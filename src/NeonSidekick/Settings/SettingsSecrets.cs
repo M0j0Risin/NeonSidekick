@@ -4,7 +4,7 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Settings;
 
 /// <summary>
-/// The four secrets a <c>profile.json</c> keeps — <see cref="AppSettingsData.LlmApiKey"/>, <see cref="AppSettingsData.ClaudeApiKey"/>,
+/// The four secrets a <c>profile.json</c> keeps — <see cref="AppSettingsData.LlmApiKey"/>, <see cref="AppSettingsData.AnthropicApiKey"/>,
 /// <see cref="AppSettingsData.OpenAIApiKey"/> (2026-10-03) and <see cref="AppSettingsData.HomeAssistantToken"/> — encrypted with DPAPI for this Windows user on this machine
 /// (<see cref="WindowsCredentials.Protect"/>: <c>dpapi:</c> and the blob). The Claude key was first (2026-09-27), the Home
 /// Assistant key next (2026-09-28); the LLM API key joined them the same day (the user's call: "since we've done it with all
@@ -77,9 +77,9 @@ public static class SettingsSecrets
             changed |= Swap(data.LlmApiKey, v => data.LlmApiKey = v, ref error);
         }
 
-        if (NeedsProtecting(data.ClaudeApiKey))
+        if (NeedsProtecting(data.AnthropicApiKey))
         {
-            changed |= Swap(data.ClaudeApiKey, v => data.ClaudeApiKey = v, ref error);
+            changed |= Swap(data.AnthropicApiKey, v => data.AnthropicApiKey = v, ref error);
         }
 
         if (NeedsProtecting(data.OpenAIApiKey))

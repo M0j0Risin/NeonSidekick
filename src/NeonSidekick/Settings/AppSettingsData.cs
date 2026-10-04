@@ -390,7 +390,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Bearer token. Keyless local servers are happy with the literal <c>empty</c>. Kept encrypted with DPAPI for this
-    /// Windows user on this machine since 2026-09-28 (<c>dpapi:</c> and the blob, as <see cref="ClaudeApiKey"/>; the user's
+    /// Windows user on this machine since 2026-09-28 (<c>dpapi:</c> and the blob, as <see cref="AnthropicApiKey"/>; the user's
     /// call), a plain one encrypted when the profile loads (<see cref="SettingsSecrets.ProtectAtRest"/>); the <c>empty</c>
     /// placeholder stays plain. Read through <see cref="Llm.LlmEndpoint.KeyOf"/>. Never logged (<see cref="SettingsDiff.Secrets"/>).
     /// </summary>
@@ -572,7 +572,7 @@ public sealed class AppSettingsData
     /// earlier turns' goes too and the request asks the chat template to keep it: <c>chat_template_kwargs</c>
     /// <c>preserve_thinking=true</c> (Qwen3.6) and <c>clear_thinking=false</c> (GLM). A template that knows neither drops
     /// or renders it by its own rule. Costs context: the prune of <c>/compact</c> and the automatic compact drop the older
-    /// turns' thinking first. The Claude API is not affected (it gets its signed thinking back inside the turn in flight
+    /// turns' thinking first. The Anthropic API is not affected (it gets its signed thinking back inside the turn in flight
     /// alone). Read at each turn, no reconnect. Off by default. No variable.
     /// </summary>
     public bool LlmPreserveThinking { get; set; }
@@ -597,7 +597,7 @@ public sealed class AppSettingsData
     /// values by itself. temperature, top_p and the two OpenAI penalties go out as the standard fields; top_k, min_p,
     /// the repetition penalty (as <c>repetition_penalty</c> for vLLM and SGLang and <c>repeat_penalty</c> for llama.cpp
     /// and LM Studio, both every time) and the extra body as extra top-level fields a server that does not know them
-    /// ignores (Ollama's <c>/v1</c> takes none of them). The Claude API is not affected. Null or empty (the default)
+    /// ignores (Ollama's <c>/v1</c> takes none of them). The Anthropic API is not affected. Null or empty (the default)
     /// is the server's defaults everywhere. Edited on <c>/sampling</c>; <c>NEONSIDEKICK_LLM_SAMPLING</c> overlays every
     /// entry. Read at each turn, no reconnect.
     /// </summary>
@@ -1406,6 +1406,12 @@ public sealed class AppSettingsData
     // Renamed GitLib … on 2026-09-30 (the user's ask), the tools with them (git_status → gitlib_status …): the keys
     // followed again, with no migration (the user's pick) — the old GitNative* keys are skipped on load, so the five
     // settings start at their defaults, and a saved git_* name in ToolsDisabled no longer matches a tool.
+    // The same on 2026-10-04 (the user's call) for the two Claude tabs: /tools' Claude tab became ClaudeCLI and its ten
+    // Claude*/ClaudeAdvisor* keys ClaudeCli* (claude_advisor → claude_advisor_cli, NEONSIDEKICK_CLAUDE_EXE/_PERMISSIONS/_ADVISOR →
+    // NEONSIDEKICK_CLAUDE_CLI_*), and /settings' Claude tab became Anthropic and its four ClaudeApi* keys AnthropicApi*
+    // (NEONSIDEKICK_CLAUDE_API[_KEY] → NEONSIDEKICK_ANTHROPIC_API[_KEY]); ClaudeCliServer kept its name. No migration: the
+    // old keys are skipped on load and take their defaults, so the Anthropic key is entered again, and a saved claude_advisor
+    // in ToolsDisabled no longer matches a tool.
 
     /// <summary>
     /// The most patch lines one <c>gitlib_diff</c> shows (2026-09-20; <c>Git native diff max lines</c> from 2026-09-21, <c>GitLib diff max lines</c> since 2026-09-30): <see cref="MinGitLibDiffMaxLines"/> to
@@ -2108,32 +2114,32 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Claude Code CLI <c>/claude</c> starts (2026-09-27): a full path, or empty to look for <c>claude.exe</c> on the
     /// PATH, then npm's <c>claude.cmd</c>, then <c>%USERPROFILE%\.local\bin</c> (<see cref="Claude.ClaudeExecutable"/>).
-    /// <c>/tools</c>' Claude tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeExeVariable"/>.
+    /// <c>/tools</c>' ClaudeCLI tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeCliExeVariable"/>.
     /// </summary>
-    public string ClaudeExecutable { get; set; } = "";
+    public string ClaudeCliExecutable { get; set; } = "";
 
     /// <summary>
     /// What the Claude Code child may do on its own (2026-09-27): one of <see cref="Claude.ClaudePermission.Names"/> —
     /// <c>read-only</c> (read, search, fetch), <c>edit</c> (file edits accepted, commands denied), <c>full</c> (everything,
     /// unasked). Nothing past the level is asked about: it is denied (<c>--permission-prompts none</c>) and the reply says
     /// so. Anything else reads as <see cref="Claude.ClaudePermission.Default"/>. Read at each <c>/claude</c>. Variable
-    /// <see cref="EnvironmentOverrides.ClaudePermissionsVariable"/>.
+    /// <see cref="EnvironmentOverrides.ClaudeCliPermissionsVariable"/>.
     /// </summary>
-    public string ClaudePermissions { get; set; } = Claude.ClaudePermission.Default;
+    public string ClaudeCliPermissions { get; set; } = Claude.ClaudePermission.Default;
 
     /// <summary>The <c>--model</c> of a <c>/claude</c> run (2026-09-27): an alias (<c>opus</c>, <c>sonnet</c>) or a full name; empty = the CLI's own. No variable.</summary>
-    public string ClaudeModel { get; set; } = "";
+    public string ClaudeCliModel { get; set; } = "";
 
     /// <summary>The <c>--effort</c> of a <c>/claude</c> run (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = the CLI's own. No variable.</summary>
-    public string ClaudeEffort { get; set; } = Claude.ClaudeEffort.Default;
+    public string ClaudeCliEffort { get; set; } = Claude.ClaudeEffort.Default;
 
     /// <summary>
-    /// Whether the model is offered <c>claude_advisor</c> (2026-09-27, the user's ask: the local model asks Claude Code
-    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> Claude tab's
+    /// Whether the model is offered <c>claude_advisor_cli</c> (2026-09-27, the user's ask: the local model asks Claude Code
+    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> ClaudeCLI tab's
     /// first advisor row. Off by default — every call costs money on the user's Claude account. Variable
-    /// <see cref="EnvironmentOverrides.ClaudeAdvisorVariable"/>.
+    /// <see cref="EnvironmentOverrides.ClaudeCliAdvisorVariable"/>.
     /// </summary>
-    public bool ClaudeAdvisor { get; set; }
+    public bool ClaudeCliAdvisor { get; set; }
 
     /// <summary>
     /// What an advisor call sends Claude besides the model's question (2026-09-27, the user's call: a setting): one of
@@ -2141,66 +2147,66 @@ public sealed class AppSettingsData
     /// alone; <c>recent</c>, those and the last <see cref="Claude.ClaudeText.AdvisorRecentMessages"/> messages of the
     /// conversation. Anything else reads as <c>brief</c>. No variable.
     /// </summary>
-    public string ClaudeAdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
+    public string ClaudeCliAdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
 
-    /// <summary>The most <c>claude_advisor</c> calls one turn may make (2026-09-27), <see cref="MinClaudeAdvisorCallsPerTurn"/> to <see cref="MaxClaudeAdvisorCallsPerTurn"/>; a call past it is refused, and the model carries on alone. No variable.</summary>
-    public int ClaudeAdvisorCallsPerTurn { get; set; } = DefaultClaudeAdvisorCallsPerTurn;
+    /// <summary>The most <c>claude_advisor_cli</c> calls one turn may make (2026-09-27), <see cref="MinClaudeCliAdvisorCallsPerTurn"/> to <see cref="MaxClaudeCliAdvisorCallsPerTurn"/>; a call past it is refused, and the model carries on alone. No variable.</summary>
+    public int ClaudeCliAdvisorCallsPerTurn { get; set; } = DefaultClaudeCliAdvisorCallsPerTurn;
 
-    public const int MinClaudeAdvisorCallsPerTurn = 1;
-    public const int MaxClaudeAdvisorCallsPerTurn = 10;
-    public const int DefaultClaudeAdvisorCallsPerTurn = 2;
+    public const int MinClaudeCliAdvisorCallsPerTurn = 1;
+    public const int MaxClaudeCliAdvisorCallsPerTurn = 10;
+    public const int DefaultClaudeCliAdvisorCallsPerTurn = 2;
 
-    /// <summary>The <c>--model</c> of an advisor call (2026-09-27); empty = <see cref="ClaudeModel"/> (and, that empty too, the CLI's own). No variable.</summary>
-    public string ClaudeAdvisorModel { get; set; } = "";
+    /// <summary>The <c>--model</c> of an advisor call (2026-09-27); empty = <see cref="ClaudeCliModel"/> (and, that empty too, the CLI's own). No variable.</summary>
+    public string ClaudeCliAdvisorModel { get; set; } = "";
 
-    /// <summary>The <c>--effort</c> of an advisor call (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = <see cref="ClaudeEffort"/>. No variable.</summary>
-    public string ClaudeAdvisorEffort { get; set; } = "";
+    /// <summary>The <c>--effort</c> of an advisor call (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = <see cref="ClaudeCliEffort"/>. No variable.</summary>
+    public string ClaudeCliAdvisorEffort { get; set; } = "";
 
     /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-09-27, the user's call: opt-in, off by default); headless has no one to ask, so a call there is refused. No variable.</summary>
-    public bool ClaudeAdvisorConfirm { get; set; }
-    // ─── Claude API (2026-09-27) ────────────────────────────────────────────────
+    public bool ClaudeCliAdvisorConfirm { get; set; }
+    // ─── Anthropic API (2026-09-27) ────────────────────────────────────────────────
 
     /// <summary>
-    /// Whether the Claude API is offered as a server (2026-09-27, the user's ask: Anthropic's Messages API as one more
+    /// Whether the Anthropic API is offered as a server (2026-09-27, the user's ask: Anthropic's Messages API as one more
     /// <c>/server</c> choice, off by default — every message costs money on the key's account). Offered only while a key
     /// is set too (<see cref="Llm.Anthropic.ClaudeApi.Offered"/>): then <c>/server</c> and the startup picker list a
-    /// <c>Claude API</c> row, and picking it saves <see cref="Llm.Anthropic.ClaudeApi.BaseUrl"/> as the LLM URL. The
-    /// <c>/settings</c>' Claude tab's first row (2026-10-03; <c>/tools</c>' Claude tab's first API row, under the advisor's, from 2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.ClaudeApiVariable"/>.
+    /// <c>Anthropic API</c> row, and picking it saves <see cref="Llm.Anthropic.ClaudeApi.BaseUrl"/> as the LLM URL. The
+    /// <c>/settings</c>' Anthropic tab's first row (2026-10-03; <c>/tools</c>' ClaudeCLI tab's first API row, under the advisor's, from 2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.AnthropicApiVariable"/>.
     /// </summary>
-    public bool ClaudeApi { get; set; }
+    public bool AnthropicApi { get; set; }
 
     /// <summary>
-    /// The Claude API key (2026-09-27): kept encrypted with DPAPI for this Windows user on this machine (<c>dpapi:</c>
+    /// The Anthropic API key (2026-09-27): kept encrypted with DPAPI for this Windows user on this machine (<c>dpapi:</c>
     /// and the blob, <see cref="Sql.WindowsCredentials"/>), so the profile file never holds it in clear; a plain value
-    /// (a hand edit) is used as it is and encrypted at the next save from the menu. Sent only to the Claude API — never
+    /// (a hand edit) is used as it is and encrypted at the next save from the menu. Sent only to the Anthropic API — never
     /// to a local server, which gets <see cref="LlmApiKey"/>. Never logged (<see cref="SettingsDiff.Secrets"/>). Variable
-    /// <see cref="EnvironmentOverrides.ClaudeApiKeyVariable"/> (plain).
+    /// <see cref="EnvironmentOverrides.AnthropicApiKeyVariable"/> (plain).
     /// </summary>
-    public string ClaudeApiKey { get; set; } = "";
+    public string AnthropicApiKey { get; set; } = "";
 
     /// <summary>
-    /// The <c>max_tokens</c> every Claude API request carries (2026-09-27): the API requires one, and a reply that
-    /// reaches it stops mid-sentence (logged). Thinking counts inside it. <see cref="MinClaudeApiMaxTokens"/> to
-    /// <see cref="MaxClaudeApiMaxTokens"/>; a reconnect. No variable.
+    /// The <c>max_tokens</c> every Anthropic API request carries (2026-09-27): the API requires one, and a reply that
+    /// reaches it stops mid-sentence (logged). Thinking counts inside it. <see cref="MinAnthropicApiMaxTokens"/> to
+    /// <see cref="MaxAnthropicApiMaxTokens"/>; a reconnect. No variable.
     /// </summary>
-    public int ClaudeApiMaxTokens { get; set; } = DefaultClaudeApiMaxTokens;
+    public int AnthropicApiMaxTokens { get; set; } = DefaultAnthropicApiMaxTokens;
 
-    public const int MinClaudeApiMaxTokens = 1_024;
-    public const int MaxClaudeApiMaxTokens = 128_000;
-    public const int DefaultClaudeApiMaxTokens = 32_000;
+    public const int MinAnthropicApiMaxTokens = 1_024;
+    public const int MaxAnthropicApiMaxTokens = 128_000;
+    public const int DefaultAnthropicApiMaxTokens = 32_000;
 
     /// <summary>
-    /// Whether Claude API requests carry prompt-cache breakpoints (2026-09-27, on by default): the tools and system
+    /// Whether Anthropic API requests carry prompt-cache breakpoints (2026-09-27, on by default): the tools and system
     /// prompt, and the conversation so far, are read back from the cache at a tenth of the price on the next request.
     /// A reconnect. No variable.
     /// </summary>
-    public bool ClaudeApiPromptCaching { get; set; } = true;
+    public bool AnthropicApiPromptCaching { get; set; } = true;
 
     // ─── OpenAI API (2026-10-03) ────────────────────────────────────────────────
 
     /// <summary>
     /// Whether the OpenAI API is offered as a server (2026-10-03, the user's ask: OpenAI's own API as one more <c>/server</c>
-    /// choice, the Claude API's twin, off by default — every message costs money on the key's account). Offered only while a
+    /// choice, the Anthropic API's twin, off by default — every message costs money on the key's account). Offered only while a
     /// key is set too (<see cref="Llm.OpenAIPlatform.OpenAIApi.Offered"/>): then <c>/server</c> and the startup picker list an
     /// <c>OpenAI API</c> row, and picking it saves <see cref="Llm.OpenAIPlatform.OpenAIApi.BaseUrl"/> as the LLM URL. Spoken to over the
     /// Responses API (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>). <c>/settings</c>' OpenAI tab's first row; a reconnect. Variable
@@ -2209,8 +2215,8 @@ public sealed class AppSettingsData
     public bool OpenAIApi { get; set; }
 
     /// <summary>
-    /// The OpenAI API key (2026-10-03): kept encrypted with DPAPI as <see cref="ClaudeApiKey"/> is, sent only to the OpenAI API
-    /// (a Bearer token) — never to a local server, which gets <see cref="LlmApiKey"/>, nor to the Claude API. A saved
+    /// The OpenAI API key (2026-10-03): kept encrypted with DPAPI as <see cref="AnthropicApiKey"/> is, sent only to the OpenAI API
+    /// (a Bearer token) — never to a local server, which gets <see cref="LlmApiKey"/>, nor to the Anthropic API. A saved
     /// <see cref="LlmUrl"/> on api.openai.com took <see cref="LlmApiKey"/> as any server until then; it now needs this key and
     /// <see cref="OpenAIApi"/>. Never logged (<see cref="SettingsDiff.Secrets"/>). Variable
     /// <see cref="EnvironmentOverrides.OpenAIApiKeyVariable"/> (plain).
@@ -2238,10 +2244,10 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether the Claude Code CLI is offered as a server (2026-09-30, the user's ask: the <c>claude</c> CLI kept running as
     /// an open session and used as the chat's server; off by default). Offered only while the CLI is found too
-    /// (<see cref="Claude.ClaudeCliEndpoint.Offered"/>: <see cref="ClaudeExecutable"/>, else the PATH): then <c>/server</c>
+    /// (<see cref="Claude.ClaudeCliEndpoint.Offered"/>: <see cref="ClaudeCliExecutable"/>, else the PATH): then <c>/server</c>
     /// and the startup picker list a <c>Claude CLI</c> row, and picking it saves <see cref="Claude.ClaudeCliEndpoint.BaseUrl"/>
     /// as the LLM URL and the <c>--model</c> word as the LLM model. Claude Code's own tools are all off there: the model gets
-    /// the app's tools, over an MCP server the app hosts. <c>/settings</c>' Claude tab's last row (2026-10-03; <c>/tools</c>' Claude tab's until then); a reconnect. Variable
+    /// the app's tools, over an MCP server the app hosts. <c>/settings</c>' Anthropic tab's last row (2026-10-03; <c>/tools</c>' ClaudeCLI tab's until then); a reconnect. Variable
     /// <see cref="EnvironmentOverrides.ClaudeCliServerVariable"/>.
     /// </summary>
     public bool ClaudeCliServer { get; set; }
@@ -2362,7 +2368,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The long-lived access token (2026-09-28; made in Home Assistant under the user's profile, Security): kept encrypted
-    /// with DPAPI for this Windows user on this machine (<c>dpapi:</c> and the blob, as <see cref="ClaudeApiKey"/>), so the
+    /// with DPAPI for this Windows user on this machine (<c>dpapi:</c> and the blob, as <see cref="AnthropicApiKey"/>), so the
     /// profile file never holds it in clear; a plain value (a hand edit) is used as it is and encrypted at the next save from
     /// the menu. Never logged (<see cref="SettingsDiff.Secrets"/>). Variable <c>NEONSIDEKICK_HA_TOKEN</c> (plain).
     /// </summary>

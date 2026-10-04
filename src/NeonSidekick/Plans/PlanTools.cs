@@ -46,8 +46,8 @@ public static class PlanTools
         "recall_memory", "load_skill", "session_manager", "ask_user",
         // the camera: a photo asked of the user, as a question is (2026-10-02); the shot it saves is the user's own taking
         "camera_capture",
-        // the advisor: Claude reads and answers, read-only whatever Claude slash command permissions says (2026-09-27)
-        "claude_advisor",
+        // the advisor: Claude reads and answers, read-only whatever Claude CLI slash command permissions says (2026-09-27)
+        "claude_advisor_cli",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>

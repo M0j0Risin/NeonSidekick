@@ -37,7 +37,7 @@ public static class BenchRunner
     /// <summary>
     /// Runs <paramref name="tests"/> in order: <paramref name="onStart"/> before each (1-based index, count, test),
     /// <paramref name="onDone"/> after. <paramref name="claudeApi"/> skips the tests that need <c>response_format</c>,
-    /// which the Claude API does not take.
+    /// which the Anthropic API does not take.
     /// </summary>
     public static async Task<IReadOnlyList<BenchResult>> RunAsync(
         Assistant assistant,

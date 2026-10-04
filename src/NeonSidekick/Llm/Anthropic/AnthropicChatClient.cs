@@ -9,7 +9,7 @@ using NeonSidekick.Diagnostics;
 namespace NeonSidekick.Llm.Anthropic;
 
 /// <summary>
-/// The Claude API's <see cref="IChatClient"/> (2026-09-27, the user's call: a hand-written client over
+/// The Anthropic API's <see cref="IChatClient"/> (2026-09-27, the user's call: a hand-written client over
 /// <see cref="HttpClient"/>, since the official SDK is not AOT-clean and this build refuses reflection). One streamed
 /// <c>POST /v1/messages</c> per request: <see cref="AnthropicRequest"/> writes the body, <see cref="AnthropicStream"/>
 /// reads the events back into the updates the turn loop already consumes, so <see cref="Assistant"/>, the compactor
@@ -45,7 +45,7 @@ public sealed class AnthropicChatClient : IChatClient
     private readonly TimeProvider _time;
     private readonly Uri _messagesUrl;
 
-    /// <param name="endpoint">The Claude API endpoint; its <see cref="LlmEndpoint.ApiKey"/> is the Claude API key.</param>
+    /// <param name="endpoint">The Anthropic API endpoint; its <see cref="LlmEndpoint.ApiKey"/> is the Anthropic API key.</param>
     /// <param name="requestTimeout">Per-request ceiling on an owned transport.</param>
     /// <param name="maxTokens">The output cap every request carries (the API requires one).</param>
     /// <param name="promptCaching">Whether requests carry cache breakpoints.</param>
@@ -66,7 +66,7 @@ public sealed class AnthropicChatClient : IChatClient
 
         var v1 = LlmEndpoint.NormalizeBaseUrl(endpoint.BaseUrl);
         Endpoint = endpoint with { BaseUrl = v1, ApiKey = endpoint.ApiKey?.Trim() ?? "" };
-        MaxTokens = Math.Clamp(maxTokens, Settings.AppSettingsData.MinClaudeApiMaxTokens, Settings.AppSettingsData.MaxClaudeApiMaxTokens);
+        MaxTokens = Math.Clamp(maxTokens, Settings.AppSettingsData.MinAnthropicApiMaxTokens, Settings.AppSettingsData.MaxAnthropicApiMaxTokens);
         PromptCaching = promptCaching;
         _messagesUrl = ClaudeApi.MessagesUrl(v1);
         _time = time ?? TimeProvider.System;
@@ -157,7 +157,7 @@ public sealed class AnthropicChatClient : IChatClient
     }
 
     /// <summary>What a stream that ended before <c>message_stop</c> says. Pinned.</summary>
-    public const string StreamCutMessage = "The Claude API stream ended before the reply did.";
+    public const string StreamCutMessage = "The Anthropic API stream ended before the reply did.";
 
     /// <summary>The wire names <see cref="AnthropicRequest.ToolName"/> changed, mapped back to the tools' own.</summary>
     internal static IReadOnlyDictionary<string, string> ToolNames(IList<AITool>? tools)
@@ -202,7 +202,7 @@ public sealed class AnthropicChatClient : IChatClient
             if (!retriedBusy && IsRetryable((HttpStatusCode)status))
             {
                 retriedBusy = true;
-                DiagnosticLog.Warn(Category, $"The Claude API answered {status.ToString(CultureInfo.InvariantCulture)}; retrying once in {delay.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s.");
+                DiagnosticLog.Warn(Category, $"The Anthropic API answered {status.ToString(CultureInfo.InvariantCulture)}; retrying once in {delay.TotalSeconds.ToString("0.#", CultureInfo.InvariantCulture)} s.");
                 await Task.Delay(delay, _time, cancellationToken).ConfigureAwait(false);
                 continue;
             }
@@ -224,7 +224,7 @@ public sealed class AnthropicChatClient : IChatClient
     }
 
     /// <summary>The log line of the thinking recovery. Pinned.</summary>
-    public const string ThinkingDroppedWarning = "The Claude API refused the thinking sent back (the turn was edited under it); retrying once without it.";
+    public const string ThinkingDroppedWarning = "The Anthropic API refused the thinking sent back (the turn was edited under it); retrying once without it.";
 
     /// <summary>
     /// A 400 whose message names thinking or a signature: the one the stripped retry answers.

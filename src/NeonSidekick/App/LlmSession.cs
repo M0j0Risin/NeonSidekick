@@ -247,7 +247,7 @@ internal sealed class LlmSession : IDisposable
                 return await ConnectAsync(effective, Endpoint, cancellationToken).ConfigureAwait(false);
             }
 
-            // Saved while it was offered; switched off (or the CLI gone) the URL stands for nothing, as the Claude API's.
+            // Saved while it was offered; switched off (or the CLI gone) the URL stands for nothing, as the Anthropic API's.
             DiagnosticLog.Warn(Category, ClaudeCliText.NotOfferedWarning);
             var blank = AppSettings.Copy(effective);
             blank.LlmUrl = "";
@@ -551,7 +551,7 @@ internal sealed class LlmSession : IDisposable
             DiagnosticLog.Info(Category, SamplingLogLine(sampling));
         }
 
-        // The Claude API publishes its window on the model list or nowhere: none of the native tiers live on its host; the
+        // The Anthropic API publishes its window on the model list or nowhere: none of the native tiers live on its host; the
         // OpenAI API's comes from the model table (2026-10-03, set at the connect). The Claude CLI's is the endpoint's own
         // (2026-09-30): no host to ask at all.
         if (_configuredContextLength <= 0 && _detectedContextLength is null && !ApiKeys.IsHostedApi(endpoint.BaseUrl) && !ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
@@ -756,7 +756,7 @@ internal sealed class LlmSession : IDisposable
                 return (null, BotLinkNoServer);
             }
 
-            // The Claude API's key goes with its endpoint (2026-09-27): a borrowed Claude API is borrowed with it.
+            // The Anthropic API's key goes with its endpoint (2026-09-27): a borrowed Anthropic API is borrowed with it.
             // The profile's key decrypted first (2026-09-28): the file keeps it DPAPI-encrypted like the other two.
             // The embedded server's per-start key and its one model go with it too (2026-09-29).
             string own = LlmEndpoint.KeyOf(profile);
@@ -1080,7 +1080,7 @@ internal sealed class LlmSession : IDisposable
     /// The connected model's sampling defaults as the server reports them (2026-09-28, for the <c>/sampling</c> pane's
     /// <c>(server)</c> values): asked once per endpoint, model and <c>LLM sampling from Hugging Face</c> value and kept
     /// until a reconnect (<see cref="ServerSamplingProbe"/>) — so a flip of the setting asks again at the next pane. Null
-    /// while nothing is connected, over the Claude API or the OpenAI API (no sampling goes there), with no probe, or when the server said
+    /// while nothing is connected, over the Anthropic API or the OpenAI API (no sampling goes there), with no probe, or when the server said
     /// nothing.
     /// </summary>
     public async Task<ServerSampling?> ServerSamplingAsync(AppSettingsData effective, CancellationToken cancellationToken)

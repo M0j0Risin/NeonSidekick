@@ -134,7 +134,7 @@ public static class HelpCommands
         ]),
         new("/keycopy",
         [
-            new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Claude API key* and *Home Assistant API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that isn't set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not copied."),
+            new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Anthropic API key* and *Home Assistant API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that isn't set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not copied."),
         ]),
         new("/learn",
         [
@@ -230,7 +230,7 @@ public static class HelpCommands
         ]),
         new("/server",
         [
-            new("/server [url | embedded | claude-cli | docker | docker:<container>]", "Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Claude API and the OpenAI API (each when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found), the installed embedded models and the chosen Docker containers (when *Docker servers enabled* is on). The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see `/settings` › Claude). `docker` lists only the chosen containers, and `docker:<container>` switches to one (see Docker servers); a container's model is the one it serves, so no model picker follows. Ctrl+S runs it too."),
+            new("/server [url | embedded | claude-cli | docker | docker:<container>]", "Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Anthropic API and the OpenAI API (each when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found), the installed embedded models and the chosen Docker containers (when *Docker servers enabled* is on). The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see `/settings` › Anthropic). `docker` lists only the chosen containers, and `docker:<container>` switches to one (see Docker servers); a container's model is the one it serves, so no model picker follows. Ctrl+S runs it too."),
         ]),
         new("/sessions",
         [
@@ -287,7 +287,7 @@ public static class HelpCommands
         new("/tools",
         [
             new("/tools", "Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git). On the Offered tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
-            new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page). The toolbar's tool items run it."),
+            new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude CLI advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page). The toolbar's tool items run it."),
         ]),
         new("/tree",
         [

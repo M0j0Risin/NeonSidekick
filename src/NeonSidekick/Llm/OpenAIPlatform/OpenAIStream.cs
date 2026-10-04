@@ -17,7 +17,7 @@ namespace NeonSidekick.Llm.OpenAIPlatform;
 /// piece carrying its encrypted content behind <see cref="OpenAIRequest.EncryptedPrefix"/>, which the request side sends back
 /// within the turn in flight. The usage: <c>input_tokens</c> is the whole prompt, the cache read and write inside it
 /// (<c>input_tokens_details.cached_tokens</c>, <c>cache_write_tokens</c>), the reasoning inside <c>output_tokens</c>; the
-/// cost (<see cref="OpenAIPrice"/>) and the cache write go under the keys <see cref="TokenUsage.From"/> reads for the Claude API.</para>
+/// cost (<see cref="OpenAIPrice"/>) and the cache write go under the keys <see cref="TokenUsage.From"/> reads for the Anthropic API.</para>
 /// </summary>
 public sealed class OpenAIStream
 {

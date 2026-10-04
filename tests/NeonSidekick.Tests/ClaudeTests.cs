@@ -230,11 +230,11 @@ public class ClaudeTests
     {
         Assert.Equal(["read-only", "edit", "full"], ClaudePermission.Names);
         Assert.Equal("read-only", ClaudePermission.Default);
-        Assert.Equal("read-only", new AppSettingsData().ClaudePermissions);
+        Assert.Equal("read-only", new AppSettingsData().ClaudeCliPermissions);
         Assert.True(ClaudePermission.TryParse(" EDIT ", out var edit));
         Assert.Equal(ClaudePermissionLevel.Edit, edit);
-        Assert.Equal(ClaudePermissionLevel.ReadOnly, ClaudePermission.Resolve(new AppSettingsData { ClaudePermissions = "yolo" }));
-        Assert.Equal(ClaudePermissionLevel.Full, ClaudePermission.Resolve(new AppSettingsData { ClaudePermissions = "full" }));
+        Assert.Equal(ClaudePermissionLevel.ReadOnly, ClaudePermission.Resolve(new AppSettingsData { ClaudeCliPermissions = "yolo" }));
+        Assert.Equal(ClaudePermissionLevel.Full, ClaudePermission.Resolve(new AppSettingsData { ClaudeCliPermissions = "full" }));
         Assert.All(ClaudePermission.Names, name => Assert.Equal(name, ClaudePermission.Name(ClaudePermission.TryParse(name, out var level) ? level : throw new InvalidOperationException())));
         Assert.All(ClaudePermission.Names, name => Assert.NotEmpty(ClaudePermission.Describe(name)));
         Assert.Equal("", ClaudePermission.Describe("x"));
@@ -254,46 +254,46 @@ public class ClaudeTests
     public void ToolsMenu_TheClaudeTab_ItsTenRowsAndHowTheyRead()
     {
         var data = new AppSettingsData();
-        int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle);
+        int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeCliTabTitle);
 
         // On /tools since later on 2026-09-27 (the user's call), after Ask, before Obsidian since later still that day (the user's order; after ComfyUI, before Options, before); gone from /settings.
         Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.OracleTabTitle) + 1, tab);   // after Oracle since 2026-10-03, the user's order (after Camera from 2026-10-02)
         Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);   // gone since 2026-09-29; /settings' own Claude tab (2026-10-03) holds the server rows
-        Assert.Equal("Claude", ToolsText.ClaudeTabTitle);   // "Claude (CLI)" until 2026-09-29 (the user's call: one Claude tab)
+        Assert.Equal("ClaudeCLI", ToolsText.ClaudeCliTabTitle);   // "Claude (CLI)" until 2026-09-29, "Claude" until 2026-10-04 (the user's call: /settings' tab became Anthropic)
         Assert.Equal(
-            [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort,
-             SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm],
-            SettingsMenu.ToolsTabFields[tab - 1]);   // the Claude API's four and the Claude CLI server's went to /settings' Claude tab on 2026-10-03
+            [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort,
+             SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
+            SettingsMenu.ToolsTabFields[tab - 1]);   // the Anthropic API's four and the Claude CLI server's went to /settings' Claude tab on 2026-10-03
         Assert.Equal(
-            ["Claude executable", "Claude slash command permissions", "Claude slash command model", "Claude slash command effort",
-             "Claude advisor tool", "Claude advisor tool context", "Claude advisor tool calls per turn", "Claude advisor tool model", "Claude advisor tool effort", "Claude advisor tool confirm"],
+            ["Claude CLI executable", "Claude CLI slash command permissions", "Claude CLI slash command model", "Claude CLI slash command effort",
+             "Claude CLI advisor tool", "Claude CLI advisor tool context", "Claude CLI advisor tool calls per turn", "Claude CLI advisor tool model", "Claude CLI advisor tool effort", "Claude CLI advisor tool confirm"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisor, data, "C:\\p"));
-        Assert.Equal("brief", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisorContext, data, "C:\\p"));
-        Assert.Equal("2 calls", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisorCallsPerTurn, data, "C:\\p"));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCliAdvisor, data, "C:\\p"));
+        Assert.Equal("brief", SettingsMenu.FieldValue(SettingsField.ClaudeCliAdvisorContext, data, "C:\\p"));
+        Assert.Equal("2 calls", SettingsMenu.FieldValue(SettingsField.ClaudeCliAdvisorCallsPerTurn, data, "C:\\p"));
         Assert.Equal("1 call", SettingsMenu.ClaudeAdvisorCalls(1));
-        Assert.Equal("(as Claude slash command model)", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisorModel, data, "C:\\p"));
-        Assert.Equal("(as Claude slash command effort)", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisorEffort, data, "C:\\p"));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisorConfirm, data, "C:\\p"));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeAdvisor));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeAdvisorConfirm));
-        Assert.Equal("(as Claude slash command effort)", SettingsMenu.ClaudeEffortLabel("", SettingsMenu.ClaudeAdvisorEffortLabel));
+        Assert.Equal("(as Claude CLI slash command model)", SettingsMenu.FieldValue(SettingsField.ClaudeCliAdvisorModel, data, "C:\\p"));
+        Assert.Equal("(as Claude CLI slash command effort)", SettingsMenu.FieldValue(SettingsField.ClaudeCliAdvisorEffort, data, "C:\\p"));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCliAdvisorConfirm, data, "C:\\p"));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCliAdvisor));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCliAdvisorConfirm));
+        Assert.Equal("(as Claude CLI slash command effort)", SettingsMenu.ClaudeEffortLabel("", SettingsMenu.ClaudeAdvisorEffortLabel));
         Assert.StartsWith("recent  ", SettingsMenu.ClaudeAdvisorContextLabel("recent"), StringComparison.Ordinal);   // padded to eight
         Assert.Contains("the last 10 messages", SettingsMenu.ClaudeAdvisorContextLabel("recent"), StringComparison.Ordinal);
-        var advisorCopy = AppSettings.Copy(new AppSettingsData { ClaudeAdvisor = true, ClaudeAdvisorContext = "recent", ClaudeAdvisorCallsPerTurn = 5, ClaudeAdvisorModel = "opus", ClaudeAdvisorEffort = "high", ClaudeAdvisorConfirm = true });
-        Assert.Equal((true, "recent", 5, "opus", "high", true), (advisorCopy.ClaudeAdvisor, advisorCopy.ClaudeAdvisorContext, advisorCopy.ClaudeAdvisorCallsPerTurn, advisorCopy.ClaudeAdvisorModel, advisorCopy.ClaudeAdvisorEffort, advisorCopy.ClaudeAdvisorConfirm));
-        Assert.Equal("(looked up)", SettingsMenu.FieldValue(SettingsField.ClaudeExecutable, data, "C:\\p"));
-        Assert.Equal("read-only", SettingsMenu.FieldValue(SettingsField.ClaudePermissions, data, "C:\\p"));
-        Assert.Equal("(Claude Code's default)", SettingsMenu.FieldValue(SettingsField.ClaudeModel, data, "C:\\p"));
-        Assert.Equal("(Claude Code's default)", SettingsMenu.FieldValue(SettingsField.ClaudeEffort, data, "C:\\p"));
-        Assert.Equal("opus", SettingsMenu.FieldValue(SettingsField.ClaudeModel, new AppSettingsData { ClaudeModel = "opus" }, "C:\\p"));
+        var advisorCopy = AppSettings.Copy(new AppSettingsData { ClaudeCliAdvisor = true, ClaudeCliAdvisorContext = "recent", ClaudeCliAdvisorCallsPerTurn = 5, ClaudeCliAdvisorModel = "opus", ClaudeCliAdvisorEffort = "high", ClaudeCliAdvisorConfirm = true });
+        Assert.Equal((true, "recent", 5, "opus", "high", true), (advisorCopy.ClaudeCliAdvisor, advisorCopy.ClaudeCliAdvisorContext, advisorCopy.ClaudeCliAdvisorCallsPerTurn, advisorCopy.ClaudeCliAdvisorModel, advisorCopy.ClaudeCliAdvisorEffort, advisorCopy.ClaudeCliAdvisorConfirm));
+        Assert.Equal("(looked up)", SettingsMenu.FieldValue(SettingsField.ClaudeCliExecutable, data, "C:\\p"));
+        Assert.Equal("read-only", SettingsMenu.FieldValue(SettingsField.ClaudeCliPermissions, data, "C:\\p"));
+        Assert.Equal("(Claude Code's default)", SettingsMenu.FieldValue(SettingsField.ClaudeCliModel, data, "C:\\p"));
+        Assert.Equal("(Claude Code's default)", SettingsMenu.FieldValue(SettingsField.ClaudeCliEffort, data, "C:\\p"));
+        Assert.Equal("opus", SettingsMenu.FieldValue(SettingsField.ClaudeCliModel, new AppSettingsData { ClaudeCliModel = "opus" }, "C:\\p"));
         Assert.StartsWith("edit       ", SettingsMenu.ClaudePermissionLabel("edit"), StringComparison.Ordinal);   // padded to eleven
         Assert.Contains("edit files without asking; commands denied", SettingsMenu.ClaudePermissionLabel("edit"), StringComparison.Ordinal);
         Assert.Equal("(Claude Code's default)", SettingsMenu.ClaudeEffortLabel(""));
         Assert.Equal("max", SettingsMenu.ClaudeEffortLabel("max"));
-        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ClaudePermissions));   // read at each /claude: nothing to reconnect
-        var copy = AppSettings.Copy(new AppSettingsData { ClaudeExecutable = "x", ClaudePermissions = "full", ClaudeModel = "m", ClaudeEffort = "low" });
-        Assert.Equal(("x", "full", "m", "low"), (copy.ClaudeExecutable, copy.ClaudePermissions, copy.ClaudeModel, copy.ClaudeEffort));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ClaudeCliPermissions));   // read at each /claude: nothing to reconnect
+        var copy = AppSettings.Copy(new AppSettingsData { ClaudeCliExecutable = "x", ClaudeCliPermissions = "full", ClaudeCliModel = "m", ClaudeCliEffort = "low" });
+        Assert.Equal(("x", "full", "m", "low"), (copy.ClaudeCliExecutable, copy.ClaudeCliPermissions, copy.ClaudeCliModel, copy.ClaudeCliEffort));
     }
 
     [Fact]
@@ -301,24 +301,24 @@ public class ClaudeTests
     {
         var env = new EnvironmentOverrides(name => name switch
         {
-            EnvironmentOverrides.ClaudeExeVariable => @"D:\claude.exe",
-            EnvironmentOverrides.ClaudePermissionsVariable => "EDIT",
+            EnvironmentOverrides.ClaudeCliExeVariable => @"D:\claude.exe",
+            EnvironmentOverrides.ClaudeCliPermissionsVariable => "EDIT",
             _ => null,
         });
 
         var effective = env.ApplyTo(new AppSettingsData());
 
-        Assert.Equal(@"D:\claude.exe", effective.ClaudeExecutable);
-        Assert.Equal("edit", effective.ClaudePermissions);
-        Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudePermissionsVariable ? "yolo" : null).ClaudePermissions);
-        Assert.Contains(EnvironmentOverrides.ClaudeExeVariable, EnvironmentOverrides.AllVariables);
-        Assert.Contains(EnvironmentOverrides.ClaudePermissionsVariable, EnvironmentOverrides.AllVariables);
+        Assert.Equal(@"D:\claude.exe", effective.ClaudeCliExecutable);
+        Assert.Equal("edit", effective.ClaudeCliPermissions);
+        Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCliPermissionsVariable ? "yolo" : null).ClaudeCliPermissions);
+        Assert.Contains(EnvironmentOverrides.ClaudeCliExeVariable, EnvironmentOverrides.AllVariables);
+        Assert.Contains(EnvironmentOverrides.ClaudeCliPermissionsVariable, EnvironmentOverrides.AllVariables);
         // The advisor's switch (2026-09-27): a switch word, as NEONSIDEKICK_SHELL_NATIVE's.
-        var advisor = new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeAdvisorVariable ? "on" : null);
-        Assert.True(advisor.ApplyTo(new AppSettingsData()).ClaudeAdvisor);
-        Assert.Contains(EnvironmentOverrides.ClaudeAdvisorVariable, advisor.ActiveVariables());
-        Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeAdvisorVariable ? "maybe" : null).ClaudeAdvisor);
-        Assert.Contains(EnvironmentOverrides.ClaudeAdvisorVariable, EnvironmentOverrides.AllVariables);
+        var advisor = new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCliAdvisorVariable ? "on" : null);
+        Assert.True(advisor.ApplyTo(new AppSettingsData()).ClaudeCliAdvisor);
+        Assert.Contains(EnvironmentOverrides.ClaudeCliAdvisorVariable, advisor.ActiveVariables());
+        Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCliAdvisorVariable ? "maybe" : null).ClaudeCliAdvisor);
+        Assert.Contains(EnvironmentOverrides.ClaudeCliAdvisorVariable, EnvironmentOverrides.AllVariables);
     }
 
     // ── the words ───────────────────────────────────────────────────────────
@@ -331,7 +331,7 @@ public class ClaudeTests
         Assert.Equal("Claude › Read a.cs", ClaudeText.ToolNote("Read", "a.cs"));
         Assert.Equal("Claude › Glob", ClaudeText.ToolNote("Glob", " "));
         Assert.Equal("Claude · $0.0200 · 1,234 in · 5 out", ClaudeText.Footer(0.02m, new TokenUsage(1234, 5, 1239, 1, default, default)));
-        Assert.Equal("Claude was denied Bash, Edit (Claude slash command permissions: read-only).", ClaudeText.DeniedNotice(["Bash", "Edit", "Bash"], "read-only"));
+        Assert.Equal("Claude was denied Bash, Edit (Claude CLI slash command permissions: read-only).", ClaudeText.DeniedNotice(["Bash", "Edit", "Bash"], "read-only"));
         Assert.Equal("exit code 1: bad", ClaudeText.NoResult(1, "bad\n"));
         Assert.Equal("exit code 2, nothing on stderr", ClaudeText.NoResult(2, ""));
         Assert.Equal("[to Claude] hi", ClaudeText.HistoryUser("hi"));

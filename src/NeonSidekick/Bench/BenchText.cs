@@ -12,8 +12,8 @@ public static class BenchText
     /// <summary>The argument words, as the usage names them.</summary>
     public const string Usage = "Usage: /test <test | reasoning | structured | long | all> | history — /test alone lists the tests";
 
-    /// <summary>The reason on a structured-output test skipped over the Claude API.</summary>
-    public const string SkippedOnClaudeApi = "skipped: the Claude API takes no response_format";
+    /// <summary>The reason on a structured-output test skipped over the Anthropic API.</summary>
+    public const string SkippedOnClaudeApi = "skipped: the Anthropic API takes no response_format";
 
     /// <summary>The notice when <c>/test history</c> finds nothing saved.</summary>
     public const string NoRuns = "No saved test runs yet: /test <name> runs one.";

@@ -27,11 +27,11 @@ namespace NeonSidekick.Llm;
 /// report too (thinking off). A sum stays null only while nothing reported one.
 /// </param>
 /// <param name="CacheRead">
-/// The share of <see cref="Input"/> the server read from its prompt cache, when it said (2026-09-27: the Claude API's
+/// The share of <see cref="Input"/> the server read from its prompt cache, when it said (2026-09-27: the Anthropic API's
 /// <c>cache_read_input_tokens</c>; the OpenAI adapter's cached count). Null as <see cref="Reasoning"/> is.
 /// </param>
-/// <param name="CacheWrite">The share of <see cref="Input"/> the server wrote to its prompt cache (the Claude API's <c>cache_creation_input_tokens</c>); null when not reported.</param>
-/// <param name="CostUsd">What the requests cost in US dollars, priced where the model's price is known (the Claude API, <see cref="Anthropic.ClaudePrice"/>); null for a local server.</param>
+/// <param name="CacheWrite">The share of <see cref="Input"/> the server wrote to its prompt cache (the Anthropic API's <c>cache_creation_input_tokens</c>); null when not reported.</param>
+/// <param name="CostUsd">What the requests cost in US dollars, priced where the model's price is known (the Anthropic API, <see cref="Anthropic.ClaudePrice"/>); null for a local server.</param>
 /// <param name="ReasoningEstimated">
 /// Whether <see cref="Reasoning"/> is (or, in a sum, includes) the app's estimate rather than the server's count (2026-09-29,
 /// <c>LLM reasoning estimate</c>: llama.cpp and Ollama stream the thinking but do not count it). Shown as <c>~</c>.

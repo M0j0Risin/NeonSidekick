@@ -42,11 +42,11 @@ public partial class ChatScreenTests
         // Every row's detail in one column: the names padded as the catalog pads them, the quantisations after, and the
         // detail's · under one another (2026-09-29). The installed models alone (later that day, the user's ask): a
         // download starts from /settings › Embedded, never from /server.
-        Assert.Contains("Embedded   " + "Gemma 4 E2B".PadRight(32) + "UD-Q4_K_XL  installed · 4.3 GB", output);
-        Assert.Contains("Embedded   " + "Gemma 4 12B QAT Uncensored".PadRight(32) + "Q4_K_M      installed · 7.8 GB", output);
+        Assert.Contains("Embedded       " + "Gemma 4 E2B".PadRight(32) + "UD-Q4_K_XL  installed · 4.3 GB", output);
+        Assert.Contains("Embedded       " + "Gemma 4 12B QAT Uncensored".PadRight(32) + "Q4_K_M      installed · 7.8 GB", output);
         Assert.DoesNotContain("download  · ", output);
         Assert.DoesNotContain("Gemma 4 E4B QAT", output);
-        Assert.Contains("LM Studio  " + "http://127.0.0.1:1234/v1".PadRight(42) + "  1 chat model", output);   // the URL column as wide as the widest name and quantisation shown
+        Assert.Contains("LM Studio      " + "http://127.0.0.1:1234/v1".PadRight(42) + "  1 chat model", output);   // the URL column as wide as the widest name and quantisation shown
         Assert.Matches(@"installed · 4\.3 GB +⚡", output);   // the drafter column (2026-09-29), one column down the list
         Assert.Contains("  · 🖥️ LLM URL: " + EmbeddedLlmText.UrlDisplay, output);
         Assert.Contains(SettingsMenu.ReasoningTitle, output);
@@ -92,7 +92,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync(input);
 
-        Assert.DoesNotContain("Embedded   " + model.Display, output);
+        Assert.DoesNotContain("Embedded       " + model.Display, output);
         Assert.Equal([model.Id], embedded.Installs);
         Assert.Equal([model.Id], embedded.Starts);
         Assert.Contains(NoticeGlyphs.Llm + EmbeddedLlmText.Installed(model), output);
@@ -309,7 +309,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.DoesNotContain("LM Studio  http://127.0.0.1:1234/v1", output);
+        Assert.DoesNotContain("LM Studio      http://127.0.0.1:1234/v1", output);
         Assert.Contains("Gemma 4 E4B QAT", output);
         Assert.DoesNotContain("Gemma 4 12B", output);   // not installed: the catalog's, not /server's (2026-09-29, the user's ask)
         Assert.Equal(["gemma-4-e2b"], embedded.Starts);
@@ -392,7 +392,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(SettingsMenu.StartupServerTitle, output);
-        Assert.DoesNotContain("Embedded   Gemma", output);
+        Assert.DoesNotContain("Embedded       Gemma", output);
         Assert.Contains(EmbeddedLlmText.SwitchedOffError, output);
         Assert.Empty(embedded.Starts);
         Assert.Equal("http://127.0.0.1:1234/v1", _session.Endpoint?.BaseUrl.AbsoluteUri);   // the first server that answered

@@ -5,7 +5,7 @@ namespace NeonSidekick.EmbeddedLlm;
 /// <summary>
 /// The embedded model as one more <c>/server</c> choice (2026-09-29, the user's ask: a small model the app downloads from
 /// Hugging Face and runs itself on llama.cpp's <c>llama-server</c>, beside the servers the scan finds). As with the
-/// Claude API (<see cref="Llm.Anthropic.ClaudeApi"/>), the provider is told by the URL alone: a saved
+/// Anthropic API (<see cref="Llm.Anthropic.ClaudeApi"/>), the provider is told by the URL alone: a saved
 /// <see cref="Settings.AppSettingsData.LlmUrl"/> on <see cref="Host"/> is the embedded model, and
 /// <see cref="Settings.AppSettingsData.LlmModel"/> holds its catalog id (<see cref="EmbeddedModelCatalog"/>). So no second
 /// URL setting exists, and a profile switch, <c>/server</c>, <c>--url embedded</c> and <c>NEONSIDEKICK_LLM_URL=embedded</c>
@@ -58,7 +58,7 @@ public static class EmbeddedEndpoint
     /// <summary>
     /// Whether <paramref name="effective"/> has the embedded model switched off (<c>Embedded servers enabled</c>, 2026-09-29, the
     /// user's ask) while its URL names it: the saved sentinel then stands for nothing, and a connect finds a server as a
-    /// blank URL would — the same as a saved Claude API URL with the Claude API off.
+    /// blank URL would — the same as a saved Anthropic API URL with the Anthropic API off.
     /// </summary>
     public static bool SwitchedOff(Settings.AppSettingsData effective)
     {

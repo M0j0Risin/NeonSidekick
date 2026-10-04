@@ -55,11 +55,11 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ShellNativeVariable, "no"),
             (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "),
             (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "),
-            (EnvironmentOverrides.ClaudeExeVariable, @" D:\bin\claude.exe "),
-            (EnvironmentOverrides.ClaudePermissionsVariable, " Full "),
-            (EnvironmentOverrides.ClaudeAdvisorVariable, " Yes "),
-            (EnvironmentOverrides.ClaudeApiVariable, " on "),
-            (EnvironmentOverrides.ClaudeApiKeyVariable, " sk-ant-env "),
+            (EnvironmentOverrides.ClaudeCliExeVariable, @" D:\bin\claude.exe "),
+            (EnvironmentOverrides.ClaudeCliPermissionsVariable, " Full "),
+            (EnvironmentOverrides.ClaudeCliAdvisorVariable, " Yes "),
+            (EnvironmentOverrides.AnthropicApiVariable, " on "),
+            (EnvironmentOverrides.AnthropicApiKeyVariable, " sk-ant-env "),
             (EnvironmentOverrides.LlmSamplingVariable, " {\"temperature\":0.3} "),
             (EnvironmentOverrides.HomeAssistantUrlVariable, " http://localhost:8123 "),
             (EnvironmentOverrides.HomeAssistantTokenVariable, " ha-token "),
@@ -93,11 +93,11 @@ public class EnvironmentOverridesTests
         Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
         Assert.False(e.ShellPoliceOutsidePaths);   // any case, trimmed (2026-09-26)
         Assert.False(e.ShellPreferNative);   // the police's switch words (later on 2026-09-26)
-        Assert.Equal(@"D:\bin\claude.exe", e.ClaudeExecutable);   // trimmed (2026-09-27)
-        Assert.Equal("full", e.ClaudePermissions);   // normalised to the saved word (2026-09-27)
-        Assert.True(e.ClaudeAdvisor);   // a switch word, any case, trimmed (2026-09-27)
-        Assert.True(e.ClaudeApi);   // a switch word (2026-09-27)
-        Assert.Equal("sk-ant-env", e.ClaudeApiKey);   // trimmed (2026-09-27)
+        Assert.Equal(@"D:\bin\claude.exe", e.ClaudeCliExecutable);   // trimmed (2026-09-27)
+        Assert.Equal("full", e.ClaudeCliPermissions);   // normalised to the saved word (2026-09-27)
+        Assert.True(e.ClaudeCliAdvisor);   // a switch word, any case, trimmed (2026-09-27)
+        Assert.True(e.AnthropicApi);   // a switch word (2026-09-27)
+        Assert.Equal("sk-ant-env", e.AnthropicApiKey);   // trimmed (2026-09-27)
         Assert.Equal(0.3, e.LlmSampling!["*"].Temperature);   // laid over every model (2026-09-28)
         Assert.Equal("http://localhost:8123", e.HomeAssistantUrl);   // trimmed (2026-09-28)
         Assert.Equal("ha-token", e.HomeAssistantToken);   // trimmed (2026-09-28)

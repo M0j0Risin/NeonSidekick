@@ -70,7 +70,7 @@ Neon Sidekick is an agentic terminal client built primarily for local LLMs, buil
 * **Docker servers:** your vLLM or SGLang containers as `/server` choices, one running at a time.
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors, by room or name ("dim the den to 30%"). Anything outside a safe list asks first; `/ha` drives the house directly.
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each family's style, or `/imagine` sends yours as typed.
-* **Claude:** the Claude API (your key) and your installed Claude Code (with this app's tools) as `/server` choices (`/settings` › Claude), `/claude` to message Claude Code, and `claude_advisor` for read-only advice (`/tools` › Claude). All off until you turn them on.
+* **Claude:** the Anthropic API (your key) and your installed Claude Code (with this app's tools) as `/server` choices (`/settings` › Anthropic), `/claude` to message Claude Code, and `claude_advisor_cli` for read-only advice (`/tools` › ClaudeCLI). All off until you turn them on.
 * **OpenAI:** the OpenAI API (your key) as a `/server` choice, off until you turn it on in `/settings` › OpenAI.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
 * **Camera:** a USB webcam through Windows' Media Foundation. `/camera` takes a photo for your next message; the model can ask for one, `/botchat` bots can see you, and `/camera watch` sends a picture when the view changes.
@@ -96,7 +96,7 @@ Neon Sidekick is an agentic terminal client built primarily for local LLMs, buil
 * Settings live in `%USERPROFILE%\.neonsidekick` (or `NEONSIDEKICK_HOME`), under the profile `default`.
 * With no model installed and *LLM server scan mode* `disabled` (the default), the app opens **Settings › Embedded models**: pick a model to download and run it in-app, or press ESC twice to skip.
 * Already running LM Studio, Ollama or vLLM? Set *LLM server scan mode* to `local`, `remote` or `both`, or use `/server <url>`. The startup picker lists what it finds: Enter saves your pick; ESC uses the first server for this run only.
-* For Anthropic's models, turn on *Claude API* (or *Claude CLI server* for your Claude Code install) in `/settings` › Claude; for OpenAI's, *OpenAI API* in `/settings` › OpenAI.
+* For Anthropic's models, turn on *Anthropic API* (or *Claude CLI server* for your Claude Code install) in `/settings` › Anthropic; for OpenAI's, *OpenAI API* in `/settings` › OpenAI.
 
 ### Voice (optional)
 Speech output (`/tts`) and voice input (`/stt`) start off. Turning one on downloads its model the first time: Kokoro (about 326 MB) for speech; Whisper base (about 148 MB) and the small Silero detector for input; Vosk (about 41 MB) for the wake word.
@@ -106,7 +106,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. Turning one on downlo
 |---|---|
 | `/help` | Lists the commands and keys. |
 | `/settings` | Opens the settings. |
-| `/server` | Picks the LLM server (found, embedded, Claude API, OpenAI API or Claude CLI). |
+| `/server` | Picks the LLM server (found, embedded, Anthropic API, OpenAI API or Claude CLI). |
 | `/model` | Picks the model on the current server. |
 | `/tools` | Chooses which tools the model may use. |
 | `/tts` / `/stt` | Turns speech output / voice input on or off. |
@@ -394,19 +394,19 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 | Docker server ready timeout (s) | How long a started container may take to answer on `/v1/models` (30–3600). Past it, the switch fails and the container keeps running. | 900 |
 | Docker server stop on exit | Stops the container in use when the app exits (the window's close button too). | off |
 
-#### Claude
+#### Anthropic
 
-The Claude API and the Claude CLI as `/server` choices. `/claude` and `claude_advisor` are on `/tools` › Claude.
+The Anthropic API and the Claude CLI as `/server` choices. `/claude` and `claude_advisor_cli` are on `/tools` › ClaudeCLI.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude API | Offers the Claude API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
-| Claude API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI). An empty entry clears it. | (none) |
-| Claude API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
-| Claude API prompt caching | Marks the tools, system prompt and conversation for Anthropic's prompt cache, so each request re-reads the last one's content cheaply. | on |
-| Claude CLI server | Offers Claude Code on `/server` while it is found (*Claude executable* on `/tools` › Claude, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude CLI stops. | off |
+| Anthropic API | Offers the Anthropic API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
+| Anthropic API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI). An empty entry clears it. | (none) |
+| Anthropic API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
+| Anthropic API prompt caching | Marks the tools, system prompt and conversation for Anthropic's prompt cache, so each request re-reads the last one's content cheaply. | on |
+| Claude CLI server | Offers Claude Code on `/server` while it is found (*Claude CLI executable* on `/tools` › ClaudeCLI, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude CLI stops. | off |
 
-**The Claude API** appears in `/server` as a **Claude API** row. Picking it sets *LLM URL* to `https://api.anthropic.com/v1`, then offers the account's models and the reasoning level.
+**The Anthropic API** appears in `/server` as an **Anthropic API** row. Picking it sets *LLM URL* to `https://api.anthropic.com/v1`, then offers the account's models and the reasoning level.
 
 * Every message is billed to the key's account. Each key goes only to its own server.
 * Changing one of these settings reconnects when `/settings` closes.
@@ -434,9 +434,9 @@ The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing
 | OpenAI API organization | The `OpenAI-Organization` header, for an account in several organizations. Empty sends none. | (none) |
 | OpenAI API project | The `OpenAI-Project` header. Empty sends none (a project key names its project already). | (none) |
 
-**The OpenAI API** appears in `/server` as an **OpenAI API** row, after the Claude API's. Picking it sets *LLM URL* to `https://api.openai.com/v1`, then offers the account's chat models, newest first (not the audio, realtime, image, embedding, moderation, `-pro` or `codex` ones), and the reasoning level.
+**The OpenAI API** appears in `/server` as an **OpenAI API** row, after the Anthropic API's. Picking it sets *LLM URL* to `https://api.openai.com/v1`, then offers the account's chat models, newest first (not the audio, realtime, image, embedding, moderation, `-pro` or `codex` ones), and the reasoning level.
 
-* Every message is billed to the key's account. The key goes only to api.openai.com: never to a local server or the Claude API, and the *LLM API key* never goes to OpenAI. A saved `https://api.openai.com` URL now needs this switch and key.
+* Every message is billed to the key's account. The key goes only to api.openai.com: never to a local server or the Anthropic API, and the *LLM API key* never goes to OpenAI. A saved `https://api.openai.com` URL now needs this switch and key.
 * Changing one of these settings reconnects when `/settings` closes.
 * *LLM reasoning* is sent as `reasoning.effort`, shaped per model: `none` is `minimal` on GPT-5 and `low` where a model has neither (o-series, GPT-6 Astra and Sol); `xhigh` is `high` before GPT-5.2; GPT-4.1 and GPT-4o get none. The thinking shows as OpenAI's summary of it, and its encrypted form goes back within a tool loop, so the model keeps its reasoning across calls.
 * Every model takes tools at every level here; over Chat Completions, GPT-5.4 and newer refuse tools beside any reasoning, which is why this is the Responses API.
@@ -497,7 +497,7 @@ Until you override them, sampling is left to the server and the model's defaults
 * **Unknown fields** are ignored by a server; Ollama's `/v1` takes only the four OpenAI ones.
 * **The extra body** may not set fields the app writes (`model`, `messages`, `tools`, `stream`, `reasoning_effort`…) or the named fields above. Its `chat_template_kwargs` merge with the app's, whose `enable_thinking` and `preserve_thinking` win.
 * **Without the pane:** `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values; `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run.
-* The Claude API and the OpenAI API are not affected.
+* The Anthropic API and the OpenAI API are not affected.
 
 #### TTS
 
@@ -743,22 +743,22 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 | Camera watch speaks up | Off, a changed picture rides your next message. On, the model is shown it unasked, at most once per gap below, when nothing else is going on. | off |
 | Camera watch min gap (s) | The least time between unprompted watch turns (30–3600). | 120 |
 
-#### Claude
+#### ClaudeCLI
 
-The Claude Code CLI, for `/claude` (you message it) and `claude_advisor` (the model asks it). The Claude API and the Claude CLI as servers are on `/settings` › Claude.
+The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (the model asks it). The Anthropic API and the Claude CLI as servers are on `/settings` › Anthropic.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin`; a path you set must exist. | (looked up) |
-| Claude slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), `edit` (its usual tools with file edits, no commands) or `full` (everything, `bypassPermissions`). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
-| Claude slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
-| Claude slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
-| Claude advisor tool | Offers `claude_advisor`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. | off |
-| Claude advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
-| Claude advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
-| Claude advisor tool model | The advisor's `--model`; the first row follows *Claude slash command model*. | (as Claude slash command model) |
-| Claude advisor tool effort | The advisor's `--effort`; the first row follows *Claude slash command effort*. | (as Claude slash command effort) |
-| Claude advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
+| Claude CLI executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin`; a path you set must exist. | (looked up) |
+| Claude CLI slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), `edit` (its usual tools with file edits, no commands) or `full` (everything, `bypassPermissions`). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
+| Claude CLI slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
+| Claude CLI slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
+| Claude CLI advisor tool | Offers `claude_advisor_cli`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. | off |
+| Claude CLI advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
+| Claude CLI advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
+| Claude CLI advisor tool model | The advisor's `--model`; the first row follows *Claude CLI slash command model*. | (as Claude CLI slash command model) |
+| Claude CLI advisor tool effort | The advisor's `--effort`; the first row follows *Claude CLI slash command effort*. | (as Claude CLI slash command effort) |
+| Claude CLI advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
 
 #### Home Assistant
 
@@ -957,7 +957,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copies *Shell allowed commands* into another profile (added, or replacing with `overwrite`). `--history` copies the command history instead (refused when that profile has *Keep command history* off). |
-| `/keycopy <profile>` | Copies the *LLM API key*, *Claude API key*, *OpenAI API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
+| `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix; the ask and yolo buttons (A, Y) switch *Shell command policy*. |
 | `/police` | Opens the on/off page for *Shell police outside paths*; its strings button (S) opens *Shell police forbidden strings*. |
@@ -1015,7 +1015,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/rewind [n]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
 | `/remember <text>` | Adds a memory. |
 | `/sampling [field value]` | Edits the per-model sampling on a pane, or the connected model's directly with `<field> <value>`, `<field> clear`, `extra <json>` or `clear`. See Sampling per model. |
-| `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Claude API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. |
+| `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | Lists, restores, renames and purges stored sessions. An age is days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name. |
 | `/settings`, `//` | Edits and saves the settings. |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab, typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
@@ -1098,7 +1098,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * The reply streams in under Claude's name, with each tool on a dim line and a cost footer; with speech on, it is spoken.
 * The pair joins the conversation tagged `[to Claude]` and `[Claude]`, so the local model can build on it. Claude doesn't see the local conversation.
 * Each session has one Claude conversation, resumed by the next `/claude` (even after a restart). `/claude new`, `/clear`, `/new` and a profile switch start another.
-* *Claude slash command permissions* sets what Claude may do; anything more is denied, never asked.
+* *Claude CLI slash command permissions* sets what Claude may do; anything more is denied, never asked.
 * ESC or Ctrl+C stops it, keeping the reply so far. Works with no LLM server; refused during a reply.
 * Your own Claude Code setup applies (sign-in, `CLAUDE.md`, skills, MCP servers, hooks). `/usage` shows the cost.
 
@@ -1126,7 +1126,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 * `/test reasoning`, `structured` and `long` run a group; `/test all` runs everything, saturation last.
 * Each test sends only its own messages (no system prompt, history or tools), with the model's own sampling and reasoning.
-* The structured tests send their schema as a strict `json_schema` `response_format`; a fenced reply fails. They are skipped over the Claude API.
+* The structured tests send their schema as a strict `json_schema` `response_format`; a fenced reply fails. They are skipped over the Anthropic API.
 * The long-context tests size themselves from the context window (the haystack up to half of it, at most ~66k tokens; ~66k when unknown). *LLM request timeout* applies; a refused or timed-out request is an error.
 * A run starts as `/clear` leaves things. Results show one line per test, then a table of time, tokens and tok/s. ESC stops the run, keeping what finished; the input line works as during a reply.
 * The last 50 runs are saved in the profile's `tests.json` with their reasoning and sampling; `/test history` lists them. Nothing enters the conversation.
@@ -1212,7 +1212,7 @@ A USB or built-in webcam through Windows' Media Foundation; nothing to install. 
 * A name is 1 to 32 letters, digits, `-` or `_`, and can't be `neon` or one of the verbs.
 * A name starting with `_` is temporary: left off the picker and the name list (unless loaded), and the next launch opens `default` (the profile is kept). `/profile _name` still switches to one.
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch without changing the next launch's. An unknown name exits with code 2; a headless run with neither opens `default`.
-* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Claude API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude executable, Obsidian vault, ComfyUI URL, Home Assistant URL and Home Assistant API key; `--all` resets those too. `default` can only be reset while loaded.
+* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude CLI executable, Obsidian vault, ComfyUI URL, Home Assistant URL and Home Assistant API key; `--all` resets those too. `default` can only be reset while loaded.
 * `push <name>` copies the loaded profile's settings over another's; `pull <name>` the other way. Both ask first. Only `profile.json` is copied (the target keeps its working directory); a pull clears the conversation.
 * The API keys in `profile.json` are encrypted for your Windows account (DPAPI, `dpapi:…`); a key typed into the file by hand is encrypted at the next load. Only the same Windows user on the same machine can read them.
 
@@ -1322,7 +1322,7 @@ Forty-one more presets come with the repo in [`assets/voices`](assets/voices), o
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Claude advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Claude CLI advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -1965,7 +1965,7 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `claude_advisor` | `question, context?` | Asks Claude Code for read-only advice; it can read the working directory and the web. The transcript shows the question, Claude's tools, the answer and a cost footer. One advisor conversation per session, separate from `/claude`'s. ESC stops it with the reply; `/usage` counts it. |
+| `claude_advisor_cli` | `question, context?` | Asks Claude Code for read-only advice; it can read the working directory and the web. The transcript shows the question, Claude's tools, the answer and a cost footer. One advisor conversation per session, separate from `/claude`'s. ESC stops it with the reply; `/usage` counts it. |
 
 ### Camera
 
@@ -2049,11 +2049,11 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_CLAUDE_EXE` | Claude executable | The Claude Code CLI's full path. |
-| `NEONSIDEKICK_CLAUDE_PERMISSIONS` | Claude slash command permissions | `read-only`, `edit`, `full`. |
-| `NEONSIDEKICK_CLAUDE_ADVISOR` | Claude advisor tool | on/off |
-| `NEONSIDEKICK_CLAUDE_API` | Claude API | on/off |
-| `NEONSIDEKICK_CLAUDE_API_KEY` | Claude API key | The key as issued. Never logged. |
+| `NEONSIDEKICK_CLAUDE_CLI_EXE` | Claude CLI executable | The Claude Code CLI's full path. |
+| `NEONSIDEKICK_CLAUDE_CLI_PERMISSIONS` | Claude CLI slash command permissions | `read-only`, `edit`, `full`. |
+| `NEONSIDEKICK_CLAUDE_CLI_ADVISOR` | Claude CLI advisor tool | on/off |
+| `NEONSIDEKICK_ANTHROPIC_API` | Anthropic API | on/off |
+| `NEONSIDEKICK_ANTHROPIC_API_KEY` | Anthropic API key | The key as issued. Never logged. |
 | `NEONSIDEKICK_CLAUDE_CLI_SERVER` | Claude CLI server | on/off |
 
 ### OpenAI
@@ -2104,7 +2104,7 @@ Only for running the tests from source; each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model not under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests (Haiku, a few cents a run).
-* `NEONSIDEKICK_TEST_CLAUDE_API_KEY`: the live Claude API tests (Sonnet 5 and Opus 5.5, a few cents a run).
+* `NEONSIDEKICK_TEST_CLAUDE_API_KEY`: the live Anthropic API tests (Sonnet 5 and Opus 5.5, a few cents a run).
 * `NEONSIDEKICK_TEST_OPENAI_API_KEY`: the live OpenAI API tests (the nano models the account lists, a few cents a run); with `NEONSIDEKICK_TEST_OPENAI_SWEEP=1`, every listed chat model's reasoning words too.
 * `NEONSIDEKICK_TEST_EMBEDDED_MODEL`: the catalog id the live embedded test runs (else the first installed; needs llama.cpp and a model already installed).
 * `NEONSIDEKICK_TEST_LLAMA_EXE` with `NEONSIDEKICK_TEST_TINY_GGUF`: any `llama-server.exe` and small GGUF (`stories15M-q4_0.gguf`, 19 MB), for the process host's test.

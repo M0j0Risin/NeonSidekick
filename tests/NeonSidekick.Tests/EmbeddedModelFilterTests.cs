@@ -179,7 +179,7 @@ public class EmbeddedModelFilterTests
     [Fact]
     public void Arrange_KeepsTheListsOrder_UntilSortSize_ThenSmallestFirst_TheOtherRowsInTheirPlaces()
     {
-        // Rows 0 and 3 are no model (a server on the network, the Claude API); 1, 2, 4 and 5 are models of 9, 3, 5 and 3 GB on the row.
+        // Rows 0 and 3 are no model (a server on the network, the Anthropic API); 1, 2, 4 and 5 are models of 9, 3, 5 and 3 GB on the row.
         EmbeddedModel?[] rows = [null, Model("Big", 8_000_000_000), Model("Small", 2_000_000_000), null, Model("Mid", 4_000_000_000), Model("Small too", 2_000_000_000)];
         List<int> shown = [0, 1, 2, 3, 4, 5];
 

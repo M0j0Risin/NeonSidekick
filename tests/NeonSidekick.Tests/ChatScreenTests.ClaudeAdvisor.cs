@@ -10,7 +10,7 @@ using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
-/// <summary><c>claude_advisor</c> on the screen (2026-09-27), over <see cref="FakeClaudeCli"/>.</summary>
+/// <summary><c>claude_advisor_cli</c> on the screen (2026-09-27), over <see cref="FakeClaudeCli"/>.</summary>
 public partial class ChatScreenTests
 {
     private static Dictionary<string, object?> AdvisorArgs(string question) => new() { [ClaudeAdvisorTool.QuestionArgument] = question };
@@ -30,7 +30,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Advisor_ACall_ShowsTheQuestion_ClaudesTools_TheAnswerAndTheFooter_AndTheModelReadsTheAnswer()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ClaudeAdvisor = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.ClaudeCliAdvisor = true; });
         _chat.Enqueue(FakeChatClient.Call("c1", ClaudeAdvisorTool.ToolName, AdvisorArgs("Which parser?")));
         _chat.EnqueueText("I'll use the streaming one.");
         _claudeCli.Enqueue(new ClaudeEvent.ToolActivity("Grep", "Parse"), new ClaudeEvent.TextDelta("Use the streaming parser.\n\nIt is faster."), FakeClaudeCli.Ok("s-1"));
@@ -58,7 +58,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Advisor_KeepsItsOwnThread_ApartFromClaudes_Stored_AndNewDropsIt()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ClaudeAdvisor = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.ClaudeCliAdvisor = true; });
         _claudeCli.EnqueueReply("cmd-1", "command reply");
         _chat.Enqueue(FakeChatClient.Call("c1", ClaudeAdvisorTool.ToolName, AdvisorArgs("first?")));
         _chat.EnqueueText("ok");
@@ -85,7 +85,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Advisor_NewForgetsTheThread()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ClaudeAdvisor = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.ClaudeCliAdvisor = true; });
         _chat.Enqueue(FakeChatClient.Call("c1", ClaudeAdvisorTool.ToolName, AdvisorArgs("first?")));
         _chat.EnqueueText("ok");
         _claudeCli.EnqueueReply("adv-1", "advice one");
@@ -105,7 +105,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Advisor_WithConfirmOn_NoPane_IsRefused_NothingRuns()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ClaudeAdvisor = true; d.ClaudeAdvisorConfirm = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.ClaudeCliAdvisor = true; d.ClaudeCliAdvisorConfirm = true; });
         _chat.Enqueue(FakeChatClient.Call("c1", ClaudeAdvisorTool.ToolName, AdvisorArgs("q?")));
         _chat.EnqueueText("fine, alone then");
         PushLine("ask it");
@@ -115,13 +115,13 @@ public partial class ChatScreenTests
 
         Assert.Empty(_claudeCli.Requests);
         Assert.Equal(ClaudeText.AdvisorNotAskedError, ToolResult(_chat.Requests[1], "c1"));
-        Assert.Contains("🛠️ Error: claude_advisor needs the user's yes", output);
+        Assert.Contains("🛠️ Error: claude_advisor_cli needs the user's yes", output);
     }
 
-    /// <summary>The model calls the advisor under <c>Claude advisor tool confirm</c>, the pane is answered with <paramref name="keys"/>, then the reply.</summary>
+    /// <summary>The model calls the advisor under <c>Claude CLI advisor tool confirm</c>, the pane is answered with <paramref name="keys"/>, then the reply.</summary>
     private void AdvisorConfirmFixture(ConsoleKeyInfo[] keys)
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ClaudeAdvisor = true; d.ClaudeAdvisorConfirm = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.ClaudeCliAdvisor = true; d.ClaudeCliAdvisorConfirm = true; });
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.Enqueue(FakeChatClient.Call("c1", ClaudeAdvisorTool.ToolName, AdvisorArgs("Which parser?")));

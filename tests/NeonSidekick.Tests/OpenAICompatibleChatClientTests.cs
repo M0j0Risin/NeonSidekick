@@ -360,7 +360,7 @@ public class OpenAICompatibleChatClientTests
         Assert.Contains("\"chat_template_kwargs\":{\"enable_thinking\":false,\"preserve_thinking\":true,\"clear_thinking\":false}", body);
     }
 
-    /// <summary>A message with no thinking, or only the Claude API's signed thinking, goes through the adapter as before.</summary>
+    /// <summary>A message with no thinking, or only the Anthropic API's signed thinking, goes through the adapter as before.</summary>
     [Fact]
     public void WithReasoningBack_LeavesMessagesWithoutThinkingAlone()
     {

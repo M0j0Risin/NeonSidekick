@@ -21,7 +21,7 @@ public partial class SidekickAppTests
 
         Assert.Contains("[tool] " + ClaudeText.ToolNote("Read", "a.txt"), output);
         Assert.Contains(SidekickApp.HeadlessClaudePrefix + "It says hi.", output);
-        Assert.Contains("[notice] Claude was denied Bash (Claude slash command permissions: read-only).", output);
+        Assert.Contains("[notice] Claude was denied Bash (Claude CLI slash command permissions: read-only).", output);
         Assert.Contains("[notice] " + ClaudeText.Footer(0.02m, FakeClaudeCli.Ok("s").Usage), output);
         Assert.Contains(SidekickApp.HeadlessClaudePrefix + "Again.", output);
         Assert.Contains("[notice] " + ClaudeText.NewThreadNotice, output);
@@ -54,7 +54,7 @@ public partial class SidekickAppTests
     public async Task Headless_Advisor_ClaudesToolsAndTheFooter_AreLines_TheAnswerIsTheResult()
     {
         ServerOn1234("llama");
-        _settings.Update(d => d.ClaudeAdvisor = true);
+        _settings.Update(d => d.ClaudeCliAdvisor = true);
         _chat.Enqueue(FakeChatClient.Call("c1", Llm.Tools.ClaudeAdvisorTool.ToolName, new Dictionary<string, object?> { ["question"] = "Which parser?" }));
         _chat.EnqueueText("Streaming it is.");
         _claudeCli.Enqueue(new ClaudeEvent.ToolActivity("Grep", "Parse"), new ClaudeEvent.TextDelta("The streaming one."), FakeClaudeCli.Ok("adv-1"));
@@ -63,7 +63,7 @@ public partial class SidekickAppTests
 
         Assert.Contains("[tool] " + ClaudeText.ToolNote("Grep", "Parse"), output);
         Assert.Contains("[notice] " + ClaudeText.Footer(0.02m, FakeClaudeCli.Ok("s").Usage, ClaudeText.AdvisorName), output);
-        Assert.Contains("[tool] claude_advisor -> The streaming one.", output);
+        Assert.Contains("[tool] claude_advisor_cli -> The streaming one.", output);
         Assert.Contains("Streaming it is.", output);
         Assert.Equal(ClaudePermissionLevel.ReadOnly, Assert.Single(_claudeCli.Requests).Permission);
     }
@@ -72,13 +72,13 @@ public partial class SidekickAppTests
     public async Task Headless_Advisor_UnderConfirm_IsRefused_NoOneToAsk()
     {
         ServerOn1234("llama");
-        _settings.Update(d => { d.ClaudeAdvisor = true; d.ClaudeAdvisorConfirm = true; });
+        _settings.Update(d => { d.ClaudeCliAdvisor = true; d.ClaudeCliAdvisorConfirm = true; });
         _chat.Enqueue(FakeChatClient.Call("c1", Llm.Tools.ClaudeAdvisorTool.ToolName, new Dictionary<string, object?> { ["question"] = "Which parser?" }));
         _chat.EnqueueText("Alone, then.");
 
         string output = await Headless("pick a parser\n");
 
-        Assert.Contains("[tool] claude_advisor -> " + ClaudeText.AdvisorNotAskedError, output);
+        Assert.Contains("[tool] claude_advisor_cli -> " + ClaudeText.AdvisorNotAskedError, output);
         Assert.Empty(_claudeCli.Requests);
     }
 }

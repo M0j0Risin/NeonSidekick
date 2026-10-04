@@ -17,13 +17,13 @@ namespace NeonSidekick.Llm.OpenAIPlatform;
 /// <item>A user message is a <c>message</c> item of <c>input_text</c>, <c>input_image</c> (a data URI or a URL) and
 /// <c>input_file</c> (a PDF) parts; a tool message's results are <c>function_call_output</c> items.</item>
 /// <item>An assistant message is its items in order: <c>reasoning</c> (only in the turn in flight, its encrypted content as
-/// the stream gave it — <see cref="ConversationHistory.InFlightStart"/>, as the Claude API's signed thinking), the text as a
+/// the stream gave it — <see cref="ConversationHistory.InFlightStart"/>, as the Anthropic API's signed thinking), the text as a
 /// <c>message</c> item, each call as a <c>function_call</c>. The text's <c>phase</c> is worked out rather than kept: text in a
 /// reply that also calls a tool is the preamble (<c>commentary</c>), text in one that does not is the <c>final_answer</c> — what
 /// OpenAI asks a caller that replays the history itself to send back, so GPT-5.4 on do not stop early.</item>
 /// <item>Every call is answered and every answer has its call: a call left without a result (a turn cut short) gets
 /// <see cref="AnthropicRequest.MissingResult"/>, and a result whose call is not in the conversation goes as user text.</item>
-/// <item>Tool names the API refuses are sanitised as the Claude API's are (<see cref="AnthropicRequest.ToolName"/>).</item>
+/// <item>Tool names the API refuses are sanitised as the Anthropic API's are (<see cref="AnthropicRequest.ToolName"/>).</item>
 /// <item>The reasoning level goes out as <c>reasoning.effort</c>, the model's word (<see cref="OpenAIModelRules"/>), with
 /// <c>summary: auto</c> so the transcript's fold has something to show; no sampling field at all (the reasoning models
 /// refuse a temperature).</item>
@@ -33,7 +33,7 @@ public static class OpenAIRequest
 {
     /// <summary>
     /// The <see cref="TextReasoningContent.ProtectedData"/> prefix of a reasoning item's encrypted content, so neither wire
-    /// sends the other's: the Claude API's signature carries none (<see cref="AnthropicRequest"/> skips this one).
+    /// sends the other's: the Anthropic API's signature carries none (<see cref="AnthropicRequest"/> skips this one).
     /// </summary>
     public const string EncryptedPrefix = "openai-reasoning:";
 

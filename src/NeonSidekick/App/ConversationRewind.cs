@@ -23,7 +23,7 @@ public sealed record RewindTurn(int Number, int Start, string Text, int ToolCall
 /// "Changes something" means every tool plan mode drops (<see cref="PlanTools.Allowed"/>), so an MCP tool counts too.
 /// Rewinding does not undo what they did.</item>
 /// <item><paramref name="HadClaude"/>: a <c>/claude</c> exchange was among them.</item>
-/// <item><paramref name="HadAdvisor"/>: a <c>claude_advisor</c> call was among them.</item>
+/// <item><paramref name="HadAdvisor"/>: a <c>claude_advisor_cli</c> call was among them.</item>
 /// <item><paramref name="FirstOrdinal"/>: the store ordinal of the first stamped turn
 /// (<see cref="ConversationHistory.TurnOrdinalKey"/>).</item>
 /// <item><paramref name="KeptStamped"/>: whether any turn that stays carries a stamp.</item>

@@ -194,7 +194,7 @@ public partial class SettingsMenuTests : IDisposable
         if (OperatingSystem.IsWindows())
         {
             Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(stored));
-            Assert.Contains("  · 🖥️ LLM API key: " + SettingsMenu.ClaudeApiKeyEncryptedLabel, _console.Output);
+            Assert.Contains("  · 🖥️ LLM API key: " + SettingsMenu.ApiKeyEncryptedLabel, _console.Output);
         }
     }
 
@@ -215,7 +215,7 @@ public partial class SettingsMenuTests : IDisposable
     public void ApiKeyRows_ArePinned()
     {
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.LlmApiKey, new AppSettingsData { LlmApiKey = "sk-secret" }));
-        Assert.Equal(SettingsMenu.ClaudeApiKeyEncryptedLabel, SettingsMenu.FieldValue(SettingsField.LlmApiKey, new AppSettingsData { LlmApiKey = "dpapi:AQAA" }, _settings.ProfileDirectory));
+        Assert.Equal(SettingsMenu.ApiKeyEncryptedLabel, SettingsMenu.FieldValue(SettingsField.LlmApiKey, new AppSettingsData { LlmApiKey = "dpapi:AQAA" }, _settings.ProfileDirectory));
         Assert.Equal("em•••", SettingsMenu.FieldValue(SettingsField.LlmApiKey, new AppSettingsData(), _settings.ProfileDirectory));
         Assert.Equal("LLM API key saved unencrypted: no DPAPI.", SettingsMenu.LlmApiKeyPlainWarning("no DPAPI"));
         Assert.Equal("Home Assistant API key", SettingsMenu.FieldName(SettingsField.HomeAssistantToken));   // "token" until 2026-09-28 (the user's call)
@@ -778,14 +778,14 @@ public partial class SettingsMenuTests : IDisposable
         data.LlmUrl = "";
         // The label column is the longest name plus two spaces, computed ("STT interrupt echo guard" once touched "100 %" when it was a hand-kept number).
         int longest = Enum.GetValues<SettingsField>().Max(f => SettingsMenu.FieldName(f).Length);
-        Assert.Equal(36, longest);   // "Use external skills (.agents\\skills)" (2026-09-16; "Ask max choices per question", 28, before)
-        Assert.Equal(38, SettingsMenu.LabelWidth);
+        Assert.Equal(38, longest);   // "Claude CLI advisor tool calls per turn" (2026-10-04); "Use external skills (.agents\\skills)" (2026-09-16; "Ask max choices per question", 28, before)
+        Assert.Equal(40, SettingsMenu.LabelWidth);
         Assert.Equal(longest + 2, SettingsMenu.LabelWidth);
         Assert.Equal("LLM request timeout (s)", SettingsMenu.FieldName(SettingsField.LlmRequestTimeoutSeconds));
         Assert.Equal("LLM turn timeout (s)", SettingsMenu.FieldName(SettingsField.LlmTurnTimeoutSeconds));
-        Assert.Equal("LLM URL                               [#EFE6FF](probe local ports)[/]", SettingsMenu.FieldLabel(SettingsField.LlmUrl, data, _settings.ProfileDirectory, null));
-        Assert.Equal("LLM API key                           [#EFE6FF]sk•••••••[/][#9A8BB8]  (overridden by X)[/]", SettingsMenu.FieldLabel(SettingsField.LlmApiKey, data, _settings.ProfileDirectory, "X"));
-        Assert.Equal("LLM request timeout (s)               [#EFE6FF]3600[/]", SettingsMenu.FieldLabel(SettingsField.LlmRequestTimeoutSeconds, data, _settings.ProfileDirectory, null));
+        Assert.Equal("LLM URL                                 [#EFE6FF](probe local ports)[/]", SettingsMenu.FieldLabel(SettingsField.LlmUrl, data, _settings.ProfileDirectory, null));
+        Assert.Equal("LLM API key                             [#EFE6FF]sk•••••••[/][#9A8BB8]  (overridden by X)[/]", SettingsMenu.FieldLabel(SettingsField.LlmApiKey, data, _settings.ProfileDirectory, "X"));
+        Assert.Equal("LLM request timeout (s)                 [#EFE6FF]3600[/]", SettingsMenu.FieldLabel(SettingsField.LlmRequestTimeoutSeconds, data, _settings.ProfileDirectory, null));
         Assert.Equal("(none)", SettingsMenu.Mask(""));
         Assert.Equal("••••", SettingsMenu.Mask("abcd"));
         Assert.Equal("3600", SettingsMenu.FieldValue(SettingsField.LlmRequestTimeoutSeconds, data, _settings.ProfileDirectory));
@@ -846,9 +846,9 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.BotChatNonTtsDelaySeconds,
                 SettingsField.ShellPreferNative,
                 SettingsField.LlmShowThinking,
-                SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort,
-                SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm,
-                SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching,
+                SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort,
+                SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm,
+                SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
                 SettingsField.BotChatSkills,
                 SettingsField.BotChatVision,
                 SettingsField.ThemedExternalWindows,
@@ -1003,7 +1003,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
         Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][SettingsMenu.TabFields[(int)SettingsTab.Llm].ToList().IndexOf(SettingsField.LlmTurnTimeoutSeconds) + 1]);   // the context run's first row, under the turn timeout, since 2026-10-01 (the user's call); [^16] before: the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
-        Assert.Equal(["General", "Embedded", "Docker", "Claude", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
+        Assert.Equal(["General", "Embedded", "Docker", "Anthropic", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1480,9 +1480,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("only the current turn's thinking goes back to the server", SettingsMenu.ToggleDescribe(SettingsField.LlmPreserveThinking, false));
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then (2026-10-01, the user's call) the rest of the connection, how it answers, tools and limits, the context and the fun verbs; the reconnecting LLM fields keep their enum order among them.
         Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
-        // The reconnecting rows: the LLM tab's seven (in three runs since 2026-10-01, rows 2 to 8 before; their tab order is still the enum's), then the Claude API's four (2026-09-27; /settings' Claude tab's four above its last since 2026-10-03), then the
+        // The reconnecting rows: the LLM tab's seven (in three runs since 2026-10-01, rows 2 to 8 before; their tab order is still the enum's), then the Anthropic API's four (2026-09-27; /settings' Claude tab's four above its last since 2026-10-03), then the
         // Embedded tab's, then the Claude CLI server's switch (2026-09-30: the Claude tab's last row), then Embedded VRAM only (2026-10-01), then Docker servers enabled (2026-10-02), then the OpenAI tab's five (2026-10-03).
-        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Where(SettingsMenu.IsLlmField).Concat(SettingsMenu.TabFields[(int)SettingsTab.Claude].SkipLast(1)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedVramOnly)).OrderBy(f => f)).Append(SettingsMenu.TabFields[(int)SettingsTab.Claude][^1]).Append(SettingsField.EmbeddedVramOnly).Append(SettingsField.DockerServers).Concat(SettingsMenu.TabFields[(int)SettingsTab.OpenAI]));   // Docker servers enabled last (2026-10-02, the Docker tab's one reconnecting row); the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
+        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Where(SettingsMenu.IsLlmField).Concat(SettingsMenu.TabFields[(int)SettingsTab.Anthropic].SkipLast(1)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedVramOnly)).OrderBy(f => f)).Append(SettingsMenu.TabFields[(int)SettingsTab.Anthropic][^1]).Append(SettingsField.EmbeddedVramOnly).Append(SettingsField.DockerServers).Concat(SettingsMenu.TabFields[(int)SettingsTab.OpenAI]));   // Docker servers enabled last (2026-10-02, the Docker tab's one reconnecting row); the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
         Assert.Equal("LLM server scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));
@@ -1534,7 +1534,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("chat", SettingsMenu.FieldValue(SettingsField.SttDestination, data, _settings.ProfileDirectory));
         Assert.Equal("draft", SettingsMenu.FieldValue(SettingsField.SttDestination, new AppSettingsData { SttDestination = "draft" }, _settings.ProfileDirectory));
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
-        Assert.Equal(["General", "Embedded", "Docker", "Claude", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
+        Assert.Equal(["General", "Embedded", "Docker", "Anthropic", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1619,7 +1619,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard"
         Assert.Equal(29, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat multi-embedded kill" (later on 2026-09-29; "Botchat txt2img workflow" from 2026-09-27, "Botchat images enabled" before)
-        Assert.Equal(36, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.ClaudeTabTitle)));   // the Claude tab (2026-09-27): "Claude advisor tool calls per turn"
+        Assert.Equal(40, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.ClaudeCliTabTitle)));   // the ClaudeCLI tab (2026-09-27): "Claude CLI advisor tool calls per turn" (since 2026-10-04; "Claude advisor tool calls per turn", 36, before)
         Assert.Equal(21, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle)));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.WebTabTitle)));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FilesTabTitle)));   // "File view image max (per call)" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
@@ -1638,7 +1638,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("(" + Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName) + ")", SettingsMenu.FieldValue(SettingsField.WorkingDirectory, data, _settings.ProfileDirectory));
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.WorkingDirectory, data));
         Assert.Equal(@"D:\x\[v]", SettingsMenu.FieldValue(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory));
-        Assert.Equal("Working directory (cwd)               [#EFE6FF]D:\\x\\[[v]][/]", SettingsMenu.FieldLabel(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory, null));
+        Assert.Equal("Working directory (cwd)                 [#EFE6FF]D:\\x\\[[v]][/]", SettingsMenu.FieldLabel(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory, null));
         Assert.Equal(@"(D:\home\profiles\p\files)", SettingsMenu.DefaultWorkingDirectoryLabel(@"D:\home\profiles\p"));
         Assert.Equal("Could not create Q:\\nope (boom); keeping (profile folder).", SettingsMenu.WorkingDirectoryCreateError(@"Q:\nope", "boom", "(profile folder)"));
         Assert.True(SettingsMenu.IsToggle(SettingsField.Memory));
@@ -2770,8 +2770,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Same(servers[0], picked);
         Assert.Contains(SettingsMenu.ServerTitle, _console.Output);
-        Assert.Contains("LM Studio  http://127.0.0.1:1234/v1   1 chat model", _console.Output);   // the URLs padded to one column (2026-09-29)
-        Assert.Contains("Ollama     http://127.0.0.1:11434/v1  2 chat models", _console.Output);
+        Assert.Contains("LM Studio      http://127.0.0.1:1234/v1   1 chat model", _console.Output);   // the URLs padded to one column (2026-09-29)
+        Assert.Contains("Ollama         http://127.0.0.1:11434/v1  2 chat models", _console.Output);
         Assert.Empty(_settings.Current.LlmUrl);   // picking saves nothing; the caller does
     }
 
@@ -2897,7 +2897,7 @@ public partial class SettingsMenuTests : IDisposable
     public void ServerStrings_ArePinned()
     {
         Assert.Equal(SettingsMenu.ServerTitle + "   Enter = choose · ESC = keep", SettingsMenu.PromptTitle(SettingsMenu.ServerTitle, SettingsMenu.KeepKeys));
-        Assert.Equal("LM Studio  [#EFE6FF]http://127.0.0.1:1234/v1[/][#9A8BB8]  1 chat model[/]", SettingsMenu.ServerLabel(Server(1234, "LM Studio", "lm")));
+        Assert.Equal("LM Studio      [#EFE6FF]http://127.0.0.1:1234/v1[/][#9A8BB8]  1 chat model[/]", SettingsMenu.ServerLabel(Server(1234, "LM Studio", "lm")));
         Assert.Equal("Not a usable server URL: bad", SettingsMenu.ServerUrlError("bad"));
         Assert.Equal("http://127.0.0.1:9/v1 did not answer /v1/models (refused); using it anyway because you asked.",
             SettingsMenu.ServerNotAnsweringWarning(new Uri("http://127.0.0.1:9/v1"), "refused"));
@@ -2906,8 +2906,8 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public void ProfileStrings_ArePinned()
     {
-        Assert.Equal(@"Profile                               [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work"));
-        Assert.Equal(@"Profile                               [#EFE6FF]p[/][#9A8BB8] (D:\h[[x]]\profiles\p)[/]", SettingsMenu.ProfileLabel("p", @"D:\h[x]\profiles\p"));   // the path escaped
+        Assert.Equal(@"Profile                                 [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work"));
+        Assert.Equal(@"Profile                                 [#EFE6FF]p[/][#9A8BB8] (D:\h[[x]]\profiles\p)[/]", SettingsMenu.ProfileLabel("p", @"D:\h[x]\profiles\p"));   // the path escaped
         Assert.Equal("profiles: default (current), work", SettingsMenu.ProfileListLine(new[] { "default", "work" }, "default"));
         Assert.Equal("profiles: default, work (current)", SettingsMenu.ProfileListLine(new[] { "default", "work" }, "Work"));
         Assert.Equal("(🪪 already on profile \"default\")", SettingsMenu.AlreadyCurrentNotice("default"));
@@ -2928,7 +2928,7 @@ public partial class SettingsMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("Profile                               " + Profiles.DefaultName, _console.Output);
+        Assert.Contains("Profile                                 " + Profiles.DefaultName, _console.Output);
         Assert.StartsWith(Profiles.DefaultName, _settings.ProfileName);
     }
 
@@ -2947,7 +2947,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("work", _settings.ProfileName);
         Assert.Equal("work-model", _settings.Current.LlmModel);
         Assert.DoesNotContain(SettingsMenu.SwitchedNotice("work"), _console.Output);   // the screen announces it, after its redraw
-        Assert.Contains("Profile                               work", _console.Output);   // the menu again, on the new profile
+        Assert.Contains("Profile                                 work", _console.Output);   // the menu again, on the new profile
     }
 
     [Fact]
@@ -3136,7 +3136,7 @@ public partial class SettingsMenuTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
+    private const string Strip = SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
     [Fact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()

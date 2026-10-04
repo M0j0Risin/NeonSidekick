@@ -17,7 +17,7 @@ public enum ClaudePermissionLevel
 }
 
 /// <summary>
-/// The <c>Claude permissions</c> setting (2026-09-27, the user's pick of the four offered: a level, denied
+/// The <c>Claude CLI slash command permissions</c> setting (2026-09-27, the user's pick of the four offered: a level, denied
 /// automatically past it — <c>--permission-prompts none</c> — rather than asked on the approval pane): the three
 /// words and their mapping to <see cref="ClaudePermissionLevel"/>, the way <see cref="Llm.CompactType"/> maps its
 /// words. <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that is none
@@ -64,13 +64,13 @@ public static class ClaudePermission
     public static ClaudePermissionLevel Resolve(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        if (TryParse(effective.ClaudePermissions, out var level))
+        if (TryParse(effective.ClaudeCliPermissions, out var level))
         {
             return level;
         }
 
         DiagnosticLog.Warn(ClaudeText.Category,
-            $"{nameof(AppSettingsData.ClaudePermissions)}='{effective.ClaudePermissions}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+            $"{nameof(AppSettingsData.ClaudeCliPermissions)}='{effective.ClaudeCliPermissions}' is not one of {string.Join(", ", Names)}. Using {Default}.");
         return ClaudePermissionLevel.ReadOnly;
     }
 }
@@ -101,13 +101,13 @@ public static class ClaudeEffort
             return word;
         }
 
-        DiagnosticLog.Warn(ClaudeText.Category, $"{nameof(AppSettingsData.ClaudeEffort)}='{saved}' is not one of {string.Join(", ", Names.Skip(1))}. Leaving it to the CLI.");
+        DiagnosticLog.Warn(ClaudeText.Category, $"{nameof(AppSettingsData.ClaudeCliEffort)}='{saved}' is not one of {string.Join(", ", Names.Skip(1))}. Leaving it to the CLI.");
         return null;
     }
 }
 
 /// <summary>
-/// The <c>Claude slash command model</c> / <c>Claude advisor tool model</c> pickers' words (2026-09-27, the user's ask: pick, don't type):
+/// The <c>Claude CLI slash command model</c> / <c>Claude CLI advisor tool model</c> pickers' words (2026-09-27, the user's ask: pick, don't type):
 /// the aliases <c>claude --model</c> takes for the latest of each family (its help names <c>fable</c>, <c>opus</c> and
 /// <c>sonnet</c>; <c>haiku</c> is the live tests'). A full model name is still typed, through the picker's <c>Other…</c> row;
 /// whatever is saved goes to <c>--model</c> as it is. Pure.

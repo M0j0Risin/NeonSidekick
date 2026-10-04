@@ -3,18 +3,19 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.App;
 
-// ── The Claude tab of /settings: the Claude API and the Claude CLI server (2026-10-03) ──────────────
+// ── The Anthropic tab of /settings: the Anthropic API and the Claude CLI server (2026-10-03; "Claude" until 2026-10-04) ──
 
 internal sealed partial class SettingsMenu
 {
     /// <summary>
-    /// The Claude tab's strip title (2026-10-03, the user's ask: the Claude API's four rows and the Claude CLI server's switch
-    /// off <c>/tools</c>' Claude tab, which keeps <c>/claude</c>'s and the advisor's; after Docker, the user's place). Pinned.
+    /// The Anthropic tab's strip title (2026-10-03, the user's ask: the Anthropic API's four rows and the Claude CLI server's switch
+    /// off <c>/tools</c>' ClaudeCLI tab, which keeps <c>/claude</c>'s and the advisor's; after Docker, the user's place). "Claude" until
+    /// 2026-10-04, when both tabs were renamed so the names say which is which (the user's call: Anthropic here, ClaudeCLI there). Pinned.
     /// </summary>
-    public const string ClaudeTabTitle = "Claude";
+    public const string AnthropicTabTitle = "Anthropic";
 
     /// <summary>
-    /// <c>Claude API key</c> and <c>OpenAI API key</c> (2026-10-03, <see cref="SetHomeAssistantTokenAsync"/>'s shape; the Claude key
+    /// <c>Anthropic API key</c> and <c>OpenAI API key</c> (2026-10-03, <see cref="SetHomeAssistantTokenAsync"/>'s shape; the Claude key
     /// was typed in the clear until then): a masked slot on the pane, the key never put back on the line — typing replaces it,
     /// empty clears it — then encrypted for this Windows user before it reaches the file (<see cref="SettingsSecrets.Protect"/>);
     /// where DPAPI fails, kept as typed and said so. A reconnect, as before.
@@ -51,10 +52,10 @@ internal sealed partial class SettingsMenu
         {
             if (protectError is not null)
             {
-                Sink.Warning(ClaudeApiKeyPlainWarning(protectError));
+                Sink.Warning(AnthropicApiKeyPlainWarning(protectError));
             }
 
-            Apply(field, d => d.ClaudeApiKey = stored);
+            Apply(field, d => d.AnthropicApiKey = stored);
         }
 
         return true;

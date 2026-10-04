@@ -5,10 +5,10 @@ namespace NeonSidekick.Llm.OpenAIPlatform;
 
 /// <summary>
 /// The OpenAI API as one more <c>/server</c> choice (2026-10-03, the user's ask: OpenAI's own API "similar to how we
-/// implemented support for Claude API", offered only while the <c>OpenAI API</c> switch is on and a key is set). As with
+/// implemented support for Anthropic API", offered only while the <c>OpenAI API</c> switch is on and a key is set). As with
 /// <see cref="Anthropic.ClaudeApi"/>, the provider is told by the URL alone — a saved <see cref="AppSettingsData.LlmUrl"/>
 /// on <see cref="Host"/> is the OpenAI API — and its key is its own (<see cref="AppSettingsData.OpenAIApiKey"/>, DPAPI in
-/// the profile), never the <c>LLM API key</c> a local server gets nor the Claude API's (<see cref="ApiKeys.For"/>). Spoken
+/// the profile), never the <c>LLM API key</c> a local server gets nor the Anthropic API's (<see cref="ApiKeys.For"/>). Spoken
 /// to over the Responses API (<see cref="OpenAIApiChatClient"/>; Chat Completions for the first cut that day, until the live
 /// sweep found it refuses tools beside reasoning on GPT-5.4 and newer).
 /// </summary>

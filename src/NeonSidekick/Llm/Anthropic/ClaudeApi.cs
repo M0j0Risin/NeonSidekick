@@ -3,32 +3,32 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Anthropic;
 
 /// <summary>
-/// The Claude API as one more <c>/server</c> choice (2026-09-27, the user's ask: Anthropic's Messages API beside the
-/// local OpenAI-compatible servers, offered only while the <c>Claude API</c> switch is on and a key is set). The
+/// The Anthropic API as one more <c>/server</c> choice (2026-09-27, the user's ask: Anthropic's Messages API beside the
+/// local OpenAI-compatible servers, offered only while the <c>Anthropic API</c> switch is on and a key is set). The
 /// provider is told by the URL alone — a saved <see cref="AppSettingsData.LlmUrl"/> on <see cref="Host"/> is the Claude
 /// API, anything else the OpenAI-compatible path — so no second URL setting exists and a profile switch, <c>/server</c>
-/// and <c>--url</c> all route it the same way. Its key is its own (<see cref="AppSettingsData.ClaudeApiKey"/>, DPAPI in
+/// and <c>--url</c> all route it the same way. Its key is its own (<see cref="AppSettingsData.AnthropicApiKey"/>, DPAPI in
 /// the profile), never the <c>LLM API key</c> a local server gets: switching servers must not send one's key to the other.
 /// </summary>
 public static class ClaudeApi
 {
-    /// <summary>The API's host; a base URL on it is the Claude API.</summary>
+    /// <summary>The API's host; a base URL on it is the Anthropic API.</summary>
     public const string Host = "api.anthropic.com";
 
-    /// <summary>The base URL <c>/server</c> saves for the Claude API, already <c>/v1</c>-normalised like every other.</summary>
+    /// <summary>The base URL <c>/server</c> saves for the Anthropic API, already <c>/v1</c>-normalised like every other.</summary>
     public static readonly Uri BaseUrl = new("https://" + Host + "/v1");
 
     /// <summary>The <c>anthropic-version</c> header every request carries.</summary>
     public const string Version = "2023-06-01";
 
     /// <summary>The server picker's name for the row (fits <c>SettingsMenu.ServerNameWidth</c>). Pinned.</summary>
-    public const string ServerName = "Claude API";
+    public const string ServerName = "Anthropic API";
 
-    /// <summary>Whether <paramref name="baseUrl"/> is the Claude API.</summary>
+    /// <summary>Whether <paramref name="baseUrl"/> is the Anthropic API.</summary>
     public static bool IsClaudeApi(Uri? baseUrl) =>
         baseUrl is not null && string.Equals(baseUrl.Host, Host, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Whether <paramref name="url"/> (a saved setting, possibly blank or malformed) names the Claude API.</summary>
+    /// <summary>Whether <paramref name="url"/> (a saved setting, possibly blank or malformed) names the Anthropic API.</summary>
     public static bool IsClaudeApi(string? url) =>
         !string.IsNullOrWhiteSpace(url) && Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed) && IsClaudeApi(parsed);
 
@@ -45,7 +45,7 @@ public static class ClaudeApi
         return new Uri(v1Base.AbsoluteUri.TrimEnd('/') + "/messages");
     }
 
-    /// <summary>The two headers that stand in for <c>Authorization: Bearer</c> on every Claude API request.</summary>
+    /// <summary>The two headers that stand in for <c>Authorization: Bearer</c> on every Anthropic API request.</summary>
     public static void AddHeaders(HttpRequestMessage request, string? apiKey)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -65,14 +65,14 @@ public static class ClaudeApi
     public static string? Key(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return SettingsSecrets.Reveal(effective.ClaudeApiKey);
+        return SettingsSecrets.Reveal(effective.AnthropicApiKey);
     }
 
-    /// <summary>Whether the Claude API is offered: the switch on and a key that reads.</summary>
+    /// <summary>Whether the Anthropic API is offered: the switch on and a key that reads.</summary>
     public static bool Offered(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.ClaudeApi && Key(effective) is not null;
+        return effective.AnthropicApi && Key(effective) is not null;
     }
 
     /// <summary>

@@ -674,8 +674,8 @@ public sealed class SidekickApp
         // The Claude CLI server's session (2026-09-30), as the screen keeps it: minted at the first turn over it, dropped with the session.
         string? claudeServerSessionId = null;
         var claude = _claude ?? new Claude.ClaudeProcess(_environment.System);
-        // claude_advisor (2026-09-27): its own thread, as the screen keeps it; no one to confirm with, so a call under
-        // Claude advisor tool confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
+        // claude_advisor_cli (2026-09-27): its own thread, as the screen keeps it; no one to confirm with, so a call under
+        // Claude CLI advisor tool confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
         var advisorThread = new Claude.ClaudeAdvisorThread();
         var advisorTools = ChatScreen.ClaudeAdvisorTools(claude, () => EffectiveSettings, () => files.Root, advisorThread, (usage, usd) => session.Usage.AddClaude(usage, usd), () => session.History.Messages, null, new HeadlessAdvisorView(this));
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
@@ -982,7 +982,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeCliAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings));
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude CLI server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
@@ -1514,8 +1514,8 @@ public sealed class SidekickApp
         for (int attempt = 0; ; attempt++)
         {
             var level = Claude.ClaudePermission.Resolve(effective);
-            var request = new Claude.ClaudeRequest(args, id, resume, root, level, effective.ClaudeExecutable,
-                string.IsNullOrWhiteSpace(effective.ClaudeModel) ? null : effective.ClaudeModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeEffort));
+            var request = new Claude.ClaudeRequest(args, id, resume, root, level, effective.ClaudeCliExecutable,
+                string.IsNullOrWhiteSpace(effective.ClaudeCliModel) ? null : effective.ClaudeCliModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeCliEffort));
             var reply = new StringBuilder();
             Claude.ClaudeEvent.Result? result = null;
             bool prefixed = false;
@@ -1681,7 +1681,7 @@ public sealed class SidekickApp
     }
 
     /// <summary>
-    /// <c>claude_advisor</c> headless (2026-09-27): each tool Claude uses as a <c>[tool] Claude › …</c> line and the footer as a
+    /// <c>claude_advisor_cli</c> headless (2026-09-27): each tool Claude uses as a <c>[tool] Claude › …</c> line and the footer as a
     /// <c>[notice]</c>; the question and the answer are the generic call and result lines. Synchronous, as
     /// <see cref="OnHeadlessDiagnostic"/> is: the tool runs between the turn loop's awaited writes, never mid-line.
     /// </summary>
@@ -1955,7 +1955,7 @@ public sealed class SidekickApp
     public static string EnvironmentLogLine(string overrides) => "Overrides in force: " + overrides;
 
     /// <summary>
-    /// The production chat client for <paramref name="endpoint"/> (2026-09-27): the Claude API's own client on its host
+    /// The production chat client for <paramref name="endpoint"/> (2026-09-27): the Anthropic API's own client on its host
     /// (<see cref="Llm.Anthropic.ClaudeApi.IsClaudeApi(Uri?)"/>), with the output cap and caching the effective settings
     /// hold at the connect; the Claude CLI's (<see cref="Claude.ClaudeCliChatClient"/>, 2026-09-30) over this run's one
     /// process on its sentinel; the OpenAI API's (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>, 2026-10-03, the Responses API) on its host, with
@@ -1968,7 +1968,7 @@ public sealed class SidekickApp
         {
             var host = _claudeServer ?? throw new InvalidOperationException(Claude.ClaudeCliText.NotRunningError);
             var context = new Claude.ClaudeCliContext(
-                () => Claude.ClaudeExecutable.Locate(EffectiveSettings.ClaudeExecutable, _environment.System, File.Exists),
+                () => Claude.ClaudeExecutable.Locate(EffectiveSettings.ClaudeCliExecutable, _environment.System, File.Exists),
                 ClaudeCliDirectory);
             return new Claude.ClaudeCliChatClient(endpoint, host, context, timeouts.Request);
         }
@@ -1988,7 +1988,7 @@ public sealed class SidekickApp
         }
 
         var effective = EffectiveSettings;
-        return new Llm.Anthropic.AnthropicChatClient(endpoint, timeouts.Request, effective.ClaudeApiMaxTokens, effective.ClaudeApiPromptCaching, time: _time);
+        return new Llm.Anthropic.AnthropicChatClient(endpoint, timeouts.Request, effective.AnthropicApiMaxTokens, effective.AnthropicApiPromptCaching, time: _time);
     }
 
     public string? OverriddenBy(SettingsField field) => field switch
@@ -2018,11 +2018,11 @@ public sealed class SidekickApp
         SettingsField.ShellPreferNative => _environment.ShellNative is not null ? EnvironmentOverrides.ShellNativeVariable : null,
         SettingsField.ObsidianVault => _environment.ObsidianVault is not null ? EnvironmentOverrides.ObsidianVaultVariable : null,
         SettingsField.ComfyUrl => _environment.ComfyUrl is not null ? EnvironmentOverrides.ComfyUrlVariable : null,
-        SettingsField.ClaudeExecutable => _environment.ClaudeExecutable is not null ? EnvironmentOverrides.ClaudeExeVariable : null,
-        SettingsField.ClaudePermissions => _environment.ClaudePermissions is not null ? EnvironmentOverrides.ClaudePermissionsVariable : null,
-        SettingsField.ClaudeAdvisor => _environment.ClaudeAdvisor is not null ? EnvironmentOverrides.ClaudeAdvisorVariable : null,
-        SettingsField.ClaudeApi => _environment.ClaudeApi is not null ? EnvironmentOverrides.ClaudeApiVariable : null,
-        SettingsField.ClaudeApiKey => _environment.ClaudeApiKey is not null ? EnvironmentOverrides.ClaudeApiKeyVariable : null,
+        SettingsField.ClaudeCliExecutable => _environment.ClaudeCliExecutable is not null ? EnvironmentOverrides.ClaudeCliExeVariable : null,
+        SettingsField.ClaudeCliPermissions => _environment.ClaudeCliPermissions is not null ? EnvironmentOverrides.ClaudeCliPermissionsVariable : null,
+        SettingsField.ClaudeCliAdvisor => _environment.ClaudeCliAdvisor is not null ? EnvironmentOverrides.ClaudeCliAdvisorVariable : null,
+        SettingsField.AnthropicApi => _environment.AnthropicApi is not null ? EnvironmentOverrides.AnthropicApiVariable : null,
+        SettingsField.AnthropicApiKey => _environment.AnthropicApiKey is not null ? EnvironmentOverrides.AnthropicApiKeyVariable : null,
         SettingsField.ClaudeCliServer => _environment.ClaudeCliServer is not null ? EnvironmentOverrides.ClaudeCliServerVariable : null,
         SettingsField.OpenAIApi => _environment.OpenAIApi is not null ? EnvironmentOverrides.OpenAIApiVariable : null,
         SettingsField.OpenAIApiKey => _environment.OpenAIApiKey is not null ? EnvironmentOverrides.OpenAIApiKeyVariable : null,

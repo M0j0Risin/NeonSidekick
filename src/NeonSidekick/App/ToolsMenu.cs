@@ -19,7 +19,7 @@ namespace NeonSidekick.App;
 /// whose switch is off shows dim on the Offered tab with the switch named after its heading — the
 /// per-tool values still flip and save. Nothing here clears the conversation: every flip is read at the next turn
 /// (<see cref="ChatScreen.PrepareTurn"/>), so the pane opens mid-turn too and edits as <c>/settings</c> does there. The
-/// Claude tab's four Claude API rows and the Claude CLI server's (2026-09-29 to 2026-10-03, when they went back to
+/// Claude tab's four Anthropic API rows and the Claude CLI server's (2026-09-29 to 2026-10-03, when they went back to
 /// <c>/settings</c>' own Claude tab, the user's call) were reconnects; the handling stays for any reconnect row
 /// (<see cref="SettingsMenu.IsLlmField"/>): refused mid-turn like there, and <see cref="ShowAsync"/> returns
 /// <see cref="SettingsChanges.Llm"/> when one saved, so the screen reconnects once the pane closes — <c>/mcp</c>'s shape.

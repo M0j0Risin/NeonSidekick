@@ -58,7 +58,7 @@ public enum SlashCommand
     /// <summary><c>/cmdcopy &lt;profile&gt; [--history] [overwrite]</c>: copy this profile's allowed shell commands (the <c>Shell allowed commands</c> prefixes) into another's — appended, the duplicates skipped, or in place of them — after a confirmation (2026-09-21, the user's ask: what was <c>/memcopy</c> then — <c>/memory copy</c> since 2026-09-22 — for the approval pane's list); with <c>--history</c> (2026-09-25, the user's ask) its command history instead, into the other profile's <c>sessions.db</c>.</summary>
     CmdCopy,
 
-    /// <summary><c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Claude API key</c> and <c>Home Assistant API key</c> (it joined the same day, the user's ask) into another's <c>profile.json</c>, after a confirmation — <c>/cmdcopy</c>'s shape without its switches. All mirrored (the user's call): a key not set here clears the target's, so the target ends with exactly this profile's keys. The stored values, as stored (a <c>dpapi:</c> key stays one); a key that comes only from a variable is not copied.</summary>
+    /// <summary><c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Anthropic API key</c> and <c>Home Assistant API key</c> (it joined the same day, the user's ask) into another's <c>profile.json</c>, after a confirmation — <c>/cmdcopy</c>'s shape without its switches. All mirrored (the user's call): a key not set here clears the target's, so the target ends with exactly this profile's keys. The stored values, as stored (a <c>dpapi:</c> key stays one); a key that comes only from a variable is not copied.</summary>
     KeyCopy,
 
     /// <summary><c>/cmdclear</c> (2026-09-25, the user's ask): this profile's command history — the input line's Up/Down recall, stored in <c>sessions.db</c> under <c>Keep command history</c> — emptied, stored and in memory, after a confirmation. No argument.</summary>
@@ -311,7 +311,7 @@ public static class SlashCommands
             new("/help", "show help"),
             new("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"),
             new("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"),
-            new("/keycopy", "copy this profile's LLM API key, Claude API key and Home Assistant API key into another profile, replacing its own (asks first): /keycopy <profile>"),
+            new("/keycopy", "copy this profile's LLM API key, Anthropic API key and Home Assistant API key into another profile, replacing its own (asks first): /keycopy <profile>"),
             new("/learn", "write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]"),
             new("/log", "open the diagnostic log in a window that follows it, or /log --file for the --log file in your editor"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),

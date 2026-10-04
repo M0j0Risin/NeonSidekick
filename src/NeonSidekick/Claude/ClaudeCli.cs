@@ -10,7 +10,7 @@ namespace NeonSidekick.Claude;
 /// <param name="Resume">False for the first message of the thread (<c>--session-id</c>), true after (<c>--resume</c>).</param>
 /// <param name="WorkingDirectory">The folder the child starts in: the sandbox root, as the file tools see it.</param>
 /// <param name="Permission">What the child may do past reading (<see cref="ClaudePermission"/>).</param>
-/// <param name="Executable">The <c>Claude executable</c> setting: a full path, or blank to look the CLI up.</param>
+/// <param name="Executable">The <c>Claude CLI executable</c> setting: a full path, or blank to look the CLI up.</param>
 /// <param name="Model">The <c>--model</c> word, or null for the CLI's own.</param>
 /// <param name="Effort">The <c>--effort</c> word, or null for the CLI's own.</param>
 public sealed record ClaudeRequest(

@@ -77,7 +77,7 @@ public sealed class LlmEndpointProbe
     /// <summary>The per-call ceiling in force.</summary>
     public TimeSpan Timeout { get; }
 
-    /// <summary>The Claude API's model-list ceiling when <see cref="Timeout"/> is shorter (2026-09-27): a hosted API over the internet, not a local port.</summary>
+    /// <summary>The Anthropic API's model-list ceiling when <see cref="Timeout"/> is shorter (2026-09-27): a hosted API over the internet, not a local port.</summary>
     public static readonly TimeSpan ClaudeApiTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>The comma-separated port list, for the "nothing found" message.</summary>
@@ -143,7 +143,7 @@ public sealed class LlmEndpointProbe
         ArgumentNullException.ThrowIfNull(baseUrl);
         var v1 = LlmEndpoint.NormalizeBaseUrl(baseUrl);
 
-        // The Claude API (2026-09-27): its own key headers and a page size that lists every model at once, and a
+        // The Anthropic API (2026-09-27): its own key headers and a page size that lists every model at once, and a
         // longer ceiling — it is across the internet, not on a port of this network. The OpenAI API (2026-10-03) takes the
         // same ceiling and a Bearer key as any server; its list is cut to the chat models and ordered newest first.
         bool claude = ClaudeApi.IsClaudeApi(v1);
@@ -186,7 +186,7 @@ public sealed class LlmEndpointProbe
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
                 return new ProbeResult(true, Array.Empty<string>(), claude
-                    ? $"{(int)response.StatusCode} on /v1/models; check Claude API key"
+                    ? $"{(int)response.StatusCode} on /v1/models; check Anthropic API key"
                     : openAI
                         ? $"{(int)response.StatusCode} on /v1/models; {OpenAIApiText.KeyHint}"
                         : $"{(int)response.StatusCode} on /v1/models; the server wants a key");
@@ -251,7 +251,7 @@ public sealed class LlmEndpointProbe
         {
             var v1 = LlmEndpoint.NormalizeBaseUrl(extra);
 
-            // The Claude API is never scanned for: its row is the session's to add, with its own key (2026-09-27); nor the OpenAI
+            // The Anthropic API is never scanned for: its row is the session's to add, with its own key (2026-09-27); nor the OpenAI
             // API's (2026-10-03). Nor is the embedded model's sentinel (2026-09-29), nor the Claude CLI's (2026-09-30): their rows
             // are the session's too, and a sentinel is no place to ask.
             if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ApiKeys.IsHostedApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1) && !Claude.ClaudeCliEndpoint.IsClaudeCli(v1) && !Docker.DockerEndpoint.IsDocker(v1)) urls.Add(v1);
@@ -345,12 +345,12 @@ public sealed class LlmEndpointProbe
         }
         else if (EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective))
         {
-            // Saved while the embedded model was on (2026-09-29); switched off, the URL stands for nothing, like the Claude API's below.
+            // Saved while the embedded model was on (2026-09-29); switched off, the URL stands for nothing, like the Anthropic API's below.
             DiagnosticLog.Warn(Category, EmbeddedLlm.EmbeddedLlmText.SwitchedOffWarning);
         }
         else if (ClaudeApi.IsClaudeApi(effective.LlmUrl) && !ClaudeApi.Offered(effective))
         {
-            // Saved while the Claude API was on (2026-09-27); with it off or keyless the URL stands for nothing, and the
+            // Saved while the Anthropic API was on (2026-09-27); with it off or keyless the URL stands for nothing, and the
             // settings' scan finds a server as a blank URL would.
             DiagnosticLog.Warn(Category, ClaudeApiText.NotOfferedWarning);
         }

@@ -48,7 +48,7 @@ public class LiveClaudeTests
         }
     }
 
-    /// <summary><c>claude_advisor</c> for real (2026-09-27): read-only, Claude reads a file in the working directory to answer.</summary>
+    /// <summary><c>claude_advisor_cli</c> for real (2026-09-27): read-only, Claude reads a file in the working directory to answer.</summary>
     [LiveClaudeFact]
     public async Task RealCli_TheAdvisor_ReadsTheWorkingDirectory_AndAnswers()
     {
@@ -56,7 +56,7 @@ public class LiveClaudeTests
         try
         {
             await File.WriteAllTextAsync(Path.Combine(folder, "answer.txt"), "The code word is HERON.");
-            var settings = new AppSettingsData { ClaudeAdvisor = true, ClaudeAdvisorModel = "haiku" };
+            var settings = new AppSettingsData { ClaudeCliAdvisor = true, ClaudeCliAdvisorModel = "haiku" };
             decimal spent = 0m;
             var tool = new Llm.Tools.ClaudeAdvisorTool(new ClaudeProcess(Environment.GetEnvironmentVariable), () => settings, () => folder, new ClaudeAdvisorThread(), (_, usd) => spent += usd, () => []);
             using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));

@@ -769,16 +769,16 @@ public class AppSettingsTests : IDisposable
 
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         string path = Profiles.ProfileFile(_dir, Profiles.DefaultName);
-        File.WriteAllText(path, "{ \"SchemaVersion\": 2, \"LlmApiKey\": \"sk-llm\", \"ClaudeApiKey\": \"sk-ant-x\", \"HomeAssistantToken\": \"ha-y\" }");
+        File.WriteAllText(path, "{ \"SchemaVersion\": 2, \"LlmApiKey\": \"sk-llm\", \"AnthropicApiKey\": \"sk-ant-x\", \"HomeAssistantToken\": \"ha-y\" }");
 
         using (var settings = new AppSettings(_dir))
         {
             var current = settings.Current;
             Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(current.LlmApiKey));
-            Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(current.ClaudeApiKey));
+            Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(current.AnthropicApiKey));
             Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(current.HomeAssistantToken));
             Assert.Equal("sk-llm", SettingsSecrets.Reveal(current.LlmApiKey));
-            Assert.Equal("sk-ant-x", SettingsSecrets.Reveal(current.ClaudeApiKey));
+            Assert.Equal("sk-ant-x", SettingsSecrets.Reveal(current.AnthropicApiKey));
             Assert.Equal("ha-y", SettingsSecrets.Reveal(current.HomeAssistantToken));
         }
 
@@ -801,7 +801,7 @@ public class AppSettingsTests : IDisposable
     {
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         string path = Profiles.ProfileFile(_dir, Profiles.DefaultName);
-        const string Json = "{ \"SchemaVersion\": 2, \"LlmApiKey\": \"empty\", \"ClaudeApiKey\": \"\" }";
+        const string Json = "{ \"SchemaVersion\": 2, \"LlmApiKey\": \"empty\", \"AnthropicApiKey\": \"\" }";
         File.WriteAllText(path, Json);
 
         using var settings = new AppSettings(_dir);

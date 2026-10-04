@@ -11,7 +11,7 @@ namespace NeonSidekick.Llm;
 /// nothing and leaves the server's default. <see cref="ApplyTo"/> puts it on a request's <see cref="ChatOptions"/>:
 /// the standard fields as the options' own properties, and the whole of it under <see cref="OpenAICompatibleChatClient.SamplingKey"/>
 /// for the fields the OpenAI schema has no slot for (top_k, min_p, the repetition penalty, the extra body), which the
-/// OpenAI-compatible client writes into the request as it does <c>chat_template_kwargs</c>. The Claude API client reads
+/// OpenAI-compatible client writes into the request as it does <c>chat_template_kwargs</c>. The Anthropic API client reads
 /// none of it.
 /// </summary>
 public sealed record LlmSampling

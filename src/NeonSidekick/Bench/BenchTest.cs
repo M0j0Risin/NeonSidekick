@@ -17,7 +17,7 @@ public enum BenchVerdict
     Fail,
     Error,
 
-    /// <summary>Not sent: the structured-output tests over the Claude API, which takes no <c>response_format</c> (2026-09-28).</summary>
+    /// <summary>Not sent: the structured-output tests over the Anthropic API, which takes no <c>response_format</c> (2026-09-28).</summary>
     Skipped,
 }
 

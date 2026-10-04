@@ -4,7 +4,7 @@ namespace NeonSidekick.Claude;
 
 /// <summary>
 /// The Claude Code CLI as one more <c>/server</c> choice (2026-09-30, the user's ask: the <c>claude</c> CLI kept running as
-/// an open session and used as the chat's server, beside the Claude API and the embedded model). As with those two
+/// an open session and used as the chat's server, beside the Anthropic API and the embedded model). As with those two
 /// (<see cref="Llm.Anthropic.ClaudeApi"/>, <see cref="EmbeddedLlm.EmbeddedEndpoint"/>), the provider is told by the URL
 /// alone: a saved <see cref="AppSettingsData.LlmUrl"/> on <see cref="Host"/> is the Claude CLI, and
 /// <see cref="AppSettingsData.LlmModel"/> holds the <c>--model</c> word (<see cref="ClaudeModels.Aliases"/>, or a full name).
@@ -69,7 +69,7 @@ public static class ClaudeCliEndpoint
     {
         ArgumentNullException.ThrowIfNull(effective);
         ArgumentNullException.ThrowIfNull(environment);
-        return effective.ClaudeCliServer && ClaudeExecutable.Locate(effective.ClaudeExecutable, environment, exists ?? File.Exists) is not null;
+        return effective.ClaudeCliServer && ClaudeExecutable.Locate(effective.ClaudeCliExecutable, environment, exists ?? File.Exists) is not null;
     }
 
     /// <summary>The <c>--model</c> word for a saved <paramref name="model"/>: blank is <see cref="DefaultModel"/>.</summary>

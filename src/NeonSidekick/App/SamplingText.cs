@@ -32,8 +32,8 @@ public static class SamplingText
     /// <summary>The hint of the pane, which edits every row by typing. Pinned.</summary>
     public const string Keys = "Enter = edit · blank = server default · ←/→ tabs · ESC = close";
 
-    /// <summary>The caption while the Claude API is connected: its requests carry none of this. Pinned.</summary>
-    public const string ClaudeApiCaption = "The Claude API ignores sampling; these apply to OpenAI-compatible servers.";
+    /// <summary>The caption while the Anthropic API is connected: its requests carry none of this. Pinned.</summary>
+    public const string ClaudeApiCaption = "The Anthropic API ignores sampling; these apply to OpenAI-compatible servers.";
 
     /// <summary>The caption while the OpenAI API is the server (2026-10-03): its client sends none of these. Pinned.</summary>
     public const string OpenAIApiCaption = "The OpenAI API ignores sampling; these apply to local servers.";

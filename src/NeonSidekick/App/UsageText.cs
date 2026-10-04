@@ -175,10 +175,10 @@ public static class UsageText
         }
     }
 
-    /// <summary>The row of the prompt tokens the cache served and took (2026-09-27, the Claude API), shown once a request reported either. Pinned.</summary>
+    /// <summary>The row of the prompt tokens the cache served and took (2026-09-27, the Anthropic API), shown once a request reported either. Pinned.</summary>
     public const string CacheLabel = "Cache";
 
-    /// <summary>The row of what the scope cost (2026-09-27, the Claude API at its list price), shown once a request was priced. Pinned.</summary>
+    /// <summary>The row of what the scope cost (2026-09-27, the Anthropic API at its list price), shown once a request was priced. Pinned.</summary>
     public const string CostLabel = "Cost";
 
     /// <summary><c>12,000 read · 1,500 written</c>: the prompt tokens the cache served and took; null while no request reported either. Pinned.</summary>

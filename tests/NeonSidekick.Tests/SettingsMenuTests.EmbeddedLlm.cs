@@ -31,7 +31,7 @@ public partial class SettingsMenuTests
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
         Assert.Equal("General", SettingsMenu.TabTitles[tab - 1]);   // second since later on 2026-09-29 (the user's order); after STT until then, the Claude (API) tab between until it went to /tools
         Assert.Equal("Docker", SettingsMenu.TabTitles[tab + 1]);   // the Docker servers' tab next to it (2026-10-02, the user's ask)
-        Assert.Equal("Claude", SettingsMenu.TabTitles[tab + 2]);   // the Claude and OpenAI tabs before LLM since 2026-10-03
+        Assert.Equal("Anthropic", SettingsMenu.TabTitles[tab + 2]);   // the Anthropic ("Claude" until 2026-10-04) and OpenAI tabs before LLM since 2026-10-03
         // The switch first and MTP last (2026-09-29, the user's asks); the VRAM budget under the GPU layers (later that day), the HF
         // download type under the catalog (2026-09-30; under the filter type until it went, 2026-10-02), VRAM only under the budget (2026-10-01).
         Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
@@ -106,7 +106,7 @@ public partial class SettingsMenuTests
         var row = new Llm.LlmServer(EmbeddedEndpoint.BaseUrl, EmbeddedEndpoint.ServerName, new Llm.ProbeResult(false, ["gemma-4-e2b"], "download  · 4.2 GB"));
 
         // The name padded as the catalog pads it, the quantisation dim after it (2026-09-29: the 12B's builds share a name).
-        Assert.Equal("Embedded   " + Theme.ColorMarkup(Theme.Ink, "Gemma 4 E2B".PadRight(SettingsMenu.EmbeddedModelNameWidth)) + Theme.DimMarkup("UD-Q4_K_XL  download  · 4.2 GB") + Marks, SettingsMenu.ServerLabel(row));
+        Assert.Equal("Embedded       " + Theme.ColorMarkup(Theme.Ink, "Gemma 4 E2B".PadRight(SettingsMenu.EmbeddedModelNameWidth)) + Theme.DimMarkup("UD-Q4_K_XL  download  · 4.2 GB") + Marks, SettingsMenu.ServerLabel(row));
         // In a list the details are padded to the widest, the drafter column after; a scanned server's row has none.
         var lm = new Llm.LlmServer(new Uri("http://127.0.0.1:1234/v1"), "LM Studio", new Llm.ProbeResult(true, ["m"], "1 chat model, and more"));
         var labels = SettingsMenu.ServerLabels([lm, row]);

@@ -12,7 +12,7 @@ using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The Claude API as a server (2026-09-27): the request shaping, the stream, the client, the probe, the settings.</summary>
+/// <summary>The Anthropic API as a server (2026-09-27): the request shaping, the stream, the client, the probe, the settings.</summary>
 public class ClaudeApiTests
 {
     private static readonly LlmEndpoint Endpoint = new(ClaudeApi.BaseUrl, "claude-sonnet-5", "sk-ant-test", "configured");
@@ -497,17 +497,17 @@ public class ClaudeApiTests
             .Map("https://api.anthropic.com/v1/models", HttpStatusCode.OK, ModelsList);
         using var session = Session(stub, []);
 
-        var off = await session.ProbeServersAsync(new AppSettingsData { ClaudeApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
+        var off = await session.ProbeServersAsync(new AppSettingsData { AnthropicApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio"], off.Select(s => s.Name));
 
-        var keyless = await session.ProbeServersAsync(new AppSettingsData { ClaudeApi = true, LlmScanMode = "local" }, null, CancellationToken.None);
+        var keyless = await session.ProbeServersAsync(new AppSettingsData { AnthropicApi = true, LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio"], keyless.Select(s => s.Name));
 
-        var on = await session.ProbeServersAsync(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
+        var on = await session.ProbeServersAsync(new AppSettingsData { AnthropicApi = true, AnthropicApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio", ClaudeApi.ServerName], on.Select(s => s.Name));
 
         // The scan disabled still lists it.
-        var alone = await session.ProbeServersAsync(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "sk-ant-test", LlmScanMode = "disabled" }, null, CancellationToken.None);
+        var alone = await session.ProbeServersAsync(new AppSettingsData { AnthropicApi = true, AnthropicApiKey = "sk-ant-test", LlmScanMode = "disabled" }, null, CancellationToken.None);
         Assert.Equal([ClaudeApi.ServerName], alone.Select(s => s.Name));
     }
 
@@ -518,7 +518,7 @@ public class ClaudeApiTests
         var endpoints = new List<LlmEndpoint>();
         using var session = Session(stub, endpoints);
 
-        Assert.True(await session.ConnectAsync(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "sk-ant-test", LlmApiKey = "local-key", LlmUrl = "https://api.anthropic.com" }, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(new AppSettingsData { AnthropicApi = true, AnthropicApiKey = "sk-ant-test", LlmApiKey = "local-key", LlmUrl = "https://api.anthropic.com" }, CancellationToken.None));
 
         var endpoint = Assert.Single(endpoints);
         Assert.Equal(("sk-ant-test", "claude-opus-5-5"), (endpoint.ApiKey, endpoint.ModelId));
@@ -533,7 +533,7 @@ public class ClaudeApiTests
         var endpoints = new List<LlmEndpoint>();
         using var session = Session(stub, endpoints);
 
-        Assert.True(await session.ConnectAsync(new AppSettingsData { ClaudeApiKey = "sk-ant-test", LlmUrl = "https://api.anthropic.com/v1", LlmScanMode = "local" }, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(new AppSettingsData { AnthropicApiKey = "sk-ant-test", LlmUrl = "https://api.anthropic.com/v1", LlmScanMode = "local" }, CancellationToken.None));
 
         Assert.Equal("http://127.0.0.1:1234/v1", Assert.Single(endpoints).BaseUrl.AbsoluteUri);
         Assert.DoesNotContain(stub.Requests, r => r.Uri.Host == ClaudeApi.Host);
@@ -544,11 +544,11 @@ public class ClaudeApiTests
     [Fact]
     public void Key_IsTheClaudeApisOwn_AndDecryptsWhatTheMenuSaved()
     {
-        Assert.False(ClaudeApi.Offered(new AppSettingsData { ClaudeApi = true }));
-        Assert.False(ClaudeApi.Offered(new AppSettingsData { ClaudeApiKey = "k" }));
-        Assert.True(ClaudeApi.Offered(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "k" }));
+        Assert.False(ClaudeApi.Offered(new AppSettingsData { AnthropicApi = true }));
+        Assert.False(ClaudeApi.Offered(new AppSettingsData { AnthropicApiKey = "k" }));
+        Assert.True(ClaudeApi.Offered(new AppSettingsData { AnthropicApi = true, AnthropicApiKey = "k" }));
 
-        var data = new AppSettingsData { ClaudeApiKey = "claude-key", LlmApiKey = "local-key" };
+        var data = new AppSettingsData { AnthropicApiKey = "claude-key", LlmApiKey = "local-key" };
         Assert.Equal("claude-key", ApiKeys.For(data, ClaudeApi.BaseUrl));
         Assert.Equal("local-key", ApiKeys.For(data, new Uri("http://127.0.0.1:1234/v1")));
         Assert.Equal("", ApiKeys.For(new AppSettingsData(), ClaudeApi.BaseUrl));
@@ -559,13 +559,13 @@ public class ClaudeApiTests
             Assert.Null(error);
             Assert.StartsWith(Sql.WindowsCredentials.ProtectedPrefix, stored);
             Assert.DoesNotContain("sk-ant-secret", stored);
-            Assert.Equal("sk-ant-secret", ClaudeApi.Key(new AppSettingsData { ClaudeApiKey = stored }));
-            Assert.Equal(SettingsMenu.ClaudeApiKeyEncryptedLabel, SettingsMenu.ClaudeApiKeyLabel(stored));
+            Assert.Equal("sk-ant-secret", ClaudeApi.Key(new AppSettingsData { AnthropicApiKey = stored }));
+            Assert.Equal(SettingsMenu.ApiKeyEncryptedLabel, SettingsMenu.ApiKeyLabel(stored));
             Assert.Equal(stored, ClaudeApi.Protect(stored, out _));   // already encrypted: kept
         }
 
         Assert.Equal("", ClaudeApi.Protect("  ", out _));
-        Assert.Null(ClaudeApi.Key(new AppSettingsData { ClaudeApiKey = Sql.WindowsCredentials.ProtectedPrefix + "bm90IGEgYmxvYg==" }));
+        Assert.Null(ClaudeApi.Key(new AppSettingsData { AnthropicApiKey = Sql.WindowsCredentials.ProtectedPrefix + "bm90IGEgYmxvYg==" }));
     }
 
     [Fact]
@@ -573,26 +573,26 @@ public class ClaudeApiTests
     {
         // On /tools' Claude tab from 2026-09-29 under the advisor's confirm, the Claude CLI server's switch below them from
         // 2026-09-30; /settings' own Claude tab since 2026-10-03 (the user's call), after Docker.
-        Assert.Equal(SettingsMenu.ClaudeTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Claude]);
-        Assert.Equal((int)SettingsTab.Docker + 1, (int)SettingsTab.Claude);
-        var claude = SettingsMenu.TabFields[(int)SettingsTab.Claude];
-        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer], claude);
-        Assert.All(SettingsMenu.ToolsTabFields, t => Assert.DoesNotContain(SettingsField.ClaudeApi, t));
+        Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
+        Assert.Equal((int)SettingsTab.Docker + 1, (int)SettingsTab.Anthropic);
+        var claude = SettingsMenu.TabFields[(int)SettingsTab.Anthropic];
+        Assert.Equal([SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching, SettingsField.ClaudeCliServer], claude);
+        Assert.All(SettingsMenu.ToolsTabFields, t => Assert.DoesNotContain(SettingsField.AnthropicApi, t));
         var apiRows = claude.SkipLast(1).ToList();
 
         var data = new AppSettingsData();
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeApi, data, "C:\\p"));
-        Assert.Equal("(none)", SettingsMenu.FieldValue(SettingsField.ClaudeApiKey, data, "C:\\p"));
-        Assert.Equal("32,000 tokens", SettingsMenu.FieldValue(SettingsField.ClaudeApiMaxTokens, data, "C:\\p"));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ClaudeApiPromptCaching, data, "C:\\p"));
-        Assert.Equal("sk••••", SettingsMenu.ClaudeApiKeyLabel("sk-ant"));
-        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.ClaudeApiKey, new AppSettingsData { ClaudeApiKey = "sk-ant" }));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.AnthropicApi, data, "C:\\p"));
+        Assert.Equal("(none)", SettingsMenu.FieldValue(SettingsField.AnthropicApiKey, data, "C:\\p"));
+        Assert.Equal("32,000 tokens", SettingsMenu.FieldValue(SettingsField.AnthropicApiMaxTokens, data, "C:\\p"));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.AnthropicApiPromptCaching, data, "C:\\p"));
+        Assert.Equal("sk••••", SettingsMenu.ApiKeyLabel("sk-ant"));
+        Assert.Equal("", SettingsMenu.EditableValue(SettingsField.AnthropicApiKey, new AppSettingsData { AnthropicApiKey = "sk-ant" }));
         Assert.All(apiRows, f => Assert.True(SettingsMenu.IsLlmField(f) && SettingsMenu.RefusedMidTurn(f)));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeApi) && SettingsMenu.IsToggle(SettingsField.ClaudeApiPromptCaching));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.AnthropicApi) && SettingsMenu.IsToggle(SettingsField.AnthropicApiPromptCaching));
 
-        var copy = AppSettings.Copy(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "k", ClaudeApiMaxTokens = 4096, ClaudeApiPromptCaching = false });
-        Assert.Equal((true, "k", 4096, false), (copy.ClaudeApi, copy.ClaudeApiKey, copy.ClaudeApiMaxTokens, copy.ClaudeApiPromptCaching));
-        Assert.Equal(["ClaudeApiKey: " + SettingsDiff.Redacted], SettingsDiff.Changes(new AppSettingsData(), new AppSettingsData { ClaudeApiKey = "secret" }));
+        var copy = AppSettings.Copy(new AppSettingsData { AnthropicApi = true, AnthropicApiKey = "k", AnthropicApiMaxTokens = 4096, AnthropicApiPromptCaching = false });
+        Assert.Equal((true, "k", 4096, false), (copy.AnthropicApi, copy.AnthropicApiKey, copy.AnthropicApiMaxTokens, copy.AnthropicApiPromptCaching));
+        Assert.Equal(["AnthropicApiKey: " + SettingsDiff.Redacted], SettingsDiff.Changes(new AppSettingsData(), new AppSettingsData { AnthropicApiKey = "secret" }));
     }
 
     [Fact]
@@ -600,8 +600,8 @@ public class ClaudeApiTests
     {
         var variables = new Dictionary<string, string>
         {
-            [EnvironmentOverrides.ClaudeApiVariable] = "on",
-            [EnvironmentOverrides.ClaudeApiKeyVariable] = "sk-ant-env",
+            [EnvironmentOverrides.AnthropicApiVariable] = "on",
+            [EnvironmentOverrides.AnthropicApiKeyVariable] = "sk-ant-env",
         };
         var environment = new EnvironmentOverrides(name => variables.GetValueOrDefault(name));
 
@@ -609,7 +609,7 @@ public class ClaudeApiTests
 
         Assert.True(ClaudeApi.Offered(effective));
         Assert.Equal("sk-ant-env", ClaudeApi.Key(effective));
-        Assert.Equal($"{EnvironmentOverrides.ClaudeApiVariable}=on, {EnvironmentOverrides.ClaudeApiKeyVariable}={EnvironmentOverrides.SecretSet}", environment.Describe());
+        Assert.Equal($"{EnvironmentOverrides.AnthropicApiVariable}=on, {EnvironmentOverrides.AnthropicApiKeyVariable}={EnvironmentOverrides.SecretSet}", environment.Describe());
     }
 
     // ── /usage ──────────────────────────────────────────────────────────────

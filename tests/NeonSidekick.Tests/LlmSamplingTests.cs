@@ -16,7 +16,7 @@ namespace NeonSidekick.Tests;
 /// Sampling overrides per model (2026-09-28, the user's ask): the resolution (model, then <c>*</c>, then the server's),
 /// the parsing and its refusals, the wire (the standard fields through the adapter, top_k, min_p, the repetition penalty
 /// under both names and the extra body raw, <c>chat_template_kwargs</c> merged), the variable, the assistant's requests,
-/// the Claude API left alone, and the <c>/sampling</c> pane.
+/// the Anthropic API left alone, and the <c>/sampling</c> pane.
 /// </summary>
 public sealed class LlmSamplingTests : IDisposable
 {

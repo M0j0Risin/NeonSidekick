@@ -383,7 +383,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// The <see cref="ChatOptions.AdditionalProperties"/> key <see cref="Assistant.PreserveThinking"/> sets (2026-09-28,
     /// the setting <c>LLM preserve thinking</c>): send every turn's thinking back, not only the turn in flight's, and ask
     /// the chat template to keep it (<see cref="WithRawFields"/>). Read here and taken off the options before the
-    /// adapter sees them; the Claude API client ignores it.
+    /// adapter sees them; the Anthropic API client ignores it.
     /// </summary>
     public const string PreserveThinkingKey = "neonsidekick.preserve_thinking";
 
@@ -395,7 +395,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// The <see cref="ChatOptions.AdditionalProperties"/> key <see cref="LlmSampling.ApplyTo"/> sets (2026-09-28, the setting
     /// <c>LLM sampling</c>): the request's <see cref="LlmSampling"/>, whose top_k, min_p, repetition penalty and extra body
     /// have no slot in the OpenAI schema and go out as raw fields (<see cref="WithRawFields"/>). Read here and taken off
-    /// the options before the adapter sees them; the Claude API client ignores it.
+    /// the options before the adapter sees them; the Anthropic API client ignores it.
     /// </summary>
     public const string SamplingKey = "neonsidekick.sampling";
 
@@ -593,7 +593,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// flight (after <see cref="ConversationHistory.InFlightStart"/>), or in any turn with <paramref name="preserveAll"/>,
     /// goes out as a clone whose <see cref="ChatMessage.RawRepresentation"/> is the SDK's own message built here with
     /// <c>reasoning_content</c> beside its text and calls: the adapter passes a raw message through as it is. A block
-    /// carrying <see cref="TextReasoningContent.ProtectedData"/> is the Claude API's or the OpenAI API's and is not this wire's. Every other
+    /// carrying <see cref="TextReasoningContent.ProtectedData"/> is the Anthropic API's or the OpenAI API's and is not this wire's. Every other
     /// message is untouched, and the history's own messages are never changed.
     /// </summary>
     internal static IEnumerable<ChatMessage> WithReasoningBack(IEnumerable<ChatMessage> messages, bool preserveAll)

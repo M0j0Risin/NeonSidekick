@@ -427,12 +427,12 @@ public static class Profiles
         nameof(AppSettingsData.LlmModel),
         nameof(AppSettingsData.LlmApiKey),
         nameof(AppSettingsData.TtsHttpUrl),
-        nameof(AppSettingsData.ClaudeApiKey),
+        nameof(AppSettingsData.AnthropicApiKey),
         nameof(AppSettingsData.OpenAIApiKey),
         nameof(AppSettingsData.WebBrowserPath),
         nameof(AppSettingsData.WebSearchMethod),
         nameof(AppSettingsData.WebSearxngUrl),
-        nameof(AppSettingsData.ClaudeExecutable),
+        nameof(AppSettingsData.ClaudeCliExecutable),
         nameof(AppSettingsData.ObsidianVault),
         nameof(AppSettingsData.ComfyUrl),
         nameof(AppSettingsData.HomeAssistantUrl),
@@ -446,12 +446,12 @@ public static class Profiles
         to.LlmModel = from.LlmModel;
         to.LlmApiKey = from.LlmApiKey;
         to.TtsHttpUrl = from.TtsHttpUrl;
-        to.ClaudeApiKey = from.ClaudeApiKey;
+        to.AnthropicApiKey = from.AnthropicApiKey;
         to.OpenAIApiKey = from.OpenAIApiKey;
         to.WebBrowserPath = from.WebBrowserPath;
         to.WebSearchMethod = from.WebSearchMethod;
         to.WebSearxngUrl = from.WebSearxngUrl;
-        to.ClaudeExecutable = from.ClaudeExecutable;
+        to.ClaudeCliExecutable = from.ClaudeCliExecutable;
         to.ObsidianVault = from.ObsidianVault;
         to.ComfyUrl = from.ComfyUrl;
         to.HomeAssistantUrl = from.HomeAssistantUrl;

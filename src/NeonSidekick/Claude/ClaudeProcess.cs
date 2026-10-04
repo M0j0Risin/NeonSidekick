@@ -8,7 +8,7 @@ using NeonSidekick.Shell;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// Where the Claude Code CLI is (2026-09-27), pure over its inputs: the <c>Claude executable</c> setting when it
+/// Where the Claude Code CLI is (2026-09-27), pure over its inputs: the <c>Claude CLI executable</c> setting when it
 /// names a file; else <c>claude.exe</c> on the PATH (the native install), else <c>claude</c> with the PATHEXT
 /// extensions (npm's <c>claude.cmd</c> shim); else the native installer's own folder,
 /// <c>%USERPROFILE%\.local\bin\claude.exe</c>, which a fresh install has not always put on the PATH yet.
@@ -92,7 +92,7 @@ public sealed class ClaudeProcess : IClaudeCli
     }
 
     /// <summary>
-    /// One <c>claude -p</c> child over <paramref name="launch"/> (2026-09-30: <c>/claude</c>'s and <c>claude_advisor</c>'s,
+    /// One <c>claude -p</c> child over <paramref name="launch"/> (2026-09-30: <c>/claude</c>'s and <c>claude_advisor_cli</c>'s,
     /// and the Claude CLI server's one-shot requests, <see cref="ClaudeArguments.BuildOneShot"/>): <paramref name="prompt"/>
     /// on stdin, stdin closed, the reply read off stdout. The same shape and the same guarantees as
     /// <see cref="RunAsync"/>: a <see cref="ClaudeEvent.Result"/> last, the child's tree killed on a cancel.

@@ -300,12 +300,12 @@ public class ProfilesTests : IDisposable
             LlmUrl = "http://llm:1234/v1",
             LlmModel = "work-model",
             TtsHttpUrl = "http://tts:8880/v1",
-            ClaudeApiKey = "dpapi:abc",
+            AnthropicApiKey = "dpapi:abc",
             OpenAIApiKey = "dpapi:oa",
             WebBrowserPath = @"C:\Chrome\chrome.exe",
             WebSearchMethod = "searxng",
             WebSearxngUrl = "http://searx:8080",
-            ClaudeExecutable = @"C:\bin\claude.exe",
+            ClaudeCliExecutable = @"C:\bin\claude.exe",
             ObsidianVault = @"D:\Vault",
             ComfyUrl = "http://comfy:8188",
             HomeAssistantUrl = "http://localhost:8123",
@@ -324,7 +324,7 @@ public class ProfilesTests : IDisposable
         Profiles.KeepOnReset(mine, expected);
         Assert.Equal(JsonSerializer.Serialize(expected, SettingsJsonContext.Default.AppSettingsData), JsonSerializer.Serialize(kept, SettingsJsonContext.Default.AppSettingsData));
         Assert.Equal("http://comfy:8188", kept.ComfyUrl);
-        Assert.Equal("dpapi:abc", kept.ClaudeApiKey);   // as stored
+        Assert.Equal("dpapi:abc", kept.AnthropicApiKey);   // as stored
         Assert.Equal("dpapi:llm", kept.LlmApiKey);      // joined the list later that day
         Assert.Equal("", kept.WorkingDirectory);
         Assert.Equal("dpapi:ha", kept.HomeAssistantToken);   // the Home Assistant pair (2026-09-28)

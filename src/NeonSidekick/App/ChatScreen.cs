@@ -1039,7 +1039,7 @@ internal sealed partial class ChatScreen
         _interpreters = new Interpreters(environment ?? (_ => null));
         // /claude (2026-09-27): the CLI found through the same PATH door as the shells.
         _claude = claude ?? new ClaudeProcess(environment ?? (_ => null));
-        // claude_advisor (2026-09-27): the same CLI, its own thread, the cost into /usage's Claude row, the pane for a confirm.
+        // claude_advisor_cli (2026-09-27): the same CLI, its own thread, the cost into /usage's Claude row, the pane for a confirm.
         _advisorTools = ClaudeAdvisorTools(_claude, _effective, () => _files.Root, _advisorThread, (usage, usd) => _session.Usage.AddClaude(usage, usd), () => _session.History.Messages, ConfirmAdvisorAsync, new AdvisorView(this));
         _runner = new ShellRunner(time);
         // The background processes (phase B): the board signals the idle read like the timers, and is killed off with the screen.
@@ -3206,7 +3206,7 @@ internal sealed partial class ChatScreen
             Without(_sqlTools, disabled).Count,
             effective.ShellPreferNative,
             _plan.Turn(_presentPlan)?.Directive,
-            effective.ClaudeAdvisor,
+            effective.ClaudeCliAdvisor,
             Without(_advisorTools, disabled).Count,
             HomeAssistantOffered(effective),
             Without(_haTools, disabled).Count,
@@ -3268,7 +3268,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools);
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools);
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -4141,7 +4141,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -4168,7 +4168,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools);
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools);
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
@@ -4182,7 +4182,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools);
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools);
         return groups.Where(g => g.Switch is not (SettingsField.Memory or SettingsField.AgentSkills)).ToList();
     }
 
@@ -5098,7 +5098,7 @@ internal sealed partial class ChatScreen
         Comfy = _comfyTools,
         ComfyEnabled = ComfyOffered(effective, _comfy),
         Advisor = _advisorTools,
-        AdvisorEnabled = effective.ClaudeAdvisor,
+        AdvisorEnabled = effective.ClaudeCliAdvisor,
         Home = _haTools,
         HomeEnabled = HomeAssistantOffered(effective),
         Print = _printTools,
@@ -6129,7 +6129,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The keys' names, as the settings pane's rows read; the Home Assistant API key joined them on 2026-09-28 (the user's ask; "API key", not "token", the user's call for one word across the three), the OpenAI API key on 2026-10-03.</summary>
     private const string LlmKeyName = "LLM API key";
-    private const string ClaudeKeyName = "Claude API key";
+    private const string AnthropicKeyName = "Anthropic API key";
     private const string OpenAIKeyName = "OpenAI API key";
     private const string HomeAssistantKeyName = "Home Assistant API key";
 
@@ -6143,7 +6143,7 @@ internal sealed partial class ChatScreen
         var set = new List<string>();
         var unset = new List<string>();
         (llmSet ? set : unset).Add(LlmKeyName);
-        (claudeSet ? set : unset).Add(ClaudeKeyName);
+        (claudeSet ? set : unset).Add(AnthropicKeyName);
         (openAISet ? set : unset).Add(OpenAIKeyName);
         (haSet ? set : unset).Add(HomeAssistantKeyName);
         return (set, unset);
@@ -6151,13 +6151,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The question before a key copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
-    /// <c>Copy the LLM API key, the Claude API key, the OpenAI API key and the Home Assistant API key into "work"?</c>, and when a key is not set
-    /// here what the mirror does to the target's — <c> "work"'s Claude API key is cleared: none here.</c> — so the clearing
+    /// <c>Copy the LLM API key, the Anthropic API key, the OpenAI API key and the Home Assistant API key into "work"?</c>, and when a key is not set
+    /// here what the mirror does to the target's — <c> "work"'s Anthropic API key is cleared: none here.</c> — so the clearing
     /// is never a surprise. Pinned.
     /// </summary>
     public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet)
     {
-        string question = $"Copy the {KeySeries([LlmKeyName, "the " + ClaudeKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName])} into \"{profile}\"?";
+        string question = $"Copy the {KeySeries([LlmKeyName, "the " + AnthropicKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName])} into \"{profile}\"?";
         var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet);
         return unset.Count == 0
             ? question
@@ -6165,9 +6165,9 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>(copied the LLM API key, the Claude API key and the Home Assistant API key into "work")</c>; one not set here reads
-    /// <c>(copied the LLM API key and the Home Assistant API key into "work"; its Claude API key cleared)</c>, none
-    /// <c>(cleared "work"'s LLM API key, Claude API key and Home Assistant API key)</c>. Pinned.
+    /// <c>(copied the LLM API key, the Anthropic API key and the Home Assistant API key into "work")</c>; one not set here reads
+    /// <c>(copied the LLM API key and the Home Assistant API key into "work"; its Anthropic API key cleared)</c>, none
+    /// <c>(cleared "work"'s LLM API key, Anthropic API key and Home Assistant API key)</c>. Pinned.
     /// </summary>
     public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet)
     {
@@ -6182,13 +6182,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Claude API
+    /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Anthropic API
     /// key</c>, <c>OpenAI API key</c> (2026-10-03) and <c>Home Assistant API key</c> (joined the same day, the user's ask) into another's, after a confirmation —
     /// <c>/cmdcopy</c>'s read-edit-write of the target's <c>profile.json</c> (<see cref="Profiles.ReadProfileFile"/>: a corrupt
     /// one is an error, never overwritten) without its switches. All are mirrored (the user's call): a key not set here clears
     /// the target's, so it ends with exactly this profile's keys, and the question says so. The stored values
     /// (<c>_settings.Current</c>, not the effective ones: a key that comes only from <c>NEONSIDEKICK_LLM_API_KEY</c>/
-    /// <c>NEONSIDEKICK_CLAUDE_API_KEY</c>/<c>NEONSIDEKICK_OPENAI_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c> is a per-run override and stays out of the file),
+    /// <c>NEONSIDEKICK_ANTHROPIC_API_KEY</c>/<c>NEONSIDEKICK_OPENAI_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c> is a per-run override and stays out of the file),
     /// copied as stored: a <c>dpapi:</c> key or token reads the same in any profile of this Windows user on this machine, as
     /// <see cref="Profiles.KeepOnReset"/> already relies on. The values are never shown or logged.
     /// </summary>
@@ -6216,7 +6216,7 @@ internal sealed partial class ChatScreen
 
         var current = _settings.Current;
         string llmKey = current.LlmApiKey;
-        string claudeKey = current.ClaudeApiKey;
+        string claudeKey = current.AnthropicApiKey;
         string openAIKey = current.OpenAIApiKey;
         string haToken = current.HomeAssistantToken;
         bool llmSet = !string.IsNullOrWhiteSpace(llmKey) && llmKey.Trim() != LlmEndpoint.DefaultApiKey;
@@ -6234,7 +6234,7 @@ internal sealed partial class ChatScreen
             string path = Profiles.ProfileFile(home, target);
             var data = Profiles.ReadProfileFile(path);
             data.LlmApiKey = llmKey;
-            data.ClaudeApiKey = claudeKey;
+            data.AnthropicApiKey = claudeKey;
             data.OpenAIApiKey = openAIKey;
             data.HomeAssistantToken = haToken;
             Profiles.WriteProfileFile(path, data);
@@ -9047,7 +9047,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one; the
+        // A saved Anthropic API URL with the Anthropic API off or keyless stands for nothing (2026-09-27): found as a blank one; the
         // OpenAI API's likewise (2026-10-03). So does a saved embedded URL with Embedded servers enabled off (2026-09-29), and a saved Claude CLI URL with the
         // Claude CLI server off or the CLI gone (2026-09-30).
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
@@ -10388,7 +10388,7 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Tools:
                 // The Tools pane (2026-09-19): every tool on or off by name, the Ask / Files / Web rows after it; the four tabs as lines without the pane.
-                // A reconnect row saved there reconnects once it closes, as /settings would (the Claude API's, 2026-09-29 to 2026-10-03; none since).
+                // A reconnect row saved there reconnects once it closes, as /settings would (the Anthropic API's, 2026-09-29 to 2026-10-03; none since).
                 await ApplySettingsChangesAsync(await _toolsMenu.ShowAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
                 return false;
 

@@ -45,7 +45,7 @@ namespace NeonSidekick.App;
 /// <param name="SqlEnabled">Whether the SQL tools may be offered (2026-09-23): the setting <c>SQL tools</c> on and a usable connection in <c>sql.json</c> — the group's switch (<see cref="ChatScreen.SqlOffered"/>).</param>
 /// <param name="SqlTools">How many SQL tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.SqlRule"/> while any is.</param>
 /// <param name="ShellNative">The setting <c>Shell prefer native tools</c> (2026-09-26): on, with a shell rule, the rules gain <see cref="Assistant.ShellNativeRule"/> after it.</param>
-/// <param name="ClaudeAdvisorEnabled">The setting <c>Claude advisor tool</c> (2026-09-27): the group's switch.</param>
+/// <param name="ClaudeAdvisorEnabled">The setting <c>Claude CLI advisor tool</c> (2026-09-27): the group's switch.</param>
 /// <param name="ClaudeAdvisorTools">How many advisor tools the next turn offers (0 while switched off on <c>/tools</c>); the rules carry <see cref="Assistant.ClaudeAdvisorRule"/> while it is.</param>
 /// <param name="HomeAssistantEnabled">Whether the Home Assistant tools may be offered (2026-09-28): the setting <c>Home Assistant tools</c> on, a URL and a readable token — the group's switch (<see cref="ChatScreen.HomeAssistantOffered"/>).</param>
 /// <param name="HomeAssistantTools">How many Home Assistant tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.HomeAssistantRule"/> while any is.</param>
@@ -289,7 +289,7 @@ public static class SystemPromptSummary
 
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
-    public const string ClaudeAdvisorOffSuffix = "Claude advisor tool is off";
+    public const string ClaudeAdvisorOffSuffix = "Claude CLI advisor tool is off";
 
     public const string ComfyOffSuffix = "ComfyUI tools is off, no ComfyUI URL is set or no workflow is offered";
 
@@ -682,9 +682,9 @@ public static class SystemPromptSummary
 
         if (advisor is not null)
         {
-            // The advisor (2026-09-27): after the image tools; offered while the setting Claude advisor tool is on.
+            // The advisor (2026-09-27): after the image tools; offered while the setting Claude CLI advisor tool is on.
             string advisorNote = !advisorEnabled ? NotOffered(ClaudeAdvisorOffSuffix) : standing;
-            groups.Add(Group(ToolsText.ClaudeTabTitle, advisor, advisorNote, advisorEnabled && toolsEnabled, SettingsField.ClaudeAdvisor, disabled));
+            groups.Add(Group(ToolsText.ClaudeCliTabTitle, advisor, advisorNote, advisorEnabled && toolsEnabled, SettingsField.ClaudeCliAdvisor, disabled));
         }
 
         if (web is not null)

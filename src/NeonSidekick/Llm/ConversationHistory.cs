@@ -169,7 +169,7 @@ public sealed class ConversationHistory
 
     /// <summary>
     /// The index of the first message of the turn in flight: the last user message that is neither a tool result nor an
-    /// image carrier — what the user typed — or 0 when there is none. Thinking is sent back after it: the Claude API's
+    /// image carrier — what the user typed — or 0 when there is none. Thinking is sent back after it: the Anthropic API's
     /// signed blocks (<see cref="Anthropic.AnthropicRequest"/>) and, since 2026-09-28, a local server's
     /// <c>reasoning_content</c> (<see cref="OpenAICompatibleChatClient.WithReasoningBack"/>).
     /// </summary>

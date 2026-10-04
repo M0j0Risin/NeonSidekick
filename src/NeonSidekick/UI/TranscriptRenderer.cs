@@ -305,7 +305,7 @@ public sealed class TranscriptRenderer : INoticeSink
     }
 
     /// <summary>
-    /// An advisor's answer under its tool line (<c>claude_advisor</c>, 2026-09-27): each line whole — wrapped by the window,
+    /// An advisor's answer under its tool line (<c>claude_advisor_cli</c>, 2026-09-27): each line whole — wrapped by the window,
     /// never cut — in the speaker's <paramref name="color"/>, indented under the tools' glyph; blank lines skipped. Part of
     /// the tool run, so a run folded by <c>Tool collapse count</c> folds it too.
     /// </summary>

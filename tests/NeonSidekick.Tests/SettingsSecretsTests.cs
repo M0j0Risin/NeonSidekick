@@ -42,11 +42,11 @@ public class SettingsSecretsTests
             return;
         }
 
-        var data = new AppSettingsData { LlmApiKey = "sk-llm", ClaudeApiKey = "sk-ant", HomeAssistantToken = "ha" };
+        var data = new AppSettingsData { LlmApiKey = "sk-llm", AnthropicApiKey = "sk-ant", HomeAssistantToken = "ha" };
         Assert.True(SettingsSecrets.ProtectAtRest(data));
-        Assert.Equal(("sk-llm", "sk-ant", "ha"), (SettingsSecrets.Reveal(data.LlmApiKey), SettingsSecrets.Reveal(data.ClaudeApiKey), SettingsSecrets.Reveal(data.HomeAssistantToken)));
+        Assert.Equal(("sk-llm", "sk-ant", "ha"), (SettingsSecrets.Reveal(data.LlmApiKey), SettingsSecrets.Reveal(data.AnthropicApiKey), SettingsSecrets.Reveal(data.HomeAssistantToken)));
         Assert.True(WindowsCredentials.IsProtected(data.LlmApiKey));
-        Assert.True(WindowsCredentials.IsProtected(data.ClaudeApiKey));
+        Assert.True(WindowsCredentials.IsProtected(data.AnthropicApiKey));
         Assert.True(WindowsCredentials.IsProtected(data.HomeAssistantToken));
 
         string before = data.LlmApiKey;
@@ -56,7 +56,7 @@ public class SettingsSecretsTests
         var fresh = new AppSettingsData();   // LLM API key "empty", the others unset
         Assert.False(SettingsSecrets.ProtectAtRest(fresh));
         Assert.Equal(LlmEndpoint.DefaultApiKey, fresh.LlmApiKey);
-        Assert.Equal("", fresh.ClaudeApiKey);
+        Assert.Equal("", fresh.AnthropicApiKey);
     }
 
     [Fact]

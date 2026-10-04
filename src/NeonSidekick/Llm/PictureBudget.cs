@@ -25,7 +25,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
     public const int DefaultPictures = 20;
 
     /// <summary>
-    /// <c>LLM picture megabytes</c>' default: under the Claude API's 32 MB request cap and well under the ~100 MB a
+    /// <c>LLM picture megabytes</c>' default: under the Anthropic API's 32 MB request cap and well under the ~100 MB a
     /// llama-server body tops out at, with room for the rest of the request.
     /// </summary>
     public const int DefaultMegabytes = 24;

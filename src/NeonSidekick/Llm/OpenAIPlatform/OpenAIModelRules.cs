@@ -163,7 +163,7 @@ public sealed record OpenAIModelRules(bool Reasons, string? NoneWord, bool Suppo
 
 /// <summary>
 /// What an OpenAI model costs, US dollars per million tokens (2026-10-03, OpenAI's Standard-tier list prices that day — the
-/// user's call: a table in the code, <c>/usage</c> in dollars as for the Claude API; a model it does not name shows tokens
+/// user's call: a table in the code, <c>/usage</c> in dollars as for the Anthropic API; a model it does not name shows tokens
 /// only). A cache read is the model's cached-input price; a cache write is billed (1.25 times the input) only from GPT-5.6
 /// on, and is zero here before. The 5.4 / 5.5 / 5.6 / 6 families double the input (and add half the output) for a prompt
 /// over <see cref="LongContextThreshold"/> tokens: the long figures, where there are some.

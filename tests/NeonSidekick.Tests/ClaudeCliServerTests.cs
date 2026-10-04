@@ -634,9 +634,9 @@ public class ClaudeCliServerTests
         string cli = Path.Combine(Path.GetTempPath(), "claude.exe");
         bool Exists(string path) => path == cli;
 
-        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeExecutable = cli }, _ => null, Exists));   // off by default
-        Assert.True(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliServer = true, ClaudeExecutable = cli }, _ => null, Exists));
-        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliServer = true, ClaudeExecutable = @"C:\gone\claude.exe" }, _ => null, Exists));
+        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliExecutable = cli }, _ => null, Exists));   // off by default
+        Assert.True(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliServer = true, ClaudeCliExecutable = cli }, _ => null, Exists));
+        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliServer = true, ClaudeCliExecutable = @"C:\gone\claude.exe" }, _ => null, Exists));
     }
 
     [Fact]
@@ -646,7 +646,7 @@ public class ClaudeCliServerTests
         Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCliServer));
         Assert.True(SettingsMenu.IsLlmField(SettingsField.ClaudeCliServer));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCliServer, new AppSettingsData(), @"C:\p"));
-        Assert.Equal(SettingsField.ClaudeCliServer, SettingsMenu.TabFields[(int)SettingsTab.Claude][^1]);   // /settings' Claude tab's last row since 2026-10-03 (/tools' until then)
+        Assert.Equal(SettingsField.ClaudeCliServer, SettingsMenu.TabFields[(int)SettingsTab.Anthropic][^1]);   // /settings' Claude tab's last row since 2026-10-03 (/tools' until then)
         Assert.True(AppSettings.Copy(new AppSettingsData { ClaudeCliServer = true }).ClaudeCliServer);
 
         var environment = new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCliServerVariable ? "on" : null);

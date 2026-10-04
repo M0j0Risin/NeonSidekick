@@ -80,7 +80,7 @@ public sealed class StoredHistory
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeSessionId { get; set; }
 
-    /// <summary>The Claude Code conversation <c>claude_advisor</c> resumes (2026-09-27, its own thread): absent until the first call.</summary>
+    /// <summary>The Claude Code conversation <c>claude_advisor_cli</c> resumes (2026-09-27, its own thread): absent until the first call.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeAdvisorSessionId { get; set; }
 
@@ -109,7 +109,7 @@ public sealed class StoredPlan
 /// image's bytes, a tool call's id + name + arguments, a tool result's id + text + skill tag, and — asked for
 /// (2026-09-28, the setting <c>Sessions save thinking</c>) — a reply's thinking as text, so a resumed session with
 /// <c>LLM preserve thinking</c> sends it back as the live one did; nothing else (a usage part is not conversation,
-/// and a Claude API block's signature is not kept: the API gets thinking back only inside the turn in flight, never
+/// and an Anthropic API block's signature is not kept: the API gets thinking back only inside the turn in flight, never
 /// a saved one). A reasoning part is read back whether or not the setting is on now. Call arguments go out through
 /// <see cref="Assistant.SerializeArguments"/> and come back as one <see cref="JsonElement"/> per
 /// property, the shape the server hands the adapter. Pure; the store owns the I/O.

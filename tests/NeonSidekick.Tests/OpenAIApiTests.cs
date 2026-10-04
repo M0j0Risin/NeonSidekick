@@ -162,12 +162,12 @@ public class OpenAIApiTests
         Assert.Equal(["message:user", "message:assistant", "message:user", "reasoning", "message:assistant", "function_call", "function_call_output", "function_call", "function_call_output"], Types(body));
         var input = body.GetProperty("input").EnumerateArray().ToList();
         Assert.Equal(OpenAIRequest.FinalAnswerPhase, input[1].GetProperty("phase").GetString());
-        Assert.Equal("NEW", input[3].GetProperty("encrypted_content").GetString());   // the old turn's went, as the Claude API's signed thinking
+        Assert.Equal("NEW", input[3].GetProperty("encrypted_content").GetString());   // the old turn's went, as the Anthropic API's signed thinking
         Assert.Equal(OpenAIRequest.CommentaryPhase, input[4].GetProperty("phase").GetString());   // text beside a call is the preamble
         Assert.Equal("{\"timezone\":\"UTC\"}", input[5].GetProperty("arguments").GetString());
         Assert.Equal(("call_1", "12:00"), (input[6].GetProperty("call_id").GetString(), input[6].GetProperty("output").GetString()));
         Assert.Equal(("call_2", AnthropicRequest.MissingResult), (input[8].GetProperty("call_id").GetString(), input[8].GetProperty("output").GetString()));
-        Assert.DoesNotContain("SIG-FROM-CLAUDE", body.GetRawText());   // the Claude API's signature is not this wire's
+        Assert.DoesNotContain("SIG-FROM-CLAUDE", body.GetRawText());   // the Anthropic API's signature is not this wire's
 
         var stripped = Body(history, withoutReasoning: true);
         Assert.DoesNotContain("reasoning", Types(stripped));
@@ -507,7 +507,7 @@ public class OpenAIApiTests
         var keyless = await session.ProbeServersAsync(new AppSettingsData { OpenAIApi = true, LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio"], keyless.Select(s => s.Name));
 
-        var both = await session.ProbeServersAsync(new AppSettingsData { OpenAIApi = true, OpenAIApiKey = "sk-openai-test", ClaudeApi = true, ClaudeApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
+        var both = await session.ProbeServersAsync(new AppSettingsData { OpenAIApi = true, OpenAIApiKey = "sk-openai-test", AnthropicApi = true, AnthropicApiKey = "sk-ant-test", LlmScanMode = "local" }, null, CancellationToken.None);
         Assert.Equal(["LM Studio", ClaudeApi.ServerName, OpenAIApi.ServerName], both.Select(s => s.Name));
 
         var alone = await session.ProbeServersAsync(new AppSettingsData { OpenAIApi = true, OpenAIApiKey = "sk-openai-test", LlmScanMode = "disabled" }, null, CancellationToken.None);
@@ -521,7 +521,7 @@ public class OpenAIApiTests
         var endpoints = new List<LlmEndpoint>();
         using var session = Session(stub, endpoints);
 
-        Assert.True(await session.ConnectAsync(new AppSettingsData { OpenAIApi = true, OpenAIApiKey = "sk-openai-test", ClaudeApiKey = "sk-ant-test", LlmApiKey = "local-key", LlmUrl = "https://api.openai.com" }, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(new AppSettingsData { OpenAIApi = true, OpenAIApiKey = "sk-openai-test", AnthropicApiKey = "sk-ant-test", LlmApiKey = "local-key", LlmUrl = "https://api.openai.com" }, CancellationToken.None));
 
         var endpoint = Assert.Single(endpoints);
         Assert.Equal(("sk-openai-test", "gpt-6.1-sol"), (endpoint.ApiKey, endpoint.ModelId));
@@ -551,7 +551,7 @@ public class OpenAIApiTests
         Assert.False(OpenAIApi.Offered(new AppSettingsData { OpenAIApiKey = "k" }));
         Assert.True(OpenAIApi.Offered(new AppSettingsData { OpenAIApi = true, OpenAIApiKey = "k" }));
 
-        var data = new AppSettingsData { OpenAIApiKey = "openai-key", ClaudeApiKey = "claude-key", LlmApiKey = "local-key" };
+        var data = new AppSettingsData { OpenAIApiKey = "openai-key", AnthropicApiKey = "claude-key", LlmApiKey = "local-key" };
         Assert.Equal("openai-key", ApiKeys.For(data, OpenAIApi.BaseUrl));
         Assert.Equal("claude-key", ApiKeys.For(data, ClaudeApi.BaseUrl));
         Assert.Equal("local-key", ApiKeys.For(data, new Uri("http://127.0.0.1:1234/v1")));

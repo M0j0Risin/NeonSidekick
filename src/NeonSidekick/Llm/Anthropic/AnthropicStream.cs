@@ -68,7 +68,7 @@ public sealed class AnthropicStream
 
     /// <summary>The log line for a reply cut at the output cap. Pinned.</summary>
     public static string MaxTokensWarning(string model) =>
-        $"The Claude API reply ({model}) stopped at its output cap; raise Claude API max tokens in /settings › Claude if replies are cut short.";
+        $"The Anthropic API reply ({model}) stopped at its output cap; raise Anthropic API max tokens in /settings › Anthropic if replies are cut short.";
 
     /// <summary>The updates for one event; <paramref name="data"/> is its JSON. An <c>error</c> event throws <see cref="AnthropicApiException"/>.</summary>
     public IEnumerable<ChatResponseUpdate> Handle(string? eventName, string data)
@@ -251,7 +251,7 @@ public sealed class AnthropicStream
     {
         if (_stopReason == "refusal")
         {
-            DiagnosticLog.Warn(Category, $"The Claude API declined the request (stop reason refusal{(_refusalCategory is null ? "" : ", " + _refusalCategory)}).");
+            DiagnosticLog.Warn(Category, $"The Anthropic API declined the request (stop reason refusal{(_refusalCategory is null ? "" : ", " + _refusalCategory)}).");
             updates.Add(Update(new TextContent(RefusalNote(_refusalCategory))));
         }
         else if (_stopReason == "max_tokens")
@@ -328,7 +328,7 @@ public sealed class AnthropicStream
 }
 
 /// <summary>
-/// A Claude API request that failed (2026-09-27): the HTTP status (0 for an <c>error</c> event mid-stream), the
+/// An Anthropic API request that failed (2026-09-27): the HTTP status (0 for an <c>error</c> event mid-stream), the
 /// API's error type and its message. The message is what <see cref="Assistant.Explain"/> shows; a key problem says
 /// where the key is set.
 /// </summary>
@@ -365,7 +365,7 @@ public sealed class AnthropicApiException : Exception
     public string ErrorType { get; }
 
     /// <summary>What a key problem adds. Pinned.</summary>
-    public const string KeyHint = " — check Claude API key in /settings › Claude";
+    public const string KeyHint = " — check Anthropic API key in /settings › Anthropic";
 
     /// <summary><c>HTTP 401: invalid x-api-key — check …</c>; <c>overloaded_error: Overloaded</c> for a stream's error. Pinned.</summary>
     public static string Compose(int status, string errorType, string message)

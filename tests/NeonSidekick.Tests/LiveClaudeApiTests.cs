@@ -7,7 +7,7 @@ using NeonSidekick.Llm.Tools;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The real Claude API for the live facts (2026-09-27): opt-in — every run is billed to the key — with
+/// The real Anthropic API for the live facts (2026-09-27): opt-in — every run is billed to the key — with
 /// <see cref="Variable"/> set to a key. A local gate, never something CI relies on.
 /// </summary>
 internal static class LiveClaudeApi
@@ -17,14 +17,14 @@ internal static class LiveClaudeApi
     public static readonly string? Key = Environment.GetEnvironmentVariable(Variable) is { Length: > 0 } key ? key : null;
 }
 
-/// <summary>A fact that runs only with a Claude API key in <see cref="LiveClaudeApi.Variable"/>.</summary>
+/// <summary>A fact that runs only with an Anthropic API key in <see cref="LiveClaudeApi.Variable"/>.</summary>
 public sealed class LiveClaudeApiFactAttribute : FactAttribute
 {
     public LiveClaudeApiFactAttribute()
     {
         if (LiveClaudeApi.Key is null)
         {
-            Skip = $"Set {LiveClaudeApi.Variable} to a Claude API key to run the live Claude API facts (each run is billed).";
+            Skip = $"Set {LiveClaudeApi.Variable} to an Anthropic API key to run the live Anthropic API facts (each run is billed).";
         }
     }
 }

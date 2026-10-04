@@ -451,7 +451,7 @@ public sealed class Assistant
         "With " + NeonSidekick.Llm.Tools.DockerLifecycleTool.ToolName + ", " + NeonSidekick.Llm.Tools.DockerPullTool.ToolName + " and the removing tools you may also change Docker, each call waiting for the user's yes: change it only when the user asks, say what you changed, and do not retry one they decline.";
 
     /// <summary>
-    /// The sentence the default rules gain while <c>claude_advisor</c> is offered (the setting <c>Claude advisor tool</c> on,
+    /// The sentence the default rules gain while <c>claude_advisor_cli</c> is offered (the setting <c>Claude CLI advisor tool</c> on,
     /// 2026-09-27): appended after the SQL sentence by <see cref="DefaultRules"/>. It says when (stuck, unsure of the best
     /// course — not for what a tool can look up), how (a self-contained question, the brief in context) and what to do with
     /// the answer (weigh it, decide, and never just relay it). Pinned.

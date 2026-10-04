@@ -9,7 +9,7 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>claude_advisor</c> (2026-09-27) over <see cref="FakeClaudeCli"/>: always read-only, its own thread resumed, the
+/// <c>claude_advisor_cli</c> (2026-09-27) over <see cref="FakeClaudeCli"/>: always read-only, its own thread resumed, the
 /// per-turn cap, the opt-in confirm, the two context modes, the model and effort falling back to <c>/claude</c>'s, the
 /// cost handed on, the failures as <c>Error:</c> sentences and a cancel that goes on up.
 /// </summary>
@@ -20,7 +20,7 @@ public class ClaudeAdvisorToolTests
     private readonly List<(TokenUsage Usage, decimal Usd)> _spent = [];
     private readonly List<ChatMessage> _history = [];
     private readonly RecordingView _view = new();
-    private AppSettingsData _settings = new() { ClaudeAdvisor = true };
+    private AppSettingsData _settings = new() { ClaudeCliAdvisor = true };
 
     private ClaudeAdvisorTool Tool(Func<string, CancellationToken, Task<bool?>>? confirm = null) =>
         new(_cli, () => _settings, () => @"C:\work", _thread, (usage, usd) => _spent.Add((usage, usd)), () => _history, confirm, _view);
@@ -52,7 +52,7 @@ public class ClaudeAdvisorToolTests
     {
         var tool = Tool();
 
-        Assert.Equal("claude_advisor", tool.Name);
+        Assert.Equal("claude_advisor_cli", tool.Name);
         var properties = tool.JsonSchema.GetProperty("properties");
         Assert.True(properties.TryGetProperty("question", out _));
         Assert.True(properties.TryGetProperty("context", out _));
@@ -63,9 +63,9 @@ public class ClaudeAdvisorToolTests
     [Fact]
     public async Task ACall_IsReadOnly_WhateverTheCommandsLevel_FramedOnce_ThenResumed_TheCostHandedOn()
     {
-        _settings.ClaudePermissions = "full";
-        _settings.ClaudeModel = "sonnet";
-        _settings.ClaudeEffort = "low";
+        _settings.ClaudeCliPermissions = "full";
+        _settings.ClaudeCliModel = "sonnet";
+        _settings.ClaudeCliEffort = "low";
         _cli.Enqueue(new ClaudeEvent.ToolActivity("Grep", "Parse"), new ClaudeEvent.TextDelta("Use the "), new ClaudeEvent.TextDelta("streaming one."), FakeClaudeCli.Ok("s-1"));
         _cli.EnqueueReply("s-1", "Still the streaming one.");
         var tool = Tool();
@@ -96,10 +96,10 @@ public class ClaudeAdvisorToolTests
     [Fact]
     public async Task TheAdvisorsOwnModelAndEffort_OutrankTheCommands()
     {
-        _settings.ClaudeModel = "sonnet";
-        _settings.ClaudeEffort = "low";
-        _settings.ClaudeAdvisorModel = " opus ";
-        _settings.ClaudeAdvisorEffort = "max";
+        _settings.ClaudeCliModel = "sonnet";
+        _settings.ClaudeCliEffort = "low";
+        _settings.ClaudeCliAdvisorModel = " opus ";
+        _settings.ClaudeCliAdvisorEffort = "max";
         _cli.EnqueueReply("s-1", "ok");
 
         await Ask(Tool(), "q");
@@ -127,7 +127,7 @@ public class ClaudeAdvisorToolTests
     [Fact]
     public async Task TheCap_RefusesTheCallPastIt_AndBeginTurnStartsItOver()
     {
-        _settings.ClaudeAdvisorCallsPerTurn = 1;
+        _settings.ClaudeCliAdvisorCallsPerTurn = 1;
         _cli.EnqueueReply("s-1", "one").EnqueueReply("s-1", "two");
         var tool = Tool();
 
@@ -136,7 +136,7 @@ public class ClaudeAdvisorToolTests
         tool.BeginTurn();
         Assert.Equal("two", await Ask(tool, "c"));
         Assert.Equal(2, _cli.Requests.Count);
-        Assert.Equal("Error: claude_advisor was already called 2 times this turn, the most allowed. Carry on without it.", ClaudeText.AdvisorCapError(2));
+        Assert.Equal("Error: claude_advisor_cli was already called 2 times this turn, the most allowed. Carry on without it.", ClaudeText.AdvisorCapError(2));
     }
 
     [Fact]
@@ -153,10 +153,10 @@ public class ClaudeAdvisorToolTests
         _cli.EnqueueReply("s-1", "unasked").EnqueueReply("s-1", "yes");
         var tool = Tool(Confirm);
 
-        Assert.Equal("unasked", await Ask(tool, "first"));   // Claude advisor tool confirm off: the seam is never called
+        Assert.Equal("unasked", await Ask(tool, "first"));   // Claude CLI advisor tool confirm off: the seam is never called
         Assert.Empty(asked);
-        _settings.ClaudeAdvisorConfirm = true;
-        _settings.ClaudeAdvisorCallsPerTurn = 10;
+        _settings.ClaudeCliAdvisorConfirm = true;
+        _settings.ClaudeCliAdvisorCallsPerTurn = 10;
         Assert.Equal(ClaudeText.AdvisorDeclinedError, await Ask(tool, "second"));
         Assert.Equal(ClaudeText.AdvisorNotAskedError, await Ask(tool, "third"));
         Assert.Equal("yes", await Ask(tool, "fourth"));
@@ -177,7 +177,7 @@ public class ClaudeAdvisorToolTests
         var tool = Tool();
 
         await Ask(tool, "q1");
-        _settings.ClaudeAdvisorContext = "recent";
+        _settings.ClaudeCliAdvisorContext = "recent";
         await Ask(tool, "q2");
 
         Assert.DoesNotContain("The conversation so far", _cli.Requests[0].Prompt, StringComparison.Ordinal);
@@ -208,7 +208,7 @@ public class ClaudeAdvisorToolTests
         _cli.EnqueueStartFailure(ClaudeText.NotFound);
         _cli.Enqueue(FakeClaudeCli.Failed(null, "Not logged in"));
         _cli.Enqueue(FakeClaudeCli.Ok("s-1"));
-        _settings.ClaudeAdvisorCallsPerTurn = 10;
+        _settings.ClaudeCliAdvisorCallsPerTurn = 10;
         var tool = Tool();
 
         Assert.Equal(ClaudeText.AdvisorNoQuestionError, await Ask(tool, "  "));
@@ -258,9 +258,9 @@ public class ClaudeAdvisorToolTests
         Assert.False(ClaudeAdvisorContext.IsRecent("brief"));
         Assert.True(ClaudeAdvisorContext.IsRecent(" Recent "));
         Assert.False(ClaudeAdvisorContext.IsRecent("everything"));   // warned, read as brief
-        Assert.Equal("brief", new AppSettingsData().ClaudeAdvisorContext);
-        Assert.False(new AppSettingsData().ClaudeAdvisor);            // off by default: every call costs money
-        Assert.False(new AppSettingsData().ClaudeAdvisorConfirm);     // opt-in
-        Assert.Equal(2, new AppSettingsData().ClaudeAdvisorCallsPerTurn);
+        Assert.Equal("brief", new AppSettingsData().ClaudeCliAdvisorContext);
+        Assert.False(new AppSettingsData().ClaudeCliAdvisor);            // off by default: every call costs money
+        Assert.False(new AppSettingsData().ClaudeCliAdvisorConfirm);     // opt-in
+        Assert.Equal(2, new AppSettingsData().ClaudeCliAdvisorCallsPerTurn);
     }
 }

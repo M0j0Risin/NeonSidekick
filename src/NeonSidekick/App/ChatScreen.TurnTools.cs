@@ -210,7 +210,7 @@ internal sealed partial class ChatScreen
         // The print tools after the Home Assistant tools (2026-09-28): Print tools is the group's switch; no rule — the descriptions say to print only when asked.
         bool print = inputs.PrintEnabled && printTools is { Count: > 0 };
         tools = print ? [.. tools, .. printTools!] : tools;
-        // The advisor after the image tools (2026-09-27): the setting Claude advisor tool is the group's switch; its sentence after the SQL one.
+        // The advisor after the image tools (2026-09-27): the setting Claude CLI advisor tool is the group's switch; its sentence after the SQL one.
         bool advisor = inputs.AdvisorEnabled && advisorTools is { Count: > 0 };
         tools = advisor ? [.. tools, .. advisorTools!] : tools;
         // The shell rule's execute_code sentence promises neon_tools only while the setting Shell tool bridge is on (later on 2026-09-21).
