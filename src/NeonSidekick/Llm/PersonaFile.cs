@@ -76,6 +76,56 @@ public sealed class PersonaFile : PromptFile
     }
 
     /// <summary>
+    /// Opens a new Windows Terminal window in <paramref name="folder"/> (<c>/terminal</c> and Ctrl+., 2026-10-03, the user's ask:
+    /// "similar to /explore", a new window rather than a tab in this one): <c>wt.exe -w new -d &lt;folder&gt;</c> through a shell
+    /// execute, which finds the app-execution alias, so the window runs Windows Terminal's default profile. Where there is no
+    /// Windows Terminal the shell refuses, and <c>cmd.exe</c> is shell-executed in the folder instead: a console window of its own
+    /// (Windows Terminal itself where it is the default terminal). Not waited for. Throws when neither launch worked; the screen
+    /// prints the detail. A deliberate launch at this process-start site, beside the editor and the shell open.
+    /// </summary>
+    public static void OpenTerminal(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        try
+        {
+            using var terminal = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("wt.exe", TerminalArguments(folder)) { UseShellExecute = true });
+            return;
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            DiagnosticLog.Info(Category, $"Windows Terminal did not start ({ex.Message}); opening a console window instead.");
+        }
+
+        using var console = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = true, WorkingDirectory = folder });
+    }
+
+    /// <summary>
+    /// <c>wt.exe</c>'s command line for <see cref="OpenTerminal"/>: a new window (<c>-w new</c>) starting in <paramref name="folder"/>
+    /// (<c>-d</c>), the folder quoted by the argv rules (a backslash run before the closing quote doubled, so <c>D:\</c> stays
+    /// <c>D:\</c>) and each <c>;</c> escaped as <c>\;</c>, since <c>wt</c> splits its commands at a bare one. Pure; pinned.
+    /// </summary>
+    public static string TerminalArguments(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        var quoted = new System.Text.StringBuilder("-w new -d \"");
+        int backslashes = 0;
+        foreach (char c in folder.Replace(";", "\\;", StringComparison.Ordinal))
+        {
+            if (c == '\\')
+            {
+                backslashes++;
+                continue;
+            }
+
+            // A quote cannot be in a Windows path; a backslash run before anything else stays as it is.
+            quoted.Append('\\', backslashes).Append(c);
+            backslashes = 0;
+        }
+
+        return quoted.Append('\\', backslashes * 2).Append('"').ToString();
+    }
+
+    /// <summary>
     /// The shell-execute call behind the editor, Explorer and the browser: whatever Windows
     /// associates with <paramref name="target"/> (<c>open</c> / <c>xdg-open</c> elsewhere), not waited
     /// for (<see cref="EditAndWaitAsync"/> is the one launch that waits). Sets <see cref="NoAttachConsoleVariable"/> first — the ONE environment write in the

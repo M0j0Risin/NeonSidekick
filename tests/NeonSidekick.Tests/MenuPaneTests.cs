@@ -1451,6 +1451,113 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    // ── The type-to-filter (2026-10-03, the user's ask: /tools', /skills' and /mcp's tool lists) ──
+
+    private static MenuPage Filtering(string filter, bool spaceToggles = false) =>
+        Page("alpha", "beta", "gamma") with { Filter = filter, SpaceToggles = spaceToggles };
+
+    [Fact]
+    public async Task AFilterPage_ATypedCharacter_ReturnsTheFilterWithIt_TheQueuedOnesFoldedIn()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        menu.Notice("saved");
+        Push(Keys.Down, Keys.Char('h'), Keys.Char('a'), Keys.Char('i'));
+
+        // The keys already waiting go on the filter with the first: one pick, one rebuild; the cursor's row is reported as ever.
+        Assert.Equal(new MenuPick(0, 1, Filter: "hai"), await menu.PickAsync(Filtering(""), 0, CancellationToken.None));
+        Assert.Empty(menu.Status);
+
+        Push(Keys.Char('k'));
+        Assert.Equal(new MenuPick(0, 0, Filter: "haik"), await menu.PickAsync(Filtering("hai"), 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task AFilterPage_Backspace_TakesTheLastCharacterOff_AndEscClearsIt_BeforeItCloses()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Backspace);
+        Assert.Equal(new MenuPick(0, 0, Filter: "ha"), await menu.PickAsync(Filtering("hai"), 0, CancellationToken.None));
+
+        Push(Keys.Escape);
+        Assert.Equal(new MenuPick(0, 0, Filter: ""), await menu.PickAsync(Filtering("ha"), 0, CancellationToken.None));
+
+        // Nothing typed: Backspace is nothing, ESC backs out as on every page.
+        Push(Keys.Backspace, Keys.Escape);
+        Assert.Null(await menu.PickAsync(Filtering(""), 0, CancellationToken.None));
+
+        // Ctrl+C backs out at once, a filter or not.
+        Push(Keys.CtrlC);
+        Assert.Null(await menu.PickAsync(Filtering("ha"), 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task AFilterPage_SpaceStaysAFlip_TheArrowsAndEnterAreTheirOwn()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Char(' '));
+        Assert.Equal(new MenuPick(0, 0, Toggle: true), await menu.PickAsync(Filtering("a", spaceToggles: true), 0, CancellationToken.None));
+
+        // Without the flip a space goes on a filter that has text, never first.
+        Push(Keys.Char(' '), Keys.Down, Keys.Enter);
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Filtering(""), 0, CancellationToken.None));
+        Push(Keys.Char(' '));
+        Assert.Equal(new MenuPick(0, 0, Filter: "a "), await menu.PickAsync(Filtering("a"), 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task APageWithoutAFilter_SwallowsTheLetters_AndATabSwitchTakesTheTabsFilter()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Char('b'), Keys.Down, Keys.Enter);
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("alpha", "beta"), 0, CancellationToken.None));
+
+        // Tab 0 filters, tab 1 does not: a letter there is nothing, and back on tab 0 it types.
+        var tabs = new[] { new MenuTab("Offered", ["alpha", "beta"]) { Filter = "" }, new MenuTab("Options", ["one", "two"]) };
+        Push(Keys.Right, Keys.Char('x'), Keys.Right, Keys.Char('x'));
+        Assert.Equal(new MenuPick(0, 0, Filter: "x"), await menu.PickAsync(MenuPage.Tabbed("Tools", tabs, 0, "Enter = pick"), 0, CancellationToken.None));
+        Assert.Equal("", MenuPage.Tabbed("Tools", tabs, 0, "Enter = pick").Filter);
+        Assert.Null(MenuPage.Tabbed("Tools", tabs, 1, "Enter = pick").Filter);
+        menu.Close();
+    }
+
+    [Fact]
+    public void MenuFilter_MatchesNameOrDescription_EditsByTheKey_AndTheWordingIsPinned()
+    {
+        Assert.True(MenuFilter.Matches("", "anything", null));
+        Assert.True(MenuFilter.Matches("HAIKU", "write_haiku", null));
+        Assert.True(MenuFilter.Matches("poem", "write_haiku", "Writes a short poem"));
+        Assert.False(MenuFilter.Matches("sonnet", "write_haiku", "Writes a short poem"));
+
+        Assert.Equal("ab", MenuFilter.Edit("a", Keys.Char('b'), spaceToggles: false));
+        Assert.Equal("a", MenuFilter.Edit("ab", Keys.Backspace, spaceToggles: false));
+        Assert.Null(MenuFilter.Edit("", Keys.Backspace, spaceToggles: false));
+        Assert.Null(MenuFilter.Edit("", Keys.Char(' '), spaceToggles: false));
+        Assert.Null(MenuFilter.Edit("a", Keys.Char(' '), spaceToggles: true));
+        Assert.Null(MenuFilter.Edit("a", Keys.Down, spaceToggles: false));
+        Assert.Null(MenuFilter.Edit("a", Keys.Enter, spaceToggles: false));
+        Assert.Null(MenuFilter.Edit("a", Keys.CtrlE, spaceToggles: false));
+        Assert.Null(MenuFilter.Edit(new string('a', MenuFilter.MaxLength), Keys.Char('b'), spaceToggles: false));
+
+        Assert.Equal("Filter: haiku · 3 of 128", MenuFilter.Caption("haiku", 3, 128));
+        Assert.Null(MenuFilter.CaptionOrNull("", 3, 128));
+        Assert.Equal("Nothing here has \"zz\" in its name or description.", MenuFilter.NoMatchLine("zz"));
+        Assert.Equal("Enter = on · " + MenuFilter.TypeAndCloseKeys, MenuFilter.Hint("Enter = on · " + MenuFilter.TypeAndCloseKeys, ""));
+        Assert.Equal("Enter = on · " + MenuFilter.FilteringKeys, MenuFilter.Hint("Enter = on · " + MenuFilter.TypeAndCloseKeys, "x"));
+        Assert.Equal("type = filter · ESC = close", MenuFilter.TypeAndCloseKeys);
+        Assert.Equal("Backspace = erase · ESC = clear filter", MenuFilter.FilteringKeys);
+    }
+
     [Fact]
     public async Task Space_WithoutSpaceToggles_IsSwallowed()
     {

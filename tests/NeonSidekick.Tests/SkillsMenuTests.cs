@@ -196,6 +196,31 @@ public class SkillsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>Typing filters the Offered tab (2026-10-03, the user's ask): Enter acts on the skill shown; ESC clears, then closes.</summary>
+    [Fact]
+    public async Task OnThePane_TypingFiltersTheOfferedTab_EnterOpensTheSkillShown_EscClearsThenCloses()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        Put(SkillScope.Profile, "pdf", "Extracts PDF text.");
+        var (menu, pane) = PaneMenu();
+        Push("pdf".Select(Keys.Char).ToArray());
+        Push(Keys.Enter);                         // pdf's scope page
+        Push(Keys.Escape);                        // back to the list, still filtered
+        Push(Keys.Escape);                        // the filter cleared
+        Push(Keys.Escape);                        // closed
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MenuFilter.Caption("pdf", 1, 2), _console.Output);
+        Assert.Contains("\n▸ pdf    profile  Extracts PDF text.\n", _console.Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("pdf")) + "\n", _console.Output);
+        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), _console.Output);
+        Assert.Contains(MenuFilter.Hint(SkillsMenu.LoadedKeys, "pdf"), _console.Output);
+        Assert.Contains("\n▸ haiku  profile  Writes haiku.\n  pdf    profile  Extracts PDF text.\n", _console.Output);   // cleared: both again
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
     /// <summary>The toggle saves off and stays off past the pane (the next turn reads it); mid-turn it flips too, as every Options row edits there.</summary>
     [Fact]
     public async Task OnThePane_TheProjectFileRow_SavesOff_MidTurnToo()

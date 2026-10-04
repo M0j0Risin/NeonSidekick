@@ -193,7 +193,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(32, SettingsMenu.LabelWidthOf(TabFields(ToolsText.ShellTabTitle)));   // "Shell police forbidden strings" (2026-10-03; "Shell tool bridge max calls", 29, before) (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(TabFields(ToolsText.AskTabTitle)));   // "Ask max choices per question"
         Assert.Equal(24, SettingsMenu.LabelWidthOf(TabFields(ToolsText.GitTabTitle)));   // "GitLib log max commits" (2026-09-30; "Git native log max commits", 28, from later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
-        Assert.Equal(27, SettingsMenu.LabelWidthOf(TabFields(ToolsText.SqlTabTitle)));   // "SQL connections (profile)" (2026-09-23)
+        Assert.Equal(28, SettingsMenu.LabelWidthOf(TabFields(ToolsText.SqlTabTitle)));   // "SQL query result max chars" (later on 2026-10-03; "SQL connections (profile)", 27, from 2026-09-23)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(TabFields(ToolsText.OracleTabTitle)));   // "Oracle connections (profile)" (2026-09-30)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(TabFields(ToolsText.MySqlTabTitle)));   // "MySQL connections (profile)" (later on 2026-09-30)
         Assert.Equal(23, SettingsMenu.LabelWidthOf(TabFields(ToolsText.UncTabTitle)));   // "UNC %-mention enabled" (later still on 2026-09-30)
@@ -241,6 +241,45 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: off\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: on\n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", _console.Output);
         Assert.Equal(0, pane.FlowRow);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_TypingFiltersTheOfferedRows_EnterFlipsTheToolShown_EscClearsTheFilter_ThenCloses()
+    {
+        // 2026-10-03 (the user's ask): the typed text narrows the tab (the caption says how far), the cursor on the first tool
+        // left; Enter flips that tool; the first ESC brings every row back, the second closes.
+        var (menu, pane, _) = PaneMenu();
+        Push("shift_d".Select(Keys.Char).ToArray());
+        Push(Keys.Enter);                         // shift_date: off
+        Push(Keys.Escape);                        // the filter cleared
+        Push(Keys.Escape);                        // closed
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["shift_date"], _settings.Current.ToolsDisabled);
+        int total = Facts().Groups.Sum(g => g.Tools.Count);
+        Assert.Contains(MenuFilter.Caption("shift_d", 1, total), _console.Output);
+        Assert.Contains("\n" + Heading("── Clock · 3") + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", _console.Output);   // the one tool under its heading
+        Assert.Contains("\n" + Heading("── Clock · 2 of 3") + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains(MenuFilter.Hint(ToolsText.OfferedKeys, "shift_d"), _console.Output);
+        // Cleared: the whole tab again, the cursor back on the first tool.
+        Assert.Contains("\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, false) + "\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_ASettingsTab_TakesNoFilter()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.OptionsTabTitle));
+        Push("zz".Select(Keys.Char).ToArray());
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(MenuFilter.Caption("z", 0, Facts().Groups.Sum(g => g.Tools.Count)), _console.Output);
+        Assert.DoesNotContain(MenuFilter.NoMatchLine("z"), _console.Output);
         pane.Dispose();
     }
 
@@ -990,8 +1029,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);
-        Assert.Contains("SQL connections offered    none of 2", _console.Output);
-        Assert.Contains("SQL connections offered    1 of 2", _console.Output);
+        Assert.Contains("SQL connections offered     none of 2", _console.Output);
+        Assert.Contains("SQL connections offered     1 of 2", _console.Output);
         Assert.Contains("[x] aw    x", _console.Output);
 
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" }, "new": { "server": "z", "auth": "windows" } } }""");
@@ -1455,8 +1494,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(200_000, _settings.Current.QueryResultMaxChars);
-        Assert.Contains("Query result max chars " + SettingsMenu.QueryResultMaxCharsRangeError + "; keeping 32000.", _console.Output);
-        Assert.Contains("  · Query result max chars: 200,000 chars\n", _console.Output);
+        Assert.Contains("SQL query result max chars " + SettingsMenu.QueryResultMaxCharsRangeError + "; keeping 32000.", _console.Output);
+        Assert.Contains("  · SQL query result max chars: 200,000 chars\n", _console.Output);
         pane.Dispose();
     }
 
@@ -1539,7 +1578,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
         Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", _console.Output);
         Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", _console.Output);
-        Assert.Contains("  ·   File search max results: 200 results\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   Query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  ·   File search max results: 200 results\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · Claude\n  ·   Claude executable: (looked up)\n  ·   Claude slash command permissions: read-only\n  ·   Claude slash command model: (Claude Code's default)\n  ·   Claude slash command effort: (Claude Code's default)\n  ·   Claude advisor tool: off\n  ·   Claude advisor tool context: brief\n  ·   Claude advisor tool calls per turn: 2 calls\n  ·   Claude advisor tool model: (as Claude slash command model)\n  ·   Claude advisor tool effort: (as Claude slash command effort)\n  ·   Claude advisor tool confirm: off\n  ·   Claude API: off\n  ·   Claude API key: (none)\n  ·   Claude API max tokens: 32,000 tokens\n  ·   Claude API prompt caching: on\n  ·   Claude CLI server: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

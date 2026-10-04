@@ -72,6 +72,7 @@ public class KeysTests
     [InlineData(ConsoleKey.L, '\x0c', "/cmdlist")]
     [InlineData(ConsoleKey.O, '\x0f', "/police")]
     [InlineData(ConsoleKey.H, '\x08', "/header")]   // later still on 2026-10-01 (the user's ask), free since /help moved to Ctrl+H
+    [InlineData(ConsoleKey.E, '\x05', "/sessions")]   // later on 2026-10-03 (the user's ask), free since /perf moved to Ctrl+F
     public void ShortcutLine_ThePaneChords_AreTheirBareCommands(ConsoleKey key, char control, string line)
     {
         // Later on 2026-09-30 (the user's ask): the test factory's '\0' and the console's control character count; Shift,
@@ -88,12 +89,12 @@ public class KeysTests
     [Fact]
     public void ShortcutLine_CtrlE_IsExplore_WithoutAltOrShift_AndATypedEStaysAnE()
     {
-        // Later on 2026-10-01 (the user's ask): the console's ENQ and the test factory's '\0' count; Ctrl+Alt+E was /perf (gone since Ctrl+F),
+        // Later on 2026-10-01 (the user's ask): the console's ENQ and the test factory's '\0' count; Ctrl+Alt+E was /perf (gone since Ctrl+F; /sessions since 2026-10-03),
         // Shift, Alt alone and a typed "E" (Spectre's test input marks it with Control) are no chord.
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.CtrlE));
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.E)));
         Assert.Contains("/explore", NeonSidekick.App.SlashCommands.Words);
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
+        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // /sessions since later on 2026-10-03
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x05', ConsoleKey.E, shift: true, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('E', ConsoleKey.E, shift: false, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.E, shift: false, alt: true, control: false)));
@@ -155,7 +156,7 @@ public class KeysTests
         Assert.Equal("/header", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // back later still on 2026-10-01 as /header (the user's ask)
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /tb on Ctrl+T, /perf on Ctrl+F since later still on 2026-10-01
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));
+        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // back later on 2026-10-03 as /sessions (the user's ask)
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sys on Ctrl+Y since 2026-10-03
         Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));
     }
@@ -177,6 +178,23 @@ public class KeysTests
         Assert.NotEqual(line, Keys.ShortcutLine(Keys.Ctrl(key)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('@', key, shift: false, alt: true, control: true)));
         Assert.False(Keys.IsKillSwitch(Keys.CtrlAlt(key)));
+    }
+
+    [Fact]
+    public void ShortcutLine_CtrlPeriod_IsTerminal_AndATypedPeriodStaysAPeriod()
+    {
+        // 2026-10-03 (the user's ask, Ctrl+. over Ctrl+Shift+.): Ctrl+/'s shape on OemPeriod with no character; a typed "."
+        // carries its character, and Shift, Alt and Ctrl+Alt are no chord.
+        Assert.Equal("/terminal", Keys.ShortcutLine(Keys.CtrlPeriod));
+        Assert.Equal("/terminal", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.OemPeriod, shift: false, alt: false, control: true)));
+        Assert.Contains("/terminal", NeonSidekick.App.SlashCommands.Words);
+        Assert.Null(Keys.ShortcutLine(Keys.Char('.')));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('.', ConsoleKey.OemPeriod, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.OemPeriod, shift: true, alt: false, control: true)));   // Ctrl+> on a US layout
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.OemPeriod)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.OemPeriod, shift: false, alt: true, control: false)));
+        Assert.False(Keys.IsInterrupt(Keys.CtrlPeriod));
+        Assert.False(Keys.IsToolToggle(Keys.CtrlPeriod));
     }
 
     [Fact]

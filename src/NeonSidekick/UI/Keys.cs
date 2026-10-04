@@ -80,6 +80,9 @@ public static class Keys
     /// <summary>Ctrl+/ as the console delivers it on a US layout: no character, the Oem2 key with Control (<c>/settings</c>).</summary>
     public static ConsoleKeyInfo CtrlSlash => new('\0', ConsoleKey.Oem2, false, false, true);
 
+    /// <summary>Ctrl+. as the console delivers it: no character, the OemPeriod key with Control (<c>/terminal</c>, 2026-10-03).</summary>
+    public static ConsoleKeyInfo CtrlPeriod => new('\0', ConsoleKey.OemPeriod, false, false, true);
+
     /// <summary>
     /// The chat line's command chords (2026-09-30, the user's ask): Ctrl+Alt+C is <c>/clear</c>, Ctrl+Alt+N <c>/new</c> and
     /// Ctrl+Alt+S <c>/splash</c> — at the idle line and under a reply, run as the typed command would be. The user asked for
@@ -125,6 +128,13 @@ public static class Keys
     /// the line's paste (Ctrl+V or Alt+V, one of the two). Later on 2026-10-02 (the user's ask) each closes its window when it
     /// is open (<c>ChatScreen.CloseByChord</c>); the typed command still opens it or brings it forward.
     /// On 2026-10-03 (the user's ask) <c>/sys</c> moved to plain Ctrl+Y and Ctrl+Alt+Y went: its EM counts as no character.
+    /// Later on 2026-10-03 (the user's ask) Ctrl+Alt+E is <c>/sessions</c>, free since <c>/perf</c> left it for Ctrl+F: its ENQ
+    /// counts as no character, and an AltGr+E that types € is still €. Under a reply it opens the list over the reply, as the
+    /// typed line does.
+    /// Later still on 2026-10-03 (the user's ask, Ctrl+. chosen over Ctrl+Shift+.) Ctrl+. is <c>/terminal</c>, Ctrl+/'s shape on
+    /// <see cref="ConsoleKey.OemPeriod"/>: "." has no control character, so the console reports the key with none, and a typed
+    /// "." carries its character and stays a ".". OemPeriod is the "." key of a US layout and of most others; Shift, Alt and
+    /// Ctrl+Alt are no chord.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -144,6 +154,7 @@ public static class Keys
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 (ConsoleKey.Y, '\0' or '\x19') => "/sys",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
+                (ConsoleKey.OemPeriod, '\0') => "/terminal",
                 _ => null,
             };
         }
@@ -164,6 +175,7 @@ public static class Keys
             (ConsoleKey.S, '\0' or '\x13') => "/skills",
             (ConsoleKey.M, '\0' or '\r') => "/memory",
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",
+            (ConsoleKey.E, '\0' or '\x05') => "/sessions",
             (ConsoleKey.L, '\0' or '\x0c') => "/cmdlist",
             (ConsoleKey.O, '\0' or '\x0f') => "/police",
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",

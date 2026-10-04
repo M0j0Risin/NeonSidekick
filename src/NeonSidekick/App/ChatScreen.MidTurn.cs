@@ -168,7 +168,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
-            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
+            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
             or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
@@ -554,6 +554,9 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Explore:
                 HandleExplore(args);
+                break;
+            case SlashCommand.Terminal:
+                HandleTerminal(args);
                 break;
             case SlashCommand.Log:
                 HandleLog(args);

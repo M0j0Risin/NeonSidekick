@@ -169,6 +169,24 @@ public class McpRowsTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ToolRows_UnderAFilter_KeepTheMatches_AServerWithNoneGoes()
+    {
+        // 2026-10-03 (the user's ask): /tools' Offered shape — the name or the description, case folded; the heading counts the whole server.
+        await using var session = await ConnectedAsync(Two);
+        var facts = Facts(session, disabled: ["docker__fail"]);
+
+        var rows = McpRows.ToolRows(facts, "PAGE");   // chrome__navigate's description
+        Assert.Equal(["── chrome · 1", "chrome__navigate  on   Opens a page."], rows.Select(r => Plain(r.Markup)));
+        Assert.Equal([0], ToolsText.HeadingRows(rows));
+
+        rows = McpRows.ToolRows(facts, "docker__");
+        Assert.Equal(["── docker · 1 of 2", "docker__echo      on   Echoes the text back.", "docker__fail      off  Always fails."], rows.Select(r => Plain(r.Markup)));
+
+        Assert.Equal([MenuFilter.NoMatchLine("zz")], McpRows.ToolRows(facts, "zz").Select(r => Plain(r.Markup)));
+        Assert.Equal(McpRows.ToolRows(facts), McpRows.ToolRows(facts, ""));
+    }
+
+    [Fact]
     public async Task ToolRows_NoneConnected_OrTheSwitchesOff()
     {
         await using var session = await ConnectedAsync(Two, "docker", "chrome");

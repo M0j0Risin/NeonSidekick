@@ -28,6 +28,9 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
 
     /// <summary>The tab's <see cref="MenuPage.Headings"/>; null for none.</summary>
     public IReadOnlySet<int>? Headings { get; init; }
+
+    /// <summary>The tab's <see cref="MenuPage.Filter"/>; null for a tab that does not filter.</summary>
+    public string? Filter { get; init; }
 }
 
 /// <summary>
@@ -122,6 +125,15 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public IReadOnlySet<int>? Headings { get; init; }
 
     /// <summary>
+    /// The text typed to filter the rows (2026-10-03, the user's ask: <c>/tools</c>' and <c>/skills</c>' Offered tabs and
+    /// <c>/mcp</c>'s Tools tab, <see cref="MenuFilter"/>): a character that types, and Backspace while there is text, return a
+    /// <see cref="MenuPick"/> with the new text as <see cref="MenuPick.Filter"/> for the menu to rebuild the rows by; ESC with
+    /// text returns <c>""</c>, so the first ESC clears the filter and the next closes. Null for a page that does not filter
+    /// (every page but those three tabs): the keys are what they were. Taken from the tab on a tabbed page.
+    /// </summary>
+    public string? Filter { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without).
@@ -135,7 +147,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
         }
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
-        return new MenuPage(title, tabs[tab].Rows, tabs[tab].Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = tabs[tab].Caption, BaseHint = hint, Headings = tabs[tab].Headings };
+        return new MenuPage(title, tabs[tab].Rows, tabs[tab].Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = tabs[tab].Caption, BaseHint = hint, Headings = tabs[tab].Headings, Filter = tabs[tab].Filter };
     }
 
     /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
@@ -211,9 +223,10 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 /// What <see cref="MenuPane.PickAsync"/> returns on Enter — or on Space over a page whose
 /// <see cref="MenuPage.SpaceToggles"/> (<see cref="Toggle"/> true): the tab shown (0 on a one-list
 /// page) and the cursor's row within it. A press on one of the page's <see cref="MenuPage.Buttons"/>
-/// (2026-09-21) is <see cref="Button"/> at its index, the row still the cursor's; −1 otherwise.
+/// (2026-09-21) is <see cref="Button"/> at its index, the row still the cursor's; −1 otherwise. A key that edits the page's
+/// <see cref="MenuPage.Filter"/> (2026-10-03) is <see cref="Filter"/>, the text it leaves; null otherwise.
 /// </summary>
-public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1);
+public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null);
 
 /// <summary>
 /// A menu in the bottom pane: the <see cref="InfoPane"/> shape for a list — a title, a status line
@@ -615,6 +628,13 @@ public sealed class MenuPane : INoticeSink
                     continue;
                 }
 
+                if (input is InputEvent.Key { Info: var escape } && Keys.IsCancel(escape) && page.Filter is { Length: > 0 })
+                {
+                    // A filter typed (2026-10-03): the first ESC clears it, the next backs out.
+                    _status.Clear();
+                    return new MenuPick(page.Tab, _cursor, Filter: "");
+                }
+
                 if ((input as InputEvent.Key)?.Info is not { } k || Keys.IsCancel(k) || Keys.IsInterrupt(k))
                 {
                     // ESC, and Ctrl+C the same (2026-09-17): nothing picked, the menu backs out.
@@ -648,6 +668,18 @@ public sealed class MenuPane : INoticeSink
                 {
                     count = SwitchTab(page, tabs, (page.Tab + step + tabs.Count) % tabs.Count);
                     continue;
+                }
+
+                if (page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceToggles) is { } typed)
+                {
+                    // Typed into the filter (2026-10-03): the keys already waiting go on it too, so a fast typist's word is one rebuild.
+                    while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && !Keys.IsCancel(q) && MenuFilter.Edit(typed, q, page.SpaceToggles) is not null) is InputEvent.Key { Info: var more })
+                    {
+                        typed = MenuFilter.Edit(typed, more, page.SpaceToggles)!;
+                    }
+
+                    _status.Clear();
+                    return new MenuPick(page.Tab, _cursor, Filter: typed);
                 }
 
                 if (page.Tabs is null && page.Buttons is { Count: > 0 } keyed && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar)
@@ -749,7 +781,7 @@ public sealed class MenuPane : INoticeSink
     private int SwitchTab(MenuPage page, IReadOnlyList<MenuTab> tabs, int tab)
     {
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
-        _page = page with { Rows = tabs[tab].Rows, Tab = tab, Caption = tabs[tab].Caption, Hint = tabs[tab].Hint ?? page.BaseHint ?? page.Hint, Headings = tabs[tab].Headings };
+        _page = page with { Rows = tabs[tab].Rows, Tab = tab, Caption = tabs[tab].Caption, Hint = tabs[tab].Hint ?? page.BaseHint ?? page.Hint, Headings = tabs[tab].Headings, Filter = tabs[tab].Filter };
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;

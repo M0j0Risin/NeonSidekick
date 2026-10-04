@@ -126,6 +126,12 @@ public enum SlashCommand
     /// <summary><c>/explore</c>: open the working directory in the system's file browser (Explorer, Finder, …), or <c>/explore &lt;path&gt;</c> for a folder under it.</summary>
     Explore,
 
+    /// <summary>
+    /// <c>/terminal</c> (2026-10-03, the user's ask: "similar to /explore"): a new Windows Terminal window in the working
+    /// directory, or <c>/terminal &lt;folder&gt;</c> in a folder under it (<see cref="Llm.PersonaFile.OpenTerminal"/>). Ctrl+. runs it.
+    /// </summary>
+    Terminal,
+
     /// <summary><c>/copy</c>: copy the last exchange to the clipboard as markdown, or <c>/copy &lt;n&gt;</c> | <c>all</c>.</summary>
     Copy,
 
@@ -334,6 +340,7 @@ public static class SlashCommands
             new("/stt", "toggle speech input, or /stt on|off"),
             new("/sys", "show the system prompt and tools sent to the model"),
             new("/tb", ToolbarItems.HelpSummary),
+            new("/terminal", "open a new Windows Terminal in the working directory, or /terminal <folder>"),
             new("/test", "run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them"),
             new("/theme", "switch the colour theme, starting a new conversation with the splash screen, or /theme <name>"),
             new("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"),
@@ -358,7 +365,8 @@ public static class SlashCommands
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
         "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perf", "/profile",
-        "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/tb", "/tools", "/tree", "/tts", "/wake",
+        "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/tb", "/terminal", "/tools", "/tree", "/tts",
+        "/wake",
     };
 
     /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>
@@ -414,7 +422,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -498,6 +506,7 @@ public static class SlashCommands
             "/tree" => SlashCommand.Tree,
             "/vault" => SlashCommand.Vault,
             "/explore" => SlashCommand.Explore,
+            "/terminal" => SlashCommand.Terminal,
             "/view" => SlashCommand.View,
             "/imagine" => SlashCommand.Imagine,
             "/comfy" => SlashCommand.Comfy,
@@ -547,7 +556,7 @@ public static class SlashCommands
         or SlashCommand.Learn
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
-        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
+        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Tools;

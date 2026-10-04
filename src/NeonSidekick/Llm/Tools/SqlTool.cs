@@ -37,7 +37,7 @@ public abstract class SqlTool : AIFunction
     protected AppSettingsData Effective => _effective();
 
     /// <summary>
-    /// The characters of table a query tool's answer may carry (2026-10-01, the user's ask): <c>Query result max chars</c>
+    /// The characters of table a query tool's answer may carry (2026-10-01, the user's ask): <c>SQL query result max chars</c> (named so on 2026-10-03, the user's ask; <c>Query result max chars</c> before)
     /// (<see cref="AppSettingsData.QueryResultMaxChars"/>), clamped; one setting for <c>sql_query</c>, <c>oracle_query</c> and
     /// <c>mysql_query</c>. The catalog tools keep <see cref="Files.WorkingDirectory.MaxReadChars"/>.
     /// </summary>

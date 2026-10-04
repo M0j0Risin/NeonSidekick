@@ -45,7 +45,7 @@ namespace NeonSidekick.App;
 internal sealed class SkillsMenu
 {
     // The key hints. Pinned.
-    public const string LoadedKeys = "Enter = move, rename, edit or delete · ←/→ tabs · ESC = close";
+    public const string LoadedKeys = "Enter = move, rename, edit or delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03
     public const string OtherKeys = "←/→ tabs · ESC = close";
     public const string ScopeKeys = SettingsMenu.PickKeys;
 
@@ -223,15 +223,22 @@ internal sealed class SkillsMenu
     private static IReadOnlyList<SettingsField> SettingsFields(int tab) => SettingsMenu.SkillsTabFields[tab == OptionsTab ? 0 : 1];
 
     /// <summary>The tabbed page: the Offered rows first, the Reflection rows (<see cref="SettingsMenu.FieldsTab"/> under <see cref="SettingsMenu.TabKeys"/>) second, the Options rows last (2026-09-22); Space is nothing anywhere since the Project tab, its one flip, went (2026-10-01), as on <c>/settings</c>.</summary>
-    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<(string Markup, Skill? Skill)> loaded, AppSettingsData saved, SettingsMenu menu, int tab)
+    /// <remarks>The Offered tab filters (2026-10-03, the user's ask, <see cref="MenuFilter"/>): <paramref name="loaded"/> are the rows under <paramref name="filter"/>, and the caption counts the skills they keep.</remarks>
+    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<(string Markup, Skill? Skill)> loaded, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "")
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(loaded);
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
+        ArgumentNullException.ThrowIfNull(filter);
         var tabs = new MenuTab[]
         {
-            new(SkillsText.OfferedTabTitle, loaded.Select(r => r.Markup).ToList()) { Hint = LoadedKeys },
+            new(SkillsText.OfferedTabTitle, loaded.Select(r => r.Markup).ToList())
+            {
+                Hint = MenuFilter.Hint(LoadedKeys, filter),
+                Filter = filter,
+                Caption = MenuFilter.CaptionOrNull(filter, loaded.Count(r => r.Skill is not null), facts.Skills.Count + facts.Shadowed.Count),
+            },
             menu.FieldsTab(SkillsText.ReflectionTabTitle, SettingsFields(ReflectionTab), saved) with { Hint = SettingsMenu.TabKeys },
             menu.FieldsTab(SkillsText.OptionsTabTitle, SettingsFields(OptionsTab), saved) with { Hint = SettingsMenu.TabKeys },
         };
@@ -273,14 +280,16 @@ internal sealed class SkillsMenu
 
         int tab = 0;
         int cursor = 0;
+        string filter = "";
         _menu.Root = SkillsText.Label;
         try
         {
             while (true)
             {
-                var loaded = SkillsText.LoadedRows(facts);
+                // The facts are the scan's until an act changes them, so typing into the filter rescans nothing (2026-10-03).
+                var loaded = SkillsText.LoadedRows(facts, filter);
                 var saved = _settings.Current;
-                var page = Page(facts, loaded, saved, _menu, tab);
+                var page = Page(facts, loaded, saved, _menu, tab, filter);
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
                 {
@@ -289,6 +298,14 @@ internal sealed class SkillsMenu
 
                 tab = pick.Tab;
                 cursor = pick.Row;
+                if (pick.Filter is { } typed)
+                {
+                    // The Offered tab's filter (2026-10-03): the rows again under it, the cursor on the first.
+                    filter = typed;
+                    cursor = 0;
+                    continue;
+                }
+
                 if (tab is OptionsTab or ReflectionTab)
                 {
                     var fields = SettingsFields(tab);
@@ -334,7 +351,7 @@ internal sealed class SkillsMenu
                 if (await PickScopeAsync(skill, facts, cancellationToken).ConfigureAwait(false))
                 {
                     facts = _facts();
-                    cursor = Math.Max(0, Math.Min(cursor, SkillsText.LoadedRows(facts).Count - 1));
+                    cursor = Math.Max(0, Math.Min(cursor, SkillsText.LoadedRows(facts, filter).Count - 1));
                 }
             }
         }

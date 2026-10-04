@@ -128,11 +128,14 @@ public static class McpRows
     /// <see cref="SectionRule"/> with an empty row before every one but the first since 2026-10-03, the <c>/tools</c> look) in the
     /// section colour whatever the switches say (the <c>/tools</c> rule, later on 2026-09-20), then a row per tool in the <c>/tools</c> Offered shape — the prefixed name, <c>on</c> /
     /// <c>off</c>, the description dim — the whole row dim while the turn would not offer it;
-    /// <see cref="McpText.NoToolsLine"/> with no server connected. The tool's prefixed name beside every tool row.
+    /// <see cref="McpText.NoToolsLine"/> with no server connected. The tool's prefixed name beside every tool row. Under a
+    /// <paramref name="filter"/> (2026-10-03, <see cref="MenuFilter"/>) the <c>/tools</c> Offered shape: only the tools whose
+    /// name or description holds it, a server with none left out, <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
     /// </summary>
-    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> ToolRows(McpFacts facts)
+    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> ToolRows(McpFacts facts, string filter = "")
     {
         ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(filter);
         var rows = new List<(string, string?, bool)>(32);
         var connected = facts.Servers.Where(s => s.State == McpState.Connected).ToList();
         if (!facts.ToolsEnabled)
@@ -153,16 +156,23 @@ public static class McpRows
 
         bool offered = facts.ToolsEnabled && facts.Enabled;
         int width = NameWidth(connected.SelectMany(s => s.Tools).Select(t => t.Name));
+        int shownServers = 0;
         foreach (var server in connected)
         {
-            if (!ReferenceEquals(server, connected[0]))
+            var tools = server.Tools.Where(t => MenuFilter.Matches(filter, t.Name, t.Description)).ToList();
+            if (tools.Count == 0 && filter.Length > 0)
+            {
+                continue;
+            }
+
+            if (shownServers++ > 0)
             {
                 rows.Add(("", null, false));
             }
 
             int left = server.Tools.Count(t => !facts.Disabled.Contains(t.Name));
             rows.Add((SectionRule.Markup(server.Name, SystemPromptSummary.GroupCount(left, server.Tools.Count)), null, true));
-            foreach (var tool in server.Tools)
+            foreach (var tool in tools)
             {
                 bool on = !facts.Disabled.Contains(tool.Name);
                 string row = offered && on
@@ -170,6 +180,11 @@ public static class McpRows
                     : Theme.DimMarkup(tool.Name.PadRight(width) + ToolsText.State(on).PadRight(StateWidth) + tool.Description);
                 rows.Add((row, tool.Name, false));
             }
+        }
+
+        if (shownServers == 0)
+        {
+            rows.Add((MenuFilter.NoMatchRow(filter), null, false));
         }
 
         return rows;

@@ -268,6 +268,26 @@ public class McpMenuTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task OnThePane_TheToolsTab_TypingFiltersIt_EnterFlipsTheToolShown_TheCursorOnTheFirstLeft()
+    {
+        // 2026-10-03 (the user's ask): /tools' Offered filter on the MCP tools.
+        await ConnectedAsync();
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Right);                          // Tools
+        Push("navig".Select(Keys.Char).ToArray());
+        Push(Keys.Enter);                          // chrome__navigate off
+        Push(Keys.Escape, Keys.Escape);            // cleared, closed
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["chrome__navigate"], _settings.Current.ToolsDisabled);
+        Assert.Contains(MenuFilter.Caption("navig", 1, 3), _console.Output);
+        Assert.Contains("\n" + Heading("── chrome · 1") + "\n▸ chrome__navigate  on   Opens a page.\n", _console.Output);
+        Assert.Contains(MenuFilter.Hint(ToolsText.OfferedKeys, "navig"), _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_TheOptionsTab_TheMasterSwitch_ReturnsTheFlag_TheTimeoutTypes()
     {
         await ConnectedAsync();

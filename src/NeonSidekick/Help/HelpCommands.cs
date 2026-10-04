@@ -151,7 +151,7 @@ public static class HelpCommands
         ]),
         new("/mcp",
         [
-            new("/mcp", "Connect external MCP servers and switch their tools on or off."),
+            new("/mcp", "Connect external MCP servers and switch their tools on or off. On the Tools tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
         ]),
         new("/memory",
         [
@@ -234,7 +234,7 @@ public static class HelpCommands
         ]),
         new("/sessions",
         [
-            new("/sessions [id | purge <id> | purge older <age> | purge all | title [<text>]]", "List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` on its own opens a box with the current name in it (as double-clicking the name on the rule does), and works while a reply runs."),
+            new("/sessions [id | purge <id> | purge older <age> | purge all | title [<text>]]", "List, restore, rename and purge stored sessions. An age is a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` on its own opens a box with the current name in it (as double-clicking the name on the rule does), and works while a reply runs. Ctrl+Alt+E runs it too."),
         ]),
         new("/settings",
         [
@@ -242,7 +242,7 @@ public static class HelpCommands
         ]),
         new("/skills",
         [
-            new("/skills", "List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings."),
+            new("/skills", "List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. On the Offered tab, type to narrow the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
             new("/skills add <search words | owner/repo[/skill] | github url | zip url> [--global | --profile]", "Install an Agent Skill from the web, with a preview first. A pane asks where it goes (the cursor starts on Cancel). Refused while a reply runs. See Installing skills."),
             new("/skills purge list <age>", "List the skills not used for that long (`30` days, `12h`, `90m`). Nothing is deleted. See Skill records."),
             new("/skills purge commit <age>", "Delete the skills not used for that long, folder and record, after a yes/no that lists them."),
@@ -268,6 +268,10 @@ public static class HelpCommands
         [
             new("/tb [on | off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default seven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
         ]),
+        new("/terminal",
+        [
+            new("/terminal [folder]", "Open a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. Ctrl+. runs it too."),
+        ]),
         new("/test",
         [
             new("/test [id | reasoning | structured | long | all | history]", "Run benchmark tests against the connected model and save the results. On its own it lists the tests with their last verdicts. See Benchmark tests."),
@@ -282,7 +286,7 @@ public static class HelpCommands
         ]),
         new("/tools",
         [
-            new("/tools", "Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git)."),
+            new("/tools", "Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git). On the Offered tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
             new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page). The toolbar's tool items run it."),
         ]),
         new("/tree",

@@ -126,8 +126,8 @@ public static class ToolsText
     /// <summary>The eighteen tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03; before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, OracleTabTitle, ClaudeTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, GitTabTitle, OptionsTabTitle];
 
-    /// <summary>The Offered tab's hint row. Pinned.</summary>
-    public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · ESC = close";
+    /// <summary>The Offered tab's hint row (<c>/mcp</c>'s Tools tab too); "type = filter" since 2026-10-03 (<see cref="MenuFilter"/>). Pinned.</summary>
+    public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
 
     /// <summary>The first row of the Offered tab while the setting <c>LLM offer tools</c> is off; every row under it dim. Pinned.</summary>
     public const string OffLine = "LLM offer tools is off (the LLM tab of /settings): nothing is offered; a switch here saves for when it is on again.";
@@ -288,27 +288,36 @@ public static class ToolsText
     /// description dim with the tool's note after it when it has one — the whole row dim while the
     /// turn would not offer it (the group off, the list off, or a note). The tool's name beside every
     /// tool row, null beside a heading, a gap and the off line; <c>Heading</c> true beside a heading alone
-    /// (<see cref="HeadingRows"/>, the pane's <see cref="MenuTab.Headings"/>).
+    /// (<see cref="HeadingRows"/>, the pane's <see cref="MenuTab.Headings"/>). Under a <paramref name="filter"/> (2026-10-03, the
+    /// user's ask, <see cref="MenuFilter"/>) only the tools whose name or description holds it, a group with none left out with its
+    /// heading and gap, the heading's count still the whole group's; <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
     /// </summary>
-    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> OfferedRows(ToolsFacts facts)
+    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> OfferedRows(ToolsFacts facts, string filter = "")
     {
         ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(filter);
         var rows = new List<(string, string?, bool)>(64);
         if (!facts.ToolsEnabled)
         {
             rows.Add((Theme.DimMarkup(OffLine), null, false));
         }
 
-        for (int g = 0; g < facts.Groups.Count; g++)
+        int shownGroups = 0;
+        foreach (var group in facts.Groups)
         {
-            var group = facts.Groups[g];
-            if (g > 0)
+            var tools = group.Tools.Where(t => MenuFilter.Matches(filter, t.Name, t.Description)).ToList();
+            if (tools.Count == 0 && filter.Length > 0)
+            {
+                continue;
+            }
+
+            if (shownGroups++ > 0)
             {
                 rows.Add(("", null, false));
             }
 
             rows.Add((SectionRule.Markup(group.Label, group.Count, Bare(HeadingSuffix(group, facts.ToolsEnabled))), null, true));
-            foreach (var tool in group.Tools)
+            foreach (var tool in tools)
             {
                 bool on = IsOn(facts, tool.Name);
                 string note = group.ToolNotes.TryGetValue(tool.Name, out var why) ? "  " + why : "";
@@ -320,7 +329,19 @@ public static class ToolsText
             }
         }
 
+        if (shownGroups == 0 && filter.Length > 0)
+        {
+            rows.Add((MenuFilter.NoMatchRow(filter), null, false));
+        }
+
         return rows;
+    }
+
+    /// <summary>The tool rows of <paramref name="rows"/> (those that name a tool), for the filter's count.</summary>
+    public static int ToolCount(IReadOnlyList<(string Markup, string? Tool, bool Heading)> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return rows.Count(r => r.Tool is not null);
     }
 
     /// <summary>The indices of the heading rows of <paramref name="rows"/>: the pane's <see cref="MenuTab.Headings"/>.</summary>

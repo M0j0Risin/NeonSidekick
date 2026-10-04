@@ -157,6 +157,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Shortcut | Runs | During a reply |
 |---|---|---|
+| Ctrl+. | `/terminal` | at once |
 | Ctrl+/ | `/settings` | opens over the reply |
 | Ctrl+E | `/explore` | at once |
 | Ctrl+F | `/perf` (performance bar on/off) | at once |
@@ -172,6 +173,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+Alt+N | `/new` | stops the reply first |
 | Ctrl+Alt+P | `/splash` | stops the reply first |
 | Ctrl+Alt+D | `/mcp` | opens over the reply |
+| Ctrl+Alt+E | `/sessions` | opens over the reply |
 | Ctrl+Alt+H | `/header` | at once |
 | Ctrl+Alt+L | `/cmdlist` | opens over the reply |
 | Ctrl+Alt+M | `/memory` | opens over the reply |
@@ -183,7 +185,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+Alt+V | `/camera live`: opens or closes the camera's window | at once |
 | Ctrl+Alt+X ×2 | unloads the embedded model (see below) | at once |
 
-* **Inside a pane** (a menu, `/help`, the folder picker, a value being typed), a shortcut closes every level of the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`. A pane's own shortcut just closes it. Ctrl+E, Ctrl+F, Ctrl+T, the three window chords and Ctrl+Alt+X act and leave the pane open.
+* **Inside a pane** (a menu, `/help`, the folder picker, a value being typed), a shortcut closes every level of the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`. A pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+T, the three window chords and Ctrl+Alt+X act and leave the pane open.
 * **Panes that ask you something** (a command's approval, `ask_user`, the plan's approval, a confirmation, *Did you mean /clear?*) ignore the shortcuts, so none can answer them by accident.
 * **Window chords** close their window when pressed again (Ctrl+Alt+V only the window `/camera live` opened); the typed command only opens it or brings it forward.
 * **Ctrl+Alt+X**, pressed twice within two seconds, unloads the embedded model at once and frees its memory, cancelling any reply, load or botchat using it. No server is connected until you pick one with `/server`; the saved *LLM URL* is kept, so the next start loads the model again. The first press only shows a reminder. With any other server it does nothing.
@@ -194,7 +196,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/tb`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/tb`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -785,7 +787,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | SQL %-mention enabled | `%` and part of a name lists the connections; a pick writes `%name`. | on |
 | SQL max rows | Rows `sql_query` returns unless the call says otherwise (1–100000). | 100 |
 | SQL query timeout (s) | How long one batch may run on the server (1–600). | 30 |
-| Query result max chars | The most characters of table one `sql_query`, `oracle_query` or `mysql_query` returns (1000–1000000); the header says how many rows fit. | 32,000 |
+| SQL query result max chars | The most characters of table one `sql_query`, `oracle_query` or `mysql_query` returns (1000–1000000); the header says how many rows fit. | 32,000 |
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (created with commented examples). | (none) |
 | SQL connections (global) | The same for the home folder's `sql.json`, which every profile reads. The profile's wins a name clash. | (none) |
 
@@ -961,7 +963,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/botchat [profile ...] [topic]` | Lets profiles talk to each other until you stop them. See Bot conversations. |
 | `/expand` | Unfolds every tool run, code block and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
-| `/mcp` | Connects MCP servers and switches their tools. |
+| `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/memory [forget \| edit \| copy <profile> [overwrite]]` | Lists memories on a pane (Enter removes one). `forget` forgets all; `edit` opens `memory.json` in your editor; `copy` adds them to another profile's (or replaces with `overwrite`). `forget` and `copy` ask first. |
 | `/model [id]` | Picks or sets the model. On the embedded LLM, lists the installed models. |
 | `/new` | Starts a new conversation without clearing the screen. |
@@ -983,7 +985,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Claude API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | Lists, restores, renames and purges stored sessions. An age is days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name. |
 | `/settings`, `//` | Edits and saves the settings. |
-| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. |
+| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab, typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Installs an [Agent Skill](https://agentskills.io) from the web after a preview. Refused during a reply. See Installing skills. |
 | `/skills purge list <age>` | Lists the skills unused for that long. See Skill records and purging unused skills. |
 | `/skills purge commit <age>` | Deletes them, folder and record, after a yes/no. |
@@ -993,10 +995,11 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/stt [on\|off]` | Toggles voice input. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
 | `/tb [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
+| `/terminal [folder]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
 | `/theme [name]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. `/theme export <name> [new-name]` writes a theme to the `themes` folder to edit. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | Lists, starts (`10m`, `90s`, `1h30m`) or stops timers. |
-| `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). |
+| `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
 | `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. |
 | `/tree [path]` | Prints a tree of the working directory (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
@@ -1462,7 +1465,7 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 | `sql_describe` | `table, connection?, database?` | One table or view in full: description, columns (type, nullability, identity, computed, default, key), foreign keys both ways, indexes, CHECK constraints and triggers. A bare name finds the one schema with it. |
 | `sql_relationships` | `connection?, database?, table?` | Foreign-key join paths as `from_table.from_column -> to_table.to_column`, all or touching a table. |
 | `sql_indexes` | `connection?, database?, table?, schema?, missing?` | The indexes of a table, schema or database: kind, key and included columns, filter, size, and seeks, scans, lookups and updates since restart (unread ones marked). `missing: true` adds the optimizer's suggestions. Usage needs `VIEW SERVER STATE`. |
-| `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–100000 (*SQL max rows* by default). Cut at *Query result max chars*. |
+| `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–100000 (*SQL max rows* by default). Cut at *SQL query result max chars*. |
 
 `--sql-check <connection>` proves the tools against a real server on the published exe (the sign-in, every type, the gate, the rollback, a cancel and a timeout).
 
@@ -1528,7 +1531,7 @@ Values go in as `:name` parameters. A `NUMBER` past 28 digits keeps every digit;
 | `oracle_describe` | `table, connection?, schema?` | One table or view in full: comment, columns (type, nullability, identity, virtual, default, key, comment), foreign keys both ways, indexes, CHECK constraints and triggers. |
 | `oracle_relationships` | `connection?, schema?, table?` | Foreign-key join paths: all, a schema's or a table's. |
 | `oracle_indexes` | `connection?, table?, schema?` | Indexes: kind, key columns, status, visibility, the optimizer's counts, and recorded use where `DBA_INDEX_USAGE` is readable. |
-| `oracle_query` | `sql, connection?, schema?, params?, max_rows?` | One read-only `SELECT` (`FETCH FIRST n ROWS ONLY`, no trailing `;`). `params` as for SQL (`:id`); `max_rows` 1–100000. Cut at *Query result max chars*. |
+| `oracle_query` | `sql, connection?, schema?, params?, max_rows?` | One read-only `SELECT` (`FETCH FIRST n ROWS ONLY`, no trailing `;`). `params` as for SQL (`:id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 
 `--oracle-check <connection>` proves the tools against a real database on the published exe (every type, the read-only layers, a cancel and a timeout).
 
@@ -1589,7 +1592,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 | `mysql_describe` | `table, connection?, database?` | One table or view: comment, columns (type, nullability, auto_increment, default, key, comment), foreign keys both ways, indexes, CHECK constraints and triggers. |
 | `mysql_relationships` | `connection?, database?, table?` | Foreign-key join paths: a database's or a table's. |
 | `mysql_indexes` | `connection?, database?, table?` | Indexes: kind, key columns, cardinality, and reads and writes since restart where `performance_schema` allows. |
-| `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` as for SQL (`@id`); `max_rows` 1–100000. Cut at *Query result max chars*. |
+| `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` as for SQL (`@id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 
 `--mysql-check <connection>` proves the tools against a real server on the published exe (every type, the gate, the session, the transaction, a cancel and a timeout).
 

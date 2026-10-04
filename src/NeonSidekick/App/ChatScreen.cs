@@ -514,6 +514,9 @@ internal sealed partial class ChatScreen
     private readonly bool _ownsMcp;
     private readonly Action<string> _openFile;
 
+    /// <summary>Opens a new terminal window in a folder (<c>/terminal</c>, 2026-10-03): <see cref="PersonaFile.OpenTerminal"/> in the app on Windows; null = <c>/terminal</c> answers <see cref="TerminalUnavailableError"/>.</summary>
+    private readonly Action<string>? _openTerminal;
+
     /// <summary>The <c>--log</c> file, full path (2026-09-22): <c>/log --file</c> opens it (the bare <c>/log</c> until 2026-10-02, and only a command while it was set). Null = started without <c>--log</c>.</summary>
     private readonly string? _logFile;
 
@@ -885,6 +888,7 @@ internal sealed partial class ChatScreen
     /// <param name="environment">Reads a system variable for the shell probe (<c>PATH</c>, <c>PATHEXT</c>; <see cref="EnvironmentOverrides.System"/> in the app, 2026-09-21); null = no PATH at all, which still finds <c>cmd.exe</c> and Windows PowerShell under the system folder (the tests' deterministic pair).</param>
     /// <param name="perfSource">What the performance bar reads the machine with (2026-09-29): <see cref="Perf.PerfSources.CreateDefault"/> in the app; opened while <c>Show performance bar</c> is on, closed when it goes off; null = <see cref="Perf.NullPerfSource"/>, a bar with no meters (the tests pass a fake).</param>
     /// <param name="frames">Where the pane's synchronized frames are held and let go as one write (2026-09-29, the user's report: the hint row, the toolbar and the performance bar flickered at every turn's end): the <see cref="FrameWriter"/> <c>Program.cs</c> made stdout; null = no holding (the tests).</param>
+    /// <param name="openTerminal">Opens a new terminal window in a folder without waiting for it (<c>/terminal</c> and Ctrl+., 2026-10-03): <see cref="PersonaFile.OpenTerminal"/> in the app on Windows; tests record the call; a throw is reported as an error line; null = <c>/terminal</c> is refused.</param>
     /// <param name="logFile">The <c>--log</c> file, full path (2026-09-22): <c>/log</c> opens it with <paramref name="openFile"/>, and only while it is given is <c>/log</c> a command, in <c>/help</c> and in the completion list; null = started without <c>--log</c> (and the tests).</param>
     public ChatScreen(
         IAnsiConsole console,
@@ -929,9 +933,11 @@ internal sealed partial class ChatScreen
         Action<string>? showShot = null,
         Action? openLogWindow = null,
         Func<bool>? closeLogWindow = null,
-        Func<bool>? closeViewer = null)
+        Func<bool>? closeViewer = null,
+        Action<string>? openTerminal = null)
     {
         _logFile = logFile;
+        _openTerminal = openTerminal;
         _openLogWindow = openLogWindow;
         _closeLogWindow = closeLogWindow;
         _closeViewer = closeViewer;
@@ -1547,6 +1553,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Explore:
                 RunOrPost(() => HandleExplore(""));
                 return true;
+            case SlashCommand.Terminal:
+                RunOrPost(() => HandleTerminal(""));
+                return true;
             case SlashCommand.Log:
                 RunOrPost(() => { if (!CloseByChord(command, args)) HandleLog(""); });
                 return true;
@@ -1907,6 +1916,8 @@ internal sealed partial class ChatScreen
     /// to plain Ctrl+H, P and U (the user's ask), their rows' wording kept: A, C, E, H, M, O, P, R, S, U, X.
     /// Ctrl+Alt+G (<c>/log</c>), U (<c>/comfy view</c>) and V (<c>/camera live</c>) on 2026-10-02, the user's ask, each in its letter's place.
     /// <c>/sys</c> moved from Ctrl+Alt+Y to plain Ctrl+Y on 2026-10-03 (the user's ask), its row's wording kept, after Ctrl+X.
+    /// Ctrl+Alt+E (<c>/sessions</c>) later on 2026-10-03, the user's ask and wording, in its letter's place; Ctrl+. (<c>/terminal</c>)
+    /// the same day, ahead of Ctrl+/.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1934,6 +1945,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+Home", "scroll to top of the chat pane"));
         rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));
+        rows.Add(("Ctrl+.", "open a terminal in the working directory (/terminal)"));
         rows.Add(("Ctrl+/", "open settings (/settings)"));
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
@@ -1951,6 +1963,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Y", "open the system prompt pane (/sys)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
+        rows.Add(("Ctrl+Alt+E", "open the sessions pane (/sessions)"));
         rows.Add(("Ctrl+Alt+G", "open or close the log viewer (/log)"));
         rows.Add(("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"));
         rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
@@ -3776,7 +3789,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Cwd:
                 return MentionCompleter.Matches([new(CwdHomeWord, CwdDefaultNote), new(CwdBrowseWord, FolderText.BrowseNote)], argText);
 
-            case SlashCommand.Tree or SlashCommand.Explore:
+            case SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal:
                 return MentionCompleter.Matches(sources.Folders(argText).Select(folder => new CompletionItem(folder, "")).ToList(), argText);
 
             case SlashCommand.Vault:
@@ -3933,12 +3946,12 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether <paramref name="command"/>'s argument is a path its own list completes: there a mention character stays the
     /// argument list's (2026-09-30), since the command takes a bare path. The file lists of <see cref="ArgumentPaths"/>
-    /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c> and <c>/vault</c>
+    /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c>, <c>/terminal</c> and <c>/vault</c>
     /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>). Pinned.
     /// </summary>
     public static bool TakesPathArgument(string command) =>
         SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
-            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Vault;
+            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault;
 
     /// <summary>
     /// The path list for a command whose argument is a sandbox path — <c>/speak</c> (2026-09-17),
@@ -6736,6 +6749,38 @@ internal sealed partial class ChatScreen
         }
 
         _transcript.Notice(ExploreOpenedNotice(result.Relative));
+    }
+
+    // ── /terminal (2026-10-03) ──────────────────────────────────────────────
+
+    /// <summary>The <c>/terminal</c> notice: the folder as the file tools name it (blank = the working directory). Pinned.</summary>
+    public static string TerminalOpenedNotice(string relative) => "(" + NoticeGlyphs.Terminal + "opened a terminal in " + FileText.Name(relative) + ")";
+
+    /// <summary><c>/terminal</c> where the screen was given no terminal opener (a non-Windows build). Pinned.</summary>
+    public const string TerminalUnavailableError = "/terminal opens Windows Terminal, which this system does not have.";
+
+    /// <summary>
+    /// <c>/terminal [folder]</c> (2026-10-03, the user's ask: "similar to /explore"): a new terminal window in the working
+    /// directory, or in a folder under it, resolved through the sandbox exactly as <see cref="HandleExplore"/> resolves its own —
+    /// a file, a path outside the root or missing, and an opener that throws are the same errors. The opener is
+    /// <see cref="PersonaFile.OpenTerminal"/>: a new Windows Terminal window, else a console window.
+    /// </summary>
+    private void HandleTerminal(string args)
+    {
+        if (_openTerminal is not { } openTerminal)
+        {
+            _transcript.Error(TerminalUnavailableError);
+            return;
+        }
+
+        var result = _files.Open(args, openTerminal, foldersOnly: true);
+        if (result.Outcome != FileOutcome.Ok)
+        {
+            _transcript.Error(FileText.Opened(result));
+            return;
+        }
+
+        _transcript.Notice(TerminalOpenedNotice(result.Relative));
     }
 
     // ── /speak (2026-09-17) ─────────────────────────────────────────────────
@@ -10160,6 +10205,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Explore:
                 HandleExplore(args);
+                return false;
+
+            case SlashCommand.Terminal:
+                HandleTerminal(args);
                 return false;
 
             case SlashCommand.GitUser:

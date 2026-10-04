@@ -1409,7 +1409,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("2,000 MB", SettingsMenu.FieldValue(SettingsField.WebDownloadMaxMegabytes, new AppSettingsData { WebDownloadMaxMegabytes = 2000 }, _settings.ProfileDirectory));
         Assert.Equal("50", SettingsMenu.EditableValue(SettingsField.WebDownloadMaxMegabytes, data));
         Assert.Equal("must be 1 to 102400 MB", SettingsMenu.WebDownloadMaxMegabytesRangeError);
-        Assert.Equal("Query result max chars", SettingsMenu.FieldName(SettingsField.QueryResultMaxChars));
+        Assert.Equal("SQL query result max chars", SettingsMenu.FieldName(SettingsField.QueryResultMaxChars));
         Assert.Equal("32,000 chars", SettingsMenu.FieldValue(SettingsField.QueryResultMaxChars, data, _settings.ProfileDirectory));
         Assert.Equal("32000", SettingsMenu.EditableValue(SettingsField.QueryResultMaxChars, data));
         Assert.Equal("must be 1000 to 1000000 characters", SettingsMenu.QueryResultMaxCharsRangeError);

@@ -136,11 +136,14 @@ public static class SkillsText
     /// dim under it; the two headings in the label colour; a shadowed row dim with its skill beside
     /// it (its scope is pickable too: the duplicate is the thing to clean up); a skipped folder dim;
     /// <see cref="OffLine"/> or <see cref="NoneLine"/> dim and alone. Null beside every row that is
-    /// not a skill's.
+    /// not a skill's. Under a <paramref name="filter"/> (2026-10-03, the user's ask, <see cref="MenuFilter"/>) only the skills
+    /// whose name or description holds it, each with its warning, the shadowed ones likewise and the skipped folders whose line
+    /// holds it, a heading left out with nothing under it; <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
     /// </summary>
-    public static IReadOnlyList<(string Markup, Skill? Skill)> LoadedRows(SkillsFacts facts)
+    public static IReadOnlyList<(string Markup, Skill? Skill)> LoadedRows(SkillsFacts facts, string filter = "")
     {
         ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(filter);
         if (!facts.Enabled)
         {
             return [(Theme.DimMarkup(OffLine), null)];
@@ -153,7 +156,7 @@ public static class SkillsText
 
         var rows = new List<(string, Skill?)>();
         int width = NameWidth(facts);
-        foreach (var skill in facts.Skills)
+        foreach (var skill in facts.Skills.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)))
         {
             rows.Add((Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape("  " + SkillScopes.Name(skill.Scope).PadRight(9) + skill.Description), skill));
             if (skill.Warning is { } warning)
@@ -162,22 +165,29 @@ public static class SkillsText
             }
         }
 
-        if (facts.Shadowed.Count > 0)
+        var shadowed = facts.Shadowed.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)).ToList();
+        if (shadowed.Count > 0)
         {
             rows.Add((Styled(Theme.AccentSecondary, ShadowedHeading), null));
-            foreach (var skill in facts.Shadowed)
+            foreach (var skill in shadowed)
             {
                 rows.Add((Theme.DimMarkup("  " + ShadowedLine(skill, width)), skill));
             }
         }
 
-        if (facts.Problems.Count > 0)
+        var problems = facts.Problems.Select(ProblemLine).Where(line => MenuFilter.Matches(filter, line, null)).ToList();
+        if (problems.Count > 0)
         {
             rows.Add((Styled(Theme.AccentSecondary, ProblemsHeading), null));
-            foreach (var problem in facts.Problems)
+            foreach (var line in problems)
             {
-                rows.Add((Theme.DimMarkup("  " + ProblemLine(problem)), null));
+                rows.Add((Theme.DimMarkup("  " + line), null));
             }
+        }
+
+        if (rows.Count == 0)
+        {
+            rows.Add((MenuFilter.NoMatchRow(filter), null));
         }
 
         return rows;

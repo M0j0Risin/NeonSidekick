@@ -128,6 +128,34 @@ public class ToolsTextTests : IDisposable
     }
 
     [Fact]
+    public void OfferedRows_UnderAFilter_KeepTheToolsWhoseNameOrDescriptionHoldsIt_TheEmptyGroupsGo()
+    {
+        // 2026-10-03 (the user's ask): case folded, the name or the description; a group with no match goes with its gap and
+        // heading, a kept one's heading still counts the whole group.
+        var facts = Facts();
+        var rows = ToolsText.OfferedRows(facts, "READ_FILE");
+
+        Assert.Contains(rows, r => r.Tool == ReadFileTool.ToolName);
+        Assert.All(rows.Where(r => r.Tool is not null), r => Assert.True(MenuFilter.Matches("read_file", r.Tool!, ToolNamed(facts, r.Tool!).Description)));
+        Assert.True(rows[0].Heading);
+        Assert.Equal(rows.Count(r => r.Heading) - 1, rows.Count(r => r.Markup.Length == 0 && !r.Heading));
+        Assert.Contains((Heading("Files", "14"), (string?)null, true), rows);
+        Assert.Equal(ToolsText.ToolCount(rows), rows.Count(r => r.Tool is not null));
+        Assert.Equal(ToolsText.FirstToolRow(rows), rows.ToList().FindIndex(r => r.Tool is not null));
+
+        // A word of the description alone keeps the tool.
+        string description = ToolNamed(facts, GetCurrentTimeTool.ToolName).Description;
+        string word = description.Split(' ').First(w => w.Length >= 5 && !GetCurrentTimeTool.ToolName.Contains(w, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(ToolsText.OfferedRows(facts, word), r => r.Tool == GetCurrentTimeTool.ToolName);
+
+        // Nothing kept: the one no-match row; nothing typed: every row.
+        Assert.Equal([(MenuFilter.NoMatchRow("zzzz"), (string?)null, false)], ToolsText.OfferedRows(facts, "zzzz"));
+        Assert.Equal(ToolsText.OfferedRows(facts), ToolsText.OfferedRows(facts, ""));
+        Assert.Equal(Theme.DimMarkup(ToolsText.OffLine), ToolsText.OfferedRows(Facts(toolsEnabled: false), "zzzz")[0].Markup);
+        Assert.EndsWith(MenuFilter.TypeAndCloseKeys, ToolsText.OfferedKeys, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OfferedRows_ADisabledTool_ReadsOff_DimWithItsNote_AndTheHeadingCountsTheRest()
     {
         var facts = Facts(["read_file", "web_search"]);

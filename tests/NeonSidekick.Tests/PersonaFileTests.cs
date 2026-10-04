@@ -21,6 +21,18 @@ public class PersonaFileTests : IDisposable
     }
 
     [Fact]
+    public void TerminalArguments_ANewWindowInTheFolder_QuotedByTheArgvRules_TheSemicolonsEscaped()
+    {
+        // /terminal (2026-10-03): wt.exe's own command line, pinned.
+        Assert.Equal(@"-w new -d ""D:\Repo\Neon""", PersonaFile.TerminalArguments(@"D:\Repo\Neon"));
+        Assert.Equal(@"-w new -d ""C:\My Files\docs""", PersonaFile.TerminalArguments(@"C:\My Files\docs"));
+        Assert.Equal(@"-w new -d ""D:\\""", PersonaFile.TerminalArguments(@"D:\"));   // the root's backslash doubled before the quote
+        Assert.Equal(@"-w new -d ""D:\a\\b\\""", PersonaFile.TerminalArguments(@"D:\a\\b\"));
+        Assert.Equal(@"-w new -d ""D:\one\;two""", PersonaFile.TerminalArguments(@"D:\one;two"));   // wt splits its commands at a bare ;
+        Assert.Throws<ArgumentException>(() => PersonaFile.TerminalArguments(" "));
+    }
+
+    [Fact]
     public void FilePath_IsPersonaMdUnderTheDirectory()
     {
         var persona = new PersonaFile(_dir);

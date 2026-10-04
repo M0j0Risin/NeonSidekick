@@ -246,7 +246,7 @@ public sealed class SqlToolsTests
         Assert.Equal(100_000, AppSettingsData.MaxSqlQueryMaxRows);
         Assert.Contains("1 to 100000", Tool<SqlQueryTool>().JsonSchema.GetProperty("properties").GetProperty("max_rows").GetProperty("description").GetString(), StringComparison.Ordinal);
 
-        // Query result max chars (2026-10-01, the user's ask): the file tools' 32,000 by default, clamped.
+        // SQL query result max chars (2026-10-01; "Query result max chars" until 2026-10-03, the user's ask): the file tools' 32,000 by default, clamped.
         Assert.Equal(32_000, AppSettingsData.DefaultQueryResultMaxChars);
         Assert.Equal(32_000, SqlTool.ResultChars(new AppSettingsData()));
         Assert.Equal(1_000, SqlTool.ResultChars(new AppSettingsData { QueryResultMaxChars = 5 }));

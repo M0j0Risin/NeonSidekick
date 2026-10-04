@@ -59,14 +59,23 @@ internal sealed class ToolsMenu
     /// settings tabs (<see cref="SettingsMenu.TabKeys"/>), Space a flip (<see cref="MenuPage.SpaceToggles"/> —
     /// page-wide, so the host ignores it on the settings tabs), the Offered cursor opening on the first
     /// tool row past its heading; the headings are rules the cursor never rests on (<see cref="MenuTab.Headings"/>, 2026-10-03).
+    /// The Offered tab filters (later on 2026-10-03, <see cref="MenuFilter"/>): <paramref name="offered"/> are the rows under
+    /// <paramref name="filter"/>, <paramref name="total"/> the tools there are, for the caption while a filter is typed.
     /// </summary>
-    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool, bool Heading)> offered, AppSettingsData saved, SettingsMenu menu, int tab)
+    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool, bool Heading)> offered, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0)
     {
         ArgumentNullException.ThrowIfNull(offered);
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
+        ArgumentNullException.ThrowIfNull(filter);
         var tabs = new MenuTab[ToolsText.TabTitles.Count];
-        tabs[0] = new MenuTab(ToolsText.OfferedTabTitle, offered.Select(r => r.Markup).ToList()) { Hint = ToolsText.OfferedKeys, Headings = ToolsText.HeadingRows(offered) };
+        tabs[0] = new MenuTab(ToolsText.OfferedTabTitle, offered.Select(r => r.Markup).ToList())
+        {
+            Hint = MenuFilter.Hint(ToolsText.OfferedKeys, filter),
+            Headings = ToolsText.HeadingRows(offered),
+            Filter = filter,
+            Caption = MenuFilter.CaptionOrNull(filter, ToolsText.ToolCount(offered), total),
+        };
         for (int t = 1; t < tabs.Length; t++)
         {
             tabs[t] = menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[t - 1], saved);
@@ -114,6 +123,7 @@ internal sealed class ToolsMenu
 
         int tab = 0;
         int cursor = -1;
+        string filter = "";
         _menu.Root = ToolsText.Label;
         try
         {
@@ -121,8 +131,8 @@ internal sealed class ToolsMenu
             {
                 var facts = _facts();
                 var saved = _settings.Current;
-                var offered = ToolsText.OfferedRows(facts);
-                var page = Page(offered, saved, _menu, tab);
+                var offered = ToolsText.OfferedRows(facts, filter);
+                var page = Page(offered, saved, _menu, tab, filter, facts.Groups.Sum(g => g.Tools.Count));
                 if (cursor < 0)
                 {
                     cursor = ToolsText.FirstToolRow(offered);
@@ -135,6 +145,14 @@ internal sealed class ToolsMenu
 
                 tab = pick.Tab;
                 cursor = pick.Row;
+                if (pick.Filter is { } typed)
+                {
+                    // The Offered tab's filter (later on 2026-10-03): the rows again under it, the cursor on the first tool left.
+                    filter = typed;
+                    cursor = -1;
+                    continue;
+                }
+
                 if (tab == 0)
                 {
                     if (cursor >= offered.Count || offered[cursor].Tool is not { } tool)

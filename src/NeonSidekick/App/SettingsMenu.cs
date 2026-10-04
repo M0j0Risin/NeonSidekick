@@ -1735,7 +1735,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlPercentMention => "SQL %-mention enabled",
         SettingsField.SqlQueryMaxRows => "SQL max rows",
         SettingsField.SqlQueryTimeoutSeconds => "SQL query timeout (s)",
-        SettingsField.QueryResultMaxChars => "Query result max chars",
+        SettingsField.QueryResultMaxChars => "SQL query result max chars",
         SettingsField.SqlConnectionsProfile => "SQL connections (profile)",
         SettingsField.SqlConnectionsGlobal => "SQL connections (global)",
         SettingsField.OracleTools => "Oracle tools",

@@ -97,6 +97,36 @@ public class SkillsTextTests
         Assert.Equal([(Dim(SkillsText.NoneLine), (Skill?)null)], SkillsText.LoadedRows(Facts()));
     }
 
+    /// <summary>Under a filter (2026-10-03, the user's ask): the skills whose name or description holds it, a warning with its skill, a heading only over what is left.</summary>
+    [Fact]
+    public void LoadedRows_UnderAFilter_KeepTheMatches_TheWarningWithItsSkill_AndAHeadingOnlyOverWhatIsLeft()
+    {
+        var facts = Facts(skills: [Haiku, Pdf], shadowed: [Hidden], problems: [Broken]);
+
+        Assert.Equal(
+            [
+                (Cyan("haiku         ") + "  profile  Writes haiku.", Haiku),
+                (Cyan("Shadowed (a higher root holds the name):"), null),
+                (Dim("  haiku           global   shadowed by the profile skills"), Hidden),
+            ],
+            SkillsText.LoadedRows(facts, "HAIKU"));
+        Assert.Equal(
+            [
+                (Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
+                (Dim("                (name 'pdf-processing' does not match the folder 'pdf')"), null),
+            ],
+            SkillsText.LoadedRows(facts, "extracts"));   // the description's word
+        Assert.Equal(
+            [
+                (Cyan("Skipped:"), null),
+                (Dim(@"  D:\home\skills\broken: the frontmatter has no description"), null),
+            ],
+            SkillsText.LoadedRows(facts, "broken"));
+        Assert.Equal([(Dim(MenuFilter.NoMatchLine("sonnet")), (Skill?)null)], SkillsText.LoadedRows(facts, "sonnet"));
+        Assert.Equal(SkillsText.LoadedRows(facts), SkillsText.LoadedRows(facts, ""));
+        Assert.Equal([(Dim(SkillsText.OffLine), (Skill?)null)], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku]), "x"));
+    }
+
     /// <summary>A description is the author's: brackets are escaped, never markup.</summary>
     [Fact]
     public void LoadedRows_EscapeTheDescription()

@@ -56,17 +56,28 @@ internal sealed class McpMenu
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
     private INoticeSink Sink => _pane.IsOpen ? _pane : _transcript;
 
-    /// <summary>The tabbed page: the Servers rows, the Tools rows, the Options fields; Space a flip on the first two.</summary>
-    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab)
+    /// <summary>
+    /// The tabbed page: the Servers rows, the Tools rows, the Options fields; Space a flip on the first two. The Tools tab
+    /// filters (2026-10-03, <see cref="MenuFilter"/>, <c>/tools</c>' Offered shape): <paramref name="tools"/> are the rows under
+    /// <paramref name="filter"/>, <paramref name="total"/> the tools there are, for the caption while a filter is typed.
+    /// </summary>
+    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
+        ArgumentNullException.ThrowIfNull(filter);
         var tabs = new MenuTab[]
         {
             new(McpText.ServersTabTitle, servers.Select(r => r.Markup).ToList()) { Hint = McpText.ServersKeys },
-            new(McpText.ToolsTabTitle, tools.Select(r => r.Markup).ToList()) { Hint = ToolsText.OfferedKeys, Headings = ToolsText.HeadingRows(tools) },
+            new(McpText.ToolsTabTitle, tools.Select(r => r.Markup).ToList())
+            {
+                Hint = MenuFilter.Hint(ToolsText.OfferedKeys, filter),
+                Headings = ToolsText.HeadingRows(tools),
+                Filter = filter,
+                Caption = MenuFilter.CaptionOrNull(filter, ToolsText.ToolCount(tools), total),
+            },
             menu.FieldsTab(McpText.OptionsTabTitle, SettingsMenu.McpTabFields[0], saved),
         };
         return MenuPage.Tabbed(McpText.Label, tabs, tab, SettingsMenu.TabKeys) with
@@ -118,6 +129,7 @@ internal sealed class McpMenu
         var changes = SettingsChanges.None;
         int tab = 0;
         int cursor = -1;
+        string filter = "";
         _menu.Root = McpText.Label;
         try
         {
@@ -126,11 +138,11 @@ internal sealed class McpMenu
                 var facts = _facts();
                 var saved = _settings.Current;
                 var servers = McpRows.ServerRows(facts);
-                var tools = McpRows.ToolRows(facts);
-                var page = Page(servers, tools, saved, _menu, tab);
+                var tools = McpRows.ToolRows(facts, filter);
+                var page = Page(servers, tools, saved, _menu, tab, filter, facts.Servers.Where(s => s.State == McpState.Connected).Sum(s => s.Tools.Count));
                 if (cursor < 0)
                 {
-                    cursor = McpRows.FirstServerRow(servers);
+                    cursor = tab == 1 ? ToolsText.FirstToolRow(tools) : McpRows.FirstServerRow(servers);
                 }
 
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
@@ -140,6 +152,14 @@ internal sealed class McpMenu
 
                 tab = pick.Tab;
                 cursor = pick.Row;
+                if (pick.Filter is { } typed)
+                {
+                    // The Tools tab's filter (2026-10-03): the rows again under it, the cursor on the first tool left.
+                    filter = typed;
+                    cursor = -1;
+                    continue;
+                }
+
                 if (tab == 0)
                 {
                     if (cursor >= servers.Count || servers[cursor].Row is not { } row)
