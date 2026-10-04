@@ -52,7 +52,7 @@ public enum SlashCommand
     /// <summary><c>/remember &lt;text&gt;</c>: keep one fact across sessions.</summary>
     Remember,
 
-    /// <summary><c>/memory</c>: list what is remembered, Enter removing one; <c>/memory forget</c> erases every one, after a confirmation; <c>/memory copy &lt;profile&gt; [overwrite]</c> copies them into another profile — appended, the duplicates skipped, or in place of its own — after a confirmation too (2026-09-22, the user's ask, twice: the wipe was <c>/forget</c>, its own command, until that morning, and the copy was <c>/memcopy</c> (2026-09-17) until later that day; both words are unknown commands now).</summary>
+    /// <summary><c>/memory</c>: list what is remembered, Enter removing one; <c>/memory on|off</c> switches Memory (2026-10-03, the user's ask); <c>/memory forget</c> erases every one, after a confirmation; <c>/memory copy &lt;profile&gt; [overwrite]</c> copies them into another profile — appended, the duplicates skipped, or in place of its own — after a confirmation too (2026-09-22, the user's ask, twice: the wipe was <c>/forget</c>, its own command, until that morning, and the copy was <c>/memcopy</c> (2026-09-17) until later that day; both words are unknown commands now).</summary>
     Memory,
 
     /// <summary><c>/cmdcopy &lt;profile&gt; [--history] [overwrite]</c>: copy this profile's allowed shell commands (the <c>Shell allowed commands</c> prefixes) into another's — appended, the duplicates skipped, or in place of them — after a confirmation (2026-09-21, the user's ask: what was <c>/memcopy</c> then — <c>/memory copy</c> since 2026-09-22 — for the approval pane's list); with <c>--history</c> (2026-09-25, the user's ask) its command history instead, into the other profile's <c>sessions.db</c>.</summary>
@@ -94,12 +94,12 @@ public enum SlashCommand
     Perf,
 
     /// <summary>
-    /// <c>/tb [on|off]</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare, the toolbar
+    /// <c>/toolbar [on|off]</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare, the toolbar
     /// hidden while it shows — its items kept in <see cref="Settings.AppSettingsData.ToolbarLastItems"/> — else shown again with
     /// them (<see cref="ToolbarItems.Defaults"/> the first time); <c>on</c> and <c>off</c> say which. Display only, so it runs at
     /// once under a reply; Ctrl+T (Ctrl+Alt+B until later still on 2026-10-01).
     /// </summary>
-    Tb,
+    Toolbar,
 
     /// <summary>
     /// <c>/header [on|off]</c> (2026-10-01, the user's ask, with Ctrl+Alt+H): <c>Show header</c> flipped, or set by the word, and
@@ -316,7 +316,7 @@ public static class SlashCommands
             new("/log", "open the diagnostic log in a window that follows it, or /log --file for the --log file in your editor"),
             new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
             new("/mcp", "connect external MCP servers and switch their tools on or off on a pane"),
-            new("/memory", "list and prune memory items, or /memory forget | edit | copy <profile> [overwrite]"),
+            new("/memory", "list and prune memory items, or /memory on | off | forget | edit | copy <profile> [overwrite]"),
             new("/model", "pick a model from the LLM server, or /model <id>"),
             new("/new", "start a new conversation but do not clear the screen"),
             new("/operata", "export and manage operata.md (the operating rules) in your editor, or /operata reset to go back to the default, or /operata copy <profile> [force] to copy it into another profile"),
@@ -339,11 +339,11 @@ public static class SlashCommands
             new("/splash", "start a new conversation, clear and show the splash screen"),
             new("/stt", "toggle speech input, or /stt on|off"),
             new("/sys", "show the system prompt and tools sent to the model"),
-            new("/tb", ToolbarItems.HelpSummary),
             new("/terminal", "open a new Windows Terminal in the working directory, or /terminal <folder>"),
             new("/test", "run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them"),
             new("/theme", "switch the colour theme, starting a new conversation with the splash screen, or /theme <name>"),
             new("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"),
+            new("/toolbar", ToolbarItems.HelpSummary),
             new("/tools", "switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane, or /tools <group> for one group's switch"),
             new("/tree", "print a tree of the working directory's folders and files, or /tree <path>"),
             new("/tts", "toggle speech output, or /tts on|off"),
@@ -358,14 +358,14 @@ public static class SlashCommands
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
     /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perf</c>,
-    /// <c>/stt</c>, <c>/tb</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick). Every other command (<c>/log</c> among them) is on
+    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
         "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perf", "/profile",
-        "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/tb", "/terminal", "/tools", "/tree", "/tts",
+        "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
         "/wake",
     };
 
@@ -422,7 +422,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -498,7 +498,7 @@ public static class SlashCommands
             "/sys" => SlashCommand.Sys,
             "/usage" => SlashCommand.Usage,
             "/perf" => SlashCommand.Perf,
-            "/tb" => SlashCommand.Tb,
+            "/toolbar" => SlashCommand.Toolbar,
             "/header" => SlashCommand.Header,
             "/profile" => SlashCommand.Profile,
             "/timer" => SlashCommand.Timer,
@@ -558,6 +558,6 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Tools;
 }

@@ -111,7 +111,7 @@ public class KeysTests
     [InlineData(ConsoleKey.P, '\x10', "/profile")]   // from Ctrl+Alt+P
     [InlineData(ConsoleKey.R, '\x12', "/reasoning")]
     [InlineData(ConsoleKey.S, '\x13', "/server")]
-    [InlineData(ConsoleKey.T, '\x14', "/tb")]       // from Ctrl+Alt+B
+    [InlineData(ConsoleKey.T, '\x14', "/toolbar")]       // from Ctrl+Alt+B
     [InlineData(ConsoleKey.U, '\x15', "/usage")]     // from Ctrl+Alt+G
     [InlineData(ConsoleKey.Y, '\x19', "/sys")]       // from Ctrl+Alt+Y on 2026-10-03 (the user's ask)
     public void ShortcutLine_ThePlainCtrlChords_AreTheirBareCommands_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
@@ -147,7 +147,7 @@ public class KeysTests
         Assert.Equal("/profile", Keys.ShortcutLine(Keys.CtrlP));
         Assert.Equal("/usage", Keys.ShortcutLine(Keys.CtrlU));
         Assert.Equal("/perf", Keys.ShortcutLine(Keys.CtrlF));
-        Assert.Equal("/tb", Keys.ShortcutLine(Keys.CtrlT));
+        Assert.Equal("/toolbar", Keys.ShortcutLine(Keys.CtrlT));
         Assert.Equal(ConsoleKey.H, Keys.CtrlH.Key);   // the BS rides on the H key: never Backspace
         Assert.Null(Keys.ShortcutLine(Keys.Backspace));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true)));   // Ctrl+Backspace
@@ -155,7 +155,7 @@ public class KeysTests
         Assert.Equal("/log", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
         Assert.Equal("/header", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // back later still on 2026-10-01 as /header (the user's ask)
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /tb on Ctrl+T, /perf on Ctrl+F since later still on 2026-10-01
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /toolbar on Ctrl+T, /perf on Ctrl+F since later still on 2026-10-01
         Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // back later on 2026-10-03 as /sessions (the user's ask)
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sys on Ctrl+Y since 2026-10-03
         Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));

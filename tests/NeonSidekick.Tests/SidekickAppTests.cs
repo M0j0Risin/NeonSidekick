@@ -1810,7 +1810,7 @@ public partial class SidekickAppTests : IDisposable
         PushLine("/server");
         _console.Input.PushKey(Keys.Down);      // Ollama
         _console.Input.PushKey(Keys.Enter);
-        _console.Input.PushKey(Keys.Down);      // gemma
+        _console.Input.PushKey(Keys.Up);        // gemma: A to Z above phi, the server's first, where the cursor opens (2026-10-03)
         _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Down);      // the reasoning menu follows (2026-09-21): none -> low
         _console.Input.PushKey(Keys.Enter);

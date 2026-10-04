@@ -91,14 +91,15 @@ public static class ThumbnailSize
 
     /// <summary>
     /// The box in force for <paramref name="effective"/>: <paramref name="window"/> (the transcript's <see cref="Fit"/>) for
-    /// <see cref="FullSize"/>; an unknown saved value warns and uses <see cref="Default"/>.
+    /// <see cref="FullSize"/>, less the strip's margin (<see cref="ImageStrip.Indent"/>, 2026-10-03) so a fullsize picture stands
+    /// under the sent line's text as the others do; an unknown saved value warns and uses <see cref="Default"/>.
     /// </summary>
     public static ThumbnailBox Resolve(AppSettingsData effective, ThumbnailBox window)
     {
         ArgumentNullException.ThrowIfNull(effective);
         if (IsFullSize(effective.ImageThumbnailSize))
         {
-            return window;
+            return window with { Columns = Math.Max(1, window.Columns - ImageStrip.Indent) };
         }
 
         if (TryParse(effective.ImageThumbnailSize, out var box))

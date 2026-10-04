@@ -113,6 +113,12 @@ public sealed class ViewerState
     /// <summary>The shown picture's index, oldest = 0; null with no picture.</summary>
     public int? Index => _pictures.Count == 0 ? null : _held ?? _pictures.Count - 1;
 
+    /// <summary>Whether ← would move (2026-10-03, the viewer's <c>&lt;</c> button, <see cref="ViewerNav"/>): a picture shown that is not the newest.</summary>
+    public bool CanNewer => Index is int index && index < _pictures.Count - 1;
+
+    /// <summary>Whether → would move (2026-10-03, the <c>&gt;</c> button): a picture shown that is not the oldest.</summary>
+    public bool CanOlder => Index is > 0;
+
     /// <summary>The shown picture's path; null with no picture.</summary>
     public string? Current => Index is int index ? _pictures[index].Path : null;
 

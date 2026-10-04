@@ -91,7 +91,7 @@ What to use instead:
 | `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` need the TUI, or the files under `<home>\profiles`. |
 | `/settings`, `//`, `/tools`, `/skills` (the pane, `/skills purge` and `/skills revert`; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. A key typed into `profile.json` in plain text (LLM, Claude or Home Assistant API key) is encrypted (DPAPI) the next time the profile loads. Environment variables override some values for one run. |
 | `/remember <text>` | Ask in a message ("Remember that …"); the model has the `save_memory` tool. |
-| `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. |
+| `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. `/memory on` / `off` need the TUI, or `Memory` in `profile.json`. |
 | `/sessions` | Ask the model to search past sessions (the sessions tool is offered when *Session tool* is on). Restoring a session needs the TUI. |
 | `/imagine …` | Ask the model to make the picture (`generate_image` is offered when ComfyUI is set up). The prompt is then the model's, not sent word for word. |
 | `/loop …` | Repeat the line in the input, or loop in the calling script. |
@@ -102,7 +102,7 @@ What to use instead:
 | `/keycopy` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY` and `NEONSIDEKICK_HA_TOKEN` set them for a run. |
 | `/usage` | Not available; `--log` records the run. |
 | `/sys` | Not available; open `/sys` in the TUI on the same profile to see the prompt. |
-| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/theme`, `/perf`, `/tb`, `/header`, `/window`, `/expand`, `/collapse`, `/queue`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
+| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/theme`, `/perf`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/queue`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
 
 ---
 

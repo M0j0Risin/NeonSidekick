@@ -76,7 +76,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// <c>/tb</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare it hides the toolbar
+    /// <c>/toolbar</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare it hides the toolbar
     /// and shows it again with the items it had; <c>off</c> and <c>on</c> say which; Ctrl+T (Ctrl+Alt+B until later still on 2026-10-01) is the bare word; anything
     /// else is the usage error. Never a turn.
     /// </summary>
@@ -91,12 +91,12 @@ public partial class ChatScreenTests
             step(input);
         };
         StepsWhenIdle(
-            Line("/tb"),
-            Then(input => PushLine(input, "/tb")),
-            Then(input => PushLine(input, "/tb off")),
+            Line("/toolbar"),
+            Then(input => PushLine(input, "/toolbar")),
+            Then(input => PushLine(input, "/toolbar off")),
             Then(input => input.Push(Keys.CtrlT)),
-            Then(input => PushLine(input, "/tb on")),
-            Then(input => PushLine(input, "/tb sideways")),
+            Then(input => PushLine(input, "/toolbar on")),
+            Then(input => PushLine(input, "/toolbar sideways")),
             Line("/exit"));
 
         string output = await RunAsync();

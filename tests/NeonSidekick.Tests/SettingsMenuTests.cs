@@ -2617,7 +2617,7 @@ public partial class SettingsMenuTests : IDisposable
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("a", "b"));
         using var session = Session();
         await session.ConnectAsync(new AppSettingsData { LlmModel = "pinned", LlmScanMode = "local" }, CancellationToken.None);
-        Push(Keys.Enter);   // the first row is the current id, inserted because the server did not list it
+        Push(Keys.Enter);   // the cursor opens on the current id, added in its A-to-Z place because the server did not list it
 
         Assert.True(await _menu.PickModelAsync(session, "", CancellationToken.None));
         Assert.Equal("pinned", _settings.Current.LlmModel);
@@ -2872,14 +2872,14 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task ModelFromList_PicksFromTheListInHand_CurrentFirstWhenUnlisted()
+    public async Task ModelFromList_PicksFromTheListInHand_TheUnlistedCurrentOfferedInItsPlace()
     {
         var listed = new ProbeResult(true, new[] { "a", "b" }, "2 chat models");
         Push(Keys.Down, Keys.Enter);
         Assert.True(await _menu.PickModelFromListAsync(listed, "", CancellationToken.None));
         Assert.Equal("b", _settings.Current.LlmModel);
 
-        Push(Keys.Enter);   // the unlisted current id is offered first
+        Push(Keys.Enter);   // the unlisted current id is offered (A to Z since 2026-10-03, first before), the cursor on it
         Assert.True(await _menu.PickModelFromListAsync(listed, "pinned", CancellationToken.None));
         Assert.Equal("pinned", _settings.Current.LlmModel);
 
@@ -3528,6 +3528,56 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The model picker A to Z (2026-10-03, the user's ask), case folded, whatever order the server listed them in; the cursor
+    /// opens on the model in use, or with none on the one the server lists first (its default).
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheModelPicker_IsAToZ_TheCursorOnTheModelInUse()
+    {
+        var (menu, pane) = PaneMenu();
+        var listed = new ProbeResult(true, new[] { "zeta", "Beta", "alpha", "gamma" }, "4 chat models");
+        Push(Keys.Escape);
+        Assert.False(await menu.PickModelFromListAsync(listed, "gamma", CancellationToken.None));
+        Assert.Contains("\n \n  alpha\n  Beta\n▸ gamma\n  zeta\n", _console.Output);
+
+        Push(Keys.Enter);
+        Assert.True(await menu.PickModelFromListAsync(listed, "", CancellationToken.None));
+        Assert.Equal("zeta", _settings.Current.LlmModel);   // none in use: the cursor on the server's first
+
+        Assert.Equal(["a", "B", "b", "c"], SettingsMenu.ModelOrder(["c", "b", "B", "a"]));
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The model picker's type-to-filter (2026-10-03, the user's ask: as <c>/tools</c>' Offered tab): typed text narrows the
+    /// rows to the ids holding it, case folded, the caption counting them and the hint naming Backspace and ESC; Enter takes
+    /// the first left; Enter on the no-match row does nothing; the first ESC clears the text, the next keeps the model.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheModelPicker_FiltersAsItIsTyped()
+    {
+        var (menu, pane) = PaneMenu();
+        var listed = new ProbeResult(true, new[] { "gpt-5", "claude-haiku", "claude-sonnet", "gemma" }, "4 chat models");
+        Push([.. "SON".Select(Keys.Char), Keys.Enter]);
+        Assert.True(await menu.PickModelFromListAsync(listed, "gemma", CancellationToken.None));
+        Assert.Equal("claude-sonnet", _settings.Current.LlmModel);
+        Assert.Contains(MenuFilter.Caption("SON", 1, 4), _console.Output);
+        Assert.Contains(MenuFilter.Hint(SettingsMenu.ModelKeys, "SON"), _console.Output);
+
+        Push([.. "zz".Select(Keys.Char), Keys.Enter, Keys.Escape, Keys.Escape]);
+        Assert.False(await menu.PickModelFromListAsync(listed, "gemma", CancellationToken.None));
+        Assert.Equal("claude-sonnet", _settings.Current.LlmModel);
+        Assert.Contains(MenuFilter.NoMatchNameLine("zz"), _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.False(pane.OverlayOpen);
+
+        Assert.Equal("Enter = choose · type = filter · ESC = keep", SettingsMenu.ModelKeys);
+        Assert.Equal("Enter = choose · Backspace = erase · ESC = clear filter", MenuFilter.Hint(SettingsMenu.ModelKeys, "x"));
+        Assert.Equal("Nothing here has \"zz\" in its name.", MenuFilter.NoMatchNameLine("zz"));
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_ASingleLevelPicker_ClosesOnThePick_AndTheNoticeGoesToTheTranscript()
     {
@@ -3538,7 +3588,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await menu.PickModelFromListAsync(listed, "a", CancellationToken.None));
 
         Assert.Equal("b", _settings.Current.LlmModel);
-        Assert.Contains(Rule(120) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + Rule(120) + "\n" + SettingsMenu.KeepKeys + "\n", _console.Output);
+        Assert.Contains(Rule(120) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + Rule(120) + "\n" + SettingsMenu.ModelKeys + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.Contains("  · 🖥️ LLM model: b\n", _console.Output);
         Assert.Equal(1, pane.FlowRow);   // the notice is a transcript line, under no pane

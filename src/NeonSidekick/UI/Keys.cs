@@ -74,7 +74,7 @@ public static class Keys
     /// <summary>Ctrl+S as the console delivers it: the DC3 character with the key and Control (<c>/server</c>).</summary>
     public static ConsoleKeyInfo CtrlS => new('\x13', ConsoleKey.S, false, false, true);
 
-    /// <summary>Ctrl+T as the console delivers it: the DC4 character with the key and Control (<c>/tb</c>).</summary>
+    /// <summary>Ctrl+T as the console delivers it: the DC4 character with the key and Control (<c>/toolbar</c>).</summary>
     public static ConsoleKeyInfo CtrlT => new('\x14', ConsoleKey.T, false, false, true);
 
     /// <summary>Ctrl+/ as the console delivers it on a US layout: no character, the Oem2 key with Control (<c>/settings</c>).</summary>
@@ -92,15 +92,15 @@ public static class Keys
     /// key that types a character (ć, ń, ś on some layouts) stays that character. Null for every other key.
     /// Eleven more came later on 2026-09-30 (the user's ask), each its bare command as typed: Ctrl+Alt+T <c>/tools</c>, K
     /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c> (plain Ctrl+Y since 2026-10-03, below), G <c>/usage</c>, E <c>/perf</c> (the performance bar shown or hidden),
-    /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page) and B <c>/tb</c> (the
+    /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page) and B <c>/toolbar</c> (the
     /// toolbar shown or hidden). Under a reply each goes where its typed line would: a pane over the reply, <c>/perf</c> and
-    /// <c>/tb</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
+    /// <c>/toolbar</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
     /// EOT, FF, SI, STX) count as no character, as ETX does for C; an AltGr key that types one (€ on AltGr+E, ł, ó) is still
     /// that character.
     /// Ctrl+Alt+H <c>/help</c> came on 2026-10-01 (the user's ask), its BS (<c>'\x08'</c>) no character as the others' are.
     /// In a pane too since 2026-10-01 (the user's ask: "operate the same there as everywhere"): every pane reader hands the
     /// chord to <see cref="ScreenPane.Chord"/>, which closes the stack for the screen to run it, or toggles the bar in place
-    /// (<c>/perf</c>, <c>/tb</c>), or ignores it under a tool's question.
+    /// (<c>/perf</c>, <c>/toolbar</c>), or ignores it under a tool's question.
     /// Ctrl+E <c>/explore</c> came later on 2026-10-01 (the user's ask), the first plain-Ctrl chord: Control held, Alt and Shift
     /// not, and no character but the console's own ENQ (<c>'\x05'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>) — the
     /// <see cref="IsToolToggle"/> shape, so a typed "E" stays an "E" and Ctrl+Alt+E is still <c>/perf</c> (until Ctrl+F took it, below).
@@ -117,7 +117,7 @@ public static class Keys
     /// the console reports it with no character (US's <c>'\x1f'</c> counts too, should one send it), and a typed "/" carries its
     /// character, so it stays a "/" and the slash list still opens. Oem2 is the "/" key of a US layout; elsewhere it is
     /// whatever key sits there (# on a German one), since a "/" that needs Shift cannot be told from Ctrl+Shift.
-    /// Later still on 2026-10-01 (the user's ask) <c>/tb</c> moved to plain Ctrl+T and <c>/perf</c> to Ctrl+F, and Ctrl+Alt+B
+    /// Later still on 2026-10-01 (the user's ask) <c>/toolbar</c> moved to plain Ctrl+T and <c>/perf</c> to Ctrl+F, and Ctrl+Alt+B
     /// and Ctrl+Alt+E went: their DC4 and ACK count as no character. Ctrl+Alt+T is still <c>/tools</c>.
     /// Later still on 2026-10-01 (the user's ask) Ctrl+Alt+H is <c>/header</c>, free since <c>/help</c> left it for Ctrl+H: <c>Show
     /// header</c> flipped, at the next wipe; its BS counts as no character, as it did for <c>/help</c>.
@@ -150,7 +150,7 @@ public static class Keys
                 (ConsoleKey.P, '\0' or '\x10') => "/profile",
                 (ConsoleKey.R, '\0' or '\x12') => "/reasoning",
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
-                (ConsoleKey.T, '\0' or '\x14') => "/tb",
+                (ConsoleKey.T, '\0' or '\x14') => "/toolbar",
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 (ConsoleKey.Y, '\0' or '\x19') => "/sys",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",

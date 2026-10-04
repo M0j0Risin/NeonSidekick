@@ -25,7 +25,7 @@ public partial class ChatScreenTests
         _settings.Update(d => d.TtsOutput = false);
         var host = UseClaudeCli();
         PushLine("/server claude-cli");
-        _console.Input.PushKey(Keys.Enter);    // the model picker's first row: the default, sonnet
+        _console.Input.PushKey(Keys.Enter);    // the model picker's cursor on the CLI's first, the default, sonnet (A to Z since 2026-10-03)
         _console.Input.PushKey(Keys.Escape);   // keep the reasoning
         PushLine("/exit");
 

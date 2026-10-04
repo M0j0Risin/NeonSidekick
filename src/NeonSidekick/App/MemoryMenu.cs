@@ -18,6 +18,12 @@ namespace NeonSidekick.App;
 /// what went. <c>/memory forget</c> keeps its confirmation because it is everything at once
 /// (2026-09-22: that wipe was <c>/forget</c>, its own command, until the word folded in here). A
 /// console that cannot show menus gets the numbered list instead, and removes nothing.</para>
+///
+/// <para>On the pane the title row carries Memory's switch (2026-10-03, the user's ask: "actions at the top, similar to ...
+/// Tools › Shell allowed commands' ask and yolo"): <see cref="OnButton"/> and <see cref="OffButton"/>, the lit one the setting
+/// in force, a press of the other switching it (<see cref="SettingsMenu.SetMemory"/>, the Memory row's own save and notice) and
+/// showing the list again. So the switch is always in reach, the pane opens with nothing remembered too, on one dim row, and
+/// stays open when the last row goes.</para>
 /// </summary>
 internal sealed class MemoryMenu
 {
@@ -27,6 +33,25 @@ internal sealed class MemoryMenu
     public const string Keys = "Enter = remove · ESC = back";
     public const string EmptyNotice = "(" + NoticeGlyphs.Memory + "nothing remembered)";   // the disk since 2026-09-22
 
+    /// <summary>The pane's hints with Memory's switch on the title row (2026-10-03): the rows, then with nothing remembered. Pinned.</summary>
+    public const string SwitchKeys = "Enter = remove · N = on · F = off · ESC = back";
+    public const string EmptySwitchKeys = "N = on · F = off · ESC = back";
+
+    /// <summary>Memory's switch on the pane's title row (2026-10-03, the user's ask): the ask/yolo pair's shape, the lit one in force. Pinned.</summary>
+    public const string OnButton = "● on";
+    public const char OnKey = 'n';
+    public const string OffButton = "○ off";
+    public const char OffKey = 'f';
+    public const int OnIndex = 0;
+    public const int OffIndex = 1;
+
+    /// <summary>The title row's buttons with Memory <paramref name="on"/> or off: the one in force lit.</summary>
+    public static IReadOnlyList<MenuButton> Buttons(bool on) =>
+    [
+        new(OnButton, OnKey, on),
+        new(OffButton, OffKey, !on),
+    ];
+
     /// <summary>How an entry with no saved date shows; the width of a <c>yyyy-MM-dd</c> date.</summary>
     public const string NoDate = "----------";
 
@@ -34,16 +59,25 @@ internal sealed class MemoryMenu
     private readonly MemoryStore _store;
     private readonly INoticeSink _transcript;
     private readonly MenuPane _pane;
+    private readonly Func<bool>? _memoryOn;
+    private readonly Action<bool>? _setMemory;
 
     /// <param name="transcript">Where the lines outside the pane go: the transcript, or the screen's deferring sink when the list may open while a reply runs.</param>
     /// <param name="pane">The menu host in the bottom pane; disabled (no pane), the list is a Spectre prompt.</param>
-    public MemoryMenu(IAnsiConsole console, MemoryStore store, INoticeSink transcript, MenuPane pane)
+    /// <param name="memoryOn">Whether Memory is on (2026-10-03): with <paramref name="setMemory"/>, the switch on the pane's title row; null, no switch.</param>
+    /// <param name="setMemory">Switches Memory, saving and saying so (<see cref="SettingsMenu.SetMemory"/>).</param>
+    public MemoryMenu(IAnsiConsole console, MemoryStore store, INoticeSink transcript, MenuPane pane, Func<bool>? memoryOn = null, Action<bool>? setMemory = null)
     {
         _console = console ?? throw new ArgumentNullException(nameof(console));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
+        _memoryOn = memoryOn;
+        _setMemory = setMemory;
     }
+
+    /// <summary>Whether the pane carries Memory's switch: wired, and a pane to put it on (the Spectre prompt has no buttons).</summary>
+    private bool HasSwitch => _memoryOn is not null && _setMemory is not null && _pane.Enabled;
 
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
     private INoticeSink Sink => _pane.IsOpen ? _pane : _transcript;
@@ -82,7 +116,7 @@ internal sealed class MemoryMenu
     public async Task ShowAsync(CancellationToken cancellationToken)
     {
         var entries = _store.EntriesSnapshot();
-        if (entries.Count == 0)
+        if (entries.Count == 0 && !(HasSwitch && CanShowMenus()))
         {
             _transcript.Notice(EmptyNotice);
             return;
@@ -107,9 +141,39 @@ internal sealed class MemoryMenu
         {
             while (true)
             {
-                var page = new MenuPage(Title, entries.Select(RowMarkup).ToList(), Keys);
-                int? picked = await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
-                if (picked is not { } row)
+                MenuPick? pick;
+                if (HasSwitch)
+                {
+                    // The switch on the title row (2026-10-03): the list, or one dim row with nothing remembered.
+                    bool on = _memoryOn!();
+                    var page = entries.Count > 0
+                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), SwitchKeys)
+                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], EmptySwitchKeys);
+                    pick = await _pane.PickAsync(page with { Buttons = Buttons(on) }, cursor, cancellationToken).ConfigureAwait(false);
+                    if (pick is { Button: OnIndex or OffIndex } pressed)
+                    {
+                        cursor = pressed.Row;
+                        bool wanted = pressed.Button == OnIndex;
+                        if (wanted != on)
+                        {
+                            _setMemory!(wanted);
+                        }
+
+                        continue;
+                    }
+
+                    if (pick is not null && entries.Count == 0)
+                    {
+                        continue;   // Enter on the empty row: nothing to remove
+                    }
+                }
+                else
+                {
+                    var page = new MenuPage(Title, entries.Select(RowMarkup).ToList(), Keys);
+                    pick = await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } picked ? new MenuPick(0, picked) : null;
+                }
+
+                if (pick is not { Row: var row })
                 {
                     return;
                 }
@@ -130,7 +194,7 @@ internal sealed class MemoryMenu
                 }
 
                 entries = _store.EntriesSnapshot();
-                if (entries.Count == 0)
+                if (entries.Count == 0 && !HasSwitch)
                 {
                     closingNotice = EmptyNotice;
                     return;

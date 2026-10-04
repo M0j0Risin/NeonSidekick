@@ -13,11 +13,18 @@ namespace NeonSidekick.UI;
 /// trails after the last tile with content on a line. Pure over the canvases' own lines. Given ids (later on
 /// 2026-09-24), a render also records where each tile landed on each line (<see cref="Spans"/>), so the pane can map
 /// a double-click back to its picture.
+///
+/// <para>The strip stands <see cref="Indent"/> cells in (2026-10-03, the user's ask: "lined up with the '[' in '[Image #1]'"),
+/// the width of the prompt glyph ahead of the sent line, so a picture starts under its <c>[Image #n]</c> and beside the reply's
+/// indented <c>▸</c> rows. The tiles pack in what is left; a tile as wide as the window stands in only as far as it still fits.</para>
 /// </summary>
 public sealed class ImageStrip : IRenderable, IPictureLayout
 {
     /// <summary>Cells between two tiles on a row.</summary>
     public const int Gap = 2;
+
+    /// <summary>Cells the strip stands in: the prompt glyph's width (<see cref="InputLine.PromptGlyph"/>), so a tile starts under the sent line's text.</summary>
+    public static readonly int Indent = TextCells.Width(InputLine.PromptGlyph);
 
     private readonly IReadOnlyList<ImageThumbnail> _thumbnails;
     private readonly IReadOnlyList<int>? _ids;
@@ -46,7 +53,7 @@ public sealed class ImageStrip : IRenderable, IPictureLayout
             widest = Math.Max(widest, thumbnail.Width);
         }
 
-        return new Measurement(Math.Min(widest, maxWidth), maxWidth);
+        return new Measurement(Math.Min(widest + Indent, maxWidth), maxWidth);
     }
 
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
@@ -56,7 +63,16 @@ public sealed class ImageStrip : IRenderable, IPictureLayout
         var spans = new List<IReadOnlyList<PictureSpan>>();
         int placed = 0;
         bool firstRow = true;
-        foreach (var row in Pack(_thumbnails, maxWidth))
+        int widest = 0;
+        foreach (var thumbnail in _thumbnails)
+        {
+            widest = Math.Max(widest, thumbnail.Width);
+        }
+
+        // As far in as the widest tile still fits: a fullsize box is not pushed past the window's edge.
+        int indent = Math.Clamp(maxWidth - widest, 0, Indent);
+        string margin = new(' ', indent);
+        foreach (var row in Pack(_thumbnails, maxWidth - indent))
         {
             if (!firstRow)
             {
@@ -68,7 +84,7 @@ public sealed class ImageStrip : IRenderable, IPictureLayout
 
             // The row's tiles side by side, a gap between: each one's column on every line of the row.
             var rowSpans = new List<PictureSpan>(row.Count);
-            int col = 0;
+            int col = indent;
             foreach (var thumbnail in row)
             {
                 if (_ids is not null)
@@ -95,6 +111,11 @@ public sealed class ImageStrip : IRenderable, IPictureLayout
                 // Up to the last tile with something on this line: a shorter one before it is
                 // padded to its width, nothing trails after it.
                 int end = tiles.FindLastIndex(tile => i < tile.Lines.Count);
+                if (indent > 0)
+                {
+                    segments.Add(new Segment(margin));
+                }
+
                 for (int t = 0; t <= end; t++)
                 {
                     var (width, lines) = tiles[t];

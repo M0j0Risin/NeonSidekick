@@ -35,12 +35,12 @@ public partial class ChatScreenTests
     /// <summary>
     /// The app's picture is drawn at <c>Image thumbnail size</c> (later on 2026-09-25, the user's report: it filled the window
     /// whatever the setting said): a wide picture fills the size's columns, one half-block row at 4 px tall; <c>fullsize</c>
-    /// is the window's 238 of 240.
+    /// is the window's 238 of 240, less the strip's two-cell margin since 2026-10-03.
     /// </summary>
     [Theory]
     [InlineData("tiny", 32)]
     [InlineData("medium", 64)]
-    [InlineData("fullsize", 238)]
+    [InlineData("fullsize", 236)]
     public async Task BotChat_TheAppsPicture_IsDrawnAtTheThumbnailSize(string size, int columns)
     {
         BotPicturesFixture(width: 512, height: 4);

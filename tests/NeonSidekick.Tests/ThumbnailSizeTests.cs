@@ -92,11 +92,11 @@ public class ThumbnailSizeTests
     [Theory]
     [InlineData("fullsize")]
     [InlineData("  FullSize ")]
-    public void Resolve_FullSize_IsTheWindowGiven(string saved)
+    public void Resolve_FullSize_IsTheWindowGiven_LessTheStripsMargin(string saved)
     {
         Assert.True(ThumbnailSize.IsFullSize(saved));
-        Assert.Equal(new ThumbnailBox(238, 43), ThumbnailSize.Resolve(new AppSettingsData { ImageThumbnailSize = saved }, new ThumbnailBox(238, 43)));
-        Assert.Equal(new ThumbnailBox(78, 23), ThumbnailSize.Resolve(new AppSettingsData { ImageThumbnailSize = saved }, ThumbnailSize.Fit(80, 24, 0)));
+        Assert.Equal(new ThumbnailBox(236, 43), ThumbnailSize.Resolve(new AppSettingsData { ImageThumbnailSize = saved }, new ThumbnailBox(238, 43)));   // 2026-10-03: the margin
+        Assert.Equal(new ThumbnailBox(76, 23), ThumbnailSize.Resolve(new AppSettingsData { ImageThumbnailSize = saved }, ThumbnailSize.Fit(80, 24, 0)));
         Assert.False(ThumbnailSize.IsFullSize("xlarge"));
         Assert.False(ThumbnailSize.IsFullSize(null));
     }

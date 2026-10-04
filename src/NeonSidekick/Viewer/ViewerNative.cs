@@ -12,7 +12,9 @@ namespace NeonSidekick.Viewer;
 /// shell's own, held as an <see cref="IntPtr"/> and called through its vtable (<see cref="PictureWindowDrag"/>): no COM
 /// class of ours, no <c>ComWrappers</c>. The log window (2026-10-02, <c>LogWindow</c>) adds the text side of gdi32 — a
 /// monospace font, its metrics, a memory DC drawn and copied in one go — and the wheel, cursor and DPI messages; the smoke's
-/// <c>viewer:log-window</c> proves those.
+/// <c>viewer:log-window</c> proves those. The viewer's arrows (2026-10-03, <see cref="ViewerNav"/>) add gdi32's
+/// <c>GdiAlphaBlend</c> over a <c>CreateDIBSection</c> (still gdi32, no msimg32), user32's <c>TrackMouseEvent</c> for the mouse
+/// leaving, and the hand cursor; <c>viewer:window</c> blends one.
 /// </summary>
 internal static unsafe partial class ViewerNative
 {
@@ -35,6 +37,7 @@ internal static unsafe partial class ViewerNative
     public const uint WmCaptureChanged = 0x0215;
     public const uint WmSetCursor = 0x0020;
     public const uint WmMouseWheel = 0x020A;
+    public const uint WmMouseLeave = 0x02A3;
     public const uint WmDpiChanged = 0x02E0;
     public const uint WmApp = 0x8000;
 
@@ -96,6 +99,19 @@ internal static unsafe partial class ViewerNative
 
     /// <summary>The idc ibeam cursor: over the log window's text.</summary>
     public const int IdcIBeam = 32513;
+
+    /// <summary>The idc hand cursor: over the picture viewer's arrows (2026-10-03).</summary>
+    public const int IdcHand = 32649;
+
+    /// <summary>TME_LEAVE: TrackMouseEvent posts WM_MOUSELEAVE once the mouse leaves the client area; TME_QUERY fills the struct instead (the probe).</summary>
+    public const uint TmeLeave = 0x00000002;
+    public const uint TmeQuery = 0x40000000;
+
+    /// <summary>
+    /// A BLENDFUNCTION packed as its four bytes (AC_SRC_OVER, no flags, the constant alpha, AC_SRC_ALPHA): by value it is one
+    /// 32-bit argument, so <see cref="GdiAlphaBlend"/> takes it as a <see cref="uint"/>.
+    /// </summary>
+    public static uint SourceOverAlpha(byte constantAlpha) => ((uint)constantAlpha << 16) | (1u << 24);
 
     /// <summary>HTCLIENT: WM_SETCURSOR's hit-test code for the client area.</summary>
     public const int HtClient = 1;
@@ -234,6 +250,15 @@ internal static unsafe partial class ViewerNative
         public int biYPelsPerMeter;
         public uint biClrUsed;
         public uint biClrImportant;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TrackMouseEventInfo
+    {
+        public uint cbSize;
+        public uint dwFlags;
+        public IntPtr hwndTrack;
+        public uint dwHoverTime;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -527,6 +552,17 @@ internal static unsafe partial class ViewerNative
 
     [LibraryImport("gdi32.dll")]
     public static partial uint SetBkColor(IntPtr hdc, uint color);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial IntPtr CreateDIBSection(IntPtr hdc, BitmapInfoHeader* pbmi, uint usage, void** ppvBits, IntPtr hSection, uint offset);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GdiAlphaBlend(IntPtr hdcDest, int xDest, int yDest, int wDest, int hDest, IntPtr hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, uint blend);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool TrackMouseEvent(TrackMouseEventInfo* lpEventTrack);
 
     [LibraryImport("ole32.dll")]
     public static partial int OleInitialize(IntPtr pvReserved);

@@ -166,7 +166,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+P | `/profile` | waits for the reply |
 | Ctrl+R | `/reasoning` | opens over the reply |
 | Ctrl+S | `/server` | waits for the reply |
-| Ctrl+T | `/tb` (toolbar on/off) | at once |
+| Ctrl+T | `/toolbar` (toolbar on/off) | at once |
 | Ctrl+U | `/usage` | opens over the reply |
 | Ctrl+Y | `/sys` | opens over the reply |
 | Ctrl+Alt+C | `/clear` | stops the reply first |
@@ -196,7 +196,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/tb`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -218,12 +218,12 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 **⤡** at the left end of that rule appears when something can fold; a click does what Ctrl+O does (unfold all if anything is folded, else fold all).
 
-**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch sits on a dark slab while its setting is off. By default it shows 🛠️, the lock, 👮, 🐚, 📁, 🌐 and the working directory.
+**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch, and 💾 while *Memory* is off, sits on a dark slab. By default it shows 🛠️, the lock, 👮, 🐚, 📁, 🌐 and the working directory.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
 | ⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
-| 💾 | while *Memory* is on | `/memory` |
+| 💾 | always; on the slab while *Memory* is off | `/memory`: the memories, with **● on** (N) and **○ off** (F) on its title row |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 / 🥷 | *Shell police outside paths* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
@@ -994,8 +994,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/expand` | Unfolds every tool run, code block and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
-| `/memory [forget \| edit \| copy <profile> [overwrite]]` | Lists memories on a pane (Enter removes one). `forget` forgets all; `edit` opens `memory.json` in your editor; `copy` adds them to another profile's (or replaces with `overwrite`). `forget` and `copy` ask first. |
-| `/model [id]` | Picks or sets the model. On the embedded LLM, lists the installed models. |
+| `/memory [on \| off \| forget \| edit \| copy <profile> [overwrite]]` | Lists memories on a pane (Enter removes one); **● on** (N) and **○ off** (F) on its title row switch *Memory*, as `on` and `off` do. `forget` forgets all; `edit` opens `memory.json` in your editor; `copy` adds them to another profile's (or replaces with `overwrite`). `forget` and `copy` ask first. |
+| `/model [id]` | Picks or sets the model. The list is A to Z with the cursor on the model in use; type to narrow it to the ids holding the text (Backspace erases, ESC clears it, the next ESC keeps the model). On the embedded LLM, lists the installed models. |
 | `/new` | Starts a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edits `operata.md` (the operating rules) in your editor, resets it, or copies it to another profile (`force` replaces theirs). |
 | `/perf [off \| text \| gauge \| spark \| led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
@@ -1024,11 +1024,11 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
-| `/tb [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
 | `/terminal [folder]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
 | `/theme [name]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. `/theme export <name> [new-name]` writes a theme to the `themes` folder to edit. |
 | `/timer [duration [name] \| stop <name> \| stop all]` | Lists, starts (`10m`, `90s`, `1h30m`) or stops timers. |
+| `/toolbar [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
 | `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
 | `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. |
 | `/tree [path]` | Prints a tree of the working directory (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
@@ -1156,6 +1156,7 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 | Key | Action |
 |---|---|
 | ← / → | Newer / older picture, the strip's way (the newest is at the left and counts 1 in the title); reaching the newest follows new pictures again |
+| Click **<** / **>** | The same as ← / →. The two round arrows fade in at the sides while the mouse is over the window; **<** is hidden on the newest picture and **>** on the oldest |
 | Home / End | Newest (following again) / oldest picture |
 | F11 or double-click | Toggle full screen |
 | Drag the picture | Copy it to wherever you drop it: the desktop, an Explorer folder, or any app that takes a dropped file (never a move) |

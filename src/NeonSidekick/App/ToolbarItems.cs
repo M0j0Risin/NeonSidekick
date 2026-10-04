@@ -10,7 +10,8 @@ namespace NeonSidekick.App;
 /// path — saved in <see cref="Settings.AppSettingsData.ToolbarItems"/>. Null there is <see cref="Defaults"/> (every item,
 /// a new one too, until later on 2026-09-29, the user's call); an empty list is no toolbar row at all. <see cref="Resolve"/> is the one place the saved list becomes the set: a display
 /// setting, so an unknown word is dropped without a warning. The glyphs are <see cref="ChatScreen"/>'s, one source; the
-/// memory, lock and police items keep the switches they followed before (<see cref="ChatScreen.ToolbarStripFor(IReadOnlySet{string}, bool, Shell.CommandPolicyMode, bool)"/>).
+/// lock and police items keep the switches they followed before (<see cref="ChatScreen.ToolbarStripFor(IReadOnlySet{string}, Shell.CommandPolicyMode, bool)"/>);
+/// the memory item is always drawn since later on 2026-10-03, on the off slab while Memory is off (<see cref="ChatScreen.ToolbarItemOff"/>).
 /// Seventeen more on 2026-10-03 (the user's ask, their glyphs and names): the tool switches, each opening its group's switch
 /// (<c>/tools &lt;group&gt;</c>) and drawn on the off slab while it is off, and the log and the two viewers, each opening its
 /// window or closing it as its chord does; the user's order with them, the chart moved behind the log, and later that day
@@ -213,14 +214,14 @@ public static class ToolbarItems
         return chosen.SequenceEqual(Defaults, StringComparer.Ordinal) ? null : chosen;
     }
 
-    /// <summary><c>/tb</c>'s words (later on 2026-09-30): <c>on</c> and <c>off</c>, the completion's list. Pinned.</summary>
+    /// <summary><c>/toolbar</c>'s words (later on 2026-09-30): <c>on</c> and <c>off</c>, the completion's list. Pinned.</summary>
     public const string OnWord = "on";
 
     public const string OffWord = "off";
 
     public static readonly string[] Words = [OnWord, OffWord];
 
-    /// <summary><c>/tb</c>'s completion hint beside a word. Pinned.</summary>
+    /// <summary><c>/toolbar</c>'s completion hint beside a word. Pinned.</summary>
     public static string DescribeWord(string word) => word switch
     {
         OnWord => "show the toolbar with the items it last had",
@@ -228,20 +229,20 @@ public static class ToolbarItems
         _ => "",
     };
 
-    /// <summary><c>/tb</c>'s row on <c>/help</c>. Pinned.</summary>
-    public const string HelpSummary = "show or hide the toolbar, or /tb on|off";
+    /// <summary><c>/toolbar</c>'s row on <c>/help</c>. Pinned.</summary>
+    public const string HelpSummary = "show or hide the toolbar, or /toolbar on|off";
 
-    /// <summary>What <c>/tb</c> says it did. Pinned.</summary>
+    /// <summary>What <c>/toolbar</c> says it did. Pinned.</summary>
     public static string Notice(bool shown) => shown ? "(toolbar on)" : "(toolbar off)";
 
-    /// <summary><c>/tb</c> given something that is not on or off. Pinned.</summary>
-    public const string UsageError = "/tb takes on or off, or nothing to toggle.";
+    /// <summary><c>/toolbar</c> given something that is not on or off. Pinned.</summary>
+    public const string UsageError = "/toolbar takes on or off, or nothing to toggle.";
 
-    /// <summary>What <c>/tb</c> saves: the toolbar's items, and the ones a later <c>/tb</c> brings back.</summary>
+    /// <summary>What <c>/toolbar</c> saves: the toolbar's items, and the ones a later <c>/toolbar</c> brings back.</summary>
     public readonly record struct ToolbarToggle(List<string>? Items, List<string>? LastItems);
 
     /// <summary>
-    /// What <c>/tb</c> saves, pure (later on 2026-09-30, the user's ask, <see cref="PerfBarMode.Toggle"/>'s shape): bare, the
+    /// What <c>/toolbar</c> saves, pure (later on 2026-09-30, the user's ask, <see cref="PerfBarMode.Toggle"/>'s shape): bare, the
     /// toolbar hidden while it shows — an empty list, its items kept in <paramref name="last"/> as <see cref="Save"/> would
     /// write them (null for <see cref="Defaults"/>) — else shown again with <paramref name="last"/> (<see cref="Defaults"/> when
     /// it is null or names nothing); <c>on</c> and <c>off</c> say which, and leave a toolbar already that way as it is. Null for

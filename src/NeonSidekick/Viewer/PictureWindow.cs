@@ -239,6 +239,7 @@ internal sealed unsafe class PictureWindowThread
     private static readonly IntPtr DebounceTimer = new(1);
     private static readonly IntPtr DeleteArmTimer = new(2);
     private static readonly IntPtr SlideTimer = new(3);
+    private static readonly IntPtr NavFadeTimer = new(4);   // the arrows fading in or out (2026-10-03)
 
     /// <summary>The wait after a folder change before the picture is read: a burst of events is one load (FolderPictureViewer's 250 ms).</summary>
     public const uint DebounceMilliseconds = 250;
@@ -254,6 +255,7 @@ internal sealed unsafe class PictureWindowThread
     private static readonly Lock s_classGate = new();
     private static IntPtr s_className;
     private static ushort s_atom;
+    private static IntPtr s_hand;   // the cursor over an arrow (2026-10-03), the system's shared one
 
     private readonly ViewerState _state = new();
     private readonly ConcurrentQueue<Change> _changes = new();
@@ -291,6 +293,20 @@ internal sealed unsafe class PictureWindowThread
     private IntPtr _background;
     private bool _ole;
     private (int X, int Y)? _press;
+
+    // The arrows (2026-10-03, ViewerNav): the mouse in the window (its leave tracked), the arrow under it, the fade's level
+    // (0 hidden, 255 shown). While they show, the picture is kept drawn in a memory DC (the scene), so a fade step or a hover
+    // redraws the two squares from it rather than stretching the picture again; the arrows' pixels sit in a DIB section.
+    private bool _hover;
+    private ViewerAction _hot;
+    private int _navLevel;
+    private IntPtr _sceneDc;
+    private IntPtr _sceneBitmap;
+    private (int Width, int Height) _sceneSize;
+    private (ViewerBitmap? Bitmap, int Width, int Height, ViewerStyle? Style, string Text)? _sceneKey;
+    private IntPtr _navDc;
+    private IntPtr _navBitmap;
+    private (int Side, uint Fill, uint Ink) _navKey;
 
     private enum ChangeKind
     {
@@ -455,7 +471,12 @@ internal sealed unsafe class PictureWindowThread
                 // dwmapi bound (the themed bar): a refusal on an old Windows is reported, not a failure.
                 int dark = 1;
                 int hr = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, &dark, sizeof(int));
-                return (true, $"user32/gdi32/dwmapi bound; a hidden window answered through the window procedure; dark bar 0x{hr:X8}");
+                if (ProbeArrows(hwnd) is { } arrows)
+                {
+                    return (false, arrows);
+                }
+
+                return (true, $"user32/gdi32/dwmapi bound; a hidden window answered through the window procedure; an arrow blended; dark bar 0x{hr:X8}");
             }
             finally
             {
@@ -465,6 +486,69 @@ internal sealed unsafe class PictureWindowThread
         catch (Exception ex)
         {
             return (false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    // The arrows' layer (2026-10-03): a button's pixels in a DIB section blended into a memory DC with GdiAlphaBlend, and the
+    // mouse's leave tracking asked for. Null when all of it worked, else what did not.
+    private static string? ProbeArrows(IntPtr hwnd)
+    {
+        const int Side = 16;
+        IntPtr dc = GetDC(hwnd), target = IntPtr.Zero, bitmap = IntPtr.Zero, sprites = IntPtr.Zero, dib = IntPtr.Zero;
+        try
+        {
+            var header = new BitmapInfoHeader { biSize = (uint)sizeof(BitmapInfoHeader), biWidth = Side, biHeight = -Side, biPlanes = 1, biBitCount = 32 };
+            void* bits = null;
+            if (dc != IntPtr.Zero)
+            {
+                target = CreateCompatibleDC(dc);
+                bitmap = CreateCompatibleBitmap(dc, Side, Side);
+                sprites = CreateCompatibleDC(dc);
+                dib = CreateDIBSection(dc, &header, DibRgbColors, &bits, IntPtr.Zero, 0);
+            }
+
+            if (target == IntPtr.Zero || bitmap == IntPtr.Zero || sprites == IntPtr.Zero || dib == IntPtr.Zero || bits == null)
+            {
+                return "a DC, a bitmap or the arrows' DIB section was not made";
+            }
+
+            ViewerNav.Pixels(Side, pointsLeft: true, fill: 0, ink: 0x00FFFFFF).CopyTo(new Span<uint>(bits, Side * Side));
+            SelectObject(target, bitmap);
+            SelectObject(sprites, dib);
+            if (!GdiAlphaBlend(target, 0, 0, Side, Side, sprites, 0, 0, Side, Side, SourceOverAlpha(ViewerNav.RestAlpha)))
+            {
+                return "GdiAlphaBlend failed";
+            }
+
+            var track = new TrackMouseEventInfo { cbSize = (uint)sizeof(TrackMouseEventInfo), dwFlags = TmeQuery };
+            return TrackMouseEvent(&track) ? null : "TrackMouseEvent failed";
+        }
+        finally
+        {
+            if (sprites != IntPtr.Zero)
+            {
+                DeleteDC(sprites);
+            }
+
+            if (target != IntPtr.Zero)
+            {
+                DeleteDC(target);
+            }
+
+            if (dib != IntPtr.Zero)
+            {
+                DeleteObject(dib);
+            }
+
+            if (bitmap != IntPtr.Zero)
+            {
+                DeleteObject(bitmap);
+            }
+
+            if (dc != IntPtr.Zero)
+            {
+                ReleaseDC(hwnd, dc);
+            }
         }
     }
 
@@ -559,6 +643,11 @@ internal sealed unsafe class PictureWindowThread
                 return;
             }
 
+            if (s_hand == IntPtr.Zero)
+            {
+                s_hand = LoadCursorW(IntPtr.Zero, (IntPtr)IdcHand);
+            }
+
             _hwnd = CreateWindowExW(0, s_className, IntPtr.Zero, WsOverlappedWindow, CwUseDefault, CwUseDefault, CwUseDefault, CwUseDefault, IntPtr.Zero, IntPtr.Zero, instance, GCHandle.ToIntPtr(self));
             if (_hwnd == IntPtr.Zero)
             {
@@ -629,6 +718,17 @@ internal sealed unsafe class PictureWindowThread
                 DeleteObject(_background);
             }
 
+            ReleaseScene();
+            if (_navDc != IntPtr.Zero)
+            {
+                DeleteDC(_navDc);
+            }
+
+            if (_navBitmap != IntPtr.Zero)
+            {
+                DeleteObject(_navBitmap);
+            }
+
             if (_ole)
             {
                 OleUninitialize();
@@ -694,12 +794,26 @@ internal sealed unsafe class PictureWindowThread
                 return IntPtr.Zero;
 
             case WmLeftButtonDoubleClick:
+                // A quick second click on an arrow is another step (2026-10-03), not full screen.
+                if (NavAt(PointOf(lParam)) is var again and not ViewerAction.None)
+                {
+                    Step(again);
+                    return IntPtr.Zero;
+                }
+
                 Do(ViewerAction.ToggleFullScreen);
                 return IntPtr.Zero;
 
             // The drag out (2026-09-28): a press remembered and the mouse captured; the first move past the system's drag
-            // rectangle starts it. A double-click never moves, so it stays full screen's.
+            // rectangle starts it. A double-click never moves, so it stays full screen's. A press on an arrow (2026-10-03) is
+            // its key, never a drag.
             case WmLeftButtonDown when _live is null:
+                if (NavAt(PointOf(lParam)) is var step and not ViewerAction.None)
+                {
+                    Step(step);
+                    return IntPtr.Zero;
+                }
+
                 _press = PointOf(lParam);
                 SetCapture(hwnd);
                 return IntPtr.Zero;
@@ -719,6 +833,29 @@ internal sealed unsafe class PictureWindowThread
                 }
 
                 return IntPtr.Zero;
+            }
+
+            // The mouse over the window, no press (2026-10-03): the arrows shown, the one under it lit.
+            case WmMouseMove when _live is null:
+                Hover(hwnd, PointOf(lParam));
+                break;
+            case WmMouseLeave:
+                _hover = false;
+                _hot = ViewerAction.None;
+                SetTimer(hwnd, NavFadeTimer, ViewerNav.FadeMilliseconds, IntPtr.Zero);
+                return IntPtr.Zero;
+            case WmSetCursor when ((long)lParam & 0xFFFF) == HtClient && _live is null && s_hand != IntPtr.Zero:
+            {
+                uint at = GetMessagePos();
+                var point = new Point { X = (short)(at & 0xFFFF), Y = (short)((at >> 16) & 0xFFFF) };
+                ScreenToClient(hwnd, &point);
+                if (NavAt((point.X, point.Y)) == ViewerAction.None)
+                {
+                    break;
+                }
+
+                SetCursor(s_hand);
+                return 1;
             }
 
             case WmLeftButtonUp:
@@ -805,6 +942,23 @@ internal sealed unsafe class PictureWindowThread
                 _state.Disarm();
                 UpdateTitle();
                 return IntPtr.Zero;
+            case WmTimer when wParam == NavFadeTimer:
+            {
+                _navLevel = ViewerNav.Fade(_navLevel, _hover);
+                if (_navLevel is 0 or 255)
+                {
+                    KillTimer(hwnd, NavFadeTimer);
+                }
+
+                if (_navLevel == 0)
+                {
+                    ReleaseScene();   // hidden: the picture is painted straight again, the memory DC's pixels given back
+                }
+
+                InvalidateNav(hwnd);
+                return IntPtr.Zero;
+            }
+
             case WmTimer when wParam == SlideTimer:
                 // A picture armed for deleting holds the show until it is deleted or disarmed.
                 if (!_state.DeleteArmed && _state.NextSlide(Random.Shared))
@@ -974,6 +1128,66 @@ internal sealed unsafe class PictureWindowThread
                 }
 
                 break;
+        }
+    }
+
+    // An arrow's click (2026-10-03): exactly its key — a first Del disarmed, then the step; the arrow at the end it reaches goes.
+    private void Step(ViewerAction action)
+    {
+        if (_state.Disarm())
+        {
+            KillTimer(_hwnd, DeleteArmTimer);
+            UpdateTitle();
+        }
+
+        Do(action);
+        InvalidateNav(_hwnd);
+    }
+
+    // The mouse moved over the window: its leave asked for once, the arrows faded in, the one under it lit.
+    private void Hover(IntPtr hwnd, (int X, int Y) point)
+    {
+        if (!_hover)
+        {
+            var track = new TrackMouseEventInfo { cbSize = (uint)sizeof(TrackMouseEventInfo), dwFlags = TmeLeave, hwndTrack = hwnd };
+            _hover = TrackMouseEvent(&track);
+            if (_hover)
+            {
+                SetTimer(hwnd, NavFadeTimer, ViewerNav.FadeMilliseconds, IntPtr.Zero);
+            }
+        }
+
+        var hot = NavAt(point);
+        if (hot != _hot)
+        {
+            _hot = hot;
+            InvalidateNav(hwnd);
+        }
+    }
+
+    // The arrow at a client point: a shown one's action (never in the camera's window, never while hidden), else None.
+    private ViewerAction NavAt((int X, int Y) point) =>
+        _live is null && _hover ? ViewerNav.At(point.X, point.Y, NavLayout(), _state.CanNewer, _state.CanOlder) : ViewerAction.None;
+
+    private (ViewerNav.Square Newer, ViewerNav.Square Older)? NavLayout()
+    {
+        Rect client;
+        GetClientRect(_hwnd, &client);
+        return ViewerNav.Layout(client.Right, client.Bottom, GetDpiForWindow(_hwnd));
+    }
+
+    // The two squares repainted (a fade step, a hover, an end reached); the rest of the window is left alone.
+    private void InvalidateNav(IntPtr hwnd)
+    {
+        if (NavLayout() is not { } squares)
+        {
+            return;
+        }
+
+        foreach (var square in (ReadOnlySpan<ViewerNav.Square>)[squares.Newer, squares.Older])
+        {
+            var rect = new Rect { Left = square.X, Top = square.Y, Right = square.X + square.Side, Bottom = square.Y + square.Side };
+            InvalidateRect(hwnd, &rect, false);
         }
     }
 
@@ -1259,53 +1473,204 @@ internal sealed unsafe class PictureWindowThread
         {
             Rect client;
             GetClientRect(hwnd, &client);
-            IntPtr fill = _background != IntPtr.Zero ? _background : GetStockObject(BlackBrush);
-            var bitmap = _bitmap;
-            if (bitmap is null)
+            var squares = _live is null && _navLevel > 0 ? ViewerNav.Layout(client.Right, client.Bottom, GetDpiForWindow(hwnd)) : null;
+            bool newer = squares is not null && _state.CanNewer;
+            bool older = squares is not null && _state.CanOlder;
+            if (!newer && !older)
             {
-                FillRect(hdc, &client, fill);
-                string text = _live is not null ? ViewerText.LiveWaiting : _unreadable is { } name ? ViewerText.Unreadable(name) : _state.Count == 0 ? ViewerText.Waiting(_state.Folder) : "";
-                if (text.Length > 0)
-                {
-                    SelectObject(hdc, GetStockObject(DefaultGuiFont));
-                    SetTextColor(hdc, _style?.Text ?? 0x00A0A0A0);
-                    SetBkMode(hdc, Transparent);
-                    DrawTextW(hdc, text, -1, &client, DtCenter | DtVCenter | DtSingleLine | DtNoPrefix);
-                }
-
+                DrawScene(hdc, client);
                 return;
             }
 
-            var (x, y, w, h) = ViewerState.Fit(bitmap.Width, bitmap.Height, client.Right, client.Bottom);
-
-            // The bars round the picture, then the picture: every pixel painted once, no flash.
-            var top = new Rect { Left = 0, Top = 0, Right = client.Right, Bottom = y };
-            var bottom = new Rect { Left = 0, Top = y + h, Right = client.Right, Bottom = client.Bottom };
-            var left = new Rect { Left = 0, Top = y, Right = x, Bottom = y + h };
-            var right = new Rect { Left = x + w, Top = y, Right = client.Right, Bottom = y + h };
-            FillRect(hdc, &top, fill);
-            FillRect(hdc, &bottom, fill);
-            FillRect(hdc, &left, fill);
-            FillRect(hdc, &right, fill);
-
-            SetStretchBltMode(hdc, Halftone);
-            SetBrushOrgEx(hdc, 0, 0, null);
-            var header = new BitmapInfoHeader
+            // The arrows over the picture (2026-10-03): the picture copied from the scene (drawn again only when it changed),
+            // the arrows blended on, each at the fade's opacity, the one under the mouse brighter.
+            if (Scene(hdc, client) is var scene && scene != IntPtr.Zero)
             {
-                biSize = (uint)sizeof(BitmapInfoHeader),
-                biWidth = bitmap.Width,
-                biHeight = -bitmap.Height,   // negative: top row first
-                biPlanes = 1,
-                biBitCount = 32,
-            };
-            fixed (byte* bits = bitmap.Bgrx)
+                var r = ps.rcPaint;
+                BitBlt(hdc, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top, scene, r.Left, r.Top, SrcCopy);
+            }
+            else
             {
-                StretchDIBits(hdc, x, y, w, h, 0, 0, bitmap.Width, bitmap.Height, bits, &header, DibRgbColors, SrcCopy);
+                DrawScene(hdc, client);
+            }
+
+            var (left, right) = squares!.Value;
+            IntPtr sprites = Sprites(hdc, left.Side);
+            if (sprites == IntPtr.Zero)
+            {
+                return;
+            }
+
+            if (newer)
+            {
+                GdiAlphaBlend(hdc, left.X, left.Y, left.Side, left.Side, sprites, 0, 0, left.Side, left.Side, SourceOverAlpha(ViewerNav.Alpha(_navLevel, _hot == ViewerAction.Newer)));
+            }
+
+            if (older)
+            {
+                GdiAlphaBlend(hdc, right.X, right.Y, right.Side, right.Side, sprites, right.Side, 0, right.Side, right.Side, SourceOverAlpha(ViewerNav.Alpha(_navLevel, _hot == ViewerAction.Older)));
             }
         }
         finally
         {
             EndPaint(hwnd, &ps);
+        }
+    }
+
+    // The line the window shows with no picture: the camera's wait, an unreadable file, an empty folder, else nothing.
+    private string SceneText() =>
+        _live is not null ? ViewerText.LiveWaiting : _unreadable is { } name ? ViewerText.Unreadable(name) : _state.Count == 0 ? ViewerText.Waiting(_state.Folder) : "";
+
+    // The memory DC holding the picture as it is drawn (2026-10-03): made at the client's size, drawn again when the picture,
+    // the size, the style or the line changes. Zero when GDI could not make it (the caller draws straight).
+    private IntPtr Scene(IntPtr hdc, Rect client)
+    {
+        int width = Math.Max(1, client.Right), height = Math.Max(1, client.Bottom);
+        if (_sceneDc == IntPtr.Zero)
+        {
+            _sceneDc = CreateCompatibleDC(hdc);
+            if (_sceneDc == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+        }
+
+        if (_sceneSize != (width, height))
+        {
+            IntPtr bitmap = CreateCompatibleBitmap(hdc, width, height);
+            if (bitmap == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+
+            SelectObject(_sceneDc, bitmap);
+            if (_sceneBitmap != IntPtr.Zero)
+            {
+                DeleteObject(_sceneBitmap);
+            }
+
+            _sceneBitmap = bitmap;
+            _sceneSize = (width, height);
+            _sceneKey = null;
+        }
+
+        var key = (_bitmap, width, height, _style, SceneText());
+        if (_sceneKey != key)
+        {
+            DrawScene(_sceneDc, client);
+            _sceneKey = key;
+        }
+
+        return _sceneDc;
+    }
+
+    private void ReleaseScene()
+    {
+        if (_sceneDc != IntPtr.Zero)
+        {
+            DeleteDC(_sceneDc);
+            _sceneDc = IntPtr.Zero;
+        }
+
+        if (_sceneBitmap != IntPtr.Zero)
+        {
+            DeleteObject(_sceneBitmap);
+            _sceneBitmap = IntPtr.Zero;
+        }
+
+        _sceneSize = default;
+        _sceneKey = null;
+    }
+
+    // The two arrows' pixels side by side in a DIB section (< then >, ViewerNav.Pixels), made again for a new size or style.
+    // Zero when GDI could not make it (no arrows that paint).
+    private IntPtr Sprites(IntPtr hdc, int side)
+    {
+        uint fill = _style?.Caption ?? ViewerStyle.Black.Caption;
+        uint ink = _style?.CaptionText ?? ViewerStyle.Black.CaptionText;
+        if (_navDc != IntPtr.Zero && _navBitmap != IntPtr.Zero && _navKey == (side, fill, ink))
+        {
+            return _navDc;
+        }
+
+        var header = new BitmapInfoHeader { biSize = (uint)sizeof(BitmapInfoHeader), biWidth = 2 * side, biHeight = -side, biPlanes = 1, biBitCount = 32 };
+        void* bits = null;
+        IntPtr dib = CreateDIBSection(hdc, &header, DibRgbColors, &bits, IntPtr.Zero, 0);
+        if (dib == IntPtr.Zero || bits == null)
+        {
+            return IntPtr.Zero;
+        }
+
+        var target = new Span<uint>(bits, 2 * side * side);
+        uint[] newer = ViewerNav.Pixels(side, pointsLeft: true, fill, ink);
+        uint[] older = ViewerNav.Pixels(side, pointsLeft: false, fill, ink);
+        for (int row = 0; row < side; row++)
+        {
+            newer.AsSpan(row * side, side).CopyTo(target.Slice(row * 2 * side, side));
+            older.AsSpan(row * side, side).CopyTo(target.Slice(row * 2 * side + side, side));
+        }
+
+        if (_navDc == IntPtr.Zero)
+        {
+            _navDc = CreateCompatibleDC(hdc);
+        }
+
+        SelectObject(_navDc, dib);
+        if (_navBitmap != IntPtr.Zero)
+        {
+            DeleteObject(_navBitmap);
+        }
+
+        _navBitmap = dib;
+        _navKey = (side, fill, ink);
+        return _navDc;
+    }
+
+    // The picture and the bars round it, or the empty window's line, on dc: every pixel painted once, no flash.
+    private void DrawScene(IntPtr hdc, Rect client)
+    {
+        IntPtr fill = _background != IntPtr.Zero ? _background : GetStockObject(BlackBrush);
+        var bitmap = _bitmap;
+        if (bitmap is null)
+        {
+            FillRect(hdc, &client, fill);
+            string text = SceneText();
+            if (text.Length > 0)
+            {
+                SelectObject(hdc, GetStockObject(DefaultGuiFont));
+                SetTextColor(hdc, _style?.Text ?? 0x00A0A0A0);
+                SetBkMode(hdc, Transparent);
+                DrawTextW(hdc, text, -1, &client, DtCenter | DtVCenter | DtSingleLine | DtNoPrefix);
+            }
+
+            return;
+        }
+
+        var (x, y, w, h) = ViewerState.Fit(bitmap.Width, bitmap.Height, client.Right, client.Bottom);
+
+        // The bars round the picture, then the picture: every pixel painted once, no flash.
+        var top = new Rect { Left = 0, Top = 0, Right = client.Right, Bottom = y };
+        var bottom = new Rect { Left = 0, Top = y + h, Right = client.Right, Bottom = client.Bottom };
+        var left = new Rect { Left = 0, Top = y, Right = x, Bottom = y + h };
+        var right = new Rect { Left = x + w, Top = y, Right = client.Right, Bottom = y + h };
+        FillRect(hdc, &top, fill);
+        FillRect(hdc, &bottom, fill);
+        FillRect(hdc, &left, fill);
+        FillRect(hdc, &right, fill);
+
+        SetStretchBltMode(hdc, Halftone);
+        SetBrushOrgEx(hdc, 0, 0, null);
+        var header = new BitmapInfoHeader
+        {
+            biSize = (uint)sizeof(BitmapInfoHeader),
+            biWidth = bitmap.Width,
+            biHeight = -bitmap.Height,   // negative: top row first
+            biPlanes = 1,
+            biBitCount = 32,
+        };
+        fixed (byte* bits = bitmap.Bgrx)
+        {
+            StretchDIBits(hdc, x, y, w, h, 0, 0, bitmap.Width, bitmap.Height, bits, &header, DibRgbColors, SrcCopy);
         }
     }
 

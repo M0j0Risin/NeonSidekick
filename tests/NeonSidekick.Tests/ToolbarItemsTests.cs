@@ -19,7 +19,7 @@ public sealed class ToolbarItemsTests
             "log", "liveview", "comfyview", "perf", "path",
         ], ToolbarItems.Names);
         Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
-        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("memory" or "cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
+        Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
         Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
         Assert.Equal(ChatScreen.CwdBrowseLine, ToolbarItems.Describe(ToolbarItems.Path));
@@ -42,7 +42,7 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Toggle_HidesKeepingTheItems_ShowsThemAgain_TheDefaultsTheFirstTime()
     {
-        // /tb (later on 2026-09-30, the user's ask), PerfBarMode.Toggle's shape.
+        // /toolbar (later on 2026-09-30, the user's ask), PerfBarMode.Toggle's shape.
         var hiddenDefaults = ToolbarItems.Toggle("", null, null)!.Value;
         Assert.Empty(hiddenDefaults.Items!);
         Assert.Null(hiddenDefaults.LastItems);                                                   // the defaults, kept as null
@@ -59,10 +59,10 @@ public sealed class ToolbarItemsTests
         Assert.Null(ToolbarItems.Toggle("sideways", null, null));
 
         Assert.Equal(["on", "off"], ToolbarItems.Words);
-        Assert.Equal("show or hide the toolbar, or /tb on|off", ToolbarItems.HelpSummary);
+        Assert.Equal("show or hide the toolbar, or /toolbar on|off", ToolbarItems.HelpSummary);
         Assert.Equal("(toolbar off)", ToolbarItems.Notice(false));
         Assert.Equal("(toolbar on)", ToolbarItems.Notice(true));
-        Assert.Equal("/tb takes on or off, or nothing to toggle.", ToolbarItems.UsageError);
+        Assert.Equal("/toolbar takes on or off, or nothing to toggle.", ToolbarItems.UsageError);
     }
 
     [Fact]

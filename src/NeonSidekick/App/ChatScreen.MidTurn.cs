@@ -169,7 +169,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
             or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
-            or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
+            or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
     };
@@ -532,7 +532,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Perf:
                 HandlePerf(args);
                 break;
-            case SlashCommand.Tb:
+            case SlashCommand.Toolbar:
                 HandleToolbar(args);
                 break;
             case SlashCommand.Header:

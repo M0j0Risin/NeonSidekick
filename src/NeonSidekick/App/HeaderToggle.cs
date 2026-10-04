@@ -5,7 +5,7 @@ namespace NeonSidekick.App;
 /// (<see cref="Settings.AppSettingsData.ShowHeader"/>) flipped or set and saved, nothing redrawn — the banner is rows of the
 /// transcript drawn at each wipe (<see cref="SidekickApp.RenderScreen(Spectre.Console.IAnsiConsole)"/>), so the change shows
 /// at the next <c>/clear</c>, <c>/splash</c>, <c>/theme</c> or profile switch (the user's pick over a redraw that would wipe the
-/// transcript). <c>/tb</c>'s shape (<see cref="ToolbarItems"/>): its words, its notice, its usage error, its pure toggle.
+/// transcript). <c>/toolbar</c>'s shape (<see cref="ToolbarItems"/>): its words, its notice, its usage error, its pure toggle.
 /// </summary>
 public static class HeaderToggle
 {

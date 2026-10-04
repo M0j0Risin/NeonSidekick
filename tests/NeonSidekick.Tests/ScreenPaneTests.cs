@@ -4886,10 +4886,12 @@ public class ScreenPaneTests : IDisposable
         pane.WritePictures(new ImageStrip([Tile(4), Tile(3)], [5, 6]));
 
         Assert.Null(pane.PictureAt(0, 93));        // "a"
-        Assert.Equal(5, pane.PictureAt(1, 94));
-        Assert.Null(pane.PictureAt(4, 94));        // the gap
-        Assert.Equal(6, pane.PictureAt(6, 94));
-        Assert.Null(pane.PictureAt(1, 95));        // under the flow
+        Assert.Null(pane.PictureAt(1, 94));        // the strip's margin (2026-10-03): the tiles stand two cells in
+        Assert.Equal(5, pane.PictureAt(2, 94));
+        Assert.Equal(5, pane.PictureAt(5, 94));
+        Assert.Null(pane.PictureAt(6, 94));        // the gap
+        Assert.Equal(6, pane.PictureAt(8, 94));
+        Assert.Null(pane.PictureAt(3, 95));        // under the flow
 
         using var plain = Pane(geometry: false);
         plain.WritePictures(new CenteredPicture(Tile(4), 1));

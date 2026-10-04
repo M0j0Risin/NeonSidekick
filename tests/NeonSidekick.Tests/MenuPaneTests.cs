@@ -1161,7 +1161,7 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
-    /// <summary>A chord the screen does in place (<c>/perf</c>, <c>/tb</c>) leaves the list reading; under a tool's question every chord is nobody's.</summary>
+    /// <summary>A chord the screen does in place (<c>/perf</c>, <c>/toolbar</c>) leaves the list reading; under a tool's question every chord is nobody's.</summary>
     [Fact]
     public async Task AChord_DoneInPlace_OrSuppressed_LeavesTheListReading()
     {

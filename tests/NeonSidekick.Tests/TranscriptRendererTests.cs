@@ -87,7 +87,7 @@ public class TranscriptRendererTests : IDisposable
         _t.AppendDelta("partial");
         _t.Images([thumbnail, thumbnail]);
 
-        Assert.Equal(new[] { "● partial", "▀▀▀  ▀▀▀", "▀▀▀  ▀▀▀" }, _console.Lines);   // one cell per pixel across, the half block stacks two down, a gap between
+        Assert.Equal(new[] { "● partial", "  ▀▀▀  ▀▀▀", "  ▀▀▀  ▀▀▀" }, _console.Lines);   // one cell per pixel across, the half block stacks two down, a gap between
         Assert.True(_t.AtLineStart);
     }
 

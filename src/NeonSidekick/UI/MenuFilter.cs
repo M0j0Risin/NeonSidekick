@@ -65,20 +65,38 @@ public static class MenuFilter
     /// <summary><see cref="NoMatchLine"/> as a dim markup row.</summary>
     public static string NoMatchRow(string filter) => Theme.DimMarkup(NoMatchLine(filter));
 
+    /// <summary>The no-match row's line on a list whose rows have a name alone (the model picker, 2026-10-03). Pinned.</summary>
+    public static string NoMatchNameLine(string filter) => "Nothing here has \"" + filter + "\" in its name.";
+
+    /// <summary><see cref="NoMatchNameLine"/> as a dim markup row.</summary>
+    public static string NoMatchNameRow(string filter) => Theme.DimMarkup(NoMatchNameLine(filter));
+
     /// <summary>The end of a filtering tab's own hint while nothing is typed (<c>ToolsText.OfferedKeys</c>, <c>SkillsMenu.LoadedKeys</c>). Pinned.</summary>
     public const string TypeAndCloseKeys = TypeKeys + " · ESC = close";
 
+    /// <summary>The end of a filtering picker's hint where ESC keeps what is in use (the model picker, 2026-10-03). Pinned.</summary>
+    public const string TypeAndKeepKeys = TypeKeys + " · ESC = keep";
+
     /// <summary>
-    /// A filtering tab's hint: <paramref name="keys"/> (which ends in <see cref="TypeAndCloseKeys"/>) as it is while nothing is
-    /// typed, else with <see cref="FilteringKeys"/> in place of that end (ESC clears the filter first). Pure.
+    /// A filtering tab's hint: <paramref name="keys"/> (which ends in <see cref="TypeAndCloseKeys"/> or <see cref="TypeAndKeepKeys"/>)
+    /// as it is while nothing is typed, else with <see cref="FilteringKeys"/> in place of that end (ESC clears the filter first). Pure.
     /// </summary>
     public static string Hint(string keys, string filter)
     {
         ArgumentNullException.ThrowIfNull(keys);
         ArgumentNullException.ThrowIfNull(filter);
-        return filter.Length == 0 || !keys.EndsWith(TypeAndCloseKeys, StringComparison.Ordinal)
-            ? keys
-            : keys[..^TypeAndCloseKeys.Length] + FilteringKeys;
+        if (filter.Length > 0)
+        {
+            foreach (string end in (ReadOnlySpan<string>)[TypeAndCloseKeys, TypeAndKeepKeys])
+            {
+                if (keys.EndsWith(end, StringComparison.Ordinal))
+                {
+                    return keys[..^end.Length] + FilteringKeys;
+                }
+            }
+        }
+
+        return keys;
     }
 
     /// <summary>The caption for a filtering tab: null while nothing is typed, else <see cref="Caption"/>.</summary>

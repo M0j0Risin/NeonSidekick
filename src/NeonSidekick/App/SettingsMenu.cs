@@ -948,6 +948,9 @@ internal sealed partial class SettingsMenu
     public const string SwitchKeys = "Enter = switch · ESC = back";
     public const string KeepKeys = "Enter = choose · ESC = keep";
 
+    /// <summary>The model picker's hint on the pane (2026-10-03, the user's ask): <see cref="KeepKeys"/> with the type-to-filter. Pinned.</summary>
+    public const string ModelKeys = "Enter = choose · " + MenuFilter.TypeAndKeepKeys;
+
     /// <summary>
     /// The theme pickers' hints (2026-10-03, the user's ask): <see cref="KeepKeys"/> and <see cref="PickKeys"/> with the letter
     /// jump (<see cref="MenuPage.JumpNames"/>).
@@ -3349,9 +3352,14 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The model picker over a list already in hand (<c>/model</c> after <see cref="LlmSession.ListModelsAsync"/>,
-    /// <c>/server</c> after its probe): <paramref name="current"/> is always offered, first when
-    /// the server does not list it, and the cursor opens on it. Returns true when the saved model
-    /// changed; ESC keeps it (<see cref="UnchangedNotice"/>). Without menus the guard prints.
+    /// <c>/server</c> after its probe): <paramref name="current"/> is always offered, and the cursor
+    /// opens on it. Returns true when the saved model changed; ESC keeps it (<see cref="UnchangedNotice"/>).
+    /// Without menus the guard prints.
+    ///
+    /// <para>A to Z (2026-10-03, the user's ask: "alphabetize the list so it's easier to find things"; <see cref="ModelOrder"/>),
+    /// whatever order the server listed them in — <paramref name="current"/> among them in its place, no longer first when the
+    /// server does not list it; with no model in use (a server just picked) the cursor opens on the one the server lists first,
+    /// so Enter still takes its default. On the pane the list filters as it is typed (<see cref="PickFilteredModelAsync"/>).</para>
     /// </summary>
     public async Task<bool> PickModelFromListAsync(ProbeResult listed, string current, CancellationToken cancellationToken)
     {
@@ -3365,7 +3373,16 @@ internal sealed partial class SettingsMenu
         var ids = listed.ModelIds.ToList();
         if (!string.IsNullOrWhiteSpace(current) && !ids.Contains(current, StringComparer.Ordinal))
         {
-            ids.Insert(0, current);
+            ids.Add(current);
+        }
+
+        ids = ModelOrder(ids);
+
+        // The cursor on the model in use; with none listed (a new server), on the one the server lists first, its default.
+        int cursor = ids.IndexOf(current);
+        if (cursor < 0 && listed.ModelIds.Count > 0)
+        {
+            cursor = ids.IndexOf(listed.ModelIds[0]);
         }
 
         if (ids.Count == 0)
@@ -3375,9 +3392,66 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        if (_pane.Enabled)
+        {
+            return await PickFilteredModelAsync(ids, cursor, cancellationToken).ConfigureAwait(false) is { } chosen ? SaveModel(chosen) : Unchanged();
+        }
+
         var page = new MenuPage(ModelTitle, ids.Select(Markup.Escape).ToList(), KeepKeys);
-        int? picked = await PickOnceAsync(page, ids.IndexOf(current), cancellationToken).ConfigureAwait(false);
+        int? picked = await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false);
         return picked is { } i ? SaveModel(ids[i]) : Unchanged();
+    }
+
+    /// <summary>The model picker's order (2026-10-03, the user's ask): A to Z, case folded, the exact spelling breaking a tie. Pure.</summary>
+    public static List<string> ModelOrder(IEnumerable<string> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        return ids.OrderBy(id => id, StringComparer.OrdinalIgnoreCase).ThenBy(id => id, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
+    /// The model picker on the pane with the type-to-filter (2026-10-03, the user's ask: "a way to type to filter them down too
+    /// like we did in the some other panes"; <see cref="MenuFilter"/>): a typed character narrows the rows to the ids that hold
+    /// the text, case folded, the cursor on the first left (Enter takes it); Backspace erases; the first ESC clears the text,
+    /// the next keeps the model. The cursor opens on <paramref name="cursor"/>, the model in use. The pick, or null on ESC; the
+    /// pane closes as it lands.
+    /// </summary>
+    private async Task<string?> PickFilteredModelAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken)
+    {
+        string filter = "";
+        try
+        {
+            while (true)
+            {
+                var shown = Enumerable.Range(0, ids.Count).Where(i => MenuFilter.Matches(filter, ids[i], null)).ToList();
+                List<string> rows = shown.Count > 0 ? shown.Select(i => Markup.Escape(ids[i])).ToList() : [MenuFilter.NoMatchNameRow(filter)];
+                var page = new MenuPage(ModelTitle, rows, MenuFilter.Hint(ModelKeys, filter))
+                {
+                    Filter = filter,
+                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, ids.Count),
+                };
+                if (await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
+                {
+                    return null;
+                }
+
+                if (pick.Filter is { } typed)
+                {
+                    filter = typed;
+                    cursor = -1;   // the first row left
+                    continue;
+                }
+
+                if (pick.Row >= 0 && pick.Row < shown.Count)
+                {
+                    return ids[shown[pick.Row]];
+                }
+            }
+        }
+        finally
+        {
+            _pane.Close();
+        }
     }
 
     /// <summary>
@@ -5513,6 +5587,22 @@ internal sealed partial class SettingsMenu
     /// </summary>
     internal Task<bool> EditToggleAsync(SettingsField field, CancellationToken cancellationToken) =>
         PickToggleAsync(field, _settings.Current, cancellationToken);
+
+    /// <summary>
+    /// Memory switched straight (2026-10-03, the user's ask: the on and off buttons on the 💾 pane, and <c>/memory on|off</c>):
+    /// the Memory row's own save and notice, on the pane's status line while one is open. False, with <see cref="UnchangedNotice"/>,
+    /// when it already is.
+    /// </summary>
+    internal bool SetMemory(bool on)
+    {
+        if (_settings.Current.Memory == on)
+        {
+            return Unchanged();
+        }
+
+        Apply(SettingsField.Memory, data => SetToggle(SettingsField.Memory, data, on));
+        return true;
+    }
 
     private async Task<bool> PickToggleAsync(SettingsField field, AppSettingsData saved, CancellationToken cancellationToken)
     {

@@ -189,6 +189,121 @@ public sealed class ViewerTests : IDisposable
         Assert.False(state.Browse(ViewerAction.ToggleFullScreen));
     }
 
+    /// <summary>
+    /// The arrows' ends (2026-10-03, the user's ask: "&lt; hidden when we're on the latest image ... &gt; hidden when we're at
+    /// the first"): each shown exactly where its key would move — no &lt; on the newest, no &gt; on the oldest, neither with one
+    /// picture or none.
+    /// </summary>
+    [Fact]
+    public void TheArrows_ShowWhereTheirKeysWouldMove()
+    {
+        var state = ThreePictures();
+        Assert.False(state.CanNewer);   // the newest, live
+        Assert.True(state.CanOlder);
+        state.Browse(ViewerAction.Older);
+        Assert.True(state.CanNewer);
+        Assert.True(state.CanOlder);
+        state.Browse(ViewerAction.Oldest);
+        Assert.True(state.CanNewer);
+        Assert.False(state.CanOlder);   // the oldest
+
+        var one = new ViewerState();
+        one.Reset(@"D:\pics", [new(@"D:\pics\a.png", T0)]);
+        Assert.False(one.CanNewer || one.CanOlder);
+        var none = new ViewerState();
+        none.Reset(@"D:\pics", []);
+        Assert.False(none.CanNewer || none.CanOlder);
+
+        // Each moves exactly when its key does.
+        var walk = ThreePictures();
+        foreach (var action in new[] { ViewerAction.Newer, ViewerAction.Older, ViewerAction.Older, ViewerAction.Older, ViewerAction.Newer, ViewerAction.Newer, ViewerAction.Newer })
+        {
+            bool could = action == ViewerAction.Newer ? walk.CanNewer : walk.CanOlder;
+            Assert.Equal(could, walk.Browse(action));
+        }
+    }
+
+    /// <summary>
+    /// The arrows' squares (2026-10-03): 44 px at 96 DPI, 12 in from each side, centred top to bottom, scaled with the DPI;
+    /// none in a window too small for them; a point names a shown arrow's action and nothing else.
+    /// </summary>
+    [Fact]
+    public void TheArrows_Layout_AndWhatAPointIsOn()
+    {
+        var squares = ViewerNav.Layout(800, 600, 96);
+        Assert.Equal(new ViewerNav.Square(12, 278, 44), squares!.Value.Newer);
+        Assert.Equal(new ViewerNav.Square(744, 278, 44), squares.Value.Older);
+        Assert.Equal(new ViewerNav.Square(18, 267, 66), ViewerNav.Layout(800, 600, 144)!.Value.Newer);   // 150 %
+        Assert.Null(ViewerNav.Layout(150, 600, 96));   // narrower than both and a button between
+        Assert.Null(ViewerNav.Layout(800, 60, 96));
+        Assert.NotNull(ViewerNav.Layout(2 * (12 + 44) + 44, 44 + 24, 96));   // just fits
+
+        Assert.Equal(ViewerAction.Newer, ViewerNav.At(12, 278, squares, canNewer: true, canOlder: true));
+        Assert.Equal(ViewerAction.Newer, ViewerNav.At(55, 321, squares, true, true));
+        Assert.Equal(ViewerAction.None, ViewerNav.At(56, 300, squares, true, true));   // just past it
+        Assert.Equal(ViewerAction.Older, ViewerNav.At(760, 300, squares, true, true));
+        Assert.Equal(ViewerAction.None, ViewerNav.At(400, 300, squares, true, true));   // the picture
+        Assert.Equal(ViewerAction.None, ViewerNav.At(20, 300, squares, canNewer: false, canOlder: true));   // hidden on the newest
+        Assert.Equal(ViewerAction.None, ViewerNav.At(760, 300, squares, canNewer: true, canOlder: false));  // hidden on the oldest
+        Assert.Equal(ViewerAction.None, ViewerNav.At(20, 300, null, true, true));
+    }
+
+    /// <summary>The arrows' fade and opacity (2026-10-03): in or out a step a tick, clamped; brighter under the mouse; nothing hidden.</summary>
+    [Fact]
+    public void TheArrows_FadeAndOpacity()
+    {
+        Assert.Equal(ViewerNav.FadeStep, ViewerNav.Fade(0, shown: true));
+        Assert.Equal(255, ViewerNav.Fade(250, shown: true));
+        Assert.Equal(0, ViewerNav.Fade(10, shown: false));
+        int level = 0, ticks = 0;
+        while (level < 255)
+        {
+            level = ViewerNav.Fade(level, true);
+            ticks++;
+        }
+
+        Assert.InRange(ticks * (int)ViewerNav.FadeMilliseconds, 60, 160);   // about a tenth of a second
+        Assert.Equal(ViewerNav.RestAlpha, ViewerNav.Alpha(255, hot: false));
+        Assert.Equal(ViewerNav.HotAlpha, ViewerNav.Alpha(255, hot: true));
+        Assert.True(ViewerNav.HotAlpha > ViewerNav.RestAlpha);
+        Assert.Equal(0, ViewerNav.Alpha(0, hot: true));
+        Assert.InRange(ViewerNav.Alpha(128, hot: false), 74, 76);
+    }
+
+    /// <summary>
+    /// An arrow's pixels (2026-10-03): premultiplied BGRA, a disc of the fill with its corners clear, the chevron's ink on the
+    /// side it points to and the fill on the other, the two arrows mirror images.
+    /// </summary>
+    [Fact]
+    public void TheArrows_Pixels_AreADiscWithAChevron()
+    {
+        const int Side = 44;
+        const uint Fill = 0x00102030;   // COLORREF: red 0x30, green 0x20, blue 0x10
+        const uint Ink = 0x00FFFFFF;
+        uint[] left = ViewerNav.Pixels(Side, pointsLeft: true, Fill, Ink);
+        uint[] right = ViewerNav.Pixels(Side, pointsLeft: false, Fill, Ink);
+        Assert.Equal(Side * Side, left.Length);
+        uint Pixel(uint[] p, int x, int y) => p[y * Side + x];
+
+        Assert.Equal(0u, Pixel(left, 0, 0));   // a corner: outside the disc
+        Assert.Equal(0xFF302010u, Pixel(left, Side / 2, 4));   // inside, off the chevron: the fill, opaque (BGRA: blue low)
+        int tip = Side / 2 - (int)(Side * 0.11);   // the left arrow's tip, on the middle row
+        Assert.Equal(0xFFFFFFFFu, Pixel(left, tip, Side / 2));
+        Assert.Equal(0xFF302010u, Pixel(left, Side - 8, Side / 2));   // the open side
+        for (int y = 0; y < Side; y++)
+        {
+            for (int x = 0; x < Side; x++)
+            {
+                Assert.Equal(Pixel(left, x, y), Pixel(right, Side - 1 - x, y));
+                uint p = Pixel(left, x, y);
+                uint a = p >> 24;
+                Assert.True((p & 0xFF) <= a && ((p >> 8) & 0xFF) <= a && ((p >> 16) & 0xFF) <= a);   // premultiplied
+            }
+        }
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => ViewerNav.Pixels(0, true, Fill, Ink));
+    }
+
     /// <summary>A double-clicked picture (later on 2026-09-27): an older one held, the newest live, and browsing goes on from there.</summary>
     [Fact]
     public void Select_HoldsAnOlderPicture_GoesLiveOnTheNewest_AndBrowsingGoesOnFromIt()

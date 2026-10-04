@@ -155,11 +155,11 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory [forget | edit | copy <profile> [overwrite]]", "List memories on a pane (Enter removes one). `forget` forgets them all. `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning). `copy` adds them to another profile's memory, skipping duplicates, or replaces it with `overwrite`. `forget` and `copy` ask first."),
+            new("/memory [on | off | forget | edit | copy <profile> [overwrite]]", "List memories on a pane (Enter removes one); **● on** (N) and **○ off** (F) on its title row switch *Memory*, as `on` and `off` do. `forget` forgets them all. `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning). `copy` adds them to another profile's memory, skipping duplicates, or replaces it with `overwrite`. `forget` and `copy` ask first."),
         ]),
         new("/model",
         [
-            new("/model [id]", "Pick a model from the server's list, or set one. On the embedded LLM, this lists the installed embedded models. Ctrl+M runs it too."),
+            new("/model [id]", "Pick a model from the server's list, or set one. The list is A to Z, the cursor on the model in use; type to narrow it to the ids that hold the text, Backspace erases, ESC clears it, the next ESC keeps the model. On the embedded LLM, this lists the installed embedded models. Ctrl+M runs it too."),
         ]),
         new("/new",
         [
@@ -264,10 +264,6 @@ public static class HelpCommands
         [
             new("/sys", "Show the system prompt and the tools sent to the model."),
         ]),
-        new("/tb",
-        [
-            new("/tb [on | off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default seven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
-        ]),
         new("/terminal",
         [
             new("/terminal [folder]", "Open a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. Ctrl+. runs it too."),
@@ -283,6 +279,10 @@ public static class HelpCommands
         new("/timer",
         [
             new("/timer [duration [name] | stop <name> | stop all]", "List the timers, start one (`10m`, `90s`, `1h30m`), or stop one."),
+        ]),
+        new("/toolbar",
+        [
+            new("/toolbar [on | off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default seven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
         ]),
         new("/tools",
         [

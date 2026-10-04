@@ -217,6 +217,12 @@ public enum MemoryActionKind
     /// <summary><c>edit</c> (2026-09-23): <c>memory.json</c> in the editor, created first when it is not there; the store reads the edit back on its next use.</summary>
     Edit,
 
+    /// <summary><c>on</c> (2026-10-03, the user's ask): the Memory setting switched on, as the 💾 pane's on button does.</summary>
+    On,
+
+    /// <summary><c>off</c> (2026-10-03): the Memory setting switched off; what is remembered stays.</summary>
+    Off,
+
     /// <summary>Anything else; <see cref="ChatScreen.MemoryUsageError"/>.</summary>
     Invalid,
 }
@@ -467,7 +473,11 @@ internal sealed partial class ChatScreen
     public const string MemoryForgetNote = "forget every memory";
     public const string MemoryEditWord = "edit";   // 2026-09-23, the user's ask: memory.json in the editor, as /profile edit opens profile.json
     public const string MemoryEditNote = "open memory.json in your editor";
-    public const string MemoryUsageError = "/memory lists the memories, /memory forget forgets them all, /memory edit opens memory.json in your editor, and /memory copy <profile> [overwrite] copies them into another profile.";
+    public const string MemoryOnWord = "on";   // 2026-10-03, the user's ask: the Memory setting from the line, as the 💾 pane's buttons
+    public const string MemoryOnNote = "switch Memory on";
+    public const string MemoryOffWord = "off";
+    public const string MemoryOffNote = "switch Memory off (what is remembered stays)";
+    public const string MemoryUsageError = "/memory lists the memories, /memory on or off switches Memory, /memory forget forgets them all, /memory edit opens memory.json in your editor, and /memory copy <profile> [overwrite] copies them into another profile.";
 
     /// <summary>The <c>/copy</c> word for every exchange.</summary>
     public const string CopyAllWord = "all";
@@ -1355,30 +1365,32 @@ internal sealed partial class ChatScreen
     public static bool TogglesWindow(string? line) => line is LogToolLine or LiveViewToolLine or ComfyViewToolLine;
 
     /// <summary>
-    /// The glyphs every item checked always draws, in strip order: all but the disk, the lock and the officer, which come and
-    /// go with their switches (the tool switches since 2026-10-03 are drawn on or off, never gone). Pinned.
+    /// The glyphs every item checked always draws, in strip order: all but the lock and the officer, which come and go with
+    /// their switches (the tool switches since 2026-10-03 are drawn on or off, never gone; the disk too since later that day,
+    /// the user's ask: "it always shows whether memory is on or off"). Pinned.
     /// </summary>
     public static readonly string ToolbarStrip = string.Join(GlyphSeparator, ToolbarItems.Names
-        .Where(id => id is not (ToolbarItems.Memory or ToolbarItems.CmdList or ToolbarItems.Police or ToolbarItems.Path))
+        .Where(id => id is not (ToolbarItems.CmdList or ToolbarItems.Police or ToolbarItems.Path))
         .Select(ToolbarItems.Glyph));
 
     /// <summary>
-    /// The strip drawn for the switches, in the strip's order (the user's, 2026-10-03): the disk while <paramref name="memory"/>
-    /// is on, the closed lock under <c>ask</c> or the open one under <c>yolo</c> (neither under <c>off</c>), the officer while
-    /// <paramref name="police"/> is on and the policy is not <c>off</c> (later on 2026-09-22, the user's ask: with no shell tool
-    /// offered there is nothing to police) — and the ninja while it is off (2026-10-02, the user's ask: the item stays, as the
-    /// lock does, its glyph telling which; still none under <c>off</c>); every other glyph always. <see cref="ToolbarStrip"/>
-    /// alone with everything off. Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
+    /// The strip drawn for the switches, in the strip's order (the user's, 2026-10-03): the closed lock under <c>ask</c> or the
+    /// open one under <c>yolo</c> (neither under <c>off</c>), the officer while <paramref name="police"/> is on and the policy is
+    /// not <c>off</c> (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police) — and the ninja
+    /// while it is off (2026-10-02, the user's ask: the item stays, as the lock does, its glyph telling which; still none under
+    /// <c>off</c>); every other glyph always, the disk among them (its Memory switch shows as the slab,
+    /// <see cref="ToolbarItemOff"/>). <see cref="ToolbarStrip"/> alone with the policy <c>off</c>. Every item checked (not the
+    /// saved default, which narrowed on 2026-09-29). Pinned.
     /// </summary>
-    public static string ToolbarStripFor(bool memory, Shell.CommandPolicyMode policy, bool police) =>
-        ToolbarStripFor(ToolbarItems.Names.ToHashSet(StringComparer.Ordinal), memory, policy, police);
+    public static string ToolbarStripFor(Shell.CommandPolicyMode policy, bool police) =>
+        ToolbarStripFor(ToolbarItems.Names.ToHashSet(StringComparer.Ordinal), policy, police);
 
     /// <summary>
-    /// The strip for the items Show toolbar checks (2026-09-29, the user's ask): each checked glyph in strip order, the disk,
-    /// the lock and the officer (or the ninja, 2026-10-02) where their switches allow them; empty when none is. Pinned.
+    /// The strip for the items Show toolbar checks (2026-09-29, the user's ask): each checked glyph in strip order, the lock
+    /// and the officer (or the ninja, 2026-10-02) where their switches allow them; empty when none is. Pinned.
     /// </summary>
-    public static string ToolbarStripFor(IReadOnlySet<string> items, bool memory, Shell.CommandPolicyMode policy, bool police) =>
-        ToolbarGlyphs(items, memory, policy, police, static _ => false).Strip;
+    public static string ToolbarStripFor(IReadOnlySet<string> items, Shell.CommandPolicyMode policy, bool police) =>
+        ToolbarGlyphs(items, policy, police, static _ => false).Strip;
 
     /// <summary>
     /// The strip for the items Show toolbar checks under <paramref name="shown"/>, and the glyphs in it drawn on the off slab
@@ -1388,17 +1400,23 @@ internal sealed partial class ChatScreen
     public static (string Strip, IReadOnlyList<int> Off) ToolbarStripFor(IReadOnlySet<string> items, AppSettingsData shown)
     {
         ArgumentNullException.ThrowIfNull(shown);
-        return ToolbarGlyphs(items, shown.Memory, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths, id => ToolbarItemOff(id, shown));
+        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths, id => ToolbarItemOff(id, shown));
     }
 
     /// <summary>
     /// Whether item <paramref name="id"/> is drawn on the off slab under <paramref name="shown"/> (2026-10-03, the user's ask: a
     /// dark slab behind the glyph, the one look that reads on a colour emoji): a tool switch that is off, the shell under the
-    /// policy <c>off</c>; never any other item. Pinned.
+    /// policy <c>off</c>, the disk while Memory is off (later that day, the user's ask: the disk no longer gone while it is);
+    /// never any other item. Pinned.
     /// </summary>
     public static bool ToolbarItemOff(string id, AppSettingsData shown)
     {
         ArgumentNullException.ThrowIfNull(shown);
+        if (id == ToolbarItems.Memory)
+        {
+            return !shown.Memory;
+        }
+
         return ToolsText.SwitchField(id) switch
         {
             null => false,
@@ -1408,7 +1426,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The one walk over <see cref="ToolbarItems.Names"/> the strips share: the glyphs drawn and the places of the ones <paramref name="off"/> names.</summary>
-    private static (string Strip, IReadOnlyList<int> Off) ToolbarGlyphs(IReadOnlySet<string> items, bool memory, Shell.CommandPolicyMode policy, bool police, Func<string, bool> off)
+    private static (string Strip, IReadOnlyList<int> Off) ToolbarGlyphs(IReadOnlySet<string> items, Shell.CommandPolicyMode policy, bool police, Func<string, bool> off)
     {
         ArgumentNullException.ThrowIfNull(items);
         var glyphs = new List<string>();
@@ -1422,7 +1440,6 @@ internal sealed partial class ChatScreen
 
             string? glyph = id switch
             {
-                ToolbarItems.Memory => memory ? MemoryToolGlyph : null,
                 ToolbarItems.CmdList => policy switch
                 {
                     Shell.CommandPolicyMode.Ask => CmdAskToolGlyph,
@@ -1451,7 +1468,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The toolbar row for the settings in force: the items Show toolbar checks (2026-09-29, the user's ask: a checklist),
     /// the glyphs among them their switches allow and the path when it is checked; null — no row — when nothing is checked,
-    /// or when what is checked draws nothing (the disk alone with Memory off).
+    /// or when what is checked draws nothing (the lock and the officer alone with the policy <c>off</c>).
     /// </summary>
     private readonly Perf.PerfSampler _perf;
 
@@ -1500,7 +1517,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/tb</c> (later on 2026-09-30, the user's ask; Ctrl+T, Ctrl+Alt+B until later still on 2026-10-01): the toolbar hidden or shown again, saved as the
+    /// <c>/toolbar</c> (later on 2026-09-30, the user's ask; Ctrl+T, Ctrl+Alt+B until later still on 2026-10-01): the toolbar hidden or shown again, saved as the
     /// <c>Show toolbar</c> checklist is (<see cref="ToolbarItems.Toggle"/>), so the row goes or comes back at the next draw.
     /// </summary>
     private void HandleToolbar(string args)
@@ -1539,7 +1556,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+F <c>/perf</c> and Ctrl+T
-    /// <c>/tb</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
+    /// <c>/toolbar</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
     /// repaints the pane's new shape. Ctrl+Alt+H <c>/header</c> the same (later still that day): a setting saved, nothing on the pane. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
     /// terminal, so the pane has no reason to close. Ctrl+Alt+G <c>/log</c>, Ctrl+Alt+U <c>/comfy view</c> and Ctrl+Alt+V
     /// <c>/camera live</c> the same (2026-10-02, the user's ask): each opens a window of its own. False for every other chord:
@@ -1568,7 +1585,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Perf:
                 RunOrPost(() => HandlePerf(""));
                 return true;
-            case SlashCommand.Tb:
+            case SlashCommand.Toolbar:
                 RunOrPost(() => HandleToolbar(""));
                 return true;
             case SlashCommand.Header:
@@ -1957,7 +1974,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+R", "open the reasoning picker (/reasoning)"));
         rows.Add(("Ctrl+S", "open the server picker (/server)"));
-        rows.Add(("Ctrl+T", "show or hide the toolbar (/tb)"));
+        rows.Add(("Ctrl+T", "show or hide the toolbar (/toolbar)"));
         rows.Add(("Ctrl+U", "open the usage pane (/usage)"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Y", "open the system prompt pane (/sys)"));
@@ -2435,6 +2452,16 @@ internal sealed partial class ChatScreen
         if (words.Length == 1 && words[0].Equals(MemoryEditWord, StringComparison.OrdinalIgnoreCase))
         {
             return new(MemoryActionKind.Edit);
+        }
+
+        if (words.Length == 1 && words[0].Equals(MemoryOnWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return new(MemoryActionKind.On);
+        }
+
+        if (words.Length == 1 && words[0].Equals(MemoryOffWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return new(MemoryActionKind.Off);
         }
 
         if (words[0].Equals(CopyWord, StringComparison.OrdinalIgnoreCase) && words.Length is 2 or 3)
@@ -3667,7 +3694,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Tools:
                 return MentionCompleter.Matches(ToolsText.SwitchWords.Select(word => new CompletionItem(word, ToolsText.DescribeSwitch(word))).ToList(), argText);
 
-            case SlashCommand.Tb:
+            case SlashCommand.Toolbar:
                 return MentionCompleter.Matches(ToolbarItems.Words.Select(word => new CompletionItem(word, ToolbarItems.DescribeWord(word))).ToList(), argText);
 
             case SlashCommand.Header:
@@ -3842,7 +3869,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches(targets.Select(name => new CompletionItem(CopyWord + " " + name, MemoryCopyTargetNote)).ToList(), argText);
                 }
 
-                return MentionCompleter.Matches([new(MemoryForgetWord, MemoryForgetNote), new(CopyWord, MemoryCopyNote), new(MemoryEditWord, MemoryEditNote)], argText);
+                return MentionCompleter.Matches([new(MemoryOnWord, MemoryOnNote), new(MemoryOffWord, MemoryOffNote), new(MemoryForgetWord, MemoryForgetNote), new(CopyWord, MemoryCopyNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
             case SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia:
@@ -4162,7 +4189,7 @@ internal sealed partial class ChatScreen
         _operata = new OperataFile(_settings.ProfileDirectory);
         _vocalia = new VocaliaFile(_settings.ProfileDirectory);
         _memoryTools = MemoryTools(_memory);
-        _memoryMenu = new MemoryMenu(new ConsoleWithInput(_pane, _keys), _memory, _flow, _menuPane);
+        _memoryMenu = new MemoryMenu(new ConsoleWithInput(_pane, _keys), _memory, _flow, _menuPane, () => _settings.Current.Memory, on => _menu.SetMemory(on));
         // The session store (2026-09-18): the old profile's handle closed, the new one opened lazily
         // by its first use; the retention purge runs here, at startup and after every switch.
         _sessions?.Dispose();
@@ -10321,7 +10348,7 @@ internal sealed partial class ChatScreen
                 HandlePerf(args);
                 return false;
 
-            case SlashCommand.Tb:
+            case SlashCommand.Toolbar:
                 HandleToolbar(args);
                 return false;
 
@@ -11006,6 +11033,11 @@ internal sealed partial class ChatScreen
 
             case { Kind: MemoryActionKind.Copy } copy:
                 await CopyMemoryAsync(copy.Profile, copy.Overwrite, cancellationToken).ConfigureAwait(false);
+                break;
+
+            case { Kind: MemoryActionKind.On or MemoryActionKind.Off } turn:
+                // The Memory row's own save and notice (2026-10-03, the user's ask); the toolbar's disk redraws from the setting.
+                _menu.SetMemory(turn.Kind == MemoryActionKind.On);
                 break;
 
             case { Kind: MemoryActionKind.Edit }:
