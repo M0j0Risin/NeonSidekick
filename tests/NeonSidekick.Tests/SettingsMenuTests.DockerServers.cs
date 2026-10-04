@@ -68,8 +68,9 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>The checklist ticks by name; a saved name the engine no longer lists is dropped as it opens, the status line naming it (2026-10-04, the user's call: it was kept until then and nothing could untick it).</summary>
     [Fact]
-    public async Task OnThePane_TheContainersChecklist_TicksByName_KeepingASavedNameTheEngineLostTrackOf()
+    public async Task OnThePane_TheContainersChecklist_TicksByName_DroppingASavedNameTheEngineNoLongerLists()
     {
         _settings.Update(d => d.DockerServerContainers = ["rebuilding"]);
         var (menu, pane) = PaneMenu();
@@ -83,7 +84,8 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["sglang_a", "vllm_b", "rebuilding"], _settings.Current.DockerServerContainers);
+        Assert.Equal(["sglang_a", "vllm_b"], _settings.Current.DockerServerContainers);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.DockerServerContainers, ["rebuilding"]), _console.Output);
         Assert.Contains("[x] sglang_a", _console.Output);
         Assert.Contains("running · sglang_a/image:latest · :30000", _console.Output);
         Assert.Contains("exited · vllm_b/image:latest", _console.Output);

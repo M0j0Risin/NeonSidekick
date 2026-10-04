@@ -116,7 +116,7 @@ public sealed class SqliteConfigFile
         {
             string detail = LogText.Excerpt(ex.Message);
             DiagnosticLog.Warn(Category, SqlText.ConfigProblemLogLine(path, detail));
-            return new SqliteCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail))]);
+            return new SqliteCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail), WholeFile: true)]);
         }
 
         // "databases": null reads as null past the non-nullable type (the third 2026-10-04 review: it threw at every turn's tool
@@ -138,7 +138,7 @@ public sealed class SqliteConfigFile
 
             if ((config is null ? SqliteText.NoPath : config.Problem) is { } reason)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason));
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
                 continue;
             }
 

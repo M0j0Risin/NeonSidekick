@@ -83,12 +83,12 @@ public sealed class SqlConfigFileTests : IDisposable
         var path = SqlConfigFile.ProfilePath(_profile);
         Assert.Equal(
             [
-                new SqlConfigProblem($"{path} (nouser)", SqlText.NoUser),
-                new SqlConfigProblem($"{path} (noserver)", SqlText.NoServer),
-                new SqlConfigProblem($"{path} (badauth)", SqlText.BadAuth("entra")),
-                new SqlConfigProblem($"{path} (badencrypt)", SqlText.BadEncrypt("sometimes")),
-                new SqlConfigProblem($"{path} (slow)", SqlText.BadConnectTimeout(0, SqlConnectionConfig.MaxConnectTimeoutSeconds)),
-                new SqlConfigProblem($"{path} (empty)", SqlText.NoServer),
+                new SqlConfigProblem($"{path} (nouser)", SqlText.NoUser, Name: "nouser"),
+                new SqlConfigProblem($"{path} (noserver)", SqlText.NoServer, Name: "noserver"),
+                new SqlConfigProblem($"{path} (badauth)", SqlText.BadAuth("entra"), Name: "badauth"),
+                new SqlConfigProblem($"{path} (badencrypt)", SqlText.BadEncrypt("sometimes"), Name: "badencrypt"),
+                new SqlConfigProblem($"{path} (slow)", SqlText.BadConnectTimeout(0, SqlConnectionConfig.MaxConnectTimeoutSeconds), Name: "slow"),
+                new SqlConfigProblem($"{path} (empty)", SqlText.NoServer, Name: "empty"),
             ],
             loaded.Problems);
         Assert.True(loaded.Connections[1].Config.IsWindows);

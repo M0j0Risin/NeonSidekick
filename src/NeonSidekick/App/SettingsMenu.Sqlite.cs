@@ -78,6 +78,10 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
+            // A saved name no longer in the files is dropped as the list opens (2026-10-04, the user's call; it was carried along
+            // unseen until then), unless a file could not be read or a problem still names it (OfferedNames.StaleConnections).
+            changed |= PruneStale(SettingsField.SqliteDatabasesOffered, _settings.Current.SqliteDatabasesOffered, OfferedNames.StaleConnections(_settings.Current.SqliteDatabasesOffered, loaded.Databases.Select(d => d.Name), loaded.Problems), StringComparer.OrdinalIgnoreCase, (d, kept) => d.SqliteDatabasesOffered = kept);
+
             var offered = _settings.Current.SqliteDatabasesOffered;
             var on = loaded.Offered(offered).Databases.Select(d => d.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int width = loaded.Databases.Max(d => d.Name.Length) + 2;
@@ -103,6 +107,8 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
+            // What is saved but not listed now survived the prune above: a name a problem still names, or every name while a
+            // file cannot be read. It stays until the file is mended, and the next opening decides (2026-10-04).
             if (offered is not null)
             {
                 next.AddRange(offered.Where(n => !loaded.Databases.Any(d => string.Equals(d.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));

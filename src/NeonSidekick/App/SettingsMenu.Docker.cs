@@ -51,7 +51,9 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// <c>Docker server containers</c> (2026-10-02, <see cref="EditUncOfferedAsync"/>'s twin): every container the engine lists,
     /// running or not, read under a spinner, ticked or not; Enter or Space flips one until ESC, the buttons tick all or none.
-    /// The order kept is the engine's list order; a ticked name the engine no longer lists is kept (an image being rebuilt).
+    /// The order kept is the engine's list order. A ticked name the engine no longer lists is dropped as the list opens (2026-10-04,
+    /// the user's call; it was kept until then, for an image being rebuilt, and nothing could untick it): only once the engine has
+    /// answered with at least one container.
     /// Not a reconnect: a container ticked or unticked here counts at the next <c>/server</c> or connect, so the one in use
     /// never stops as a side effect of the list. True when anything changed.
     /// </summary>
@@ -77,7 +79,8 @@ internal sealed partial class SettingsMenu
         }
 
         var containers = DockerText.Ordered(listed);
-        bool changed = false;
+        var before = _settings.Current.DockerServerContainers;
+        bool changed = PruneStale(SettingsField.DockerServerContainers, before, OfferedNames.Stale(before, containers.Select(c => c.Name), [], StringComparer.Ordinal), StringComparer.Ordinal, (d, kept) => d.DockerServerContainers = kept);
         int cursor = 0;
         int width = containers.Max(c => c.Name.Length) + 2;
         while (true)
@@ -104,11 +107,6 @@ internal sealed partial class SettingsMenu
             if (next.Count == containers.Count(c => on.Contains(c.Name)) && next.All(on.Contains))
             {
                 continue;
-            }
-
-            if (saved is not null)
-            {
-                next.AddRange(saved.Select(n => n.Trim()).Where(n => n.Length > 0 && !containers.Any(c => string.Equals(c.Name, n, StringComparison.Ordinal))));
             }
 
             Apply(SettingsField.DockerServerContainers, d => d.DockerServerContainers = next);

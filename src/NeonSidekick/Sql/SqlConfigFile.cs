@@ -5,8 +5,13 @@ using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Sql;
 
-/// <summary>One thing a load could not use: the file itself, or one connection in it. <see cref="Source"/> is the path, or the path and the connection's name.</summary>
-public sealed record SqlConfigProblem(string Source, string Reason);
+/// <summary>
+/// One thing a load could not use: the file itself, or one connection in it. <see cref="Source"/> is the path, or the path and the
+/// connection's name. <see cref="Name"/> is that connection's name (trimmed) and <see cref="WholeFile"/> marks a file that could not be
+/// read at all (2026-10-04): the offered checklists never prune a name against a load that lost a whole file, and a name a problem
+/// names still counts as there (<see cref="App.OfferedNames"/>).
+/// </summary>
+public sealed record SqlConfigProblem(string Source, string Reason, string? Name = null, bool WholeFile = false);
 
 /// <summary>
 /// What <see cref="SqlConfigFile.LoadCatalog"/> found: the usable connections (the profile's first, then the
@@ -142,7 +147,7 @@ public sealed class SqlConfigFile
         {
             string detail = LogText.Excerpt(ex.Message);
             DiagnosticLog.Warn(Category, SqlText.ConfigProblemLogLine(path, detail));
-            return new SqlCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail))]);
+            return new SqlCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail), WholeFile: true)]);
         }
 
         if (file is null || file.Connections.Count == 0)
@@ -163,7 +168,7 @@ public sealed class SqlConfigFile
             string? reason = config is null ? SqlText.NoServer : config.Problem;
             if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason));
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
                 continue;
             }
 

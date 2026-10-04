@@ -785,8 +785,11 @@ internal sealed partial class SettingsMenu
     // ── ComfyUI workflows offered ───────────────────────────────────────────
 
     /// <summary>The workflows the two comfy folders hold, for the checklist and its value (the profile's then the home's).</summary>
-    private static IReadOnlyList<ComfyWorkflow> InstalledComfyWorkflows(string profileDirectory) =>
-        new ComfyWorkflowCatalog(() => [Path.Combine(profileDirectory, ComfyWorkflowCatalog.DirectoryName), Path.Combine(Profiles.HomeOf(profileDirectory), ComfyWorkflowCatalog.DirectoryName)]).Workflows;
+    private static IReadOnlyList<ComfyWorkflow> InstalledComfyWorkflows(string profileDirectory) => ScanComfyWorkflows(profileDirectory).Workflows;
+
+    /// <summary><see cref="InstalledComfyWorkflows"/> with the files skipped, for the checklists' prune: a workflow that failed to load is still there (2026-10-04).</summary>
+    private static (IReadOnlyList<ComfyWorkflow> Workflows, IReadOnlyList<ComfyWorkflowProblem> Problems) ScanComfyWorkflows(string profileDirectory) =>
+        new ComfyWorkflowCatalog(() => [Path.Combine(profileDirectory, ComfyWorkflowCatalog.DirectoryName), Path.Combine(Profiles.HomeOf(profileDirectory), ComfyWorkflowCatalog.DirectoryName)]).Scan();
 
     /// <summary>The <c>ComfyUI workflows offered</c> value: <c>K of N</c>, or <c>none of N</c> — before any is ticked too (2026-10-01: null offers none). Pinned.</summary>
     public static string ComfyOfferedValue(IReadOnlyList<string>? offered, IReadOnlyList<ComfyWorkflow> installed)
@@ -796,13 +799,39 @@ internal sealed partial class SettingsMenu
         return (kept == 0 ? "none" : Invariant(kept)) + " of " + Invariant(installed.Count);
     }
 
-    /// <summary>One checklist row: the mark, the name, what it is. Pinned.</summary>
-    public static string ComfyOfferedRow(ComfyWorkflow workflow, bool offered, int width)
+    /// <summary>
+    /// The widths a ComfyUI checklist lines its columns up to (2026-10-04, the user's ask: the family · shape · size run wandered row
+    /// to row): the name's (with its two-space gap), the family's, the shape's, and the default width's digits, so the <c>×</c> of
+    /// every size falls in one column.
+    /// </summary>
+    public sealed record ComfyOfferedColumns(int Name, int Family, int Shape, int SizeWidth)
+    {
+        /// <summary>The columns over every workflow listed. Pure.</summary>
+        public static ComfyOfferedColumns Of(IReadOnlyList<ComfyWorkflow> workflows)
+        {
+            ArgumentNullException.ThrowIfNull(workflows);
+            return workflows.Count == 0
+                ? new(2, 0, 0, 0)
+                : new(
+                    workflows.Max(w => w.Name.Length) + 2,
+                    workflows.Max(w => ComfyFamilies.Name(w.Family).Length),
+                    workflows.Max(w => ComfyText.InputShape(w).Length),
+                    workflows.Max(w => Invariant(w.Defaults.Width).Length));
+        }
+    }
+
+    /// <summary>
+    /// One checklist row: the mark, the name, then dim in columns (<see cref="ComfyOfferedColumns"/>, two spaces apart) the family,
+    /// the shape and the default size, its width right-aligned. Pinned.
+    /// </summary>
+    public static string ComfyOfferedRow(ComfyWorkflow workflow, bool offered, ComfyOfferedColumns columns)
     {
         ArgumentNullException.ThrowIfNull(workflow);
+        ArgumentNullException.ThrowIfNull(columns);
         var d = workflow.Defaults;
-        string note = ComfyFamilies.Name(workflow.Family) + " · " + ComfyText.InputShape(workflow) + " · " + Invariant(d.Width) + "×" + Invariant(d.Height);
-        return Markup.Escape((offered ? "[x] " : "[ ] ") + workflow.Name.PadRight(width)) + Theme.DimMarkup(note);
+        string note = ComfyFamilies.Name(workflow.Family).PadRight(columns.Family) + "  " + ComfyText.InputShape(workflow).PadRight(columns.Shape) + "  "
+            + Invariant(d.Width).PadLeft(columns.SizeWidth) + "×" + Invariant(d.Height);
+        return Markup.Escape((offered ? "[x] " : "[ ] ") + workflow.Name.PadRight(columns.Name)) + Theme.DimMarkup(note);
     }
 
     /// <summary><c>EditSqlOfferedAsync</c>'s loop over the installed workflows: Enter or Space flips one, saved at once; nothing is ticked until the user ticks it (2026-10-01).</summary>
@@ -814,8 +843,9 @@ internal sealed partial class SettingsMenu
     /// <c>Botchat ComfyUI limited workflows</c>; one loop for both since that day's second code review): each row with its kind,
     /// family and size (<see cref="ComfyOfferedRow"/>), the names <paramref name="read"/> gives ticked. Enter or Space flips one,
     /// A every one installed now (one added later still starts unticked, 2026-09-29, the user's call), N none, each saved at once
-    /// through <paramref name="write"/>; a button that changes nothing saves nothing. A name ticked before but no longer installed
-    /// stays in the list: it counts again if the workflow comes back. <paramref name="caption"/> is read afresh for every page.
+    /// through <paramref name="write"/>; a button that changes nothing saves nothing. A ticked name no longer installed is dropped as
+    /// the list opens (2026-10-04, the user's call: until then it stayed, unseen, "to count again if the workflow came back", and
+    /// even N kept it), unless a file of that name failed to load. <paramref name="caption"/> is read afresh for every page.
     /// </summary>
     private async Task<bool> EditWorkflowChecklistAsync(SettingsField field, Func<AppSettingsData, List<string>?> read, Action<AppSettingsData, List<string>> write, Func<AppSettingsData, string?> caption, CancellationToken cancellationToken)
     {
@@ -823,18 +853,20 @@ internal sealed partial class SettingsMenu
         int cursor = 0;
         while (true)
         {
-            var installed = InstalledComfyWorkflows(_settings.ProfileDirectory);
+            var (installed, problems) = ScanComfyWorkflows(_settings.ProfileDirectory);
             if (installed.Count == 0)
             {
                 Sink.Error(ComfyText.NoWorkflows(ComfyRoots));
                 return changed;
             }
 
+            var broken = problems.Select(p => Path.GetFileNameWithoutExtension(p.FilePath)).ToList();
+            changed |= PruneStale(field, read(_settings.Current), OfferedNames.Stale(read(_settings.Current), installed.Select(w => w.Name), broken, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase, write);
             var current = _settings.Current;
             var chosen = read(current) ?? [];
             var on = ComfyWorkflowCatalog.Offered(installed, chosen).Select(w => w.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            int width = installed.Max(w => w.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(field)), installed.Select(w => ComfyOfferedRow(w, on.Contains(w.Name), width)).ToList(), ToggleKeys)
+            var columns = ComfyOfferedColumns.Of(installed);
+            var page = new MenuPage(Crumb(FieldName(field)), installed.Select(w => ComfyOfferedRow(w, on.Contains(w.Name), columns)).ToList(), ToggleKeys)
             {
                 SpaceToggles = true,
                 Caption = caption(current),
@@ -860,6 +892,7 @@ internal sealed partial class SettingsMenu
                 continue;   // a button that changes nothing saves nothing (null and empty both offer none, 2026-10-01)
             }
 
+            // Saved but not installed now survived the prune above: a file of that name failed to load. It stays until mended (2026-10-04).
             next.AddRange(chosen.Where(n => !installed.Any(w => string.Equals(w.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
             Apply(field, d => write(d, next));
             changed = true;

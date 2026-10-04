@@ -158,7 +158,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
         {
             string detail = LogText.Excerpt(ex.Message);
             DiagnosticLog.Warn(Category, SqlText.ConfigProblemLogLine(path, detail));
-            return ([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail))]);
+            return ([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail), WholeFile: true)]);
         }
 
         if (entries is null || entries.Count == 0)
@@ -179,7 +179,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
             string? reason = config is null ? NullEntry : config.Problem;
             if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason));
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
                 continue;
             }
 

@@ -4684,11 +4684,12 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>
     /// Botchat limited skills on the pane (2026-09-27 as the preloaded skills'; the first drive of it, with its buttons, 2026-09-29;
-    /// renamed 2026-10-04): Space flips one, A ticks every installed skill, N none — saved as null — and a name ticked before but no
-    /// longer installed stays through all three.
+    /// renamed 2026-10-04): Space flips one, A ticks every installed skill, N none — saved as null. A name ticked before but not
+    /// listed now is a row of its own after the skills (2026-10-04, the user's call; it rode along unseen until then): A keeps it,
+    /// N clears it, Space on its row unticks it.
     /// </summary>
     [Fact]
-    public async Task OnThePane_BotchatLimitedSkills_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
+    public async Task OnThePane_BotchatLimitedSkills_FlipsOne_SelectsAll_ThenNone_AGoneNameARowOfItsOwn()
     {
         _settings.Update(d => d.BotChatLimitedSkills = ["gone"]);
         Skill[] skills = [new("haiku", "Writes haiku.", SkillScope.Profile, _dir), new("pony-prompts", "Writes prompts.", SkillScope.Profile, _dir)];
@@ -4702,6 +4703,7 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Equal(["haiku", "gone"], _settings.Current.BotChatLimitedSkills);
+        Assert.Contains(SettingsMenu.NotAvailableNote, _console.Output);
 
         (menu, pane) = PaneMenu(botChatSkills: () => skills);
         GoTo(SettingsTab.BotChat);
@@ -4718,22 +4720,35 @@ public partial class SettingsMenuTests : IDisposable
         GoTo(SettingsTab.BotChat);
         Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedSkills));
         Push(Keys.Enter);
-        Push(Keys.Char('n'));                   // none of the installed ones; the gone name stays
+        Push(Keys.Char('n'));                   // none, the gone name too
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["gone"], _settings.Current.BotChatLimitedSkills);
+        Assert.Null(_settings.Current.BotChatLimitedSkills);
         Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
+
+        _settings.Update(d => d.BotChatLimitedSkills = ["haiku", "gone"]);
+        (menu, pane) = PaneMenu(botChatSkills: () => skills);
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedSkills));
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Char(' '));   // the gone row, the third, off
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["haiku"], _settings.Current.BotChatLimitedSkills);
     }
 
     /// <summary>
     /// Botchat ComfyUI limited workflows on the pane (later on 2026-10-04, the user's ask): every installed workflow, the profile's
-    /// and the home's, offered to the main chat or not; Space flips one, A all, N none (a name no longer installed stays). While
-    /// Botchat ComfyUI enabled is on, the caption says the list waits.
+    /// and the home's, offered to the main chat or not; Space flips one, A all, N none. A name no longer installed is dropped as the
+    /// list opens, the status line naming it (2026-10-04, the user's call; it stayed, unseen, until then). While Botchat ComfyUI
+    /// enabled is on, the caption says the list waits.
     /// </summary>
     [Fact]
-    public async Task OnThePane_BotchatLimitedComfyWorkflows_AnyInstalledOne_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
+    public async Task OnThePane_BotchatLimitedComfyWorkflows_AnyInstalledOne_FlipsOne_SelectsAll_ThenNone_DroppingAGoneName()
     {
         foreach (var (folder, name) in new[] { (_settings.ProfileComfyDirectory, "pony"), (_settings.GlobalComfyDirectory, "flux") })
         {
@@ -4752,7 +4767,8 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["pony", "gone"], _settings.Current.BotChatLimitedComfyWorkflows);
+        Assert.Equal(["pony"], _settings.Current.BotChatLimitedComfyWorkflows);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.BotChatLimitedComfyWorkflows, ["gone"]), _console.Output);
         Assert.DoesNotContain(SettingsMenu.LimitedComfyUnusedCaption, _console.Output);
 
         _settings.Update(d => d.BotChatComfy = true);
@@ -4765,19 +4781,19 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["flux", "pony", "gone"], _settings.Current.BotChatLimitedComfyWorkflows);
+        Assert.Equal(["flux", "pony"], _settings.Current.BotChatLimitedComfyWorkflows);
         Assert.Contains(SettingsMenu.LimitedComfyUnusedCaption, _console.Output);
 
         (menu, pane) = PaneMenu();
         GoTo(SettingsTab.BotChat);
         Down(row);
         Push(Keys.Enter);
-        Push(Keys.Char('n'));                   // none of the installed ones; the gone name stays
+        Push(Keys.Char('n'));                   // none
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["gone"], _settings.Current.BotChatLimitedComfyWorkflows);
+        Assert.Null(_settings.Current.BotChatLimitedComfyWorkflows);
     }
 
     private sealed class NamedTool(string name, string description) : AIFunction
@@ -4791,11 +4807,12 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>
     /// Botchat limited tools on the pane (2026-10-04, the user's ask): the tools by group under their headings, the cursor on the
-    /// first tool; Space flips one, A ticks every listed tool, N none — saved as null — and a name ticked before but not listed now
-    /// (an MCP server not connected) stays. While Botchat tools enabled is on, the caption says the list waits.
+    /// first tool; Space flips one, A ticks every listed tool, N none — saved as null. A name ticked before but not listed now (an
+    /// MCP server not connected) is a row under its own heading at the end (2026-10-04, the user's call): A keeps it, N clears it.
+    /// While Botchat tools enabled is on, the caption says the list waits.
     /// </summary>
     [Fact]
-    public async Task OnThePane_BotchatLimitedTools_ByGroup_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
+    public async Task OnThePane_BotchatLimitedTools_ByGroup_FlipsOne_SelectsAll_ThenNone_AGoneNameARowOfItsOwn()
     {
         _settings.Update(d => d.BotChatLimitedTools = ["chrome__gone"]);
         ToolGroup[] groups =
@@ -4814,6 +4831,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(["get_current_time", "chrome__gone"], _settings.Current.BotChatLimitedTools);
         Assert.Contains("not offered: web tools is off", _console.Output);
+        Assert.Contains(SettingsMenu.NotAvailableHeading, _console.Output);
         Assert.DoesNotContain(SettingsMenu.LimitedToolsUnusedCaption, _console.Output);
 
         _settings.Update(d => d.BotChatTools = true);
@@ -4833,12 +4851,26 @@ public partial class SettingsMenuTests : IDisposable
         GoTo(SettingsTab.BotChat);
         Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedTools));
         Push(Keys.Enter);
-        Push(Keys.Char('n'));                   // none of the listed ones; the gone name stays
+        Push(Keys.Char('n'));                   // none, the gone name too
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["chrome__gone"], _settings.Current.BotChatLimitedTools);
+        Assert.Null(_settings.Current.BotChatLimitedTools);
+    }
+
+    /// <summary>The limited tools' rows with gone names (2026-10-04): a gap and <see cref="SettingsMenu.NotAvailableHeading"/> after the groups, then each gone name ticked, its name beside its row.</summary>
+    [Fact]
+    public void LimitedToolRows_CloseWithTheGoneNamesUnderTheirHeading()
+    {
+        ToolGroup[] groups = [new("Clock (1)", "", [new NamedTool("get_current_time", "The time.")], true) { Label = "Clock" }];
+        var rows = SettingsMenu.LimitedToolRows(groups, new HashSet<string>(["chrome__gone"], StringComparer.Ordinal), ["chrome__gone"]);
+
+        Assert.Equal([null, "get_current_time", null, null, "chrome__gone"], rows.Select(r => r.Tool));
+        Assert.Equal([0, 3], NeonSidekick.App.ToolsText.HeadingRows(rows).Order());
+        Assert.Contains(SettingsMenu.NotAvailableHeading, rows[3].Markup);
+        Assert.Equal(SettingsMenu.LimitedGoneRow("chrome__gone", NeonSidekick.App.ToolsText.NameWidth), rows[4].Markup);
+        Assert.Equal(2, SettingsMenu.LimitedToolRows(groups, new HashSet<string>(StringComparer.Ordinal), []).Count);   // none gone, no heading
     }
 
     /// <summary>The limited tools' rows (2026-10-04): a heading per group, a gap between, the mark and the name per tool, the tool's name beside its row alone.</summary>

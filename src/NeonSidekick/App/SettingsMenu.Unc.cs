@@ -94,6 +94,10 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
+            // A saved name no longer in the files is dropped as the list opens (2026-10-04, the user's call; it was carried along
+            // unseen until then), unless a file could not be read or a problem still names it (OfferedNames.StaleConnections).
+            changed |= PruneStale(SettingsField.UncSharesOffered, _settings.Current.UncSharesOffered, OfferedNames.StaleConnections(_settings.Current.UncSharesOffered, loaded.Shares.Select(s => s.Name), loaded.Problems), StringComparer.OrdinalIgnoreCase, (d, kept) => d.UncSharesOffered = kept);
+
             var offered = _settings.Current.UncSharesOffered;
             var on = loaded.Offered(offered).Shares.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int width = loaded.Shares.Max(s => s.Name.Length) + 2;
@@ -119,6 +123,8 @@ internal sealed partial class SettingsMenu
                 continue;   // null and empty both offer none (2026-10-01)
             }
 
+            // What is saved but not listed now survived the prune above: a name a problem still names, or every name while a
+            // file cannot be read. It stays until the file is mended, and the next opening decides (2026-10-04).
             if (offered is not null)
             {
                 next.AddRange(offered.Where(n => !loaded.Shares.Any(s => string.Equals(s.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));

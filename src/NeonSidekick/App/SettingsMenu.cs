@@ -2397,6 +2397,29 @@ internal sealed partial class SettingsMenu
     /// <summary>The <c>Botchat limited skills</c> checklist's caption while <c>Botchat skills enabled</c> is on (2026-10-04). Pinned.</summary>
     public const string LimitedSkillsUnusedCaption = "Botchat skills enabled is on: the bots get every skill, and this list is not used until it is off.";
 
+    /// <summary>
+    /// The status line when a checklist dropped saved names it no longer lists (2026-10-04, the user's call: the list keeps what the
+    /// checklist shows, <see cref="OfferedNames"/>): <c>ComfyUI workflows offered: dropped 2 no longer listed: a, b</c>. Pinned.
+    /// </summary>
+    public static string StaleDroppedNotice(SettingsField field, IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return FieldName(field) + ": dropped " + names.Count.ToString(CultureInfo.InvariantCulture) + " no longer listed: " + string.Join(", ", names);
+    }
+
+    /// <summary>The dim note on a <c>Botchat limited skills</c> row whose skill is ticked but not listed now (2026-10-04). Pinned.</summary>
+    public const string NotAvailableNote = "not available now";
+
+    /// <summary>The <c>Botchat limited tools</c> heading over the ticked tools not listed now — an MCP server not connected (2026-10-04). Pinned.</summary>
+    public const string NotAvailableHeading = "Not available now";
+
+    /// <summary>A ticked <c>Botchat limited skills</c> name with no skill listed now (2026-10-04): the mark, the name, <see cref="NotAvailableNote"/> dim; Enter unticks it, and then it is gone from the list. Pinned.</summary>
+    public static string LimitedGoneRow(string name, int width)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return Markup.Escape("[x] " + name.PadRight(width)) + Theme.DimMarkup(NotAvailableNote);
+    }
+
     /// <summary>One <c>Botchat limited skills</c> checklist row: the mark, the name, the description cut short. Pinned.</summary>
     public static string LimitedSkillRow(Skills.Skill skill, bool chosen, int width)
     {
@@ -2410,9 +2433,11 @@ internal sealed partial class SettingsMenu
     /// <see cref="SectionRule"/> of the label, the count and why the main chat does not offer it, as <c>/tools</c>' Offered tab
     /// draws it — then a row per tool: the mark, the name padded to <see cref="ToolsText.NameWidth"/>, the description cut short
     /// and dim, with the tool's own note when the main chat would not offer it. The tool's name beside its row, null beside a gap
-    /// or a heading; <c>Heading</c> true beside a heading (<see cref="ToolsText.HeadingRows"/>). A group with no tool is left out. Pure.
+    /// or a heading; <c>Heading</c> true beside a heading (<see cref="ToolsText.HeadingRows"/>). A group with no tool is left out.
+    /// <paramref name="gone"/>, the ticked names not listed now, close the list under <see cref="NotAvailableHeading"/>, each ticked
+    /// with <see cref="NotAvailableNote"/> (2026-10-04). Pure.
     /// </summary>
-    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> LimitedToolRows(IReadOnlyList<ToolGroup> groups, IReadOnlySet<string> chosen)
+    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> LimitedToolRows(IReadOnlyList<ToolGroup> groups, IReadOnlySet<string> chosen, IReadOnlyList<string>? gone = null)
     {
         ArgumentNullException.ThrowIfNull(groups);
         ArgumentNullException.ThrowIfNull(chosen);
@@ -2431,6 +2456,17 @@ internal sealed partial class SettingsMenu
                 string note = group.Offered && group.ToolNotes.TryGetValue(tool.Name, out var why) ? "  " + why : "";
                 rows.Add((Markup.Escape((chosen.Contains(tool.Name) ? "[x] " : "[ ] ") + tool.Name.PadRight(ToolsText.NameWidth)) + Theme.DimMarkup(about + note), tool.Name, false));
             }
+        }
+
+        if (gone is { Count: > 0 })
+        {
+            if (rows.Count > 0)
+            {
+                rows.Add(("", null, false));
+            }
+
+            rows.Add((SectionRule.Markup(NotAvailableHeading, gone.Count.ToString(CultureInfo.InvariantCulture)), null, true));
+            rows.AddRange(gone.Select(name => (LimitedGoneRow(name, ToolsText.NameWidth), (string?)name, false)));
         }
 
         return rows;
@@ -6693,7 +6729,10 @@ internal sealed partial class SettingsMenu
     /// <c>SQL connections offered</c> (later on 2026-09-23): every connection the two files hold, ticked or not, Enter or
     /// Space flipping one and the list shown again until ESC (the <see cref="EditCodeLanguagesAsync"/> shape). The list is
     /// exact: nothing is ticked until the user ticks it (2026-10-01; until then a never-narrowed profile started all ticked),
-    /// and a connection added later stays hidden until ticked (the user's call). True when anything changed.
+    /// and a connection added later stays hidden until ticked (the user's call). A ticked name the files no longer hold is
+    /// dropped as the list opens (2026-10-04, the user's call: it used to ride along unseen, kept even by N), unless a file
+    /// could not be read or a load problem still names it (<see cref="OfferedNames.StaleConnections"/>); its five twins do the
+    /// same. True when anything changed, a prune too.
     /// </summary>
     private async Task<bool> EditSqlOfferedAsync(CancellationToken cancellationToken)
     {
@@ -6707,6 +6746,10 @@ internal sealed partial class SettingsMenu
                 Sink.Error(Sql.SqlText.NoConnections);
                 return changed;
             }
+
+            // A saved name no longer in the files is dropped as the list opens (2026-10-04, the user's call; it was carried along
+            // unseen until then), unless a file could not be read or a problem still names it (OfferedNames.StaleConnections).
+            changed |= PruneStale(SettingsField.SqlConnectionsOffered, _settings.Current.SqlConnectionsOffered, OfferedNames.StaleConnections(_settings.Current.SqlConnectionsOffered, loaded.Connections.Select(c => c.Name), loaded.Problems), StringComparer.OrdinalIgnoreCase, (d, kept) => d.SqlConnectionsOffered = kept);
 
             var offered = _settings.Current.SqlConnectionsOffered;
             var on = loaded.Offered(offered).Connections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -6734,7 +6777,8 @@ internal sealed partial class SettingsMenu
                 continue;   // a button that changes nothing saves nothing (null and empty both offer none, 2026-10-01)
             }
 
-            // A name ticked before but no longer in the files stays in the list: it counts again if the connection comes back.
+            // What is saved but not listed now survived the prune above: a name a problem still names, or every name while a
+            // file cannot be read. It stays until the file is mended, and the next opening decides (2026-10-04).
             if (offered is not null)
             {
                 next.AddRange(offered.Where(n => !loaded.Connections.Any(c => string.Equals(c.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
@@ -7271,8 +7315,10 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The <c>Botchat limited skills</c> checklist (2026-09-27 as the preloaded skills'), <see cref="EditComfyOfferedAsync"/>'s loop
-    /// over the skills a botchat sees: Enter or Space flips one, saved at once; a name ticked before but no longer installed stays
-    /// in the list. Its caption says the list waits while <c>Botchat skills enabled</c> is on (2026-10-04).
+    /// over the skills a botchat sees: Enter or Space flips one, saved at once. A ticked name with no skill listed now (external skills
+    /// off, another folder's own) is a row of its own after them (<see cref="LimitedGoneRow"/>, 2026-10-04, the user's call: until
+    /// then it rode along unseen and even N kept it), never dropped by itself since it may come back; Enter unticks it, A keeps it, N
+    /// clears it with the rest. Its caption says the list waits while <c>Botchat skills enabled</c> is on (2026-10-04).
     /// </summary>
     private async Task<bool> EditBotChatLimitedSkillsAsync(CancellationToken cancellationToken)
     {
@@ -7281,21 +7327,24 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var skills = _botChatSkills();
-            if (skills.Count == 0)
+            var chosen = _settings.Current.BotChatLimitedSkills ?? [];
+            var gone = OfferedNames.Gone(chosen, skills.Select(s => s.Name), StringComparer.OrdinalIgnoreCase);
+            if (skills.Count == 0 && gone.Count == 0)
             {
                 Sink.Error(NoSkillsToLimit);
                 return changed;
             }
 
-            var chosen = _settings.Current.BotChatLimitedSkills ?? [];
             var on = chosen.Select(n => n.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            int width = skills.Max(s => s.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatLimitedSkills)), skills.Select(s => LimitedSkillRow(s, on.Contains(s.Name), width)).ToList(), ToggleKeys)
+            var names = skills.Select(s => s.Name).Concat(gone).ToList();
+            int width = names.Max(n => n.Length) + 2;
+            var rows = skills.Select(s => LimitedSkillRow(s, on.Contains(s.Name), width)).Concat(gone.Select(n => LimitedGoneRow(n, width))).ToList();
+            var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatLimitedSkills)), rows, ToggleKeys)
             {
                 SpaceToggles = true,
                 Caption = _settings.Current.BotChatSkills ? LimitedSkillsUnusedCaption : null,
             };
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, skills.Count - 1), cancellationToken).ConfigureAwait(false);
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, names.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -7307,16 +7356,15 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
-            string name = skills[pick.Row].Name;
-            var next = pick.Button == SelectAllIndex ? skills.Select(s => s.Name).ToList()
+            string name = names[pick.Row];
+            var next = pick.Button == SelectAllIndex ? [.. names]
                 : pick.Button == SelectNoneIndex ? []
-                : skills.Select(s => s.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (next.Count == skills.Count(s => on.Contains(s.Name)) && next.All(on.Contains))
+                : names.Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (next.Count == names.Count(on.Contains) && next.All(on.Contains))
             {
                 continue;   // a button that changes nothing saves nothing
             }
 
-            next.AddRange(chosen.Where(n => !skills.Any(s => string.Equals(s.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
             Apply(SettingsField.BotChatLimitedSkills, d => d.BotChatLimitedSkills = next.Count == 0 ? null : next);
             changed = true;
         }
@@ -7325,8 +7373,10 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The <c>Botchat limited tools</c> checklist (2026-10-04, the user's ask): the main chat's tools by group
     /// (<see cref="LimitedToolRows"/>, the memory and skill groups left out — their own botchat switches say), headings never a
-    /// stop. Enter or Space flips one, A every listed tool, N none, saved at once; a name ticked before but not listed now (an MCP
-    /// server not connected) stays in the list. Its caption says the list waits while <c>Botchat tools enabled</c> is on.
+    /// stop. Enter or Space flips one, A every listed tool, N none, saved at once. A ticked name not listed now (an MCP server not
+    /// connected) is a row under <see cref="NotAvailableHeading"/> at the end (2026-10-04, the user's call: until then it rode along
+    /// unseen and even N kept it), never dropped by itself since it may come back; Enter unticks it, A keeps it, N clears it with the
+    /// rest. Its caption says the list waits while <c>Botchat tools enabled</c> is on.
     /// </summary>
     private async Task<bool> EditBotChatLimitedToolsAsync(CancellationToken cancellationToken)
     {
@@ -7335,16 +7385,18 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var groups = _botChatTools();
-            var names = groups.SelectMany(g => g.Tools).Select(t => t.Name).Distinct(StringComparer.Ordinal).ToList();
+            var listed = groups.SelectMany(g => g.Tools).Select(t => t.Name).Distinct(StringComparer.Ordinal).ToList();
+            var chosen = _settings.Current.BotChatLimitedTools ?? [];
+            var gone = OfferedNames.Gone(chosen, listed, StringComparer.Ordinal);
+            var names = listed.Concat(gone).ToList();
             if (names.Count == 0)
             {
                 Sink.Error(NoToolsToLimit);
                 return changed;
             }
 
-            var chosen = _settings.Current.BotChatLimitedTools ?? [];
             var on = chosen.Select(n => n.Trim()).ToHashSet(StringComparer.Ordinal);
-            var rows = LimitedToolRows(groups, on);
+            var rows = LimitedToolRows(groups, on, gone);
             if (cursor < 0)
             {
                 cursor = Math.Max(0, rows.ToList().FindIndex(r => r.Tool is not null));
@@ -7392,7 +7444,6 @@ internal sealed partial class SettingsMenu
                 continue;   // a button that changes nothing saves nothing
             }
 
-            next.AddRange(chosen.Where(n => !names.Contains(n.Trim(), StringComparer.Ordinal)));
             Apply(SettingsField.BotChatLimitedTools, d => d.BotChatLimitedTools = next.Count == 0 ? null : next);
             changed = true;
         }
@@ -7748,6 +7799,24 @@ internal sealed partial class SettingsMenu
     {
         Sink.Notice(UnchangedNotice);
         return false;
+    }
+
+    /// <summary>
+    /// A checklist's opening prune (2026-10-04, the user's call, <see cref="OfferedNames"/>): with <paramref name="stale"/> not empty,
+    /// saves <paramref name="saved"/> without them through <paramref name="write"/> and says which went
+    /// (<see cref="StaleDroppedNotice"/>). True when it saved, so the checklist's ESC says no "unchanged" over it.
+    /// </summary>
+    private bool PruneStale(SettingsField field, IReadOnlyList<string>? saved, IReadOnlyList<string> stale, StringComparer comparer, Action<AppSettingsData, List<string>> write)
+    {
+        if (stale.Count == 0)
+        {
+            return false;
+        }
+
+        var kept = OfferedNames.Without(saved, stale, comparer);
+        Apply(field, d => write(d, kept));
+        Sink.Notice(StaleDroppedNotice(field, stale));
+        return true;
     }
 
     /// <summary>

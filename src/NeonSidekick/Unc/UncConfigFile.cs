@@ -162,7 +162,7 @@ public sealed class UncConfigFile
         {
             string detail = LogText.Excerpt(ex.Message);
             DiagnosticLog.Warn(Category, SqlText.ConfigProblemLogLine(path, detail));
-            return new UncCatalog([], [new SqlConfigProblem(path, UncText.UnreadableFile(detail))]);
+            return new UncCatalog([], [new SqlConfigProblem(path, UncText.UnreadableFile(detail), WholeFile: true)]);
         }
 
         if (file is null || file.Shares.Count == 0)
@@ -183,7 +183,7 @@ public sealed class UncConfigFile
             string? reason = config is null ? UncText.NoPath : config.Problem;
             if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason));
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
                 continue;
             }
 

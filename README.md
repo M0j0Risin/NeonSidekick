@@ -448,7 +448,7 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 | Setting | What it does | Default |
 |---|---|---|
 | Docker servers enabled | Offers the chosen containers in `/server`. Turning it off while one is in use stops it at the reconnect. | off |
-| Docker server containers | A checklist of every container the engine lists, with state, image and ports. A ticked name the engine no longer lists is kept. | none |
+| Docker server containers | A checklist of every container the engine lists, with state, image and ports. A ticked name the engine no longer lists is dropped when the checklist opens, and the status line names it. | none |
 | Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
 | Docker server post-stop delay (s) | The wait between stopping the others and starting this one, so the GPU's memory frees up (0–60). | 2 |
 | Docker server ready timeout (s) | How long a started container may take to answer on `/v1/models` (30–3600). Past it, the switch fails and the container keeps running. | 900 |
@@ -556,15 +556,15 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 | Botchat multi-embedded | Under `multi`, for bots wanting a different embedded model from the one running. `parent-server`: they share the running model, with a warning. `multi-server`: one extra `llama-server` per model, started in turn under that bot's profile's Embedded settings so each fits in what's left. Bots on one model share its server. | `parent-server` |
 | Botchat multi-embedded kill | Stops `multi-server`'s extra servers when the chat ends. Off, they run until `/botchat --kill` or you quit, and a later chat reuses them. | on |
 | Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Off, *Botchat ComfyUI limited workflows* says; with neither, the chat is talk alone. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
-| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get: tick them (**A** / **N**), any installed workflow, offered to this chat or not. None ticked: no pictures. | (none) |
+| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get: tick them (**A** / **N**), any installed workflow, offered to this chat or not. None ticked: no pictures. A ticked workflow no longer installed is dropped when the checklist opens. | (none) |
 | Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` over the botchat workflows and draw when they choose. See Botchat pictures. | `automatic` |
 | Botchat img2img mode | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). Only with an image → image workflow among the botchat workflows. | `latest` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture and appears with it. | on |
 | Botchat non-TTS delay | A reading pause after each reply when *TTS output* is off (0–30 s). A line you send meanwhile, or one queued while the bot was replying, ends the pause and goes to the bots at once; ESC ends the chat. | 5 |
 | Botchat tools enabled | Offers every bot the tools a turn of this chat would get: the same switches, `/tools` list and panes (the shell's approval, the Docker, Home Assistant and print confirms, `ask_user`, the camera's shutter); while you plan, only plan mode's read-only tools. Not memory, skills or the ComfyUI tools, which have their own rows. Off, *Botchat limited tools* says. | off |
-| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (**A** / **N**). Each is offered only while this chat would offer it. None ticked: no tools. The ComfyUI tools aren't listed. | (none) |
+| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (**A** / **N**). Each is offered only while this chat would offer it. None ticked: no tools. The ComfyUI tools aren't listed. A ticked tool not listed now (an MCP server not connected) shows at the end under *Not available now*; untick it there, or **N** clears it. | (none) |
 | Botchat skills enabled | Offers every bot `load_skill` over the starting profile's, the global and (with *Use external skills*) the external skills, never a bot's own profile's. The `automatic` prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off. Off, *Botchat limited skills* says. | off |
-| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (**A** / **N**), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. | (none) |
+| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (**A** / **N**), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. A ticked skill not listed now shows after the others as *not available now*; untick it there, or **N** clears it. | (none) |
 | Botchat memory enabled | Gives every bot memories: the list in its prompt, plus `save_memory` and `recall_memory`. Inside `/botchat` this alone decides, over every profile's *Memory* switch. | on |
 | Botchat memory mode | Whose memories: `shared-parent` (every bot uses the starting profile's) or `independent` (each bot its own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot, on its turn, the newest 4 pictures since it last spoke (not its own), captioned with whose they are. Needs models that read images. Not kept for `--resume` or the session. | off |
@@ -813,7 +813,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 |---|---|---|
 | ComfyUI tools | Offers `generate_image` and `set_splash_image` once *ComfyUI URL* is set and a workflow is installed. | off |
 | ComfyUI URL | The ComfyUI server, often on your LAN (`http://gpu-box:8188`). The web tools' network mode never blocks it. | (not set) |
-| ComfyUI workflows offered | A checklist of the workflows the model is offered; nothing until ticked (here or in the wizard). **A** / **N** tick all or none. With one ticked, every plain request and plain `/imagine` uses it. `/imagine <name>` can still use a hidden one. | none |
+| ComfyUI workflows offered | A checklist of the workflows the model is offered; nothing until ticked (here or in the wizard). **A** / **N** tick all or none. With one ticked, every plain request and plain `/imagine` uses it. `/imagine <name>` can still use a hidden one. A ticked workflow no longer installed is dropped when the checklist opens (not one whose file failed to load). The checklist lines up family, shape and size in columns. | none |
 | ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** a ComfyUI export. See Adding a workflow. | — |
 | ComfyUI ^-mention enabled | `^` and part of a name lists the offered workflows; a pick writes `^name`, which `generate_image` uses. | on |
 | ComfyUI timeout (s) | How long to wait for one generation, queue included (10–3600). | 300 |
@@ -828,7 +828,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | Setting | What it does | Default |
 |---|---|---|
 | SQL tools | Offers the SQL tools (connections, databases, tables, columns, describe, relationships, indexes, query) over `sql.json`'s connections. | off |
-| SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). **A** / **N** tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. | none |
+| SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). **A** / **N** tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. A ticked name no longer in the files is dropped when the checklist opens, and the status line names it; not while a file can't be read, nor a name an entry with a problem still holds. | none |
 | SQL default connection | The connection a call uses when it names none: an offered one, or the first. | (the first connection) |
 | SQL set password | Pick a `sql` or `runas` connection and type its password, masked; it goes to that connection's store. | — |
 | SQL add connection | A wizard for a new connection, which can **test** it (`SELECT @@VERSION`) before saving. See Managing connections. | — |
@@ -876,7 +876,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Setting | What it does | Default |
 |---|---|---|
 | SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases named in `sqlite.json` and, below, the working directory's files. | off |
-| SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. | none |
+| SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. Otherwise as *SQL connections offered*. | none |
 | SQLite default database | The database a call uses when it names none. | (the first database) |
 | SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`). | on |
 | SQLite add database | The wizard: the file to save in, the name, the database file, a description; its test opens the file read-only and counts the tables. | — |

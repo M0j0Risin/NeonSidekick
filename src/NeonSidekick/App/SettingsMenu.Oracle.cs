@@ -85,6 +85,10 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
+            // A saved name no longer in the files is dropped as the list opens (2026-10-04, the user's call; it was carried along
+            // unseen until then), unless a file could not be read or a problem still names it (OfferedNames.StaleConnections).
+            changed |= PruneStale(SettingsField.OracleConnectionsOffered, _settings.Current.OracleConnectionsOffered, OfferedNames.StaleConnections(_settings.Current.OracleConnectionsOffered, loaded.Connections.Select(c => c.Name), loaded.Problems), StringComparer.OrdinalIgnoreCase, (d, kept) => d.OracleConnectionsOffered = kept);
+
             var offered = _settings.Current.OracleConnectionsOffered;
             var on = loaded.Offered(offered).Connections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int width = loaded.Connections.Max(c => c.Name.Length) + 2;
@@ -110,6 +114,8 @@ internal sealed partial class SettingsMenu
                 continue;   // null and empty both offer none (2026-10-01)
             }
 
+            // What is saved but not listed now survived the prune above: a name a problem still names, or every name while a
+            // file cannot be read. It stays until the file is mended, and the next opening decides (2026-10-04).
             if (offered is not null)
             {
                 next.AddRange(offered.Where(n => !loaded.Connections.Any(c => string.Equals(c.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
