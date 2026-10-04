@@ -29,13 +29,14 @@ public sealed class BotPicturePacer
     }
 
     /// <summary>
-    /// Whether the chat's pictures are paced, as the settings stand at the send: pictures on, async on, and no voice —
+    /// Whether the chat's pictures are paced, as the settings stand at the send: pictures on (a ComfyUI workflow chosen,
+    /// <see cref="BotChat.ComfyChosen"/>, since 2026-10-04 — <c>Botchat images enabled</c> until then), async on, and no voice —
     /// <c>TTS output</c> off, or on with the speech not ready (the chat's own <c>speaking</c> test). Pure.
     /// </summary>
     public static bool Applies(AppSettingsData effective, bool speechReady)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.BotChatImages && effective.BotChatImageAsync && !(effective.TtsOutput && speechReady);
+        return BotChat.ComfyChosen(effective) && effective.BotChatImageAsync && !(effective.TtsOutput && speechReady);
     }
 
     /// <summary>

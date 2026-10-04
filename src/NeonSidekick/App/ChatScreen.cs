@@ -4220,8 +4220,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The groups the <c>Botchat limited tools</c> checklist lists (2026-10-04): <see cref="ToolsFacts"/>' groups with the MCP
-    /// servers' too (as <c>/tools</c>' completion lists them), less Memory and Skills — the bots' memory and skills have their own
-    /// botchat switches.
+    /// servers' too (as <c>/tools</c>' completion lists them), less Memory, Skills and ComfyUI — the bots' memory, skills and
+    /// workflows have their own botchat switches (ComfyUI's later on 2026-10-04, with <c>Botchat ComfyUI enabled</c>).
     /// </summary>
     private IReadOnlyList<ToolGroup> BotChatToolGroups()
     {
@@ -4229,7 +4229,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
         var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: _sqliteTools, sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: _postgresTools, postgresEnabled: PostgresOffered(effective, _postgres));
-        return groups.Where(g => g.Switch is not (SettingsField.Memory or SettingsField.AgentSkills)).ToList();
+        return groups.Where(g => g.Switch is not (SettingsField.Memory or SettingsField.AgentSkills or SettingsField.ComfyTools)).ToList();
     }
 
     /// <summary>The skills as the next turn would take them (<see cref="PrepareTurn"/>), from the live settings.</summary>
@@ -11442,10 +11442,13 @@ internal sealed partial class ChatScreen
     /// turn, the starter's view as its history, so <c>/sessions</c> brings it back as a chat with the starter);
     /// the main conversation is never touched. Returns true when the shell should exit.
     ///
-    /// <para>Pictures (2026-09-25, the user's ask): with <c>Botchat images enabled</c> on and the ComfyUI tools offered
-    /// (<see cref="ComfyOffered"/>), <c>Botchat image mode</c> says who draws. The bots, offered <c>generate_image</c> alone
-    /// (<see cref="BotImageTool"/>), draw through the turn like the main chat's model; the app, after every reply, has the
-    /// model write an image prompt from it (<see cref="WriteBotPictureAsync"/>) and draws it with <c>Botchat txt2img workflow</c> (or, since 2026-09-27, reworks a picture with <c>Botchat img2img workflow</c>).
+    /// <para>Pictures (2026-09-25, the user's ask): while a ComfyUI workflow is chosen for the chat (<see cref="BotChat.ComfyChosen"/>,
+    /// its set <see cref="BotWorkflows"/> — since 2026-10-04 <c>Botchat ComfyUI enabled</c>'s or <c>Botchat ComfyUI limited
+    /// workflows</c>', in place of <c>Botchat images enabled</c> and one workflow of each kind) and ComfyUI can run
+    /// (<see cref="BotComfyReady"/>), <c>Botchat image mode</c> says who draws. The bots, offered <c>generate_image</c> over that set alone (<see cref="BotImageTool"/>), draw through the turn like the
+    /// main chat's model; the app, after every reply, has the model write an image prompt from it (<see cref="WriteBotPictureAsync"/>)
+    /// and draws it with a text → image workflow of the set (or, since 2026-09-27, reworks a picture with an image → image one), the
+    /// writer naming which when a kind has several.
     /// With <c>Botchat image async</c> off (later on 2026-09-25, the user's ask: the picture before the words) the reply is
     /// written unseen first (<see cref="CollectBotTurnAsync"/>), its picture made, and then the turn is replayed — the name,
     /// the picture, the reply shown and spoken; on, the reply streams as ever and its picture renders while the next bot
@@ -11626,8 +11629,10 @@ internal sealed partial class ChatScreen
                 string pronouns = BotChat.PronounsLine(cast.Where(b => b != bot).Select(b => (b.Name, b.Gender)).ToList());
                 // Pictures (2026-09-25): read per reply, so a switch mid-chat holds from the next one.
                 var imageMode = BotChatImageMode.Resolve(effective);
-                bool pictured = effective.BotChatImages && BotComfyReady(effective);
-                // The chat's two workflows and the pictures a rework may start from (2026-09-27): read per reply, as the rest.
+                // Pictures while a workflow is chosen (later on 2026-10-04: Botchat ComfyUI enabled or a limited one, Botchat images
+                // enabled folded in); a chosen set with nothing to draw with says so once (NoWorkflowNotice), as the switch did.
+                bool pictured = BotComfyReady(effective) && BotChat.ComfyChosen(effective);
+                // The chat's workflows and the pictures a rework may start from (2026-09-27): read per reply, as the rest.
                 var (fresh, rework, candidates) = BotWorkflows(effective);
                 var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective, fresh, rework, candidates.Count > 0) : null;
                 // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own;
@@ -11660,10 +11665,10 @@ internal sealed partial class ChatScreen
                 seenImages = turnPictures;
                 sentText += captions;
                 picturesSeen[bot.Name] = _botPictureLog?.Count ?? 0;
-                if (imageTool is not null && rework is not null && candidates.Count > 0)
+                if (imageTool is not null && rework.Count > 0 && candidates.Count > 0)
                 {
                     // What the bot may rework and how (2026-09-27): on the sent text alone, as the vision caption.
-                    sentText += "\n\n" + BotChat.ReworkCaption(rework.Name, candidates);
+                    sentText += "\n\n" + BotChat.ReworkCaption(rework.Select(w => w.Name).ToList(), candidates);
                 }
 
                 bool memorySave = memory?.Tools.Any(t => t is SaveMemoryTool) == true;
@@ -12026,6 +12031,10 @@ internal sealed partial class ChatScreen
         {
             Memory = [],
             MemoryEnabled = false,
+            // Never the main chat's ComfyUI tools (later on 2026-10-04, the user's report: its generate_image, over the profile's
+            // offered workflows, sat beside the bot's own under the same name, and the bots drew with the wrong ones): the
+            // Botchat ComfyUI rows alone say (BotImageTool).
+            ComfyEnabled = false,
             Plan = null,
             PlanReadOnly = _plan.Turn(_presentPlan) is not null,
             OnlyTools = effective.BotChatTools ? null : limited,
@@ -12083,15 +12092,17 @@ internal sealed partial class ChatScreen
     private bool _botNoWorkflowTold;
 
     /// <summary>
-    /// The one tool a bot is offered (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): <c>generate_image</c> over the
-    /// screen's studio, narrowed since 2026-09-27 (the user's ask: the bots as limited as <c>automatic</c>) to
-    /// <c>Botchat txt2img workflow</c> and — while there is a picture to rework — <c>Botchat img2img workflow</c>
-    /// (<see cref="BotChat.BotWorkflows"/>). Null when it is switched off by name on <c>/tools</c>, or neither is usable.
+    /// The one picture tool a bot is offered (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): <c>generate_image</c> over the
+    /// screen's studio, narrowed since 2026-09-27 (the user's ask: the bots as limited as <c>automatic</c>) to the chat's text → image
+    /// workflows and — while there is a picture to rework — its image → image ones (<see cref="BotChat.BotWorkflows"/>; the set of
+    /// <c>Botchat ComfyUI enabled</c> or <c>Botchat ComfyUI limited workflows</c> since 2026-10-04). The bots' only
+    /// <c>generate_image</c>: <see cref="BotGeneralTools"/> never carries the main chat's. Null when it is switched off by name on
+    /// <c>/tools</c>, or nothing is usable.
     /// </summary>
-    private AIFunction? BotImageTool(AppSettingsData effective, ComfyWorkflow? fresh, ComfyWorkflow? rework, bool reworkable)
+    private AIFunction? BotImageTool(AppSettingsData effective, IReadOnlyList<ComfyWorkflow> fresh, IReadOnlyList<ComfyWorkflow> rework, bool reworkable)
     {
         bool offered = Without(_comfyTools, ToolsText.DisabledSet(effective.ToolsDisabled)).Any(tool => string.Equals(tool.Name, GenerateImageTool.ToolName, StringComparison.Ordinal));
-        if (!offered || (fresh is null && !(rework is not null && reworkable)))
+        if (!offered || (fresh.Count == 0 && !(rework.Count > 0 && reworkable)))
         {
             return null;
         }
@@ -12100,17 +12111,17 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/botchat</c>'s workflows as the settings stand (2026-09-27): <c>Botchat txt2img workflow</c>, <c>Botchat img2img
-    /// workflow</c> (each null when blank or not installed; any installed one, <c>ComfyUI workflows offered</c> or not — later
-    /// that day, the user's call) and, with the latter, the pictures a rework may start from under <c>Botchat img2img mode</c>
+    /// <c>/botchat</c>'s workflows as the settings stand (2026-09-27; the set since 2026-10-04, <see cref="BotChat.ComfyWorkflows"/>:
+    /// <c>Botchat ComfyUI enabled</c>'s offered ones or <c>Botchat ComfyUI limited workflows</c>' installed ones): its text → image
+    /// and image → image workflows and, with the latter, the pictures a rework may start from under <c>Botchat img2img mode</c>
     /// (<see cref="BotChat.ReworkCandidates"/>); none outside a chat.
     /// </summary>
-    private (ComfyWorkflow? Fresh, ComfyWorkflow? Rework, IReadOnlyList<ReworkPicture> Candidates) BotWorkflows(AppSettingsData effective)
+    private (IReadOnlyList<ComfyWorkflow> Fresh, IReadOnlyList<ComfyWorkflow> Rework, IReadOnlyList<ReworkPicture> Candidates) BotWorkflows(AppSettingsData effective)
     {
-        var installed = _comfy.Catalog.Workflows;
-        var fresh = BotChat.Txt2ImgWorkflow(installed, effective.BotChatTxt2ImgWorkflow);
-        var rework = BotChat.Img2ImgWorkflow(installed, effective.BotChatImg2ImgWorkflow);
-        IReadOnlyList<ReworkPicture> candidates = rework is not null && _botPictureLog is { } log ? BotChat.ReworkCandidates(log, BotChatImg2ImgMode.Resolve(effective)) : [];
+        var set = BotChat.ComfyWorkflows(_comfy.Catalog.Workflows, effective);
+        var fresh = BotChat.Txt2ImgWorkflows(set);
+        var rework = BotChat.Img2ImgWorkflows(set);
+        IReadOnlyList<ReworkPicture> candidates = rework.Count > 0 && _botPictureLog is { } log ? BotChat.ReworkCandidates(log, BotChatImg2ImgMode.Resolve(effective)) : [];
         return (fresh, rework, candidates);
     }
 
@@ -12182,7 +12193,7 @@ internal sealed partial class ChatScreen
     {
         // A fresh picture, or (2026-09-27, the user's ask) a rework of one of the chat's pictures: the prompt writer's choice.
         var (fresh, rework, candidates) = BotWorkflows(effective);
-        if (fresh is null && candidates.Count == 0)
+        if (fresh.Count == 0 && candidates.Count == 0)
         {
             if (!_botNoWorkflowTold)
             {
@@ -12224,9 +12235,16 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        var (prompt, reworked) = candidates.Count == 0 ? (BotChat.CleanImagePrompt(written), null) : BotChat.ParseImagePrompt(written, candidates, fresh is not null);
-        // No rework chosen means fresh is there: with none, ParseImagePrompt takes the latest candidate.
-        string workflow = reworked is null ? fresh!.Name : rework!.Name;
+        var (prompt, reworked, named) = BotChat.ParseImagePrompt(written, candidates, fresh, rework);
+        // No rework chosen means fresh has one: with none, ParseImagePrompt takes the latest candidate. A kind of several with no
+        // workflow named (2026-10-04) takes its first, and the log says so.
+        var kind = reworked is null ? fresh : rework;
+        if (named is null)
+        {
+            DiagnosticLog.Warn(AppCategory, BotChat.UnnamedWorkflowLogLine(bot.Name, kind[0].Name));
+        }
+
+        string workflow = (named ?? kind[0]).Name;
         // AnyWorkflow: the named one out of every installed workflow, as /imagine's — the botchat workflows need not be offered.
         var job = new ComfyRequest(prompt, Workflow: workflow, Images: reworked is null ? null : [reworked.Path], AnyWorkflow: true);
         if (promised)

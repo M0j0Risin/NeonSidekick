@@ -19,9 +19,10 @@ namespace NeonSidekick.App;
 /// speaker's own persona (its <c>persona.md</c>, rebuilt every turn, never another bot's) and voice; and
 /// every turn on the starting profile's LLM server and model, one after another — a profile's own
 /// <c>LLM URL</c> and <c>LLM model</c> are never read here. The first exception to "no tools" (2026-09-25, the
-/// user's ask): with the Botchat tab's <c>Botchat images enabled</c> on and ComfyUI offered, pictures — the
-/// bots' own <c>generate_image</c> (<see cref="ImageRule"/>) or the app's picture of each reply
-/// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says. Then skills (2026-09-27) and, on 2026-10-04 (the
+/// user's ask): pictures — the bots' own <c>generate_image</c> (<see cref="ImageRule"/>) or the app's picture of each reply
+/// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says — over the workflows <c>Botchat ComfyUI enabled</c> or
+/// <c>Botchat ComfyUI limited workflows</c> give (<see cref="ComfyWorkflows"/>, 2026-10-04; <c>Botchat images enabled</c> and one
+/// workflow of each kind until then). Then skills (2026-09-27) and, on 2026-10-04 (the
 /// user's asks), the main chat's tools (<c>Botchat tools enabled</c>, or the <c>Botchat limited tools</c> alone) and memory
 /// (<c>Botchat memory enabled</c>, on by default; <see cref="BotChatMemoryMode"/> says whose): each its own switch on the tab.</para>
 ///
@@ -437,9 +438,35 @@ public static partial class BotChat
     // ── The app's pictures (2026-09-25) ─────────────────────────────────────
 
     /// <summary>
-    /// The workflows a fresh <c>/botchat</c> picture may use (2026-09-25; <c>Botchat txt2img workflow</c>'s list since
-    /// 2026-09-27): those of <paramref name="workflows"/> (the offered ones) that take a prompt and no input picture — text →
-    /// image — in the order given. Pure.
+    /// Whether the settings give <c>/botchat</c> any ComfyUI workflow at all (2026-10-04, in place of <c>Botchat images enabled</c>):
+    /// <c>Botchat ComfyUI enabled</c> on, or a name in <c>Botchat ComfyUI limited workflows</c>. The settings alone, no catalog: what
+    /// <see cref="BotPicturePacer.Applies"/> reads. Whether a picture can be made is <see cref="ComfyWorkflows"/>'. Pure.
+    /// </summary>
+    public static bool ComfyChosen(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return effective.BotChatComfy || (effective.BotChatLimitedComfyWorkflows?.Any(name => !string.IsNullOrWhiteSpace(name)) ?? false);
+    }
+
+    /// <summary>
+    /// The ComfyUI workflows of <c>/botchat</c> (2026-10-04, the user's ask: the bots never confused about which the user wants):
+    /// with <c>Botchat ComfyUI enabled</c> the ones <c>ComfyUI workflows offered</c> offers the main chat, else those
+    /// <c>Botchat ComfyUI limited workflows</c> names among every installed one (offered or not, the user's pick) — in
+    /// <paramref name="installed"/>'s order either way, a name not installed skipped (<see cref="ComfyWorkflowCatalog.Offered"/>).
+    /// <see cref="Txt2ImgWorkflows"/> and <see cref="Img2ImgWorkflows"/> sort them into fresh pictures and reworks; another kind
+    /// (two pictures, no prompt) is never used. Pure.
+    /// </summary>
+    public static IReadOnlyList<ComfyWorkflow> ComfyWorkflows(IReadOnlyList<ComfyWorkflow> installed, AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(installed);
+        ArgumentNullException.ThrowIfNull(effective);
+        return ComfyWorkflowCatalog.Offered(installed, effective.BotChatComfy ? effective.ComfyWorkflowsOffered : effective.BotChatLimitedComfyWorkflows);
+    }
+
+    /// <summary>
+    /// The workflows a fresh <c>/botchat</c> picture may use (2026-09-25; <c>Botchat txt2img workflow</c>'s list from 2026-09-27,
+    /// the chat's set's since 2026-10-04, <see cref="ComfyWorkflows"/>): those of <paramref name="workflows"/> that take a prompt
+    /// and no input picture — text → image — in the order given. Pure.
     /// </summary>
     public static IReadOnlyList<ComfyWorkflow> Txt2ImgWorkflows(IReadOnlyList<ComfyWorkflow> workflows)
     {
@@ -448,7 +475,7 @@ public static partial class BotChat
     }
 
     /// <summary>
-    /// The workflows a <c>/botchat</c> rework may use (2026-09-27, <c>Botchat img2img workflow</c>'s list): those of
+    /// The workflows a <c>/botchat</c> rework may use (2026-09-27, <c>Botchat img2img workflow</c>'s list; the set's since 2026-10-04): those of
     /// <paramref name="workflows"/> that take a prompt and exactly one input picture — image → image — in the order given. Pure.
     /// </summary>
     public static IReadOnlyList<ComfyWorkflow> Img2ImgWorkflows(IReadOnlyList<ComfyWorkflow> workflows)
@@ -458,33 +485,19 @@ public static partial class BotChat
     }
 
     /// <summary>
-    /// The workflow of a fresh <c>/botchat</c> picture (<c>Botchat txt2img workflow</c>): the one <paramref name="setting"/> names
-    /// (ignoring case) when it is among <see cref="Txt2ImgWorkflows"/> of <paramref name="installed"/> — every installed workflow,
-    /// offered or not (later on 2026-09-27, the user's call); null — none — when blank or not among them (2026-09-27, the
-    /// user's call: blank was the first of them until then). Pure.
-    /// </summary>
-    public static ComfyWorkflow? Txt2ImgWorkflow(IReadOnlyList<ComfyWorkflow> installed, string? setting) => Named(Txt2ImgWorkflows(installed), setting);
-
-    /// <summary>The workflow of a <c>/botchat</c> rework (<c>Botchat img2img workflow</c>, 2026-09-27): as <see cref="Txt2ImgWorkflow"/>, among <see cref="Img2ImgWorkflows"/>. Pure.</summary>
-    public static ComfyWorkflow? Img2ImgWorkflow(IReadOnlyList<ComfyWorkflow> installed, string? setting) => Named(Img2ImgWorkflows(installed), setting);
-
-    private static ComfyWorkflow? Named(IReadOnlyList<ComfyWorkflow> usable, string? setting)
-    {
-        string name = setting?.Trim() ?? "";
-        return name.Length == 0 ? null : usable.FirstOrDefault(w => string.Equals(w.Name, name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
     /// The workflows the bots' own <c>generate_image</c> sees (2026-09-27, the user's ask: <c>autonomous</c> limited as <c>automatic</c>
-    /// is): <paramref name="fresh"/> and, while there is a picture to rework, <paramref name="rework"/>, of those still installed
-    /// (offered or not, later on 2026-09-27). Pure.
+    /// is): <paramref name="fresh"/> and, while there is a picture to rework, <paramref name="rework"/>, of those still installed —
+    /// lists since 2026-10-04 (the chat's set may have several of a kind). Pure.
     /// </summary>
-    public static IReadOnlyList<ComfyWorkflow> BotWorkflows(IReadOnlyList<ComfyWorkflow> installed, ComfyWorkflow? fresh, ComfyWorkflow? rework, bool reworkable)
+    public static IReadOnlyList<ComfyWorkflow> BotWorkflows(IReadOnlyList<ComfyWorkflow> installed, IReadOnlyList<ComfyWorkflow> fresh, IReadOnlyList<ComfyWorkflow> rework, bool reworkable)
     {
         ArgumentNullException.ThrowIfNull(installed);
-        return installed.Where(w => (fresh is not null && string.Equals(w.Name, fresh.Name, StringComparison.OrdinalIgnoreCase))
-            || (reworkable && rework is not null && string.Equals(w.Name, rework.Name, StringComparison.OrdinalIgnoreCase))).ToList();
+        ArgumentNullException.ThrowIfNull(fresh);
+        ArgumentNullException.ThrowIfNull(rework);
+        return installed.Where(w => fresh.Any(f => SameName(f, w)) || (reworkable && rework.Any(r => SameName(r, w)))).ToList();
     }
+
+    private static bool SameName(ComfyWorkflow a, ComfyWorkflow b) => string.Equals(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
 
     // ── Reworking a picture (2026-09-27) ────────────────────────────────────
 
@@ -530,20 +543,53 @@ public static partial class BotChat
         }
     }
 
+    /// <summary>The first line of an image-prompt answer that names its workflow, when a kind has several (2026-10-04). Pinned: it is prompt text.</summary>
+    public const string WorkflowAnswer = "WORKFLOW";
+
+    /// <summary>The workflow line as the instructions spell it (2026-10-04). Pinned: it is prompt text.</summary>
+    private const string WorkflowLine = WorkflowAnswer + " name (the workflow's name as listed)";
+
+    /// <summary>
+    /// Several workflows of one kind for the prompt writer to choose from (2026-10-04, the user's pick): <paramref name="lead"/>, then
+    /// each by name with its family's style and its sidecar's tips, in the chat's set's order.
+    /// </summary>
+    private static void AppendStyles(StringBuilder text, IReadOnlyList<ComfyWorkflow> workflows, string lead)
+    {
+        text.Append(lead);
+        foreach (var workflow in workflows)
+        {
+            text.Append("\n\n").Append(workflow.Name).Append(": ").Append(ComfyFamilies.StyleGuide(workflow.Family));
+            if (!string.IsNullOrWhiteSpace(workflow.Tips))
+            {
+                text.Append("\nTips for ").Append(workflow.Name).Append(": ").Append(workflow.Tips.Trim());
+            }
+        }
+    }
+
     /// <summary>
     /// The image-prompt system message with a rework on offer (2026-09-27, the user's ask: after the first picture the prompt
-    /// writer chooses a fresh picture or a rework): <paramref name="fresh"/> null means the rework is the only way; without
-    /// <paramref name="rework"/> or a candidate it is <see cref="ImagePromptInstruction(ComfyWorkflow)"/> (or
-    /// <see cref="PromisedPictureInstruction(ComfyWorkflow)"/>) as before. <paramref name="promised"/> is the promised-picture
+    /// writer chooses a fresh picture or a rework): <paramref name="fresh"/> empty means the rework is the only way; without
+    /// <paramref name="rework"/> or a candidate, and with one fresh workflow, it is <see cref="ImagePromptInstruction(ComfyWorkflow)"/>
+    /// (or <see cref="PromisedPictureInstruction(ComfyWorkflow)"/>) as before. Lists since 2026-10-04 (the user's pick: the chat's set
+    /// may hold several of a kind, and the writer chooses): a kind with several lists them by name, each in its style, and asks for
+    /// <see cref="WorkflowAnswer"/> and the name on a line of its own before the prompt (after the <see cref="ReworkAnswer"/> line in a
+    /// rework); with one of each kind the text is what it was, byte for byte. <paramref name="promised"/> is the promised-picture
     /// request's form, <see cref="NoPictureAnswer"/> kept. Pinned: it is prompt text.
     /// </summary>
-    public static string PictureInstruction(bool promised, ComfyWorkflow? fresh, ComfyWorkflow? rework, IReadOnlyList<ReworkPicture> candidates)
+    public static string PictureInstruction(bool promised, IReadOnlyList<ComfyWorkflow> fresh, IReadOnlyList<ComfyWorkflow> rework, IReadOnlyList<ReworkPicture> candidates)
     {
+        ArgumentNullException.ThrowIfNull(fresh);
+        ArgumentNullException.ThrowIfNull(rework);
         ArgumentNullException.ThrowIfNull(candidates);
-        if (rework is null || candidates.Count == 0)
+        bool reworking = rework.Count > 0 && candidates.Count > 0;
+        if (!reworking && fresh.Count == 0)
         {
-            var only = fresh ?? throw new ArgumentException("Neither a fresh workflow nor a picture to rework.", nameof(fresh));
-            return promised ? PromisedPictureInstruction(only) : ImagePromptInstruction(only);
+            throw new ArgumentException("Neither a fresh workflow nor a picture to rework.", nameof(fresh));
+        }
+
+        if (!reworking && fresh.Count == 1)
+        {
+            return promised ? PromisedPictureInstruction(fresh[0]) : ImagePromptInstruction(fresh[0]);
         }
 
         var text = new StringBuilder("You write prompts for an image generator. Given one line of a group chat, ");
@@ -555,13 +601,26 @@ public static partial class BotChat
 
         const string NoChat = "never the chat itself, no speech bubbles, no screens of text. ";
         const string Keep = "keep what it shows where the line does not change it, and change what the line calls for";
-        if (fresh is not null)
+        if (fresh.Count > 0)
         {
             text.Append(promised ? "write a single prompt for the picture they describe — what it shows, its mood — " : "write a single prompt for a picture that illustrates it: the scene, the things or ideas it talks about, its mood — ")
-                .Append(NoChat).Append("Write it in this style: ");
-            AppendStyle(text, fresh, "Tips for this workflow: ");
-            text.Append("\n\nYou may instead rework ").Append(WhichPicture(candidates))
-                .Append(" rather than make a new one, when the line talks about it, answers it or builds on it: ").Append(Keep).Append(". ");
+                .Append(NoChat);
+            if (fresh.Count == 1)
+            {
+                text.Append("Write it in this style: ");
+                AppendStyle(text, fresh[0], "Tips for this workflow: ");
+            }
+            else
+            {
+                AppendStyles(text, fresh, "Choose the workflow that suits the picture best and write the prompt in its style. The workflows:");
+                text.Append("\n\nPut ").Append(WorkflowLine).Append(" alone on the first line of your answer and the prompt after it.");
+            }
+
+            if (reworking)
+            {
+                text.Append("\n\nYou may instead rework ").Append(WhichPicture(candidates))
+                    .Append(" rather than make a new one, when the line talks about it, answers it or builds on it: ").Append(Keep).Append(". ");
+            }
         }
         else
         {
@@ -569,65 +628,145 @@ public static partial class BotChat
                 .Append(promised ? " into the picture they describe: " : " so that it illustrates the line: ").Append(Keep).Append(" — ").Append(NoChat);
         }
 
-        if (candidates.Count > 1)
+        if (reworking)
         {
-            text.Append("The pictures, oldest first:");
-            foreach (var picture in candidates)
+            if (candidates.Count > 1)
             {
-                text.Append(CultureInfo.InvariantCulture, $"\n{picture.Number}. {DescribePicture(picture)}");
+                text.Append("The pictures, oldest first:");
+                foreach (var picture in candidates)
+                {
+                    text.Append(CultureInfo.InvariantCulture, $"\n{picture.Number}. {DescribePicture(picture)}");
+                }
+
+                text.Append("\n");
             }
 
-            text.Append("\n");
+            text.Append(fresh.Count > 0 ? "To rework it, put " : "Put ").Append(ReworkLine(candidates));
+            if (rework.Count == 1)
+            {
+                text.Append(" alone on the first line of your answer and the prompt after it. Write the rework's prompt in this style: ");
+                AppendStyle(text, rework[0], "Tips for the rework workflow: ");
+            }
+            else
+            {
+                text.Append(" alone on the first line of your answer, ").Append(WorkflowLine).Append(" alone on the second and the prompt after them. ");
+                AppendStyles(text, rework, "Choose the rework workflow that suits it best and write the rework's prompt in its style. The rework workflows:");
+            }
         }
 
-        text.Append(fresh is not null ? "To rework it, put " : "Put ").Append(ReworkLine(candidates))
-            .Append(" alone on the first line of your answer and the prompt after it. Write the rework's prompt in this style: ");
-        AppendStyle(text, rework, "Tips for the rework workflow: ");
-        text.Append("\n\nAnswer with ").Append(fresh is not null ? "the prompt alone, or the " + ReworkAnswer + " line and then the prompt" : "the " + ReworkAnswer + " line and then the prompt")
-            .Append(promised ? ", or " + NoPictureAnswer : "").Append(": no preamble, no explanation, no quotes.");
+        var answers = new List<string>();
+        if (fresh.Count > 0)
+        {
+            answers.Add(fresh.Count == 1 ? "the prompt alone" : "the " + WorkflowAnswer + " line and then the prompt");
+        }
+
+        if (reworking)
+        {
+            answers.Add(rework.Count == 1 ? "the " + ReworkAnswer + " line and then the prompt" : "the " + ReworkAnswer + " line, the " + WorkflowAnswer + " line and then the prompt");
+        }
+
+        if (promised)
+        {
+            answers.Add(NoPictureAnswer);
+        }
+
+        text.Append("\n\nAnswer with ").Append(string.Join(", or ", answers)).Append(": no preamble, no explanation, no quotes.");
         return text.ToString();
     }
 
     /// <summary>
     /// An image-prompt answer read (2026-09-27): a first line <see cref="ReworkAnswer"/> (a number after it, stray marks around
     /// it) takes that candidate — a number that names none takes the latest — and the rest is the prompt; no such line is a fresh
-    /// picture when <paramref name="fresh"/>, else a rework of the latest. No candidate, no rework. The prompt is
-    /// <see cref="CleanImagePrompt"/>'s. Pure.
+    /// picture when <paramref name="fresh"/> has one, else a rework of the latest. No candidate or no <paramref name="rework"/>
+    /// workflow, no rework. The prompt is <see cref="CleanImagePrompt"/>'s. Pure.
     ///
     /// <para>The word is <c>REWORK</c> in capitals, as the request spells it, or in any case only with a number, a <c>#</c>, a mark
     /// or the line's end after it (2026-09-28, code review): with the case ignored, a fresh prompt such as <c>Rework of an old
     /// castle at dusk</c> reworked the latest picture and lost its first word. <c>**Rework #1:**</c> is still read.</para>
+    ///
+    /// <para>The workflow (2026-10-04, the writer's pick when a kind has several): a <see cref="WorkflowAnswer"/> line — first, or
+    /// right after the rework line, or before it — names one of the chosen kind (any case, or the longest name the line holds); the
+    /// same capitals-or-a-mark rule keeps a fresh prompt such as <c>Workflow of a busy kitchen</c> whole, and the line is read only
+    /// while the set has several workflows, so a set of one parses as before. With one of the kind it is that one; null when the kind
+    /// has several and none was named — the caller takes the first and says so in the log.</para>
     /// </summary>
-    public static (string Prompt, ReworkPicture? Rework) ParseImagePrompt(string? text, IReadOnlyList<ReworkPicture> candidates, bool fresh)
+    public static (string Prompt, ReworkPicture? Rework, ComfyWorkflow? Workflow) ParseImagePrompt(string? text, IReadOnlyList<ReworkPicture> candidates, IReadOnlyList<ComfyWorkflow> fresh, IReadOnlyList<ComfyWorkflow> rework)
     {
         ArgumentNullException.ThrowIfNull(candidates);
-        string cleaned = CleanImagePrompt(text);
-        int end = cleaned.IndexOf('\n', StringComparison.Ordinal);
-        string first = end < 0 ? cleaned : cleaned[..end];
-        var match = ReworkFirstLine().Match(first);
-        if (!match.Success)
+        ArgumentNullException.ThrowIfNull(fresh);
+        ArgumentNullException.ThrowIfNull(rework);
+        bool reworkable = rework.Count > 0 && candidates.Count > 0;
+        bool named = fresh.Count > 1 || (reworkable && rework.Count > 1);
+        string body = CleanImagePrompt(text);
+        ReworkPicture? chosen = null;
+        bool reworkRead = false;
+        string? workflowName = null;
+        // Up to two header lines, either order: the rework line and the workflow line.
+        for (int header = 0; header < 2; header++)
         {
-            return (cleaned, fresh ? null : candidates.LastOrDefault());
+            int end = body.IndexOf('\n', StringComparison.Ordinal);
+            string first = end < 0 ? body : body[..end];
+            string after = end < 0 ? "" : body[end..];
+            if (reworkable && !reworkRead && ReworkFirstLine().Match(first) is { Success: true } match)
+            {
+                reworkRead = true;
+                chosen = int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n >= 1 && n <= candidates.Count
+                    ? candidates[n - 1]
+                    : candidates[^1];
+                body = CleanImagePrompt((match.Groups["rest"].Value + after).Trim());
+                continue;
+            }
+
+            if (named && workflowName is null && WorkflowFirstLine().Match(first) is { Success: true } line)
+            {
+                workflowName = line.Groups["name"].Value;
+                body = CleanImagePrompt(after);
+                continue;
+            }
+
+            break;
         }
 
-        string rest = (match.Groups["rest"].Value + (end < 0 ? "" : cleaned[end..])).Trim();
-        var chosen = int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n >= 1 && n <= candidates.Count
-            ? candidates[n - 1]
-            : candidates.LastOrDefault();
-        return (CleanImagePrompt(rest), chosen);
+        if (!reworkRead && reworkable && fresh.Count == 0)
+        {
+            chosen = candidates[^1];
+        }
+
+        var kind = chosen is null ? fresh : rework;
+        var workflow = kind.Count == 1 ? kind[0] : NamedWorkflow(kind, workflowName);
+        return (body, chosen, workflow);
     }
 
     [GeneratedRegex(@"^\W*(?:REWORK\b|(?i:rework)(?=\s*(?:[#:*.\-–—\d]|$)))[\s#:*.\-–—]*(?<n>\d+)?[\s:*.\-–—]*(?<rest>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex ReworkFirstLine();
 
+    [GeneratedRegex(@"^\W*(?:WORKFLOW\b|(?i:workflow)(?=\s*[#:*\-–—]))[\s#:*\-–—""'`]*(?<name>.*?)[\s""'`*.]*$", RegexOptions.CultureInvariant)]
+    private static partial Regex WorkflowFirstLine();
+
+    /// <summary>The workflow of <paramref name="kind"/> a <see cref="WorkflowAnswer"/> line names: by its name (any case), else the longest name the line holds; null with none.</summary>
+    private static ComfyWorkflow? NamedWorkflow(IReadOnlyList<ComfyWorkflow> kind, string? name)
+    {
+        string wanted = name?.Trim() ?? "";
+        if (wanted.Length == 0)
+        {
+            return null;
+        }
+
+        return kind.FirstOrDefault(w => string.Equals(w.Name, wanted, StringComparison.OrdinalIgnoreCase))
+            ?? kind.Where(w => wanted.Contains(w.Name, StringComparison.OrdinalIgnoreCase)).OrderByDescending(w => w.Name.Length).FirstOrDefault();
+    }
+
     /// <summary>
     /// The line a bot's turn text ends with while <c>generate_image</c> may rework (2026-09-27, <c>autonomous</c>): the pictures
-    /// it may start from, whose and their paths, and how to call it. The stored line stays as it was. Pinned: it is prompt text.
+    /// it may start from, whose and their paths, and how to call it — with any of <paramref name="workflows"/>, the set's image →
+    /// image ones (several since 2026-10-04: <c>workflow "a" or "b"</c>). The stored line stays as it was. Pinned: it is prompt text.
     /// </summary>
-    public static string ReworkCaption(string workflow, IReadOnlyList<ReworkPicture> candidates)
+    public static string ReworkCaption(IReadOnlyList<string> workflows, IReadOnlyList<ReworkPicture> candidates)
     {
+        ArgumentNullException.ThrowIfNull(workflows);
         ArgumentNullException.ThrowIfNull(candidates);
-        string how = $"call generate_image with workflow \"{workflow}\", its path as image, and a prompt for the reworked picture";
+        string names = string.Join(" or ", workflows.Select(w => $"\"{w}\""));
+        string how = $"call generate_image with workflow {names}, its path as image, and a prompt for the reworked picture";
         if (candidates.Count == 1)
         {
             return $"(You may rework the chat's latest picture, {DescribePicture(candidates[0])}, at \"{candidates[0].Path}\": {how}.)";
@@ -730,8 +869,15 @@ public static partial class BotChat
     /// <summary>The line over an app's picture drawn after later lines (<c>Botchat image async</c>, 2026-09-25): whose reply it pictures. Pinned.</summary>
     public static string PictureNotice(string speaker) => $"(botchat: {speaker}'s picture)";
 
-    /// <summary>Once per chat, when pictures are on but no picture can be made (2026-09-25; since 2026-09-27: no txt2img workflow set, nor an img2img one with a picture to rework). Pinned.</summary>
-    public const string NoWorkflowNotice = "(botchat: no Botchat txt2img workflow is set — or it is no longer installed — so there are no pictures of the replies)";
+    /// <summary>
+    /// Once per chat, when pictures are on but no picture can be made (2026-09-25; since 2026-09-27: no txt2img workflow set, nor an
+    /// img2img one with a picture to rework; since 2026-10-04: none in the chat's set, <see cref="ComfyWorkflows"/>). Pinned.
+    /// </summary>
+    public const string NoWorkflowNotice = "(botchat: Botchat ComfyUI enabled and Botchat ComfyUI limited workflows give no installed txt2img workflow, so there are no pictures of the replies)";
+
+    /// <summary>The <c>--log</c> warning when the image-prompt writer named no workflow of a kind with several (2026-10-04): the first is used.</summary>
+    public static string UnnamedWorkflowLogLine(string speaker, string workflow) =>
+        $"The botchat image prompt for {speaker}'s reply named no workflow of the chat's set; using the first, {workflow}.";
 
     /// <summary>When the model wrote no image prompt for a reply (2026-09-25). Pinned.</summary>
     public const string NoPromptNotice = "(botchat: no image prompt came back for that reply; no picture)";

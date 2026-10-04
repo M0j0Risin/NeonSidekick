@@ -44,10 +44,9 @@ public class AppSettingsTests : IDisposable
         Theme = "noir",
         BotChatLlmMode = "multi",
         LlmMidTurnUsage = "estimate",   // last-known is the default since later on 2026-09-25
-        BotChatImages = true,
+        BotChatComfy = true,
+        BotChatLimitedComfyWorkflows = ["flux", "flux-edit"],
         BotChatImageMode = "autonomous",
-        BotChatTxt2ImgWorkflow = "flux",
-        BotChatImg2ImgWorkflow = "flux-edit",
         BotChatImg2ImgMode = "chat-history",
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
@@ -713,10 +712,12 @@ public class AppSettingsTests : IDisposable
         // On 2026-09-24 the on/off WelcomeSplash became the WelcomeSplashMode pick: no migration (the user's call), so an old off is fullsize again.
         // On 2026-09-28 ComfyPictureStripSync went (the user's call: the strip and the viewer always follow each other): retired, skipped the same way.
         // On 2026-10-04 BotChatPreloadedSkills became BotChatLimitedSkills (no migration) and BotChatSkillMode went: both skipped the same way.
+        // Later on 2026-10-04 BotChatImages, BotChatTxt2ImgWorkflow and BotChatImg2ImgWorkflow went for BotChatComfy and
+        // BotChatLimitedComfyWorkflows (the user's call, no migration): retired, skipped the same way.
         // On 2026-09-30 the five GitNative* keys became GitLib* (the rows' new labels): old spellings, skipped the same way.
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName),
-            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\" }");
+            "{ \"SchemaVersion\": 1, \"BotChatImages\": true, \"BotChatTxt2ImgWorkflow\": \"flux\", \"BotChatImg2ImgWorkflow\": \"edit\", \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\" }");
 
         using var settings = new AppSettings(_dir);
         Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
@@ -728,6 +729,8 @@ public class AppSettingsTests : IDisposable
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
         Assert.Null(settings.Current.BotChatLimitedSkills);   // the renamed BotChatPreloadedSkills is not carried over (2026-10-04)
+        Assert.False(settings.Current.BotChatComfy);   // the retired BotChatImages is not carried over (later on 2026-10-04)
+        Assert.Null(settings.Current.BotChatLimitedComfyWorkflows);   // nor the two retired workflow pickers
         Assert.True(settings.Current.LlmOfferTools);   // the renamed key, skipped; the default stands
         Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete", "docker_remove", "docker_prune"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
         Assert.Equal(WorkingDirectory.DefaultTreeLength, settings.Current.FileTreeMaxLength);   // the old TreeMaxLength key, skipped

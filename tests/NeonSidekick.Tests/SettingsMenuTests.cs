@@ -84,6 +84,15 @@ public partial class SettingsMenuTests : IDisposable
         }
     }
 
+    /// <summary>From one tab to a later one, Right as many times as their indexes differ (2026-10-04: LLM second, so TTS is no longer its neighbour).</summary>
+    private void GoFrom(SettingsTab from, SettingsTab to)
+    {
+        for (int i = (int)from; i < (int)to; i++)
+        {
+            Push(Keys.Right);
+        }
+    }
+
     private void Backspace(int times)
     {
         for (int i = 0; i < times; i++)
@@ -839,7 +848,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.SqlTools, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
                 SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyOutputFolder, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ImageEditor, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyCaretMention, SettingsField.ComfyPictureStrip,
                 SettingsField.ReflectionYieldsToTurns,
-                SettingsField.BotChatImages, SettingsField.BotChatImageMode, SettingsField.BotChatTxt2ImgWorkflow, SettingsField.BotChatImageAsync,
+                SettingsField.BotChatImageMode, SettingsField.BotChatImageAsync,   // BotChatImages and BotChatTxt2ImgWorkflow until later on 2026-10-04
                 SettingsField.BotChatLlmMode,
                 SettingsField.LlmMidTurnUsage,
                 SettingsField.KeepCommandHistory,
@@ -853,7 +862,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.BotChatVision,
                 SettingsField.ThemedExternalWindows,
                 SettingsField.ReflectionEditsSupportingFiles,
-                SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode,
+                SettingsField.BotChatImg2ImgMode,   // BotChatImg2ImgWorkflow before it until later on 2026-10-04
                 SettingsField.BotChatLimitedSkills,   // BotChatPreloadedSkills and BotChatSkillMode until 2026-10-04
                 SettingsField.LlmPreserveThinking, SettingsField.SessionSaveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
                 SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds,
@@ -915,6 +924,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
                 SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
+                SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1003,7 +1013,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
         Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][SettingsMenu.TabFields[(int)SettingsTab.Llm].ToList().IndexOf(SettingsField.LlmTurnTimeoutSeconds) + 1]);   // the context run's first row, under the turn timeout, since 2026-10-01 (the user's call); [^16] before: the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
-        Assert.Equal(["General", "Embedded", "Docker", "Anthropic", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
+        Assert.Equal(["General", "LLM", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // LLM second since 2026-10-04 (the user's order); Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1080,7 +1090,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
         Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
         Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
-        Assert.Equal(5, (int)SettingsTab.Llm);   // sixth since 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
+        Assert.Equal(1, (int)SettingsTab.Llm);   // second since 2026-10-04 (the user's order); sixth from 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
         Assert.Equal("#-mention enabled", SettingsMenu.FieldName(SettingsField.SkillHashMention));
@@ -1534,7 +1544,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("chat", SettingsMenu.FieldValue(SettingsField.SttDestination, data, _settings.ProfileDirectory));
         Assert.Equal("draft", SettingsMenu.FieldValue(SettingsField.SttDestination, new AppSettingsData { SttDestination = "draft" }, _settings.ProfileDirectory));
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
-        Assert.Equal(["General", "Embedded", "Docker", "Anthropic", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
+        Assert.Equal(["General", "LLM", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // LLM second since 2026-10-04 (the user's order); Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1572,7 +1582,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
         Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
         Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
-        Assert.Equal(5, (int)SettingsTab.Llm);   // sixth since 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
+        Assert.Equal(1, (int)SettingsTab.Llm);   // second since 2026-10-04 (the user's order); sixth from 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
         Assert.Equal("#-mention enabled", SettingsMenu.FieldName(SettingsField.SkillHashMention));
@@ -1618,7 +1628,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(32, SettingsMenu.TabLabelWidth(SettingsTab.Llm));       // "LLM sampling from Hugging Face" (2026-09-28; "LLM compact show summary", 24, from 2026-09-21; "LLM request timeout (s)", 23, before)
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard"
-        Assert.Equal(29, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat multi-embedded kill" (later on 2026-09-29; "Botchat txt2img workflow" from 2026-09-27, "Botchat images enabled" before)
+        Assert.Equal(35, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat ComfyUI limited workflows" (later on 2026-10-04; "Botchat multi-embedded kill", 29, from later on 2026-09-29; "Botchat txt2img workflow" from 2026-09-27, "Botchat images enabled" before)
         Assert.Equal(40, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.ClaudeCliTabTitle)));   // the ClaudeCLI tab (2026-09-27): "Claude CLI advisor tool calls per turn" (since 2026-10-04; "Claude advisor tool calls per turn", 36, before)
         Assert.Equal(21, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle)));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(26, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.WebTabTitle)));   // "Web browser network mode" (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
@@ -3136,7 +3146,7 @@ public partial class SettingsMenuTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
+    private const string Strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // LLM second since 2026-10-04   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
     [Fact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()
@@ -3165,7 +3175,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_EveryTab_ShowsItsRowsInOrder()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Right, Keys.Tab, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Escape);   // Embedded, Docker (Tab), then Claude, OpenAI (2026-10-03), LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
+        Push(Keys.Right, Keys.Tab, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Escape);   // LLM, Embedded (Tab; LLM second since 2026-10-04), then Docker, Anthropic, OpenAI (2026-10-03), TTS, STT, Sessions; until 2026-10-04 Embedded, Docker (Tab), then Claude, OpenAI, LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
@@ -3286,7 +3296,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Working directory: refused
         Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Memory (right under Working directory since 2026-10-01): a General toggle, its page opens, off picked, saved
         GoTo(SettingsTab.Llm); Push(Keys.Down, Keys.Enter);   // LLM URL: refused
-        Push(Keys.Right, Keys.Enter);           // TTS output: refused
+        GoFrom(SettingsTab.Llm, SettingsTab.Tts); Push(Keys.Enter);   // TTS output: refused (LLM second since 2026-10-04, the tabs between skipped)
         Push(Keys.Right, Keys.Enter);           // STT input: refused
         Push(Keys.Escape);
 
@@ -4273,11 +4283,11 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task OnThePane_TheLlmTab_IsThird_AfterEmbedded()
+    public async Task OnThePane_TheLlmTab_IsSecond_AfterGeneral()
     {
         var (menu, pane) = PaneMenu();
-        GoTo(SettingsTab.Llm);                                  // General → Embedded → LLM (2026-09-29, the user's order; General → Sessions → LLM from 2026-09-19, the Skills tab between from 2026-09-18 until then — /skills' Options tab now)
-        Push(Keys.Left);                                        // Embedded
+        GoTo(SettingsTab.Llm);                                  // General → LLM (2026-10-04, the user's order; General → Embedded → Docker → Claude → OpenAI → LLM from 2026-10-03, General → Embedded → LLM from 2026-09-29)
+        Push(Keys.Right);                                       // Embedded, after it
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
@@ -4292,7 +4302,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_TheSessionsTab_IsSeventh_AfterStt()
     {
         var (menu, pane) = PaneMenu();
-        GoTo(SettingsTab.Sessions);                             // eight Rights (Claude and OpenAI before LLM since 2026-10-03; six from 2026-10-02, Docker before LLM; five from 2026-09-29, after STT; one from 2026-09-18, the wrap from General that morning)
+        GoTo(SettingsTab.Sessions);                             // eight Rights (LLM second since 2026-10-04; Claude and OpenAI before LLM from 2026-10-03; six from 2026-10-02, Docker before LLM; five from 2026-09-29, after STT; one from 2026-09-18, the wrap from General that morning)
         Push(Keys.Down, Keys.Enter);                            // Session retention (days), the second row: typed
         _console.Input.PushText("30");
         Push(Keys.Enter);
@@ -4317,7 +4327,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("\n▸ Session show name           none\n", _console.Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));
         Assert.Equal(SettingsTab.Sessions, (SettingsTab)8);   // seventh until Claude and OpenAI, 2026-10-03; fifth until Docker, 2026-10-02
-        Assert.Equal(SettingsTab.Embedded, (SettingsTab)1);   // the user's order, 2026-09-29
+        Assert.Equal(SettingsTab.Llm, (SettingsTab)1);        // the user's order, 2026-10-04
+        Assert.Equal(SettingsTab.Embedded, (SettingsTab)2);   // second from 2026-09-29 (the user's order) until LLM, 2026-10-04
         Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);
         // Save thinking (2026-09-28): the Sessions tab's last row, a toggle off by default.
         Assert.True(SettingsMenu.IsToggle(SettingsField.SessionSaveThinking));
@@ -4714,6 +4725,59 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(["gone"], _settings.Current.BotChatLimitedSkills);
         Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
+    }
+
+    /// <summary>
+    /// Botchat ComfyUI limited workflows on the pane (later on 2026-10-04, the user's ask): every installed workflow, the profile's
+    /// and the home's, offered to the main chat or not; Space flips one, A all, N none (a name no longer installed stays). While
+    /// Botchat ComfyUI enabled is on, the caption says the list waits.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_BotchatLimitedComfyWorkflows_AnyInstalledOne_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
+    {
+        foreach (var (folder, name) in new[] { (_settings.ProfileComfyDirectory, "pony"), (_settings.GlobalComfyDirectory, "flux") })
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, name + ".json"), "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}");
+        }
+
+        _settings.Update(d => { d.ComfyWorkflowsOffered = ["flux"]; d.BotChatLimitedComfyWorkflows = ["gone"]; });
+        int row = SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedComfyWorkflows);
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.BotChat);
+        Down(row);
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Char(' '));        // pony, the second (the catalog's order), the profile's and not offered, on
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["pony", "gone"], _settings.Current.BotChatLimitedComfyWorkflows);
+        Assert.DoesNotContain(SettingsMenu.LimitedComfyUnusedCaption, _console.Output);
+
+        _settings.Update(d => d.BotChatComfy = true);
+        (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.BotChat);
+        Down(row);
+        Push(Keys.Enter);
+        Push(Keys.Char('a'));                   // both
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["flux", "pony", "gone"], _settings.Current.BotChatLimitedComfyWorkflows);
+        Assert.Contains(SettingsMenu.LimitedComfyUnusedCaption, _console.Output);
+
+        (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.BotChat);
+        Down(row);
+        Push(Keys.Enter);
+        Push(Keys.Char('n'));                   // none of the installed ones; the gone name stays
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["gone"], _settings.Current.BotChatLimitedComfyWorkflows);
     }
 
     private sealed class NamedTool(string name, string description) : AIFunction

@@ -84,7 +84,7 @@ public sealed class GenerateImageTool : AIFunction
     /// <param name="studio">The screen's ComfyUI studio.</param>
     /// <param name="narrow">
     /// The workflows this tool may use out of every installed one (2026-09-27, the user's ask: <c>/botchat</c>'s bots get
-    /// <c>Botchat txt2img workflow</c> and <c>Botchat img2img workflow</c> alone, offered or not): read at every description
+    /// their own workflows alone — the two pickers' then, the Botchat ComfyUI rows' set since 2026-10-04): read at every description
     /// and every call; null is every offered workflow, the main chat's tool.
     /// </param>
     public GenerateImageTool(ComfyStudio studio, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow = null)

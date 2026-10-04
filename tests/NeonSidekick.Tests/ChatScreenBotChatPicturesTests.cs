@@ -23,8 +23,9 @@ public partial class ChatScreenTests
     {
         BotChatFixture();
         var stub = ComfyServer(width, height);
-        // The workflow named (2026-09-27): blank is none since, no longer the first.
-        _settings.Update(d => { d.BotChatImages = true; d.BotChatImageMode = mode; d.BotChatImageAsync = async; d.BotChatTxt2ImgWorkflow = "pony"; });
+        // The workflow ticked (later on 2026-10-04, Botchat ComfyUI limited workflows; Botchat images enabled and the txt2img
+        // picker until then).
+        _settings.Update(d => { d.BotChatLimitedComfyWorkflows = ["pony"]; d.BotChatImageMode = mode; d.BotChatImageAsync = async; });
         return stub;
     }
 
@@ -192,8 +193,7 @@ public partial class ChatScreenTests
 
         // The second request is the image prompt's: the family's style and the reply, no tools; the bots get none either.
         Assert.Equal(3, _chat.Requests.Count);
-        var pony = BotChat.Txt2ImgWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], "pony")!;
-        Assert.Equal(BotChat.ImagePromptInstruction(pony), SystemText(_chat.Requests[1]));
+        Assert.Equal(BotChat.ImagePromptInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));
         Assert.Equal(BotChat.ImagePromptRequest("default", DogReply, ""), _chat.Requests[1][^1].Text);
         Assert.All(_chat.Options, options => Assert.Empty(ToolsOf(options)));
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
@@ -454,7 +454,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Botchat img2img workflow (2026-09-27, the user's ask): the first picture is fresh, its prompt writer offered no rework;
+    /// An img2img workflow among the botchat ones (2026-09-27, the user's ask): the first picture is fresh, its prompt writer offered no rework;
     /// the next reply's writer is offered the latest picture and answers REWORK, so that picture is uploaded and reworked.
     /// </summary>
     [Fact]
@@ -462,7 +462,7 @@ public partial class ChatScreenTests
     {
         var stub = BotPicturesFixture();
         Img2ImgWorkflow(stub);
-        _settings.Update(d => d.BotChatImg2ImgWorkflow = "hatter");
+        _settings.Update(d => d.BotChatLimitedComfyWorkflows = ["pony", "hatter"]);
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("a dog surfing a wave");
         _chat.EnqueueText("Ada ", "answers.");
@@ -485,12 +485,16 @@ public partial class ChatScreenTests
         Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/upload/image");
     }
 
-    /// <summary>Botchat txt2img workflow blank (2026-09-27: none, no longer the first): no picture, and the notice once.</summary>
+    /// <summary>
+    /// A chosen set with no txt2img workflow (2026-09-27 as a blank Botchat txt2img workflow; the set since later on 2026-10-04):
+    /// no picture, and the notice once.
+    /// </summary>
     [Fact]
     public async Task BotChat_NoTxt2ImgWorkflow_DrawsNothing_AndSaysSoOnce()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatTxt2ImgWorkflow = null);
+        Img2ImgWorkflow(stub);
+        _settings.Update(d => d.BotChatLimitedComfyWorkflows = ["hatter"]);
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(3);
@@ -504,6 +508,102 @@ public partial class ChatScreenTests
         Assert.Equal(1, CountOf(output, BotChat.NoWorkflowNotice));
     }
 
+    /// <summary>Neither Botchat ComfyUI row choosing a workflow (later on 2026-10-04, as Botchat images enabled off was): talk alone, no notice.</summary>
+    [Fact]
+    public async Task BotChat_NoComfyWorkflowChosen_IsTalkAlone_WithNoNotice()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        _settings.Update(d => d.BotChatLimitedComfyWorkflows = null);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.All(_chat.Options, options => Assert.Empty(ToolsOf(options)));
+        Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.DoesNotContain(BotChat.NoWorkflowNotice, output);
+    }
+
+    /// <summary>
+    /// The user's report (later on 2026-10-04): with Botchat tools enabled on, the main chat's generate_image (over ComfyUI
+    /// workflows offered) sat beside the bot's own, and the bots drew with the profile's workflows. Now the bots get one
+    /// generate_image, over the botchat workflows alone.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_WithBotchatToolsOn_TheBotsGetOneGenerateImage_OverTheBotchatWorkflowsAlone()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"), File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json")));
+        _settings.Update(d => { d.BotChatTools = true; d.ComfyWorkflowsOffered = ["other-t2i"]; });
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var images = ToolsOf(_chat.Options[0]).Where(t => t.Name == GenerateImageTool.ToolName).ToList();
+        string description = Assert.Single(images).Description!;
+        Assert.Contains("\n- pony ", description);
+        Assert.DoesNotContain("other-t2i", description);   // the profile's offered workflow is the main chat's alone
+        Assert.DoesNotContain(ToolsOf(_chat.Options[0]), t => t.Name == SetSplashImageTool.ToolName);   // nor the rest of its ComfyUI group
+    }
+
+    /// <summary>Botchat ComfyUI enabled (later on 2026-10-04, the user's ask): the bots get this profile's offered workflows, the limited list unused.</summary>
+    [Fact]
+    public async Task BotChat_ComfyEnabled_TheBotsGetTheOfferedWorkflows_NotTheLimitedOnes()
+    {
+        var stub = BotPicturesFixture(mode: "autonomous");
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"), File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json")));
+        _settings.Update(d => { d.BotChatComfy = true; d.ComfyWorkflowsOffered = ["other-t2i"]; });
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string description = Assert.Single(ToolsOf(_chat.Options[0])).Description!;
+        Assert.Contains("\n- other-t2i ", description);
+        Assert.DoesNotContain("\n- pony ", description);
+    }
+
+    /// <summary>
+    /// Several txt2img workflows in automatic (later on 2026-10-04, the user's pick): the prompt writer is shown each by name and
+    /// names its pick on a WORKFLOW line, and that workflow draws the picture.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_Automatic_WithTwoTxt2ImgWorkflows_TheWriterPicksOne_ByItsWorkflowLine()
+    {
+        var stub = BotPicturesFixture();
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"),
+            "{\"3\":{\"class_type\":\"OtherSampler\",\"inputs\":{\"seed\":\"{{seed}}\"}},\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}");
+        _settings.Update(d => d.BotChatLimitedComfyWorkflows = ["pony", "other-t2i"]);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText("WORKFLOW other-t2i\na dog surfing a wave");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string system = SystemText(_chat.Requests[1]);
+        Assert.Contains("The workflows:", system);
+        Assert.Contains("\n\nother-t2i: ", system);
+        Assert.Contains("\n\npony: ", system);
+        Assert.Contains("Put " + BotChat.WorkflowAnswer + " name", system);
+        var prompt = Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
+        Assert.Contains("OtherSampler", prompt.Body!);
+        Assert.Contains("\"text\":\"a dog surfing a wave", prompt.Body!);   // the workflow line kept out of the prompt
+    }
+
     /// <summary>
     /// Autonomous with both workflows (2026-09-27, the user's ask: the bots limited as automatic is): generate_image lists the
     /// txt2img workflow alone until there is a picture, then the img2img one too, and the next bot's turn names the picture's path.
@@ -514,7 +614,7 @@ public partial class ChatScreenTests
         var stub = BotPicturesFixture(mode: "autonomous");
         Img2ImgWorkflow(stub);
         File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"), File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json")));
-        _settings.Update(d => d.BotChatImg2ImgWorkflow = "hatter");
+        _settings.Update(d => d.BotChatLimitedComfyWorkflows = ["pony", "hatter"]);
         _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
         _chat.EnqueueText("Here is my dog.");
         _chat.EnqueueText("Ada ", "answers.");
@@ -532,7 +632,7 @@ public partial class ChatScreenTests
         string next = Assert.Single(ToolsOf(_chat.Options[2])).Description!;
         Assert.Contains("hatter", next);
         Assert.DoesNotContain("other-t2i", next);
-        Assert.EndsWith(BotChat.ReworkCaption("hatter", [new ReworkPicture(1, "default", true, @"comfy_images\pony-7.png")]), _chat.Requests[2][^1].Text, StringComparison.Ordinal);
+        Assert.EndsWith(BotChat.ReworkCaption(["hatter"], [new ReworkPicture(1, "default", true, @"comfy_images\pony-7.png")]), _chat.Requests[2][^1].Text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -625,7 +725,7 @@ public partial class ChatScreenTests
     {
         var stub = BotPicturesFixture();
         Img2ImgWorkflow(stub);
-        _settings.Update(d => { d.BotChatImg2ImgWorkflow = "hatter"; d.ComfyWorkflowsOffered = ["something-else"]; });
+        _settings.Update(d => { d.BotChatLimitedComfyWorkflows = ["pony", "hatter"]; d.ComfyWorkflowsOffered = ["something-else"]; });
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("a dog surfing a wave");
         _chat.EnqueueText("Ada ", "answers.");
@@ -650,7 +750,7 @@ public partial class ChatScreenTests
     {
         var stub = BotPicturesFixture(mode: "autonomous");
         Img2ImgWorkflow(stub);
-        _settings.Update(d => { d.BotChatImg2ImgWorkflow = "hatter"; d.ComfyWorkflowsOffered = ["something-else"]; });
+        _settings.Update(d => { d.BotChatLimitedComfyWorkflows = ["pony", "hatter"]; d.ComfyWorkflowsOffered = ["something-else"]; });
         _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
         _chat.EnqueueText("Here is my dog.");
         _chat.EnqueueText("Ada ", "answers.");
@@ -966,7 +1066,7 @@ public partial class ChatScreenTests
 
     private const string SketchReply = "Here's a sketch I drew of a dog surfing.";
 
-    private ComfyWorkflow PonyWorkflow => BotChat.Txt2ImgWorkflow([.. new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows], "pony")!;
+    private ComfyWorkflow PonyWorkflow => new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows.Single(w => w.Name == "pony");
 
     [Fact]
     public async Task BotChat_Autonomous_APictureTheBotOnlyTalkedAbout_IsDrawnUnderTheReply()

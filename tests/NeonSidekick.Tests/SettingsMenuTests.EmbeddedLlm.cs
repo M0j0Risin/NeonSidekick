@@ -25,13 +25,14 @@ public partial class SettingsMenuTests
     private static int NormalRow(string id) => EmbeddedModelCatalog.Models.Where(m => !m.Uncensored).ToList().FindIndex(m => m.Id == id);
 
     [Fact]
-    public void TheTab_IsAfterGeneral_WithItsNineRows_AllButTheFilterTypeReconnecting()
+    public void TheTab_IsAfterLlm_WithItsNineRows_AllButTheFilterTypeReconnecting()
     {
         int tab = (int)SettingsTab.Embedded;
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
-        Assert.Equal("General", SettingsMenu.TabTitles[tab - 1]);   // second since later on 2026-09-29 (the user's order); after STT until then, the Claude (API) tab between until it went to /tools
+        Assert.Equal("LLM", SettingsMenu.TabTitles[tab - 1]);   // third since 2026-10-04 (the user's order: LLM second); second from later on 2026-09-29, after STT until then
+        Assert.Equal("General", SettingsMenu.TabTitles[tab - 2]);
         Assert.Equal("Docker", SettingsMenu.TabTitles[tab + 1]);   // the Docker servers' tab next to it (2026-10-02, the user's ask)
-        Assert.Equal("Anthropic", SettingsMenu.TabTitles[tab + 2]);   // the Anthropic ("Claude" until 2026-10-04) and OpenAI tabs before LLM since 2026-10-03
+        Assert.Equal("Anthropic", SettingsMenu.TabTitles[tab + 2]);   // the Anthropic ("Claude" until 2026-10-04) and OpenAI tabs after Docker since 2026-10-03
         // The switch first and MTP last (2026-09-29, the user's asks); the VRAM budget under the GPU layers (later that day), the HF
         // download type under the catalog (2026-09-30; under the filter type until it went, 2026-10-02), VRAM only under the budget (2026-10-01).
         Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);

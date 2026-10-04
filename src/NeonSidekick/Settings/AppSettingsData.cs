@@ -787,49 +787,45 @@ public sealed class AppSettingsData
     public bool BotChatMultiEmbeddedKill { get; set; } = true;
 
     /// <summary>
-    /// Whether <c>/botchat</c> has pictures (2026-09-25, the user's ask): while on and the ComfyUI image tools are offered
-    /// (<c>ChatScreen.ComfyOffered</c>), <see cref="BotChatImageMode"/> says who draws — the app a picture of every reply,
-    /// the bots with <c>generate_image</c>, or both. Off (the default), the chat is talk alone, no tool at all. Read per
-    /// reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
+    /// Whether the <c>/botchat</c> bots get the starting profile's ComfyUI workflows (2026-10-04, the user's ask: the bots should
+    /// never be confused about which workflows the user wants them to use): on, the workflows <see cref="ComfyWorkflowsOffered"/>
+    /// offers the main chat; off (the default), <see cref="BotChatLimitedComfyWorkflows"/> says. Either way the set's text → image
+    /// workflows draw fresh pictures and its image → image ones rework the chat's pictures; a workflow of another kind is skipped.
+    /// A chat has pictures while either row chooses a workflow and the ComfyUI tools can run (<c>ComfyUI tools</c> on, an http(s)
+    /// <c>ComfyUI URL</c>) — a set with nothing to draw with says so once — and <see cref="BotChatImageMode"/> says who draws. It folds in <c>BotChatImages</c> (<c>Botchat images
+    /// enabled</c>, 2026-09-25) and, with <see cref="BotChatLimitedComfyWorkflows"/>, replaces <c>BotChatTxt2ImgWorkflow</c> and
+    /// <c>BotChatImg2ImgWorkflow</c> (2026-09-27, one workflow of each kind): the three keys retired, no migration, as ever. The
+    /// main chat's own <c>generate_image</c> is never among the bots' tools since: with <see cref="BotChatTools"/> on it was offered
+    /// beside botchat's narrowed one under the same name, and the bots drew with the profile's workflows (the user's report).
+    /// Read per reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
-    public bool BotChatImages { get; set; }
+    public bool BotChatComfy { get; set; }
+
+    /// <summary>
+    /// The ComfyUI workflows the <c>/botchat</c> bots get while <see cref="BotChatComfy"/> is off (2026-10-04, the user's ask):
+    /// names among every installed workflow, offered to the main chat or not, as the old pickers' were (the user's pick). Null or
+    /// empty (the default) is none: no pictures. A name no longer installed is kept and skipped. Read per reply. The Botchat tab
+    /// of <c>/settings</c>, a checklist. No variable.
+    /// </summary>
+    public List<string>? BotChatLimitedComfyWorkflows { get; set; }
 
     /// <summary>
     /// Who draws a <c>/botchat</c> picture (2026-09-25, the user's three words): one of <see cref="App.BotChatImageMode.Names"/> —
     /// <c>automatic</c> (the default: after every reply the model writes an image prompt from it, in the workflow's family
-    /// style, and <see cref="BotChatTxt2ImgWorkflow"/> draws it — or <see cref="BotChatImg2ImgWorkflow"/> reworks an earlier
-    /// picture, the prompt writer's choice; the bots are offered no tool), <c>autonomous</c> (the bots are
-    /// offered <c>generate_image</c> over those same two workflows alone and draw when they choose; the app draws only a picture a bot talked about but did not
+    /// style, and a text → image workflow of the chat's set draws it — or an image → image one reworks an earlier picture, the
+    /// prompt writer's choice, naming the workflow too when a kind has several (2026-10-04); the bots are offered no tool),
+    /// <c>autonomous</c> (the bots are offered <c>generate_image</c> over that set alone and draw when they choose; the app draws only a picture a bot talked about but did not
     /// draw — a call that failed counts as not drawn, and a call written out as text runs as a real one — later on 2026-09-25,
     /// so the reply is true). Only while
-    /// <see cref="BotChatImages"/> is on. The Botchat tab of <c>/settings</c>. No variable.
+    /// the chat has pictures (<see cref="BotChatComfy"/>, <see cref="BotChatLimitedComfyWorkflows"/>). The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public string BotChatImageMode { get; set; } = App.BotChatImageMode.Default;
-
-    /// <summary>
-    /// The text → image workflow of <c>/botchat</c>'s fresh pictures (2026-09-25 as <c>Botchat image workflow</c>, which blank
-    /// meant the first of them; renamed 2026-09-27, the user's call, beside <see cref="BotChatImg2ImgWorkflow"/>): a name among
-    /// the installed workflows that take a prompt and no input picture — offered or not: <c>ComfyUI workflows offered</c> is the
-    /// main chat's list alone (later on 2026-09-27, the user's call). Both modes use it alone — the app's picture of a reply
-    /// and, since the same day, the bots' own <c>generate_image</c>. Blank (the default), or a name no longer offered of that
-    /// kind, or no longer installed, is none: no fresh picture at all. The old key is not carried over (no migration, as ever): a profile that named one
-    /// names none until it is picked again. The Botchat tab of <c>/settings</c>. No variable.
-    /// </summary>
-    public string? BotChatTxt2ImgWorkflow { get; set; }
-
-    /// <summary>
-    /// The image → image workflow <c>/botchat</c> may rework an earlier picture with (2026-09-27, the user's ask): a name among
-    /// the installed workflows that take a prompt and exactly one input picture, offered or not (later that day). Once the chat has a picture, the prompt writer
-    /// (<c>automatic</c>) or the bot (<c>autonomous</c>) chooses between a fresh picture and a rework of one that
-    /// <see cref="BotChatImg2ImgMode"/> allows. Blank (the default) is none: no rework. The Botchat tab of <c>/settings</c>. No variable.
-    /// </summary>
-    public string? BotChatImg2ImgWorkflow { get; set; }
 
     /// <summary>
     /// Which pictures a <c>/botchat</c> rework may start from (2026-09-27, the user's words): one of
     /// <see cref="App.BotChatImg2ImgMode.Names"/> — <c>latest</c> (the default: the chat's latest picture alone) or
     /// <c>chat-history</c> (any of its pictures so far, the last few, numbered). A picture still rendering is none of them yet.
-    /// Only while <see cref="BotChatImg2ImgWorkflow"/> names one. The Botchat tab of <c>/settings</c>. No variable.
+    /// Only while the chat's set has an image → image workflow (<see cref="BotChatComfy"/>). The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public string BotChatImg2ImgMode { get; set; } = App.BotChatImg2ImgMode.Default;
 
@@ -866,7 +862,9 @@ public sealed class AppSettingsData
     /// tools a turn of the main chat would be — the starting profile's tool switches, <c>/tools</c>' Offered list and plan mode's
     /// read-only narrowing (never <c>present_plan</c>) — with their rules in its prompt, and the panes they ask on (the shell's
     /// approval, the Docker, Home Assistant and print confirms, <c>ask_user</c>, the camera's shutter) shown as in a normal chat.
-    /// Skills and memory are not among them: <see cref="BotChatSkills"/> and <see cref="BotChatMemory"/> say. Off (the default),
+    /// Skills, memory and the ComfyUI tools are not among them: <see cref="BotChatSkills"/>, <see cref="BotChatMemory"/> and
+    /// <see cref="BotChatComfy"/> say (the last since later on 2026-10-04: the main chat's <c>generate_image</c> beside botchat's
+    /// own had the bots drawing with the profile's workflows). Off (the default),
     /// <see cref="BotChatLimitedTools"/> says. Read per reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public bool BotChatTools { get; set; }

@@ -239,7 +239,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
 
 ### Panes
-* `/settings`: the app, the embedded model, Docker, Claude and OpenAI servers, sessions, LLM, voice and `/botchat`
+* `/settings`: the app, LLM, the embedded model, Docker, Anthropic and OpenAI servers, voice, sessions and `/botchat`
 * `/skills`: agent skills and self-reflection
 * `/tools`: the model's tools, and Claude (`/claude` and the advisor)
 * `/mcp`: external MCP servers
@@ -294,6 +294,62 @@ Settings that an environment variable or flag can override for one launch are li
 * An NVIDIA GPU is read through its driver (NVML); any other through Windows' GPU counters, for the card with the most memory.
 * The network meters follow the busiest adapter that is up and has a gateway, so a VPN over Wi-Fi isn't counted twice. NET↓ and NET↑ show bits per second (`850K`, `12.4M`, `1.2G`); their gauges show the share of the link.
 * `/perfbar` or the toolbar's 📈 hides the bar, or brings it back with the meters it last had.
+
+#### LLM
+
+| Setting | What it does | Default |
+|---|---|---|
+| LLM server scan mode | Where to look for a server while *LLM URL* is blank: `local` (the usual ports here), `remote` (the same ports across the LAN), `both`, or `disabled`. | `disabled` |
+| LLM URL | The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), `embedded`, or `docker:<container>`. `/server` fills it in. Empty: the app scans and, at startup, lets you pick a server, model and reasoning level and saves all three (ESC takes the first server without saving). | (none) |
+| LLM model | The model id. Empty takes the first the server lists; a Docker server serving one model saves its id here when it connects; `/model` picks one. | (first listed) |
+| LLM API key | The bearer token the server expects (`empty` for none). Saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`. | `empty` |
+| LLM reasoning | How hard the model thinks: `none`, `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
+| LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts. Click it, Ctrl+O or `/expand` to see it again. Needs *Transcript markdown*. Thinking is never spoken or logged; only `/copy --thinking` copies it. | on |
+| LLM preserve thinking | Sends earlier turns' thinking back to a local server (`reasoning_content`) and asks the chat template to keep it (`preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking is always sent back between tool calls. Costs context; a prune drops old thinking first. | off |
+| LLM reasoning estimate | How `/usage` counts reasoning when the server streams thinking but doesn't count it (llama.cpp, the embedded LLM, Ollama): `chars` (characters ÷ 4), `tokenize` (llama.cpp's exact `/tokenize`, else `chars`) or `off` (`—`). Estimates show as `~1,234`; a server's own count always wins. | `chars` |
+| LLM sampling | Per-model sampling overrides; Enter opens the `/sampling` pane. See Sampling per model. | (server defaults) |
+| LLM sampling from Hugging Face | For servers that don't report their defaults (vLLM, SGLang, LM Studio) and a Hugging Face model id (`Qwen/Qwen3-8B`), shows the model card's `generation_config.json` values in `/sampling` as `(Hugging Face)`. One request per model and connect, never with your key; display only. | off |
+| LLM offer tools | Whether the model gets any tools. Turn it off for chat templates with no tool role. A change starts a new conversation. | on |
+| LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
+| LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
+| LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
+| LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (server) |
+| LLM mid-turn usage | The hint row's usage during a reply: `estimate` (live, marked `~`, one token per chunk) or `last-known` (the last completed request's figures). | `last-known` |
+| LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
+| LLM auto compact (%) | How full the context may get before the next message compacts it (1–100; 0 = off). *LLM tool compact type* acts at the same share during a reply. | 85 |
+| LLM compact type | What `/compact` does: `summary` folds older turns into a model-written summary; `prune` swaps their bulky tool results for stubs. An empty summary is retried once on a plainer transcript; if that fails too, the compact says why. | `summary` |
+| LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
+| LLM compact show summary | After a compact, shows the summary (or one line per pruned result) and how many messages were kept. | off |
+| LLM tool compact type | What happens when one turn's tool calls reach the auto-compact share. `compact` prunes, then if needed summarises earlier turns and then this turn's earlier calls. `prune` stubs this turn's older results. `stop` ends the turn. `nothing` does nothing. | `compact` |
+| LLM picture keep | The most pictures one request carries (0–500; 0 = no cap). Past it the oldest leave the conversation until half the cap is left, each a line naming its file (`view_image` shows it again); the newest message's pictures always stay. Every picture is sent again with every request, so a long picture session can outgrow what a server takes. | 20 |
+| LLM picture megabytes | The most megabytes of pictures one request carries, as sent (0–1000; 0 = no cap); past it the oldest leave until half is left. A request with pictures that the server drops as it is sent is tried once more with half of them. | 24 |
+| LLM use fun verbs | The thinking spinner shows a random verb instead of `thinking` / `writing`. | off |
+
+#### Sampling per model
+
+Until you override them, sampling is left to the server and the model's defaults.
+
+* `/sampling` (or the *LLM sampling* row) opens one tab per model: the connected model, then **any model (`*`)**, then every other model you have set something for.
+* Each field comes from the model's tab, else from `*`, else isn't sent. Switching models picks up the other model's values.
+* Changes apply at the next turn, so nothing reconnects; the pane also opens during a reply.
+* A blank value clears a field. Out-of-range values are refused, never clamped.
+
+| Field | Accepts | Sent as | Servers that honour it |
+|---|---|---|---|
+| temperature | 0 to 5 | `temperature` | all |
+| top_p | above 0, up to 1 | `top_p` | all |
+| top_k | a whole number from -1 (0 or -1 is off, depending on the server) | `top_k` | vLLM, SGLang, llama.cpp, LM Studio |
+| min_p | 0 to 1 | `min_p` | vLLM, SGLang, llama.cpp |
+| presence_penalty | -2 to 2 | `presence_penalty` | all |
+| frequency_penalty | -2 to 2 | `frequency_penalty` | all |
+| repetition_penalty | above 0, up to 2 (1 is none) | `repetition_penalty` **and** `repeat_penalty` | vLLM and SGLang read the first, llama.cpp and LM Studio the second |
+| extra body | a JSON object | its fields, top level | whatever the server knows: `{"typical_p":0.9,"dry_multiplier":0.8,"seed":42}` |
+
+* **Server defaults** show dim on the connected model's tab (`0.8 (server)`): llama.cpp reports them on `/props`, Ollama on `/api/show`. vLLM, SGLang and LM Studio report none; for vLLM and SGLang, *LLM sampling from Hugging Face* reads the model card instead.
+* **Unknown fields** are ignored by a server; Ollama's `/v1` takes only the four OpenAI ones.
+* **The extra body** may not set fields the app writes (`model`, `messages`, `tools`, `stream`, `reasoning_effort`…) or the named fields above. Its `chat_template_kwargs` merge with the app's, whose `enable_thinking` and `preserve_thinking` win.
+* **Without the pane:** `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values; `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run.
+* The Anthropic API and the OpenAI API are not affected.
 
 #### Embedded
 
@@ -445,62 +501,6 @@ The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing
 * *LLM sampling* is not sent (the reasoning models refuse a temperature), nor is another server's thinking.
 * The context window comes from the app's model table (the model list names none); *LLM context length* overrides it. `/usage` adds *Cache* and *Cost* rows: an estimate at OpenAI's list prices of 2026-10-03, long-context prices past 272K prompt tokens, cache writes from GPT-5.6 on.
 
-#### LLM
-
-| Setting | What it does | Default |
-|---|---|---|
-| LLM server scan mode | Where to look for a server while *LLM URL* is blank: `local` (the usual ports here), `remote` (the same ports across the LAN), `both`, or `disabled`. | `disabled` |
-| LLM URL | The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), `embedded`, or `docker:<container>`. `/server` fills it in. Empty: the app scans and, at startup, lets you pick a server, model and reasoning level and saves all three (ESC takes the first server without saving). | (none) |
-| LLM model | The model id. Empty takes the first the server lists; a Docker server serving one model saves its id here when it connects; `/model` picks one. | (first listed) |
-| LLM API key | The bearer token the server expects (`empty` for none). Saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`. | `empty` |
-| LLM reasoning | How hard the model thinks: `none`, `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
-| LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts. Click it, Ctrl+O or `/expand` to see it again. Needs *Transcript markdown*. Thinking is never spoken or logged; only `/copy --thinking` copies it. | on |
-| LLM preserve thinking | Sends earlier turns' thinking back to a local server (`reasoning_content`) and asks the chat template to keep it (`preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking is always sent back between tool calls. Costs context; a prune drops old thinking first. | off |
-| LLM reasoning estimate | How `/usage` counts reasoning when the server streams thinking but doesn't count it (llama.cpp, the embedded LLM, Ollama): `chars` (characters ÷ 4), `tokenize` (llama.cpp's exact `/tokenize`, else `chars`) or `off` (`—`). Estimates show as `~1,234`; a server's own count always wins. | `chars` |
-| LLM sampling | Per-model sampling overrides; Enter opens the `/sampling` pane. See Sampling per model. | (server defaults) |
-| LLM sampling from Hugging Face | For servers that don't report their defaults (vLLM, SGLang, LM Studio) and a Hugging Face model id (`Qwen/Qwen3-8B`), shows the model card's `generation_config.json` values in `/sampling` as `(Hugging Face)`. One request per model and connect, never with your key; display only. | off |
-| LLM offer tools | Whether the model gets any tools. Turn it off for chat templates with no tool role. A change starts a new conversation. | on |
-| LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
-| LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
-| LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
-| LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (server) |
-| LLM mid-turn usage | The hint row's usage during a reply: `estimate` (live, marked `~`, one token per chunk) or `last-known` (the last completed request's figures). | `last-known` |
-| LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
-| LLM auto compact (%) | How full the context may get before the next message compacts it (1–100; 0 = off). *LLM tool compact type* acts at the same share during a reply. | 85 |
-| LLM compact type | What `/compact` does: `summary` folds older turns into a model-written summary; `prune` swaps their bulky tool results for stubs. An empty summary is retried once on a plainer transcript; if that fails too, the compact says why. | `summary` |
-| LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
-| LLM compact show summary | After a compact, shows the summary (or one line per pruned result) and how many messages were kept. | off |
-| LLM tool compact type | What happens when one turn's tool calls reach the auto-compact share. `compact` prunes, then if needed summarises earlier turns and then this turn's earlier calls. `prune` stubs this turn's older results. `stop` ends the turn. `nothing` does nothing. | `compact` |
-| LLM picture keep | The most pictures one request carries (0–500; 0 = no cap). Past it the oldest leave the conversation until half the cap is left, each a line naming its file (`view_image` shows it again); the newest message's pictures always stay. Every picture is sent again with every request, so a long picture session can outgrow what a server takes. | 20 |
-| LLM picture megabytes | The most megabytes of pictures one request carries, as sent (0–1000; 0 = no cap); past it the oldest leave until half is left. A request with pictures that the server drops as it is sent is tried once more with half of them. | 24 |
-| LLM use fun verbs | The thinking spinner shows a random verb instead of `thinking` / `writing`. | off |
-
-#### Sampling per model
-
-Until you override them, sampling is left to the server and the model's defaults.
-
-* `/sampling` (or the *LLM sampling* row) opens one tab per model: the connected model, then **any model (`*`)**, then every other model you have set something for.
-* Each field comes from the model's tab, else from `*`, else isn't sent. Switching models picks up the other model's values.
-* Changes apply at the next turn, so nothing reconnects; the pane also opens during a reply.
-* A blank value clears a field. Out-of-range values are refused, never clamped.
-
-| Field | Accepts | Sent as | Servers that honour it |
-|---|---|---|---|
-| temperature | 0 to 5 | `temperature` | all |
-| top_p | above 0, up to 1 | `top_p` | all |
-| top_k | a whole number from -1 (0 or -1 is off, depending on the server) | `top_k` | vLLM, SGLang, llama.cpp, LM Studio |
-| min_p | 0 to 1 | `min_p` | vLLM, SGLang, llama.cpp |
-| presence_penalty | -2 to 2 | `presence_penalty` | all |
-| frequency_penalty | -2 to 2 | `frequency_penalty` | all |
-| repetition_penalty | above 0, up to 2 (1 is none) | `repetition_penalty` **and** `repeat_penalty` | vLLM and SGLang read the first, llama.cpp and LM Studio the second |
-| extra body | a JSON object | its fields, top level | whatever the server knows: `{"typical_p":0.9,"dry_multiplier":0.8,"seed":42}` |
-
-* **Server defaults** show dim on the connected model's tab (`0.8 (server)`): llama.cpp reports them on `/props`, Ollama on `/api/show`. vLLM, SGLang and LM Studio report none; for vLLM and SGLang, *LLM sampling from Hugging Face* reads the model card instead.
-* **Unknown fields** are ignored by a server; Ollama's `/v1` takes only the four OpenAI ones.
-* **The extra body** may not set fields the app writes (`model`, `messages`, `tools`, `stream`, `reasoning_effort`…) or the named fields above. Its `chat_template_kwargs` merge with the app's, whose `enable_thinking` and `preserve_thinking` win.
-* **Without the pane:** `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values; `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run.
-* The Anthropic API and the OpenAI API are not affected.
-
 #### TTS
 
 Speech output sets up in the background (🔈 on the hint row); replies are text-only until it's ready.
@@ -553,15 +553,14 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 | Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's (a blank URL borrows this one's). A bot whose server doesn't answer sits the chat out. Read when a chat starts or resumes. | `single` |
 | Botchat multi-embedded | Under `multi`, for bots wanting a different embedded model from the one running. `parent-server`: they share the running model, with a warning. `multi-server`: one extra `llama-server` per model, started in turn under that bot's profile's Embedded settings so each fits in what's left. Bots on one model share its server. | `parent-server` |
 | Botchat multi-embedded kill | Stops `multi-server`'s extra servers when the chat ends. Off, they run until `/botchat --kill` or you quit, and a later chat reuses them. | on |
-| Botchat images enabled | Adds pictures to `/botchat`; needs *ComfyUI tools* and a *ComfyUI URL*. Off, the bots draw nothing; their other tools are the rows below. | off |
-| Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` and draw when they choose. See Botchat pictures. | `automatic` |
-| Botchat txt2img workflow | The text → image workflow; blank means no new pictures. | (none) |
-| Botchat img2img workflow | The image → image workflow for reworks; blank means none. | (none) |
-| Botchat img2img mode | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). | `latest` |
+| Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Off, *Botchat ComfyUI limited workflows* says; with neither, the chat is talk alone. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
+| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get: tick them (**A** / **N**), any installed workflow, offered to this chat or not. None ticked: no pictures. | (none) |
+| Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` over the botchat workflows and draw when they choose. See Botchat pictures. | `automatic` |
+| Botchat img2img mode | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). Only with an image → image workflow among the botchat workflows. | `latest` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture and appears with it. | on |
 | Botchat non-TTS delay | A reading pause after each reply when *TTS output* is off (0–30 s). A line you send meanwhile, or one queued while the bot was replying, ends the pause and goes to the bots at once; ESC ends the chat. | 5 |
-| Botchat tools enabled | Offers every bot the tools a turn of this chat would get: the same switches, `/tools` list and panes (the shell's approval, the Docker, Home Assistant and print confirms, `ask_user`, the camera's shutter); while you plan, only plan mode's read-only tools. Not memory or skills, which have their own rows. Off, *Botchat limited tools* says. | off |
-| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (**A** / **N**). Each is offered only while this chat would offer it. None ticked: no tools. | (none) |
+| Botchat tools enabled | Offers every bot the tools a turn of this chat would get: the same switches, `/tools` list and panes (the shell's approval, the Docker, Home Assistant and print confirms, `ask_user`, the camera's shutter); while you plan, only plan mode's read-only tools. Not memory, skills or the ComfyUI tools, which have their own rows. Off, *Botchat limited tools* says. | off |
+| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (**A** / **N**). Each is offered only while this chat would offer it. None ticked: no tools. The ComfyUI tools aren't listed. | (none) |
 | Botchat skills enabled | Offers every bot `load_skill` over the starting profile's, the global and (with *Use external skills*) the external skills, never a bot's own profile's. The `automatic` prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off. Off, *Botchat limited skills* says. | off |
 | Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (**A** / **N**), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. | (none) |
 | Botchat memory enabled | Gives every bot memories: the list in its prompt, plus `save_memory` and `recall_memory`. Inside `/botchat` this alone decides, over every profile's *Memory* switch. | on |
@@ -571,10 +570,10 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 
 ##### Botchat pictures
 
-* Either workflow can be any installed one of its kind, ticked in *ComfyUI workflows offered* or not. Pictures are drawn at *Image thumbnail size*.
-* **`automatic`:** after each reply, the model writes an image prompt in the workflow family's style and the app draws it. The bots get no tool.
-* **`autonomous`:** the bots get `generate_image`, limited to the two botchat workflows. A reply that describes a picture the bot never drew gets it drawn anyway. A tool call written out as text (`<tool_call>` markup included) runs as a real call and is never shown or spoken.
-* **Reworks:** once there's a picture and an img2img workflow, the next prompt's writer chooses between a new picture and a rework (`REWORK` or `REWORK n` in `automatic`; an `image` path in `autonomous`). A picture still rendering can't be reworked.
+* **The botchat workflows** are *Botchat ComfyUI enabled*'s (this profile's offered ones) or *Botchat ComfyUI limited workflows*' (any installed ones). Their text → image workflows draw new pictures and their image → image ones rework the chat's pictures; other kinds are skipped. The bots never get the main chat's own `generate_image`, so these rows alone say which workflows they use. Pictures are drawn at *Image thumbnail size*.
+* **`automatic`:** after each reply, the model writes an image prompt in the workflow family's style and the app draws it. With several workflows of a kind, the writer is shown each one's style and names its pick (`WORKFLOW name`). The bots get no tool.
+* **`autonomous`:** the bots get `generate_image`, limited to the botchat workflows. A reply that describes a picture the bot never drew gets it drawn anyway. A tool call written out as text (`<tool_call>` markup included) runs as a real call and is never shown or spoken.
+* **Reworks:** once there's a picture and an image → image workflow, the next prompt's writer chooses between a new picture and a rework (`REWORK` or `REWORK n` in `automatic`; an `image` path in `autonomous`). A picture still rendering can't be reworked.
 * **Async on:** 🖼️ (🎨 for a rework) shows on the hint row while a picture renders, with a count when several are pending. Each picture is labelled with whose reply it shows. Without speech, pictures go to ComfyUI one at a time.
 * **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips just that picture.
 * **Skills:** with *Botchat skills enabled*, the `automatic` prompt writer may load a skill first, so "use the pony-prompts skill for pictures" holds from the first picture. With it off, *Botchat limited skills* offers the writer the ticked skills alone.

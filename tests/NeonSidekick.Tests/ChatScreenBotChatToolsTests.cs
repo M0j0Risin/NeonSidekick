@@ -64,6 +64,33 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(Assistant.WebRule, system);
     }
 
+    /// <summary>
+    /// The main chat's ComfyUI tools are never the bots' (later on 2026-10-04, the user's report: its generate_image sat beside the
+    /// bot's own and the bots drew with the profile's workflows): ticked in the limited tools, or with the tools on, they are not
+    /// offered; the Botchat ComfyUI rows alone give a bot generate_image.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BotChat_TheMainChatsComfyTools_AreNeverTheBots(bool toolsEnabled)
+    {
+        BotChatFixture();
+        ComfyServer();   // pony offered to the main chat
+        _settings.Update(d => { d.BotChatTools = toolsEnabled; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName]; });
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(2);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string[] bot = ToolNames(_chat.Options[0]);
+        Assert.Contains(GetCurrentTimeTool.ToolName, bot);
+        Assert.DoesNotContain(GenerateImageTool.ToolName, bot);
+        Assert.DoesNotContain(SetSplashImageTool.ToolName, bot);
+    }
+
     /// <summary>With the main chat's tools a bot's turn has the main chat's round trips, not the botchat's few.</summary>
     [Fact]
     public async Task BotChat_ToolsEnabled_ABotMayTakeMoreThanThreeRoundTrips()
