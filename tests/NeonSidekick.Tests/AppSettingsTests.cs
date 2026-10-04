@@ -692,18 +692,24 @@ public class AppSettingsTests : IDisposable
         AssertOldShapeLoaded(settings.Current);
     }
 
-    /// <summary>A JSON null in a list that is never null in code is its default again (the second 2026-10-04 review: the copy threw).</summary>
+    /// <summary>
+    /// A JSON null in a list or a string that is never null in code is its default again (the second 2026-10-04 review: the copy
+    /// threw; the third: every such field, LlmModel's .Trim() at /settings among them); a nullable one still reads null.
+    /// </summary>
     [Fact]
     public void ProfileFile_NullLists_LoadAsTheirDefaults_AndAnUpdateCopies()
     {
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         string path = Profiles.ProfileFile(_dir, Profiles.DefaultName);
         File.WriteAllText(path,
-            "{ \"SchemaVersion\": 2, \"ToolsDisabled\": null, \"ShellCommandAllowed\": null, \"ShellPoliceForbiddenStrings\": null, \"ShellCodeLanguages\": null, \"McpServersDisabled\": null }");
+            "{ \"SchemaVersion\": 2, \"ToolsDisabled\": null, \"ShellCommandAllowed\": null, \"ShellPoliceForbiddenStrings\": null, \"ShellCodeLanguages\": null, \"McpServersDisabled\": null, \"LlmModel\": null, \"LlmUrl\": null, \"ToolbarItems\": null }");
         var defaults = new AppSettingsData();
 
         using (var settings = new AppSettings(_dir))
         {
+            Assert.Equal(defaults.LlmModel, settings.Current.LlmModel);
+            Assert.Equal(defaults.LlmUrl, settings.Current.LlmUrl);
+            Assert.Null(settings.Current.ToolbarItems);
             Assert.Equal(defaults.ToolsDisabled, settings.Current.ToolsDisabled);
             Assert.Empty(settings.Current.ShellCommandAllowed);
             Assert.Empty(settings.Current.ShellPoliceForbiddenStrings);

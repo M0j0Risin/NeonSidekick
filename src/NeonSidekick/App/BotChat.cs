@@ -784,7 +784,7 @@ public static partial class BotChat
             .FirstOrDefault();
         if (lead.Workflow is not null)
         {
-            return (lead.Workflow.Name, line[lead.Length..].TrimStart(PromptLead));
+            return (lead.Workflow.Name, PromptAfter(line[lead.Length..]));
         }
 
         var split = Separators
@@ -798,11 +798,21 @@ public static partial class BotChat
             bool onlyWhole = !workflows.Any(w => HoldsWord(before, w.Name)) && workflows.Any(w => HoldsWord(whole, w.Name));
             if (!onlyWhole)
             {
-                return (before, line[(split.At + split.Length)..].TrimStart(PromptLead));
+                return (before, PromptAfter(line[(split.At + split.Length)..]));
             }
         }
 
         return (whole, "");
+    }
+
+    /// <summary>
+    /// The prompt after a workflow's name on its line: the marks before it dropped, and nothing when no letter or digit is left
+    /// (the third 2026-10-04 review: <c>WORKFLOW: flux dev.</c> with flux-dev installed drew the prompt ".").
+    /// </summary>
+    private static string PromptAfter(string rest)
+    {
+        string prompt = rest.TrimStart(PromptLead);
+        return prompt.Any(char.IsLetterOrDigit) ? prompt : "";
     }
 
     /// <summary>What may stand between a workflow's name and a prompt on its line, when the name is not one installed.</summary>

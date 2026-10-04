@@ -6,7 +6,8 @@ namespace NeonSidekick.Sqlite;
 /// Whether <c>sqlite_query</c> may run a text (2026-10-04), <c>MySqlReadOnlyGate</c>'s part for SQLite: the first layer, ahead of
 /// the file opened read-only, <c>PRAGMA query_only</c> and a transaction always rolled back (<see cref="SqliteAccess"/>). A
 /// <b>lexer</b> for SQLite's rules, never a pattern: <c>--</c> and <c>/* */</c> comments (not nested); <c>'…'</c> strings with
-/// <c>''</c>; names in <c>"…"</c>, <c>[…]</c> and <c>`…`</c>; <c>@name</c>, <c>:name</c> and <c>$name</c> placeholders. Allowed: one
+/// <c>''</c>; names in <c>"…"</c>, <c>[…]</c> and <c>`…`</c>; <c>@name</c>, <c>:name</c>, <c>$name</c> and <c>#name</c> placeholders
+/// read as SQLite's tokenizer reads them (<see cref="VariableLength"/>). Allowed: one
 /// statement (a trailing <c>;</c> dropped) that starts <c>SELECT</c>, <c>WITH</c> or <c>VALUES</c>. Refused wherever it stands: the
 /// changing words (a <c>WITH</c> may lead an <c>INSERT</c>, so they are refused anywhere; <c>REPLACE</c> only before <c>INTO</c>,
 /// since <c>replace()</c> is a string function), <c>ATTACH</c>/<c>DETACH</c> (another file), <c>PRAGMA</c>, the transaction words,
@@ -29,7 +30,7 @@ public static class SqliteReadOnlyGate
         /// <summary>A numeric literal.</summary>
         Number,
 
-        /// <summary>A named placeholder; the text is it with its prefix (<c>@id</c>, <c>:id</c>, <c>$id</c>).</summary>
+        /// <summary>A named placeholder; the text is it with its prefix (<c>@id</c>, <c>:id</c>, <c>$id</c>, <c>#id</c>, <c>$a::b</c>, <c>$a(x)</c>).</summary>
         Bind,
 
         /// <summary>Any other character: <c>(</c>, <c>;</c>, <c>?</c>, an operator.</summary>
@@ -252,16 +253,10 @@ public static class SqliteReadOnlyGate
                 continue;
             }
 
-            if (c is '@' or ':' or '$' && i + 1 < sql.Length && IsNameChar(sql[i + 1]))
+            if (c is '@' or ':' or '$' or '#' && VariableLength(sql, i) is int length and > 0)
             {
-                int k = i + 1;
-                while (k < sql.Length && IsNameChar(sql[k]))
-                {
-                    k++;
-                }
-
-                tokens.Add(new Token(TokenKind.Bind, sql[i..k], line, column));
-                i = k;
+                tokens.Add(new Token(TokenKind.Bind, sql.Substring(i, length), line, column));
+                i += length;
                 continue;
             }
 
@@ -278,7 +273,7 @@ public static class SqliteReadOnlyGate
                 continue;
             }
 
-            if (IsNameChar(c))
+            if (IsNameChar(c) && c != '$')
             {
                 int k = i + 1;
                 while (k < sql.Length && IsNameChar(sql[k]))
@@ -298,5 +293,47 @@ public static class SqliteReadOnlyGate
         return tokens;
     }
 
-    private static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c == '_' || c > 127;
+    /// <summary>SQLite's <c>IdChar</c>: a letter, a digit, <c>_</c>, <c>$</c> (inside a name, never leading one) or past ASCII.</summary>
+    private static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '$' || c > 127;
+
+    /// <summary>
+    /// How long the placeholder at <paramref name="start"/> (its <c>@</c>, <c>:</c>, <c>$</c> or <c>#</c>) is; 0 when SQLite would not
+    /// read one there. tokenize.c's <c>CC_VARALPHA</c> case over again (the third 2026-10-04 review: the gate read <c>#a</c> as no
+    /// placeholder and stopped <c>@a$b</c> at the <c>$</c>, so <see cref="Binds"/> missed or misnamed them and Microsoft.Data.Sqlite
+    /// threw past the <c>SqliteException</c> catches): name characters, <c>$</c> among them; a <c>::</c> anywhere; after at least one
+    /// name character a <c>(…)</c> with no blank in it ends it (unclosed, SQLite's illegal token: 0 here too).
+    /// </summary>
+    private static int VariableLength(string sql, int start)
+    {
+        int i = start + 1, n = 0;
+        while (i < sql.Length)
+        {
+            char c = sql[i];
+            if (IsNameChar(c))
+            {
+                n++;
+                i++;
+            }
+            else if (c == '(' && n > 0)
+            {
+                int k = i + 1;
+                while (k < sql.Length && !char.IsWhiteSpace(sql[k]) && sql[k] != ')')
+                {
+                    k++;
+                }
+
+                return k < sql.Length && sql[k] == ')' ? k + 1 - start : 0;
+            }
+            else if (c == ':' && i + 1 < sql.Length && sql[i + 1] == ':')
+            {
+                i += 2;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return n > 0 ? i - start : 0;
+    }
 }

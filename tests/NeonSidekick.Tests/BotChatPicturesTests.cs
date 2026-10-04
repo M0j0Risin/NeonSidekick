@@ -166,6 +166,8 @@ public class BotChatPicturesTests
 
     [Theory]
     [InlineData("WORKFLOW: flux dev", "flux-dev", "")]               // the second 2026-10-04 review: was flux, drawing "dev"
+    [InlineData("WORKFLOW: flux dev.", "flux-dev", "")]              // the third: the full stop was the prompt
+    [InlineData("WORKFLOW: fluxdev!", "flux-dev", "")]
     [InlineData("WORKFLOW: flux a red fox", "flux", "a red fox")]    // the shorter name still leads a prompt on its line
     [InlineData("WORKFLOW: flux-dev a red fox", "flux-dev", "a red fox")]
     public void ParseImagePrompt_TheLongerNameWins_WhateverItsJoiner(string text, string workflow, string prompt)

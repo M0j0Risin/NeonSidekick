@@ -164,6 +164,25 @@ public static class PostgresReadOnlyGate
             .Select(t => t.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>
+    /// The <c>@name</c>s straight after an operator character that <paramref name="named"/> does not hold, each once, without the
+    /// <c>@</c>; empty when the text does not lex. Sent as written, the server reads such an @ as the operator's tail, so a
+    /// placeholder written <c>id=@id</c> with no params is the operator <c>=@</c>: <see cref="PostgresAccess"/> adds a hint to the
+    /// error that follows (the third 2026-10-04 review: the spaced <c>id = @id</c> binds NULL, the unspaced one failed with
+    /// <c>operator does not exist: integer =@ integer</c> and nothing more).
+    /// </summary>
+    public static IReadOnlyList<string> UnboundOperatorBinds(string sql, IEnumerable<string>? named = null)
+    {
+        if (Tokenize(sql ?? "", out _) is not { } tokens)
+        {
+            return [];
+        }
+
+        var given = new HashSet<string>(named ?? [], StringComparer.OrdinalIgnoreCase);
+        return tokens.Where(t => t.Kind == TokenKind.OperatorBind && !given.Contains(t.Text))
+            .Select(t => t.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     /// <summary>The text without a trailing <c>;</c>: what runs.</summary>
     public static string Body(string sql)
     {

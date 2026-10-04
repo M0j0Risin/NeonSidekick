@@ -146,7 +146,21 @@ public sealed class SqliteAccess
             }
         }
 
-        using var timer = new Timer(_ => Interrupt(timer: true), null, TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)), Timeout.InfiniteTimeSpan);
+        // Past the deadline, or once cancelled, the timer goes on interrupting until the run ends (the third 2026-10-04 review):
+        // SQLite drops an interrupt that lands while no statement runs, between two statements or before the first, so a one-shot
+        // left the rest with no deadline. The loop's checks below end the run between statements at once.
+        var deadline = TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds));
+        using var timer = new Timer(_ =>
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                Interrupt(timer: false);
+            }
+            else if (watch.Elapsed >= deadline)
+            {
+                Interrupt(timer: true);
+            }
+        }, null, InterruptRepeat, InterruptRepeat);
         using var registration = cancellationToken.Register(() => Interrupt(timer: false));
         try
         {
@@ -161,6 +175,15 @@ public sealed class SqliteAccess
             {
                 foreach (string sql in statements)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    lock (gate)
+                    {
+                        if (timedOut)
+                        {
+                            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, "", grids, watch.Elapsed);
+                        }
+                    }
+
                     using var command = connection.CreateCommand();
                     command.Transaction = transaction;
                     command.CommandText = sql;
@@ -213,6 +236,9 @@ public sealed class SqliteAccess
 
         return new SqlRun(SqlOutcome.Ok, "", target.Name, "", grids, watch.Elapsed);
     }
+
+    /// <summary>How often the run's timer looks at the deadline and the token, and interrupts again once either is past.</summary>
+    private static readonly TimeSpan InterruptRepeat = TimeSpan.FromMilliseconds(100);
 
     /// <summary>A placeholder bound as written (<c>@id</c>, <c>:id</c>, <c>$id</c>): text, whole numbers, floats; a decimal as a float and a boolean as 1 or 0, SQLite's own types.</summary>
     public static SqliteParameter Bind(string name, object? value) => new(name, value switch

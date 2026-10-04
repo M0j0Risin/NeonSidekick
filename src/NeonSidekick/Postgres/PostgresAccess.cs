@@ -36,6 +36,12 @@ public sealed class PostgresAccess
     /// <summary>SQLSTATE of a write a read-only transaction refused.</summary>
     public const string ReadOnlyTransaction = "25006";
 
+    /// <summary>SQLSTATE of a function or operator that does not exist (<c>=@</c> from an unbound <c>id=@id</c>).</summary>
+    public const string UndefinedFunction = "42883";
+
+    /// <summary>SQLSTATE of a syntax error.</summary>
+    public const string SyntaxError = "42601";
+
     private readonly Func<PostgresCatalog> _catalog;
 
     public PostgresAccess(Func<PostgresCatalog> catalog)
@@ -160,7 +166,7 @@ public sealed class PostgresAccess
         }
         catch (PostgresException ex)
         {
-            return new SqlRun(SqlOutcome.Failed, Message(ex), target.Name, workIn, grids, watch.Elapsed);
+            return new SqlRun(SqlOutcome.Failed, Message(ex) + OperatorBindHint(ex.SqlState, statements, parameters.Select(p => p.Name)), target.Name, workIn, grids, watch.Elapsed);
         }
         catch (NpgsqlException ex)
         {
@@ -261,6 +267,24 @@ public sealed class PostgresAccess
         ArgumentNullException.ThrowIfNull(ex);
         string text = PostgresText.ServerError(ex.SqlState, LogText.Excerpt(ex.MessageText.ReplaceLineEndings(" "), 600));
         return ex.SqlState == ReadOnlyTransaction ? PostgresText.ReadOnlyRefused + " (" + text + ")" : text;
+    }
+
+    /// <summary>
+    /// What follows the server's message when the error is an operator or a syntax one and a statement holds an <c>@name</c> straight
+    /// after an operator that params does not name (<see cref="PostgresReadOnlyGate.UnboundOperatorBinds"/>): the likely cause,
+    /// said; else empty.
+    /// </summary>
+    public static string OperatorBindHint(string sqlState, IEnumerable<string> statements, IEnumerable<string> named)
+    {
+        ArgumentNullException.ThrowIfNull(statements);
+        if (sqlState is not (UndefinedFunction or SyntaxError))
+        {
+            return "";
+        }
+
+        var names = named.ToList();
+        var unbound = statements.SelectMany(s => PostgresReadOnlyGate.UnboundOperatorBinds(s, names)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return unbound.Count == 0 ? "" : PostgresText.UnboundOperatorBind(unbound);
     }
 
     /// <summary>A table reference split into schema and name: <c>public.orders</c>, <c>orders</c>, <c>"My.Table"</c> (a doubled quote is one). Null when it is not one or two names.</summary>

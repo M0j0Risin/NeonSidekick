@@ -12074,7 +12074,6 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Whether <c>/botchat</c> may have pictures at all    /// <summary>
     /// Whether <c>/botchat</c> may have pictures at all (later on 2026-09-27, the user's call: its workflows are any installed
     /// ones, so <see cref="ComfyOffered"/>'s offered-workflow test no longer applies): <c>ComfyUI tools</c> on and an http(s)
     /// <c>ComfyUI URL</c>. Whether a picture can be made is <see cref="BotWorkflows"/>'s to say.
@@ -13607,7 +13606,8 @@ internal sealed partial class ChatScreen
     /// Kept whatever <c>ComfyUI picture strip</c> says — the setting hides the strip, it does not stop the gathering, so a
     /// flip back on shows the session's pictures. <c>Show image thumbnails</c> is not consulted. Any thread.
     /// Each goes in by its file's creation time (2026-10-04, the user's report: a <c>Botchat image async</c> picture drawn
-    /// late landed left of later ones, out of the viewer's order); a file not found or not read counts as made now.
+    /// late landed left of later ones, out of the viewer's order); a file not found or not read has no time and goes by when it
+    /// came, just newer than the picture added before it (<see cref="PictureFileStamp"/>, <see cref="PictureStrip.Add"/>).
     /// </summary>
     private void AddToPictureStrip(IReadOnlyList<ImageAttachment> images)
     {

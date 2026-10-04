@@ -87,6 +87,15 @@ public sealed class PostgresReadOnlyGateTests
         const string Mixed = "SELECT * FROM t WHERE ARRAY['x'] <@tags AND v @@q AND id=@id AND n = @n";
         Assert.Equal(["n"], PostgresReadOnlyGate.Binds(Mixed));
         Assert.Equal(["id", "n"], PostgresReadOnlyGate.Binds(Mixed, ["ID", "n"]));
+
+        // The unbound ones are the likely cause of an operator or syntax error, said after the server's message (the third
+        // 2026-10-04 review: id=@id with no params failed with "operator does not exist: integer =@ integer" alone).
+        Assert.Equal(["tags", "q", "id"], PostgresReadOnlyGate.UnboundOperatorBinds(Mixed));
+        Assert.Equal(["tags", "q"], PostgresReadOnlyGate.UnboundOperatorBinds(Mixed, ["ID"]));
+        Assert.Contains("@id", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, ["SELECT 1", "SELECT * FROM t WHERE id=@id"], []));
+        Assert.Contains("@id", PostgresAccess.OperatorBindHint(PostgresAccess.SyntaxError, ["SELECT * FROM t WHERE id=@id"], ["n"]));
+        Assert.Equal("", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, ["SELECT * FROM t WHERE id=@id"], ["id"]));
+        Assert.Equal("", PostgresAccess.OperatorBindHint("42P01", ["SELECT * FROM t WHERE id=@id"], []));
         Assert.Null(PostgresReadOnlyGate.Check(Mixed));
         Assert.Equal("SELECT 1", PostgresReadOnlyGate.Body("SELECT 1 ; "));
     }
@@ -370,6 +379,9 @@ public sealed class LivePostgresTests
         Assert.Contains("| 11 | 7.00 | NULL |", rows);
         Assert.Contains("{gift, rush}", await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT tags FROM ns_orders WHERE id = 10", null, null, [], null, CancellationToken.None));
         Assert.Contains("the first 1 shown", await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT * FROM ns_orders", null, null, [], 1, CancellationToken.None));
+        var unbound = await Raw("SELECT * FROM ns_orders WHERE id=@id");
+        Assert.Equal(SqlOutcome.Failed, unbound.Outcome);
+        Assert.EndsWith(PostgresText.UnboundOperatorBind(["id"]), unbound.Detail);
 
         var types = await Raw(PostgresCheck.TypeMatrix);
         Assert.Equal(SqlOutcome.Ok, types.Outcome);

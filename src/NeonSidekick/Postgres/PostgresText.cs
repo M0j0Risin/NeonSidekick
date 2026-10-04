@@ -104,6 +104,10 @@ public static class PostgresText
     public static string Failed(string connection, string detail) => $"Error: the server refused it ({connection}): {detail}";
     public static string ServerError(string sqlState, string message) => $"{sqlState}: {message}";
     public const string ReadOnlyRefused = "the read-only transaction refused a change";
+
+    /// <summary>The hint after an operator or syntax error when an <c>@name</c> straight after an operator was left unbound (<see cref="PostgresAccess.OperatorBindHint"/>).</summary>
+    public static string UnboundOperatorBind(IReadOnlyList<string> names) =>
+        $"; {string.Join(", ", names.Select(n => "@" + n))} straight after an operator is a placeholder only when params names it, else the server reads the @ as part of the operator: pass {string.Join(", ", names)} in params";
     public static string ConnectFailedLogLine(string connection, string detail) => $"{connection} did not connect: {detail}";
 
     public static string Error(SqlRun run)

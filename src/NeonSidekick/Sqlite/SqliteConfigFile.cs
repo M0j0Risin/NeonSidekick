@@ -119,7 +119,9 @@ public sealed class SqliteConfigFile
             return new SqliteCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail))]);
         }
 
-        if (file is null || file.Databases.Count == 0)
+        // "databases": null reads as null past the non-nullable type (the third 2026-10-04 review: it threw at every turn's tool
+        // build, ConnectionFamily.Load's null check being the Oracle/MySQL/Postgres files' alone).
+        if (file?.Databases is not { Count: > 0 })
         {
             return SqliteCatalog.Empty;
         }

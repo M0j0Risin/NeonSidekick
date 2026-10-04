@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Settings;
@@ -574,11 +575,9 @@ public sealed class AppSettings : IDisposable
             if (File.Exists(filePath))
             {
                 var json = File.ReadAllText(filePath);
-                var loaded = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettingsData);
+                var loaded = JsonSerializer.Deserialize(json, ReadInfo);
                 if (loaded is not null)
                 {
-                    FillNullLists(loaded);
-
                     // The interrupt needs the wake word (2026-09-13); a profile saved before that
                     // rule loads with it off, and the file follows at the next save.
                     if (loaded.SttInterrupt && !loaded.SttWake)
@@ -622,21 +621,45 @@ public sealed class AppSettings : IDisposable
     }
 
     /// <summary>
-    /// The lists that are never null in code given their defaults back when the file says <c>null</c> (the second 2026-10-04 review):
-    /// System.Text.Json writes a JSON null into a non-nullable <c>List&lt;string&gt;</c>, and <see cref="Copy"/>'s spread then threw
-    /// on the first <see cref="Update"/>, as <c>ForbiddenStrings.Find</c> did under <c>run_command</c>. The nullable lists
-    /// (<c>ToolbarItems</c> and the like) already read null as their own default. Returns <paramref name="loaded"/>.
+    /// How a profile file is read: <see cref="SettingsJsonContext"/>'s metadata with a JSON <c>null</c> skipped for every property
+    /// that is never null in code, so its default stands (the third 2026-10-04 review). System.Text.Json writes the null into a
+    /// non-nullable <c>string</c> or <c>List&lt;string&gt;</c> all the same: <c>"LlmModel": null</c> threw at <c>/settings</c>'
+    /// <c>.Trim()</c>, a null list in <see cref="Copy"/>'s spread and <c>ForbiddenStrings.Find</c>. The review before patched five
+    /// lists by hand; this covers every field, a new one included. The nullable ones (<c>ToolbarItems</c> and the like) still read
+    /// null as null. <c>RespectNullableAnnotations</c> was not the way: it throws, and the whole file would fall back to defaults.
     /// </summary>
-    internal static AppSettingsData FillNullLists(AppSettingsData loaded)
+    internal static JsonTypeInfo<AppSettingsData> ReadInfo { get; } = BuildReadInfo();
+
+    private static JsonTypeInfo<AppSettingsData> BuildReadInfo()
     {
-        ArgumentNullException.ThrowIfNull(loaded);
-        var defaults = new AppSettingsData();
-        loaded.ToolsDisabled ??= defaults.ToolsDisabled;
-        loaded.ShellCommandAllowed ??= defaults.ShellCommandAllowed;
-        loaded.ShellPoliceForbiddenStrings ??= defaults.ShellPoliceForbiddenStrings;
-        loaded.ShellCodeLanguages ??= defaults.ShellCodeLanguages;
-        loaded.McpServersDisabled ??= defaults.McpServersDisabled;
-        return loaded;
+        var options = new JsonSerializerOptions(SettingsJsonContext.Default.Options)
+        {
+            TypeInfoResolver = SettingsJsonContext.Default.WithAddedModifier(KeepDefaultForNull),
+        };
+        return (JsonTypeInfo<AppSettingsData>)options.GetTypeInfo(typeof(AppSettingsData));
+    }
+
+    /// <summary>A non-nullable reference property's setter wrapped to pass a null by: the property keeps its initial value.</summary>
+    private static void KeepDefaultForNull(JsonTypeInfo info)
+    {
+        if (info.Kind != JsonTypeInfoKind.Object)
+        {
+            return;
+        }
+
+        foreach (var property in info.Properties)
+        {
+            if (property.Set is { } set && !property.IsSetNullable && !property.PropertyType.IsValueType)
+            {
+                property.Set = (target, value) =>
+                {
+                    if (value is not null)
+                    {
+                        set(target, value);
+                    }
+                };
+            }
+        }
     }
 
     /// <summary>

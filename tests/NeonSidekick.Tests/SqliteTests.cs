@@ -55,6 +55,10 @@ public sealed class SqliteReadOnlyGateTests
     public void Binds_AndBody()
     {
         Assert.Equal(["@id", ":name", "$x", "@ID"], SqliteReadOnlyGate.Binds("SELECT @id, :name, $x, @ID, @id, '@not'"));
+        // SQLite's own variable forms (the third 2026-10-04 review): #name, a $ inside a name, the TCL :: and (…); a$b is a column.
+        Assert.Equal(["#a", "@a$b", "$a::b", "$c(x)", ":d"], SqliteReadOnlyGate.Binds("SELECT #a, @a$b, $a::b, $c(x), :d, a$b, $c(x y)"));
+        Assert.Null(SqliteReadOnlyGate.Check("SELECT #a, @a$b FROM t WHERE c$d = $e(INSERT)"));
+        Assert.NotNull(SqliteReadOnlyGate.Check("SELECT $e(x INSERT)"));
         Assert.Equal("SELECT 1", SqliteReadOnlyGate.Body("SELECT 1 ;  "));
         Assert.Equal("SELECT 1", SqliteReadOnlyGate.Body("SELECT 1"));
     }
@@ -136,6 +140,10 @@ public sealed class SqliteToolsTests : IDisposable
 
         File.WriteAllText(SqliteConfigFile.GlobalPath(_home), "{ not json");
         Assert.Contains(SqliteConfigFile.LoadCatalog(_profile, _home).Problems, p => p.Source == SqliteConfigFile.GlobalPath(_home));
+
+        // A null list is no databases, not a throw at every turn's tool build (the third 2026-10-04 review).
+        File.WriteAllText(SqliteConfigFile.GlobalPath(_home), "{ \"databases\": null }");
+        Assert.Same(SqliteCatalog.Empty, SqliteConfigFile.Load(SqliteConfigFile.GlobalPath(_home)));
     }
 
     [Fact]
@@ -188,6 +196,11 @@ public sealed class SqliteToolsTests : IDisposable
         var cased = await access.RunAsync("shop", null, ["SELECT :x, :X, :y IS NULL, :Y IS NULL, :z"], [new("x", 1L), new("X", 2L), new("Z", 3L)], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, cased.Outcome);
         Assert.Equal(["1", "2", "1", "1", "3"], cased.Grids[0].Rows[0]);
+
+        // #a and @a$b are placeholders to SQLite: bound, one named and one not, where the driver threw for both (the third review).
+        var forms = await access.RunAsync("shop", null, ["SELECT #a, @a$b, $c::d IS NULL"], [new("a", 1L), new("a$b", 2L)], 10, 5, CancellationToken.None);
+        Assert.Equal(SqlOutcome.Ok, forms.Outcome);
+        Assert.Equal(["1", "2", "1"], forms.Grids[0].Rows[0]);
 
         var capped = await access.RunAsync("shop", null, ["SELECT * FROM customers"], [], 2, 5, CancellationToken.None);
         Assert.True(capped.Grids[0].More);
