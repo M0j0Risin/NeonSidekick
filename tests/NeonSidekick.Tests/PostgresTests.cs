@@ -92,10 +92,19 @@ public sealed class PostgresReadOnlyGateTests
         // 2026-10-04 review: id=@id with no params failed with "operator does not exist: integer =@ integer" alone).
         Assert.Equal(["tags", "q", "id"], PostgresReadOnlyGate.UnboundOperatorBinds(Mixed));
         Assert.Equal(["tags", "q"], PostgresReadOnlyGate.UnboundOperatorBinds(Mixed, ["ID"]));
-        Assert.Contains("@id", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, ["SELECT 1", "SELECT * FROM t WHERE id=@id"], []));
-        Assert.Contains("@id", PostgresAccess.OperatorBindHint(PostgresAccess.SyntaxError, ["SELECT * FROM t WHERE id=@id"], ["n"]));
-        Assert.Equal("", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, ["SELECT * FROM t WHERE id=@id"], ["id"]));
-        Assert.Equal("", PostgresAccess.OperatorBindHint("42P01", ["SELECT * FROM t WHERE id=@id"], []));
+        Assert.Equal([("id", "<>@"), ("q", "@@")], PostgresReadOnlyGate.UnboundOperators("SELECT * FROM t WHERE id<>@id AND v @@q AND x = @x"));
+        const string NoOperator = "operator does not exist: integer =@ integer";
+        Assert.Contains("@id", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, NoOperator, ["SELECT 1", "SELECT * FROM t WHERE id=@id"], []));
+        Assert.Contains("@id", PostgresAccess.OperatorBindHint(PostgresAccess.SyntaxError, "syntax error at or near \"=@\"", ["SELECT * FROM t WHERE id=@id"], ["n"]));
+        Assert.Equal("", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, NoOperator, ["SELECT * FROM t WHERE id=@id"], ["id"]));
+        Assert.Equal("", PostgresAccess.OperatorBindHint("42P01", NoOperator, ["SELECT * FROM t WHERE id=@id"], []));
+
+        // Only an error about that operator gets the hint (the fourth 2026-10-04 review): a misspelt function beside a correct
+        // full-text match is not told to bind to_tsquery, and an error about =@ names id alone, not the @@ beside it.
+        const string FullText = "SELECT * FROM docs WHERE v @@to_tsquery('x') AND misspelt_fn(1) > 0";
+        Assert.Equal("", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, "function misspelt_fn(integer) does not exist", [FullText], []));
+        Assert.Equal(PostgresText.UnboundOperatorBind(["id"]), PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, NoOperator, [FullText + " AND id=@id"], []));
+        Assert.Equal("", PostgresAccess.OperatorBindHint(PostgresAccess.UndefinedFunction, "operator does not exist: integer =@@ integer", ["SELECT * FROM t WHERE id=@id"], []));
         Assert.Null(PostgresReadOnlyGate.Check(Mixed));
         Assert.Equal("SELECT 1", PostgresReadOnlyGate.Body("SELECT 1 ; "));
     }

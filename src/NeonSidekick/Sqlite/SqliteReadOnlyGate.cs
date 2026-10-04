@@ -140,6 +140,20 @@ public static class SqliteReadOnlyGate
     public static IReadOnlyList<string> Binds(string sql) =>
         Tokenize(sql ?? "", out _) is { } tokens ? tokens.Where(t => t.Kind == TokenKind.Bind).Select(t => t.Text).Distinct(StringComparer.Ordinal).ToList() : [];
 
+    /// <summary>
+    /// A <c>params</c> name as <see cref="SqliteAccess"/> looks it up: the name after the placeholder's mark, so <c>id</c>,
+    /// <c>@id</c>, <c>:id</c>, <c>$id</c> and <c>#id</c> all name <c>id</c> (one leading mark dropped), and a name SQLite reads in
+    /// a placeholder whole — <c>a$b</c>, <c>ñame</c>, the TCL forms <c>a::b</c> and <c>a(1)</c>; null when it is not one (the fourth
+    /// 2026-10-04 review: the other families' ASCII rule refused <c>{":id": 5}</c>, which sqlite_query's own doc invited, and left
+    /// such placeholders bound NULL with no way to name them).
+    /// </summary>
+    public static string? ParamName(string written)
+    {
+        ArgumentNullException.ThrowIfNull(written);
+        string placeholder = written.Length > 0 && written[0] is '@' or ':' or '$' or '#' ? written : "@" + written;
+        return placeholder.Length > 1 && VariableLength(placeholder, 0) == placeholder.Length ? placeholder[1..] : null;
+    }
+
     /// <summary>The text without a trailing <c>;</c> (and what follows it of blanks and comments): what runs.</summary>
     public static string Body(string sql)
     {

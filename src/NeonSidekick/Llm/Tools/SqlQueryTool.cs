@@ -59,18 +59,20 @@ public sealed class SqlQueryTool : SqlTool
     /// <summary>
     /// The <c>params</c> object as bound values, or the <c>Error:</c> sentence: a name (a leading <c>@</c> dropped)
     /// must be letters, digits and <c>_</c>; a value a string, a number (whole = <see cref="long"/>, else
-    /// <see cref="decimal"/>, else <see cref="double"/>), a boolean or null.
+    /// <see cref="decimal"/>, else <see cref="double"/>), a boolean or null. A family whose placeholders are written otherwise
+    /// passes its own <paramref name="readName"/> (the bound name, or null for none) and <paramref name="badName"/> sentence:
+    /// SQLite's <c>:id</c>, <c>#id</c>, <c>a$b</c> and <c>$a(1)</c> (<see cref="Sqlite.SqliteReadOnlyGate.ParamName"/>, the fourth
+    /// 2026-10-04 review: the ASCII rule refused <c>{":id": 5}</c> and left such placeholders bound NULL).
     /// </summary>
-    public static IReadOnlyList<SqlParameterValue>? ReadParameters(JsonElement values, out string? error)
+    public static IReadOnlyList<SqlParameterValue>? ReadParameters(JsonElement values, out string? error, Func<string, string?>? readName = null, Func<string, string>? badName = null)
     {
         error = null;
         var list = new List<SqlParameterValue>();
         foreach (var property in values.EnumerateObject())
         {
-            string name = property.Name.TrimStart('@');
-            if (name.Length == 0 || !(char.IsAsciiLetter(name[0]) || name[0] == '_') || !name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
+            if ((readName ?? ReadName)(property.Name) is not { } name)
             {
-                error = SqlText.BadParamName(property.Name);
+                error = (badName ?? SqlText.BadParamName)(property.Name);
                 return null;
             }
 
@@ -107,6 +109,13 @@ public sealed class SqlQueryTool : SqlTool
         }
 
         return list;
+    }
+
+    /// <summary>A params name as bound: letters, digits and <c>_</c>, not leading with a digit, a leading <c>@</c> dropped; null when it is not one.</summary>
+    private static string? ReadName(string written)
+    {
+        string name = written.TrimStart('@');
+        return name.Length > 0 && (char.IsAsciiLetter(name[0]) || name[0] == '_') && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') ? name : null;
     }
 
     public async Task<string> RunAsync(string sql, string? connection, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)

@@ -1713,8 +1713,8 @@ SQLite database files, through the same Microsoft.Data.Sqlite the sessions use: 
 |---|---|---|
 | `sqlite_databases` | — | The named databases (file, description), the default marked, and whether working-directory files may be named. Opens nothing. |
 | `sqlite_tables` | `database?, pattern?` | Tables and views with their kind. |
-| `sqlite_describe` | `table, database?` | One table or view: columns (type, nullability, primary key, default; generated and hidden columns marked), foreign keys both ways, indexes and the `CREATE` statement. |
-| `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name`, `$name` or `#name`, as SQLite reads them (a `$` inside a name, as in `@a$b`, is part of it); one `params` does not give is NULL; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+| `sqlite_describe` | `table, database?` | One table or view: columns (type, nullability, primary key, default; generated and hidden columns marked), foreign keys both ways, indexes (their columns in order, an expression shown as `(expression)`) and the `CREATE` statement. |
+| `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name`, `$name` or `#name`, as SQLite reads them (a `$` inside a name, as in `@a$b`, is part of it), each given by its name after the mark (`{"id": 5}` or `{":id": 5}` for `:id`; a TCL form whole, `{"a(1)": 5}` for `$a(1)`); one `params` does not give is NULL; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 
 `--sqlite-check <database>` proves the tools against a real file on the published exe (it opens and counts, every storage class, the gate, a write refused, the interrupt).
 

@@ -750,7 +750,12 @@ public static partial class BotChat
     [GeneratedRegex(@"^\W*(?:REWORK\b|(?i:rework)(?=\s*(?:[#:*.\-–—\d]|$)))[\s#:*.\-–—]*(?<n>\d+)?[\s:*.\-–—]*(?<rest>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex ReworkFirstLine();
 
-    [GeneratedRegex(@"^\W*(?:WORKFLOW\b|(?i:workflow)(?=\s*[#:*\-–—]))[\s#:*\-–—""'`]*(?<name>.*)$", RegexOptions.CultureInvariant)]
+    /// <summary>
+    /// The <see cref="WorkflowAnswer"/> line: the word in capitals, or in any case with a mark after it — a dash only when no
+    /// letter or digit is glued to it (the fourth 2026-10-04 review: <c>Workflow-themed infographic of a kitchen</c> was read as a
+    /// workflow line, its words the name, and nothing was drawn).
+    /// </summary>
+    [GeneratedRegex(@"^\W*(?:WORKFLOW\b|(?i:workflow)(?=\s*(?:[#:*]|[\-–—](?![\p{L}\p{N}]))))[\s#:*\-–—""'`]*(?<name>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex WorkflowFirstLine();
 
     /// <summary>The marks around a workflow's name on its line: quotes, bold, a full stop.</summary>
@@ -807,12 +812,22 @@ public static partial class BotChat
 
     /// <summary>
     /// The prompt after a workflow's name on its line: the marks before it dropped, and nothing when no letter or digit is left
-    /// (the third 2026-10-04 review: <c>WORKFLOW: flux dev.</c> with flux-dev installed drew the prompt ".").
+    /// (the third 2026-10-04 review: <c>WORKFLOW: flux dev.</c> with flux-dev installed drew the prompt ".") or when all that is
+    /// left is one bracketed note on the choice (the fourth: <c>WORKFLOW: flux-dev (the photographic one)</c> drew "(the
+    /// photographic one)").
     /// </summary>
     private static string PromptAfter(string rest)
     {
         string prompt = rest.TrimStart(PromptLead);
-        return prompt.Any(char.IsLetterOrDigit) ? prompt : "";
+        return prompt.Any(char.IsLetterOrDigit) && !IsBracketedNote(prompt) ? prompt : "";
+    }
+
+    /// <summary>Whether <paramref name="text"/> is one <c>(…)</c> or <c>[…]</c> with nothing after it but marks.</summary>
+    private static bool IsBracketedNote(string text)
+    {
+        char close = text.Length == 0 ? '\0' : text[0] switch { '(' => ')', '[' => ']', _ => '\0' };
+        int end = close == '\0' ? -1 : text.IndexOf(close, StringComparison.Ordinal);
+        return end > 0 && text[(end + 1)..].TrimEnd(NameMarks).Length == 0;
     }
 
     /// <summary>What may stand between a workflow's name and a prompt on its line, when the name is not one installed.</summary>

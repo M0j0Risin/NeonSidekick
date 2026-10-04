@@ -128,6 +128,8 @@ public class BotChatPicturesTests
     [InlineData("a red fox", "a red fox", null, null)]                                       // none named: the caller takes the first
     [InlineData("WORKFLOW gone\na red fox", "a red fox", null, null)]
     [InlineData("Workflow of a busy kitchen", "Workflow of a busy kitchen", null, null)]      // a fresh prompt's first word
+    [InlineData("Workflow-themed infographic of a kitchen", "Workflow-themed infographic of a kitchen", null, null)]   // the fourth review: a hyphenated word
+    [InlineData("workflow - flux-dev\na red fox", "a red fox", null, "flux-dev")]           // a spaced dash is still the mark
     [InlineData("REWORK 1\nWORKFLOW restyle\na red fox", "a red fox", "a.png", "restyle")]
     [InlineData("WORKFLOW restyle\nREWORK 1\na red fox", "a red fox", "a.png", "restyle")]  // either order
     [InlineData("REWORK 2\nWORKFLOW pony\na red fox", "a red fox", "b.png", null)]          // a name of the other kind is none of the rework's
@@ -168,6 +170,8 @@ public class BotChatPicturesTests
     [InlineData("WORKFLOW: flux dev", "flux-dev", "")]               // the second 2026-10-04 review: was flux, drawing "dev"
     [InlineData("WORKFLOW: flux dev.", "flux-dev", "")]              // the third: the full stop was the prompt
     [InlineData("WORKFLOW: fluxdev!", "flux-dev", "")]
+    [InlineData("WORKFLOW: flux-dev (the photographic one)", "flux-dev", "")]   // the fourth: the note was drawn
+    [InlineData("WORKFLOW: flux-dev [photo].", "flux-dev", "")]
     [InlineData("WORKFLOW: flux a red fox", "flux", "a red fox")]    // the shorter name still leads a prompt on its line
     [InlineData("WORKFLOW: flux-dev a red fox", "flux-dev", "a red fox")]
     public void ParseImagePrompt_TheLongerNameWins_WhateverItsJoiner(string text, string workflow, string prompt)

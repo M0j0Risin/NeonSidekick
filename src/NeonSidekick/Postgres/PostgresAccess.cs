@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Sql;
 using Npgsql;
@@ -166,7 +167,7 @@ public sealed class PostgresAccess
         }
         catch (PostgresException ex)
         {
-            return new SqlRun(SqlOutcome.Failed, Message(ex) + OperatorBindHint(ex.SqlState, statements, parameters.Select(p => p.Name)), target.Name, workIn, grids, watch.Elapsed);
+            return new SqlRun(SqlOutcome.Failed, Message(ex) + OperatorBindHint(ex.SqlState, ex.MessageText, statements, parameters.Select(p => p.Name)), target.Name, workIn, grids, watch.Elapsed);
         }
         catch (NpgsqlException ex)
         {
@@ -270,22 +271,31 @@ public sealed class PostgresAccess
     }
 
     /// <summary>
-    /// What follows the server's message when the error is an operator or a syntax one and a statement holds an <c>@name</c> straight
-    /// after an operator that params does not name (<see cref="PostgresReadOnlyGate.UnboundOperatorBinds"/>): the likely cause,
-    /// said; else empty.
+    /// What follows the server's message when the error is an operator or a syntax one about the operator an <c>@name</c> straight
+    /// after an operator makes when params does not name it (<see cref="PostgresReadOnlyGate.UnboundOperators"/>): the likely cause,
+    /// said; else empty. The message must name that operator — <c>operator does not exist: integer =@ integer</c>, <c>syntax error at
+    /// or near "=@"</c> — so a misspelt function's error beside a correct <c>v @@to_tsquery(…)</c> gets no hint to bind to_tsquery
+    /// (the fourth 2026-10-04 review).
     /// </summary>
-    public static string OperatorBindHint(string sqlState, IEnumerable<string> statements, IEnumerable<string> named)
+    public static string OperatorBindHint(string sqlState, string? message, IEnumerable<string> statements, IEnumerable<string> named)
     {
         ArgumentNullException.ThrowIfNull(statements);
-        if (sqlState is not (UndefinedFunction or SyntaxError))
+        if (sqlState is not (UndefinedFunction or SyntaxError) || string.IsNullOrEmpty(message))
         {
             return "";
         }
 
         var names = named.ToList();
-        var unbound = statements.SelectMany(s => PostgresReadOnlyGate.UnboundOperatorBinds(s, names)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var unbound = statements.SelectMany(s => PostgresReadOnlyGate.UnboundOperators(s, names))
+            .Where(u => NamesOperator(message, u.Operator))
+            .Select(u => u.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         return unbound.Count == 0 ? "" : PostgresText.UnboundOperatorBind(unbound);
     }
+
+    /// <summary>Whether the server's message names <paramref name="op"/> as a whole operator: between blanks, after <c>: </c>, or quoted.</summary>
+    private static bool NamesOperator(string message, string op) =>
+        message.Contains("\"" + op + "\"", StringComparison.Ordinal)
+        || Regex.IsMatch(message, @"(?:^|\s)" + Regex.Escape(op) + @"(?:\s|$)", RegexOptions.CultureInvariant);
 
     /// <summary>A table reference split into schema and name: <c>public.orders</c>, <c>orders</c>, <c>"My.Table"</c> (a doubled quote is one). Null when it is not one or two names.</summary>
     public static (string? Schema, string Name)? Split(string? reference)

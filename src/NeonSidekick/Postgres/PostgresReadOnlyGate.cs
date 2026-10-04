@@ -33,7 +33,8 @@ public static class PostgresReadOnlyGate
         Symbol,
     }
 
-    public readonly record struct Token(TokenKind Kind, string Text, int Line, int Column);
+    /// <summary>A token; <paramref name="Operator"/> is, for an <see cref="TokenKind.OperatorBind"/>, the operator the server reads when it is left unbound (<c>=@</c> for <c>id=@id</c>).</summary>
+    public readonly record struct Token(TokenKind Kind, string Text, int Line, int Column, string Operator = "");
 
     /// <summary>
     /// Functions a query may not call, by name; <see cref="DeniedPrefixes"/> covers the families. The ones that run a query handed
@@ -171,7 +172,15 @@ public static class PostgresReadOnlyGate
     /// error that follows (the third 2026-10-04 review: the spaced <c>id = @id</c> binds NULL, the unspaced one failed with
     /// <c>operator does not exist: integer =@ integer</c> and nothing more).
     /// </summary>
-    public static IReadOnlyList<string> UnboundOperatorBinds(string sql, IEnumerable<string>? named = null)
+    public static IReadOnlyList<string> UnboundOperatorBinds(string sql, IEnumerable<string>? named = null) =>
+        UnboundOperators(sql, named).Select(u => u.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>
+    /// <see cref="UnboundOperatorBinds"/> with the operator each one makes when left unbound (<c>=@</c>, <c>&lt;@</c>, <c>@@</c>), so
+    /// the hint can be tied to an error about that operator (the fourth 2026-10-04 review: any 42883 got it, a misspelt function's
+    /// beside a correct <c>v @@to_tsquery(…)</c> too, and the model was told to pass to_tsquery in params).
+    /// </summary>
+    public static IReadOnlyList<(string Name, string Operator)> UnboundOperators(string sql, IEnumerable<string>? named = null)
     {
         if (Tokenize(sql ?? "", out _) is not { } tokens)
         {
@@ -179,8 +188,7 @@ public static class PostgresReadOnlyGate
         }
 
         var given = new HashSet<string>(named ?? [], StringComparer.OrdinalIgnoreCase);
-        return tokens.Where(t => t.Kind == TokenKind.OperatorBind && !given.Contains(t.Text))
-            .Select(t => t.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return tokens.Where(t => t.Kind == TokenKind.OperatorBind && !given.Contains(t.Text)).Select(t => (t.Text, t.Operator)).ToList();
     }
 
     /// <summary>The text without a trailing <c>;</c>: what runs.</summary>
@@ -402,7 +410,13 @@ public static class PostgresReadOnlyGate
                 // After an operator character the @ may be the operator's tail (<@tags, @@to_tsquery): ReadAsync bound every one to
                 // NULL, and ARRAY['x'] <@tags compared with NULL in place of the column (the second 2026-10-04 review).
                 var kind = i > 0 && IsOperatorChar(sql[i - 1]) ? TokenKind.OperatorBind : TokenKind.Bind;
-                tokens.Add(new Token(kind, sql[(i + 1)..k], line, column));
+                int from = i;
+                while (kind == TokenKind.OperatorBind && from > 0 && IsOperatorChar(sql[from - 1]))
+                {
+                    from--;
+                }
+
+                tokens.Add(new Token(kind, sql[(i + 1)..k], line, column, kind == TokenKind.OperatorBind ? sql[from..(i + 1)] : ""));
                 Advance(k);
                 continue;
             }

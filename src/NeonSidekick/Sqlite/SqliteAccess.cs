@@ -189,7 +189,9 @@ public sealed class SqliteAccess
                     command.CommandText = sql;
                     // A placeholder params does not name binds as NULL, PostgresAccess's way (the 2026-10-04 review): left unbound,
                     // Microsoft.Data.Sqlite threw an InvalidOperationException past the SqliteException catches below. Each
-                    // placeholder takes the params name in its own case first, else any case (:id and :ID are two to SQLite).
+                    // placeholder takes the params name in its own case first, else any case (:id and :ID are two to SQLite). The
+                    // name is everything after the mark, a TCL form's :: or (…) included: params names $a(1) as "a(1)"
+                    // (SqlQueryTool.ReadParameters with SqliteReadOnlyGate.ParamName, the fourth 2026-10-04 review).
                     foreach (string bind in SqliteReadOnlyGate.Binds(sql))
                     {
                         string name = bind[1..];
@@ -204,6 +206,13 @@ public sealed class SqliteAccess
             }
             finally
             {
+                // No interrupt from here on (the fourth 2026-10-04 review): the timer repeats past the deadline, and an interrupt landing
+                // on the rollback threw into the catch below and skipped it on exactly the timeout path.
+                lock (gate)
+                {
+                    open = false;
+                }
+
                 try
                 {
                     transaction.Rollback();

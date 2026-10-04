@@ -21,17 +21,23 @@ public static class SqliteCatalogQueries
     /// <c>@name</c>'s columns (name, type, notnull, default, pk, hidden), its foreign keys out (table, from, to, on update, on delete;
     /// a compound key's columns joined), the keys of other tables that point at it (table, from, to), its indexes (name, unique,
     /// origin, partial, columns) and its <c>CREATE</c> text — five result sets in that order.
+    /// <para>A compound key's or index's columns are joined in their own order (<c>ORDER BY seq</c>/<c>seqno</c> inside the
+    /// aggregate, SQLite 3.44+; the bundled e_sqlite3 is newer): unordered, <c>(b, a)</c> could read <c>a, b</c>. An expression in an
+    /// index has no name and reads as <see cref="ExpressionColumn"/>, where it dropped out (the fourth 2026-10-04 review).</para>
     /// </summary>
     public static readonly IReadOnlyList<string> Describe =
     [
         "SELECT name, type, \"notnull\", dflt_value, pk, hidden FROM pragma_table_xinfo(@name) ORDER BY cid",
-        "SELECT \"table\", group_concat(\"from\", ', '), group_concat(\"to\", ', '), on_update, on_delete FROM pragma_foreign_key_list(@name) GROUP BY id ORDER BY id",
-        "SELECT m.name, group_concat(f.\"from\", ', '), group_concat(f.\"to\", ', ') FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f " +
+        "SELECT \"table\", group_concat(\"from\", ', ' ORDER BY seq), group_concat(\"to\", ', ' ORDER BY seq), on_update, on_delete FROM pragma_foreign_key_list(@name) GROUP BY id ORDER BY id",
+        "SELECT m.name, group_concat(f.\"from\", ', ' ORDER BY f.seq), group_concat(f.\"to\", ', ' ORDER BY f.seq) FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f " +
             "WHERE m.type = 'table' AND f.\"table\" = @name COLLATE NOCASE GROUP BY m.name, f.id ORDER BY m.name",
-        "SELECT il.name, il.\"unique\", il.origin, il.partial, group_concat(ii.name, ', ') FROM pragma_index_list(@name) il " +
-            "JOIN pragma_index_info(il.name) ii GROUP BY il.name ORDER BY il.name",
+        "SELECT il.name, il.\"unique\", il.origin, il.partial, group_concat(coalesce(ii.name, CASE ii.cid WHEN -1 THEN 'rowid' ELSE '" + ExpressionColumn + "' END), ', ' ORDER BY ii.seqno) " +
+            "FROM pragma_index_list(@name) il JOIN pragma_index_info(il.name) ii GROUP BY il.name ORDER BY il.name",
         "SELECT sql FROM sqlite_master WHERE name = @name",
     ];
+
+    /// <summary>What an index column that is an expression (<c>lower(name)</c>) reads as in <see cref="Describe"/>: SQLite gives it no name.</summary>
+    public const string ExpressionColumn = "(expression)";
 
     /// <summary>How many tables and views the file holds: the wizard's and the check's proof that it opened as a database.</summary>
     public const string Count = "SELECT count(*) FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'";

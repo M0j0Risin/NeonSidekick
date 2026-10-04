@@ -55,6 +55,19 @@ public sealed class SqliteReadOnlyGateTests
     public void Binds_AndBody()
     {
         Assert.Equal(["@id", ":name", "$x", "@ID"], SqliteReadOnlyGate.Binds("SELECT @id, :name, $x, @ID, @id, '@not'"));
+        // A params name as the lookup reads it: one leading mark dropped, SQLite's name characters and TCL forms kept whole.
+        Assert.Equal("id", SqliteReadOnlyGate.ParamName("id"));
+        Assert.Equal("id", SqliteReadOnlyGate.ParamName(":id"));
+        Assert.Equal("id", SqliteReadOnlyGate.ParamName("#id"));
+        Assert.Equal("a$b", SqliteReadOnlyGate.ParamName("a$b"));
+        Assert.Equal("ñame", SqliteReadOnlyGate.ParamName("$ñame"));
+        Assert.Equal("a::b", SqliteReadOnlyGate.ParamName("a::b"));
+        Assert.Equal("a(1)", SqliteReadOnlyGate.ParamName("$a(1)"));
+        Assert.Null(SqliteReadOnlyGate.ParamName(""));
+        Assert.Null(SqliteReadOnlyGate.ParamName(":"));
+        Assert.Null(SqliteReadOnlyGate.ParamName("a b"));
+        Assert.Null(SqliteReadOnlyGate.ParamName("a(x y)"));
+
         // SQLite's own variable forms (the third 2026-10-04 review): #name, a $ inside a name, the TCL :: and (…); a$b is a column.
         Assert.Equal(["#a", "@a$b", "$a::b", "$c(x)", ":d"], SqliteReadOnlyGate.Binds("SELECT #a, @a$b, $a::b, $c(x), :d, a$b, $c(x y)"));
         Assert.Null(SqliteReadOnlyGate.Check("SELECT #a, @a$b FROM t WHERE c$d = $e(INSERT)"));
@@ -85,6 +98,8 @@ public sealed class SqliteToolsTests : IDisposable
             CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL, city TEXT DEFAULT 'Oslo');
             CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id) ON DELETE CASCADE, total REAL, note BLOB);
             CREATE INDEX orders_by_customer ON orders (customer_id);
+            CREATE INDEX customers_by_place ON customers (city, name);
+            CREATE INDEX customers_by_lower ON customers (lower(name), id);
             CREATE VIEW big_orders AS SELECT * FROM orders WHERE total > 100;
             INSERT INTO customers (name) VALUES ('Ada'), ('Grace'), ('Linus');
             INSERT INTO orders (customer_id, total, note) VALUES (1, 250.5, X'CAFE'), (2, 12, NULL), (1, 99.99, NULL);
@@ -198,9 +213,10 @@ public sealed class SqliteToolsTests : IDisposable
         Assert.Equal(["1", "2", "1", "1", "3"], cased.Grids[0].Rows[0]);
 
         // #a and @a$b are placeholders to SQLite: bound, one named and one not, where the driver threw for both (the third review).
-        var forms = await access.RunAsync("shop", null, ["SELECT #a, @a$b, $c::d IS NULL"], [new("a", 1L), new("a$b", 2L)], 10, 5, CancellationToken.None);
+        // A TCL form is named whole in params, its (…) or :: included (the fourth review).
+        var forms = await access.RunAsync("shop", null, ["SELECT #a, @a$b, $c::d IS NULL, $e(1), $f::g"], [new("a", 1L), new("a$b", 2L), new("e(1)", 3L), new("f::g", 4L)], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, forms.Outcome);
-        Assert.Equal(["1", "2", "1"], forms.Grids[0].Rows[0]);
+        Assert.Equal(["1", "2", "1", "3", "4"], forms.Grids[0].Rows[0]);
 
         var capped = await access.RunAsync("shop", null, ["SELECT * FROM customers"], [], 2, 5, CancellationToken.None);
         Assert.True(capped.Grids[0].More);
@@ -245,6 +261,9 @@ public sealed class SqliteToolsTests : IDisposable
         Assert.Contains("```sql\nCREATE TABLE orders", orders);
         string customers = await describe.DescribeAsync("customers", "shop", CancellationToken.None);
         Assert.Contains("Referenced by:\n- orders (customer_id) → (id)", customers);
+        // An index's columns in its own order, an expression standing in where it had no name (the fourth 2026-10-04 review).
+        Assert.Contains("- customers_by_place (city, name)", customers);
+        Assert.Contains("- customers_by_lower (" + SqliteCatalogQueries.ExpressionColumn + ", id)", customers);
         Assert.Contains("| city | TEXT | yes |  | 'Oslo' |", customers);
         Assert.Equal(SqliteText.TableNotFound("nope", "shop"), await describe.DescribeAsync("nope", null, CancellationToken.None));
         Assert.Equal(SqliteText.NoTable, await describe.DescribeAsync(" ", null, CancellationToken.None));
@@ -261,6 +280,10 @@ public sealed class SqliteToolsTests : IDisposable
 
         var invoked = (string)(await query.InvokeAsync(new AIFunctionArguments { ["sql"] = "SELECT name FROM customers WHERE id = @id", ["params"] = System.Text.Json.JsonDocument.Parse("""{"id": 3}""").RootElement }))!;
         Assert.Contains("| Linus |", invoked);
+        // params names a placeholder SQLite's way: after its mark, whichever mark (the fourth 2026-10-04 review refused ":id").
+        var colon = (string)(await query.InvokeAsync(new AIFunctionArguments { ["sql"] = "SELECT name FROM customers WHERE id = :id", ["params"] = System.Text.Json.JsonDocument.Parse("""{":id": 2}""").RootElement }))!;
+        Assert.Contains("| Grace |", colon);
+        Assert.Equal(SqliteText.BadParamName("a b"), (string)(await query.InvokeAsync(new AIFunctionArguments { ["sql"] = "SELECT 1", ["params"] = System.Text.Json.JsonDocument.Parse("""{"a b": 1}""").RootElement }))!);
         Assert.StartsWith("Error: \"params\" must be one object", (string)(await query.InvokeAsync(new AIFunctionArguments { ["sql"] = "SELECT 1", ["params"] = "x" }))!);
     }
 

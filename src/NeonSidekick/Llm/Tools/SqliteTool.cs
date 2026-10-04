@@ -195,7 +195,7 @@ public sealed class SqliteQueryTool : SqliteTool
           "properties": {
             "sql": { "type": "string", "description": "One SQLite SELECT (LIMIT n); a WITH clause may lead it. No INSERT, UPDATE, DELETE, DDL, PRAGMA, ATTACH or second statement." },
             {{DatabaseProperty}},
-            "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 101} for @id; strings, numbers, true, false or null." },
+            "params": { "type": "object", "description": "Values for the named placeholders in the SQL (@name, :name, $name), each by its name, e.g. {\"id\": 101} for @id or :id; strings, numbers, true, false or null." },
             "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
           },
           "required": ["sql"]
@@ -257,7 +257,7 @@ public sealed class SqliteQueryTool : SqliteTool
         IReadOnlyList<SqlParameterValue> parameters = [];
         if (objects.Count == 1)
         {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
+            if (SqlQueryTool.ReadParameters(objects[0], out var error, SqliteReadOnlyGate.ParamName, SqliteText.BadParamName) is not { } read)
             {
                 return error;
             }
