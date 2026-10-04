@@ -8907,6 +8907,10 @@ internal sealed partial class ChatScreen
     private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false)
     {
         _llmGeneration++;
+        // The hint row's tally is the old model's (2026-10-03, the user's ask): gone through the load and after it, back
+        // at the new model's first report. The counts stay — the auto-compact reads them.
+        _session.Usage.HideFromHint();
+        _pane.RefreshHint();
         var effective = _effective();
         if (EmbeddedLlm.EmbeddedEndpoint.Chosen(effective))
         {

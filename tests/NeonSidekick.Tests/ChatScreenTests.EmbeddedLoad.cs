@@ -176,13 +176,22 @@ public partial class ChatScreenTests
         // The review's finding (2026-10-01): the whole usage zone was the load's cancel, the tally included.
         var embedded = OnTheEmbeddedE2b();
         LoadOnThePane();
-        _session.Usage.Add(new TokenUsage(1200, 30, 1230, 1, TimeSpan.Zero, TimeSpan.Zero));
+        _session.Usage.Add(new TokenUsage(1100, 30, 1130, 1, TimeSpan.Zero, TimeSpan.Zero));   // the old model's 1.1k
         var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var input = WhenIdle(
             i => { i.Push(Keys.Escape); opened.TrySetResult(); },   // the Usage pane's read, the load still held
             i => PushLine(i, "/exit"));
         embedded.StartGate = async ct =>
         {
+            // The connect took the old tally off the row (2026-10-03, the user's ask); a report brings one back beside the spinner.
+            Assert.True(_session.Usage.HintHidden);
+            Assert.Null(UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsage.LastKnown, StreamMeter.Reading.Idle));
+            _session.Usage.Add(new TokenUsage(1200, 30, 1230, 1, TimeSpan.Zero, TimeSpan.Zero));
+            await UntilAsync(() =>
+            {
+                _time.Advance(TimeSpan.FromMilliseconds(100));   // the spinner's next frame redraws the row
+                return Output.Contains("1.2k tokens", StringComparison.Ordinal);
+            }, ct);
             // "⠋ 🦙 starting Gemma 4 E2B 00:00 · 1.2k tokens": the label's zone ends at 30, the tally starts at 34.
             input.PushClick(36, 102);
             input.PushClick(36, 102);

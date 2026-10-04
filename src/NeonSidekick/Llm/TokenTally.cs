@@ -3,7 +3,8 @@ namespace NeonSidekick.Llm;
 /// <summary>
 /// The session's running token counts, three scopes wide: the last reply, the conversation and
 /// the process. Owned by the LLM session next to the history, so it outlives a reconnect
-/// (<c>/server</c>, <c>/model</c>) the way the conversation does; nothing is persisted. Pure:
+/// (<c>/server</c>, <c>/model</c>) the way the conversation does — the hint row alone stops
+/// showing the figures until the new model reports (<see cref="HideFromHint"/>); nothing is persisted. Pure:
 /// the screen calls <see cref="BeginTurn"/>, feeds every <see cref="TurnEvent.Usage"/> to
 /// <see cref="Add"/> and calls <see cref="EndTurn"/> when the reply completed, and resets the
 /// conversation scope exactly where it clears the history.
@@ -26,6 +27,7 @@ public sealed class TokenTally
     private int _claudeRuns;
     private decimal _claudeCost;
     private int _unreportedReplies;
+    private bool _hintHidden;
 
     /// <summary>The turn in progress, or the last one that ran. Zero until the first reply.</summary>
     public TokenUsage LastReply { get { lock (_gate) { return _lastReply; } } }
@@ -69,11 +71,33 @@ public sealed class TokenTally
         }
     }
 
+    /// <summary>
+    /// Whether the hint row leaves the figures out (2026-10-03, the user's ask): set by <see cref="HideFromHint"/> at an
+    /// LLM connect, cleared by the next <see cref="Add"/> or <see cref="ResetConversation"/>.
+    /// </summary>
+    public bool HintHidden { get { lock (_gate) { return _hintHidden; } } }
+
+    /// <summary>
+    /// An LLM connect began (2026-10-03, the user's ask: after a <c>/server</c> switch the row kept reading
+    /// <c>27.1k tokens · 82 tok/s</c> through the new model's load and after it — the old model's speed over the old
+    /// window). Display only: the counts, <c>/usage</c> and the auto-compact keep <see cref="LastRequest"/>, since the
+    /// history crosses the switch and a smaller window must still compact before the next message. The new model's first
+    /// report brings the row back.
+    /// </summary>
+    public void HideFromHint()
+    {
+        lock (_gate)
+        {
+            _hintHidden = true;
+        }
+    }
+
     /// <summary>One model request's usage, into every scope.</summary>
     public void Add(TokenUsage usage)
     {
         lock (_gate)
         {
+            _hintHidden = false;
             _lastRequest = usage;
             _lastReply += usage;
             _conversation += usage;
@@ -183,6 +207,7 @@ public sealed class TokenTally
             _conversation = TokenUsage.Zero;
             _lastRequest = TokenUsage.Zero;
             _unreportedReplies = 0;
+            _hintHidden = false;
         }
     }
 }

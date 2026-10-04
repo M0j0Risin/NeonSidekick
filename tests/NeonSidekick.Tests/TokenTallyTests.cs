@@ -19,6 +19,32 @@ public class TokenTallyTests
     }
 
     [Fact]
+    public void HideFromHint_KeepsEveryCount_UntilTheNextReport_OrAReset()
+    {
+        var tally = new TokenTally();
+        tally.BeginTurn();
+        tally.Add(One(100, 10));
+        tally.EndTurn();
+        Assert.False(tally.HintHidden);
+
+        tally.HideFromHint();   // an LLM connect
+        Assert.True(tally.HintHidden);
+        Assert.Equal(One(100, 10), tally.LastRequest);   // the auto-compact still reads it
+        Assert.Equal(One(100, 10), tally.LastReply);
+        Assert.Equal(One(100, 10), tally.Conversation);
+        Assert.Equal(One(100, 10), tally.Session);
+
+        tally.BeginTurn();
+        Assert.True(tally.HintHidden);   // a turn's start is no report
+        tally.Add(One(120, 20));
+        Assert.False(tally.HintHidden);
+
+        tally.HideFromHint();
+        tally.ResetConversation();
+        Assert.False(tally.HintHidden);
+    }
+
+    [Fact]
     public void Turns_SumIntoEveryScope_AndTheLastReplyStartsOver()
     {
         var tally = new TokenTally();

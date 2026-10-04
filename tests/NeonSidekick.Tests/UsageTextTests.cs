@@ -361,4 +361,21 @@ public class UsageTextTests
         Assert.Equal("1.2k / 4.1k · 30% · 46 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, StreamMeter.Reading.Idle));
         Assert.Null(UsageText.BusyHintPart(new TokenTally(), Window, MidTurnUsage.Estimate, StreamMeter.Reading.Idle));
     }
+
+    [Fact]
+    public void HiddenFromTheHint_TheLastKnownFiguresGo_TheLiveEstimateStays_AndTheNextReportBringsThemBack()
+    {
+        var tally = Filled();
+        tally.HideFromHint();   // an LLM connect: the figures are the old model's
+
+        Assert.Null(UsageText.HintPart(tally, Window));
+        Assert.Null(UsageText.BusyHintPart(tally, Window, MidTurnUsage.LastKnown, new StreamMeter.Reading(true, 500, 40)));
+        Assert.Null(UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, StreamMeter.Reading.Idle));
+        Assert.Equal("~1.7k / 4.1k · ~42% · ~40 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 500, 40)));
+        Assert.Equal("Context: 1,240 of 4,096 tokens (30%, max_model_len on /v1/models)", UsageText.ContextLine(tally, Window));   // /usage keeps them
+
+        tally.BeginTurn();
+        tally.Add(Usage(1_300, 20, 1, 0.5, 1));
+        Assert.Equal("1.3k / 4.1k · 32% · 20 tok/s", UsageText.HintPart(tally, Window));
+    }
 }

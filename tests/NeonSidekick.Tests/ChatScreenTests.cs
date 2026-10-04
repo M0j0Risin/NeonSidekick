@@ -10764,6 +10764,31 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("reported no usage", output);
     }
 
+    /// <summary>
+    /// An LLM connect (2026-10-03, the user's ask: a /server switch kept the old model's tally on the row through the load
+    /// and after it) takes the tally off the hint row; the count stays for the auto-compact. /reasoning's quiet reconnect is
+    /// the same ConnectLlmAsync as /server's and /model's.
+    /// </summary>
+    [Fact]
+    public async Task AnLlmConnect_TakesTheTallyOffTheHintRow_AndKeepsTheCount()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 20;
+        _geometry = new ScreenGeometry(() => null);
+        ReplyWithUsage();
+        PushLine("hi");
+        PushLine("/reasoning high");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string rule = new(ScreenPane.RuleGlyph, 240);
+        Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null, "25 tokens · 3 tok/s")), output);
+        Assert.EndsWith(rule + "\n" + Row(ChatScreen.HintLine(null), reasoning: "high") + "\n", output);
+        Assert.Null(UsageText.HintPart(_session.Usage, _session.ContextLength));
+        Assert.Equal(25, _session.Usage.LastRequest.Total);
+    }
+
     [Fact]
     public async Task Usage_AReplyWithoutAReport_IsCounted_ACancelledOneIsNot()
     {

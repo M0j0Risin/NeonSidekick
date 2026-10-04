@@ -257,14 +257,15 @@ public static class UsageText
     /// The hint row's part, on one base: the context in use over the window, its share, and the last
     /// reply's speed (<c>4.6k / 151.4k · 3% · 42 tok/s</c>); <c>4.6k tokens · 42 tok/s</c> while the
     /// window is unknown; null while nothing is in the context (before the first reply, after
-    /// <c>/clear</c>), so the row reads as before. Never the conversation's summed total: that
+    /// <c>/clear</c>) and while <see cref="TokenTally.HintHidden"/> (an LLM connect, 2026-10-03, until the new
+    /// model reports), so the row reads as before. Never the conversation's summed total: that
     /// counts the re-sent history once per request and sits several times past the real context.
     /// </summary>
     public static string? HintPart(TokenTally tally, ContextLength? window)
     {
         ArgumentNullException.ThrowIfNull(tally);
         long inUse = tally.LastRequest.Total;
-        if (inUse == 0)
+        if (inUse == 0 || tally.HintHidden)
         {
             return null;
         }
@@ -283,7 +284,9 @@ public static class UsageText
     /// is the same until the request streaming now (<paramref name="live"/>) has a chunk, then every figure estimated and
     /// marked <see cref="EstimateMark"/>: the last request's total plus the chunks streamed, and the chunks' rate
     /// (<c>~5.1k / 151.4k · ~3% · ~41 tok/s</c>). The base leaves out what the request added before it streamed (the new
-    /// message, the tool results) — the server's report puts it right when the request ends. Null while nothing is known.
+    /// message, the tool results) — the server's report puts it right when the request ends. Null while nothing is known,
+    /// and the last-known figures null while <see cref="TokenTally.HintHidden"/> (2026-10-03: another model's, through a
+    /// load's spinner); the live estimate still shows then, being the new model's own count.
     /// </summary>
     public static string? BusyHintPart(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live)
     {
@@ -295,7 +298,7 @@ public static class UsageText
             return live.ChunksPerSecond is { } rate ? part + Sep + EstimateMark + Speed(rate, 0) : part;
         }
 
-        if (known == 0)
+        if (known == 0 || tally.HintHidden)
         {
             return null;
         }
