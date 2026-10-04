@@ -339,21 +339,31 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary><c>/camera list</c>: the cameras Windows lists, numbered, the chosen one marked.</summary>
+    /// <summary>
+    /// <c>/camera list</c>: the cameras Windows lists, numbered, the chosen one marked — on the info pane since 2026-10-04 (the
+    /// user's pick), over a reply too; a failure (no camera, the list unread) its error line through <paramref name="sink"/>.
+    /// </summary>
     private async Task ListCamerasAsync(INoticeSink sink, CancellationToken cancellationToken)
     {
         var lines = await CameraCommand.ListAsync(_camera, _effective().CameraDevice, cancellationToken).ConfigureAwait(false);
-        foreach (var (text, error) in lines)
+        if (lines.Any(line => line.Error))
         {
-            if (error)
+            foreach (var (text, error) in lines)
             {
-                sink.Error(text);
+                if (error)
+                {
+                    sink.Error(text);
+                }
+                else
+                {
+                    sink.Notice(text);
+                }
             }
-            else
-            {
-                sink.Notice(text);
-            }
+
+            return;
         }
+
+        await ShowLinesAsync("/camera list", lines.Select(line => line.Text).ToList(), sink, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary><c>/camera use &lt;n|name&gt;</c>: the camera by its number in the list or its name, saved as <c>Camera device</c>; the open stream follows at its next open.</summary>

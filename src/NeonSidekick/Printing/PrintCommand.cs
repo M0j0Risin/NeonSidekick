@@ -5,7 +5,7 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Printing;
 
 /// <summary>What one <c>/print</c> line came to: the lines to print, and whether it failed (an error's line).</summary>
-public sealed record PrintCommandResult(IReadOnlyList<string> Lines, bool Failed)
+public sealed record PrintCommandResult(IReadOnlyList<string> Lines, bool Failed, bool Paned = false)
 {
     public static PrintCommandResult Error(string line) => new([line], true);
 
@@ -123,13 +123,13 @@ public static class PrintCommand
         if (parsed.Target.Length == 0 && parsed.Printer is null && !parsed.Landscape && parsed.Pages is null && parsed.Copies == 1)
         {
             var printers = await Task.Run(service.Printers, cancellationToken).ConfigureAwait(false);
-            return new PrintCommandResult([PrintText.Usage, .. Lines(PrintText.PrinterList(printers, setting))], false);
+            return new PrintCommandResult([PrintText.Usage, .. Lines(PrintText.PrinterList(printers, setting))], false, Paned: true);
         }
 
         if (string.Equals(parsed.Target, PrintText.PrintersWord, StringComparison.OrdinalIgnoreCase))
         {
             var printers = await Task.Run(service.Printers, cancellationToken).ConfigureAwait(false);
-            return new PrintCommandResult(Lines(PrintText.PrinterList(printers, setting)), false);
+            return new PrintCommandResult(Lines(PrintText.PrinterList(printers, setting)), false, Paned: true);
         }
 
         PrintRequest request;

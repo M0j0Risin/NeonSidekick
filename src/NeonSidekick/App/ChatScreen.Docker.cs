@@ -153,7 +153,7 @@ internal sealed partial class ChatScreen
         }
 
         var result = await _transcript.WithSpinnerAsync(DockerText.Working, () => DockerCommand.RunAsync(_docker, args, cancellationToken)).ConfigureAwait(false);
-        WriteDockerResult(result, _transcript);
+        await ShowDockerResultAsync(result, args, _transcript, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -173,7 +173,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        WriteDockerResult(result, _flow);
+        await ShowDockerResultAsync(result, args, _flow, cancellationToken).ConfigureAwait(false);
     }
 
     // ── Docker servers (2026-10-02) ──────────────────────────────────────────
@@ -283,6 +283,21 @@ internal sealed partial class ChatScreen
         {
             DiagnosticLog.Warn(DockerText.Category, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
         }
+    }
+
+    /// <summary>
+    /// A <c>/docker</c> result: <c>logs</c>' lines on the info pane (2026-10-04, the user's pick: up to 2000 of them), over a reply
+    /// too; every other verb's lines as notices, or a failure's as errors.
+    /// </summary>
+    private Task ShowDockerResultAsync(DockerCommandResult result, string args, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (result.Paned && !result.Failed)
+        {
+            return ShowLinesAsync(TreeText.PaneLabel("/docker", args), result.Lines, sink, cancellationToken);
+        }
+
+        WriteDockerResult(result, sink);
+        return Task.CompletedTask;
     }
 
     /// <summary>A <c>/docker</c> result's lines as notices, or a failure's as errors.</summary>

@@ -184,7 +184,8 @@ internal sealed partial class ChatScreen
     /// <c>/view --chat</c> draws in the transcript the turn owns, and the bare <c>/view</c> is refused as before. The bare
     /// <c>/sessions title</c> (2026-09-28, the rename box a double-click on the upper rule's session name opens) is a
     /// <see cref="MidTurnClass.Pane"/>: the store holds its own lock and the model's title never lands over a typed one;
-    /// <c>/sessions title &lt;text&gt;</c> still waits. <c>/camera live</c>, <c>watch</c>, <c>off</c>, <c>list</c> and <c>use</c>
+    /// <c>/sessions title &lt;text&gt;</c> still waits. <c>/camera list</c> is a <see cref="MidTurnClass.Pane"/> since 2026-10-04 (its list
+    /// moved to the info pane, the user's pick). <c>/camera live</c>, <c>watch</c>, <c>off</c>, <c>list</c> (until then) and <c>use</c>
     /// (2026-10-02, the user's ask: <c>/camera off</c> waited for the reply, and an ESC under <c>Queue cancel mode</c> <c>empty</c>
     /// dropped it) are <see cref="MidTurnClass.Quick"/>: the camera has its own thread and the viewer its own window, and none
     /// of them opens a pane or touches the line; a word <c>/camera</c> does not know is its error at once. The bare
@@ -193,6 +194,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
+        SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.List => MidTurnClass.Pane,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb is not (Camera.CameraVerb.Shutter or Camera.CameraVerb.Snap) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
@@ -405,6 +407,10 @@ internal sealed partial class ChatScreen
                 // /keycheck (2026-10-04): its pane over the reply, as /usage's; an error through the flow sink.
                 await ShowKeyCheckAsync(_flow, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Camera:
+                // /camera list (2026-10-04, the user's pick): its pane over the reply; the policy sends no other camera word here.
+                await ListCamerasAsync(_flow, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.About:
                 await _info.ShowAsync(AboutText.Label, AboutTabs(), 0, cancellationToken).ConfigureAwait(false);
                 break;
@@ -474,10 +480,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Tree:
                 // /tree and /vault under a reply (later on 2026-09-27): the walk on the info pane, not in the reply.
-                await ShowTreePaneAsync(TreeLines(args, out string? treeError), treeError, TreeText.PaneLabel("/tree", args), cancellationToken).ConfigureAwait(false);
+                await ShowWalkAsync(TreeLines(args, out string? treeError), treeError, TreeText.PaneLabel("/tree", args), _flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Vault:
-                await ShowTreePaneAsync(VaultLines(args, out string? vaultError), vaultError, TreeText.PaneLabel("/vault", args), cancellationToken).ConfigureAwait(false);
+                await ShowWalkAsync(VaultLines(args, out string? vaultError), vaultError, TreeText.PaneLabel("/vault", args), _flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.CmdCopy:
                 // /cmdcopy and the prompt files (later on 2026-09-27): another profile's file, or one the running turn's prompt
@@ -598,17 +604,39 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary><c>/tree</c> or <c>/vault</c> under a reply (later on 2026-09-27): the walk's lines on the info pane, or its error line through the flow sink.</summary>
-    private async Task ShowTreePaneAsync(IReadOnlyList<string>? lines, string? error, string label, CancellationToken cancellationToken)
+    /// <summary>
+    /// A read-only list on the info pane, one tab under <paramref name="label"/> (later on 2026-09-27 for <c>/tree</c> and <c>/vault</c>
+    /// under a reply; 2026-10-04, the user's pick, for every list one reads and dismisses: the trees at the idle line too,
+    /// <c>/docker logs</c>, <c>/ha states</c>, <c>/comfy</c>, <c>/comfy offered</c>, <c>/print printers</c>, <c>/plan open</c>,
+    /// <c>/camera list</c>, <c>/screen list</c>). Without the pane (a redirected console) the lines as notices through
+    /// <paramref name="sink"/>, as before. A failure never comes here: it stays an error line in the chat.
+    /// </summary>
+    private async Task ShowLinesAsync(string label, IReadOnlyList<string> lines, INoticeSink sink, CancellationToken cancellationToken)
     {
-        if (lines is null)
+        if (!_pane.Enabled)
         {
-            _flow.Error(error ?? "");
+            foreach (string line in lines)
+            {
+                sink.Notice(line);
+            }
+
             return;
         }
 
         string text = string.Join('\n', lines);
         await _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(text))], 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary><c>/tree</c> or <c>/vault</c>: the walk's lines through <see cref="ShowLinesAsync"/>, or its error line through <paramref name="sink"/>.</summary>
+    private Task ShowWalkAsync(IReadOnlyList<string>? lines, string? error, string label, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (lines is null)
+        {
+            sink.Error(error ?? "");
+            return Task.CompletedTask;
+        }
+
+        return ShowLinesAsync(label, lines, sink, cancellationToken);
     }
 
     /// <summary>A switch saved mid-turn: the reconnect it needs is owed to the turn's end, and the line says so.</summary>

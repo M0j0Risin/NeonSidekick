@@ -163,7 +163,7 @@ internal sealed partial class ChatScreen
             if (!rest.Any(char.IsWhiteSpace))
             {
                 _transcript.Error(PlanText.NoSuchPlanError(rest));
-                ListPlans();
+                await ListPlansAsync(cancellationToken).ConfigureAwait(false);
                 return false;
             }
 
@@ -174,7 +174,7 @@ internal sealed partial class ChatScreen
         switch (command)
         {
             case PlanCommand.List:
-                ListPlans();
+                await ListPlansAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 
             case PlanCommand.Open:
@@ -445,19 +445,17 @@ internal sealed partial class ChatScreen
         PlanFiles.List(_files).Select(plan => new CompletionItem(plan.Name, PlanText.CompletionNote(plan))).ToList();
 
     /// <summary><c>/plan open</c> alone: the plans under <c>.neon/plans/</c>, one notice each, or that there are none.</summary>
-    private void ListPlans()
+    private Task ListPlansAsync(CancellationToken cancellationToken)
     {
         var plans = PlanFiles.List(_files);
         if (plans.Count == 0)
         {
             _transcript.Notice(PlanText.NoPlansNotice);
-            return;
+            return Task.CompletedTask;
         }
 
-        foreach (var plan in plans)
-        {
-            _transcript.Notice(PlanText.ListLine(plan));
-        }
+        // On the info pane since 2026-10-04 (the user's pick); none is still the one line.
+        return ShowLinesAsync("/plan " + PlanText.OpenWord, plans.Select(PlanText.ListLine).ToList(), _transcript, cancellationToken);
     }
 
     /// <summary>

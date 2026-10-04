@@ -128,7 +128,7 @@ internal sealed partial class ChatScreen
     private async Task HandleHomeAssistantAsync(string args, CancellationToken cancellationToken)
     {
         var result = await _transcript.WithSpinnerAsync(HaText.Working, () => HaCommand.RunAsync(_ha, args, cancellationToken)).ConfigureAwait(false);
-        WriteHomeResult(result, _transcript);
+        await ShowHomeResultAsync(result, args, _transcript, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -149,7 +149,22 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        WriteHomeResult(result, _flow);
+        await ShowHomeResultAsync(result, args, _flow, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A <c>/ha</c> result: <c>states</c>' lines on the info pane (2026-10-04, the user's pick: up to 80 of them), over a reply too;
+    /// every other verb's lines as notices, or a failure's as errors.
+    /// </summary>
+    private Task ShowHomeResultAsync(HaCommandResult result, string args, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (result.Paned && !result.Failed)
+        {
+            return ShowLinesAsync(TreeText.PaneLabel("/ha", args), result.Lines, sink, cancellationToken);
+        }
+
+        WriteHomeResult(result, sink);
+        return Task.CompletedTask;
     }
 
     /// <summary>A <c>/ha</c> result's lines as notices, or a failure's as errors.</summary>

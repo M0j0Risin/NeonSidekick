@@ -4,8 +4,11 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.HomeAssistant;
 
-/// <summary>What one <c>/ha</c> line came to: the lines to print, and whether it failed (an error's line).</summary>
-public sealed record HaCommandResult(IReadOnlyList<string> Lines, bool Failed)
+/// <summary>
+/// What one <c>/ha</c> line came to: the lines to print, whether it failed (an error's line), and whether the screen shows them on
+/// the info pane (<paramref name="Paned"/>: <c>states</c>, 2026-10-04); headless prints them either way.
+/// </summary>
+public sealed record HaCommandResult(IReadOnlyList<string> Lines, bool Failed, bool Paned = false)
 {
     public static HaCommandResult Error(string line) => new([line], true);
 
@@ -107,7 +110,7 @@ public static class HaCommand
 
                 bool isDomain = rest.Length > 0 && !rest.Contains(' ', StringComparison.Ordinal) && snapshot.Of(rest.ToLowerInvariant()).Count > 0;
                 string listing = HaStatesTool.List(snapshot, rest.Length == 0 || isDomain ? null : rest, isDomain ? rest : null, null);
-                return new HaCommandResult(listing.Split('\n'), false);
+                return new HaCommandResult(listing.Split('\n'), false, Paned: true);
             }
 
             case "say":

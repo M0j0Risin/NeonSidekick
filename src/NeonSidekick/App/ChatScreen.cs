@@ -6760,7 +6760,8 @@ internal sealed partial class ChatScreen
     /// them all. A <c>.git</c> folder at any depth is left out either way since 2026-09-30 (the user's ask: as the
     /// root's <c>.trash</c> was until 2026-10-01), unless it is the folder asked for. A path outside the root, missing or a file is the usual file error.
     /// </summary>
-    private void HandleTree(string args) => WriteTree(TreeLines(args, out string? error), error);
+    private Task HandleTreeAsync(string args, CancellationToken cancellationToken) =>
+        ShowWalkAsync(TreeLines(args, out string? error), error, TreeText.PaneLabel("/tree", args), _transcript, cancellationToken);
 
     /// <summary><c>/tree</c>'s walk as its lines; null with the error line (later on 2026-09-27: split out so a reply's info pane shows the same).</summary>
     private IReadOnlyList<string>? TreeLines(string args, out string? error)
@@ -6777,21 +6778,6 @@ internal sealed partial class ChatScreen
         }
 
         return TreeText.Lines(result, effective.FileTreeShowSizes, cap);
-    }
-
-    // A walk's lines as notices at the idle line, or its error line.
-    private void WriteTree(IReadOnlyList<string>? lines, string? error)
-    {
-        if (lines is null)
-        {
-            _transcript.Error(error ?? "");
-            return;
-        }
-
-        foreach (var line in lines)
-        {
-            _transcript.Notice(line);
-        }
     }
 
     // ── /vault (2026-09-22) ─────────────────────────────────────────────────
@@ -6820,7 +6806,8 @@ internal sealed partial class ChatScreen
     /// <c>/tree</c>'s error line — and a path through a dot-folder (<c>.obsidian</c>, <c>.trash/…</c>) is the
     /// missing one, since the vault tools never show those.
     /// </summary>
-    private void HandleVault(string args) => WriteTree(VaultLines(args, out string? error), error);
+    private Task HandleVaultAsync(string args, CancellationToken cancellationToken) =>
+        ShowWalkAsync(VaultLines(args, out string? error), error, TreeText.PaneLabel("/vault", args), _transcript, cancellationToken);
 
     /// <summary><c>/vault</c>'s walk as its lines; null with the error line (later on 2026-09-27, as <see cref="TreeLines"/>).</summary>
     private IReadOnlyList<string>? VaultLines(string args, out string? error)
@@ -7543,12 +7530,13 @@ internal sealed partial class ChatScreen
     private async Task HandleComfyAsync(CancellationToken cancellationToken)
     {
         var effective = _effective();
+        var lines = new List<string>();
         if (_comfy.Client() is { } client)
         {
             var (ok, status) = await _transcript.WithSpinnerAsync(ComfyText.CheckingServer, () => client.StatusAsync(cancellationToken)).ConfigureAwait(false);
             if (ok)
             {
-                _transcript.Notice(ComfyText.Glyph + client.BaseUrl + " — " + status);
+                lines.Add(ComfyText.Glyph + client.BaseUrl + " — " + status);
             }
             else
             {
@@ -7560,24 +7548,22 @@ internal sealed partial class ChatScreen
             _transcript.Error(ComfyText.NoServer);
         }
 
+        // On the info pane since 2026-10-04 (the user's pick): a server that did not answer stays an error line in the chat.
         var (workflows, problems) = _comfy.Catalog.Scan();
-        foreach (var line in ComfyText.StatusLines(workflows, problems, _comfy.Catalog.Roots, effective.ComfyTools, effective.ComfyWorkflowsOffered))
-        {
-            _transcript.Notice(line);
-        }
+        lines.AddRange(ComfyText.StatusLines(workflows, problems, _comfy.Catalog.Roots, effective.ComfyTools, effective.ComfyWorkflowsOffered));
+        await ShowLinesAsync("/comfy", lines, _transcript, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// <c>/comfy offered</c> (2026-10-04, the user's ask): the workflows the model is offered as a bulleted list, nothing asked
     /// of the server — a fresh scan, so a workflow added or removed on disk since shows at once.
     /// </summary>
-    private void ListComfyOffered()
+    private Task ListComfyOfferedAsync(CancellationToken cancellationToken)
     {
+        // On the info pane since later on 2026-10-04 (the user's pick).
         var effective = _effective();
-        foreach (var line in ComfyText.OfferedLines(_comfy.Catalog.Workflows, effective.ComfyWorkflowsOffered, effective.ComfyTools))
-        {
-            _transcript.Notice(line);
-        }
+        var lines = ComfyText.OfferedLines(_comfy.Catalog.Workflows, effective.ComfyWorkflowsOffered, effective.ComfyTools);
+        return ShowLinesAsync("/comfy " + ComfyOfferedWord, lines, _transcript, cancellationToken);
     }
 
     // ── the purge lines' glyph ──────────────────────────────────────────────
@@ -10364,11 +10350,11 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Tree:
-                HandleTree(args);
+                await HandleTreeAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Vault:
-                HandleVault(args);
+                await HandleVaultAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Explore:
@@ -10410,7 +10396,7 @@ internal sealed partial class ChatScreen
 
                 if (string.Equals(args.Trim(), ComfyOfferedWord, StringComparison.OrdinalIgnoreCase))
                 {
-                    ListComfyOffered();
+                    await ListComfyOfferedAsync(cancellationToken).ConfigureAwait(false);
                     return false;
                 }
 

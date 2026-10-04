@@ -4,8 +4,11 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.Docker;
 
-/// <summary>What one <c>/docker</c> line came to: the lines to print, and whether it failed (an error's line).</summary>
-public sealed record DockerCommandResult(IReadOnlyList<string> Lines, bool Failed)
+/// <summary>
+/// What one <c>/docker</c> line came to: the lines to print, whether it failed (an error's line), and whether the screen shows them
+/// on the info pane (<paramref name="Paned"/>: <c>logs</c>, 2026-10-04); headless prints them either way.
+/// </summary>
+public sealed record DockerCommandResult(IReadOnlyList<string> Lines, bool Failed, bool Paned = false)
 {
     public static DockerCommandResult Error(string line) => new([line], true);
 
@@ -71,7 +74,7 @@ public static class DockerCommand
 
                 int tail = count ?? DefaultLogLines;
                 var logs = await docker.Client().LogsAsync(container.Id, tail, null, timestamps: false, DockerLogStreams.Both, DockerSession.ReadTimeout, cancellationToken).ConfigureAwait(false);
-                return logs.Error is not null ? DockerCommandResult.Error(logs.Error) : DockerCommandResult.Of(DockerLogsTool.Render(container.Name, logs.Lines, tail, null, logs.Capped));
+                return logs.Error is not null ? DockerCommandResult.Error(logs.Error) : DockerCommandResult.Of(DockerLogsTool.Render(container.Name, logs.Lines, tail, null, logs.Capped)) with { Paned = true };
             }
 
             case "stats":

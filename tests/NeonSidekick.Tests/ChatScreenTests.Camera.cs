@@ -614,7 +614,7 @@ public partial class ChatScreenTests
     [InlineData("watch 5", MidTurnClass.Quick)]
     [InlineData("watch off", MidTurnClass.Quick)]
     [InlineData("off", MidTurnClass.Quick)]
-    [InlineData("list", MidTurnClass.Quick)]
+    [InlineData("list", MidTurnClass.Pane)]    // its list on the info pane over the reply since 2026-10-04 (the user's pick)
     [InlineData("use 2", MidTurnClass.Quick)]
     [InlineData("zoom", MidTurnClass.Quick)]   // a word /camera does not know: its error at once
     [InlineData("", MidTurnClass.Deferred)]    // the pane would take the keys from the reply
@@ -635,6 +635,7 @@ public partial class ChatScreenTests
             }
             else if (i == 2)
             {
+                Scripted().Push(Keys.Escape);   // the list's pane over the reply (2026-10-04) closed
                 PushLine("/camera off");
             }
         });

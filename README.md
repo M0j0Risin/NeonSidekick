@@ -200,8 +200,8 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/persona`, `/operata`, `/vocalia` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -1015,15 +1015,15 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/cwd [path \| ~ \| browse]` | Shows or changes the working directory. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
 | `/camera` | Opens the camera pane: Space takes the photo, R retakes, Enter puts it on the input line as `[Image #N]`, ESC drops it. Without the pane it snaps at once. See Camera. |
 | `/camera snap` | Takes a photo at once and puts it on the input line. |
-| `/camera list` | Lists the cameras, numbered, the chosen one marked. |
+| `/camera list` | Lists the cameras in a pane, numbered, the chosen one marked. |
 | `/camera use <n\|name>` | Chooses the camera by number or name (*Camera device*). |
 | `/camera live` | Shows the camera live in its own window until you close it or `/camera off`. |
 | `/camera watch [seconds\|off]` | Looks every *Camera watch interval* (or the seconds given); a picture that changed rides your next message. Never on at startup. |
 | `/camera off` | Ends `/camera live` and watch mode; the camera closes a few seconds later. |
 | `/screen [screen \| all \| monitor:N \| window:<id or title words> \| behind]` | Captures the monitor the app is on (or the target given) and puts the screenshot on the input line as `[Image #N]`. `behind` is the window right behind the app's own: the one you were just in. After `/screen ` the list offers the targets, then the monitors after `monitor:` and the open windows after `window:` (narrowed by id, title or program). See Screen capture. |
-| `/screen list` | Lists the monitors and the windows, front to back, with the target that names each. |
+| `/screen list` | Lists the monitors and the windows in a pane, front to back, with the target that names each. |
 | `/docker` | Docker Desktop's containers on a pane, with state, health and ports. Enter offers what fits: stop, restart or pause (asking first), start or unpause, the last 50 log lines, open a port in the browser, copy the id. |
-| `/docker ps \| status \| logs <container> [lines] \| stats [container]` | The containers; the versions and counts; a container's last lines (50 by default); CPU, memory, network and disk use. |
+| `/docker ps \| status \| logs <container> [lines] \| stats [container]` | The containers; the versions and counts; a container's last lines (50 by default) in a pane; CPU, memory, network and disk use. |
 | `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container by name, part of a name or id. Your own hand: *Docker writes* doesn't apply and nothing is asked, but every change is logged. |
 | `/draft` | Writes the next message in your editor; it is sent when you save and close. |
 | `/echo <text>` | Prints a line as a reply (spoken when speech is on). |
@@ -1034,7 +1034,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/ha on\|off\|toggle <room or name> [brightness%]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
 | `/ha scene <name>` | Activates a scene (`/ha scene den relax`). |
 | `/ha tv on\|off\|mute\|unmute\|up\|down\|vol <0-100>\|source <name>` | Controls the only media player (`/ha tv source hdmi 2`). |
-| `/ha states [domain \| words \| entity id]` | Lists entities with ids and states; an entity id shows all its attributes. |
+| `/ha states [domain \| words \| entity id]` | Lists entities with ids and states in a pane; an entity id shows all its attributes. |
 | `/ha say <sentence>` | Hands a sentence to Home Assistant's Assist agent. |
 | `/header [on \| off]` | Shows or hides the banner (*Show header*), from the next clear. Alone, it flips the setting. |
 | `/help` | The commands (basic and advanced) and keys. |
@@ -1056,7 +1056,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality; seeded with the built-in persona). |
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape]` | Prints a file from the working directory (see Printing). The printer matches by name or part of it; quote a name with spaces. *Print action policy* never applies. |
 | `/print reply [options]` | Prints the last reply as formatted Markdown. |
-| `/print printers` | Lists the printers, marking the Windows default and *Print default printer*. |
+| `/print printers` | Lists the printers in a pane, marking the Windows default and *Print default printer*. `/print` alone shows its usage and the same list. |
 | `/pdf <file> [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see Making PDFs). |
 | `/pdf https://… [to=<out.pdf>] [overwrite]` | Makes a PDF of a web page as the browser shows it; *Web browser network mode* still applies. |
 | `/pdf reply [options]` | Makes a PDF of the last reply as formatted Markdown. |
@@ -1084,15 +1084,15 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/toolbar [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
 | `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
 | `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (D, H, C) for *Web browser mode*. |
-| `/tree [path]` | Prints a tree of the working directory (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
+| `/tree [path]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
 | `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
-| `/vault [path]` | Prints a tree of the *Obsidian vault* (or a folder in it), like `/tree`. |
+| `/vault [path]` | Shows a tree of the *Obsidian vault* (or a folder in it) in a pane, like `/tree`. |
 | `/view <image or folder> [--chat]` | Opens an image (or a folder's newest picture) in the picture viewer; `--chat` draws it in the transcript instead. |
 | `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]` | Generates a picture on ComfyUI from your prompt exactly as typed. See Imagine options. |
-| `/comfy` | The ComfyUI server's status, the workflows found, skipped files and where workflows go. |
+| `/comfy` | The ComfyUI server's status, the workflows found, skipped files and where workflows go, in a pane (a server that doesn't answer is an error line in the chat). |
 | `/comfy edit json <workflow>`, `/comfy edit markdown <workflow>` | Opens a workflow's graph, or its `.md` (created if missing), in your editor. |
-| `/comfy offered` | Lists the workflows currently offered to the model, one bullet each. |
+| `/comfy offered` | Lists the workflows currently offered to the model in a pane, one bullet each. |
 | `/comfy view` | Opens the picture viewer on the output folder. |
 | `/comfy purge` | Deletes everything in the output folder, `.pasted` included, after a yes/no. Refused when it is the working directory. |
 | `/vocalia [reset \| copy <profile> [force]]` | Edits `vocalia.md` (the voice directive, empty by default, added last to every spoken reply), removes it, or copies it to another profile. |
@@ -1124,7 +1124,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `cancelled`. |
 | `/plan save [name]` | Keeps a reply that looks like a plan (the model never called `present_plan`) as the plan, and brings up the approval pane. |
 | `/plan open <name>` | Picks a plan up again: plan mode turns on over that file (back to `draft`) and the model reads it and asks what should change. `/plan approve` then runs only the unticked steps. |
-| `/plan open` | Lists the plans with status and progress. |
+| `/plan open` | Lists the plans with status and progress in a pane. |
 
 #### Bot conversations
 

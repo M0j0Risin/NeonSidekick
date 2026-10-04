@@ -28,7 +28,7 @@ public static class HelpCommands
         [
             new("/camera", "Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. See Camera."),
             new("/camera snap", "Take a photo at once and put it on the input line."),
-            new("/camera list", "List the cameras Windows sees, numbered, the chosen one marked."),
+            new("/camera list", "List the cameras Windows sees in a pane, numbered, the chosen one marked."),
             new("/camera use <n|name>", "Choose the camera by its number in the list or its name (*Camera device*)."),
             new("/camera live", "Show the camera live in its own window until you close the window or `/camera off`."),
             new("/camera watch [seconds|off]", "Watch mode: the camera looks every *Camera watch interval* seconds (or the seconds given), and a picture that changed rides your next message (with *Camera watch speaks up*, the model may also be shown it unasked). Never on at startup; `/camera watch off` stops it."),
@@ -61,9 +61,9 @@ public static class HelpCommands
         ]),
         new("/comfy",
         [
-            new("/comfy", "Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), skipped files and where workflows go."),
+            new("/comfy", "Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), skipped files and where workflows go, in a pane. A server that doesn't answer is an error line in the chat."),
             new("/comfy edit json <workflow>, /comfy edit markdown <workflow>", "Open a workflow's graph, or its `.md`, in your editor (`md` works too; the `.md` is created with the family filled in if it doesn't exist)."),
-            new("/comfy offered", "List the workflows currently offered to the model as a bulleted list (name, family, input, size, description), without asking the server."),
+            new("/comfy offered", "List the workflows currently offered to the model in a pane, one bullet each (name, family, input, size, description), without asking the server."),
             new("/comfy view", "Open the picture viewer on the output folder. Works while a reply runs."),
             new("/comfy purge", "Permanently delete everything in the output folder, `.pasted` inputs included, after a yes/no. Refused when the output folder is the working directory."),
         ]),
@@ -82,7 +82,7 @@ public static class HelpCommands
         new("/docker",
         [
             new("/docker", "Docker Desktop's containers on a pane, running first, with their state, health and ports. Enter on one offers what fits its state: stop, restart or pause (each asks first), start or unpause, its last 50 log lines, open a published port in the browser, copy the id. Without the pane it lists them."),
-            new("/docker ps | status | logs <container> [lines] | stats [container]", "The containers; Docker Desktop's and the engine's versions with the counts; a container's last lines (50 by default); the CPU, memory, network and disk use of one or every running container."),
+            new("/docker ps | status | logs <container> [lines] | stats [container]", "The containers; Docker Desktop's and the engine's versions with the counts; a container's last lines (50 by default, in a pane); the CPU, memory, network and disk use of one or every running container."),
             new("/docker start|stop|restart|pause|unpause <container>", "Act on one container, by name, part of a name or id. Your own hand: *Docker writes* never applies, nothing is asked, every change is logged. Runs under a reply too."),
         ]),
         new("/draft",
@@ -115,7 +115,7 @@ public static class HelpCommands
             new("/ha on|off|toggle <room or name> [brightness%]", "Switch a room (its group light), a light, a switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`)."),
             new("/ha scene <name>", "Activate a scene (`/ha scene den relax`)."),
             new("/ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name>", "Control the only media player (`/ha tv source hdmi 2`)."),
-            new("/ha states [domain | words | entity id]", "List entities with their ids and states. An entity id shows all of its attributes."),
+            new("/ha states [domain | words | entity id]", "List entities with their ids and states in a pane. An entity id shows all of its attributes."),
             new("/ha say <sentence>", "Hand a sentence to Home Assistant's Assist agent."),
         ]),
         new("/header",
@@ -198,7 +198,7 @@ public static class HelpCommands
             new("/plan cancel", "Leave plan mode. The file is kept, marked `cancelled`."),
             new("/plan save [name]", "When a reply looks like a plan but the model never called `present_plan` (a notice says so), keep it as the plan and bring up the approval pane."),
             new("/plan open <name>", "Pick a plan up again, in or out of plan mode (names complete from `.neon/plans/`). Plan mode turns on over that file, the file goes back to `draft`, and the model is asked to read it and ask what should change. `/plan approve` then carries out only the unticked steps."),
-            new("/plan open", "List the plans with their status and progress."),
+            new("/plan open", "List the plans with their status and progress in a pane."),
         ]),
         new("/police",
         [
@@ -208,7 +208,7 @@ public static class HelpCommands
         [
             new("/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape]", "Print a file from the working directory. Text and code print as a listing, markdown prints formatted, and a picture is fitted to one page; each page is headed with the file's name, the time and *page N of M*. Anything else (a PDF, a Word or Excel file) goes to the program Windows has for it, on the default printer. The printer is matched by its name or part of it (`printer=color`); put a name with spaces in quotes. *Print action policy* never applies to this command. See Printing."),
             new("/print reply [options]", "Print the last reply, formatted as markdown."),
-            new("/print printers", "List the installed printers, marking the Windows default and *Print default printer*."),
+            new("/print printers", "List the installed printers in a pane, marking the Windows default and *Print default printer*."),
         ]),
         new("/profile",
         [
@@ -241,7 +241,7 @@ public static class HelpCommands
             new("/screen monitor:<n>", "Capture monitor n (`/screen list` numbers them)."),
             new("/screen window:<id or title words>", "Capture one window, even when another covers it: by its id from `/screen list`, or words of its title (or its process name)."),
             new("/screen behind", "Capture the window right behind the app's own: the one you were just in."),
-            new("/screen list", "List the monitors and the windows (front to back) with the target that names each."),
+            new("/screen list", "List the monitors and the windows (front to back) in a pane, with the target that names each. The argument list after `/screen ` offers them too."),
         ]),
         new("/server",
         [
@@ -305,7 +305,7 @@ public static class HelpCommands
         ]),
         new("/tree",
         [
-            new("/tree [path]", "Print a tree of the working directory. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out unless you name one as the path."),
+            new("/tree [path]", "Show a tree of the working directory in a pane. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`. `.git` folders are always left out unless you name one as the path."),
         ]),
         new("/tts",
         [
@@ -317,7 +317,7 @@ public static class HelpCommands
         ]),
         new("/vault",
         [
-            new("/vault [path]", "Print a tree of the *Obsidian vault* (or a folder in it), like `/tree`. Dot-folders are left out, the length is capped by *File /tree max length*, and sizes follow *File /tree show sizes*. Fails if *Obsidian tools* is off, no vault is set, or the folder can't be reached or has no `.obsidian`."),
+            new("/vault [path]", "Show a tree of the *Obsidian vault* (or a folder in it) in a pane, like `/tree`. Dot-folders are left out, the length is capped by *File /tree max length*, and sizes follow *File /tree show sizes*. Fails if *Obsidian tools* is off, no vault is set, or the folder can't be reached or has no `.obsidian`."),
         ]),
         new("/view",
         [

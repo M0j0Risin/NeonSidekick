@@ -95,6 +95,13 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // The bare /print and /print printers list the printers on the info pane (2026-10-04, the user's pick).
+        if (result.Paned && !result.Failed)
+        {
+            await ShowLinesAsync(TreeText.PaneLabel("/print", args), result.Lines, _transcript, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         foreach (string line in result.Lines)
         {
             if (result.Failed)

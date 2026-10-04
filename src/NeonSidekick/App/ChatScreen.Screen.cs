@@ -180,18 +180,19 @@ internal sealed partial class ChatScreen
 
         if (string.Equals(args.Trim(), "list", StringComparison.OrdinalIgnoreCase))
         {
+            // On the info pane since later on 2026-10-04 (the user's pick); the argument list offers the ids as you type them.
+            IReadOnlyList<string> lines;
             try
             {
-                foreach (string line in await Task.Run(() => ScreenText.List(system.Monitors(), system.OwnMonitor(), system.Windows(), system.OwnWindow()), cancellationToken).ConfigureAwait(false))
-                {
-                    _transcript.Notice(line);
-                }
+                lines = await Task.Run(() => ScreenText.List(system.Monitors(), system.OwnMonitor(), system.Windows(), system.OwnWindow()), cancellationToken).ConfigureAwait(false);
             }
             catch (ScreenException e)
             {
                 _transcript.Error(e.Message);
+                return;
             }
 
+            await ShowLinesAsync("/screen list", lines, _transcript, cancellationToken).ConfigureAwait(false);
             return;
         }
 
