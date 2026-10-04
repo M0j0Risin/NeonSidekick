@@ -8,6 +8,9 @@ namespace NeonSidekick.Web;
 /// <summary>What a headless run produced: the rendered DOM, or null with the reason.</summary>
 public sealed record BrowserDump(string? Html, string Detail);
 
+/// <summary>What a print-to-PDF run produced (2026-10-03): whether the PDF is at the output path, else why not.</summary>
+public sealed record BrowserPdf(bool Ok, string Detail);
+
 /// <summary>The headless-browser seam: where the browser is, and a page through it. <see cref="HeadlessBrowser"/> in the app, a fake in tests.</summary>
 public interface IHeadlessBrowser
 {
@@ -16,6 +19,9 @@ public interface IHeadlessBrowser
 
     /// <summary>The DOM of <paramref name="url"/> after the page ran its scripts, through <paramref name="executable"/>.</summary>
     Task<BrowserDump> DumpDomAsync(string executable, Uri url, CancellationToken cancellationToken);
+
+    /// <summary><paramref name="page"/> printed to a PDF at <paramref name="outputPath"/> through <paramref name="executable"/> (2026-10-03).</summary>
+    Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -27,11 +33,21 @@ public interface IHeadlessBrowser
 /// editor opener is the first): no shell, no window, a throwaway profile folder under the temp
 /// directory — without one a running Edge takes the URL over and this process exits with nothing —
 /// one run at a time, killed with its tree at <see cref="Timeout"/>.
+/// <para>
+/// Since 2026-10-03 it also prints pages to PDF (<c>convert_to_pdf</c>, <c>/pdf</c>): Chromium's <c>--print-to-pdf</c> on a page
+/// the app wrote to the temp folder or on a web page, with images on and the browser's own header and footer off, within
+/// <see cref="PdfTimeout"/>. Still the same one process-start site — <c>RunProcessAsync</c> serves both — and the same one run at
+/// a time, so this instance is the web tools' own (<c>WebAccess.Browser</c>). The PDF is judged by its file, not by stdout:
+/// there, whole and starting <c>%PDF</c>.
+/// </para>
 /// </summary>
 public sealed class HeadlessBrowser : IHeadlessBrowser
 {
     /// <summary>How long one page may take, scripts included, before the process is killed.</summary>
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long one print to PDF may take: a long document lays out for a while.</summary>
+    public static readonly TimeSpan PdfTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>Virtual time the page's scripts get to settle before the DOM is dumped.</summary>
     public const int VirtualTimeBudgetMs = 5000;
@@ -125,6 +141,17 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     public string? Locate(string configuredPath) => Locate(configuredPath, Candidates(), File.Exists);
 
+    /// <summary>The flags every run shares, after <c>--headless=new</c> and the run's own verb.</summary>
+    private static readonly string[] CommonFlags =
+    [
+        "--disable-gpu",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--mute-audio",
+    ];
+
     /// <summary>The command line after the executable. Pinned.</summary>
     public static IReadOnlyList<string> Arguments(Uri url, string userDataDirectory)
     {
@@ -134,17 +161,36 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         [
             "--headless=new",
             "--dump-dom",
-            "--disable-gpu",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-extensions",
-            "--disable-background-networking",
-            "--mute-audio",
+            .. CommonFlags,
             "--blink-settings=imagesEnabled=false",
             "--virtual-time-budget=" + VirtualTimeBudgetMs.ToString(CultureInfo.InvariantCulture),
             "--user-data-dir=" + userDataDirectory,
             url.AbsoluteUri,
         ];
+    }
+
+    /// <summary>
+    /// The print-to-PDF command line after the executable (2026-10-03). Pinned. Images stay on — they are half of what a PDF
+    /// shows — and the browser's own header and footer (the date, the file's URL) are left off. A web page gets the virtual time
+    /// budget to settle its scripts; a page the app wrote has none to settle.
+    /// </summary>
+    public static IReadOnlyList<string> PdfArguments(Uri page, string outputPath, string userDataDirectory, bool isWeb)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(outputPath);
+        ArgumentNullException.ThrowIfNull(userDataDirectory);
+        var list = new List<string>(12) { "--headless=new" };
+        list.AddRange(CommonFlags);
+        list.Add("--no-pdf-header-footer");
+        list.Add("--print-to-pdf=" + outputPath);
+        if (isWeb)
+        {
+            list.Add("--virtual-time-budget=" + VirtualTimeBudgetMs.ToString(CultureInfo.InvariantCulture));
+        }
+
+        list.Add("--user-data-dir=" + userDataDirectory);
+        list.Add(page.AbsoluteUri);
+        return list;
     }
 
     public async Task<BrowserDump> DumpDomAsync(string executable, Uri url, CancellationToken cancellationToken)
@@ -154,7 +200,24 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await RunAsync(executable, url, cancellationToken).ConfigureAwait(false);
+            var run = await RunProcessAsync(executable, url, userData => Arguments(url, userData), Timeout, cancellationToken).ConfigureAwait(false);
+            if (run.StartError is not null)
+            {
+                return new BrowserDump(null, run.StartError);
+            }
+
+            DiagnosticLog.Debug(Category, $"{run.Summary}, {run.Stdout.Length.ToString(CultureInfo.InvariantCulture)} chars" + run.StderrTail);
+            if (run.TimedOut)
+            {
+                return new BrowserDump(null, $"no page within {Llm.LlmTimeouts.Format(Timeout)}");
+            }
+
+            if (string.IsNullOrWhiteSpace(run.Stdout))
+            {
+                return new BrowserDump(null, run.Failure("it printed nothing"));
+            }
+
+            return new BrowserDump(run.Stdout, "");
         }
         finally
         {
@@ -162,7 +225,59 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
     }
 
-    private static async Task<BrowserDump> RunAsync(string executable, Uri url, CancellationToken cancellationToken)
+    public async Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(outputPath);
+        await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            bool isWeb = page.Scheme is "http" or "https";
+            var run = await RunProcessAsync(executable, page, userData => PdfArguments(page, outputPath, userData, isWeb), PdfTimeout, cancellationToken).ConfigureAwait(false);
+            if (run.StartError is not null)
+            {
+                return new BrowserPdf(false, run.StartError);
+            }
+
+            DiagnosticLog.Debug(Category, $"{run.Summary}, PDF to {outputPath}" + run.StderrTail);
+            if (run.TimedOut)
+            {
+                return new BrowserPdf(false, $"no PDF within {Llm.LlmTimeouts.Format(PdfTimeout)}");
+            }
+
+            if (!File.Exists(outputPath))
+            {
+                return new BrowserPdf(false, run.Failure("it wrote no PDF"));
+            }
+
+            return Printing.PrintToFile.IsPdf(outputPath) ? new BrowserPdf(true, "") : new BrowserPdf(false, "it wrote a file that is not a PDF");
+        }
+        finally
+        {
+            _oneAtATime.Release();
+        }
+    }
+
+    /// <summary>One finished browser run: what it printed, how it ended, or why it never started.</summary>
+    private sealed record BrowserRun(string? StartError, int ExitCode, string Stdout, string Stderr, bool TimedOut, string Summary)
+    {
+        public string StderrTail => Stderr.Length > 0 ? $"; stderr: {LastLine(Stderr)}" : "";
+
+        /// <summary>Why a run that ended made nothing: the exit code when it was not 0, else <paramref name="quiet"/>; stderr's last line after.</summary>
+        public string Failure(string quiet)
+        {
+            string reason = ExitCode != 0 ? $"exit code {ExitCode.ToString(CultureInfo.InvariantCulture)}" : quiet;
+            string tail = LastLine(Stderr);
+            return tail.Length > 0 ? $"{reason}: {tail}" : reason;
+        }
+    }
+
+    /// <summary>
+    /// The one place the browser is started: the profile folder made, the process run with no window, stdout and stderr read,
+    /// killed with its tree when <paramref name="timeout"/> runs out. The caller holds <c>_oneAtATime</c>.
+    /// </summary>
+    private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, CancellationToken cancellationToken)
     {
         string userData = UserDataDirectory;
         try
@@ -171,7 +286,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new BrowserDump(null, $"could not create the profile folder {userData} ({ex.Message})");
+            return new BrowserRun($"could not create the profile folder {userData} ({ex.Message})", 0, "", "", false, "");
         }
 
         var start = new ProcessStartInfo(executable)
@@ -183,7 +298,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             StandardOutputEncoding = new UTF8Encoding(false),
             StandardErrorEncoding = new UTF8Encoding(false),
         };
-        foreach (var argument in Arguments(url, userData))
+        foreach (var argument in arguments(userData))
         {
             start.ArgumentList.Add(argument);
         }
@@ -196,18 +311,18 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            return new BrowserDump(null, $"could not start {Path.GetFileName(executable)} ({ex.Message})");
+            return new BrowserRun($"could not start {Path.GetFileName(executable)} ({ex.Message})", 0, "", "", false, "");
         }
 
         if (process is null)
         {
-            return new BrowserDump(null, $"could not start {Path.GetFileName(executable)}");
+            return new BrowserRun($"could not start {Path.GetFileName(executable)}", 0, "", "", false, "");
         }
 
         using (process)
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(Timeout);
+            budget.CancelAfter(timeout);
             var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
             var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
             bool timedOut = false;
@@ -225,22 +340,10 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 }
             }
 
-            string html = await stdout.ConfigureAwait(false);
+            string output = await stdout.ConfigureAwait(false);
             string errors = await stderr.ConfigureAwait(false);
-            DiagnosticLog.Debug(Category, $"{Path.GetFileName(executable)} {url}: exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)} after {watch.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s, {html.Length.ToString(CultureInfo.InvariantCulture)} chars" + (errors.Length > 0 ? $"; stderr: {LastLine(errors)}" : ""));
-            if (timedOut)
-            {
-                return new BrowserDump(null, $"no page within {Llm.LlmTimeouts.Format(Timeout)}");
-            }
-
-            if (string.IsNullOrWhiteSpace(html))
-            {
-                string reason = process.ExitCode != 0 ? $"exit code {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "it printed nothing";
-                string tail = LastLine(errors);
-                return new BrowserDump(null, tail.Length > 0 ? $"{reason}: {tail}" : reason);
-            }
-
-            return new BrowserDump(html, "");
+            string summary = $"{Path.GetFileName(executable)} {page}: exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)} after {watch.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
+            return new BrowserRun(null, process.ExitCode, output, errors, timedOut, summary);
         }
     }
 

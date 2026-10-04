@@ -256,7 +256,7 @@ public sealed class WebFetcher
             return FetchResult.Fail(FetchOutcome.NotHttp, url.OriginalString, "");
         }
 
-        if (await RefusalAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
+        if (await PreflightAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
         {
             return FetchResult.Fail(refused, url.AbsoluteUri, url.Host);
         }
@@ -305,9 +305,10 @@ public sealed class WebFetcher
     /// network mode refuses <paramref name="host"/> with, or null to go on. A literal address or
     /// <c>localhost</c> is judged by spelling (2026-09-18: a public literal too, so no lookup), a name by its addresses (<see cref="LanPolicy.Judge"/>);
     /// an unresolvable name is not judged — the request itself will say so. Under <c>both</c> nothing
-    /// is asked. The socket (<see cref="LanPolicy.ConnectAsync"/>) judges again on what it connects to.
+    /// is asked. The socket (<see cref="LanPolicy.ConnectAsync"/>) judges again on what it connects to. Public since 2026-10-03:
+    /// <c>convert_to_pdf</c> asks it before the browser prints a web page, the one check that path gets.
     /// </summary>
-    private async Task<FetchOutcome?> RefusalAsync(string host, FetchOptions options, CancellationToken cancellationToken)
+    public async Task<FetchOutcome?> PreflightAsync(string host, FetchOptions options, CancellationToken cancellationToken)
     {
         if (options.Reach == NetworkReach.Both)
         {
@@ -376,7 +377,7 @@ public sealed class WebFetcher
     /// <summary>
     /// The redirect walk both legs share (2026-09-18): GET after GET, each hop headed like Chrome
     /// (<see cref="BrowserHeaders"/>), under its own <see cref="FetchTimeout"/> budget and judged by
-    /// <see cref="RefusalAsync"/> before it is followed, up to <see cref="MaxRedirects"/>. The arrival
+    /// <see cref="PreflightAsync"/> before it is followed, up to <see cref="MaxRedirects"/>. The arrival
     /// is the caller's to dispose; a failure is the fetch result to answer with. Exceptions escape to
     /// the caller's <see cref="Failure"/>.
     /// </summary>
@@ -410,7 +411,7 @@ public sealed class WebFetcher
                         return (null, FetchResult.Fail(FetchOutcome.NotHttp, next.OriginalString, "", status));
                     }
 
-                    if (await RefusalAsync(next.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
+                    if (await PreflightAsync(next.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
                     {
                         return (null, FetchResult.Fail(refused, url.AbsoluteUri, next.Host, status));
                     }
@@ -573,7 +574,7 @@ public sealed class WebFetcher
             return OpenedDownload.Fail(FetchOutcome.NotHttp, url.OriginalString, "");
         }
 
-        if (await RefusalAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
+        if (await PreflightAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
         {
             return OpenedDownload.Fail(refused, url.AbsoluteUri, url.Host);
         }

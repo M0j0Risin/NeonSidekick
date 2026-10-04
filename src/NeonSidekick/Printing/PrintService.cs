@@ -17,9 +17,11 @@ public enum PrintKind
 
 /// <summary>
 /// What to print: a sandbox path, or markdown text (<c>/print reply</c>) with its <paramref name="Title"/>; the printer (blank:
-/// the setting, then the Windows default), the copies, the page range and the orientation.
+/// the setting, then the Windows default), the copies, the page range and the orientation. <paramref name="OutputFile"/>
+/// (2026-10-03, the PDF fallback of <c>convert_to_pdf</c>) is the file a print-to-file printer writes instead of asking where;
+/// a file only the shell's program prints cannot take one.
 /// </summary>
-public sealed record PrintRequest(string? Path, string? Printer = null, int Copies = 1, string? Pages = null, bool Landscape = false, string? Markdown = null, string? Title = null);
+public sealed record PrintRequest(string? Path, string? Printer = null, int Copies = 1, string? Pages = null, bool Landscape = false, string? Markdown = null, string? Title = null, string? OutputFile = null);
 
 /// <summary>
 /// A print ready to go: how, what it shows as (<paramref name="Display"/>, the path relative to the working directory or the
@@ -153,6 +155,11 @@ public sealed class PrintService
         var printers = _spooler.Printers();
         if (kind == PrintKind.Shell)
         {
+            if (request.OutputFile is not null)
+            {
+                return (null, PrintText.NoFileOutput(display));
+            }
+
             if (!string.IsNullOrWhiteSpace(request.Printer) || request.Copies != 1 || !string.IsNullOrWhiteSpace(request.Pages) || request.Landscape)
             {
                 return (null, PrintText.ShellDefaultOnly(display));
@@ -191,7 +198,7 @@ public sealed class PrintService
             return (null, rangeError);
         }
 
-        var job = new PrintJob(printer, display, pages.Where(p => chosen.Contains(p.Number)).ToList(), request.Landscape, request.Copies);
+        var job = new PrintJob(printer, display, pages.Where(p => chosen.Contains(p.Number)).ToList(), request.Landscape, request.Copies, request.OutputFile);
         return (new PrintPlan(kind, display, printer, pages.Count, [.. chosen], request.Copies, request.Landscape, job, null), null);
     }
 

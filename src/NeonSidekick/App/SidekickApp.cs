@@ -616,7 +616,10 @@ public sealed class SidekickApp
         var files = BuildWorkingDirectory();
         // The UNC shares' door first (2026-10-01): open reaches the offered shares too.
         var unc = new Unc.UncAccess(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.UncSharesOffered), _time);
-        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc);
+        // The printing door before the file tools (2026-10-03): convert_to_pdf makes its PDFs with the web tools' headless browser or Microsoft Print to PDF.
+        var print = new Printing.PrintService(_printSpooler, files, () => EffectiveSettings, _time);
+        var pdf = new Pdf.PdfConverter(_web.Browser, _web.Fetcher, print, files, () => EffectiveSettings, _time);
+        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf);
         // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too.
         IReadOnlyList<AIFunction> standingTools = [.. clockTools, .. ChatScreen.HelpTools()];
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
@@ -648,7 +651,6 @@ public sealed class SidekickApp
         using var camera = new Camera.CameraSession(_camera, () => Camera.CameraSettings.Options(EffectiveSettings), _time);
         var dockerTools = ChatScreen.DockerTools(docker, confirm: null);
         // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
-        var print = new Printing.PrintService(_printSpooler, files, () => EffectiveSettings, _time);
         var printTools = ChatScreen.PrintTools(print, confirm: null);
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
         // allow list alone decides, and NEONSIDEKICK_COMMAND_POLICY=yolo is how a scripted run says yes.
@@ -907,6 +909,14 @@ public sealed class SidekickApp
                         await HeadlessLineAsync((printResult.Failed ? "[error] " : "") + printLine).ConfigureAwait(false);
                     }
 
+                    continue;
+                }
+
+                // /pdf (2026-10-03): ahead of the server check too — only /pdf reply needs a reply.
+                if (SlashCommands.Parse(text) is (SlashCommand.Pdf, var pdfArgs))
+                {
+                    string pdfResult = await Pdf.PdfCommand.RunAsync(pdf, pdfArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken).ConfigureAwait(false);
+                    await HeadlessLineAsync((pdfResult.StartsWith("Error:", StringComparison.Ordinal) ? "[error] " : "") + pdfResult).ConfigureAwait(false);
                     continue;
                 }
 

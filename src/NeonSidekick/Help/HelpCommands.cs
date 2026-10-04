@@ -169,6 +169,12 @@ public static class HelpCommands
         [
             new("/operata [reset | copy <profile> [force]]", "Edit `operata.md` (the operating rules) in your editor, reset it to the default, or copy it to another profile (`force` replaces theirs)."),
         ]),
+        new("/pdf",
+        [
+            new("/pdf <file> [to=<out.pdf>] [paper=letter|a4|legal] [landscape] [overwrite]", "Make a PDF in the working directory from a file: Markdown keeps its headings, tables, lists, links, coloured code and the pictures beside it; text and code become a coloured listing; HTML is printed as the page, its scripts and anything outside the working directory left out; a picture is fitted to one page. The PDF goes beside the file unless `to=` names a file or folder; an existing one is replaced only with `overwrite`. Edge, Chrome or Brave makes it; without one, Microsoft Print to PDF (Markdown, text and pictures, in black and white). *PDF engine* chooses. See Making PDFs."),
+            new("/pdf https://… [to=<out.pdf>] [overwrite]", "Make a PDF of a web page as the browser shows it, after *Web browser network mode* allows its address. The page keeps its own layout, so `paper=` and `landscape` are not taken."),
+            new("/pdf reply [options]", "Make a PDF of the last reply, formatted as Markdown."),
+        ]),
         new("/perf",
         [
             new("/perf [off | text | gauge | spark | led]", "Show or hide the performance bar (*Show performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too."),

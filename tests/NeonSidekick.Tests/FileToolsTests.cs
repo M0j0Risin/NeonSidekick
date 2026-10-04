@@ -64,7 +64,7 @@ public sealed class FileToolsTests : IDisposable
     [Fact]
     public void FileTools_AreTheFourteen_InOrder_AllQuiet()
     {
-        Assert.Equal(FileToolNames.All, _tools.Select(t => t.Name));
+        Assert.Equal(FileToolNames.WithoutPdf, _tools.Select(t => t.Name));
         Assert.Equal(14, _tools.Count);   // fifteen until 2026-10-01, when restore went with File safe edits
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));

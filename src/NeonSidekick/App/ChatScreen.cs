@@ -16,6 +16,7 @@ using NeonSidekick.MySql;
 using NeonSidekick.Memory;
 using NeonSidekick.Obsidian;
 using NeonSidekick.Oracle;
+using NeonSidekick.Pdf;
 using NeonSidekick.Plans;
 using NeonSidekick.Printing;
 using NeonSidekick.Sessions;
@@ -557,6 +558,7 @@ internal sealed partial class ChatScreen
     private readonly WorkingDirectory _files;
     private readonly IReadOnlyList<AIFunction> _fileTools;
     private readonly WebAccess _web;
+    private readonly PdfConverter _pdf;
     private readonly IReadOnlyList<AIFunction> _webTools;
     private readonly GitAccess _git;
     private readonly IReadOnlyList<AIFunction> _gitTools;
@@ -966,11 +968,16 @@ internal sealed partial class ChatScreen
         // The UNC shares' door (2026-09-30) before the file tools: open reaches the offered shares too (2026-10-01).
         // The profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
         _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc);
+        // The web door and the printing door before the file tools (2026-10-03): convert_to_pdf, one of them, makes its PDFs
+        // with the web tools' own headless browser (one run at a time across both) or Microsoft Print to PDF.
+        _web = web ?? WebAccess.Create(() => Web.NetworkMode.Resolve(_effective()), time);
+        // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
+        _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
+        _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time);
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
-        _web = web ?? WebAccess.Create(() => Web.NetworkMode.Resolve(_effective()), time);
         _webTools = WebTools(_web, _files, _effective);
         // The git tools (2026-09-20) sit on the same sandbox: the repository is looked for from a sandbox path, never above the root.
         _git = new GitAccess(_files, time);
@@ -1006,8 +1013,6 @@ internal sealed partial class ChatScreen
         _cameraWatch = new CameraWatch(_camera, _time, () => _effective().CameraWatchThreshold, OnWatchChanged);
         _liveView = liveView;
         _showShot = showShot;
-        // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
-        _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _printTools = PrintTools(_print, ConfirmPrintAsync);
         _printerNames = new PrinterNameCache(_print, _time);
         // The performance bar (2026-09-29): sampled on its own timer while the setting draws it (PerfRow).
@@ -3889,6 +3894,10 @@ internal sealed partial class ChatScreen
                 // reply and printers for the first word, the options and the printers' names after a target (2026-09-28); the path itself is ArgumentPaths'.
                 return sources.Print?.Invoke(argText) ?? PrintCommand.Complete(argText, []);
 
+            case SlashCommand.Pdf:
+                // reply for the first word, the options after a target (2026-10-03); the path itself is ArgumentPaths'.
+                return PdfCommand.Complete(argText);
+
             case SlashCommand.Test:
                 // The test ids, the group words, all and history (2026-09-28): one word, nothing after it.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(TestChoices(), argText);
@@ -3924,11 +3933,11 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether <paramref name="command"/>'s argument is a path its own list completes: there a mention character stays the
     /// argument list's (2026-09-30), since the command takes a bare path. The file lists of <see cref="ArgumentPaths"/>
-    /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>), and the folder lists of <c>/tree</c>, <c>/explore</c> and <c>/vault</c>
+    /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c> and <c>/vault</c>
     /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>). Pinned.
     /// </summary>
     public static bool TakesPathArgument(string command) =>
-        SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print
+        SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
             or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Vault;
 
     /// <summary>
@@ -3953,6 +3962,11 @@ internal sealed partial class ChatScreen
         if (kind == SlashCommand.Print)
         {
             return PrintPaths(argText, sources);
+        }
+
+        if (kind == SlashCommand.Pdf)
+        {
+            return PrintPaths(argText, sources, PdfVerbs);
         }
 
         if (kind is not (SlashCommand.Speak or SlashCommand.View))
@@ -3986,12 +4000,14 @@ internal sealed partial class ChatScreen
     /// <c>/print</c>'s path list (2026-09-28): any file of the working directory, since the command prints text and pictures
     /// itself and hands the rest to its own program. Null — the word list instead (<see cref="PrintCommand.Complete"/>) — once a
     /// whole path, <c>reply</c> or <c>printers</c> is followed by a space (the options come next), and for a first word no file
-    /// starts with that <c>reply</c> or <c>printers</c> does. Pure over <paramref name="sources"/>.
+    /// starts with that <c>reply</c> or <c>printers</c> does. Pure over <paramref name="sources"/>. <c>/pdf</c>'s list too
+    /// (2026-10-03), whose one word is <c>reply</c> (<paramref name="verbs"/>: <see cref="PdfVerbs"/>).
     /// </summary>
-    public static MentionResult? PrintPaths(string argText, ArgumentSources sources)
+    public static MentionResult? PrintPaths(string argText, ArgumentSources sources, IReadOnlyList<string>? verbs = null)
     {
         ArgumentNullException.ThrowIfNull(argText);
         ArgumentNullException.ThrowIfNull(sources);
+        verbs ??= PrintVerbs;
         if (sources.AnyFiles is not { } files)
         {
             return null;
@@ -4002,7 +4018,7 @@ internal sealed partial class ChatScreen
         {
             string head = argText[..space].Trim();
             if (string.Equals(head.Split(' ')[0], PrintText.ReplyWord, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(head, PrintText.PrintersWord, StringComparison.OrdinalIgnoreCase)
+                || verbs.Any(v => string.Equals(head, v, StringComparison.OrdinalIgnoreCase))
                 || head.Contains('=', StringComparison.Ordinal))
             {
                 return null;
@@ -4017,7 +4033,7 @@ internal sealed partial class ChatScreen
 
         var found = files(argText);
         if (found.Paths.Count == 0 && argText.Length > 0 && !argText.Contains(' ', StringComparison.Ordinal)
-            && (PrintText.ReplyWord.StartsWith(argText, StringComparison.OrdinalIgnoreCase) || PrintText.PrintersWord.StartsWith(argText, StringComparison.OrdinalIgnoreCase)))
+            && verbs.Any(v => v.StartsWith(argText, StringComparison.OrdinalIgnoreCase)))
         {
             return null;
         }
@@ -4029,6 +4045,12 @@ internal sealed partial class ChatScreen
 
         return found;
     }
+
+    /// <summary>The words <c>/print</c> takes in place of a path.</summary>
+    private static readonly string[] PrintVerbs = [PrintText.ReplyWord, PrintText.PrintersWord];
+
+    /// <summary>The words <c>/pdf</c> takes in place of a path (2026-10-03).</summary>
+    private static readonly string[] PdfVerbs = [PdfCommand.ReplyWord];
 
     /// <summary>The themes for <c>/theme</c>'s list, the user's read afresh (2026-10-01); their problems are said when a picker opens, not per keystroke.</summary>
     private IReadOnlyList<CompletionItem> ThemeChoices() =>
@@ -4323,25 +4345,35 @@ internal sealed partial class ChatScreen
     /// own folder; <paramref name="openFile"/> is the shell's "open with" for <c>open</c>;
     /// <paramref name="effective"/> is where <c>view_image</c> reads its cap (<c>File view image max (per call)</c>) at every
     /// call. Fourteen since 2026-10-01: <c>restore</c> went with File safe edits (the user's call). <paramref name="unc"/> (later
-    /// on 2026-10-01) lets <c>open</c> open on an offered UNC share; null = the working directory alone.
+    /// on 2026-10-01) lets <c>open</c> open on an offered UNC share; null = the working directory alone. <paramref name="pdf"/>
+    /// (2026-10-03) adds <c>convert_to_pdf</c> last, fifteen then; null = without it (the tests that count the fourteen).
     /// </summary>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null)
     {
-        new GetWorkingDirectoryTool(files, isDefault),
-        new SearchFilesTool(files, effective),
-        new FileInfoTool(files),
-        new ReadFileTool(files),
-        new ViewImageTool(files, effective),
-        new WriteFileTool(files),
-        new PatchFileTool(files),
-        new CreateDirectoryTool(files),
-        new MoveTool(files),
-        new CopyTool(files),
-        new DeleteTool(files),
-        new ZipTool(files),
-        new UnzipTool(files),
-        new OpenTool(files, openFile, unc, effective),
-    };
+        var tools = new List<AIFunction>(15)
+        {
+            new GetWorkingDirectoryTool(files, isDefault),
+            new SearchFilesTool(files, effective),
+            new FileInfoTool(files),
+            new ReadFileTool(files),
+            new ViewImageTool(files, effective),
+            new WriteFileTool(files),
+            new PatchFileTool(files),
+            new CreateDirectoryTool(files),
+            new MoveTool(files),
+            new CopyTool(files),
+            new DeleteTool(files),
+            new ZipTool(files),
+            new UnzipTool(files),
+            new OpenTool(files, openFile, unc, effective),
+        };
+        if (pdf is not null)
+        {
+            tools.Add(new ConvertToPdfTool(files, pdf, effective));
+        }
+
+        return tools;
+    }
 
     /// <summary>
     /// The four web tools, offered on every turn while the setting <c>Web tools</c> is on (headless too:
@@ -4734,6 +4766,7 @@ internal sealed partial class ChatScreen
         WebFetchTool.ToolName,
         OpenUrlTool.ToolName,
         DownloadFileTool.ToolName,
+        ConvertToPdfTool.ToolName,
         SessionManagerTool.ToolName,
         GetCurrentTimeTool.ToolName,
         ShiftDateTool.ToolName,
@@ -10193,6 +10226,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Print:
                 await HandlePrintAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Pdf:
+                await HandlePdfAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Copy:

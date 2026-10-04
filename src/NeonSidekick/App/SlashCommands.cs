@@ -211,6 +211,13 @@ public enum SlashCommand
     /// </summary>
     Print,
 
+    /// <summary>
+    /// <c>/pdf</c> (2026-10-03, the user's ask): a PDF in the working directory — <c>/pdf &lt;file|https://url&gt; [to=&lt;out.pdf&gt;]
+    /// [paper=letter|a4|legal] [landscape] [overwrite]</c>, <c>/pdf reply</c> for the last reply (<see cref="Pdf.PdfCommand"/>).
+    /// The user's own hand: <c>convert_to_pdf</c> without its <c>File tools</c> and <c>Web tools</c> switches.
+    /// </summary>
+    Pdf,
+
     /// <summary><c>/echo &lt;text&gt;</c>: the line printed as a reply and read aloud when speech is on — <c>/speak</c>'s block and voice over typed text, never resumed (2026-09-17).</summary>
     Echo,
 
@@ -311,6 +318,7 @@ public static class SlashCommands
             new("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"),
             new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
             new("/police", "switch shell police on or off"),
+            new("/pdf", "make a PDF in the working directory: /pdf <file|https://url> [to=<out.pdf>] [paper=letter|a4|legal] [landscape] [overwrite], /pdf reply for the last reply"),
             new("/print", "print a file of the working directory: /print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape], /print reply for the last reply, /print printers"),
             new("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"),
             new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
@@ -406,7 +414,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/tb", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -497,6 +505,7 @@ public static class SlashCommands
             "/docker" => SlashCommand.Docker,
             "/camera" => SlashCommand.Camera,
             "/print" => SlashCommand.Print,
+            "/pdf" => SlashCommand.Pdf,
             "/echo" => SlashCommand.Echo,
             "/queue" => SlashCommand.Queue,
             "/sessions" => SlashCommand.Session,
@@ -540,6 +549,6 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Tb or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Tools;
 }

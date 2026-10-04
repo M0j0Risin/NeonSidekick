@@ -21,5 +21,9 @@ public static class FileToolNames
         ZipTool.ToolName,
         UnzipTool.ToolName,
         OpenTool.ToolName,
+        ConvertToPdfTool.ToolName,
     };
+
+    /// <summary>The fourteen <c>ChatScreen.FileTools</c> builds without a PDF converter (the tests that build the list alone; 2026-10-03).</summary>
+    public static readonly string[] WithoutPdf = All[..^1];
 }

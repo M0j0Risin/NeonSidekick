@@ -855,6 +855,7 @@ public sealed class AppSettings : IDisposable
         PrintActionPolicy = source.PrintActionPolicy,
         PrintDefaultPrinter = source.PrintDefaultPrinter,
         PrintFontSize = source.PrintFontSize,
+        PdfEngine = source.PdfEngine,
         ShellCodeLanguages = [.. source.ShellCodeLanguages],
         ShellCodeMaxToolCalls = source.ShellCodeMaxToolCalls,
         ShellCodeTimeoutSeconds = source.ShellCodeTimeoutSeconds,

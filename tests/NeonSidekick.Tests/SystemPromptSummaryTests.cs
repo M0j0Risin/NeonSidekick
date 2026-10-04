@@ -471,7 +471,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.All(on, g => Assert.Equal("", g.Note));
         Assert.Equal(["get_current_time", "shift_date", "days_between"], on[0].Tools.Select(t => t.Name));
         Assert.Equal(["start_timer", "stop_timer", "list_timers"], on[1].Tools.Select(t => t.Name));
-        Assert.Equal(FileToolNames.All, on[2].Tools.Select(t => t.Name));
+        Assert.Equal(FileToolNames.WithoutPdf, on[2].Tools.Select(t => t.Name));
         Assert.Equal([SaveMemoryTool.ToolName, RecallMemoryTool.ToolName], on[3].Tools.Select(t => t.Name));
 
         var off = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false);
@@ -512,7 +512,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(["Clock (3)", "Timers (3)", "Files (14) — not offered: file tools is off", "Web (4)", "Memory (2)"], filesOff.Select(g => g.Title));
         Assert.False(filesOff[2].Offered);
         Assert.True(filesOff[0].Offered && filesOff[3].Offered && filesOff[4].Offered);
-        Assert.Equal(FileToolNames.All, filesOff[2].Tools.Select(t => t.Name));
+        Assert.Equal(FileToolNames.WithoutPdf, filesOff[2].Tools.Select(t => t.Name));
         Assert.Equal("Files (14) — not offered: file tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: false)[2].Title);
 
         // The questions group (2026-09-15): last, after memory, marked when the setting Ask user is off, else when the bottom pane is (its own reasons first); nothing when no list is given.

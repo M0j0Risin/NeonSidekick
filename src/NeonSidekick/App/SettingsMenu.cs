@@ -817,6 +817,9 @@ public enum SettingsField
 
     /// <summary>A list the user types into: the strings the shell police refuses (<see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/>), its top row adding one and Enter on one removing it. The Shell tab, under <see cref="ShellPoliceOutsidePaths"/>, whose switch it rides (2026-10-03, the user's idea); also <c>/police</c>' strings button. No reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     ShellPoliceForbiddenStrings,
+
+    /// <summary>A picker over <see cref="Pdf.PdfEngine.Names"/>: what makes a PDF (<see cref="Settings.AppSettingsData.PdfEngine"/>). The Print tab of <c>/tools</c>, after <see cref="PrintFontSize"/> (2026-10-03, the user's ask); no reconnect (read at each PDF). Last in the enum, as every newcomer.</summary>
+    PdfEngine,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1197,7 +1200,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
-        [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize],
+        [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
@@ -1699,6 +1702,7 @@ internal sealed partial class SettingsMenu
         SettingsField.PrintActionPolicy => "Print action policy",
         SettingsField.PrintDefaultPrinter => "Print default printer",
         SettingsField.PrintFontSize => "Print font size (pt)",
+        SettingsField.PdfEngine => "PDF engine",
         SettingsField.ComfyUrl => "ComfyUI URL",
         SettingsField.ComfyTimeoutSeconds => "ComfyUI timeout (s)",
         SettingsField.ComfyMaxPicturesPerCall => "ComfyUI max pictures per call",
@@ -1994,6 +1998,7 @@ internal sealed partial class SettingsMenu
             SettingsField.PrintActionPolicy => Printing.PrintPolicy.Resolve(data.PrintActionPolicy),
             SettingsField.PrintDefaultPrinter => string.IsNullOrWhiteSpace(data.PrintDefaultPrinter) ? WindowsDefaultPrinterLabel : data.PrintDefaultPrinter,
             SettingsField.PrintFontSize => data.PrintFontSize.ToString(CultureInfo.InvariantCulture) + " pt",
+            SettingsField.PdfEngine => Pdf.PdfEngine.Resolve(data.PdfEngine),
             SettingsField.ComfyUrl => string.IsNullOrWhiteSpace(data.ComfyUrl) ? NoComfyUrlLabel : data.ComfyUrl,
             SettingsField.ComfyTimeoutSeconds => Seconds(data.ComfyTimeoutSeconds),
             SettingsField.ComfyMaxPicturesPerCall => ComfyPictures(data.ComfyMaxPicturesPerCall),
@@ -2343,6 +2348,10 @@ internal sealed partial class SettingsMenu
     /// <summary>A row of the print-policy picker: the name padded, what it does dim (2026-09-28).</summary>
     public static string PrintPolicyLabel(string name) =>
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Printing.PrintPolicy.Describe(name));
+
+    /// <summary>A row of the PDF-engine picker: the name padded, what it does dim (2026-10-03).</summary>
+    public static string PdfEngineLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Pdf.PdfEngine.Describe(name));
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.PrintDefaultPrinter"/> (2026-09-28), and the picker's first row.</summary>
     public const string WindowsDefaultPrinterLabel = "(Windows default)";
@@ -3587,6 +3596,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.PrintDefaultPrinter)
         {
             return await PickDefaultPrinterAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PdfEngine)
+        {
+            return await PickPdfEngineAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.HomeAssistantTest)
@@ -5113,6 +5127,22 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.PrintActionPolicy, d => d.PrintActionPolicy = name);
+        return true;
+    }
+
+    /// <summary>The PDF-engine picker (2026-10-03): one <see cref="PdfEngineLabel"/> row per <see cref="Pdf.PdfEngine.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickPdfEngineAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Pdf.PdfEngine.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.PdfEngine)), names.Select(PdfEngineLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, Pdf.PdfEngine.Resolve(saved.PdfEngine))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.PdfEngine, d => d.PdfEngine = name);
         return true;
     }
 

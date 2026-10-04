@@ -6,6 +6,7 @@ namespace NeonSidekick.Tests.Fakes;
 /// The print seam's fake (2026-09-28): three printers (the first the Windows default), US Letter paper turned for landscape,
 /// text measured at a fixed advance (<see cref="FixedMeasure"/>), and every job, opened surface and shell print recorded. Only
 /// <see cref="ShellTypes"/> have a program to print them. <see cref="FailWith"/> makes the next job fail with that sentence.
+/// A job with an output file (the PDF fallback, 2026-10-03) writes <see cref="OutputBytes"/> there, or nothing when it is null.
 /// </summary>
 public sealed class FakePrintSpooler : IPrintSpooler
 {
@@ -24,6 +25,9 @@ public sealed class FakePrintSpooler : IPrintSpooler
     public HashSet<string> ShellTypes { get; } = new(StringComparer.OrdinalIgnoreCase) { ".pdf" };
 
     public string? FailWith { get; set; }
+
+    /// <summary>What a print-to-file job writes to its output file: a tiny PDF by default; null writes nothing.</summary>
+    public byte[]? OutputBytes { get; set; } = "%PDF-1.7\n%fake\n"u8.ToArray();
 
     public IReadOnlyList<PrinterInfo> Printers() => Installed;
 
@@ -44,6 +48,11 @@ public sealed class FakePrintSpooler : IPrintSpooler
     {
         cancellationToken.ThrowIfCancellationRequested();
         Jobs.Add(job);
+        if (FailWith is null && job.OutputFile is not null && OutputBytes is not null)
+        {
+            File.WriteAllBytes(job.OutputFile, OutputBytes);
+        }
+
         return FailWith;
     }
 

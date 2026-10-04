@@ -50,8 +50,9 @@ public sealed record PrintPage(int Number, IReadOnlyList<PrintOp> Ops);
 
 /// <summary>
 /// What the spooler prints (2026-09-28): device-independent pages already laid out, the printer's name, the job's title in
-/// the queue, the orientation the pages were laid out for, and — for the smoke probe and the live test only — the file a
-/// print-to-file printer writes instead of asking where. Copies are pages repeated, collated, so every driver prints them.
+/// the queue, the orientation the pages were laid out for, and the file a print-to-file printer writes instead of asking
+/// where — the smoke probe's and the live test's, and since 2026-10-03 the PDF fallback's (<c>convert_to_pdf</c> on Microsoft
+/// Print to PDF when no browser can make the PDF). Copies are pages repeated, collated, so every driver prints them.
 /// </summary>
 public sealed record PrintJob(string Printer, string Title, IReadOnlyList<PrintPage> Pages, bool Landscape = false, int Copies = 1, string? OutputFile = null);
 

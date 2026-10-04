@@ -291,7 +291,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
         // The content is built once for the visit (2026-10-03): a scroll draws from the lines laid out at the open.
-        Assert.Equal(1, _built.Count);
+        Assert.Single(_built);
         int a = Output.IndexOf("\nline2\nline3\nline4\nline5\nline6\n", StringComparison.Ordinal);
         int b = Output.IndexOf("\nline7\nline8\nline9\nline10\nline11\n", StringComparison.Ordinal);
         int c = Output.IndexOf("\nline16\nline17\nline18\nline19\nline20\n", StringComparison.Ordinal);
@@ -322,7 +322,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        Assert.Equal(1, _built.Count);
+        Assert.Single(_built);
         Assert.DoesNotContain("\nline2\nline3\nline4\nline5\nline6\n", Output);
         Assert.DoesNotContain("\nline11\nline12\nline13\nline14\nline15\n", Output);
         int run = Output.IndexOf("\nline10\nline11\nline12\nline13\nline14\n", StringComparison.Ordinal);
@@ -582,7 +582,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        Assert.Equal(1, _built.Count);   // built at the open; every notch draws from those lines (2026-10-03)
+        Assert.Single(_built);   // built at the open; every notch draws from those lines (2026-10-03)
         int a = Output.IndexOf("\nline4\nline5\nline6\nline7\nline8\n", StringComparison.Ordinal);
         int b = Output.IndexOf("\nline10\nline11\nline12\nline13\nline14\n", StringComparison.Ordinal);
         int c = Output.IndexOf("\nline16\nline17\nline18\nline19\nline20\n", StringComparison.Ordinal);

@@ -2334,4 +2334,12 @@ public sealed class AppSettingsData
     /// to <see cref="Printing.PrintLayout.MaxFontSize"/>; headings scale from it. No variable.
     /// </summary>
     public int PrintFontSize { get; set; } = Printing.PrintLayout.DefaultFontSize;
+
+    /// <summary>
+    /// What makes a PDF for <c>convert_to_pdf</c> and <c>/pdf</c> (2026-10-03, the user's ask): one of <see cref="Pdf.PdfEngine.Names"/> —
+    /// <c>auto</c> (the default: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails),
+    /// <c>browser</c> (the browser or nothing) or <c>printer</c> (Microsoft Print to PDF always: Markdown, text and pictures only).
+    /// Anything else reads as <c>auto</c>. The Print tab of <c>/tools</c>. No variable.
+    /// </summary>
+    public string PdfEngine { get; set; } = Pdf.PdfEngine.Default;
 }

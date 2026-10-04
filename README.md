@@ -146,7 +146,7 @@ The `--*-check` modes keep nothing (`--sql-check` makes one temporary table insi
 
 ### The input line
 * It is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End, Delete; Shift+arrows, Ctrl+A or a drag to select; a double-click selects a word (letters, digits and `_`; all of a password field); Ctrl+C / Ctrl+X copy / cut; right-click or Alt+V pastes; ↑/↓ walk the history.
-* `/`, `@`, `#`, `$`, `%`, `^` and `*` open their lists. The mention lists work inside a command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view` and `/print`, which complete their own path.
+* `/`, `@`, `#`, `$`, `%`, `^` and `*` open their lists. The mention lists work inside a command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view`, `/print` and `/pdf`, which complete their own path.
 * Drag a picture from the ComfyUI picture strip or the transcript onto the input row to attach it, as if dropped from the desktop. The hint row reads **🖼️ drop on line** while you drag; letting go elsewhere attaches nothing.
 * Enter during a reply queues the message. A draft left on the row survives the reply.
 * ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does).
@@ -608,7 +608,7 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 |---|---|---|
 | Web tools | Offers `web_search`, `web_fetch`, `open_url` and `download_file`. | off |
 | Web browser mode | `default` uses HTTP and falls back to a headless browser for a blocked or empty page; `httpclient` never falls back; `chromium` uses the browser for every page. | `default` |
-| Web browser path | The Chromium-based browser for headless fetches; empty finds Edge, Chrome or Brave. | (auto) |
+| Web browser path | The Chromium-based browser for headless fetches and for making PDFs; empty finds Edge, Chrome or Brave. | (auto) |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `local_area_network` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | (not set) |
@@ -747,6 +747,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
 | Print default printer | Where a print goes when none is named. | (Windows default) |
 | Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
+| PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See Making PDFs. | `auto` |
 
 #### Obsidian
 
@@ -970,6 +971,9 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape]` | Prints a file from the working directory (see Printing). The printer matches by name or part of it; quote a name with spaces. *Print action policy* never applies. |
 | `/print reply [options]` | Prints the last reply as formatted Markdown. |
 | `/print printers` | Lists the printers, marking the Windows default and *Print default printer*. |
+| `/pdf <file> [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see Making PDFs). |
+| `/pdf https://… [to=<out.pdf>] [overwrite]` | Makes a PDF of a web page as the browser shows it; *Web browser network mode* still applies. |
+| `/pdf reply [options]` | Makes a PDF of the last reply as formatted Markdown. |
 | `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switches, creates, deletes, renames or resets a profile, or copies its settings to (`push`) or from (`pull`) another. `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. See Profiles. |
 | `/queue [clear]` | Lists and prunes the queued messages (`⊠ clear all` or `c` drops them); `/queue clear` drops them without the pane. |
 | `/reasoning [level]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
@@ -1340,6 +1344,7 @@ Every path is relative to the working directory; nothing outside it can be reach
 | `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. |
 | `open` | `path?, share?` | Opens a file in your own editor or viewer, or a folder in Explorer (the working directory by default). `share` (or a full `\\server\share` path) opens one on a UNC share; a network runas share is refused. |
+| `convert_to_pdf` | `path? \| url? \| markdown?, title?, to?, overwrite?, landscape?, paper?` | Makes a PDF in the working directory from a file, a web page (needs *Web tools* too) or Markdown it writes (see Making PDFs). Not in plan mode. |
 
 ### GitLib
 
@@ -1736,6 +1741,19 @@ The Home Assistant tools control your own Home Assistant over its REST API with 
 |---|---|---|
 | `list_printers` | — | The installed printers, marking the Windows default and *Print default printer*. Available in plan mode. |
 | `print_file` | `path, printer?, copies?, pages?, landscape?` | Prints a file from the working directory: a printer by name (else *Print default printer*, else the Windows default), 1–10 copies, pages like `1-3`, `4-` or `1,3,5`, and landscape. Not in plan mode. |
+
+#### Making PDFs
+
+`/pdf` and the `convert_to_pdf` file tool make a PDF in the working directory. Nothing new is installed: the browser you already have makes it, or Windows' own PDF printer.
+
+* **Markdown** keeps its headings, emphasis, lists and task lists, quotes, tables, links (clickable), footnotes and code blocks, coloured as in the transcript. Its pictures come from the working directory, relative to the file; a picture outside it or on the web shows as `[image: alt]`. Raw HTML in it is shown as text.
+* **Text and code** become one listing, coloured by the file's extension. **A picture** is fitted to one page, never enlarged.
+* **An HTML file** is printed as the page, after its scripts, frames and embeds are taken out; its stylesheets and pictures come from the working directory only.
+* **A web page** is printed as the browser shows it, after *Web browser network mode* allows its address (the page's own requests are not checked beyond that). It keeps its own layout, so paper and landscape are not taken.
+* **The pages:** US Letter by default (`paper=` A4 or Legal), portrait unless landscape, with the title at the top left and *page N of M* at the top right.
+* **The engine** (*PDF engine*): Edge, Chrome or Brave (*Web browser path*, else the first found) prints the page; it gets a minute. Without one, or when it fails under `auto`, **Microsoft Print to PDF** draws Markdown, text and pictures as `/print` would: black and white, two fonts, on the driver's paper. HTML and web pages need the browser.
+* **The output** goes beside the source with `.pdf` (a web page or Markdown text at the top: `example.com-intro.pdf`, `reply-2026-10-03-1405.pdf`), or where `to` says (a file, or a folder). An existing PDF is replaced only with `overwrite`. A PDF, or a file that is neither text nor a picture, is refused.
+* `convert_to_pdf` is a file tool, so *File tools* decides; a `url` needs *Web tools* as well. `/pdf` needs neither.
 
 </details>
 

@@ -18,6 +18,9 @@ public static class PrintText
     /// <summary>A text file over this many bytes is refused: two megabytes is some four hundred pages of listing.</summary>
     public const long MaxTextBytes = 2_000_000;
 
+    /// <summary>The print-to-file printer every Windows 10 and 11 installs: the smoke's probe and the PDF fallback print to it.</summary>
+    public const string PrintToPdfPrinter = "Microsoft Print to PDF";
+
     /// <summary>The header's title for <c>/print reply</c>.</summary>
     public const string ReplyTitle = "Reply";
 
@@ -60,6 +63,9 @@ public static class PrintText
 
     public static string ShellDefaultOnly(string file) =>
         $"Error: {file} is printed by the program Windows has for {Extension(file)} files, on the Windows default printer as it is set up; leave out printer, copies, pages and landscape";
+
+    public static string NoFileOutput(string file) =>
+        $"Error: {file} is printed by the program Windows has for {Extension(file)} files, which cannot print to a file";
 
     public static string TooLarge(string file) =>
         $"Error: {file} is over {(MaxTextBytes / 1_000_000).ToString(CultureInfo.InvariantCulture)} MB, too long to print";

@@ -878,6 +878,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ThemedBackground,   // 2026-10-03, the General tab under Theme
                 SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines,   // later on 2026-10-03, /tools' Options tab: the diff under a file edit
                 SettingsField.ShellPoliceForbiddenStrings,   // later still on 2026-10-03, /tools' Shell tab under the police: the strings it refuses
+                SettingsField.PdfEngine,   // later still on 2026-10-03, /tools' Print tab's last row: what makes a PDF
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.

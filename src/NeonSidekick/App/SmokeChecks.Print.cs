@@ -5,7 +5,7 @@ namespace NeonSidekick.App;
 public static partial class SmokeChecks
 {
     /// <summary>The print-to-file printer every Windows 10 and 11 installs, which <see cref="ProbePrintSpooler"/> prints to.</summary>
-    public const string PrintToPdfPrinter = "Microsoft Print to PDF";
+    public const string PrintToPdfPrinter = PrintText.PrintToPdfPrinter;
 
     /// <summary>
     /// <c>print:spooler</c> (2026-09-28): the print layer's imports in the published binary — the printers listed (winspool),
@@ -65,27 +65,17 @@ public static partial class SmokeChecks
                 }
             }
 
-            // The spooler writes the file after EndDoc returns: wait for it, up to ten seconds.
-            for (int i = 0; i < 100 && !(File.Exists(path) && new FileInfo(path).Length > 0); i++)
-            {
-                Thread.Sleep(100);
-            }
-
-            if (!File.Exists(path))
+            // The spooler writes the file after EndDoc returns: wait for it, up to ten seconds (PrintToFile, 2026-10-03).
+            var state = PrintToFile.WaitForPdf(path, TimeSpan.FromSeconds(10));
+            if (state is PdfFileState.Missing)
             {
                 return new SmokeCheck(name, false, $"{PrintToPdfPrinter} took the job but wrote no file");
             }
 
-            byte[] head = new byte[4];
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            {
-                stream.ReadAtLeast(head, 4, throwOnEndOfStream: false);
-            }
-
-            bool isPdf = head[0] == (byte)'%' && head[1] == (byte)'P' && head[2] == (byte)'D' && head[3] == (byte)'F';
+            bool isPdf = state == PdfFileState.Ready;
             return new SmokeCheck(name, isPdf, isPdf
                 ? $"{PrintText.Count(printers.Count, "printer")} listed; two landscape pages printed to {PrintToPdfPrinter}"
-                : $"{PrintToPdfPrinter} wrote a file that is not a PDF");
+                : state == PdfFileState.Unfinished ? $"{PrintToPdfPrinter} was still writing the file after ten seconds" : $"{PrintToPdfPrinter} wrote a file that is not a PDF");
         }
         catch (Exception ex)
         {
