@@ -166,7 +166,7 @@ public static class ToolbarItems
         Sys => "/sys",
         Sessions => "/sessions",
         Usage => "/usage",
-        Perf => "/perf",
+        Perf => "/perfbar",
         Memory => "/memory",
         CmdList => "/cmdlist",
         Police => "/police",

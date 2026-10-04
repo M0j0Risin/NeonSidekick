@@ -51,9 +51,12 @@ public class AppSettingsTests : IDisposable
         BotChatImg2ImgMode = "chat-history",
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
+        BotChatTools = true,
+        BotChatLimitedTools = ["web_search", "read_file"],
         BotChatSkills = true,
-        BotChatPreloadedSkills = ["pony-prompts", "haiku"],
-        BotChatSkillMode = "prompt-writer-only",
+        BotChatLimitedSkills = ["pony-prompts", "haiku"],
+        BotChatMemory = false,
+        BotChatMemoryMode = "independent",
         BotChatVision = true,
         Memory = false,
         NewProfileMode = "advanced",
@@ -709,10 +712,11 @@ public class AppSettingsTests : IDisposable
         // Later still on 2026-09-19 FileStaleLineNumberGuard went with edit_lines (the eight file tools folded into four): retired, skipped the same way.
         // On 2026-09-24 the on/off WelcomeSplash became the WelcomeSplashMode pick: no migration (the user's call), so an old off is fullsize again.
         // On 2026-09-28 ComfyPictureStripSync went (the user's call: the strip and the viewer always follow each other): retired, skipped the same way.
+        // On 2026-10-04 BotChatPreloadedSkills became BotChatLimitedSkills (no migration) and BotChatSkillMode went: both skipped the same way.
         // On 2026-09-30 the five GitNative* keys became GitLib* (the rows' new labels): old spellings, skipped the same way.
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName),
-            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50 }");
+            "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\" }");
 
         using var settings = new AppSettings(_dir);
         Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
@@ -723,6 +727,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("fullsize", settings.Current.WelcomeSplashMode);   // the retired switch, skipped (2026-09-24)
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
+        Assert.Null(settings.Current.BotChatLimitedSkills);   // the renamed BotChatPreloadedSkills is not carried over (2026-10-04)
         Assert.True(settings.Current.LlmOfferTools);   // the renamed key, skipped; the default stands
         Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete", "docker_remove", "docker_prune"], settings.Current.ToolsDisabled);   // no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
         Assert.Equal(WorkingDirectory.DefaultTreeLength, settings.Current.FileTreeMaxLength);   // the old TreeMaxLength key, skipped
@@ -1393,7 +1398,7 @@ public class AppSettingsTests : IDisposable
         Assert.Null(s.ToolbarItems);   // 2026-09-21 as a switch, on; every item since the checklist, 2026-09-29
         Assert.Null(s.ToolbarLastItems);   // what a bare /toolbar brings back: the defaults until it hides a list (later on 2026-09-30)
         Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30; null the four since 2026-10-02, the user's ask
-        Assert.Null(s.PerformanceBarLastItems);   // what a bare /perf brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
+        Assert.Null(s.PerformanceBarLastItems);   // what a bare /perfbar brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
         Assert.Equal("led", s.PerformanceBarLook);   // the look (later on 2026-09-29); led since 2026-10-02, the user's ask (text before)
         Assert.Equal(91, s.EmbeddedVramBudget);       // 91 since 2026-09-30 (the user's call; off from later on 2026-09-29)
         Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick

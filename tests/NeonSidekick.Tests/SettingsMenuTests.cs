@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
@@ -853,7 +854,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ThemedExternalWindows,
                 SettingsField.ReflectionEditsSupportingFiles,
                 SettingsField.BotChatImg2ImgWorkflow, SettingsField.BotChatImg2ImgMode,
-                SettingsField.BotChatPreloadedSkills, SettingsField.BotChatSkillMode,
+                SettingsField.BotChatLimitedSkills,   // BotChatPreloadedSkills and BotChatSkillMode until 2026-10-04
                 SettingsField.LlmPreserveThinking, SettingsField.SessionSaveThinking, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
                 SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds,
                 SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize,
@@ -913,6 +914,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.PdfEngine,   // later still on 2026-10-03, /tools' Print tab's last row: what makes a PDF
                 SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
+                SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode,   // 2026-10-04, the Botchat tab
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -3047,12 +3049,12 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>The menu over a pane with geometry: every list is a level of the pane, the notices its status line.</summary>
     /// <param name="browseFolder">The folder picker the Working directory (cwd) row opens (2026-09-22); null leaves the row asking for a typed path, as it did before the picker.</param>
-    private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null, Func<IReadOnlyList<Skill>>? botChatSkills = null)
+    private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null, Func<IReadOnlyList<Skill>>? botChatSkills = null, Func<IReadOnlyList<ToolGroup>>? botChatTools = null)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
-        var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, botChatSkills: botChatSkills);
+        var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, botChatSkills: botChatSkills, botChatTools: botChatTools);
         pane.Show();
         return (menu, pane);
     }
@@ -4670,47 +4672,127 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// Botchat preloaded skills on the pane (2026-09-27; the first drive of it, with its buttons, 2026-09-29): Space flips one,
-    /// A ticks every installed skill, N none — saved as null — and a name ticked before but no longer installed stays through all three.
+    /// Botchat limited skills on the pane (2026-09-27 as the preloaded skills'; the first drive of it, with its buttons, 2026-09-29;
+    /// renamed 2026-10-04): Space flips one, A ticks every installed skill, N none — saved as null — and a name ticked before but no
+    /// longer installed stays through all three.
     /// </summary>
     [Fact]
-    public async Task OnThePane_BotchatPreloadedSkills_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
+    public async Task OnThePane_BotchatLimitedSkills_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
     {
-        _settings.Update(d => d.BotChatPreloadedSkills = ["gone"]);
+        _settings.Update(d => d.BotChatLimitedSkills = ["gone"]);
         Skill[] skills = [new("haiku", "Writes haiku.", SkillScope.Profile, _dir), new("pony-prompts", "Writes prompts.", SkillScope.Profile, _dir)];
         var (menu, pane) = PaneMenu(botChatSkills: () => skills);
         GoTo(SettingsTab.BotChat);
-        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatPreloadedSkills));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedSkills));
         Push(Keys.Enter);
         Push(Keys.Char(' '));                   // haiku on
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["haiku", "gone"], _settings.Current.BotChatPreloadedSkills);
+        Assert.Equal(["haiku", "gone"], _settings.Current.BotChatLimitedSkills);
 
         (menu, pane) = PaneMenu(botChatSkills: () => skills);
         GoTo(SettingsTab.BotChat);
-        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatPreloadedSkills));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedSkills));
         Push(Keys.Enter);
         Push(Keys.Char('a'));                   // both
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["haiku", "pony-prompts", "gone"], _settings.Current.BotChatPreloadedSkills);
+        Assert.Equal(["haiku", "pony-prompts", "gone"], _settings.Current.BotChatLimitedSkills);
 
         (menu, pane) = PaneMenu(botChatSkills: () => skills);
         GoTo(SettingsTab.BotChat);
-        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatPreloadedSkills));
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedSkills));
         Push(Keys.Enter);
         Push(Keys.Char('n'));                   // none of the installed ones; the gone name stays
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["gone"], _settings.Current.BotChatPreloadedSkills);
+        Assert.Equal(["gone"], _settings.Current.BotChatLimitedSkills);
         Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
+    }
+
+    private sealed class NamedTool(string name, string description) : AIFunction
+    {
+        public override string Name => name;
+
+        public override string Description => description;
+
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new("ok");
+    }
+
+    /// <summary>
+    /// Botchat limited tools on the pane (2026-10-04, the user's ask): the tools by group under their headings, the cursor on the
+    /// first tool; Space flips one, A ticks every listed tool, N none — saved as null — and a name ticked before but not listed now
+    /// (an MCP server not connected) stays. While Botchat tools enabled is on, the caption says the list waits.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_BotchatLimitedTools_ByGroup_FlipsOne_SelectsAll_ThenNone_KeepingAGoneName()
+    {
+        _settings.Update(d => d.BotChatLimitedTools = ["chrome__gone"]);
+        ToolGroup[] groups =
+        [
+            new("Clock (1)", "", [new NamedTool("get_current_time", "The time.")], true) { Label = "Clock" },
+            new("Web (2)", "not offered: web tools is off", [new NamedTool("web_search", "Searches."), new NamedTool("web_fetch", "Fetches.")], false) { Label = "Web" },
+        ];
+        var (menu, pane) = PaneMenu(botChatTools: () => groups);
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedTools));
+        Push(Keys.Enter);
+        Push(Keys.Char(' '));                   // the clock, the first tool, on
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["get_current_time", "chrome__gone"], _settings.Current.BotChatLimitedTools);
+        Assert.Contains("not offered: web tools is off", _console.Output);
+        Assert.DoesNotContain(SettingsMenu.LimitedToolsUnusedCaption, _console.Output);
+
+        _settings.Update(d => d.BotChatTools = true);
+        (menu, pane) = PaneMenu(botChatTools: () => groups);
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedTools));
+        Push(Keys.Enter);
+        Push(Keys.Char('a'));                   // all three
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["get_current_time", "web_search", "web_fetch", "chrome__gone"], _settings.Current.BotChatLimitedTools);
+        Assert.Contains(SettingsMenu.LimitedToolsUnusedCaption, _console.Output);
+
+        (menu, pane) = PaneMenu(botChatTools: () => groups);
+        GoTo(SettingsTab.BotChat);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedTools));
+        Push(Keys.Enter);
+        Push(Keys.Char('n'));                   // none of the listed ones; the gone name stays
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.Equal(["chrome__gone"], _settings.Current.BotChatLimitedTools);
+    }
+
+    /// <summary>The limited tools' rows (2026-10-04): a heading per group, a gap between, the mark and the name per tool, the tool's name beside its row alone.</summary>
+    [Fact]
+    public void LimitedToolRows_AreHeadingsAndMarkedTools()
+    {
+        ToolGroup[] groups =
+        [
+            new("Clock (1)", "", [new NamedTool("get_current_time", "The time.")], true) { Label = "Clock" },
+            new("Empty (0)", "", [], true) { Label = "Empty" },
+            new("Web (1)", "", [new NamedTool("web_search", "Searches.")], true) { Label = "Web" },
+        ];
+        var rows = SettingsMenu.LimitedToolRows(groups, new HashSet<string>(["web_search"], StringComparer.Ordinal));
+
+        Assert.Equal([null, "get_current_time", null, null, "web_search"], rows.Select(r => r.Tool));
+        Assert.Equal([true, false, false, true, false], rows.Select(r => r.Heading));
+        Assert.StartsWith("[[ ]] get_current_time", rows[1].Markup);
+        Assert.StartsWith("[[x]] web_search", rows[4].Markup);
     }
 
     /// <summary>

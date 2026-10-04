@@ -36,7 +36,7 @@ public static class SkillEventKinds
     /// <summary>The reconcile found its SKILL.md written since the app last did: an edit the app did not make.</summary>
     public const string HandEdit = "hand-edit";
 
-    /// <summary>A turn loaded it (one event per turn, with the errors after the load), or a <c>/botchat</c> preload did.</summary>
+    /// <summary>A turn loaded it (one event per turn, with the errors after the load); a <c>/botchat</c> preload did too until 2026-10-04.</summary>
     public const string Used = "used";
 
     /// <summary><c>/skills revert</c> (or the pane's revert) put an earlier version back.</summary>

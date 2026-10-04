@@ -538,8 +538,6 @@ public partial class ChatScreenTests
     /// <summary>
     /// Botchat skills enabled in automatic (2026-09-27, the user's report: the first picture was prompted before any skill could
     /// be loaded): the image-prompt writer sees the catalog and load_skill, loads the one the topic asks for, and its prompt follows.
-    /// The topic does not spell the skill's name out (2026-09-30): one that did would preload it, and a preloaded skill is not
-    /// offered to load again.
     /// </summary>
     [Fact]
     public async Task BotChat_Automatic_ThePromptWriter_LoadsTheSkillFirst()
@@ -668,39 +666,16 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Preloaded skills (2026-09-27, the user's ask): a skill the topic names is read by the app and put into the picture prompt
-    /// writer's request and, under prompt-writer-and-bots (the default), every bot's prompt — with Botchat skills enabled off,
-    /// so no load_skill is ever offered; the chat says so once.
+    /// Botchat limited skills (2026-10-04, the user's ask): with Botchat skills enabled off, the ticked skills alone are listed and
+    /// loadable — load_skill's enum names them alone — for the bots and the picture prompt writer alike; nothing is pasted in.
     /// </summary>
     [Fact]
-    public async Task BotChat_ASkillTheTopicNames_IsPreloaded_ForTheWriterAndTheBots()
+    public async Task BotChat_LimitedSkills_TheTickedSkillsAlone_AreOfferedToTheBotsAndTheWriter()
     {
         BotPicturesFixture();
+        _settings.Update(d => d.BotChatLimitedSkills = ["pony-prompts", "gone"]);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(3);
-        PushLine("/botchat use pony-prompts for the pictures");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Equal(3, _chat.Requests.Count);
-        Assert.All([0, 1, 2], i => Assert.Empty(ToolsOf(_chat.Options[i])));   // no load_skill anywhere
-        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[0]));   // neon
-        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[1]));   // the prompt writer
-        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[2]));   // ada
-        Assert.Equal(1, CountOf(output, BotChat.PreloadedNotice(["pony-prompts"], BotSkillMode.PromptWriterAndBots)));
-    }
-
-    /// <summary>prompt-writer-only: the setting's skill reaches the picture prompt writer, not the bots.</summary>
-    [Fact]
-    public async Task BotChat_PromptWriterOnly_ThePreloadedSkill_ReachesTheWriterAlone()
-    {
-        BotPicturesFixture();
-        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
-        _settings.Update(d => { d.BotChatPreloadedSkills = ["pony-prompts"]; d.BotChatSkillMode = "prompt-writer-only"; });
+        PutSkill(ProfileSkills, "haiku");
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("score_9, a dog surfing a wave");
         _chat.EnqueueText("Ada ", "answers.");
@@ -708,86 +683,30 @@ public partial class ChatScreenTests
         PushLine("/botchat");
         PushLine("/exit");
 
-        string output = await RunAsync();
-
-        Assert.DoesNotContain("Always start with score_9.", SystemText(_chat.Requests[0]));
-        Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[1]));
-        Assert.DoesNotContain("Always start with score_9.", SystemText(_chat.Requests[2]));
-        Assert.Contains(BotChat.PreloadedNotice(["pony-prompts"], BotSkillMode.PromptWriterOnly), output);
-    }
-
-    /// <summary>
-    /// A preloaded skill brings its bundled text files (2026-09-30, the user's ask), each as load_skill's file returns it, in the
-    /// file list's order up to <see cref="BotChat.MaxPreloadedFileChars"/> together: a file past the cap and a picture are left
-    /// out, the list still naming them.
-    /// </summary>
-    [Fact]
-    public async Task BotChat_APreloadedSkill_BringsItsBundledTextFiles_WithinTheCap()
-    {
-        BotPicturesFixture();
-        string directory = PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nRead references/tags.md.");
-        Directory.CreateDirectory(Path.Combine(directory, "references"));
-        File.WriteAllText(Path.Combine(directory, "references", "tags.md"), "Tag: score_9");
-        File.WriteAllText(Path.Combine(directory, "a-big.txt"), new string('a', 40_000));
-        File.WriteAllText(Path.Combine(directory, "b-big.txt"), new string('b', 40_000));   // 80,000 with a-big: past the cap
-        File.WriteAllBytes(Path.Combine(directory, "pic.png"), [0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0]);
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(3);
-        PushLine("/botchat use pony-prompts for the pictures");
-        PushLine("/exit");
-
         await RunAsync();
 
-        Assert.All([0, 1], i =>
+        Assert.All([0, 1, 2], i =>
         {
-            string system = SystemText(_chat.Requests[i]);   // neon, then the prompt writer
-            Assert.Contains(Skills.SkillText.FilesFollowNote, system);
-            Assert.Contains(Skills.SkillText.File("pony-prompts", "references/tags.md", "Tag: score_9", false), system);
-            Assert.Contains("<skill_file skill=\"pony-prompts\" path=\"a-big.txt\">", system);
-            Assert.DoesNotContain("<skill_file skill=\"pony-prompts\" path=\"b-big.txt\">", system);
-            Assert.DoesNotContain("<skill_file skill=\"pony-prompts\" path=\"pic.png\">", system);
-            Assert.Contains("<file>b-big.txt</file>", system);   // still listed
+            string system = SystemText(_chat.Requests[i]);   // neon, the prompt writer, ada
+            Assert.Contains("<name>pony-prompts</name>", system);
+            Assert.DoesNotContain("<name>haiku</name>", system);
+            Assert.DoesNotContain("Always start with score_9.", system);
+            var tool = Assert.Single(ToolsOf(_chat.Options[i]).Cast<AIFunction>());
+            Assert.Equal(LoadSkillTool.ToolName, tool.Name);
+            string names = tool.JsonSchema.GetProperty("properties").GetProperty("name").GetProperty("enum").GetRawText();
+            Assert.Contains("\"pony-prompts\"", names);
+            Assert.DoesNotContain("\"haiku\"", names);
         });
     }
 
     /// <summary>
-    /// Both switches on (2026-09-30, the user's question): the preloaded skill is left out of the list to load, for the bots and the
-    /// writer alike, while another skill stays listed and load_skill offered.
+    /// None ticked and Botchat skills enabled off (the defaults): no skill tool or list anywhere, and a topic naming a skill pastes
+    /// nothing (until 2026-10-04 it was preloaded).
     /// </summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_APreloadedSkill_IsNotOfferedToLoadAgain()
+    public async Task BotChat_NoLimitedSkills_NoSkillTool_AndATopicNamingOne_PastesNothing()
     {
         BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
-        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
-        PutSkill(ProfileSkills, "haiku");
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(3);
-        PushLine("/botchat use pony-prompts for the pictures");
-        PushLine("/exit");
-
-        await RunAsync();
-
-        Assert.All([0, 1], i =>
-        {
-            string system = SystemText(_chat.Requests[i]);
-            Assert.Contains("Always start with score_9.", system);
-            Assert.Contains("<name>haiku</name>", system);
-            Assert.DoesNotContain("<name>pony-prompts</name>", system);
-            Assert.Equal([LoadSkillTool.ToolName], ToolsOf(_chat.Options[i]).Select(t => t.Name));
-        });
-    }
-
-    /// <summary>With the preloaded skill the only one, neither the bots nor the writer is offered load_skill or a list at all.</summary>
-    [Fact]
-    public async Task BotChat_SkillsEnabled_OnlyThePreloadedSkill_NoLoadSkillAnywhere()
-    {
-        BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("score_9, a dog surfing a wave");
@@ -802,17 +721,18 @@ public partial class ChatScreenTests
         {
             Assert.Empty(ToolsOf(_chat.Options[i]));
             Assert.DoesNotContain(Skills.SkillsPrompt.CatalogOpen, SystemText(_chat.Requests[i]));
-            Assert.Contains("Always start with score_9.", SystemText(_chat.Requests[i]));
+            Assert.DoesNotContain("Always start with score_9.", SystemText(_chat.Requests[i]));
         });
     }
 
-    /// <summary>prompt-writer-only with skills enabled: the bots lack the skill's content, so they may still load it; the writer has it.</summary>
+    /// <summary>Botchat skills enabled on: every skill, the limited list not read.</summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_PromptWriterOnly_TheBotsStillListThePreloadedSkill()
+    public async Task BotChat_SkillsEnabled_TheLimitedListIsNotRead()
     {
         BotPicturesFixture();
-        _settings.Update(d => { d.BotChatSkills = true; d.BotChatPreloadedSkills = ["pony-prompts"]; d.BotChatSkillMode = "prompt-writer-only"; });
-        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
+        _settings.Update(d => { d.BotChatSkills = true; d.BotChatLimitedSkills = ["pony-prompts"]; });
+        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.");
+        PutSkill(ProfileSkills, "haiku");
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("score_9, a dog surfing a wave");
         _chat.EnqueueText("Ada ", "answers.");
@@ -822,10 +742,11 @@ public partial class ChatScreenTests
 
         await RunAsync();
 
-        Assert.Contains("<name>pony-prompts</name>", SystemText(_chat.Requests[0]));
-        Assert.Equal([LoadSkillTool.ToolName], ToolsOf(_chat.Options[0]).Select(t => t.Name));
-        Assert.DoesNotContain(Skills.SkillsPrompt.CatalogOpen, SystemText(_chat.Requests[1]));
-        Assert.Empty(ToolsOf(_chat.Options[1]));
+        Assert.All([0, 1], i =>
+        {
+            Assert.Contains("<name>pony-prompts</name>", SystemText(_chat.Requests[i]));
+            Assert.Contains("<name>haiku</name>", SystemText(_chat.Requests[i]));
+        });
     }
 
     /// <summary>
@@ -859,12 +780,11 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Words beside a written load of a preloaded skill (2026-09-30, code review): never the prompt, even though the load brings
-    /// nothing new — they are as often a lead-in to the call as a prompt — so the writer is asked again, "already loaded" in
-    /// front of it. The transcript's line is the short one, not the sentence written to the model.
+    /// Words beside a written load (2026-09-30, code review): never the prompt — they are as often a lead-in to the call as a
+    /// prompt — so the writer is asked again, the skill's content in front of it. The transcript's line is the short one.
     /// </summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_WordsBesideAPreloadedSkillsLoad_AreNotThePrompt()
+    public async Task BotChat_SkillsEnabled_WordsBesideAWrittenLoad_AreNotThePrompt()
     {
         var stub = BotPicturesFixture();
         _settings.Update(d => d.BotChatSkills = true);
@@ -884,13 +804,12 @@ public partial class ChatScreenTests
         string body = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
         Assert.Contains("\"text\":\"score_9, a dog surfing a wave\"", body);
         Assert.DoesNotContain("I'll load", body);
-        Assert.Contains(Skills.SkillText.AlreadyLoadedNote("pony-prompts"), output);
-        Assert.DoesNotContain("in your system prompt", output);
+        Assert.Contains("loaded skill 'pony-prompts'", output);
     }
 
     /// <summary>
-    /// A load_skill line written by a writer offered no tool (2026-09-30, code review: Botchat skills enabled off, a preloaded skill
-    /// in the prompt): taken out of the prompt, the line form too — caught only with load_skill's parameter names.
+    /// A load_skill line written by a writer offered no tool (2026-09-30, code review: Botchat skills enabled off): taken out of the
+    /// prompt, the line form too — caught only with load_skill's parameter names.
     /// </summary>
     [Fact]
     public async Task BotChat_NoSkillTool_AWrittenLoadSkillLine_IsTakenOutOfThePrompt()
@@ -909,60 +828,6 @@ public partial class ChatScreenTests
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Empty(ToolsOf(_chat.Options[1]));
         Assert.Contains("\"text\":\"score_9, a dog surfing a wave\"", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
-    }
-
-    /// <summary>
-    /// Both switches on and the writer asks for the preloaded skill anyway (2026-09-30, code review: the directive names the
-    /// skill the topic names, the one preloaded): load_skill answers it is loaded already, not with its content again.
-    /// </summary>
-    [Fact]
-    public async Task BotChat_SkillsEnabled_TheWriterLoadingAPreloadedSkill_IsToldItIsLoadedAlready()
-    {
-        var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
-        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
-        PutSkill(ProfileSkills, "haiku");
-        _chat.EnqueueText(DogReply);
-        _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(4);
-        PushLine("/botchat use pony-prompts for the pictures");
-        PushLine("/exit");
-
-        await RunAsync();
-
-        Assert.Equal(4, _chat.Requests.Count);
-        var result = Assert.Single(_chat.Requests[2].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
-        Assert.Equal(Skills.SkillText.AlreadyLoaded("pony-prompts"), result.Result?.ToString());
-        Assert.Contains("\"text\":\"score_9, a dog surfing a wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
-    }
-
-    /// <summary>
-    /// prompt-writer-only with skills enabled: a bot, which lacks the preloaded skill's content, still loads it in full. A second
-    /// skill (2026-09-30, code review: with the preloaded one alone, the bots' and the writer's tools were the same object and
-    /// either could be handed out) leaves the writer a preloaded-aware load_skill of its own.
-    /// </summary>
-    [Fact]
-    public async Task BotChat_SkillsEnabled_PromptWriterOnly_ABotLoadingThePreloadedSkill_GetsItsContent()
-    {
-        BotPicturesFixture();
-        _settings.Update(d => { d.BotChatSkills = true; d.BotChatPreloadedSkills = ["pony-prompts"]; d.BotChatSkillMode = "prompt-writer-only"; });
-        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
-        PutSkill(ProfileSkills, "haiku");
-        _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(4);
-        PushLine("/botchat");
-        PushLine("/exit");
-
-        await RunAsync();
-
-        Assert.Equal(4, _chat.Requests.Count);
-        var result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
-        Assert.Contains("Always start with score_9.", result.Result?.ToString());
     }
 
     /// <summary>
@@ -992,60 +857,6 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(second.Where(m => m.Role == ChatRole.Assistant), m => m.Text.Contains("<tool_call>", StringComparison.Ordinal));
         Assert.Contains("\"text\":\"score_9, a dog surfing a wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
         Assert.DoesNotContain(BotChat.NoPromptNotice, output);
-    }
-
-    /// <summary>
-    /// prompt-writer-and-bots with skills enabled (2026-09-30, code review: no test told the bots' tool from the writer's): a bot,
-    /// whose prompt carries the preloaded skill, asking for it is answered it is loaded already.
-    /// </summary>
-    [Fact]
-    public async Task BotChat_SkillsEnabled_PromptWriterAndBots_ABotLoadingThePreloadedSkill_IsToldItIsLoadedAlready()
-    {
-        BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
-        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
-        PutSkill(ProfileSkills, "haiku");
-        _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(4);
-        PushLine("/botchat use pony-prompts for the pictures");
-        PushLine("/exit");
-
-        await RunAsync();
-
-        Assert.Equal(4, _chat.Requests.Count);
-        var result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>());
-        Assert.Equal(Skills.SkillText.AlreadyLoaded("pony-prompts"), result.Result?.ToString());
-    }
-
-    /// <summary>
-    /// Every skill preloaded but a file left out past the cap (2026-09-30, code review: no side was offered load_skill, so the file
-    /// the content lists could never be read): the writer and the bots are offered load_skill, with no skill list.
-    /// </summary>
-    [Fact]
-    public async Task BotChat_SkillsEnabled_OnlyThePreloadedSkill_AFileLeftOut_LoadSkillStaysOffered()
-    {
-        BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
-        string directory = PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
-        File.WriteAllText(Path.Combine(directory, "a-big.txt"), new string('a', 40_000));
-        File.WriteAllText(Path.Combine(directory, "b-big.txt"), new string('b', 40_000));   // past the cap with a-big
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(3);
-        PushLine("/botchat use pony-prompts for the pictures");
-        PushLine("/exit");
-
-        await RunAsync();
-
-        Assert.All([0, 1, 2], i =>
-        {
-            Assert.Equal([LoadSkillTool.ToolName], ToolsOf(_chat.Options[i]).Select(t => t.Name));
-            Assert.DoesNotContain(Skills.SkillsPrompt.CatalogOpen, SystemText(_chat.Requests[i]));
-        });
     }
 
     /// <summary>
@@ -1129,8 +940,8 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// A bot offered no load_skill writes one its preloaded skill names (2026-09-30, code review: the line was shown, spoken and
-    /// stored): taken out of its line, never run.
+    /// A bot offered no load_skill writes one (2026-09-30, code review: the line was shown, spoken and stored): taken out of its
+    /// line, never run.
     /// </summary>
     [Fact]
     public async Task BotChat_ABotOfferedNoLoadSkill_ItsWrittenLoadSkill_IsTakenOutOfItsLine()

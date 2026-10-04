@@ -18,10 +18,12 @@ namespace NeonSidekick.App;
 /// is; a random speaker each turn, never the one who spoke last; no tools, only talk; each reply in the
 /// speaker's own persona (its <c>persona.md</c>, rebuilt every turn, never another bot's) and voice; and
 /// every turn on the starting profile's LLM server and model, one after another — a profile's own
-/// <c>LLM URL</c> and <c>LLM model</c> are never read here. The one exception to "no tools" (2026-09-25, the
+/// <c>LLM URL</c> and <c>LLM model</c> are never read here. The first exception to "no tools" (2026-09-25, the
 /// user's ask): with the Botchat tab's <c>Botchat images enabled</c> on and ComfyUI offered, pictures — the
 /// bots' own <c>generate_image</c> (<see cref="ImageRule"/>) or the app's picture of each reply
-/// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says.</para>
+/// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says. Then skills (2026-09-27) and, on 2026-10-04 (the
+/// user's asks), the main chat's tools (<c>Botchat tools enabled</c>, or the <c>Botchat limited tools</c> alone) and memory
+/// (<c>Botchat memory enabled</c>, on by default; <see cref="BotChatMemoryMode"/> says whose): each its own switch on the tab.</para>
 ///
 /// <para>Who speaks next (2026-09-25, the user's report: a bot asked another by name and a third answered):
 /// a bot named in the last line — the user's lines since the last reply first, then that reply — answers,
@@ -236,82 +238,68 @@ public static partial class BotChat
 
     /// <summary>
     /// The system prompt for one speaker's turn: its persona (<see cref="Assistant.DefaultPersona"/> when its
-    /// profile has no <c>persona.md</c>) through <see cref="Assistant.SystemPrompt"/> with every tool off, then
-    /// <see cref="Rules"/>. Built afresh for every turn from that speaker's persona alone. With <paramref name="skills"/>
-    /// (<c>Botchat skills enabled</c>, 2026-09-27: the main chat's catalog — the starting profile's, the global and the
-    /// external skills, never the speaker's own profile's) the load-only skills block
-    /// (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes between the two; null or empty, the prompt is as before.
-    /// <paramref name="preloaded"/> (<see cref="PreloadedSkillsSection"/>, 2026-09-27, <c>Botchat skill mode</c>
-    /// <c>prompt-writer-and-bots</c>) follows that block, before the rules. Pure.
+    /// profile has no <c>persona.md</c>) through <see cref="Assistant.BotSystemPrompt"/>, then <see cref="Rules"/>. Built afresh
+    /// for every turn from that speaker's persona alone. With <paramref name="tools"/> (2026-10-04, <c>Botchat tools enabled</c>
+    /// or <c>Botchat limited tools</c>) the default rules carry the sentences of the tools offered, as the main chat's would; with
+    /// <paramref name="memories"/> (<c>Botchat memory enabled</c>) the memory section with the list follows them
+    /// (<paramref name="memorySave"/>: <c>save_memory</c> offered) and <see cref="Rules"/> gains <see cref="MemoryRule"/>. With
+    /// <paramref name="skills"/> (<c>Botchat skills enabled</c>, 2026-09-27, or <c>Botchat limited skills</c> since 2026-10-04: the
+    /// main chat's catalog — the starting profile's, the global and the external skills, never the speaker's own profile's) the
+    /// load-only skills block (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes before the rules. With none of them the
+    /// prompt is as before, byte for byte. The preloaded skills' block of 2026-09-27 went on 2026-10-04 (the user's call). Pure.
     /// </summary>
-    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, string? preloaded = null, bool camera = false) =>
-        Assistant.SystemPrompt(speechOutput, memories: null, persona: string.IsNullOrWhiteSpace(persona) ? null : persona, voiceDirective: voiceDirective,
-            tools: false, files: false, timers: false, markdown: markdown)
+    public static string SystemPrompt(string? persona, string speaker, IReadOnlyList<string> others, string topic, bool speechOutput, string? voiceDirective, bool markdown, string? pronouns = null, bool images = false, IReadOnlyList<Skills.Skill>? skills = null, bool camera = false, TurnRules? tools = null, IReadOnlyList<string>? memories = null, bool memorySave = true) =>
+        Assistant.BotSystemPrompt(speechOutput, persona, voiceDirective, markdown, tools, memories, memorySave)
         + (skills is { Count: > 0 } ? "\n\n" + Skills.SkillsPrompt.LoadOnlySection(skills) : "")
-        + (string.IsNullOrEmpty(preloaded) ? "" : "\n\n" + preloaded)
-        + "\n\n" + Rules(speaker, others, topic, pronouns, images, camera);
+        + "\n\n" + Rules(speaker, others, topic, pronouns, images, camera, memory: memories is not null);
 
-    // ── Preloaded skills (2026-09-27) ───────────────────────────────────────
+    // ── A bot's tools (2026-10-04) ──────────────────────────────────────────
 
     /// <summary>
-    /// The skills <c>/botchat</c> loads itself (2026-09-27, the user's report: told to load a skill, the models mostly did not):
-    /// those <paramref name="setting"/> (<c>Botchat preloaded skills</c>) names that are in <paramref name="catalog"/>, then any
-    /// catalog skill whose name <paramref name="topic"/> spells out as a whole word — any case, a hyphen part of the name, so
-    /// <c>pony</c> is not <c>pony-prompts</c> — each once, in the catalog's order. Pure.
+    /// A bot's tool list, in order (2026-10-04): the main chat's tools it is offered (in the main chat's order), the memory tools,
+    /// <c>generate_image</c>, then <c>load_skill</c>. Pure.
     /// </summary>
-    public static IReadOnlyList<Skills.Skill> PreloadedSkills(IReadOnlyList<Skills.Skill> catalog, IReadOnlyList<string>? setting, string topic)
+    public static IReadOnlyList<AIFunction> TurnTools(IReadOnlyList<AIFunction> general, IReadOnlyList<AIFunction> memory, AIFunction? image, AIFunction? skill)
     {
-        ArgumentNullException.ThrowIfNull(catalog);
-        ArgumentNullException.ThrowIfNull(topic);
-        var named = (setting ?? []).Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return catalog.Where(s => named.Contains(s.Name) || NamedIn(topic, s.Name)).ToList();
+        ArgumentNullException.ThrowIfNull(general);
+        ArgumentNullException.ThrowIfNull(memory);
+        var tools = new List<AIFunction>(general.Count + memory.Count + 2);
+        tools.AddRange(general);
+        tools.AddRange(memory);
+        if (image is not null)
+        {
+            tools.Add(image);
+        }
+
+        if (skill is not null)
+        {
+            tools.Add(skill);
+        }
+
+        return tools;
     }
 
     /// <summary>
-    /// <paramref name="catalog"/> without the skills <paramref name="preloaded"/> names (2026-09-30, the user's question: both
-    /// <c>Botchat preloaded skills</c> and <c>Botchat skills enabled</c> on): a skill whose content a prompt already carries is
-    /// not listed there to load again. Null for no catalog or none left. Pure.
+    /// The round trips a bot's turn may take (2026-10-04, folding the picture's and the skill's caps of 2026-09-25 and 2026-09-27):
+    /// one for its words, two for a picture, two for a skill and a file it bundles, one for a memory — so 3 with a picture or a
+    /// skill alone and 5 with both, as before. Offered the main chat's tools, the main chat's cap (<paramref name="mainCap"/>,
+    /// <c>LLM max tool iterations</c>), never fewer than those. Pure.
     /// </summary>
-    public static IReadOnlyList<Skills.Skill>? WithoutPreloaded(IReadOnlyList<Skills.Skill>? catalog, IReadOnlyList<string> preloaded)
+    public static int ToolIterations(int? mainCap, bool image, bool skill, bool memory)
     {
-        ArgumentNullException.ThrowIfNull(preloaded);
-        return catalog?.Where(s => !preloaded.Contains(s.Name, StringComparer.OrdinalIgnoreCase)).ToList() is { Count: > 0 } kept ? kept : null;
-    }
-
-    private static bool NamedIn(string topic, string name) =>
-        name.Length > 0 && Regex.IsMatch(topic, @"(?<![\w-])" + Regex.Escape(name) + @"(?![\w-])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
-
-    /// <summary>
-    /// The preloaded skills as prompt text (2026-09-27): a line saying they are loaded and to be followed, then each skill's
-    /// content as <c>load_skill</c> returns it. Empty for none. Pinned: it is prompt text.
-    /// </summary>
-    public static string PreloadedSkillsSection(IReadOnlyList<string> contents)
-    {
-        ArgumentNullException.ThrowIfNull(contents);
-        return contents.Count == 0 ? "" : PreloadedSkillsLead + "\n\n" + string.Join("\n\n", contents);
+        int small = 1 + (image ? 2 : 0) + (skill ? 2 : 0) + (memory ? 1 : 0);
+        return mainCap is { } cap ? Math.Max(cap, small) : small;
     }
 
     /// <summary>
-    /// How much of a preloaded skill's bundled text files goes in with it (2026-09-30, the user's ask: all the files, not the
-    /// SKILL.md alone): one <c>load_skill</c> file's worth for all of them together, so a skill of fifty files cannot fill a
-    /// local model's context in every bot's prompt. A file past it is left out; the skill's file list still names it.
+    /// The tools a bot's calls written out as text are caught for (2026-10-04, <see cref="Assistant.TextToolCallNames"/>): the
+    /// four botchat has always offered or now offers itself. A written call to one of the main chat's tools is never run — the
+    /// main chat runs none either.
     /// </summary>
-    public const int MaxPreloadedFileChars = Skills.SkillCatalog.MaxResourceChars;
-
-    /// <summary>The <c>--log</c> line for the files a preloaded skill left out past <see cref="MaxPreloadedFileChars"/> (2026-09-30).</summary>
-    public static string PreloadedFilesLeftOutLogLine(string skill, IReadOnlyList<string> files) =>
-        $"Botchat preloaded skill '{skill}' left out {string.Join(", ", files)}: its files are capped at {MaxPreloadedFileChars.ToString("N0", CultureInfo.InvariantCulture)} characters together.";
-
-    /// <summary>The first line of <see cref="PreloadedSkillsSection"/>. Pinned: it is prompt text.</summary>
-    public const string PreloadedSkillsLead = "These skills are loaded for you already; follow their instructions:";
-
-    /// <summary>The line the chat shows when its preloaded skills are first read, or change (2026-09-27). Pinned.</summary>
-    public static string PreloadedNotice(IReadOnlyList<string> names, BotSkillMode mode)
+    public static readonly IReadOnlySet<string> CaughtWrittenCalls = new HashSet<string>(StringComparer.Ordinal)
     {
-        ArgumentNullException.ThrowIfNull(names);
-        string whom = mode == BotSkillMode.PromptWriterOnly ? "for the picture prompts" : "for the picture prompts and the bots";
-        return $"(botchat: skills loaded {whom}: {string.Join(", ", names)})";
-    }
+        GenerateImageTool.ToolName, LoadSkillTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName,
+    };
 
     /// <summary>
     /// The group-chat rules after the persona (2026-09-24): who else is in the room, speak only as yourself,
@@ -320,7 +308,7 @@ public static partial class BotChat
     /// sentence when given; <paramref name="images"/> (the bots offered <c>generate_image</c>, 2026-09-25) closes
     /// it with <see cref="ImageRule"/>. Pinned: it is prompt text.
     /// </summary>
-    public static string Rules(string speaker, IReadOnlyList<string> others, string topic, string? pronouns = null, bool images = false, bool camera = false)
+    public static string Rules(string speaker, IReadOnlyList<string> others, string topic, string? pronouns = null, bool images = false, bool camera = false, bool memory = false)
     {
         ArgumentNullException.ThrowIfNull(others);
         var text = new StringBuilder().Append(CultureInfo.InvariantCulture, $"You are {speaker}, in a group chat with {JoinNames(others)} and the user, who may join in at any time. ");
@@ -346,8 +334,19 @@ public static partial class BotChat
             text.Append(' ').Append(CameraRule);
         }
 
+        if (memory)
+        {
+            text.Append(' ').Append(MemoryRule);
+        }
+
         return text.ToString();
     }
+
+    /// <summary>
+    /// The rules' last sentence while the bots remember (2026-10-04, <c>Botchat memory enabled</c>): the others' lines reach a bot
+    /// as user messages, so without it a bot saves another bot's words about itself as facts about the user. Pinned: it is prompt text.
+    /// </summary>
+    public const string MemoryRule = "Only lines signed User: are the user's; never save what another speaker says about themselves as a memory.";
 
     /// <summary>
     /// The rules' last sentence while the bots see the user (<c>Botchat camera</c>, later on 2026-10-02, the user's report: the
@@ -663,8 +662,8 @@ public static partial class BotChat
     /// <c>automatic</c> the first picture was prompted before any skill could be loaded, a topic saying which to load had no
     /// way to be obeyed): the load-only catalog (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) and a directive to load
     /// the skill the topic or the line asks for pictures — or one for writing image prompts — and a file it bundles, before
-    /// answering as the instruction above says. Since 2026-09-30 (code review) it says a preloaded skill needs no load: the skill
-    /// the topic names is the one preloaded, and the directive alone sent the writer to load it again. Pinned: it is prompt text.
+    /// answering as the instruction above says. Its "a skill already loaded for you above needs no load_skill" (2026-09-30) went with
+    /// the preloaded skills on 2026-10-04. Pinned: it is prompt text.
     /// </summary>
     public static string ImagePromptSkills(IReadOnlyList<Skills.Skill> skills)
     {
@@ -676,7 +675,7 @@ public static partial class BotChat
     public const string ImagePromptSkillsDirective =
         "Before you answer, load with " + LoadSkillTool.ToolName + " any skill the chat's topic or the line asks to be used for pictures or image prompts, "
         + "or one whose description covers writing image prompts for this workflow — and a file it bundles when the skill says to read one — "
-        + "and follow it; a skill already loaded for you above needs no " + LoadSkillTool.ToolName + ". Then answer exactly as instructed above; never mention the skill in the answer.";
+        + "and follow it. Then answer exactly as instructed above; never mention the skill in the answer.";
 
     /// <summary>The user message of the image-prompt request (2026-09-25): whose line, the topic when there is one, and the line. Pinned: it is prompt text.</summary>
     public static string ImagePromptRequest(string speaker, string reply, string topic)

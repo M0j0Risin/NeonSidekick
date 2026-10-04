@@ -24,7 +24,9 @@ public partial class ChatScreenTests
     private void BotChatFixture()
     {
         // No pause between replies (2026-09-26): the manual clock never moves on its own; the pause's own tests set it.
-        _settings.Update(d => { d.TtsOutput = false; d.BotChatNonTtsDelaySeconds = 0; });
+        // No memory (2026-10-04): Botchat memory enabled is on by default and would add save_memory, recall_memory and the memory
+        // section to every bot's request; the memory tests switch it on.
+        _settings.Update(d => { d.TtsOutput = false; d.BotChatNonTtsDelaySeconds = 0; d.BotChatMemory = false; });
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Neon. " + NeonMarker);
         Profiles.Create(_dir, "ada", new AppSettingsData { LlmUrl = "http://ada-only-server:9999", LlmModel = "ada-only-model", TtsVoice = "bm_george" });
         File.WriteAllText(Path.Combine(ProfileDir("ada"), PersonaFile.FileName), "You are Ada. " + AdaMarker);
@@ -291,10 +293,10 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// With no voice the next bot waits out <c>Botchat non-TTS delay</c> on the screen's clock (2026-09-26, the user's ask):
-    /// not asked at 4 s, asked at 5; a line typed during the pause joins the chat at once, before the next reply.
+    /// not asked at 4 s, asked at 5.
     /// </summary>
     [Fact]
-    public async Task BotChat_TtsOff_TheNextBotWaitsOutThePause_AndALineTypedMeanwhileJoins()
+    public async Task BotChat_TtsOff_TheNextBotWaitsOutThePause()
     {
         BotChatFixture();
         _settings.Update(d => d.BotChatNonTtsDelaySeconds = 5);
@@ -311,8 +313,7 @@ public partial class ChatScreenTests
 
             return Task.CompletedTask;
         };
-        int beforeTheClock = -1, atFourSeconds = -1;
-        bool echoedInThePause = false;
+        int atFourSeconds = -1;
         var clock = Task.Run(async () =>
         {
             var deadline = DateTime.UtcNow.AddSeconds(20);
@@ -322,14 +323,6 @@ public partial class ChatScreenTests
             }
 
             await Task.Delay(300);   // the reply has ended: the chat is in the pause
-            PushLine("hi bots");
-            while (!Output.Contains("› hi bots", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
-            {
-                await Task.Delay(10);
-            }
-
-            echoedInThePause = _chat.Requests.Count == 1;
-            beforeTheClock = _chat.Requests.Count;
             _time.Advance(TimeSpan.FromSeconds(4));
             await Task.Delay(300);
             atFourSeconds = _chat.Requests.Count;
@@ -340,9 +333,49 @@ public partial class ChatScreenTests
         await RunAsync();
         await clock;
 
-        Assert.Equal(1, beforeTheClock);
         Assert.Equal(1, atFourSeconds);
-        Assert.True(echoedInThePause);
+        Assert.Equal(2, _chat.Requests.Count);
+    }
+
+    /// <summary>
+    /// A line sent during the pause ends it (2026-10-04, the user's ask; until then it joined the chat and the pause ran out
+    /// first): echoed, and the next bot asked with it at once, the clock never moved.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_TtsOff_ALineSentDuringThePause_EndsIt_AndGoesToTheNextBot()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatNonTtsDelaySeconds = 5);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Hello, user.");
+        _chat.BeforeUpdate = (i, _) =>
+        {
+            if (i == 0 && _chat.Requests.Count == 2)
+            {
+                PushLine("/exit");
+            }
+
+            return Task.CompletedTask;
+        };
+        var type = Task.Run(async () =>
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(20);
+            while (!Output.Contains("Hello from Neon.", StringComparison.Ordinal) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            await Task.Delay(300);   // the reply has ended: the chat is in the pause
+            PushLine("hi bots");
+        });
+        PushLine("/botchat");
+
+        string output = await RunAsync();
+        await type;
+
+        Assert.Contains("› hi bots", output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("User: hi bots", _chat.Requests[1][^1].Text.Split("\n\n")[^1]);
     }

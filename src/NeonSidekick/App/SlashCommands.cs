@@ -86,7 +86,7 @@ public enum SlashCommand
     Usage,
 
     /// <summary>
-    /// <c>/perf [off|text|gauge|spark|led]</c> (2026-09-29, the user's ask): bare, the performance bar hidden, or shown again
+    /// <c>/perfbar [off|text|gauge|spark|led]</c> (2026-09-29, the user's ask): bare, the performance bar hidden, or shown again
     /// with the meters it last had (<see cref="Settings.AppSettingsData.PerformanceBarLastItems"/>; CPU, RAM, GPU and VRAM the
     /// first time, 2026-09-30); <c>off</c> hides it; a look sets it and shows the bar. Display only, so it runs at once under a
     /// reply; the toolbar's 📈 word.
@@ -320,7 +320,7 @@ public static class SlashCommands
             new("/model", "pick a model from the LLM server, or /model <id>"),
             new("/new", "start a new conversation but do not clear the screen"),
             new("/operata", "export and manage operata.md (the operating rules) in your editor, or /operata reset to go back to the default, or /operata copy <profile> [force] to copy it into another profile"),
-            new("/perf", "show or hide the performance bar, or /perf off|text|gauge|spark|led for its look"),
+            new("/perfbar", "show or hide the performance bar, or /perfbar off|text|gauge|spark|led for its look"),
             new("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"),
             new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
             new("/police", "switch shell police on or off"),
@@ -357,14 +357,14 @@ public static class SlashCommands
 
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
-    /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perf</c>,
+    /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perfbar</c>,
     /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
-        "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perf", "/profile",
+        "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perfbar", "/profile",
         "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
         "/wake",
     };
@@ -422,7 +422,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perf", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -441,7 +441,7 @@ public static class SlashCommands
     public const string PoliceWord = "/police";       // 2026-09-22, the officer last of all, while Shell police outside paths is on
     public const string MemoryWord = "/memory";       // 2026-09-22, the disk between the balloon and the lock, while Memory is on
     public const string ProfileWord = "/profile";     // later on 2026-09-29, the ID card after the gear: the profile picker
-    public const string PerfWord = "/perf";           // later on 2026-09-29, the rising chart after the Usage chart: the performance bar shown or hidden
+    public const string PerfWord = "/perfbar";           // later on 2026-09-29, the rising chart after the Usage chart: the performance bar shown or hidden
 
     /// <summary>The words the hint row's model name and reasoning mark send through the screen's dispatch at idle (later on 2026-09-21, so a double-click off the pane they open can switch panes); the name is <c>/server</c> since 2026-09-22 (the user's call: the click walks server, model, then reasoning, as the typed command does). Pinned.</summary>
     public const string ServerWord = "/server";
@@ -497,7 +497,7 @@ public static class SlashCommands
             "/vocalia" => SlashCommand.Vocalia,
             "/sys" => SlashCommand.Sys,
             "/usage" => SlashCommand.Usage,
-            "/perf" => SlashCommand.Perf,
+            "/perfbar" => SlashCommand.Perf,
             "/toolbar" => SlashCommand.Toolbar,
             "/header" => SlashCommand.Header,
             "/profile" => SlashCommand.Profile,

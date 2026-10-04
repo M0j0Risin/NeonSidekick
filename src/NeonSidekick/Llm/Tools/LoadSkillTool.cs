@@ -14,11 +14,9 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>enum</c> of names is rebuilt when the catalog's set changes, so the model cannot ask for a
 /// skill that is not there — the specification's tip. Offered only while at least one skill is
 /// installed (<c>ChatScreen.PrepareTurn</c>). A quiet tool: the transcript shows <see cref="Note"/>.
-/// <para>With <c>preloaded</c> (2026-09-30, code review: a <c>/botchat</c> preloaded skill, its content already in the prompt, was
-/// left out of the list but still loaded again when the model asked — the picture writer's directive even tells it to load the
-/// skill the topic names, which is the one preloaded) a name alone for one of those answers <see cref="SkillText.AlreadyLoaded"/>,
-/// not the content again. Its files are still read: those past the preload's cap stay listed by name, and may be wanted. The
-/// schema keeps every name, so such a read stays valid.</para>
+/// <para>With <c>only</c> (2026-10-04, the user's ask: <c>Botchat limited skills</c>) it serves those skills alone: the schema's
+/// <c>enum</c>, the lookup and the unknown-name answer all leave the rest of the catalog out, so another skill is unknown. It
+/// replaced the <c>preloaded</c> set of 2026-09-30, whose skills answered "already loaded" — the preloading went that day.</para>
 /// </summary>
 public sealed class LoadSkillTool : AIFunction
 {
@@ -33,20 +31,23 @@ public sealed class LoadSkillTool : AIFunction
     public static readonly (string Name, IReadOnlyList<string> Parameters) WrittenForm = (ToolName, [NameArgument, FileArgument]);
 
     private readonly SkillCatalog _catalog;
-    private readonly HashSet<string> _preloaded;
+    private readonly HashSet<string>? _only;
     private readonly Action<Skill>? _used;
     private JsonElement _schema;
     private int _schemaVersion = -1;
 
     /// <param name="catalog">The skills it loads.</param>
-    /// <param name="preloaded">The skills whose content the prompt already carries (any case): a name alone for one is answered <see cref="SkillText.AlreadyLoaded"/>.</param>
-    /// <param name="used">Told each skill whose instructions it served (2026-09-30, the skill records' last use, <see cref="SkillRecords.Used"/>); a bundled file read and an already-loaded answer are not uses.</param>
-    public LoadSkillTool(SkillCatalog catalog, IReadOnlyCollection<string>? preloaded = null, Action<Skill>? used = null)
+    /// <param name="only">The skills it serves (any case), the rest of the catalog left out; null, every skill.</param>
+    /// <param name="used">Told each skill whose instructions it served (2026-09-30, the skill records' last use, <see cref="SkillRecords.Used"/>); a bundled file read is not a use.</param>
+    public LoadSkillTool(SkillCatalog catalog, IReadOnlyCollection<string>? only = null, Action<Skill>? used = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _used = used;
-        _preloaded = new HashSet<string>(preloaded ?? [], StringComparer.OrdinalIgnoreCase);
+        _only = only is null ? null : new HashSet<string>(only, StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>The catalog's skills it serves, in the catalog's order.</summary>
+    private IEnumerable<Skill> Offered => _only is null ? _catalog.Skills : _catalog.Skills.Where(s => _only.Contains(s.Name));
 
     public override string Name => ToolName;
 
@@ -62,7 +63,7 @@ public sealed class LoadSkillTool : AIFunction
             int version = _catalog.Version;
             if (version != _schemaVersion)
             {
-                _schema = Schema(_catalog.Skills.Select(s => s.Name).ToList());
+                _schema = Schema(Offered.Select(s => s.Name).ToList());
                 _schemaVersion = version;
             }
 
@@ -97,9 +98,9 @@ public sealed class LoadSkillTool : AIFunction
         }
 
         var skill = _catalog.Find(name);
-        if (skill is null)
+        if (skill is null || (_only is not null && !_only.Contains(skill.Name)))
         {
-            return SkillText.Unknown(name, _catalog.Skills.Select(s => s.Name).ToList());
+            return SkillText.Unknown(name, Offered.Select(s => s.Name).ToList());
         }
 
         if (!string.IsNullOrWhiteSpace(file))
@@ -107,11 +108,6 @@ public sealed class LoadSkillTool : AIFunction
             string relative = file.Trim();
             var read = SkillCatalog.ReadResource(skill, relative);
             return read.Outcome == SkillCatalog.ReadOutcome.Ok ? SkillText.File(skill.Name, relative, read.Text, read.Truncated) : SkillText.ReadError(skill, relative, read);
-        }
-
-        if (_preloaded.Contains(skill.Name))
-        {
-            return SkillText.AlreadyLoaded(skill.Name);
         }
 
         var body = SkillCatalog.ReadBody(skill);
@@ -127,9 +123,7 @@ public sealed class LoadSkillTool : AIFunction
 
     /// <summary>
     /// The transcript's one dim line for a result: <c>loaded skill 'x' (1,234 characters)</c>,
-    /// <c>read references/a.md of skill 'x'</c>, <c>skill 'x' already loaded (preloaded)</c> (2026-09-30, code review: the
-    /// <see cref="SkillText.AlreadyLoaded"/> sentence is written to the model, and was shown word for word), or the error
-    /// sentence as it is. Pinned.
+    /// <c>read references/a.md of skill 'x'</c>, or the error sentence as it is. Pinned.
     /// </summary>
     public static string Note(string result)
     {
@@ -149,11 +143,6 @@ public sealed class LoadSkillTool : AIFunction
             int at = result.IndexOf(path, StringComparison.Ordinal);
             string relative = at < 0 ? "" : Attribute(result, at + path.Length);
             return $"read {relative} of skill '{name}'";
-        }
-
-        if (SkillText.IsAlreadyLoaded(result, out string already))
-        {
-            return SkillText.AlreadyLoadedNote(already);
         }
 
         return result;

@@ -10,16 +10,16 @@ public static class PerfText
 {
     /// <summary>
     /// The performance bar's glyph (later on 2026-09-29, the user's pick): the toolbar's item whose double-click is
-    /// <c>/perf</c>, and <c>/perf</c>'s notices. A surrogate pair, two cells. Pinned.
+    /// <c>/perfbar</c>, and <c>/perfbar</c>'s notices. A surrogate pair, two cells. Pinned.
     /// </summary>
     public const string Glyph = "📈";
 
-    /// <summary>What <c>/perf</c> says it did: the look it turned on, or off. Pinned.</summary>
+    /// <summary>What <c>/perfbar</c> says it did: the look it turned on, or off. Pinned.</summary>
     public static string BarNotice(string name) =>
         name == "off" ? "(" + Glyph + " performance bar off)" : "(" + Glyph + " performance bar on: " + name + ")";
 
-    /// <summary><c>/perf</c> given something that is not a look. Pinned.</summary>
-    public const string UsageError = "/perf takes off, text, gauge, spark or led, or nothing to toggle.";
+    /// <summary><c>/perfbar</c> given something that is not a look. Pinned.</summary>
+    public const string UsageError = "/perfbar takes off, text, gauge, spark or led, or nothing to toggle.";
 
     public const string CpuLabel = "CPU";
     public const string RamLabel = "RAM";

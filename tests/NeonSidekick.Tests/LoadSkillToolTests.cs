@@ -96,20 +96,6 @@ public class LoadSkillToolTests : IDisposable
         Assert.Equal("loaded skill 'haiku' (" + result.Length.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters)", LoadSkillTool.Note(result));
     }
 
-    /// <summary>The preloaded form (2026-09-30, /botchat): its files follow it, so the note says so rather than pointing at load_skill; with no file, the plain note.</summary>
-    [Fact]
-    public void Content_FilesFollow_SaysSo_IsPinned()
-    {
-        Assert.Equal(
-            "<skill_content name=\"haiku\">\nbody\n\nSkill directory: d\n"
-            + "Relative paths in this skill are relative to the skill directory; its bundled files follow.\n"
-            + "<skill_resources>\n  <file>a.md</file>\n</skill_resources>\n</skill_content>",
-            SkillText.Content("haiku", "body", "d", ["a.md"], false, false, filesFollow: true));
-        Assert.Equal(
-            "<skill_content name=\"haiku\">\nbody\n\nSkill directory: d\nRelative paths in this skill are relative to the skill directory.\n</skill_content>",
-            SkillText.Content("haiku", "body", "d", [], false, false, filesFollow: true));
-    }
-
     [Fact]
     public async Task ByName_WithNoBundledFile_NoResourcesBlock()
     {
@@ -176,12 +162,11 @@ public class LoadSkillToolTests : IDisposable
     }
 
     /// <summary>
-    /// A preloaded skill (2026-09-30, code review: a /botchat skill whose content the prompt already carries): its name alone, in
-    /// any case, is answered "already loaded", not the content again; its files are still read, another skill loads as ever, and
-    /// the schema still names it.
+    /// With <c>only</c> (2026-10-04, <c>Botchat limited skills</c>) the tool serves those skills alone, any case: the schema's enum
+    /// names them alone, another skill is unknown (the answer listing only those), and their files are read as ever.
     /// </summary>
     [Fact]
-    public async Task APreloadedSkill_ByName_IsAlreadyLoaded_ItsFilesStillRead()
+    public async Task Only_ServesThoseSkillsAlone_TheSchemaTheLookupAndTheUnknownList()
     {
         string directory = Put("haiku");
         File.WriteAllText(Path.Combine(directory, "forms.md"), "5-7-5");
@@ -190,18 +175,13 @@ public class LoadSkillToolTests : IDisposable
         var tool = new LoadSkillTool(_catalog, ["Haiku"]);
         async Task<string> Call(params (string Name, object? Value)[] values) => (string)(await tool.InvokeAsync(Args(values), CancellationToken.None))!;
 
-        string again = await Call(("name", "haiku"));
-        Assert.Equal(SkillText.AlreadyLoaded("haiku"), again);
-        Assert.Contains("already loaded", again);
-        Assert.Contains("in your system prompt", again);
-        Assert.Contains("load_skill and file", again);   // a file past the preload's cap is still wanted (2026-09-30, code review)
-        Assert.DoesNotContain("Five, seven, five.", again);
-        // The sentence is the model's; the transcript's line is short (2026-09-30, code review).
-        Assert.Equal("skill 'haiku' already loaded (preloaded)", LoadSkillTool.Note(again));
-        Assert.False(SkillText.IsAlreadyLoaded(SkillText.AlreadyLoaded(""), out _));
+        Assert.StartsWith("<skill_content name=\"haiku\">", await Call(("name", "haiku")));
         Assert.Equal("<skill_file skill=\"haiku\" path=\"forms.md\">\n5-7-5\n</skill_file>", await Call(("name", "haiku"), ("file", "forms.md")));
-        Assert.StartsWith("<skill_content name=\"pdf\">", await Call(("name", "pdf")));
-        Assert.Contains("\"haiku\"", tool.JsonSchema.GetProperty("properties").GetProperty("name").GetProperty("enum").GetRawText());
+        Assert.Equal(SkillText.Unknown("pdf", ["haiku"]), await Call(("name", "pdf")));
+        Assert.Equal(SkillText.Unknown("pdf", ["haiku"]), await Call(("name", "pdf"), ("file", "x.md")));
+        string names = tool.JsonSchema.GetProperty("properties").GetProperty("name").GetProperty("enum").GetRawText();
+        Assert.Contains("\"haiku\"", names);
+        Assert.DoesNotContain("\"pdf\"", names);
     }
 
     [Fact]

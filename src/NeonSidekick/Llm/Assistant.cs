@@ -576,6 +576,31 @@ public sealed class Assistant
         return sb.ToString();
     }
 
+    /// <summary>
+    /// A <c>/botchat</c> bot's system prompt up to its own blocks (2026-10-04, the bots' tools and memory): the persona
+    /// (<see cref="DefaultPersona"/> when null or blank), the default rules — <see cref="TextRule"/> alone without
+    /// <paramref name="rules"/>, else the sentences of the tools the bot is offered (<see cref="TurnRules.DefaultRules"/>) — then,
+    /// with <paramref name="memories"/>, the memory section with the list in it (<see cref="MemoryPrompt.ListedSection"/>: a bot's
+    /// history is rebuilt every reply, so no opening <c>recall_memory</c> pair carries it), and the voice directive last when
+    /// spoken. No <c>operata.md</c>, project notes, skills or plan directive: the bots never had them. With neither tools nor
+    /// memories it is <c>SystemPrompt</c> with every tool off, byte for byte. Pure.
+    /// </summary>
+    public static string BotSystemPrompt(bool speechOutput, string? persona, string? voiceDirective, bool markdown, TurnRules? rules = null, IReadOnlyList<string>? memories = null, bool memorySave = true)
+    {
+        var sb = new StringBuilder((string.IsNullOrWhiteSpace(persona) ? DefaultPersona : persona.Trim()) + "\n\n" + (rules?.DefaultRules(markdown) ?? TextRule(markdown)));
+        if (memories is not null)
+        {
+            sb.Append("\n\n").Append(MemoryPrompt.ListedSection(memories, memorySave));
+        }
+
+        if (speechOutput && !string.IsNullOrWhiteSpace(voiceDirective))
+        {
+            sb.Append("\n\n").Append(voiceDirective.Trim());
+        }
+
+        return sb.ToString();
+    }
+
     /// <summary>The project notes block: <see cref="ProjectNotesHeading"/> naming the file, a newline, the text. Pinned.</summary>
     public static string ProjectNotesSection(ProjectNotes project)
     {
@@ -618,6 +643,13 @@ public sealed class Assistant
     /// the default, takes out none; a tool the turn offers and <see cref="TextToolCalls"/> catches still runs.
     /// </summary>
     public IReadOnlyList<(string Name, IReadOnlyList<string> Parameters)> WrittenCallsTakenOut { get; set; } = [];
+
+    /// <summary>
+    /// The offered tools whose calls written out as text <see cref="TextToolCalls"/> catches (2026-10-04, the <c>/botchat</c> bots'
+    /// tools): null, the default, every one offered; else those names alone, so a bot offered the main chat's tools still runs a
+    /// written <c>generate_image</c> or <c>save_memory</c> but never a written <c>delete</c> (the main chat runs none).
+    /// </summary>
+    public IReadOnlySet<string>? TextToolCallNames { get; set; }
 
     /// <summary>
     /// Whether the last round trip <see cref="MaxToolIterations"/> allows is asked without the tools, so the model must answer in
@@ -1167,7 +1199,7 @@ public sealed class Assistant
             var tagThinking = new StringBuilder();
             // After the think filter: a call written as text, caught when the turn asks for it and offers tools, and one to a tool
             // in WrittenCallsTakenOut (2026-09-30), taken out whatever the turn offers.
-            var catching = TextToolCalls && _tools.Count > 0 ? WrittenCallNames(_tools) : [];
+            var catching = TextToolCalls && _tools.Count > 0 ? WrittenCallNames(TextToolCallNames is { } caught ? _tools.Where(t => caught.Contains(t.Name)) : _tools) : [];
             var written = catching.Count > 0 || WrittenCallsTakenOut.Count > 0 ? WrittenCallFilter([.. catching, .. WrittenCallsTakenOut]) : null;
             Exception? failure = null;
             bool cancelled = false;

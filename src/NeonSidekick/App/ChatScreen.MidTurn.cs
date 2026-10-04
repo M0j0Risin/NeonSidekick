@@ -149,7 +149,7 @@ internal sealed partial class ChatScreen
     /// <c>/cwd</c> are quick notices; <c>/tree</c> and <c>/vault</c> are panes (the info pane, never the transcript the turn
     /// owns); <c>/cmdcopy</c> and the three prompt files' words are panes — they write another profile or a file the running
     /// turn's prompt was built from already, and ask their yes/no on the pane. <c>/keycopy</c> (2026-09-28) is one the same
-    /// way: another profile's file, its yes/no on the pane. <c>/perf</c> (later on 2026-09-29) is quick: display only.</para>
+    /// way: another profile's file, its yes/no on the pane. <c>/perfbar</c> (later on 2026-09-29) is quick: display only.</para>
     /// <para><c>/ha</c> (2026-09-30, the user's ask: it waited for the reply) is a <see cref="MidTurnClass.Pane"/> though it opens
     /// none: a quick act runs on the turn task, and a Home Assistant call — up to <c>Home Assistant timeout</c>, 10 s by
     /// default — would hold the streaming reply that long. On the watcher the reply streams on, its lines go through the flow

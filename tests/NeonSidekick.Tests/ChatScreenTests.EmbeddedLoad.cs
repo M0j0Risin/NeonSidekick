@@ -109,7 +109,7 @@ public partial class ChatScreenTests
         bool toggledUnderTheLoad = false;
         embedded.StartGate = async ct =>
         {
-            input.PushClick(3, 103);   // 📈 on the toolbar: /perf, a quick act run while the load waits
+            input.PushClick(3, 103);   // 📈 on the toolbar: /perfbar, a quick act run while the load waits
             input.PushClick(3, 103);
             await UntilAsync(() => Output.Contains(PerfText.BarNotice("led"), StringComparison.Ordinal), ct);   // the default look, led since 2026-10-02
             toggledUnderTheLoad = true;

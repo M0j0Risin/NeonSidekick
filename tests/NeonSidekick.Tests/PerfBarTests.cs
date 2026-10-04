@@ -92,7 +92,7 @@ public class PerfBarTests
         Assert.Equal(["cpu", "net"], shown.Items);
         Assert.Equal("gauge", shown.Look);
 
-        // Never picked: the four show (2026-10-02, the user's ask), so a bare /perf hides them and keeps them to come back.
+        // Never picked: the four show (2026-10-02, the user's ask), so a bare /perfbar hides them and keeps them to come back.
         var never = PerfBarMode.Toggle("", null, null, "text")!;
         Assert.Empty(never.Items!);
         Assert.Equal(["cpu", "ram", "gpu", "vram"], never.LastItems);
@@ -128,7 +128,7 @@ public class PerfBarTests
         Assert.Equal("📈", PerfText.Glyph);
         Assert.Equal("(📈 performance bar on: gauge)", PerfText.BarNotice("gauge"));
         Assert.Equal("(📈 performance bar off)", PerfText.BarNotice("off"));
-        Assert.Equal("/perf takes off, text, gauge, spark or led, or nothing to toggle.", PerfText.UsageError);
+        Assert.Equal("/perfbar takes off, text, gauge, spark or led, or nothing to toggle.", PerfText.UsageError);
     }
 
     // ── The network (2026-09-30) ────────────────────────────────────────────

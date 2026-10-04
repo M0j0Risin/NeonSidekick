@@ -167,10 +167,12 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes)
 
     /// <summary>
     /// The notice a turn shows when the budget took pictures out before a request: <c>🖼 12 older pictures taken out
-    /// (31 MB) to keep the request small</c>. Pinned.
+    /// (31 MB) to keep the request small</c>. Pinned. The glyph carries U+FE0F (2026-10-04, the user's catch: the bare 🖼
+    /// defaults to text presentation, which Windows Terminal draws two cells wide in one, so it ran into the count — the
+    /// picture viewer's fix of 2026-09-27, <c>ViewerText.Opened</c>).
     /// </summary>
     public static string TakenOutNotice(int pictures, long bytes) =>
-        "🖼 " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " older picture" : " older pictures") + " taken out (" + FormatMegabytes(bytes) + ") to keep the request small";
+        "🖼️ " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " older picture" : " older pictures") + " taken out (" + FormatMegabytes(bytes) + ") to keep the request small";
 }
 
 /// <summary>What <see cref="PictureBudget.Apply"/> or <see cref="PictureBudget.TakeOut"/> made: the messages, and the pictures taken out and their wire bytes.</summary>

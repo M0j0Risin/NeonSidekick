@@ -85,7 +85,7 @@ public sealed class ToolbarItemsTests
         Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse"), ToolbarItems.Label("path", false));
         Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory"), ToolbarItems.Label("memory", true));
         Assert.Equal("[[x]] 🪪  Profile                 " + Theme.DimMarkup("/profile"), ToolbarItems.Label("profile", true));
-        Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perf"), ToolbarItems.Label("perf", false));   // the command alone (2026-10-02)
+        Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perfbar"), ToolbarItems.Label("perf", false));   // the command alone (2026-10-02)
         // The tool switches, the log and the viewers (2026-10-03, the user's names).
         Assert.Equal("[[x]] 🐚  Shell                   " + Theme.DimMarkup("/tools shell"), ToolbarItems.Label("shell", true));
         Assert.Equal("[[ ]] ✴️  Claude                  " + Theme.DimMarkup("/tools claude"), ToolbarItems.Label("claude", false));

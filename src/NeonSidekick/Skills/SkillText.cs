@@ -17,10 +17,10 @@ public static class SkillText
     /// <summary>
     /// A loaded skill the specification's way: the body wrapped in a tag that names the skill, the
     /// folder the body's relative paths resolve against, and the bundled files listed (not read —
-    /// <c>load_skill</c> with <c>file</c> reads one). <paramref name="filesFollow"/> (2026-09-30, <c>/botchat</c>'s preloaded skills,
-    /// whose bundled files come after the content): the note says so instead of pointing at <c>load_skill</c>.
+    /// <c>load_skill</c> with <c>file</c> reads one). The <c>filesFollow</c> form of 2026-09-30 went with <c>/botchat</c>'s
+    /// preloaded skills on 2026-10-04.
     /// </summary>
-    public static string Content(string name, string body, string directory, IReadOnlyList<string> resources, bool more, bool truncated, bool filesFollow = false)
+    public static string Content(string name, string body, string directory, IReadOnlyList<string> resources, bool more, bool truncated)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(body);
@@ -35,7 +35,7 @@ public static class SkillText
         }
 
         sb.Append("\n\nSkill directory: ").Append(directory);
-        sb.Append('\n').Append(filesFollow && resources.Count > 0 ? FilesFollowNote : RelativePathsNote(resources.Count > 0));
+        sb.Append('\n').Append(RelativePathsNote(resources.Count > 0));
         if (resources.Count > 0)
         {
             sb.Append("\n<skill_resources>");
@@ -62,8 +62,6 @@ public static class SkillText
     public static string RelativePathsNote(bool withFiles) =>
         "Relative paths in this skill are relative to the skill directory" + (withFiles ? "; read a bundled file with " + LoadSkillTool.ToolName + " and its " + LoadSkillTool.FileArgument + " argument." : ".");
 
-    /// <summary>The note of a <see cref="Content"/> whose bundled files follow it (2026-09-30). Pinned: it is prompt text.</summary>
-    public const string FilesFollowNote = "Relative paths in this skill are relative to the skill directory; its bundled files follow.";
 
     public static string MoreResourcesNote =>
         "(and more: the first " + SkillCatalog.MaxResources.ToString(CultureInfo.InvariantCulture) + " files are listed)";
@@ -85,36 +83,6 @@ public static class SkillText
         ArgumentNullException.ThrowIfNull(names);
         return $"Error: there is no skill named '{name.Trim()}'; " + (names.Count == 0 ? "no skill is installed" : "the skills are: " + string.Join(", ", names));
     }
-
-    /// <summary>
-    /// <c>load_skill</c>'s answer for a skill whose content the prompt already carries (2026-09-30, code review: a <c>/botchat</c>
-    /// preloaded skill, <see cref="Llm.Tools.LoadSkillTool"/>'s <c>preloaded</c>): no content again, a sentence saying where it is,
-    /// and (later that day, code review) that a bundled file is still read with <c>file</c> — a file past the preload's cap is
-    /// listed by name only, and told just "follow them from there" the model never asked for it.
-    /// </summary>
-    public static string AlreadyLoaded(string name) => AlreadyLoadedOpen + name.Trim() + AlreadyLoadedClose;
-
-    private const string AlreadyLoadedOpen = "Skill '";
-    // The tool's and its argument's names from their constants (2026-09-30, code review), as RelativePathsNote's.
-    private const string AlreadyLoadedClose = "' is already loaded: its instructions are in your system prompt; follow them from there. A file it bundles is still read with "
-        + LoadSkillTool.ToolName + " and " + LoadSkillTool.FileArgument + ".";
-
-    /// <summary>
-    /// Whether <paramref name="result"/> is an <see cref="AlreadyLoaded"/> answer, and for which skill (2026-09-30, code review):
-    /// the sentence is the model's, so the transcript shows <see cref="AlreadyLoadedNote"/> instead. Display only: nothing decides
-    /// on it (later that day, code review: the picture writer's loop did, and a rewording would have changed it silently).
-    /// </summary>
-    public static bool IsAlreadyLoaded(string result, out string name)
-    {
-        ArgumentNullException.ThrowIfNull(result);
-        bool matches = result.StartsWith(AlreadyLoadedOpen, StringComparison.Ordinal) && result.EndsWith(AlreadyLoadedClose, StringComparison.Ordinal)
-            && result.Length > AlreadyLoadedOpen.Length + AlreadyLoadedClose.Length;
-        name = matches ? result[AlreadyLoadedOpen.Length..^AlreadyLoadedClose.Length] : "";
-        return matches;
-    }
-
-    /// <summary>The transcript's dim line for an <see cref="AlreadyLoaded"/> answer (2026-09-30, code review): <c>skill 'x' already loaded (preloaded)</c>.</summary>
-    public static string AlreadyLoadedNote(string name) => $"skill '{name}' already loaded (preloaded)";
 
     public static string NoName => "Error: name is empty; pass the name of a skill from the list";
 

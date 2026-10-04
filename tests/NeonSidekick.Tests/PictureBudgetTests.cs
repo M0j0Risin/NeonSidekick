@@ -34,8 +34,8 @@ public class PictureBudgetTests
         Assert.Equal("(a picture, taken out to keep the request small)", PictureBudget.LeftOut(null));
         Assert.Equal("31 MB", PictureBudget.FormatMegabytes(31_400_000));
         Assert.Equal("0.4 MB", PictureBudget.FormatMegabytes(400_000));
-        Assert.Equal("🖼 12 older pictures taken out (31 MB) to keep the request small", PictureBudget.TakenOutNotice(12, 31_000_000));
-        Assert.Equal("🖼 1 older picture taken out (0.3 MB) to keep the request small", PictureBudget.TakenOutNotice(1, 300_000));
+        Assert.Equal("🖼️ 12 older pictures taken out (31 MB) to keep the request small", PictureBudget.TakenOutNotice(12, 31_000_000));
+        Assert.Equal("🖼️ 1 older picture taken out (0.3 MB) to keep the request small", PictureBudget.TakenOutNotice(1, 300_000));
     }
 
     [Fact]

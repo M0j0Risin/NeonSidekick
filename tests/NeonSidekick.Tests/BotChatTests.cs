@@ -329,4 +329,60 @@ public class BotChatTests
         Assert.Equal("ada and max", BotChat.JoinNames(["ada", "max"]));
         Assert.Equal("ada, max and neon", BotChat.JoinNames(["ada", "max", "neon"]));
     }
+
+    /// <summary>With neither tools nor memories (2026-10-04) the prompt is the tool-free one, byte for byte as before.</summary>
+    [Fact]
+    public void SystemPrompt_WithoutToolsOrMemories_IsAsBefore()
+    {
+        string expected = Assistant.SystemPrompt(false, null, "You are Ada.", tools: false, files: false, timers: false) + "\n\n" + BotChat.Rules("ada", ["max"], "pizza");
+
+        Assert.Equal(expected, BotChat.SystemPrompt("You are Ada.", "ada", ["max"], "pizza", false, null, false));
+    }
+
+    /// <summary>
+    /// With tools (2026-10-04) the default rules carry the offered tools' sentences, as the main chat's would; with memories the
+    /// listed section follows them, then the skills, then the rules with the memory rule last.
+    /// </summary>
+    [Fact]
+    public void SystemPrompt_WithToolsAndMemories_TheRulesTheListAndTheMemoryRule_InOrder()
+    {
+        var skill = new Skills.Skill("haiku", "Writes haiku.", Skills.SkillScope.Profile, "haiku");
+        string prompt = BotChat.SystemPrompt("You are Ada.", "ada", ["max"], "", false, null, false, skills: [skill], tools: new TurnRules(Web: true, Timers: true), memories: ["The user likes pizza."]);
+
+        string rules = Assistant.DefaultRules(false, tools: true, files: false, web: true);
+        string memory = Memory.MemoryPrompt.ListedSection(["The user likes pizza."], save: true);
+        Assert.StartsWith("You are Ada.\n\n" + rules + "\n\n" + memory + "\n\n" + Skills.SkillsPrompt.LoadOnlySection([skill]), prompt);
+        Assert.EndsWith(" " + BotChat.MemoryRule, prompt);
+        Assert.DoesNotContain(BotChat.MemoryRule, BotChat.SystemPrompt("You are Ada.", "ada", ["max"], "", false, null, false));
+    }
+
+    [Theory]
+    [InlineData(null, false, false, false, 1)]
+    [InlineData(null, true, false, false, 3)]
+    [InlineData(null, false, true, false, 3)]
+    [InlineData(null, true, true, false, 5)]
+    [InlineData(null, false, false, true, 2)]
+    [InlineData(10000, false, false, false, 10000)]
+    [InlineData(2, true, true, true, 6)]   // never fewer than the botchat's own
+    public void ToolIterations_TheBotchatsFew_OrTheMainChatsCap(int? mainCap, bool image, bool skill, bool memory, int expected)
+    {
+        Assert.Equal(expected, BotChat.ToolIterations(mainCap, image, skill, memory));
+    }
+
+    private sealed class NamedTool(string name) : AIFunction
+    {
+        public override string Name => name;
+
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new("ok");
+    }
+
+    [Fact]
+    public void TurnTools_TheGeneralTools_Memory_ThePicture_ThenTheSkill()
+    {
+        var tools = BotChat.TurnTools([new NamedTool("get_current_time")], [new NamedTool("save_memory"), new NamedTool("recall_memory")], new NamedTool("generate_image"), new NamedTool("load_skill"));
+
+        Assert.Equal(["get_current_time", "save_memory", "recall_memory", "generate_image", "load_skill"], tools.Select(t => t.Name));
+        Assert.Empty(BotChat.TurnTools([], [], null, null));
+        Assert.Equal(["generate_image", "load_skill", "recall_memory", "save_memory"], BotChat.CaughtWrittenCalls.Order(StringComparer.Ordinal));
+    }
 }

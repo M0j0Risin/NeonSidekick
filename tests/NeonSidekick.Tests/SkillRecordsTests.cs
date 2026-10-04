@@ -337,7 +337,7 @@ public class SkillRecordsTests : IDisposable
     }
 
     [Fact]
-    public void TurnUsed_RecordsEachLoadedSkill_WithTheErrorsAfterItsLoad_AndPreloadedOneWithNone()
+    public void TurnUsed_RecordsEachLoadedSkill_WithTheErrorsAfterItsLoad()
     {
         Write(_roots.Profile, "haiku");
         Write(_roots.Global, "pdf");
@@ -352,10 +352,8 @@ public class SkillRecordsTests : IDisposable
 
         _records.TurnUsed(trace, catalog.Skills, 4);
         _records.TurnUsed(trace, catalog.Skills, 5);
-        _records.Preloaded(catalog.Find("pdf")!);
 
         Assert.Equal(new SkillUseFacts(2, 2, 2, _time.GetUtcNow()), _store.UseFacts(_store.Find(SkillScope.Profile, "neon", "haiku")!.Id));
-        Assert.Equal(new SkillUseFacts(1, 0, 0, _time.GetUtcNow()), _store.UseFacts(_store.Find(SkillScope.Global, "", "pdf")!.Id));
         Assert.Equal("loaded 2 times across 2 sessions, 2 followed by errors; last loaded " + Sessions.SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone), _records.UsageLine(catalog.Find("haiku")!, _time.LocalTimeZone));
     }
 

@@ -44,7 +44,7 @@ public sealed record SkillRevert(SkillRevertOutcome Outcome, SkillRevision? Revi
 /// <item><c>skill_editor</c> and the reflection, through <see cref="Edited"/>;</item>
 /// <item><c>/skills add</c>, through <see cref="Installed"/>;</item>
 /// <item>the Skills pane's move, rename and delete, through <see cref="Moved"/>, <see cref="Renamed"/> and <see cref="Deleted"/>;</item>
-/// <item><c>load_skill</c> and the <c>/botchat</c> preload, through <see cref="Used"/>.</item>
+/// <item><c>load_skill</c>, through <see cref="Used"/> (the <c>/botchat</c> preload too until it went, 2026-10-04).</item>
 /// </list>
 /// Anything the app did not do itself (a hand edit, an edit in the editor the pane opened, a folder dropped in or taken out)
 /// is caught by <see cref="Reconcile"/> at startup, at every profile load, after an install and before a purge.
@@ -214,7 +214,7 @@ public sealed class SkillRecords
         _store.AddEvent(result.Scope, profile, folder, SkillEventKinds.Installed, SkillActors.Install, profile, now, detail: origin);
     }
 
-    /// <summary>The skill's instructions were loaded (<c>load_skill</c>, a <c>/botchat</c> preload): last used now.</summary>
+    /// <summary>The skill's instructions were loaded (<c>load_skill</c>): last used now.</summary>
     public void Used(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
@@ -225,18 +225,6 @@ public sealed class SkillRecords
 
         _store.Used(skill.Scope, CurrentProfile, skill.FolderName, skill.Name, _time.GetUtcNow());
         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.UsedLogLine(skill.Scope, skill.FolderName));
-    }
-
-    /// <summary>A <c>/botchat</c> preload (2026-10-02): last used now, and a <c>used</c> event with no error count (no turn of the model's followed it).</summary>
-    public void Preloaded(Skill skill)
-    {
-        ArgumentNullException.ThrowIfNull(skill);
-        Used(skill);
-        if (skill.Scope != SkillScope.External)
-        {
-            string profile = CurrentProfile;
-            _store.AddEvent(skill.Scope, profile, skill.FolderName, SkillEventKinds.Used, SkillActors.User, profile, _time.GetUtcNow());
-        }
     }
 
     /// <summary>

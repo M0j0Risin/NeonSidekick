@@ -1175,7 +1175,7 @@ internal sealed partial class ChatScreen
         _flow = new FlowSink(this);
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane);
         _queuedClicks = new DoubleClick(_pane.Time);
-        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync, printers: _print.Printers)
+        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync, printers: _print.Printers, botChatTools: BotChatToolGroups)
         {
             // A picker opened mid-turn closes on the watcher task: its saved line waits for the turn task.
             Flow = _flow,
@@ -1304,7 +1304,7 @@ internal sealed partial class ChatScreen
     /// column after it moved by three. Two more fixed glyphs later on 2026-09-29 (the user's ask): the ID card
     /// <c>/profile</c>'s notices already wore, between the gear and the tools, whose double-click is <c>/profile</c> (the
     /// picker; under a reply nothing, the command waiting for the reply and a click getting no notice), and the rising chart
-    /// after the Usage chart, whose double-click is <c>/perf</c> — the performance bar shown or hidden; every column after
+    /// after the Usage chart, whose double-click is <c>/perfbar</c> — the performance bar shown or hidden; every column after
     /// the gear moved by three, after the Usage chart by six.
     /// </summary>
     public const string SettingsToolGlyph = "⚙️";
@@ -1493,7 +1493,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/perf</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word): one body for the idle line and the turn —
+    /// <c>/perfbar</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word): one body for the idle line and the turn —
     /// display only, nothing reconnects, and the pane's tick adds or drops the row. Bare it hides the bar, keeping its meters,
     /// or brings them back (<see cref="PerfBarMode.Toggle"/>, the checklist's since 2026-09-30); <c>off</c> hides it; a look
     /// sets it and shows the bar. The saved profile's, as <c>/tts</c> reads it: the bar has no variable.
@@ -1555,7 +1555,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+F <c>/perf</c> and Ctrl+T
+    /// A command chord pressed in a pane that leaves it open (2026-10-01, the user's call): Ctrl+F <c>/perfbar</c> and Ctrl+T
     /// <c>/toolbar</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
     /// repaints the pane's new shape. Ctrl+Alt+H <c>/header</c> the same (later still that day): a setting saved, nothing on the pane. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
     /// terminal, so the pane has no reason to close. Ctrl+Alt+G <c>/log</c>, Ctrl+Alt+U <c>/comfy view</c> and Ctrl+Alt+V
@@ -1967,7 +1967,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+A", "select all text on the line"));
         rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
         rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
-        rows.Add(("Ctrl+F", "show or hide the performance bar (/perf)"));
+        rows.Add(("Ctrl+F", "show or hide the performance bar (/perfbar)"));
         rows.Add(("Ctrl+H", "open help (/help)"));
         rows.Add(("Ctrl+M", "open the model picker (/model)"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
@@ -4172,6 +4172,20 @@ internal sealed partial class ChatScreen
         return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
     }
 
+    /// <summary>
+    /// The groups the <c>Botchat limited tools</c> checklist lists (2026-10-04): <see cref="ToolsFacts"/>' groups with the MCP
+    /// servers' too (as <c>/tools</c>' completion lists them), less Memory and Skills — the bots' memory and skills have their own
+    /// botchat switches.
+    /// </summary>
+    private IReadOnlyList<ToolGroup> BotChatToolGroups()
+    {
+        var effective = _effective();
+        var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
+        _interpreters.Refresh();
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, effective.Memory, effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools);
+        return groups.Where(g => g.Switch is not (SettingsField.Memory or SettingsField.AgentSkills)).ToList();
+    }
+
     /// <summary>The skills as the next turn would take them (<see cref="PrepareTurn"/>), from the live settings.</summary>
     private SkillsForTurn SkillsFor(AppSettingsData effective) =>
         new(_catalog, _skillTools, _project, effective.AgentSkills, effective.AgentSkills && effective.ExternalSkills, effective.ProjectFile);
@@ -4910,10 +4924,69 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false)
     {
-        ArgumentNullException.ThrowIfNull(assistant);
-        ArgumentNullException.ThrowIfNull(memory);
         ArgumentNullException.ThrowIfNull(memoryTools);
         ArgumentNullException.ThrowIfNull(standingTools);
+        // The long form (2026-10-04): headless and the tests' callers; the screen builds TurnToolInputs itself (TurnInputs).
+        var inputs = new TurnToolInputs
+        {
+            Standing = standingTools,
+            ToolsEnabled = toolsEnabled,
+            Memory = memoryTools,
+            MemoryEnabled = memoryEnabled,
+            Web = webTools,
+            WebEnabled = webEnabled,
+            Files = fileTools,
+            FilesEnabled = filesEnabled,
+            Ask = askTools,
+            Sessions = sessionTools,
+            SessionsEnabled = sessionsEnabled,
+            Mcp = mcpTools,
+            McpEnabled = mcpEnabled,
+            Git = gitTools,
+            GitEnabled = gitEnabled,
+            Shell = shellTools,
+            ShellEnabled = shellEnabled,
+            ShellBridge = shellBridge,
+            ShellPolice = shellPolice,
+            ShellNative = shellNative,
+            Obsidian = obsidianTools,
+            ObsidianEnabled = obsidianEnabled,
+            Sql = sqlTools,
+            SqlEnabled = sqlEnabled,
+            Comfy = comfyTools,
+            ComfyEnabled = comfyEnabled,
+            Advisor = advisorTools,
+            AdvisorEnabled = advisorEnabled,
+            Home = homeTools,
+            HomeEnabled = homeEnabled,
+            Print = printTools,
+            PrintEnabled = printEnabled,
+            Oracle = oracleTools,
+            OracleEnabled = oracleEnabled,
+            MySql = mysqlTools,
+            MySqlEnabled = mysqlEnabled,
+            Unc = uncTools,
+            UncEnabled = uncEnabled,
+            Docker = dockerTools,
+            DockerEnabled = dockerEnabled,
+            Camera = cameraTools,
+            CameraEnabled = cameraEnabled,
+            Disabled = disabledTools,
+            Plan = plan,
+        };
+        PrepareTurn(assistant, inputs, memory, persona, operata, vocalia, speechOutput, maxToolIterations, contextGuard, skills, markdown, processes, preserveThinking, sampling);
+    }
+
+    /// <summary>
+    /// The long form's work over <paramref name="inputs"/> (2026-10-04): the skills scanned into it, the list and the rules from
+    /// <see cref="ComposeTurnTools"/>, then what a main-chat turn alone does — the advisor's and <c>run_command</c>'s per-turn
+    /// starts, the opening calls, the seeded process polls and the system prompt.
+    /// </summary>
+    public static void PrepareTurn(Assistant assistant, TurnToolInputs inputs, MemoryStore memory, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool speechOutput, int maxToolIterations, Assistant.TurnContextGuard? contextGuard, SkillsForTurn? skills, bool markdown, ProcessRegistry? processes, bool preserveThinking, LlmSampling? sampling)
+    {
+        ArgumentNullException.ThrowIfNull(assistant);
+        ArgumentNullException.ThrowIfNull(inputs);
+        ArgumentNullException.ThrowIfNull(memory);
         ProjectNotes? project = null;
         IReadOnlyList<AIFunction> skillTools = [];
         IReadOnlyList<Skill>? catalog = null;
@@ -4937,7 +5010,8 @@ internal sealed partial class ChatScreen
             assistant.Sampling = sampling;
         }
 
-        if (!toolsEnabled)
+        bool memoryEnabled = inputs.MemoryEnabled;
+        if (!inputs.ToolsEnabled)
         {
             assistant.Tools = [];
             assistant.OpeningCalls = [];
@@ -4945,133 +5019,17 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (plan is not null)
-        {
-            // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
-            // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
-        }
-
-        if (disabledTools is { Count: > 0 })
-        {
-            // The /tools list (2026-09-19): every group loses its switched-off names first, so what follows reads an emptied group as its switch off.
-            standingTools = Without(standingTools, disabledTools);
-            fileTools = fileTools is null ? null : Without(fileTools, disabledTools);
-            webTools = webTools is null ? null : Without(webTools, disabledTools);
-            gitTools = gitTools is null ? null : Without(gitTools, disabledTools);
-            shellTools = shellTools is null ? null : Without(shellTools, disabledTools);
-            obsidianTools = obsidianTools is null ? null : Without(obsidianTools, disabledTools);
-            sqlTools = sqlTools is null ? null : Without(sqlTools, disabledTools);
-            oracleTools = oracleTools is null ? null : Without(oracleTools, disabledTools);
-            mysqlTools = mysqlTools is null ? null : Without(mysqlTools, disabledTools);
-            uncTools = uncTools is null ? null : Without(uncTools, disabledTools);
-            dockerTools = dockerTools is null ? null : Without(dockerTools, disabledTools);
-            comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
-            homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
-            printTools = printTools is null ? null : Without(printTools, disabledTools);
-            memoryTools = Without(memoryTools, disabledTools);
-            skillTools = Without(skillTools, disabledTools);
-            sessionTools = sessionTools is null ? null : Without(sessionTools, disabledTools);
-            askTools = askTools is null ? null : Without(askTools, disabledTools);
-            cameraTools = cameraTools is null ? null : Without(cameraTools, disabledTools);
-            mcpTools = mcpTools is null ? null : Without(mcpTools, disabledTools);
-            advisorTools = advisorTools is null ? null : Without(advisorTools, disabledTools);
-        }
-
-        bool files = filesEnabled && fileTools is { Count: > 0 };
-        // The timer sentence rides only with a timer tool (2026-09-20): headless has none, the pane loses all three on /tools.
-        bool timers = standingTools.Any(t => t is StartTimerTool or StopTimerTool or ListTimersTool);
-        // The manual's sentence rides with neon_help (2026-10-02): a standing tool, gone with it when /tools switches it off.
-        bool help = standingTools.Any(t => t is NeonHelpTool);
-        // The download tool rides the web list only while the file tools are offered (2026-09-18).
-        webTools = webTools is null ? null : WebToolsFor(webTools, files);
-        bool web = webEnabled && webTools is { Count: > 0 };
-        bool download = web && webTools!.Any(t => t is DownloadFileTool);
-        // The delete clause of the file rule rides only while delete is offered (2026-09-20; off in a fresh profile until later on 2026-09-21).
-        bool delete = files && fileTools!.Any(t => t is DeleteTool);
-        // The rule quotes the caps the offered tool itself reads, so the two never disagree.
-        AskLimits? ask = askTools is { Count: > 0 } ? askTools.OfType<AskUserTool>().FirstOrDefault()?.Limits ?? AskLimits.Default : null;
-        IReadOnlyList<AIFunction> offered = files ? [.. standingTools, .. fileTools!] : standingTools;
-        // The git tools right after the file tools (2026-09-20): the sandbox's tools together, the setting GitLib tools a per-group offer.
-        bool git = gitEnabled && gitTools is { Count: > 0 };
-        offered = git ? [.. offered, .. gitTools!] : offered;
-        // The shell tools right after the git tools (2026-09-21): the setting Shell command policy is the group's switch; execute_code rides only with an interpreter to run.
-        shellTools = shellTools is null ? null : ShellToolsFor(shellTools);
-        bool shell = shellEnabled && shellTools is { Count: > 0 };
-        offered = shell ? [.. offered, .. shellTools!] : offered;
-        // The vault tools after the shell tools (2026-09-22): the setting Obsidian tools and a vault set are the group's switch.
-        bool obsidian = obsidianEnabled && obsidianTools is { Count: > 0 };
-        offered = obsidian ? [.. offered, .. obsidianTools!] : offered;
-        // The vault rule's delete sentence rides only while vault_delete is offered (later on 2026-09-22): Obsidian allow delete on, the tool not switched off.
-        bool obsidianDelete = obsidian && obsidianTools!.Any(t => t is VaultDeleteTool);
-        // The SQL tools after the vault tools (2026-09-23): the setting SQL tools and a connection in sql.json are the group's switch.
-        bool sql = sqlEnabled && sqlTools is { Count: > 0 };
-        offered = sql ? [.. offered, .. sqlTools!] : offered;
-        // The Oracle tools right after the SQL tools (2026-09-30): the setting Oracle tools and a connection in oracle.json are the group's switch.
-        bool oracle = oracleEnabled && oracleTools is { Count: > 0 };
-        offered = oracle ? [.. offered, .. oracleTools!] : offered;
-        // The MySQL tools after the Oracle tools (2026-09-30): the setting MySQL tools and a connection in mysql.json are the group's switch.
-        bool mysql = mysqlEnabled && mysqlTools is { Count: > 0 };
-        offered = mysql ? [.. offered, .. mysqlTools!] : offered;
-        // The UNC tools after the MySQL tools (2026-09-30): the setting UNC tools and a share in unc.json are the group's switch;
-        // unc_fetch and unc_put have the working directory at their other end, so they ride only with the file tools offered.
-        uncTools = uncTools is null || files ? uncTools : uncTools.Where(t => t is not (UncFetchTool or UncPutTool)).ToList();
-        bool unc = uncEnabled && uncTools is { Count: > 0 };
-        offered = unc ? [.. offered, .. uncTools!] : offered;
-        bool uncFetch = unc && uncTools!.Any(t => t is UncFetchTool);
-        bool uncWrite = unc && uncTools!.Any(t => UncWriteToolNames.Contains(t.Name));
-        // The Docker tools after the UNC tools (2026-10-02): the setting Docker tools is the group's switch; the callers pass the list
-        // DockerToolsFor cut (the changes only under Docker writes), and the write sentence rides while a change is left.
-        bool docker = dockerEnabled && dockerTools is { Count: > 0 };
-        offered = docker ? [.. offered, .. dockerTools!] : offered;
-        bool dockerWrite = docker && dockerTools!.Any(t => DockerWriteToolNames.Contains(t.Name));
-        // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.
-        bool comfy = comfyEnabled && comfyTools is { Count: > 0 };
-        offered = comfy ? [.. offered, .. comfyTools!] : offered;
-        // The Home Assistant tools after the image tools (2026-09-28): Home Assistant tools, a URL and a token are the group's switch; its sentence after the SQL one.
-        bool home = homeEnabled && homeTools is { Count: > 0 };
-        offered = home ? [.. offered, .. homeTools!] : offered;
-        // The print tools after the Home Assistant tools (2026-09-28): Print tools is the group's switch; no rule — the descriptions say to print only when asked.
-        bool print = printEnabled && printTools is { Count: > 0 };
-        offered = print ? [.. offered, .. printTools!] : offered;
-        // The advisor after the image tools (2026-09-27): the setting Claude advisor tool is the group's switch; its sentence after the SQL one.
-        bool advisor = advisorEnabled && advisorTools is { Count: > 0 };
-        offered = advisor ? [.. offered, .. advisorTools!] : offered;
-        // … and its per-turn cap starts over.
-        (advisor ? advisorTools!.OfType<ClaudeAdvisorTool>().FirstOrDefault() : null)?.BeginTurn();
-        // The shell rule's execute_code sentence promises neon_tools only while the setting Shell tool bridge is on (later on 2026-09-21).
-        bool bridge = shell && shellBridge;
-        // … and its head says the shell stays under the working directory only while the setting Shell police outside paths is on (2026-09-22); off, it says a command starts there and no more.
-        bool police = !shell || shellPolice;
-        IReadOnlyList<AIFunction> tools = (web, memoryEnabled) switch
-        {
-            (true, true) => [.. offered, .. webTools!, .. memoryTools],
-            (true, false) => [.. offered, .. webTools!],
-            (false, true) => [.. offered, .. memoryTools],
-            _ => offered,
-        };
-        tools = skillTools.Count > 0 ? [.. tools, .. skillTools] : tools;
-        // The session tool after the skills (2026-09-18): the setting Session tool, a per-group offer.
-        bool sessions = sessionsEnabled && sessionTools is { Count: > 0 };
-        tools = sessions ? [.. tools, .. sessionTools!] : tools;
-        // The MCP servers' tools after the session tool (2026-09-20): the setting MCP servers, a per-group offer over what is connected.
-        bool mcp = mcpEnabled && mcpTools is { Count: > 0 };
-        tools = mcp ? [.. tools, .. mcpTools!] : tools;
-        // camera_capture (2026-10-02): Camera tool on, the pane and a model that reads pictures; ahead of present_plan and ask_user.
-        bool camera = cameraEnabled && cameraTools is { Count: > 0 };
-        tools = camera ? [.. tools, .. cameraTools!] : tools;
-        // present_plan while planning (2026-09-26): after everything else, ahead of the question tool, which stays last.
-        tools = plan is not null ? [.. tools, plan.Tool] : tools;
-        assistant.Tools = ask is not null ? [.. tools, .. askTools!] : tools;
+        var set = ComposeTurnTools(inputs with { Skills = skillTools });
+        assistant.Tools = set.Tools;
+        // The advisor's per-turn cap starts over (2026-09-27).
+        set.Advisor?.BeginTurn();
         // run_command learns the turn's offer (Shell prefer native tools, 2026-09-26): what it may send a line back to, and the once-a-turn rule starts over.
-        (shell ? shellTools!.OfType<RunCommandTool>().FirstOrDefault() : null)?.BeginTurn(assistant.Tools.Select(t => t.Name));
-        // … and the rules say so after the shell sentence, naming the groups offered.
-        bool native = shell && shellNative;
+        set.Shell?.BeginTurn(assistant.Tools.Select(t => t.Name));
 
         // An assistant built without the clock or the sandbox (tests over other tools, or the
         // file tools switched off) opens without that call.
-        var clock = offered.FirstOrDefault(t => string.Equals(t.Name, GetCurrentTimeTool.ToolName, StringComparison.Ordinal));
-        var cwd = offered.OfType<GetWorkingDirectoryTool>().FirstOrDefault();
+        var clock = set.Offered.FirstOrDefault(t => string.Equals(t.Name, GetCurrentTimeTool.ToolName, StringComparison.Ordinal));
+        var cwd = set.Offered.OfType<GetWorkingDirectoryTool>().FirstOrDefault();
         var opening = new List<Assistant.OpeningCall>(3);
         if (clock is not null)
         {
@@ -5092,7 +5050,7 @@ internal sealed partial class ChatScreen
         // result is kept current the cwd way, so a save_memory, /remember, /memory, /memory forget or
         // /memory copy since the first message is in the next request. Memory switched on
         // mid-conversation seeds nothing (as File tools does); the model has the tool.
-        var recall = memoryEnabled ? memoryTools.OfType<RecallMemoryTool>().FirstOrDefault() : null;
+        var recall = set.Recall;
         if (recall is not null)
         {
             opening.Add(new(recall, Assistant.OpeningMemoryCallId));
@@ -5102,8 +5060,62 @@ internal sealed partial class ChatScreen
         assistant.OpeningCalls = opening;
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: web, files: files, ask: ask, project: project, skills: catalog, markdown: markdown, sessions: sessions, download: download, recall: recall is not null, delete: delete, mcp: mcp, timers: timers, git: git, shell: shell, bridge: bridge, police: police, obsidian: obsidian, obsidianDelete: obsidianDelete, sql: sql, native: native, plan: plan?.Directive, advisor: advisor, homeAssistant: home, oracle: oracle, mysql: mysql, unc: unc, uncFetch: uncFetch, uncWrite: uncWrite, docker: docker, dockerWrite: dockerWrite, help: help);
+        var r = set.Rules;
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, bridge: r.Bridge, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.Directive, advisor: r.Advisor, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help);
     }
+
+    /// <summary>
+    /// The groups a main-chat turn is made from as the screen stands (2026-10-04, out of the turn's <c>PrepareTurn</c> call so a
+    /// <c>/botchat</c> bot's turn reads the very same, <see cref="BotGeneralTools"/>): every group with its switch from
+    /// <paramref name="effective"/>, the <c>/tools</c> list, <c>ask_user</c> only with the pane, and plan mode's turn.
+    /// </summary>
+    private TurnToolInputs TurnInputs(AppSettingsData effective) => new()
+    {
+        Standing = [.. _clockTools, .. _timerTools, .. _helpTools],
+        ToolsEnabled = effective.LlmOfferTools,
+        Memory = _memoryTools,
+        MemoryEnabled = effective.Memory,
+        Web = _webTools,
+        WebEnabled = effective.WebTools,
+        Files = _fileTools,
+        FilesEnabled = effective.FileTools,
+        Ask = _pane.Enabled && effective.AskUser ? _askTools : null,
+        Sessions = _sessionTools,
+        SessionsEnabled = effective.SessionTool,
+        Mcp = _mcp.Tools,
+        McpEnabled = effective.McpServers,
+        Git = _gitTools,
+        GitEnabled = effective.GitLibTools,
+        Shell = _shellTools,
+        ShellEnabled = ShellOffered(effective),
+        ShellBridge = effective.ShellToolBridge,
+        ShellPolice = effective.ShellPoliceOutsidePaths,
+        ShellNative = effective.ShellPreferNative,
+        Obsidian = ObsidianToolsFor(_vaultTools, effective),
+        ObsidianEnabled = ObsidianOffered(effective),
+        Sql = _sqlTools,
+        SqlEnabled = SqlOffered(effective, _sql),
+        Comfy = _comfyTools,
+        ComfyEnabled = ComfyOffered(effective, _comfy),
+        Advisor = _advisorTools,
+        AdvisorEnabled = effective.ClaudeAdvisor,
+        Home = _haTools,
+        HomeEnabled = HomeAssistantOffered(effective),
+        Print = _printTools,
+        PrintEnabled = PrintOffered(effective),
+        Oracle = _oracleTools,
+        OracleEnabled = OracleOffered(effective, _oracle),
+        MySql = _mysqlTools,
+        MySqlEnabled = MySqlOffered(effective, _mysql),
+        Unc = UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools),
+        UncEnabled = UncOffered(effective, _unc),
+        Docker = DockerToolsFor(_dockerTools, effective),
+        DockerEnabled = DockerOffered(effective),
+        Camera = _cameraTools,
+        CameraEnabled = CameraOffered(effective),
+        Disabled = ToolsText.DisabledSet(effective.ToolsDisabled),
+        Plan = _plan.Turn(_presentPlan),
+    };
 
     /// <summary>
     /// <paramref name="tools"/> less every one whose name is in <paramref name="disabled"/> (the
@@ -11455,8 +11467,8 @@ internal sealed partial class ChatScreen
         var pictures = new List<(BotParticipant Bot, Task<ComfyGeneration?> Job)>();
         // Their pace with no voice to wait for (2026-09-25): one at a time, a second's rest after each.
         var pacer = new BotPicturePacer(_time);
-        // The preloaded skills' notice as last shown (2026-09-27): shown again only when the set or the mode changes.
-        string preloadedTold = "";
+        // Each bot's own memory under Botchat memory mode independent (2026-10-04): built at its first reply, kept for the chat.
+        var botMemories = new Dictionary<string, (MemoryStore Store, IReadOnlyList<AIFunction> Tools)>(StringComparer.OrdinalIgnoreCase);
         // ESC's ladder (2026-09-25): the voice, then the bot replying, then the chat.
         var ladder = new BotEscLadder();
         Volatile.Write(ref _botLadder, ladder);   // Ctrl+Alt+X ends the chat through it (2026-10-01)
@@ -11501,33 +11513,15 @@ internal sealed partial class ChatScreen
                 // The chat's two workflows and the pictures a rework may start from (2026-09-27): read per reply, as the rest.
                 var (fresh, rework, candidates) = BotWorkflows(effective);
                 var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective, fresh, rework, candidates.Count > 0) : null;
-                // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own.
-                var (catalog, loadTool) = BotSkills(effective);
-                // Preloaded skills (2026-09-27, the user's ask): read by the app, no load_skill needed; the bots get them under prompt-writer-and-bots.
-                var skillMode = BotChatSkillMode.Resolve(effective);
-                var (preloadedNames, preloaded, filesLeftOut) = BotPreloadedSkills(effective, topic);
-                // Both switches on (2026-09-30, the user's question): a skill whose content is already given is not offered to load
-                // again — the writer always has it, the bots under prompt-writer-and-bots — or the model spends its round trips
-                // reloading it and meets the no-tools last round sooner. A side left with no skill gets neither the list nor load_skill,
-                // unless a preloaded skill's file was left out past the cap (2026-09-30, code review: then only load_skill reads it).
-                // Asked for it anyway (2026-09-30, code review: the writer's directive names the skill the topic names, the one
-                // preloaded), that side's load_skill answers it is loaded already; prompt-writer-only's bots, without it, load it.
-                // Built per reply (2026-09-30, code review: a cache of it across replies was state for a small set and a schema parsed once).
-                var writerSkills = BotChat.WithoutPreloaded(catalog, preloadedNames);
-                AIFunction? writerTool = loadTool is null || (writerSkills is null && !filesLeftOut) ? null
-                    : preloadedNames.Count == 0 ? loadTool : new LoadSkillTool(_catalog, preloadedNames, _skillRecords.Used);
-                var botSkills = new BotSkillSet(writerSkills, writerTool, preloaded);
-                // One decision for both (2026-09-30, code review): under prompt-writer-and-bots the bots' prompt carries the preloaded
-                // content, so they get the writer's list and tool; under prompt-writer-only they get the whole catalog and the plain tool.
-                bool botsPreloaded = skillMode == BotSkillMode.PromptWriterAndBots;
-                var (skills, skillTool) = botsPreloaded ? (writerSkills, writerTool) : (catalog, loadTool);
-                string preloadedNotice = preloadedNames.Count == 0 ? "" : BotChat.PreloadedNotice(preloadedNames, skillMode);
-                if (preloadedNotice.Length > 0 && !string.Equals(preloadedNotice, preloadedTold, StringComparison.Ordinal))
-                {
-                    _transcript.Notice(preloadedNotice);
-                }
-
-                preloadedTold = preloadedNotice;
+                // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own;
+                // all of it under Botchat skills enabled, the Botchat limited skills alone otherwise (2026-10-04). The picture prompt
+                // writer gets the same.
+                var (skills, skillTool) = BotSkills(effective);
+                var botSkills = new BotSkillSet(skills, skillTool);
+                // The main chat's tools (2026-10-04, Botchat tools enabled or Botchat limited tools) and memory (Botchat memory
+                // enabled), read per reply as the rest.
+                var general = BotGeneralTools(effective);
+                var memory = BotMemoryFor(bot, effective, botMemories);
                 // Vision (2026-09-27): the pictures shown since this bot last spoke ride its turn message, with a caption saying whose.
                 // The caption rides the sent text alone: the stored session keeps the line as it was.
                 string sentText = turnText;
@@ -11555,7 +11549,8 @@ internal sealed partial class ChatScreen
                     sentText += "\n\n" + BotChat.ReworkCaption(rework.Name, candidates);
                 }
 
-                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, preloaded: botsPreloaded ? preloaded : null, camera: cameraPicture is not null));
+                bool memorySave = memory?.Tools.Any(t => t is SaveMemoryTool) == true;
+                var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, camera: cameraPicture is not null, tools: general?.Rules, memories: memory?.Store.Snapshot(), memorySave: memorySave));
                 history.Replace(prior);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
@@ -11563,30 +11558,34 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
-                if (imageTool is not null)
+                // The bot's tools (2026-10-04, BotChat.TurnTools): the main chat's it is offered, the memory tools, the picture
+                // tool, then load_skill; the round trips each needs (BotChat.ToolIterations), the main chat's cap with its tools.
+                assistant.Tools = BotChat.TurnTools(general?.Tools ?? [], memory?.Tools ?? [], imageTool, skillTool);
+                assistant.MaxToolIterations = BotChat.ToolIterations(general is null ? null : effective.LlmMaxToolIterations, imageTool is not null, skillTool is not null, memory is { Tools.Count: > 0 });
+                if (general is not null)
                 {
-                    assistant.Tools = [imageTool];
-                    assistant.MaxToolIterations = BotImageToolIterations;
-                }
-
-                if (skillTool is not null)
-                {
-                    // Beside the picture tool when both are offered, the words' round trip counted once.
-                    assistant.Tools = imageTool is null ? [skillTool] : [imageTool, skillTool];
-                    assistant.MaxToolIterations = imageTool is null ? BotSkillToolIterations : BotImageToolIterations + BotSkillToolIterations - 1;
+                    // What a main-chat turn starts over (2026-10-04): the advisor's cap, run_command's offer, a declined photo; and the
+                    // context guard on the main link, whose window is known. No opening calls (the history is rebuilt every reply) and
+                    // no seeded process polls (they would take the main chat's exit notes).
+                    general.Advisor?.BeginTurn();
+                    general.Shell?.BeginTurn(assistant.Tools.Select(t => t.Name));
+                    _cameraDeclined = false;
+                    assistant.ContextGuard = links.Count > 0 && links[next] is not null ? null : ContextGuardFor(effective, _session.ContextLength);
                 }
 
                 // The last of those round trips asks for the bot's words without the tools (2026-09-30, the user's report: a bot
                 // a few turns in spent all three on pictures and its line came out as "Stopped after 3 tool iterations").
-                assistant.LastRoundAnswers = imageTool is not null || skillTool is not null;
+                assistant.LastRoundAnswers = assistant.Tools.Count > 0;
                 // A call to an offered tool written out as text (later on 2026-09-25, the user's report: generate_image(…) in a
                 // bot's line) is caught: run, unseen and unspoken, in a round that offers the tools; kept out of the reply and not
                 // run in that last round. With load_skill alone too since 2026-09-30: the last round, asked without the tools, is
                 // where a model writes one, and a skills-only bot's would otherwise reach the transcript — so its written load_skill
-                // runs in the rounds before, as a bot offered both tools has had since 2026-09-25.
+                // runs in the rounds before, as a bot offered both tools has had since 2026-09-25. Botchat's own four alone since
+                // 2026-10-04 (BotChat.CaughtWrittenCalls): a written call to one of the main chat's tools is never run.
                 assistant.TextToolCalls = assistant.LastRoundAnswers;
-                // A load_skill written with none offered (2026-09-30, code review: a preloaded skill's content can name it, and the
-                // line reached the transcript and the voice) is taken out, never run — as the picture writer's is.
+                assistant.TextToolCallNames = BotChat.CaughtWrittenCalls;
+                // A load_skill written with none offered (2026-09-30, code review: a skill's content can name it, and the line
+                // reached the transcript and the voice) is taken out, never run — as the picture writer's is.
                 assistant.WrittenCallsTakenOut = skillTool is null ? [LoadSkillTool.WrittenForm] : [];
 
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
@@ -11859,33 +11858,96 @@ internal sealed partial class ChatScreen
         return (results, cancelled);
     }
 
-    /// <summary>The model's round trips a bot's turn may take while it is offered <c>generate_image</c> (2026-09-25): a picture or two, then its words.</summary>
-    private const int BotImageToolIterations = 3;
-
-    /// <summary>The model's round trips a bot's turn may take while it is offered <c>load_skill</c> (2026-09-27): a skill and a file it bundles, then its words.</summary>
-    private const int BotSkillToolIterations = 3;
-
     /// <summary>
     /// The skills a bot sees and the one skill tool it is offered (2026-09-27, <c>Botchat skills enabled</c>): the main chat's
     /// catalog, rescanned as a turn's is — the starting profile's, the global and (with <c>Use external skills</c>) the external
     /// skills; a bot's own profile's are never read (the user's call) — and <c>load_skill</c>, never <c>skill_editor</c> (a bot
-    /// must not write the parent's skills). Nothing with the switch or <c>Agent skills</c> off, no skill installed, or
-    /// <c>load_skill</c> switched off by name on <c>/tools</c>.
+    /// must not write the parent's skills). With the switch off, the skills <c>Botchat limited skills</c> names (2026-10-04, the
+    /// user's ask) that are installed, in the catalog's order, and a <c>load_skill</c> that serves those alone. Nothing with
+    /// <c>Agent skills</c> off, no skill to offer, or <c>load_skill</c> switched off by name on <c>/tools</c>.
     /// </summary>
     private (IReadOnlyList<Skill>? Skills, AIFunction? Tool) BotSkills(AppSettingsData effective)
     {
-        if (!effective.BotChatSkills || !effective.AgentSkills
+        var limited = ToolsText.DisabledSet(effective.BotChatLimitedSkills ?? []);
+        if ((!effective.BotChatSkills && limited.Count == 0) || !effective.AgentSkills
             || Without(_skillTools, ToolsText.DisabledSet(effective.ToolsDisabled)).FirstOrDefault(tool => string.Equals(tool.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)) is not { } tool)
         {
             return (null, null);
         }
 
         _catalog.Scan(effective.ExternalSkills);
-        var skills = _catalog.Skills;
-        return skills.Count == 0 ? (null, null) : (skills, tool);
+        if (effective.BotChatSkills)
+        {
+            var skills = _catalog.Skills;
+            return skills.Count == 0 ? (null, null) : (skills, tool);
+        }
+
+        var only = new HashSet<string>(limited, StringComparer.OrdinalIgnoreCase);
+        var named = _catalog.Skills.Where(s => only.Contains(s.Name)).ToList();
+        return named.Count == 0 ? (null, null) : (named, new LoadSkillTool(_catalog, named.Select(s => s.Name).ToList(), _skillRecords.Used));
     }
 
     /// <summary>
+    /// The main chat's tools a bot is offered this reply (2026-10-04, the user's ask): with <c>Botchat tools enabled</c>, every tool
+    /// a main-chat turn would offer now (<see cref="TurnInputs"/> through <see cref="ComposeTurnTools"/>: the switches, the
+    /// <c>/tools</c> list, the panes' tools); off, the <c>Botchat limited tools</c> alone, each only while the main chat would offer it.
+    /// Never the memory or skill tools (their own botchat switches say) and, while the main chat plans, plan mode's read-only
+    /// narrowing without <c>present_plan</c>. Null with neither, <c>LLM offer tools</c> off, or nothing left.
+    /// </summary>
+    private TurnToolSet? BotGeneralTools(AppSettingsData effective)
+    {
+        var limited = ToolsText.DisabledSet(effective.BotChatLimitedTools ?? []);
+        if (!effective.BotChatTools && limited.Count == 0)
+        {
+            return null;
+        }
+
+        // The shells found are probed afresh, as a main-chat turn's (2026-09-21).
+        _interpreters.Refresh();
+        var inputs = TurnInputs(effective) with
+        {
+            Memory = [],
+            MemoryEnabled = false,
+            Plan = null,
+            PlanReadOnly = _plan.Turn(_presentPlan) is not null,
+            OnlyTools = effective.BotChatTools ? null : limited,
+        };
+        var set = ComposeTurnTools(inputs);
+        return set.Tools.Count == 0 ? null : set;
+    }
+
+    /// <summary>
+    /// A bot's memory this reply (2026-10-04, the user's ask): null with <c>Botchat memory enabled</c> off — which alone decides,
+    /// over every profile's <c>Memory</c> switch, the starter's too. Under <c>Botchat memory mode</c> <c>shared-parent</c>, or for the
+    /// starting profile's bot, the screen's own store (<c>/memory</c>'s, <c>/remember</c>'s); under <c>independent</c>, the bot's own
+    /// profile's <c>memory.json</c>, its store built at its first reply and kept in <paramref name="own"/> for the chat. The tools are
+    /// <c>save_memory</c> and <c>recall_memory</c> over that store, less any switched off on <c>/tools</c>.
+    /// </summary>
+    private (MemoryStore Store, IReadOnlyList<AIFunction> Tools)? BotMemoryFor(BotParticipant bot, AppSettingsData effective, Dictionary<string, (MemoryStore Store, IReadOnlyList<AIFunction> Tools)> own)
+    {
+        if (!effective.BotChatMemory)
+        {
+            return null;
+        }
+
+        var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
+        if (bot.Profile is null || BotChatMemoryMode.Resolve(effective) == BotMemoryMode.SharedParent)
+        {
+            return (_memory, Without(_memoryTools, disabled));
+        }
+
+        if (!own.TryGetValue(bot.Name, out var mine))
+        {
+            var store = new MemoryStore(Profiles.Directory(_settings.StorageDirectory, bot.Name), _time);
+            mine = (store, MemoryTools(store));
+            own[bot.Name] = mine;
+        }
+
+        return (mine.Store, Without(mine.Tools, disabled));
+    }
+
+    /// <summary>
+    /// Whether <c>/botchat</c> may have pictures at all    /// <summary>
     /// Whether <c>/botchat</c> may have pictures at all (later on 2026-09-27, the user's call: its workflows are any installed
     /// ones, so <see cref="ComfyOffered"/>'s offered-workflow test no longer applies): <c>ComfyUI tools</c> on and an http(s)
     /// <c>ComfyUI URL</c>. Whether a picture can be made is <see cref="BotWorkflows"/>'s to say.
@@ -11893,79 +11955,11 @@ internal sealed partial class ChatScreen
     private static bool BotComfyReady(AppSettingsData effective) => effective.ComfyTools && ComfyStudio.ServerOf(effective) is not null;
 
     /// <summary>
-    /// The skills <c>/botchat</c> loads itself this reply (2026-09-27, the user's report: told to load a skill, the models mostly
-    /// did not): <see cref="BotChat.PreloadedSkills"/> over the catalog a botchat sees (scanned as <see cref="BotSkills"/> does),
-    /// each read exactly as <c>load_skill</c> returns it (<see cref="SkillCatalog.ReadBody"/>, <see cref="SkillText.Content"/>);
-    /// one that cannot be read is logged and left out. The names and the prompt section (<see cref="BotChat.PreloadedSkillsSection"/>);
-    /// none with <c>Agent skills</c> off. <c>Botchat skills enabled</c> has no say: it offers <c>load_skill</c>, this needs none.
-    /// Since 2026-09-30 (the user's ask) each skill's bundled text files follow its content, each as <c>load_skill</c>'s
-    /// <c>file</c> returns it (<see cref="SkillText.File"/>), up to <see cref="BotChat.MaxPreloadedFileChars"/> of them together in
-    /// file-list order; a file that is not text, cannot be read or would pass the cap is left out, the list still naming it.
-    /// <c>FilesLeftOut</c> (2026-09-30, code review) says a file past the cap was, which only <c>load_skill</c> can then read.
+    /// One <c>/botchat</c> reply's skills (2026-09-28, code review): <see cref="BotSkills"/>', read once per reply and handed to the
+    /// picture's prompt writer. Before, the writer read them again — the catalog scanned twice more. The preloaded skills' section
+    /// it carried went on 2026-10-04 with the preloading.
     /// </summary>
-    private (IReadOnlyList<string> Names, string Section, bool FilesLeftOut) BotPreloadedSkills(AppSettingsData effective, string topic)
-    {
-        if (!effective.AgentSkills)
-        {
-            return ([], "", false);
-        }
-
-        _catalog.Scan(effective.ExternalSkills);
-        var names = new List<string>();
-        var contents = new List<string>();
-        bool anyLeftOut = false;
-        foreach (var skill in BotChat.PreloadedSkills(_catalog.Skills, effective.BotChatPreloadedSkills, topic))
-        {
-            var body = SkillCatalog.ReadBody(skill);
-            if (body.Outcome != SkillCatalog.ReadOutcome.Ok)
-            {
-                DiagnosticLog.Warn(AppCategory, "Botchat could not preload skill '" + skill.Name + "': " + SkillText.ReadError(skill, null, body));
-                continue;
-            }
-
-            var resources = SkillCatalog.Resources(skill, out bool more);
-            var content = new StringBuilder(SkillText.Content(skill.Name, body.Text, skill.Directory, resources, more, body.Truncated, filesFollow: true));
-            int room = BotChat.MaxPreloadedFileChars;
-            var leftOut = new List<string>();
-            foreach (string relative in resources)
-            {
-                var file = SkillCatalog.ReadResource(skill, relative);
-                if (file.Outcome != SkillCatalog.ReadOutcome.Ok)
-                {
-                    DiagnosticLog.Debug(AppCategory, "Botchat preloaded skill '" + skill.Name + "' skips a file: " + SkillText.ReadError(skill, relative, file));
-                    continue;
-                }
-
-                if (file.Text.Length > room)
-                {
-                    leftOut.Add(relative);
-                    continue;
-                }
-
-                room -= file.Text.Length;
-                content.Append("\n\n").Append(SkillText.File(skill.Name, relative, file.Text, file.Truncated));
-            }
-
-            if (leftOut.Count > 0)
-            {
-                anyLeftOut = true;
-                DiagnosticLog.Info(AppCategory, BotChat.PreloadedFilesLeftOutLogLine(skill.Name, leftOut));
-            }
-
-            contents.Add(content.ToString());
-            names.Add(skill.Name);
-            _skillRecords.Preloaded(skill);   // a preload is a use (2026-09-30, the skill records' last use; an event too since 2026-10-02)
-        }
-
-        return (names, BotChat.PreloadedSkillsSection(contents), anyLeftOut);
-    }
-
-    /// <summary>
-    /// One <c>/botchat</c> reply's skills (2026-09-28, code review): <see cref="BotSkills"/>' and <see cref="BotPreloadedSkills"/>'
-    /// section, read once per reply and handed to the picture's prompt writer. Before, the writer read them again — the catalog
-    /// scanned twice more and every preloaded skill's files read twice per reply, and a skill that could not be read logged twice.
-    /// </summary>
-    private sealed record BotSkillSet(IReadOnlyList<Skill>? Skills, AIFunction? Tool, string Preloaded);
+    private sealed record BotSkillSet(IReadOnlyList<Skill>? Skills, AIFunction? Tool);
 
     /// <summary>Whether <see cref="BotChat.NoWorkflowNotice"/> was shown this chat: once is enough.</summary>
     private bool _botNoWorkflowTold;
@@ -12082,10 +12076,10 @@ internal sealed partial class ChatScreen
         }
 
         // Skills (2026-09-27, the user's report: the first picture was prompted before any skill could be loaded): the bots'
-        // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written. The preloaded
-        // skills (2026-09-27) in either Botchat skill mode: the writer always gets them. Both the reply's, read by the loop.
-        var (skills, skillTool, preloaded) = botSkills;
-        string system = BotChat.PictureInstruction(promised, fresh, rework, candidates) + (preloaded.Length == 0 ? "" : "\n\n" + preloaded);
+        // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written; the Botchat
+        // limited skills alone with Botchat skills enabled off (2026-10-04). The reply's, read by the loop.
+        var (skills, skillTool) = botSkills;
+        string system = BotChat.PictureInstruction(promised, fresh, rework, candidates);
         var request = new List<ChatMessage>
         {
             new(ChatRole.System, skills is null ? system : system + "\n\n" + BotChat.ImagePromptSkills(skills)),
@@ -12210,7 +12204,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The calls the picture writer's rounds catch written as text (2026-09-30, code review): <c>load_skill</c>, its own tool when
-    /// offered and a preloaded skill's content can name it when not, and <c>generate_image</c>, never offered, whose prompt is the
+    /// offered and a skill's content can name it when not, and <c>generate_image</c>, never offered, whose prompt is the
     /// answer (<see cref="CalledPrompt"/>). Names and parameter names alone, so no tool instance is needed.
     /// </summary>
     private static readonly IReadOnlyList<(string Name, IReadOnlyList<string> Parameters)> WriterWrittenCalls = [LoadSkillTool.WrittenForm, GenerateImageTool.WrittenForm];
@@ -12383,12 +12377,15 @@ internal sealed partial class ChatScreen
     ///
     /// <para>With no voice (2026-09-26, the user's ask: <see cref="AppSettingsData.BotChatNonTtsDelaySeconds"/>),
     /// <paramref name="playing"/> is null and the wait is <paramref name="pause"/> on the screen's clock, watched the same
-    /// way; ESC there finds no voice to stop, so the ladder ends the chat.</para>
+    /// way; ESC there finds no voice to stop, so the ladder ends the chat. A line the user sends during the pause ends it
+    /// (2026-10-04, the user's ask): the line joins the chat and the next bot answers at once, not when the clock runs out.
+    /// The pause's own token is cancelled then, never <c>waitCts</c>, whose cancellation means the chat's end.</para>
     /// </summary>
     private async Task<bool> WaitForBotSpeechAsync(SpeechOutput? playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotEscLadder ladder, int turnId, CancellationToken cancellationToken, TimeSpan pause = default)
     {
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Task done = playing?.Completion ?? Task.Delay(pause, _time, waitCts.Token);
+        using var pauseCts = CancellationTokenSource.CreateLinkedTokenSource(waitCts.Token);
+        Task done = playing?.Completion ?? Task.Delay(pause, _time, pauseCts.Token);
         using var stop = new CancellationTokenSource();
         // Written on the watcher task, read once it is joined (the finally).
         bool skipped = false;
@@ -12417,12 +12414,18 @@ internal sealed partial class ChatScreen
                 Task picture = pictures.Count > 0 ? pictures[0].Job : cancelled;
                 await Task.WhenAny(done, signal, cancelled, picture).ConfigureAwait(false);
                 await DrainActsAsync().ConfigureAwait(false);
-                TakeInterjections(lines);
+                bool joined = TakeInterjections(lines);
                 ShowReadyBotPictures(pictures);
+                if (joined && playing is null)
+                {
+                    // The pause gives way to the user's line (2026-10-04); a voice still plays to its end.
+                    break;
+                }
             }
         }
         finally
         {
+            pauseCts.Cancel();
             stop.Cancel();
             await watcher.ConfigureAwait(false);
             await EndTurnAsync(closePane: waitCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
@@ -12447,9 +12450,12 @@ internal sealed partial class ChatScreen
     /// <para>A command is no interjection (2026-09-28, code review): one queued under the reply before the chat began — a
     /// <c>/profile</c> typed after the <c>/botchat</c> — was echoed and sent to the bots as the user's words, and never ran. It
     /// waits for the idle line as a command typed under the chat does; the lines after it are still taken.</para>
+    ///
+    /// <para>True when a line of the user's joined the chat (2026-10-04: it ends the non-TTS pause); a command set aside does not count.</para>
     /// </summary>
-    private void TakeInterjections(List<BotChatLine> lines)
+    private bool TakeInterjections(List<BotChatLine> lines)
     {
+        bool joined = false;
         while (!_queue.Held && _queue.TryDequeue(out var queued))
         {
             if (queued.Line.CommandText is { } command && ParseLine(command).Command != SlashCommand.None)
@@ -12460,7 +12466,10 @@ internal sealed partial class ChatScreen
 
             _transcript.User(queued.Label);
             lines.Add(new BotChatLine(BotChat.UserName, queued.Label, IsUser: true));
+            joined = true;
         }
+
+        return joined;
     }
 
     /// <summary>A <c>/botchat</c> speaker's name colour: the palette's bright hues in turn, read at draw time so a theme change follows.</summary>
@@ -13006,7 +13015,7 @@ internal sealed partial class ChatScreen
             _interpreters.Refresh();
             // A photo declined in the last turn may be asked for again in this one (2026-10-02).
             _cameraDeclined = false;
-            PrepareTurn(assistant, _memory, _memoryTools, [.. _clockTools, .. _timerTools, .. _helpTools], _persona, _operata, _vocalia, effective.Memory, speaker is not null, effective.LlmMaxToolIterations, effective.LlmOfferTools, _webTools, effective.WebTools, ContextGuardFor(effective, _session.ContextLength), _fileTools, effective.FileTools, _pane.Enabled && effective.AskUser ? _askTools : null, SkillsFor(effective), markdown, _sessionTools, effective.SessionTool, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.Tools, effective.McpServers, _gitTools, effective.GitLibTools, _shellTools, ShellOffered(effective), _processes, effective.ShellToolBridge, effective.ShellPoliceOutsidePaths, ObsidianToolsFor(_vaultTools, effective), ObsidianOffered(effective), _sqlTools, SqlOffered(effective, _sql), _comfyTools, ComfyOffered(effective, _comfy), effective.ShellPreferNative, _plan.Turn(_presentPlan), _advisorTools, effective.ClaudeAdvisor, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId), _haTools, HomeAssistantOffered(effective), _printTools, PrintOffered(effective), _oracleTools, OracleOffered(effective, _oracle), _mysqlTools, MySqlOffered(effective, _mysql), UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), UncOffered(effective, _unc), DockerToolsFor(_dockerTools, effective), DockerOffered(effective), _cameraTools, CameraOffered(effective));
+            PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
 
             // The Claude CLI server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
             // measures or prunes a history the CLI does not read (it compacts its own).

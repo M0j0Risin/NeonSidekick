@@ -53,7 +53,7 @@ public static class Keys
     /// <summary>Ctrl+E as the console delivers it: the ENQ character with the key and Control (<c>/explore</c>, <see cref="ShortcutLine"/>).</summary>
     public static ConsoleKeyInfo CtrlE => new('\x05', ConsoleKey.E, false, false, true);
 
-    /// <summary>Ctrl+F as the console delivers it: the ACK character with the key and Control (<c>/perf</c>).</summary>
+    /// <summary>Ctrl+F as the console delivers it: the ACK character with the key and Control (<c>/perfbar</c>).</summary>
     public static ConsoleKeyInfo CtrlF => new('\x06', ConsoleKey.F, false, false, true);
 
     /// <summary>Ctrl+H as the console delivers it: the BS character with the H key (never Backspace) and Control (<c>/help</c>).</summary>
@@ -91,19 +91,19 @@ public static class Keys
     /// the console's own control one for the letter (ETX, SO, DC3; a test builds <c>'\0'</c>): AltGr is Ctrl+Alt, and an AltGr
     /// key that types a character (ć, ń, ś on some layouts) stays that character. Null for every other key.
     /// Eleven more came later on 2026-09-30 (the user's ask), each its bare command as typed: Ctrl+Alt+T <c>/tools</c>, K
-    /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c> (plain Ctrl+Y since 2026-10-03, below), G <c>/usage</c>, E <c>/perf</c> (the performance bar shown or hidden),
+    /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c> (plain Ctrl+Y since 2026-10-03, below), G <c>/usage</c>, E <c>/perfbar</c> (the performance bar shown or hidden),
     /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page) and B <c>/toolbar</c> (the
-    /// toolbar shown or hidden). Under a reply each goes where its typed line would: a pane over the reply, <c>/perf</c> and
+    /// toolbar shown or hidden). Under a reply each goes where its typed line would: a pane over the reply, <c>/perfbar</c> and
     /// <c>/toolbar</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
     /// EOT, FF, SI, STX) count as no character, as ETX does for C; an AltGr key that types one (€ on AltGr+E, ł, ó) is still
     /// that character.
     /// Ctrl+Alt+H <c>/help</c> came on 2026-10-01 (the user's ask), its BS (<c>'\x08'</c>) no character as the others' are.
     /// In a pane too since 2026-10-01 (the user's ask: "operate the same there as everywhere"): every pane reader hands the
     /// chord to <see cref="ScreenPane.Chord"/>, which closes the stack for the screen to run it, or toggles the bar in place
-    /// (<c>/perf</c>, <c>/toolbar</c>), or ignores it under a tool's question.
+    /// (<c>/perfbar</c>, <c>/toolbar</c>), or ignores it under a tool's question.
     /// Ctrl+E <c>/explore</c> came later on 2026-10-01 (the user's ask), the first plain-Ctrl chord: Control held, Alt and Shift
     /// not, and no character but the console's own ENQ (<c>'\x05'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>) — the
-    /// <see cref="IsToolToggle"/> shape, so a typed "E" stays an "E" and Ctrl+Alt+E is still <c>/perf</c> (until Ctrl+F took it, below).
+    /// <see cref="IsToolToggle"/> shape, so a typed "E" stays an "E" and Ctrl+Alt+E is still <c>/perfbar</c> (until Ctrl+F took it, below).
     /// Ctrl+M <c>/model</c>, Ctrl+R <c>/reasoning</c> and Ctrl+S <c>/server</c> came later still that day (the user's ask), the
     /// three pickers, in the same shape: their CR, DC2 and DC3 count as no character. Ctrl+M's CR rides on
     /// <see cref="ConsoleKey.M"/>, never on <see cref="ConsoleKey.Enter"/> (the console reports the key, as for Ctrl+Alt+M), so it
@@ -117,7 +117,7 @@ public static class Keys
     /// the console reports it with no character (US's <c>'\x1f'</c> counts too, should one send it), and a typed "/" carries its
     /// character, so it stays a "/" and the slash list still opens. Oem2 is the "/" key of a US layout; elsewhere it is
     /// whatever key sits there (# on a German one), since a "/" that needs Shift cannot be told from Ctrl+Shift.
-    /// Later still on 2026-10-01 (the user's ask) <c>/toolbar</c> moved to plain Ctrl+T and <c>/perf</c> to Ctrl+F, and Ctrl+Alt+B
+    /// Later still on 2026-10-01 (the user's ask) <c>/toolbar</c> moved to plain Ctrl+T and <c>/perfbar</c> to Ctrl+F, and Ctrl+Alt+B
     /// and Ctrl+Alt+E went: their DC4 and ACK count as no character. Ctrl+Alt+T is still <c>/tools</c>.
     /// Later still on 2026-10-01 (the user's ask) Ctrl+Alt+H is <c>/header</c>, free since <c>/help</c> left it for Ctrl+H: <c>Show
     /// header</c> flipped, at the next wipe; its BS counts as no character, as it did for <c>/help</c>.
@@ -128,7 +128,7 @@ public static class Keys
     /// the line's paste (Ctrl+V or Alt+V, one of the two). Later on 2026-10-02 (the user's ask) each closes its window when it
     /// is open (<c>ChatScreen.CloseByChord</c>); the typed command still opens it or brings it forward.
     /// On 2026-10-03 (the user's ask) <c>/sys</c> moved to plain Ctrl+Y and Ctrl+Alt+Y went: its EM counts as no character.
-    /// Later on 2026-10-03 (the user's ask) Ctrl+Alt+E is <c>/sessions</c>, free since <c>/perf</c> left it for Ctrl+F: its ENQ
+    /// Later on 2026-10-03 (the user's ask) Ctrl+Alt+E is <c>/sessions</c>, free since <c>/perfbar</c> left it for Ctrl+F: its ENQ
     /// counts as no character, and an AltGr+E that types € is still €. Under a reply it opens the list over the reply, as the
     /// typed line does.
     /// Later still on 2026-10-03 (the user's ask, Ctrl+. chosen over Ctrl+Shift+.) Ctrl+. is <c>/terminal</c>, Ctrl+/'s shape on
@@ -144,7 +144,7 @@ public static class Keys
             return (key.Key, key.KeyChar) switch
             {
                 (ConsoleKey.E, '\0' or '\x05') => "/explore",
-                (ConsoleKey.F, '\0' or '\x06') => "/perf",
+                (ConsoleKey.F, '\0' or '\x06') => "/perfbar",
                 (ConsoleKey.H, '\0' or '\x08') => "/help",
                 (ConsoleKey.M, '\0' or '\r') => "/model",
                 (ConsoleKey.P, '\0' or '\x10') => "/profile",

@@ -58,4 +58,21 @@ public class MemoryPromptTests
         Assert.Throws<ArgumentNullException>(() => MemoryPrompt.Section(null!));
         Assert.Throws<ArgumentNullException>(() => MemoryPrompt.Recalled(null!));
     }
+
+    /// <summary>The split of 2026-10-04 keeps the directive byte for byte.</summary>
+    [Fact]
+    public void Directive_IsTheThreeParts()
+    {
+        Assert.Equal(MemoryPrompt.DirectiveWithoutTool + " " + MemoryPrompt.SaveSentences + " " + MemoryPrompt.RecallSentence, MemoryPrompt.Directive);
+        Assert.StartsWith("When the user tells you a lasting fact", MemoryPrompt.SaveSentences);
+        Assert.StartsWith("What you remember arrives as the result of recall_memory", MemoryPrompt.RecallSentence);
+    }
+
+    /// <summary>The bots' section (2026-10-04): the list always, the save sentences only with save_memory offered.</summary>
+    [Fact]
+    public void ListedSection_TheListWhateverTheTools_TheSaveSentencesWithSave()
+    {
+        Assert.Equal(MemoryPrompt.DirectiveWithoutTool + " " + MemoryPrompt.SaveSentences + "\n\n" + MemoryPrompt.Heading + "\n- a\n- b", MemoryPrompt.ListedSection(["a", "b"], save: true));
+        Assert.Equal(MemoryPrompt.DirectiveWithoutTool + "\n\n" + MemoryPrompt.NothingRemembered, MemoryPrompt.ListedSection([], save: false));
+    }
 }

@@ -22,13 +22,21 @@ public static class MemoryPrompt
 
     /// <summary>
     /// Tells the model when to call the save tool and where the list is. Names the tools by
-    /// <see cref="Llm.Tools.SaveMemoryTool.ToolName"/> and <see cref="Llm.Tools.RecallMemoryTool.ToolName"/>.
+    /// <see cref="Llm.Tools.SaveMemoryTool.ToolName"/> and <see cref="Llm.Tools.RecallMemoryTool.ToolName"/>. Since 2026-10-04
+    /// it is put together from <see cref="SaveSentences"/> and <see cref="RecallSentence"/>, byte for byte as before.
     /// </summary>
-    public const string Directive =
-        DirectiveWithoutTool + " " +
+    public const string Directive = DirectiveWithoutTool + " " + SaveSentences + " " + RecallSentence;
+
+    /// <summary>
+    /// When to call the save tool (2026-10-04: split out of <see cref="Directive"/> for <see cref="ListedSection"/>). Pinned.
+    /// </summary>
+    public const string SaveSentences =
         "When the user tells you a lasting fact about themselves (their name, where they live, what they like, what they are working on) " +
         "or asks you to remember something, call " + Llm.Tools.SaveMemoryTool.ToolName + " with one short sentence in the third person, then continue your reply. " +
-        "Do not save passing details, and do not save anything you already remember. " +
+        "Do not save passing details, and do not save anything you already remember.";
+
+    /// <summary>Where the list arrives in the main chat: the opening <c>recall_memory</c> pair. Pinned.</summary>
+    public const string RecallSentence =
         "What you remember arrives as the result of " + Llm.Tools.RecallMemoryTool.ToolName + " at the start of the conversation; call it again when the list is no longer in view.";
 
     /// <summary>Above the list, only when there is one.</summary>
@@ -75,5 +83,17 @@ public static class MemoryPrompt
         }
 
         return memories.Count == 0 ? DirectiveWithoutTool : DirectiveWithoutTool + "\n\n" + Recalled(memories);
+    }
+
+    /// <summary>
+    /// The memory section with the list in it whatever the tools (2026-10-04, the <c>/botchat</c> bots' memory): a bot's history
+    /// is rebuilt every reply, so no opening <c>recall_memory</c> pair would carry the list, and the prompt, rebuilt with it,
+    /// always holds the store as it is. <see cref="DirectiveWithoutTool"/>, <see cref="SaveSentences"/> with <paramref name="save"/>
+    /// (<c>save_memory</c> offered), then <see cref="Recalled"/> — <see cref="NothingRemembered"/> for an empty store.
+    /// </summary>
+    public static string ListedSection(IReadOnlyList<string> memories, bool save)
+    {
+        ArgumentNullException.ThrowIfNull(memories);
+        return (save ? DirectiveWithoutTool + " " + SaveSentences : DirectiveWithoutTool) + "\n\n" + Recalled(memories);
     }
 }

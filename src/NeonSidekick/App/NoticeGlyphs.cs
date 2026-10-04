@@ -40,7 +40,7 @@ public static class NoticeGlyphs
     /// <summary>Profiles, and <c>persona.md</c>.</summary>
     public const string Profile = ChatScreen.ProfileToolGlyph + " ";   // the toolbar's ID card since later on 2026-09-29, one source
 
-    /// <summary>The performance bar (<c>/perf</c>, later on 2026-09-29).</summary>
+    /// <summary>The performance bar (<c>/perfbar</c>, later on 2026-09-29).</summary>
     public const string Perf = ChatScreen.PerfToolGlyph + " ";
 
     /// <summary><c>operata.md</c>, the operating rules.</summary>

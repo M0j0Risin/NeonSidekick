@@ -4,7 +4,7 @@
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
 
 
-Neon Sidekick is an agentic terminal client for local LLMs, built on .NET 10. It draws on tools like Claude Code, Hermes Agent and Cline, combining my favourite features from them with a few ideas of my own. It's Windows-first and meant as a stable base for building agentic tools. Next on the roadmap: stronger coding capabilities and official macOS and Linux support.
+Neon Sidekick is an agentic terminal client built primarily for local LLMs, built on .NET 10. It draws on tools like Claude Code, Hermes Agent and Cline, combining my favourite features from them with features of my own. It's Windows-first and meant as a stable base for building and testing new agentic tools. Next on the roadmap: stronger coding capabilities and official macOS and Linux support.
 
 <details>
   <summary>📷 Screenshots</summary>
@@ -160,7 +160,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+. | `/terminal` | at once |
 | Ctrl+/ | `/settings` | opens over the reply |
 | Ctrl+E | `/explore` | at once |
-| Ctrl+F | `/perf` (performance bar on/off) | at once |
+| Ctrl+F | `/perfbar` (performance bar on/off) | at once |
 | Ctrl+H | `/help` | opens over the reply |
 | Ctrl+M | `/model` | waits for the reply |
 | Ctrl+P | `/profile` | waits for the reply |
@@ -196,7 +196,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perf`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -231,7 +231,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
-| 📈 | always | `/perf`: hides or shows the performance bar |
+| 📈 | always | `/perfbar`: hides or shows the performance bar |
 | working directory (right edge) | always | `/cwd browse` |
 | blank space | — | `/settings` |
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
@@ -291,7 +291,7 @@ Settings that an environment variable or flag can override for one launch are li
 * Values turn amber from 60 % and red from 85 %. A meter the machine can't read (no GPU, no network) is left out.
 * An NVIDIA GPU is read through its driver (NVML); any other through Windows' GPU counters, for the card with the most memory.
 * The network meters follow the busiest adapter that is up and has a gateway, so a VPN over Wi-Fi isn't counted twice. NET↓ and NET↑ show bits per second (`850K`, `12.4M`, `1.2G`); their gauges show the share of the link.
-* `/perf` or the toolbar's 📈 hides the bar, or brings it back with the meters it last had.
+* `/perfbar` or the toolbar's 📈 hides the bar, or brings it back with the meters it last had.
 
 #### Embedded
 
@@ -551,16 +551,19 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 | Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's (a blank URL borrows this one's). A bot whose server doesn't answer sits the chat out. Read when a chat starts or resumes. | `single` |
 | Botchat multi-embedded | Under `multi`, for bots wanting a different embedded model from the one running. `parent-server`: they share the running model, with a warning. `multi-server`: one extra `llama-server` per model, started in turn under that bot's profile's Embedded settings so each fits in what's left. Bots on one model share its server. | `parent-server` |
 | Botchat multi-embedded kill | Stops `multi-server`'s extra servers when the chat ends. Off, they run until `/botchat --kill` or you quit, and a later chat reuses them. | on |
-| Botchat images enabled | Adds pictures to `/botchat`; needs *ComfyUI tools* and a *ComfyUI URL*. Off, the chat is talk only, with no tools (except `load_skill` under *Botchat skills enabled*). | off |
+| Botchat images enabled | Adds pictures to `/botchat`; needs *ComfyUI tools* and a *ComfyUI URL*. Off, the bots draw nothing; their other tools are the rows below. | off |
 | Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` and draw when they choose. See Botchat pictures. | `automatic` |
 | Botchat txt2img workflow | The text → image workflow; blank means no new pictures. | (none) |
 | Botchat img2img workflow | The image → image workflow for reworks; blank means none. | (none) |
 | Botchat img2img mode | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). | `latest` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture and appears with it. | on |
-| Botchat non-TTS delay | A reading pause after each reply when *TTS output* is off (0–30 s). A line typed meanwhile joins the chat; ESC ends it. | 5 |
-| Botchat skills enabled | Offers every bot `load_skill` over the starting profile's, the global and (with *Use external skills*) the external skills, never a bot's own profile's. The `automatic` prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off. | off |
-| Botchat preloaded skills | Skills loaded for the chat, so no `load_skill` call is needed: tick them (**A** / **N**), or name one as a whole word in the topic (`/botchat use pony-prompts for the pictures`). Each brings up to 64,000 characters of its bundled text files; any left out are listed by name and readable only with *Botchat skills enabled*. Needs *Agent skills*. | none |
-| Botchat skill mode | Who gets the preloaded skills: `prompt-writer-and-bots` or `prompt-writer-only`. | `prompt-writer-and-bots` |
+| Botchat non-TTS delay | A reading pause after each reply when *TTS output* is off (0–30 s). A line you send meanwhile ends the pause and goes to the bots at once; ESC ends the chat. | 5 |
+| Botchat tools enabled | Offers every bot the tools a turn of this chat would get: the same switches, `/tools` list and panes (the shell's approval, the Docker, Home Assistant and print confirms, `ask_user`, the camera's shutter); while you plan, only plan mode's read-only tools. Not memory or skills, which have their own rows. Off, *Botchat limited tools* says. | off |
+| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (**A** / **N**). Each is offered only while this chat would offer it. None ticked: no tools. | (none) |
+| Botchat skills enabled | Offers every bot `load_skill` over the starting profile's, the global and (with *Use external skills*) the external skills, never a bot's own profile's. The `automatic` prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off. Off, *Botchat limited skills* says. | off |
+| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (**A** / **N**), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. | (none) |
+| Botchat memory enabled | Gives every bot memories: the list in its prompt, plus `save_memory` and `recall_memory`. Inside `/botchat` this alone decides, over every profile's *Memory* switch. | on |
+| Botchat memory mode | Whose memories: `shared-parent` (every bot uses the starting profile's) or `independent` (each bot its own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot, on its turn, the newest 4 pictures since it last spoke (not its own), captioned with whose they are. Needs models that read images. Not kept for `--resume` or the session. | off |
 | Botchat camera | The bots see you: each turn gets a fresh camera picture, captioned as a photo of you. Kept in memory only. Needs models that read images; a failing camera is one warning. Read when a chat starts. | off |
 
@@ -572,7 +575,7 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 * **Reworks:** once there's a picture and an img2img workflow, the next prompt's writer chooses between a new picture and a rework (`REWORK` or `REWORK n` in `automatic`; an `image` path in `autonomous`). A picture still rendering can't be reworked.
 * **Async on:** 🖼️ (🎨 for a rework) shows on the hint row while a picture renders, with a count when several are pending. Each picture is labelled with whose reply it shows. Without speech, pictures go to ComfyUI one at a time.
 * **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips just that picture.
-* **Skills:** with *Botchat skills enabled*, the `automatic` prompt writer may load a skill first, so "use the pony-prompts skill for pictures" holds from the first picture. *Botchat preloaded skills* doesn't depend on the model choosing to load it.
+* **Skills:** with *Botchat skills enabled*, the `automatic` prompt writer may load a skill first, so "use the pony-prompts skill for pictures" holds from the first picture. With it off, *Botchat limited skills* offers the writer the ticked skills alone.
 
 </details>
 
@@ -628,7 +631,7 @@ A reflection must `load_skill` a skill before rewriting its instructions or a su
 
 #### Skill records and purging unused skills
 
-`skills.db` in the home folder records every global and profile skill: its folder, scope, when it was created, last modified and last used (loaded or preloaded), and a category (empty for now).
+`skills.db` in the home folder records every global and profile skill: its folder, scope, when it was created, last modified and last used (loaded), and a category (empty for now).
 
 - `skill_editor`, reflections, `/skills add` and the `/skills` pane update the record as they act.
 - At startup and every profile load, the app reconciles the folders: a new folder gets a record (dated from its `SKILL.md`), a newer `SKILL.md` moves the modified date, and a record whose folder is gone is removed.
@@ -998,7 +1001,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/model [id]` | Picks or sets the model. The list is A to Z with the cursor on the model in use; type to narrow it to the ids holding the text (Backspace erases, ESC clears it, the next ESC keeps the model). On the embedded LLM, lists the installed models. |
 | `/new` | Starts a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edits `operata.md` (the operating rules) in your editor, resets it, or copies it to another profile (`force` replaces theirs). |
-| `/perf [off \| text \| gauge \| spark \| led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
+| `/perfbar [off \| text \| gauge \| spark \| led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
 | `/persona [reset \| copy <profile> [force]]` | The same for `persona.md` (the personality; seeded with the built-in persona). |
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape]` | Prints a file from the working directory (see Printing). The printer matches by name or part of it; quote a name with spaces. *Print action policy* never applies. |
 | `/print reply [options]` | Prints the last reply as formatted Markdown. |
@@ -1079,7 +1082,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * **Cast:** the profiles you name, or all of them. The current profile always joins and speaks first.
 * **Topic:** the first word that isn't a profile starts it (`/botchat ada max the best pizza`); after `--`, the rest is always the topic (`/botchat ada -- max speed of light`). Without one, the bots pick.
 * **Turns:** each reply is in the speaker's persona and, with speech on, its own voice. A bot named in the last line speaks next; otherwise a random one, never the last speaker. Bots use this profile's LLM, or their own under *Botchat LLM mode* `multi`.
-* **Tools:** none, except pictures (see Botchat pictures) and `load_skill` (*Botchat skills enabled*).
+* **Tools:** pictures (see Botchat pictures); the main chat's tools under *Botchat tools enabled*, or the *Botchat limited tools* alone; `load_skill` under *Botchat skills enabled* or *Botchat limited skills*; and memory under *Botchat memory enabled* (on by default; *Botchat memory mode* says whose). A tool's pane (an approval, a question) shows mid-chat as in a normal one.
 * **Joining in:** a line you type joins before the next reply.
 * **Talking:** with *STT input* on, push-to-talk stops the speaking bot, cuts the replying one short, and listens; what you say follows *STT destination*. With *TTS output* off, the wake phrase (*STT wake*) does the same. The wake phrase during speech (*STT interrupt*) ends the chat.
 * **ESC** steps: stop the voice, then cut the replying bot short (the next one answers), then, before the next bot has said anything, end the chat. `/exit`, `/clear` and `/new` end the chat, then run.

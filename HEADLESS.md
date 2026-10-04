@@ -102,7 +102,7 @@ What to use instead:
 | `/keycopy` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY` and `NEONSIDEKICK_HA_TOKEN` set them for a run. |
 | `/usage` | Not available; `--log` records the run. |
 | `/sys` | Not available; open `/sys` in the TUI on the same profile to see the prompt. |
-| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/theme`, `/perf`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/queue`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
+| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/theme`, `/perfbar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/queue`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
 
 ---
 

@@ -41,7 +41,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// <c>/perf</c> (later on 2026-09-29, the user's ask; the checklist's since 2026-09-30): bare it shows the bar (CPU, RAM,
+    /// <c>/perfbar</c> (later on 2026-09-29, the user's ask; the checklist's since 2026-09-30): bare it shows the bar (CPU, RAM,
     /// GPU and VRAM the first time) and hides it again, keeping its meters for the next show; a look sets it; anything else is
     /// the usage error. Never a turn.
     /// </summary>
@@ -56,11 +56,11 @@ public partial class ChatScreenTests
             PushLine(input, line);
         };
         StepsWhenIdle(
-            Line("/perf"),
-            Then("/perf gauge"),
-            Then("/perf"),
-            Then("/perf"),
-            Then("/perf bars"),
+            Line("/perfbar"),
+            Then("/perfbar gauge"),
+            Then("/perfbar"),
+            Then("/perfbar"),
+            Then("/perfbar bars"),
             Line("/exit"));
 
         string output = await RunAsync();
@@ -133,7 +133,7 @@ public partial class ChatScreenTests
         Assert.Contains(Titled(SettingsMenu.ProfileTitle), output);
         Assert.Equal(["cpu", "ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
         Assert.Contains(PerfText.BarNotice("led"), output);   // the default look, led since 2026-10-02
-        Assert.All(new[] { "/profile", "/perf" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/profile", "/perfbar" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Empty(_chat.Requests);
     }
 }

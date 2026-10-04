@@ -706,6 +706,26 @@ public class AssistantTests
         Assert.Equal(call.CallId, asked.Contents.OfType<FunctionCallContent>().Single().CallId);
     }
 
+    /// <summary>
+    /// <see cref="Assistant.TextToolCallNames"/> (2026-10-04, the /botchat bots offered the main chat's tools): a written call to an
+    /// offered tool not on the list is neither caught nor run — it stays in the reply, as in the main chat.
+    /// </summary>
+    [Fact]
+    public async Task TextToolCallNames_AWrittenCallToAnotherTool_IsNotRun()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.TextToolCalls = true;
+        assistant.TextToolCallNames = new HashSet<string>(["generate_image"], StringComparer.Ordinal);
+        client.EnqueueText("Sure. echo(text=\"hi there\") Done.");
+
+        var events = await Run(assistant, "a");
+
+        Assert.Empty(echo.Received);
+        Assert.Empty(events.OfType<TurnEvent.ToolCall>());
+        Assert.Contains("echo(text=", string.Concat(Deltas(events)));
+    }
+
     /// <summary>The line form (later on 2026-09-25, the user's /botchat report): the tool's name, then its parameters as <c>key: value</c>, on a line of its own.</summary>
     [Fact]
     public async Task TextToolCalls_On_ACallWrittenAsALine_RunsAsARealOne_AndIsNeverShown()

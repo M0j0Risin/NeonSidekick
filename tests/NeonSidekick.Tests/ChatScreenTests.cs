@@ -9836,7 +9836,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/cmdlist", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.CmdYoloToolGlyph, 21)));
         Assert.Equal(SlashCommands.PoliceWord, ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 24)));
         Assert.Equal("/profile", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.ProfileToolGlyph, 3)));   // later on 2026-09-29
-        Assert.Equal("/perf", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PerfToolGlyph, 24)));   // the officer is /police since later on 2026-09-22 (it named nothing until then)
+        Assert.Equal("/perfbar", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PerfToolGlyph, 24)));   // the officer is /police since later on 2026-09-22 (it named nothing until then)
         Assert.Null(ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, "🧰", 0)));
         Assert.Equal("/cwd browse", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Path, "", 200)));
         Assert.Equal("/settings", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Row, "", -1)));
@@ -10119,7 +10119,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("🪪", ChatScreen.ProfileToolGlyph);
         Assert.Equal("📈", ChatScreen.PerfToolGlyph);
         Assert.Equal("/profile", ChatScreen.ToolbarWord(ChatScreen.ProfileToolGlyph));
-        Assert.Equal("/perf", ChatScreen.ToolbarWord(ChatScreen.PerfToolGlyph));
+        Assert.Equal("/perfbar", ChatScreen.ToolbarWord(ChatScreen.PerfToolGlyph));
         Assert.Equal(ChatScreen.ProfileToolGlyph + " Profile", SettingsMenu.ProfileTitle);   // the picker wears the toolbar's glyph
         Assert.Equal(ChatScreen.ProfileToolGlyph + " ", NoticeGlyphs.Profile);
         Assert.Equal(ChatScreen.UsageToolGlyph + " Usage", UsageText.Label);   // the pane wears the toolbar's glyph
@@ -10357,7 +10357,7 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+A", "select all text on the line"),
             ("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"),
             ("Ctrl+E", "open the working directory in your file browser (/explore)"),   // later on 2026-10-01, the user's place and wording
-            ("Ctrl+F", "show or hide the performance bar (/perf)"),   // from Ctrl+Alt+E, later still on 2026-10-01
+            ("Ctrl+F", "show or hide the performance bar (/perfbar)"),   // from Ctrl+Alt+E, later still on 2026-10-01
             ("Ctrl+H", "open help (/help)"),   // from Ctrl+Alt+H, later still on 2026-10-01
             ("Ctrl+M", "open the model picker (/model)"),   // later still on 2026-10-01, the user's wording
             ("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"),   // 2026-09-22
@@ -10437,7 +10437,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(
         [
-            "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perf", "/profile",
+            "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perfbar", "/profile",
             "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
             "/wake",
         ], basicEntries.Select(e => e.Command));
@@ -20690,12 +20690,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([.. ThemeName.Names, ThemeText.ExportWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
         Assert.Equal(["netrunner", "noir", "nostromo"], Texts(ChatScreen.ArgumentItems("/theme", "n", sources)));   // A to Z since 2026-10-03
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "ne", sources));
-        Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perf", "", sources)));
+        Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perfbar", "", sources)));
         // The commands whose argument is a path of their own keep their list over a mention (2026-09-30).
         Assert.True(ChatScreen.TakesPathArgument("/speak") && ChatScreen.TakesPathArgument("/view") && ChatScreen.TakesPathArgument("/PRINT"));
         Assert.True(ChatScreen.TakesPathArgument("/tree") && ChatScreen.TakesPathArgument("/explore") && ChatScreen.TakesPathArgument("/vault") && ChatScreen.TakesPathArgument("/terminal"));   // their folder lists
         Assert.False(ChatScreen.TakesPathArgument("/loop") || ChatScreen.TakesPathArgument("/plan") || ChatScreen.TakesPathArgument("/claude"));   // off and the looks (later on 2026-09-29)
-        Assert.Equal([new CompletionItem("gauge", PerfBarMode.Describe("gauge"))], ChatScreen.ArgumentItems("/perf", "g", sources));
+        Assert.Equal([new CompletionItem("gauge", PerfBarMode.Describe("gauge"))], ChatScreen.ArgumentItems("/perfbar", "g", sources));
 
         // /profile: the names (the loaded one marked) then the verbs; a verb typed opens the names behind it.
         Assert.Equal(["chef", "default", "work", "add", "delete", "edit", "pull", "push", "reload", "rename", "reset"], Texts(ChatScreen.ArgumentItems("/profile", "", sources)));   // edit and reload 2026-09-21, pull and push 2026-09-28

@@ -1161,7 +1161,7 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
-    /// <summary>A chord the screen does in place (<c>/perf</c>, <c>/toolbar</c>) leaves the list reading; under a tool's question every chord is nobody's.</summary>
+    /// <summary>A chord the screen does in place (<c>/perfbar</c>, <c>/toolbar</c>) leaves the list reading; under a tool's question every chord is nobody's.</summary>
     [Fact]
     public async Task AChord_DoneInPlace_OrSuppressed_LeavesTheListReading()
     {
@@ -1173,12 +1173,12 @@ public class MenuPaneTests : IDisposable
         pane.ChordInPlace = line =>
         {
             done.Add(line);
-            return line == "/perf";
+            return line == "/perfbar";
         };
         input.Push(Keys.CtrlF, Keys.Down, Keys.Enter);
 
         Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
-        Assert.Equal(["/perf"], done);
+        Assert.Equal(["/perfbar"], done);
         Assert.False(pane.Dismissed);
 
         using (pane.SuppressChords())
@@ -1187,7 +1187,7 @@ public class MenuPaneTests : IDisposable
             Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Page("one", "two", "three"), 2, CancellationToken.None));
         }
 
-        Assert.Equal(["/perf"], done);                   // never asked while suppressed
+        Assert.Equal(["/perfbar"], done);                   // never asked while suppressed
         Assert.False(pane.Dismissed);
         Assert.Null(pane.TakeDismissChord());
         menu.Close();

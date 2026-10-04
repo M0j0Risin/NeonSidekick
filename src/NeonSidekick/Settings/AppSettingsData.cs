@@ -251,7 +251,7 @@ public sealed class AppSettingsData
     public List<string>? PerformanceBarItems { get; set; }
 
     /// <summary>
-    /// The meters a bare <c>/perf</c> (or the toolbar's 📈) brings back after it hid the bar (2026-09-30): what was checked when
+    /// The meters a bare <c>/perfbar</c> (or the toolbar's 📈) brings back after it hid the bar (2026-09-30): what was checked when
     /// it hid it; null until then, when <see cref="App.PerfBarItems.Defaults"/> (CPU, RAM, GPU and VRAM) come back. No settings
     /// row, no variable.
     /// </summary>
@@ -261,7 +261,7 @@ public sealed class AppSettingsData
     /// The performance bar's look (later on 2026-09-29, the user's ask: "the last look used"; the look itself since
     /// 2026-09-30): one of <see cref="App.PerfBarMode.Names"/> — <c>text</c>, <c>gauge</c>, <c>spark</c> or <c>led</c> (the
     /// default since 2026-10-02, the user's ask; <c>text</c> until then, which a profile that saved it keeps) — picked on the
-    /// <c>Show performance bar</c> page's title row or by <c>/perf &lt;look&gt;</c>. Anything else reads as <c>led</c>. No row of
+    /// <c>Show performance bar</c> page's title row or by <c>/perfbar &lt;look&gt;</c>. Anything else reads as <c>led</c>. No row of
     /// its own, no variable.
     /// </summary>
     public string PerformanceBarLook { get; set; } = App.PerfBarMode.Default;
@@ -846,7 +846,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// The seconds <c>/botchat</c> rests after a reply when no voice plays (2026-09-26, the user's ask: with TTS off the
     /// replies came back-to-back, too fast to read): the next bot answers after this pause, as it would after a voice.
-    /// Lines typed meanwhile join the chat at once, and ESC there ends the chat. <see cref="MinBotChatNonTtsDelaySeconds"/>
+    /// A line sent meanwhile joins the chat and ends the pause, the next bot answering at once (2026-10-04, the user's ask;
+    /// until then the pause ran out first), and ESC there ends the chat. <see cref="MinBotChatNonTtsDelaySeconds"/>
     /// (0, off) to <see cref="MaxBotChatNonTtsDelaySeconds"/>; a hand-edited value outside is clamped at use. Read per
     /// reply. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
@@ -860,33 +861,59 @@ public sealed class AppSettingsData
     public const int DefaultBotChatNonTtsDelaySeconds = 5;
 
     /// <summary>
+    /// Whether the <c>/botchat</c> bots get the main chat's tools (2026-10-04, the user's ask): on, every bot is offered the
+    /// tools a turn of the main chat would be — the starting profile's tool switches, <c>/tools</c>' Offered list and plan mode's
+    /// read-only narrowing (never <c>present_plan</c>) — with their rules in its prompt, and the panes they ask on (the shell's
+    /// approval, the Docker, Home Assistant and print confirms, <c>ask_user</c>, the camera's shutter) shown as in a normal chat.
+    /// Skills and memory are not among them: <see cref="BotChatSkills"/> and <see cref="BotChatMemory"/> say. Off (the default),
+    /// <see cref="BotChatLimitedTools"/> says. Read per reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public bool BotChatTools { get; set; }
+
+    /// <summary>
+    /// The tools the <c>/botchat</c> bots get while <see cref="BotChatTools"/> is off (2026-10-04, the user's ask): tool names
+    /// (an MCP server's as <c>server__tool</c>), each offered only while the main chat would offer it too — its switch on, not
+    /// off on <c>/tools</c>. Null or empty (the default) is none. A name not offered now is kept and skipped. Read per reply.
+    /// The Botchat tab of <c>/settings</c>, a checklist. No variable.
+    /// </summary>
+    public List<string>? BotChatLimitedTools { get; set; }
+
+    /// <summary>
     /// Whether the <c>/botchat</c> bots get skills (2026-09-27, the user's ask): on, and with <see cref="AgentSkills"/> on,
     /// every bot's prompt lists the skills the main chat sees — the starting profile's, the global ones and, with
     /// <see cref="ExternalSkills"/> on, the external ones; never a bot's own profile's (the user's call: the parent's
     /// skills stand for the room) — and each bot is offered <c>load_skill</c>, never <c>skill_editor</c> (a bot must not
-    /// write the parent's skills). Off (the default), the chat is talk alone as before. Read per reply, no reconnect.
-    /// The Botchat tab of <c>/settings</c>, its last row. No variable.
+    /// write the parent's skills). Off (the default), <see cref="BotChatLimitedSkills"/> says. Read per reply, no reconnect.
+    /// The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public bool BotChatSkills { get; set; }
 
     /// <summary>
-    /// The skills <c>/botchat</c> loads itself (2026-09-27, the user's report: told in the topic to load a skill for the picture
-    /// prompts, the models mostly did not call <c>load_skill</c>): names among the skills a botchat sees (the starting profile's,
-    /// the global and, with <see cref="ExternalSkills"/>, the external ones), their instructions put straight into the requests
-    /// <see cref="BotChatSkillMode"/> says — no tool call needed. A skill whose name the <c>/botchat</c> topic spells out is
-    /// loaded the same way. Needs <see cref="AgentSkills"/>, not <see cref="BotChatSkills"/> (which offers <c>load_skill</c>).
-    /// Null or empty (the default) is none; a name no longer installed is kept and skipped. Read per reply. The Botchat tab of
+    /// The skills the <c>/botchat</c> bots and its picture prompt writer may load while <see cref="BotChatSkills"/> is off
+    /// (2026-10-04, the user's ask; until then <c>BotChatPreloadedSkills</c>, whose skills were pasted into the prompts, and
+    /// <c>BotChatSkillMode</c>, which said whose — both keys retired, no migration): names among the skills a botchat sees
+    /// (the starting profile's, the global and, with <see cref="ExternalSkills"/>, the external ones). With any, the skills
+    /// list and <c>load_skill</c> are offered for those skills alone; null or empty (the default), no skill tool. Needs
+    /// <see cref="AgentSkills"/>. A name no longer installed is kept and skipped. Read per reply. The Botchat tab of
     /// <c>/settings</c>, a checklist. No variable.
     /// </summary>
-    public List<string>? BotChatPreloadedSkills { get; set; }
+    public List<string>? BotChatLimitedSkills { get; set; }
 
     /// <summary>
-    /// Where <c>/botchat</c>'s preloaded skills go (2026-09-27, the user's words and default): one of
-    /// <see cref="App.BotChatSkillMode.Names"/> — <c>prompt-writer-and-bots</c> (the default: the picture prompt writer and every
-    /// bot's system prompt) or <c>prompt-writer-only</c> (the writer alone; the bots' replies are left as they were). Read per
-    /// reply. The Botchat tab of <c>/settings</c>. No variable.
+    /// Whether the <c>/botchat</c> bots remember (2026-10-04, the user's ask): on (the default), each bot's prompt lists its
+    /// memories and it is offered <c>save_memory</c> and <c>recall_memory</c>, whose memories <see cref="BotChatMemoryMode"/>
+    /// says. Inside <c>/botchat</c> this is the one switch: it overrides <see cref="Memory"/>, the starting profile's and every
+    /// bot's own. Off, no bot remembers. Read per reply. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
-    public string BotChatSkillMode { get; set; } = App.BotChatSkillMode.Default;
+    public bool BotChatMemory { get; set; } = true;
+
+    /// <summary>
+    /// Whose memories the <c>/botchat</c> bots use (2026-10-04, the user's words and default): one of
+    /// <see cref="App.BotChatMemoryMode.Names"/> — <c>shared-parent</c> (the default: every bot the starting profile's) or
+    /// <c>independent</c> (each bot its own profile's <c>memory.json</c>; the starting profile's bot its own, which is the
+    /// parent's). Read per reply. The Botchat tab of <c>/settings</c>. No variable.
+    /// </summary>
+    public string BotChatMemoryMode { get; set; } = App.BotChatMemoryMode.Default;
 
     /// <summary>
     /// Whether the <c>/botchat</c> bots see the chat's pictures (2026-09-27, the user's ask: they reacted to each other's
