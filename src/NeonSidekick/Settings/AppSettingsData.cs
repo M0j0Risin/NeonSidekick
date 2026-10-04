@@ -1040,7 +1040,7 @@ public sealed class AppSettingsData
     /// user's call in the reflection audit): <c>read-only</c> refuses its <c>skill_editor</c> any change to one and asks for a companion skill
     /// instead, so a later update from the same origin stays clean; <c>allow-and-mark</c> (the default since 2026-10-03, the user's call;
     /// <c>read-only</c> before, and a saved profile keeps its word) lets it write, the skill records keep the change, and the install's
-    /// update page warns that updating replaces it. The main chat and <c>/skills revert</c> are
+    /// update page warns that updating replaces it. The main chat and the Skills pane's revert are
     /// unaffected. Read when a reflection is decided, no reconnect; the Reflection tab of <c>/skills</c>, last row, labelled
     /// <c>Reflection downloaded skills</c> (<c>Reflection installed skills</c> until later on 2026-10-02, briefly <c>Reflection AgentSkills.io skills</c>
     /// that day, the user's calls; agentskills.io is the format every skill here follows, not where these come from). No variable.

@@ -115,13 +115,15 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(8, rows.Count(r => r.Heading));
         Assert.Equal(7, rows.Count(r => r.Markup.Length == 0 && r.Tool is null && !r.Heading));
         Assert.Equal(30, rows.Count(r => r.Tool is not null));
-        Assert.Equal(["── Clock · 3", "── Timers · 3", "── Files · 14", "── Web · 4", "── Memory · 2", "── Skills · 2", "── Sessions · 1", "── Questions · 1"], rows.Where(r => r.Heading).Select(r => Markup.Remove(r.Markup)));
+        // Alphabetical since 2026-10-04 (the user's ask).
+        Assert.Equal(["── Clock · 3", "── Files · 14", "── Memory · 2", "── Questions · 1", "── Sessions · 1", "── Skills · 2", "── Timers · 3", "── Web · 4"], rows.Where(r => r.Heading).Select(r => Markup.Remove(r.Markup)));
         Assert.Equal((Heading("Clock", "3"), (string?)null, true), rows[0]);
         Assert.Equal((OnRow(ToolNamed(facts, GetCurrentTimeTool.ToolName), true), GetCurrentTimeTool.ToolName, false), rows[1]);
-        Assert.Equal(("", (string?)null, false), rows[4]);   // the gap before Timers
-        Assert.Equal((Heading("Timers", "3"), (string?)null, true), rows[5]);
+        Assert.Equal(("", (string?)null, false), rows[4]);   // the gap before Files
+        Assert.Equal((Heading("Files", "14"), (string?)null, true), rows[5]);
         Assert.Equal((OnRow(ToolNamed(facts, ReadFileTool.ToolName), true), ReadFileTool.ToolName, false), rows.Single(r => r.Tool == ReadFileTool.ToolName));
-        Assert.Equal((OnRow(ToolNamed(facts, AskUserTool.ToolName), true), AskUserTool.ToolName, false), rows[^1]);
+        Assert.Equal((OnRow(ToolNamed(facts, AskUserTool.ToolName), true), AskUserTool.ToolName, false), rows.Single(r => r.Tool == AskUserTool.ToolName));
+        Assert.Equal(DownloadFileTool.ToolName, rows[^1].Tool);   // Web last
         Assert.Equal(1, ToolsText.FirstToolRow(rows));
         Assert.Equal(Enumerable.Range(0, rows.Count).Where(i => rows[i].Heading), ToolsText.HeadingRows(rows).Order());
         Assert.Equal(facts.Groups.SelectMany(g => g.Tools).Select(t => t.Name), rows.Where(r => r.Tool is not null).Select(r => r.Tool));
@@ -182,9 +184,9 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(Heading("Questions", "1", "off: Ask user is off"), rows.First(r => r.Heading && r.Markup.Contains("Questions", StringComparison.Ordinal)).Markup);
         Assert.Equal(DimRow(ToolNamed(facts, DownloadFileTool.ToolName), true, "not offered: file tools is off"), rows.Single(r => r.Tool == DownloadFileTool.ToolName).Markup);
         Assert.Equal(Heading("Web", "4"), rows.First(r => r.Heading && r.Markup.Contains("Web", StringComparison.Ordinal)).Markup);
-        Assert.Equal("(off: Ask user is off)", ToolsText.HeadingSuffix(Facts(askEnabled: false).Groups[^1], toolsEnabled: true));
-        Assert.Equal("(off: no pane)", ToolsText.HeadingSuffix(Facts(paneOn: false).Groups[^1], toolsEnabled: true));
-        Assert.Equal("(off: Memory is off)", ToolsText.HeadingSuffix(Facts(memoryEnabled: false).Groups[4], toolsEnabled: true));
+        Assert.Equal("(off: Ask user is off)", ToolsText.HeadingSuffix(Facts(askEnabled: false).Groups.Single(g => g.Label == "Questions"), toolsEnabled: true));
+        Assert.Equal("(off: no pane)", ToolsText.HeadingSuffix(Facts(paneOn: false).Groups.Single(g => g.Label == "Questions"), toolsEnabled: true));
+        Assert.Equal("(off: Memory is off)", ToolsText.HeadingSuffix(Facts(memoryEnabled: false).Groups.Single(g => g.Label == "Memory"), toolsEnabled: true));
         Assert.Equal("", ToolsText.HeadingSuffix(Facts().Groups[0], toolsEnabled: true));
         Assert.Equal("", ToolsText.HeadingSuffix(Facts(toolsEnabled: false).Groups[2], toolsEnabled: false));   // the off line says it once
     }

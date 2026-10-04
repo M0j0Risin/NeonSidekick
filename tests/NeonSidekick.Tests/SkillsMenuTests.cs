@@ -24,6 +24,9 @@ public class SkillsMenuTests : IDisposable
     /// <summary>Every file the edit row opened (2026-09-23), and what opening one does: record it, or throw for the failure path.</summary>
     private readonly List<string> _opened = new();
     private Action<string>? _openFile;
+    /// <summary>The revert row's seams (2026-10-04): null, no row; the restores the menu asked for.</summary>
+    private Func<Skill, IReadOnlyList<SkillRevision>>? _versions;
+    private readonly List<SkillRevision> _restored = new();
 
     private void OpenFile(string path) => (_openFile ?? _opened.Add)(path);
 
@@ -95,7 +98,8 @@ public class SkillsMenuTests : IDisposable
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var menuPane = new MenuPane(pane, keys);
         var settings = Settings(pane, keys, menuPane);
-        var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage);
+        var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage,
+            versions: _versions, restore: _versions is null ? null : Restore);
         pane.Show();
         return (menu, pane, settings);
     }
@@ -113,6 +117,12 @@ public class SkillsMenuTests : IDisposable
     }
 
     private static string Rule(int width) => new(ScreenPane.RuleGlyph, width);
+
+    private SkillRevert Restore(Skill skill, SkillRevision revision)
+    {
+        _restored.Add(revision);
+        return new SkillRevert(SkillRevertOutcome.Reverted, revision, null);
+    }
 
     /// <summary><paramref name="before"/>, then the blank rows that hold a tab at its pane's tallest tab's height (2026-10-01), then <paramref name="after"/>.</summary>
     private void AssertPadded(string before, string after) =>
@@ -165,6 +175,63 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal("(🎓 deleted: haiku from the global skills)", SkillsMenu.DeletedNotice("haiku", SkillScope.Global));
         Assert.Equal("Could not delete the skill: boom", SkillsMenu.DeleteFailedError("boom"));
         Assert.Equal("Could not find skill 'haiku' on disk any more; the list was read again", SkillsMenu.MissingError("haiku"));
+        // The revert row and its version list (2026-10-04).
+        Assert.Equal("revert   [#9A8BB8]pick an earlier version to put back[/]", SkillsMenu.RevertRow);
+        Assert.Equal(SkillsText.Label + " › haiku › revert", SkillsMenu.VersionsTitle("haiku"));
+        var at = new DateTimeOffset(2026, 10, 4, 14, 5, 0, TimeSpan.Zero);
+        Assert.Equal("notes.md [#9A8BB8]not there before a reflection's change at 2026-10-04 14:05[/]", SkillsMenu.VersionRow(new SkillRevision(1, 1, at, "notes.md", null, SkillActors.Reflection), false, 8, TimeZoneInfo.Utc));
+        Assert.Equal("SKILL.md   [#9A8BB8]your edit of 2026-10-04 14:05 · current[/]", SkillsMenu.VersionRow(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.User), true, 10, TimeZoneInfo.Utc));
+        Assert.Equal("before a revert at 2026-10-04 14:05", SkillRecordText.VersionText(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.Revert), TimeZoneInfo.Utc));
+        Assert.Equal("before the model's change at 2026-10-04 14:05", SkillRecordText.VersionText(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.Model), TimeZoneInfo.Utc));
+        Assert.Equal("(↩️ nothing to revert: no earlier version of haiku is kept yet)", SkillRecordText.NoVersionsNotice("haiku"));
+    }
+
+    /// <summary>The revert row (2026-10-04): always on the page with the seams, before delete; nothing kept is a notice on the status line, no list.</summary>
+    [Fact]
+    public async Task RevertRow_IsAlwaysOffered_AndWithNothingKept_SaysSo()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        _versions = _ => [];
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);                                            // the scope page
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  revert   pick an earlier version to put back\n  delete   remove the folder and everything in it\n", _console.Output);
+        Assert.Contains("  · " + SkillRecordText.NoVersionsNotice("haiku") + "\n", _console.Output);
+        Assert.DoesNotContain(SkillsMenu.VersionsTitle("haiku"), _console.Output);
+        Assert.Empty(_restored);
+    }
+
+    /// <summary>The version list (2026-10-04, the user's ask): newest first, the one the file holds marked, the cursor on the newest that is not; Enter puts it back, the notice on the list's status line.</summary>
+    [Fact]
+    public async Task RevertRow_ListsTheVersions_AndEnterPutsThePickBack()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        string current = File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName));
+        var at = new DateTimeOffset(2026, 10, 4, 14, 5, 0, TimeSpan.Zero);
+        SkillRevision[] kept =
+        [
+            new(3, 1, at, SkillCatalog.FileName, current, SkillActors.User),
+            new(2, 1, at, SkillCatalog.FileName, "old", SkillActors.Model),
+            new(1, 1, at, "notes.md", null, SkillActors.Reflection),
+        ];
+        _versions = _ => kept;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list
+        Push(Keys.Enter);                                            // the cursor's: the model's
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        // No notes.md on disk: the version from before it was there is the file's now too.
+        Assert.Contains("\n" + Titled(SkillsMenu.VersionsTitle("haiku")) + "\n" + SkillRecordText.VersionsCaption + "\n \n" +
+            "  SKILL.md your edit of 2026-10-04 14:05 · current\n▸ SKILL.md before the model's change at 2026-10-04 14:05\n  notes.md not there before a reflection's change at 2026-10-04 14:05 · current\n", _console.Output);
+        Assert.Equal(2, Assert.Single(_restored).Id);
+        Assert.Contains("  · " + SkillRecordText.RevertedNotice("haiku", kept[1], TimeZoneInfo.Utc) + "\n", _console.Output);
     }
 
     /// <summary>The pane: the three tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project file toggle is an Options row since 2026-10-01 (the one row of a Project tab of its own from later on 2026-09-19 until then) — Enter opens its page, off picked, the status line saying so; ESC closes with nothing in the transcript.</summary>

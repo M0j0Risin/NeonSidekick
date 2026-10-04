@@ -14,8 +14,8 @@ public static class SkillRecordText
     public const string ListWord = "list";
     public const string CommitWord = "commit";
 
-    /// <summary>The screen's <c>/skills</c> usage error: the installer's, and the purge's two forms. Pinned.</summary>
-    public const string SkillsUsageError = SkillInstallText.UsageError + ", /skills purge list|commit <age>, or /skills revert <name>";
+    /// <summary>The screen's <c>/skills</c> usage error: the installer's, and the purge's two forms (<c>/skills revert</c> went on 2026-10-04 for the pane's revert). Pinned.</summary>
+    public const string SkillsUsageError = SkillInstallText.UsageError + ", or /skills purge list|commit <age>";
 
     /// <summary>The completion notes on <c>purge list</c> and <c>purge commit</c>. Pinned.</summary>
     public const string ListNote = "show the skills not used for that long: an age, 30 (days), 12h, 90m";
@@ -198,27 +198,77 @@ public static class SkillRecordText
     public static string RevisionSkippedLogLine(SkillScope scope, string folder, string path) =>
         "Skill record: " + Key(scope, folder) + " " + path + "'s earlier text is too long to keep as a revision";
 
-    /// <summary><c>Skill reverted: profile/haiku SKILL.md to before a reflection write at 2026-10-02T…</c>. Pinned.</summary>
+    /// <summary><c>Skill record: profile/haiku SKILL.md's hand edit is not kept (too long, or not read)</c> (2026-10-04). Pinned.</summary>
+    public static string HandCopySkippedLogLine(SkillScope scope, string folder) =>
+        "Skill record: " + Key(scope, folder) + " " + SkillCatalog.FileName + "'s hand edit is not kept (too long, or not read)";
+
+    /// <summary>
+    /// <c>Skill reverted: profile/haiku SKILL.md to before a reflection write at 2026-10-02T…</c>; <c>… SKILL.md to the hand edit of …</c>
+    /// for a hand-edit copy (2026-10-04). Pinned.
+    /// </summary>
     public static string RevertedLogLine(SkillScope scope, string folder, SkillRevision revision)
     {
         ArgumentNullException.ThrowIfNull(revision);
-        return "Skill reverted: " + Key(scope, folder) + " " + revision.Path + " to before a " + revision.Actor + " write at " + SessionStore.Stamp(revision.At);
+        return "Skill reverted: " + Key(scope, folder) + " " + RevertDetail(revision);
+    }
+
+    /// <summary>
+    /// The revert's event detail and log line's tail: <c>SKILL.md to before a model write at …</c>, <c>SKILL.md to the hand edit of …</c>,
+    /// <c>SKILL.md to before a revert at …</c>.
+    /// </summary>
+    public static string RevertDetail(SkillRevision revision)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        string at = SessionStore.Stamp(revision.At);
+        return revision.IsHandEdit ? revision.Path + " to the hand edit of " + at
+            : revision.Actor == SkillActors.Revert ? revision.Path + " to before a revert at " + at
+            : revision.Path + " to before a " + revision.Actor + " write at " + at;
     }
 
     /// <summary><c>Skill records: imported 14 events from profile "neon"'s sessions.db</c>. Pinned.</summary>
     public static string ImportedLogLine(string profile, int events) =>
         string.Create(CultureInfo.InvariantCulture, $"Skill records: imported {events} events from profile \"{profile}\"'s {SessionStore.FileName}");
 
-    // ── /skills revert (2026-10-02) ─────────────────────────────────────────
+    // ── The Skills pane's revert (2026-10-04; /skills revert from 2026-10-02 until then) ───────
 
+    /// <summary>The skill page's row word. Pinned.</summary>
     public const string RevertWord = "revert";
 
-    /// <summary>The completion note on <c>revert</c>. Pinned.</summary>
-    public const string RevertNote = "put a skill back as it was before its last change (a model's, a reflection's, an install's)";
+    /// <summary>The version list's caption. Pinned.</summary>
+    public const string VersionsCaption = "Pick a version to put back; the current text is kept first, so you can come back to it.";
+
+    /// <summary>The revert row on a skill with no version kept. Pinned.</summary>
+    public static string NoVersionsNotice(string name) =>
+        "(" + RevertGlyph + "nothing to revert: no earlier version of " + name + " is kept yet)";
 
     /// <summary>
-    /// The one place a revert's outcome becomes words (the command's and the pane's): the notice for a revert done, else the error. The
-    /// bool says which.
+    /// A version's words on the list, after its path: <c>before the model's change at 2026-10-04 14:05</c>, <c>not there before the
+    /// model's change at …</c> (restoring removes the file), <c>your edit of …</c>, <c>before a revert at …</c>. Pinned.
+    /// </summary>
+    public static string VersionText(SkillRevision revision, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        ArgumentNullException.ThrowIfNull(zone);
+        string at = SessionText.Moment(revision.At, zone);
+        if (revision.IsHandEdit)
+        {
+            return "your edit of " + at;
+        }
+
+        if (revision.Actor == SkillActors.Revert)
+        {
+            return (revision.Content is null ? "not there " : "") + "before a revert at " + at;
+        }
+
+        return (revision.Content is null ? "not there " : "") + "before " + ActorPhrase(revision.Actor) + " change at " + at;
+    }
+
+    /// <summary>The mark after the version the file holds now. Pinned.</summary>
+    public const string CurrentMark = "· current";
+
+    /// <summary>
+    /// The one place a revert's outcome becomes words: the notice for a revert done, else the error (an unchanged file is a notice too,
+    /// with nothing done). The bool says whether the skill changed.
     /// </summary>
     public static (bool Ok, string Text) RevertText(string name, SkillRevert revert, TimeZoneInfo zone)
     {
@@ -226,36 +276,45 @@ public static class SkillRecordText
         return revert.Outcome switch
         {
             SkillRevertOutcome.Reverted => (true, RevertedNotice(name, revert.Revision!, zone)),
-            SkillRevertOutcome.NoRevision => (false, NoRevisionError(name)),
-            SkillRevertOutcome.HandEdited => (false, RevertHandEditedError(name)),
+            SkillRevertOutcome.NoRevision => (false, VersionGoneError(name)),
+            SkillRevertOutcome.Unchanged => (false, UnchangedNotice(name)),
+            SkillRevertOutcome.NotKept => (false, NotKeptError(name, revert.Revision?.Path ?? SkillCatalog.FileName)),
             _ => (false, RevertFailedError(name, revert.Edit?.Detail ?? "")),
         };
     }
 
-    /// <summary>The usage error for <c>/skills revert</c> with no name. Pinned.</summary>
-    public const string RevertUsageError = "/skills revert <name>: the skill to put back as it was before its last change.";
-
-    /// <summary>The undo glyph the revert's notice wears.</summary>
+    /// <summary>The undo glyph the revert's notices wear.</summary>
     public const string RevertGlyph = "↩️ ";
 
-    /// <summary>A name no skill in the catalog has. Pinned.</summary>
-    public static string RevertUnknownError(string name) => "No skill named " + name + ".";
+    /// <summary>A version dropped from the list since it was shown (past the cap). Pinned.</summary>
+    public static string VersionGoneError(string name) => "Not reverted: that version of " + name + " is no longer kept.";
 
-    /// <summary>A skill with nothing to put back. Pinned.</summary>
-    public static string NoRevisionError(string name) => "Nothing to revert for " + name + ": no earlier version is kept (only the app's own changes keep one).";
+    /// <summary>The file holds the picked version already. Pinned.</summary>
+    public static string UnchangedNotice(string name) => "(" + RevertGlyph + name + " holds that version already: nothing changed)";
 
     /// <summary>After the revert: <c>(↩️ haiku: SKILL.md is back as it was before a reflection's change at 2026-10-02 14:05)</c>; <c>… removed, as before …</c> for a file the change created. Pinned.</summary>
     public static string RevertedNotice(string name, SkillRevision revision, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(revision);
         ArgumentNullException.ThrowIfNull(zone);
+        string at = SessionText.Moment(revision.At, zone);
+        if (revision.IsHandEdit)
+        {
+            // A hand edit's copy (2026-10-04): (↩️ haiku: SKILL.md is back to your edit of …).
+            return "(" + RevertGlyph + name + ": " + revision.Path + " is back to your edit of " + at + ")";
+        }
+
         string what = revision.Content is null ? revision.Path + " is removed, as" : revision.Path + " is back as it was";
-        return "(" + RevertGlyph + name + ": " + what + " before " + ActorPhrase(revision.Actor) + " change at " + SessionText.Moment(revision.At, zone) + ")";
+        string before = revision.Actor == SkillActors.Revert ? "before a revert at " : "before " + ActorPhrase(revision.Actor) + " change at ";
+        return "(" + RevertGlyph + name + ": " + what + " " + before + at + ")";
     }
 
-    /// <summary>The revert refused over a hand edit. Pinned.</summary>
-    public static string RevertHandEditedError(string name) =>
-        "Not reverted: " + name + " was edited by hand since the app last changed it, and a revert would lose that edit; change it by hand instead.";
+    /// <summary>
+    /// The revert refused because the file's current text cannot be kept first (2026-10-04: longer than
+    /// <see cref="SkillRecordStore.MaxRevisionChars"/>, or not read), so the restore would lose it. Pinned.
+    /// </summary>
+    public static string NotKeptError(string name, string path) =>
+        "Not reverted: " + name + "'s " + path + " is too long to keep (over 256 KB) or could not be read, so a revert would lose it; change it by hand instead.";
 
     /// <summary>The revert that could not write: <c>Could not revert haiku: …</c>. Pinned.</summary>
     public static string RevertFailedError(string name, string detail) => "Could not revert " + name + (string.IsNullOrWhiteSpace(detail) ? "." : ": " + detail);
@@ -266,12 +325,13 @@ public static class SkillRecordText
         SkillActors.Reflection => "a reflection's",
         SkillActors.Model => "the model's",
         SkillActors.Install => "an install's",
+        SkillActors.Revert => "a revert's",
         _ => "your",
     };
 
     /// <summary>The install update page's warning when reflections changed the installed skill (2026-10-02). Pinned.</summary>
     public static string ChangedSinceInstallWarning(int writes) =>
-        string.Create(CultureInfo.InvariantCulture, $"A reflection changed this skill {writes}× since it was installed; updating replaces that (/skills revert brings the SKILL.md back).");
+        string.Create(CultureInfo.InvariantCulture, $"A reflection changed this skill {writes}× since it was installed; updating replaces that (the skill's revert in /skills brings the SKILL.md back).");
 
     /// <summary><c>Skills reconciled: 2 added, 1 removed, 1 modified (global + profile neon)</c>. Pinned.</summary>
     public static string ReconciledLogLine(SkillReconcile result, string profile) =>

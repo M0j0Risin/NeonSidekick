@@ -1199,7 +1199,7 @@ internal sealed partial class ChatScreen
             Flow = _flow,
         };
         // Built once: the roots ride the facts, so a profile switch needs no rebind; the Options rows through the settings menu (2026-09-19).
-        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, RevertSkill);
+        _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill);
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
@@ -2838,7 +2838,7 @@ internal sealed partial class ChatScreen
     /// so <c>Session logging</c> off meant no cooldown and a session purge forgot it); the skill's name is its name now, a rename followed.
     /// Under either mode, turns that loaded the skill just written and met an error after the load never wait (later on 2026-10-02,
     /// the user's call): the fresh skill failed in use, the one case a rewrite is surely worth, and the other churn guards (the usage
-    /// line's wording, load-before-rewrite, changed-since-load, <c>/skills revert</c>) carry the rest.
+    /// line's wording, load-before-rewrite, changed-since-load, the Skills pane's revert) carry the rest.
     /// </summary>
     private bool CoolingDown(AppSettingsData effective, TurnTrace tally, out string detail)
     {
@@ -3955,14 +3955,8 @@ internal sealed partial class ChatScreen
                     ], argText);
                 }
 
-                // revert (2026-10-02): the catalog's names after it.
-                if (argText.StartsWith(SkillRecordText.RevertWord + " ", StringComparison.OrdinalIgnoreCase))
-                {
-                    return argText.Count(c => c == ' ') > 1 || sources.Skills is null ? [] : MentionCompleter.Matches(
-                        sources.Skills().Select(item => new CompletionItem(SkillRecordText.RevertWord + " " + item.Text, item.Note)).ToList(), argText);
-                }
-
-                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote), new(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote), new(SkillRecordText.RevertWord, SkillRecordText.RevertNote)], argText);
+                // revert went to the Skills pane on 2026-10-04 (the user's call): add and purge are left.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(SkillInstallText.AddWord, SkillInstallText.AddNote), new(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote)], argText);
 
             case SlashCommand.HomeAssistant:
                 // The verbs, then the rooms, names, scenes and TV words of the last snapshot (2026-09-28).

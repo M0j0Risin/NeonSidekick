@@ -25,7 +25,7 @@ public sealed record SkillInstallCheck(SkillInstallOption Option, SkillScope? Sc
 /// <summary>How an install ended: the scope and folder it went to, or the error.</summary>
 public sealed record SkillInstallResult(bool Ok, bool Updated, SkillScope Scope, string Directory, string? Error = null)
 {
-    /// <summary>The SKILL.md an update replaced (2026-10-02, kept as a revision for <c>/skills revert</c>); null for a new install or one too long to keep.</summary>
+    /// <summary>The SKILL.md an update replaced (2026-10-02, kept as a revision for the Skills pane's revert); null for a new install or one too long to keep.</summary>
     public string? Previous { get; init; }
 }
 

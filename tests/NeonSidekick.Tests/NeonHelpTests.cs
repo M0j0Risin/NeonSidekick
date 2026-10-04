@@ -289,12 +289,13 @@ public class NeonHelpTests
     }
 
     [Fact]
-    public void TheGroup_StandsAfterTheTimers_WithoutASwitch_AndCountsASwitchedOffTool()
+    public void TheGroup_SortsAmongTheOthers_WithoutASwitch_AndCountsASwitchedOffTool()
     {
         var help = ChatScreen.HelpTools();
         var groups = SystemPromptSummary.ToolGroups([], [], [], [], memoryEnabled: false, disabled: ToolsText.DisabledSet([NeonHelpTool.ToolName]), help: help);
 
-        Assert.Equal(["Clock (0)", "Timers (0)", HelpText.GroupTitle + " (0 of 1)", "Files (0)"], groups.Take(4).Select(g => g.Name).ToArray());
+        // Alphabetical since 2026-10-04 (the user's ask; after the timers, where the turn offers it, until then).
+        Assert.Equal(["Clock (0)", "Files (0)", HelpText.GroupTitle + " (0 of 1)", "Memory (0)", "Timers (0)"], groups.Select(g => g.Name).ToArray());
         var group = groups[2];
         Assert.Null(group.Switch);
         Assert.False(group.Offers(NeonHelpTool.ToolName));

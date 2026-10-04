@@ -276,64 +276,165 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal("haiku-forms", _records.LastReflectionWrite()!.Skill.Folder);
     }
 
+    /// <summary>
+    /// The Skills pane's revert (2026-10-04, the user's call): any kept version put back, the current text kept first and the pick kept
+    /// too, so the user can go back and forth; a file the change created goes; the version the file holds is unchanged.
+    /// </summary>
     [Fact]
-    public void Revert_PutsTheNewestVersionBack_ThenOneFurther_ThenNothing_AndANewFileGoes()
+    public void Restore_PutsAPickedVersionBack_KeepsTheCurrentText_AndThePick()
     {
         Write(_roots.Profile, "haiku");
         Reconcile();
         string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        string notes = Path.Combine(_roots.Profile, "haiku", "notes.md");
         string v0 = File.ReadAllText(path);
         var editor = Editor(SkillActors.Model);
         editor.Describe("update", "", "haiku", null, "Version one.");
         string v1 = File.ReadAllText(path);
         editor.Describe("update", "", "haiku", null, "Version two.");
+        string v2 = File.ReadAllText(path);
         editor.DescribeWrite("haiku", "notes.md", "new");
         var skill = SkillOf("haiku");
 
-        var first = _records.Revert(skill);
-        Assert.Equal((SkillRevertOutcome.Reverted, "notes.md"), (first.Outcome, first.Revision!.Path));
-        Assert.False(File.Exists(Path.Combine(_roots.Profile, "haiku", "notes.md")));   // the write created it: the revert removes it
-        Assert.Equal("(↩️ haiku: notes.md is removed, as before the model's change at " + Sessions.SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone) + ")",
-            SkillRecordText.RevertText("haiku", first, _time.LocalTimeZone).Text);
+        var list = _records.Revisions(skill);
+        Assert.Equal([("notes.md", null), (SkillCatalog.FileName, v1), (SkillCatalog.FileName, v0)], list.Select(r => (r.Path, r.Content)));
+        Assert.All(list, r => Assert.False(SkillRecords.IsCurrent(skill, r)));
 
-        Assert.Equal(SkillRevertOutcome.Reverted, _records.Revert(skill).Outcome);
-        Assert.Equal(v1, File.ReadAllText(path));
-        Assert.Equal(SkillRevertOutcome.Reverted, _records.Revert(skill).Outcome);
+        // The oldest: the current text is kept first, as a revert's version, and the pick stays on the list.
+        var oldest = _records.Restore(skill, list[2]);
+        Assert.Equal(SkillRevertOutcome.Reverted, oldest.Outcome);
         Assert.Equal(v0, File.ReadAllText(path));
-        var none = _records.Revert(skill);
-        Assert.Equal(SkillRevertOutcome.NoRevision, none.Outcome);
-        Assert.Equal((false, SkillRecordText.NoRevisionError("haiku")), SkillRecordText.RevertText("haiku", none, _time.LocalTimeZone));
-        Assert.Equal(default, Reconcile());   // the reverts are the app's own writes, never a hand edit
+        Assert.Equal("(↩️ haiku: SKILL.md is back as it was before the model's change at " + Sessions.SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone) + ")",
+            SkillRecordText.RevertText("haiku", oldest, _time.LocalTimeZone).Text);
+        list = _records.Revisions(skill);
+        Assert.Equal(4, list.Count);
+        Assert.Equal((SkillCatalog.FileName, v2, SkillActors.Revert), (list[0].Path, list[0].Content, list[0].Actor));
+        Assert.True(SkillRecords.IsCurrent(skill, list[3]));
+
+        // Back to where it was: v0 is on the list already, so nothing new is kept.
+        Assert.Equal(SkillRevertOutcome.Reverted, _records.Restore(skill, list[0]).Outcome);
+        Assert.Equal(v2, File.ReadAllText(path));
+        Assert.Equal(4, _records.Revisions(skill).Count);
+        Assert.Equal("(↩️ haiku: SKILL.md is back as it was before a revert at " + Sessions.SessionText.Moment(_time.GetUtcNow(), _time.LocalTimeZone) + ")",
+            SkillRecordText.RevertedNotice("haiku", list[0], _time.LocalTimeZone));
+
+        var same = _records.Restore(skill, list[0]);
+        Assert.Equal(SkillRevertOutcome.Unchanged, same.Outcome);
+        Assert.Equal((false, SkillRecordText.UnchangedNotice("haiku")), SkillRecordText.RevertText("haiku", same, _time.LocalTimeZone));
+
+        // A version from before the file was there removes it, its text kept first.
+        var removed = _records.Restore(skill, list[1]);
+        Assert.Equal(SkillRevertOutcome.Reverted, removed.Outcome);
+        Assert.False(File.Exists(notes));
+        Assert.StartsWith("(↩️ haiku: notes.md is removed, as before the model's change at ", SkillRecordText.RevertText("haiku", removed, _time.LocalTimeZone).Text, StringComparison.Ordinal);
+        Assert.Contains(_records.Revisions(skill), r => r.Path == "notes.md" && r.Content == "new" && r.Actor == SkillActors.Revert);
+
+        Assert.Equal(default, Reconcile());   // the restores are the app's own writes, never a hand edit
         long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
         Assert.Equal(3, _store.Events(id).Count(e => e.Kind == SkillEventKinds.Reverted));
     }
 
     [Fact]
-    public void AHandEdit_IsAnEvent_TheUsageLineSaysSo_AndARevertIsRefused()
+    public void Restore_AVersionNoLongerKept_IsRefused()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        Editor(SkillActors.Model).Describe("update", "", "haiku", null, "Version one.");
+        var skill = SkillOf("haiku");
+        var gone = _records.Restore(skill, _records.Revisions(skill)[0] with { Id = 9999 });
+        Assert.Equal(SkillRevertOutcome.NoRevision, gone.Outcome);
+        Assert.Equal((false, SkillRecordText.VersionGoneError("haiku")), SkillRecordText.RevertText("haiku", gone, _time.LocalTimeZone));
+        Assert.Empty(_records.Revisions(SkillOf("haiku") with { Scope = SkillScope.External }));
+    }
+
+    /// <summary>The hand edit written to the haiku's SKILL.md with a file time past the row's, as an editor outside the app leaves it.</summary>
+    private string HandEdit(string text, int minutesAhead = 10)
+    {
+        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        File.WriteAllText(path, text);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(minutesAhead));
+        return path;
+    }
+
+    private IReadOnlyList<SkillRevision> HandCopies(string folder = "haiku") =>
+        _store.Revisions(_store.Find(SkillScope.Profile, "neon", folder)!.Id).Where(r => r.IsHandEdit).ToList();
+
+    /// <summary>2026-10-04 (the user's call): the reconcile keeps a hand edit's text, so a restore past the edit never loses it.</summary>
+    [Fact]
+    public void AHandEdit_IsAnEvent_TheReconcileKeepsACopy_AndARestoreNeverLosesIt()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        string v0 = File.ReadAllText(path);
+        Editor(SkillActors.Reflection).Describe("update", "", "haiku", null, "The reflection's text.");
+        const string Mine = "---\nname: haiku\ndescription: Does things.\n---\nMy own words.\n";
+        HandEdit(Mine);
+
+        Assert.Equal(1, Reconcile().Modified);
+        var skill = SkillOf("haiku");
+        Assert.NotNull(_records.FactsOf(skill)!.HandEditedAt);
+        Assert.Contains("; edited by hand ", _records.UsageLine(skill, _time.LocalTimeZone), StringComparison.Ordinal);
+        var copy = Assert.Single(HandCopies());
+        Assert.Equal((SkillCatalog.FileName, Mine, SkillActors.User), (copy.Path, copy.Content, copy.Actor));
+        var list = _records.Revisions(skill);
+        Assert.Equal([copy.Id, list[1].Id], list.Select(r => r.Id));
+        Assert.True(SkillRecords.IsCurrent(skill, copy));
+
+        // Past the edit: the copy holds it already, so nothing more is kept.
+        Assert.Equal(SkillRevertOutcome.Reverted, _records.Restore(skill, list[1]).Outcome);
+        Assert.Equal(v0, File.ReadAllText(path));
+        Assert.Equal(2, _records.Revisions(skill).Count);
+        Assert.Null(_records.FactsOf(skill)!.HandEditedAt);
+
+        // And back to the edit, with its own notice.
+        var back = _records.Restore(skill, copy);
+        Assert.Equal(SkillRevertOutcome.Reverted, back.Outcome);
+        Assert.Equal(Mine, File.ReadAllText(path));
+        Assert.Equal((true, "(↩️ haiku: SKILL.md is back to your edit of " + Sessions.SessionText.Moment(copy.At, _time.LocalTimeZone) + ")"),
+            SkillRecordText.RevertText("haiku", back, _time.LocalTimeZone));
+        Assert.Equal(2, _records.Revisions(skill).Count);
+        Assert.Equal(default, Reconcile());
+    }
+
+    [Fact]
+    public void ANewerHandEdit_ReplacesTheCopy_AndAnAppWriteDropsIt()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        HandEdit("---\nname: haiku\ndescription: Does things.\n---\nFirst words.\n", 10);
+        Reconcile();
+        string path = HandEdit("---\nname: haiku\ndescription: Does things.\n---\nSecond words.\n", 20);
+        Reconcile();
+        Assert.Contains("Second words.", Assert.Single(HandCopies()).Content, StringComparison.Ordinal);
+
+        // The app's write keeps the hand-edited text as its own revision: the copy goes, so the edit is listed once, not twice.
+        _time.Advance(TimeSpan.FromMinutes(30));
+        Editor(SkillActors.Model).Describe("update", "", "haiku", null, "The model's text.");
+        Assert.Empty(HandCopies());
+        var skill = SkillOf("haiku");
+        var kept = Assert.Single(_records.Revisions(skill));
+        Assert.Equal(SkillRevertOutcome.Reverted, _records.Restore(skill, kept).Outcome);
+        Assert.Contains("Second words.", File.ReadAllText(path), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACurrentTextTooLongToKeep_KeepsNoCopy_AndTheRestoreIsRefused()
     {
         Write(_roots.Profile, "haiku");
         Reconcile();
         Editor(SkillActors.Reflection).Describe("update", "", "haiku", null, "The reflection's text.");
-        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
-        File.WriteAllText(path, "---\nname: haiku\ndescription: Does things.\n---\nMy own words.\n");
-        var edited = DateTimeOffset.UtcNow.AddMinutes(10);
-        File.SetLastWriteTimeUtc(path, edited.UtcDateTime);
+        string mine = "---\nname: haiku\ndescription: Does things.\n---\n" + new string('x', SkillRecordStore.MaxRevisionChars) + "\n";
+        string path = HandEdit(mine);
+        Reconcile();
+        Assert.Empty(HandCopies());
 
-        Assert.Equal(1, Reconcile().Modified);
         var skill = SkillOf("haiku");
-        var facts = _records.FactsOf(skill)!;
-        Assert.NotNull(facts.HandEditedAt);
-        Assert.Contains("; edited by hand ", _records.UsageLine(skill, _time.LocalTimeZone), StringComparison.Ordinal);
-
-        var refused = _records.Revert(skill);
-        Assert.Equal(SkillRevertOutcome.HandEdited, refused.Outcome);
-        Assert.Contains("My own words.", File.ReadAllText(path), StringComparison.Ordinal);
-        Assert.Equal((false, SkillRecordText.RevertHandEditedError("haiku")), SkillRecordText.RevertText("haiku", refused, _time.LocalTimeZone));
-
-        // A later app write makes the latest change the app's again.
-        _time.Advance(TimeSpan.FromMinutes(1));
-        Editor(SkillActors.Model).Describe("update", "", "haiku", "New description.", null);
-        Assert.Null(_records.FactsOf(skill)!.HandEditedAt);
+        var refused = _records.Restore(skill, Assert.Single(_records.Revisions(skill)));
+        Assert.Equal(SkillRevertOutcome.NotKept, refused.Outcome);
+        Assert.Equal(mine, File.ReadAllText(path));
+        Assert.Equal((false, SkillRecordText.NotKeptError("haiku", SkillCatalog.FileName)), SkillRecordText.RevertText("haiku", refused, _time.LocalTimeZone));
+        Assert.Single(_records.Revisions(skill));
     }
 
     [Fact]
@@ -376,7 +477,7 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal(0, _records.ReflectionChangesSinceInstall(skill));
         var revision = _records.LatestRevision(skill)!;
         Assert.Equal(("the reflected text", SkillActors.Install), (revision.Content, revision.Actor));
-        Assert.Equal("A reflection changed this skill 2× since it was installed; updating replaces that (/skills revert brings the SKILL.md back).", SkillRecordText.ChangedSinceInstallWarning(2));
+        Assert.Equal("A reflection changed this skill 2× since it was installed; updating replaces that (the skill's revert in /skills brings the SKILL.md back).", SkillRecordText.ChangedSinceInstallWarning(2));
     }
 
     [Fact]
@@ -476,7 +577,7 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal("Skills reconciled: 2 added, 1 removed, 0 modified (global + profile neon)", SkillRecordText.ReconciledLogLine(new SkillReconcile(2, 1, 0, 0), "neon"));
         Assert.Equal("Skills purge: 2 deleted, 0 failed, unused for 30 days", SkillRecordText.PurgeSummaryLogLine(2, 0, days));
         Assert.Equal("Skill purged: profile/haiku (last used never, modified 2026-08-01T14:05:00.0000000Z)", SkillRecordText.PurgedLogLine(never));
-        Assert.Equal(SkillInstallText.UsageError + ", /skills purge list|commit <age>, or /skills revert <name>", SkillRecordText.SkillsUsageError);
+        Assert.Equal(SkillInstallText.UsageError + ", or /skills purge list|commit <age>", SkillRecordText.SkillsUsageError);
         Assert.Equal(at, never.Reference);
         Assert.Equal(at, used.Reference);
     }

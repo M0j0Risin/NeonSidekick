@@ -535,7 +535,8 @@ public static class SystemPromptSummary
     // ── The Tools tab ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// The groups in the order the turn offers them; the memory group is marked when memory is off,
+    /// The groups in alphabetical order (<see cref="SortedGroups"/>, 2026-10-04; the comments below that place a group "after" another
+    /// tell the order the turn offers them, the list's until then); the memory group is marked when memory is off,
     /// the web group when the web tools are, the files group when the file tools are, the questions
     /// group when the setting <c>Ask user</c> is (else when there is no pane), the sessions group when
     /// the setting <c>Session tool</c> is, every group when the setting <c>LLM offer tools</c> is (the group's
@@ -774,8 +775,16 @@ public static class SystemPromptSummary
             groups.Add(Group("Questions", questions, questionsNote, askEnabled && paneOn && toolsEnabled, SettingsField.AskUser, disabled));
         }
 
-        return groups;
+        return SortedGroups(groups);
     }
+
+    /// <summary>
+    /// The groups in alphabetical order by their bare label (2026-10-04, the user's ask; the order the turn offers them until then), any case;
+    /// the sort is stable, so several MCP servers keep their own order on a tie. One source for <c>/tools</c>' Offered tab, <c>/sys</c>' Tools
+    /// tab, the <c>$</c> completion and the Botchat limited tools checklist. What a turn sends is built elsewhere and keeps its own order.
+    /// </summary>
+    public static IReadOnlyList<ToolGroup> SortedGroups(IEnumerable<ToolGroup> groups) =>
+        groups.OrderBy(g => g.Label, StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>One group: the disabled tools noted (<paramref name="notes"/> first — a tool dropped for another reason keeps that reason), the name counting what the /tools list left.</summary>
     private static ToolGroup Group(string name, IReadOnlyList<AIFunction> tools, string note, bool offered, SettingsField? @switch, IReadOnlySet<string>? disabled, Dictionary<string, string>? notes = null, string disabledSuffix = DisabledSuffix)

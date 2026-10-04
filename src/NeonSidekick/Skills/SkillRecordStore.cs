@@ -39,7 +39,7 @@ public static class SkillEventKinds
     /// <summary>A turn loaded it (one event per turn, with the errors after the load); a <c>/botchat</c> preload did too until 2026-10-04.</summary>
     public const string Used = "used";
 
-    /// <summary><c>/skills revert</c> (or the pane's revert) put an earlier version back.</summary>
+    /// <summary>The Skills pane's revert put a kept version back (<c>/skills revert</c> until 2026-10-04).</summary>
     public const string Reverted = "reverted";
 
     /// <summary>The kinds that changed the skill's files.</summary>
@@ -60,6 +60,12 @@ public static class SkillActors
 
     /// <summary><c>/skills add</c>.</summary>
     public const string Install = "install";
+
+    /// <summary>
+    /// The Skills pane's revert (2026-10-04), a revision's actor only: the text a restore replaced, kept first so nothing is lost (the
+    /// revert's event is the user's).
+    /// </summary>
+    public const string Revert = "revert";
 }
 
 /// <summary>One row of <c>skill_events</c> (2026-10-02): the skill's row id, when, what, who, in which profile and session, the errors a turn hit after loading it, and a detail (a change's summary, a file's path, an install's origin).</summary>
@@ -68,8 +74,16 @@ public sealed record SkillEvent(long Id, long SkillId, DateTimeOffset At, string
 /// <summary>
 /// One row of <c>skill_revisions</c> (2026-10-02): the text a file of the skill held before an app write replaced it. <paramref name="Path"/>
 /// is <c>SKILL.md</c> or the supporting file's path relative to the folder; <paramref name="Content"/> is null when the write created the file.
+/// <para>A row of <see cref="SkillActors.User"/> is a hand-edit copy instead (2026-10-04, <see cref="IsHandEdit"/>): the text a hand edit
+/// left, kept by the reconcile when it found the edit, so a revert can go back past the edit without losing it. One per file at most;
+/// an app write of the file drops it, its own revision holding the same text. A row of <see cref="SkillActors.Revert"/> is the text a
+/// revert replaced, kept first so nothing is lost.</para>
 /// </summary>
-public sealed record SkillRevision(long Id, long SkillId, DateTimeOffset At, string Path, string? Content, string Actor);
+public sealed record SkillRevision(long Id, long SkillId, DateTimeOffset At, string Path, string? Content, string Actor)
+{
+    /// <summary>A hand-edit copy: the text of the user's edit, not a text an app write replaced.</summary>
+    public bool IsHandEdit => Actor == SkillActors.User;
+}
 
 /// <summary>How the turns used one skill, read from its <c>used</c> events: the loads, across how many sessions, how many of those turns hit an error after the load, and the last one.</summary>
 public sealed record SkillUseFacts(int Loads, int Sessions, int FollowedByErrors, DateTimeOffset LastAt);
@@ -89,7 +103,9 @@ public sealed record SkillWriteMark(SkillEvent Event, SkillRecord Skill);
 /// <para>Since 2026-10-02 (the reflection audit, the user's call: the skills' history belongs with the skills, not with the sessions a
 /// purge removes) two more tables hang off a row by its id, both deleted with it (<c>foreign_keys</c> on): <c>skill_events</c>, what
 /// happened to the skill and who did it (<see cref="SkillEventKinds"/>, <see cref="SkillActors"/>), and <c>skill_revisions</c>, the text
-/// a file held before an app write replaced it, the newest <see cref="MaxRevisions"/> per skill, for <c>/skills revert</c>. Added tables
+/// a file held before an app write replaced it (and, since 2026-10-04, the copy of a hand edit, <see cref="SkillRevision.IsHandEdit"/>),
+/// the newest <see cref="MaxRevisions"/> per skill: the versions the Skills pane's revert lists (2026-10-04; <c>/skills revert</c> until
+/// then). Added tables
 /// are <c>IF NOT EXISTS</c> on every open, so the schema number stays 1 (<c>sessions.db</c>'s <c>command_history</c> precedent).</para>
 /// </summary>
 public sealed class SkillRecordStore : IDisposable
@@ -462,8 +478,21 @@ public sealed class SkillRecordStore : IDisposable
         }
     }
 
-    /// <summary>A revision put back (<c>/skills revert</c>): it leaves the list, so the next revert goes one further back.</summary>
-    public void DeleteRevision(long id) => WriteById("drop a skill revision", "DELETE FROM skill_revisions WHERE id = $id", id, null);
+    /// <summary>
+    /// The hand-edit copies (<see cref="SkillRevision.IsHandEdit"/>) of <paramref name="path"/> dropped (2026-10-04): a newer hand edit's
+    /// copy replaces them, and an app write of the file keeps the hand-edited text as its own revision. The count dropped.
+    /// </summary>
+    public int DropHandCopies(SkillScope scope, string profile, string folder, string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return Write("drop a skill's hand-edit copy",
+            "DELETE FROM skill_revisions WHERE actor = $actor AND path = $path AND skill_id IN (SELECT id FROM skills WHERE scope = $scope AND profile = $profile AND folder = $folder)",
+            scope, profile, folder, command =>
+            {
+                command.Parameters.AddWithValue("$actor", SkillActors.User);
+                command.Parameters.AddWithValue("$path", path);
+            });
+    }
 
     /// <summary>
     /// The skill's events in the order they were recorded (the id's, not the moment's: a hand edit carries its file's own time, which

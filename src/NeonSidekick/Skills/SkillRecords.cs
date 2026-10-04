@@ -19,16 +19,19 @@ public sealed record SkillFacts(SkillUseFacts? Uses, int ReflectionWrites, Skill
     public bool IsEmpty => Uses is null && ReflectionWrites == 0 && HandEditedAt is null && InstalledFrom is null;
 }
 
-/// <summary>What a <see cref="SkillRecords.Revert"/> came to.</summary>
+/// <summary>What a <see cref="SkillRecords.Restore"/> came to.</summary>
 public enum SkillRevertOutcome
 {
     Reverted,
 
-    /// <summary>No earlier version is kept.</summary>
+    /// <summary>The picked version is no longer kept (dropped past the cap since the list was shown).</summary>
     NoRevision,
 
-    /// <summary>The skill was edited by hand since the app last changed it: refused, the edit would be lost.</summary>
-    HandEdited,
+    /// <summary>The file holds the picked version already: nothing written.</summary>
+    Unchanged,
+
+    /// <summary>The file's current text cannot be kept (too long, or not read): refused, the restore would lose it (2026-10-04; a hand edit no copy held until then).</summary>
+    NotKept,
 
     /// <summary>The editor could not write it back; the edit result's detail says why.</summary>
     Failed,
@@ -55,7 +58,7 @@ public sealed record SkillRevert(SkillRevertOutcome Outcome, SkillRevision? Revi
 /// that changed anything is one Info line.</para>
 /// <para>Since 2026-10-02 (the reflection audit) the records are also the skills' history: who wrote each change (the model, a
 /// reflection, the user by hand, an install), every turn that loaded a skill with the errors after the load, and the text each app write
-/// replaced (the revisions <see cref="Revert"/> puts back). The reflection reads its usage lines and its cooldown mark from here, so
+/// replaced and a hand edit's copy (the versions <see cref="Restore"/> puts back). The reflection reads its usage lines and its cooldown mark from here, so
 /// they survive a session purge and a rename, and work with <c>Session logging</c> off.</para>
 /// </summary>
 public sealed class SkillRecords
@@ -149,7 +152,62 @@ public sealed class SkillRecords
             return;
         }
 
-        _store.AddRevision(scope, profile, folder, path, result.Existed ? result.Previous : null, actor, at);
+        if (_store.AddRevision(scope, profile, folder, path, result.Existed ? result.Previous : null, actor, at))
+        {
+            // The revision holds the hand-edited text now, if there was one (2026-10-04): a copy left beside it would come back twice.
+            _store.DropHandCopies(scope, profile, folder, path);
+        }
+    }
+
+    /// <summary>
+    /// A hand edit of <paramref name="file"/> (the folder's <c>SKILL.md</c>) kept as the skill's one hand-edit copy (2026-10-04, the
+    /// user's call), replacing an older one, so a revert can go back past the edit without losing it; false (a Debug line) when the text
+    /// is too long to keep or cannot be read.
+    /// </summary>
+    private bool KeepHandCopy(SkillScope scope, string profile, string folder, string file, DateTimeOffset at)
+    {
+        if (ReadKeepable(file) is not { } text)
+        {
+            DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.HandCopySkippedLogLine(scope, folder));
+            return false;
+        }
+
+        _store.DropHandCopies(scope, profile, folder, SkillCatalog.FileName);
+        return _store.AddRevision(scope, profile, folder, SkillCatalog.FileName, text, SkillActors.User, at);
+    }
+
+    /// <summary>A file's text when it is short enough to keep as a revision (<see cref="SkillRecordStore.MaxRevisionChars"/>); null when it is longer, gone or not read.</summary>
+    private static string? ReadKeepable(string file)
+    {
+        try
+        {
+            // Four bytes a character at most: a longer file is never short enough, and is not read.
+            if (!File.Exists(file) || new FileInfo(file).Length > SkillRecordStore.MaxRevisionChars * 4L)
+            {
+                return null;
+            }
+
+            string text = File.ReadAllText(file);
+            return text.Length <= SkillRecordStore.MaxRevisionChars ? text : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The text <paramref name="path"/> holds in <paramref name="skill"/>'s folder, or null when it is gone or not read.</summary>
+    private static string? ReadSkillFile(Skill skill, string path)
+    {
+        try
+        {
+            string file = Path.Combine(skill.Directory, path);
+            return File.Exists(file) ? File.ReadAllText(file) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -199,9 +257,9 @@ public sealed class SkillRecords
         {
             _store.Modified(result.Scope, profile, folder, folder, at);
             DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.ModifiedLogLine(result.Scope, folder));
-            if (result.Previous is not null)
+            if (result.Previous is not null && _store.AddRevision(result.Scope, profile, folder, SkillCatalog.FileName, result.Previous, SkillActors.Install, now))
             {
-                _store.AddRevision(result.Scope, profile, folder, SkillCatalog.FileName, result.Previous, SkillActors.Install, now);
+                _store.DropHandCopies(result.Scope, profile, folder, SkillCatalog.FileName);
             }
         }
         else
@@ -303,38 +361,76 @@ public sealed class SkillRecords
     }
 
     /// <summary>
-    /// <c>/skills revert</c> (2026-10-02): the newest revision of <paramref name="skill"/> put back (<see cref="SkillEditor.Restore"/>) and
-    /// taken off the list, so the next revert goes one further back; the row's modified moment moves and a <c>reverted</c> event says
-    /// what came back. Refused while the skill's latest change is a hand edit (the reconcile's, so the caller reconciles first): that
-    /// text was never the app's to keep, and a revert would lose it for good.
+    /// The kept versions of <paramref name="skill"/>, newest first (2026-10-04: the Skills pane's revert list, the user picking one); empty
+    /// for an external skill or one with no row.
     /// </summary>
-    public SkillRevert Revert(Skill skill)
+    public IReadOnlyList<SkillRevision> Revisions(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (LatestRevision(skill) is not { } revision)
+        return skill.Scope == SkillScope.External || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row
+            ? []
+            : _store.Revisions(row.Id);
+    }
+
+    /// <summary>Whether <paramref name="revision"/> is what its file holds now (the list's <c>current</c> mark): the same text, or no file for a version that had none.</summary>
+    public static bool IsCurrent(Skill skill, SkillRevision revision)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentNullException.ThrowIfNull(revision);
+        return string.Equals(revision.Content, ReadSkillFile(skill, revision.Path), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The Skills pane's revert (2026-10-04, the user's call; <c>/skills revert &lt;name&gt;</c>, the newest version and one further back
+    /// each time, until then): <paramref name="revision"/>, picked from <see cref="Revisions"/>, put back (<see cref="SkillEditor.Restore"/>).
+    /// Nothing is lost (the user's pick): the file's current text is kept first as a <see cref="SkillActors.Revert"/> version unless one on
+    /// the list holds it already (a hand edit's copy, an earlier revert's), and the picked version stays on the list, so the user can go back
+    /// and forth. The row's modified moment moves and a <c>reverted</c> event says what came back. <see cref="SkillRevertOutcome.Unchanged"/>
+    /// when the file holds it already; <see cref="SkillRevertOutcome.NotKept"/> when the current text cannot be kept (too long, or not read):
+    /// the restore would lose it for good. The caller reconciles first, so a hand edit's copy is on the list.
+    /// </summary>
+    public SkillRevert Restore(Skill skill, SkillRevision revision)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentNullException.ThrowIfNull(revision);
+        var listed = Revisions(skill);
+        if (!listed.Any(r => r.Id == revision.Id))
         {
-            return new SkillRevert(SkillRevertOutcome.NoRevision, null, null);
+            return new SkillRevert(SkillRevertOutcome.NoRevision, revision, null);
         }
 
-        if (FactsOf(skill) is { HandEditedAt: not null })
+        bool exists = File.Exists(Path.Combine(skill.Directory, revision.Path));
+        string? current = ReadSkillFile(skill, revision.Path);
+        if (exists && current is null)
         {
-            return new SkillRevert(SkillRevertOutcome.HandEdited, revision, null);
+            return new SkillRevert(SkillRevertOutcome.NotKept, revision, null);
+        }
+
+        if (string.Equals(current, revision.Content, StringComparison.Ordinal))
+        {
+            return new SkillRevert(SkillRevertOutcome.Unchanged, revision, null);
         }
 
         var roots = _roots();
+        string profile = ProfileOf(roots);
+        var now = _time.GetUtcNow();
+        bool held = listed.Any(r => string.Equals(r.Path, revision.Path, StringComparison.OrdinalIgnoreCase) && string.Equals(r.Content, current, StringComparison.Ordinal));
+        if (!held && (current is { Length: > SkillRecordStore.MaxRevisionChars }
+            || !_store.AddRevision(skill.Scope, profile, skill.FolderName, revision.Path, current, SkillActors.Revert, now)))
+        {
+            return new SkillRevert(SkillRevertOutcome.NotKept, revision, null);
+        }
+
         var result = SkillEditor.Restore(roots, skill.Scope, skill.Directory, skill.FolderName, revision.Path, revision.Content);
         if (result.Outcome is not (SkillEditOutcome.Updated or SkillEditOutcome.FileWritten))
         {
             return new SkillRevert(SkillRevertOutcome.Failed, revision, result);
         }
 
-        string profile = ProfileOf(roots);
-        var now = _time.GetUtcNow();
-        bool skillFile = string.Equals(revision.Path, SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase);
-        _store.Modified(skill.Scope, profile, skill.FolderName, skill.Name, skillFile ? WrittenAt(roots, skill.Scope, skill.FolderName, now) : now);
-        _store.DeleteRevision(revision.Id);
+        // The SKILL.md's own time when the clock is behind it, whichever file came back: the row never goes back past the file it watches.
+        _store.Modified(skill.Scope, profile, skill.FolderName, skill.Name, WrittenAt(roots, skill.Scope, skill.FolderName, now));
         _store.AddEvent(skill.Scope, profile, skill.FolderName, SkillEventKinds.Reverted, SkillActors.User, profile, now,
-            detail: revision.Path + " as before a " + revision.Actor + " write at " + Sessions.SessionStore.Stamp(revision.At));
+            detail: SkillRecordText.RevertDetail(revision));
         DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.RevertedLogLine(skill.Scope, skill.FolderName, revision));
         return new SkillRevert(SkillRevertOutcome.Reverted, revision, result);
     }
@@ -503,8 +599,10 @@ public sealed class SkillRecords
                     {
                         modified++;
                         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.ModifiedLogLine(scope, folder));
-                        // An edit the app did not make (2026-10-02): the reflection is told the text is the user's.
+                        // An edit the app did not make (2026-10-02): the reflection is told the text is the user's. Its text is kept
+                        // as the skill's hand-edit copy (2026-10-04), so a revert can go back past it and bring it back last.
                         _store.AddEvent(row.Id, SkillEventKinds.HandEdit, SkillActors.User, profile, written);
+                        KeepHandCopy(scope, profile, row.Folder, file, written);
                     }
                 }
             }

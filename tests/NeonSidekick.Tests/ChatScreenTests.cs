@@ -4411,7 +4411,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Height = 80;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/tools");
-        _console.Input.PushKey(Keys.Enter);     // get_current_time off
+        _console.Input.PushKey(Keys.Enter);     // camera_capture off: the first row (the groups alphabetical since 2026-10-04, Camera first)
         _console.Input.PushKey(Keys.Right);     // Web
         _console.Input.PushKey(Keys.Right);     // Files
         _console.Input.PushKey(Keys.Right);     // Shell (2026-09-21)
@@ -4440,9 +4440,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude CLI executable                   (looked up)\n  Claude CLI slash command permissions    read-only\n  Claude CLI slash command model          (Claude Code's default)\n  Claude CLI slash command effort         (Claude Code's default)\n  Claude CLI advisor tool                 off\n  Claude CLI advisor tool context         brief\n  Claude CLI advisor tool calls per turn  2 calls\n  Claude CLI advisor tool model           (as Claude CLI slash command model)\n  Claude CLI advisor tool effort          (as Claude CLI slash command effort)\n  Claude CLI advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
-        Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n▸ get_current_time      on   ", output);
-        Assert.Contains("\n  · get_current_time: off\n" + HeadingRow("── Clock · 2 of 3") + "\n▸ get_current_time      off  ", output);
-        Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
+        Assert.Contains("\n" + HeadingRow("── Camera · 1 ── " + ToolsText.Bare(ToolsText.CameraOffSuffix)) + "\n▸ camera_capture        on   ", output);
+        Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── " + ToolsText.Bare(ToolsText.CameraOffSuffix)) + "\n▸ camera_capture        off  ", output);
+        Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n  get_current_time      on   ", output);
+        Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.Contains("\n" + ToolsText.OfferedKeys, output);
         Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
         Assert.Contains("\n▸ Ask user                      on\n", output);
@@ -4817,7 +4818,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", output);
+        Assert.Contains("  · Offered\n  ·   Camera (1)", output);   // the groups alphabetical since 2026-10-04
+        Assert.Contains("  ·   Clock (3)\n  ·     get_current_time      on   ", output);
         Assert.Contains("  ·   Files (14 of 15)\n", output);
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
@@ -4839,7 +4841,7 @@ public partial class ChatScreenTests : IDisposable
             }
             else if (i == 2)
             {
-                Scripted().Push(Keys.Enter);    // get_current_time off
+                Scripted().Push(Keys.Enter);    // camera_capture off: the first row (the groups alphabetical since 2026-10-04)
                 Scripted().Push(Keys.Escape);
             }
         });
@@ -4847,8 +4849,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
-        Assert.Contains("  · get_current_time: off", output);
-        Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
+        Assert.Contains("  · " + CameraCaptureTool.ToolName + ": off", output);
+        Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -19476,10 +19478,12 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task SkillsRevert_PutsTheLastVersionBack_ThenSaysNothingIsKept()
+    public async Task SkillsPaneRevert_ListsTheVersions_PutsThePickBack_AndKeepsTheReplacedText()
     {
-        // /skills revert (2026-10-02): the main chat's update kept the text it replaced; the revert writes it back.
+        // The Skills pane's revert (2026-10-04, the user's call; /skills revert from 2026-10-02 until then): the main chat's update kept
+        // the text it replaced; the skill's page, revert, the version list, Enter on the newest puts it back, the replaced text kept first.
         _settings.Update(d => d.TtsOutput = false);
+        _geometry = new ScreenGeometry(() => null);
         PutSkill(ProfileSkills, "clock-check");
         string path = Path.Combine(ProfileSkills, "clock-check", SkillCatalog.FileName);
         string before = File.ReadAllText(path);
@@ -19498,21 +19502,48 @@ public partial class ChatScreenTests : IDisposable
             {
                 case 0: step++; PushLine(input, "change the clock skill"); break;
                 case 1:
-                    if (Output.Contains("Changed it.", StringComparison.Ordinal)) { step++; PushLine(input, "/skills revert clock-check"); }
+                    if (Output.Contains("Changed it.", StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/skills");
+                        input.Push(Keys.Enter);   // clock-check's page
+                        for (int i = 0; i < 4; i++)
+                        {
+                            input.Push(Keys.Down);   // profile, global, rename, edit, revert
+                        }
+
+                        input.Push(Keys.Enter);   // the version list
+                        input.Push(Keys.Enter);   // the newest: before the model's change
+                    }
+
                     break;
                 case 2:
-                    if (Output.Contains("is back as it was", StringComparison.Ordinal)) { step++; PushLine(input, "/skills revert clock-check"); }
-                    break;
-                case 3:
-                    if (Output.Contains("Nothing to revert", StringComparison.Ordinal)) { step++; PushLine(input, "/exit"); }
+                    if (Output.Contains("is back as it was", StringComparison.Ordinal))
+                    {
+                        step++;
+                        input.Push(Keys.Enter);   // the page again
+                        for (int i = 0; i < 4; i++)
+                        {
+                            input.Push(Keys.Down);
+                        }
+
+                        input.Push(Keys.Enter);   // the list: the model's text kept as a revert's version
+                        input.Push(Keys.Escape);
+                        input.Push(Keys.Escape);
+                        PushLine(input, "/exit");
+                    }
+
                     break;
             }
         };
 
         string output = await RunAsync();
 
+        Assert.Contains(Titled(SkillsMenu.VersionsTitle("clock-check")), output);
+        Assert.Contains(SkillRecordText.VersionsCaption, output);
         Assert.Contains("(↩️ clock-check: SKILL.md is back as it was before the model's change at ", output);
-        Assert.Contains(SkillRecordText.NoRevisionError("clock-check"), output);
+        Assert.Contains("before a revert at ", output);
+        Assert.Contains(SkillRecordText.CurrentMark, output);
         Assert.Equal(before, File.ReadAllText(path));
     }
 
@@ -20794,7 +20825,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/persona", "copy ghost ", sources));
         // /skill took nothing from later on 2026-09-18 (the catalog listed under it from 2026-09-16 until then); edit, then the catalog after it, from 2026-09-21
         // until 2026-09-23 (the scope page's edit row since): nothing again until add came on 2026-09-26, the one word.
-        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote), new CompletionItem(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote), new CompletionItem(SkillRecordText.RevertWord, SkillRecordText.RevertNote)], ChatScreen.ArgumentItems("/skills", "", sources));   // purge 2026-09-30, revert 2026-10-02
+        Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote), new CompletionItem(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote)], ChatScreen.ArgumentItems("/skills", "", sources));   // purge 2026-09-30; revert 2026-10-02 until 2026-10-04 (the Skills pane's now)
         Assert.Equal([new CompletionItem("purge list", SkillRecordText.ListNote), new CompletionItem("purge commit", SkillRecordText.CommitNote)], ChatScreen.ArgumentItems("/skills", "purge ", sources));
         Assert.Equal([new CompletionItem("purge commit", SkillRecordText.CommitNote)], ChatScreen.ArgumentItems("/skills", "purge c", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/skills", "purge list 3", sources));   // the age is free text

@@ -46,7 +46,7 @@ public partial class ChatScreenTests
                 }
                 else if (i == 1)
                 {
-                    Scripted().Push(Keys.Enter);    // get_current_time off
+                    Scripted().Push(Keys.Enter);    // camera_capture off: the first row (the groups alphabetical since 2026-10-04, Camera first)
                     Scripted().Push(Keys.Escape);
                 }
 
@@ -58,7 +58,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(ToolsText.Label + "   Offered    Ask", output);
-        Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
+        Assert.Equal([NeonSidekick.Llm.Tools.CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.Contains("✓ mind", output);
         var run = Assert.Single(new BenchHistory(_settings.ProfileDirectory).Runs());
         Assert.False(run.Cancelled);

@@ -139,7 +139,10 @@ internal sealed partial class ChatScreen
             : disabled;
     }
 
-    /// <summary>The /sys Tools tab's groups with <c>present_plan</c>'s while planning, ahead of the questions, where the turn offers it.</summary>
+    /// <summary>
+    /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
+    /// ahead of the questions, where the turn offers it, until then).
+    /// </summary>
     private IReadOnlyList<ToolGroup> WithPlanGroup(IReadOnlyList<ToolGroup> groups)
     {
         if (!_plan.Active || !_effective().LlmOfferTools)
@@ -148,8 +151,7 @@ internal sealed partial class ChatScreen
         }
 
         var plan = new ToolGroup(SystemPromptSummary.GroupName(PlanGroupName, 1, 1), "", [_presentPlan], true) { Label = PlanGroupName };
-        int at = groups.Count > 0 && string.Equals(groups[^1].Label, "Questions", StringComparison.Ordinal) ? groups.Count - 1 : groups.Count;
-        return [.. groups.Take(at), plan, .. groups.Skip(at)];
+        return SystemPromptSummary.SortedGroups([.. groups, plan]);
     }
 
     /// <summary><c>/plan …</c>, idle only (<see cref="MidTurnPolicy"/> refuses it under a reply).</summary>

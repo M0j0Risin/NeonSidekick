@@ -56,7 +56,7 @@ public enum SkillEditOutcome
 public sealed record SkillEditResult(SkillEditOutcome Outcome, string Name, SkillScope Scope, long Bytes = 0, string Detail = "", int Length = 0, string Summary = "", string Path = "")
 {
     /// <summary>
-    /// What a write replaced (2026-10-02, the revisions <c>/skills revert</c> puts back): the SKILL.md's text before an update, a
+    /// What a write replaced (2026-10-02, the revisions the Skills pane's revert puts back): the SKILL.md's text before an update, a
     /// supporting file's before a <c>write_file</c> / <c>edit_file</c>. Null when nothing was there (<see cref="Existed"/> false) or the old
     /// text was longer than <see cref="SkillRecordStore.MaxRevisionChars"/> and not read.
     /// </summary>
@@ -242,7 +242,7 @@ public static class SkillEditor
     private static string? Kept(string? text) => text is null || text.Length > SkillRecordStore.MaxRevisionChars ? null : text;
 
     /// <summary>
-    /// <c>/skills revert</c> (2026-10-02): <paramref name="content"/> put back as the whole of <paramref name="path"/> (<c>SKILL.md</c> or a
+    /// The revert (2026-10-02; the Skills pane's since 2026-10-04, <see cref="SkillRecords.Restore"/>): <paramref name="content"/> put back as the whole of <paramref name="path"/> (<c>SKILL.md</c> or a
     /// supporting file, relative to the folder) of the skill in <paramref name="directory"/>, or the file removed when
     /// <paramref name="content"/> is null (the write being undone created it). Raw text, no frontmatter check: the revision was the
     /// file as it was. The external root is never written (<see cref="SkillEditOutcome.ExternalReadOnly"/>); a path outside the

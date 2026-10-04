@@ -22,8 +22,9 @@ namespace NeonSidekick.App;
 /// a skill's row (a loaded one, or a shadowed one — the duplicate is the thing to clean up) opens the
 /// scope page under the list: <c>profile</c>, <c>global</c>, <c>rename</c> (2026-09-21, the user's ask), <c>edit</c>
 /// (2026-09-23, the user's ask: it opens the skill's <c>SKILL.md</c> in the editor, the status line saying so, and took
-/// over from <c>/skills edit &lt;name&gt;</c>, which went), <c>revert</c> (2026-10-02, only while the skill records keep an earlier version:
-/// <c>/skills revert</c>'s twin) and <c>delete</c> (always, since 2026-09-23, the user's call;
+/// over from <c>/skills edit &lt;name&gt;</c>, which went), <c>revert</c> (2026-10-02; since 2026-10-04, the user's call, always offered and
+/// the only way in, <c>/skills revert</c> gone: it lists every kept version, newest first, and the one picked is put back, the current
+/// text kept first so nothing is lost, <see cref="SkillRecords.Restore"/>) and <c>delete</c> (always, since 2026-09-23, the user's call;
 /// behind the <c>Allow skill delete</c> setting from 2026-09-18 until then, which went), the cursor on the scope it is in. Picking the other root moves the folder
 /// (<see cref="SkillEditor.Move"/>) after a yes/no confirmation kept under the list; picking
 /// <c>delete</c> removes it (<see cref="SkillEditor.Delete"/>) after one; the scope it is in already
@@ -45,7 +46,7 @@ namespace NeonSidekick.App;
 internal sealed class SkillsMenu
 {
     // The key hints. Pinned.
-    public const string LoadedKeys = "Enter = move, rename, edit or delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03
+    public const string LoadedKeys = "Enter = move, rename, edit, revert or delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03
     public const string OtherKeys = "←/→ tabs · ESC = close";
     public const string ScopeKeys = SettingsMenu.PickKeys;
 
@@ -75,7 +76,8 @@ internal sealed class SkillsMenu
     private readonly Action<string> _openFile;
     private readonly Func<string, string?> _usage;
     private readonly SkillRecords? _records;
-    private readonly Func<Skill, SkillRevert>? _revert;
+    private readonly Func<Skill, IReadOnlyList<SkillRevision>>? _versions;
+    private readonly Func<Skill, SkillRevision, SkillRevert>? _restore;
 
     /// <param name="facts">The catalog as of a fresh scan and the rest the tabs show; read when the list opens and again after every change.</param>
     /// <param name="settings">The store the Options tab's rows show and save to.</param>
@@ -86,11 +88,14 @@ internal sealed class SkillsMenu
     /// <param name="openFile">Opens a file in the user's editor: the <c>edit</c> row's <c>SKILL.md</c> (2026-09-23; the screen's <c>/profile edit</c> seam).</param>
     /// <param name="usage">The scope page's caption for a skill by name (<see cref="UsageCaption"/>; the session store's usage line, 2026-09-19), null for none — read when the page opens; tests pass nothing.</param>
     /// <param name="records">The skill records (2026-09-30): a move, a rename and a delete keep them in step. Null for none.</param>
-    /// <param name="revert">The <c>revert</c> row's act (2026-10-02, the screen's: a reconcile, then <see cref="SkillRecords.Revert"/>); null = no row.</param>
-    public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null, Func<Skill, SkillRevert>? revert = null)
+    /// <param name="versions">The <c>revert</c> row's list (2026-10-04, the screen's: a reconcile, then <see cref="SkillRecords.Revisions"/>); null, or no <paramref name="restore"/>, = no row.</param>
+    /// <param name="restore">The version picked put back (the screen's <see cref="SkillRecords.Restore"/>).</param>
+    public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null,
+        Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null)
     {
         _records = records;
-        _revert = revert;
+        _versions = versions;
+        _restore = restore;
         _facts = facts ?? throw new ArgumentNullException(nameof(facts));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _menu = menu ?? throw new ArgumentNullException(nameof(menu));
@@ -139,8 +144,22 @@ internal sealed class SkillsMenu
     /// <summary>The edit row (2026-09-23): the word padded to nine, what it does dim after it.</summary>
     public static string EditRow => Markup.Escape(EditWord.PadRight(9)) + Theme.DimMarkup("open its SKILL.md in your editor");
 
-    /// <summary>The scope page's row before delete while the records keep an earlier version (2026-10-02, <c>/skills revert</c>'s twin). Pinned.</summary>
-    public static string RevertRow => Markup.Escape(SkillRecordText.RevertWord.PadRight(9)) + Theme.DimMarkup("put it back as it was before its last change");
+    /// <summary>The scope page's row before delete (2026-10-02; always since 2026-10-04, opening the version list). Pinned.</summary>
+    public static string RevertRow => Markup.Escape(SkillRecordText.RevertWord.PadRight(9)) + Theme.DimMarkup("pick an earlier version to put back");
+
+    /// <summary>The version list's title: <c>Skills › haiku › revert</c> (2026-10-04).</summary>
+    public static string VersionsTitle(string name) => ScopeTitle(name) + " › " + SkillRecordText.RevertWord;
+
+    /// <summary>
+    /// A version's row (2026-10-04): its file's path padded to <paramref name="pathWidth"/>, then what it is, dim
+    /// (<see cref="SkillRecordText.VersionText"/>), and <see cref="SkillRecordText.CurrentMark"/> on the one the file holds now. Pinned.
+    /// </summary>
+    public static string VersionRow(SkillRevision revision, bool current, int pathWidth, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        string text = SkillRecordText.VersionText(revision, zone) + (current ? " " + SkillRecordText.CurrentMark : "");
+        return Markup.Escape(revision.Path.PadRight(pathWidth)) + " " + Theme.DimMarkup(text);
+    }
 
     /// <summary>What the status line says once the edit row opened the file (<c>/skills edit</c>'s words until 2026-09-23). Pinned.</summary>
     public static string EditOpenedNotice(string name, string path) => $"({NoticeGlyphs.Skill}opened skill \"{name}\"'s SKILL.md in your editor: {path})";
@@ -369,8 +388,8 @@ internal sealed class SkillsMenu
         var rows = ScopeRows.Select(scope => ScopeRow(scope, roots)).ToList();
         rows.Add(RenameRow);
         rows.Add(EditRow);
-        // The revert row only while an earlier version is kept (2026-10-02).
-        int revertRow = _revert is not null && _records?.LatestRevision(skill) is not null ? rows.Count : -1;
+        // The revert row (2026-10-02): always since 2026-10-04 (the user's call), a skill with nothing kept saying so when picked.
+        int revertRow = _versions is not null && _restore is not null ? rows.Count : -1;
         if (revertRow >= 0)
         {
             rows.Add(RevertRow);
@@ -398,15 +417,7 @@ internal sealed class SkillsMenu
 
         if (row == revertRow)
         {
-            var (ok, text) = SkillRecordText.RevertText(skill.Name, _revert!(skill), _records!.Zone);
-            if (ok)
-            {
-                Sink.Notice(text);
-                return true;
-            }
-
-            Sink.Error(text);
-            return false;
+            return await PickVersionAsync(skill, cancellationToken).ConfigureAwait(false);
         }
 
         if (row > ScopeRows.Count + 1)
@@ -471,6 +482,46 @@ internal sealed class SkillsMenu
                 Sink.Error(MoveFailedError(moved.Detail));
                 return false;
         }
+    }
+
+    /// <summary>
+    /// The revert row's list (2026-10-04, the user's ask): every kept version of the skill, newest first, the one the file holds now marked,
+    /// the cursor on the newest that is not; Enter puts the pick back (<see cref="SkillRecords.Restore"/>: the current text kept first, so
+    /// no yes/no — nothing is lost, the rename's rule), ESC goes back to the list. Nothing kept is a notice on the status line. True when
+    /// the skill changed (the facts are stale).
+    /// </summary>
+    private async Task<bool> PickVersionAsync(Skill skill, CancellationToken cancellationToken)
+    {
+        var versions = _versions!(skill);
+        if (versions.Count == 0)
+        {
+            Sink.Notice(SkillRecordText.NoVersionsNotice(skill.Name));
+            return false;
+        }
+
+        var zone = _records?.Zone ?? TimeZoneInfo.Utc;
+        int width = versions.Max(v => v.Path.Length);
+        var current = versions.Select(v => SkillRecords.IsCurrent(skill, v)).ToList();
+        var rows = versions.Select((v, i) => VersionRow(v, current[i], width, zone)).ToList();
+        int cursor = Math.Max(0, current.IndexOf(false));
+        var page = new MenuPage(VersionsTitle(skill.Name), rows, SettingsMenu.PickKeys) { Caption = SkillRecordText.VersionsCaption };
+        if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { Row: var picked } || picked >= versions.Count)
+        {
+            return false;
+        }
+
+        var revert = _restore!(skill, versions[picked]);
+        var (changed, text) = SkillRecordText.RevertText(skill.Name, revert, zone);
+        if (changed || revert.Outcome == SkillRevertOutcome.Unchanged)
+        {
+            Sink.Notice(text);
+        }
+        else
+        {
+            Sink.Error(text);
+        }
+
+        return changed;
     }
 
     /// <summary>The rename's slot under the page, the name checked and the act (2026-09-21); true when the folder changed.</summary>

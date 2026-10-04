@@ -214,7 +214,7 @@ public partial class ToolsMenuTests : IDisposable
 
         // The strip, the Clock heading, the cursor on get_current_time (the first tool row, past its heading), the hint with the flip keys; nothing reached the transcript.
         // The headings are rules with a gap before each but the first (2026-10-03).
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DaysBetweenTool.ToolName, true) + "\n  \n" + Heading("── Timers · 3") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DaysBetweenTool.ToolName, true) + "\n  \n" + Heading("── Files · 14") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
         Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", _console.Output);
         Assert.Contains("\n" + Heading("── Files · 14") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
         Assert.Contains(MenuPane.MoreHint, _console.Output);   // 39 rows over 30: the list scrolls
@@ -287,15 +287,15 @@ public partial class ToolsMenuTests : IDisposable
     public async Task OnThePane_TheCursorNeverRestsOnAHeadingOrAGap()
     {
         // A heading is no stop (2026-10-03): Up from the first tool wraps past the Clock heading to the last tool, Down from
-        // the last clock row steps over the gap and the Timers heading, Home is the first tool again.
+        // the last clock row steps over the gap and the Files heading (the groups alphabetical since 2026-10-04), Home is the first tool again.
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Up, Keys.Enter);                // ask_user, the last row
-        Push(Keys.Home, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // start_timer
+        Push(Keys.Up, Keys.Enter);                // download_file, the last row (Web last)
+        Push(Keys.Home, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // get_working_directory
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal([AskUserTool.ToolName, StartTimerTool.ToolName], _settings.Current.ToolsDisabled);
+        Assert.Equal([DownloadFileTool.ToolName, GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain("▸ ──", _console.Output);
         pane.Dispose();
     }
@@ -305,7 +305,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         _settings.Update(d => d.FileTools = false);
         var (menu, pane, _) = PaneMenu();
-        Down(6);                                  // past the two other clock rows and the three timers (the gaps and headings no stops, 2026-10-03): get_working_directory
+        Down(3);                                  // past the two other clock rows (the gap and heading no stops, 2026-10-03; Files next since 2026-10-04): get_working_directory
         Push(Keys.Enter);
         Push(Keys.Escape);
 

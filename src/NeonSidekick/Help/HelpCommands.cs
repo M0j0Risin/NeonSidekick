@@ -251,11 +251,10 @@ public static class HelpCommands
         ]),
         new("/skills",
         [
-            new("/skills", "List the skills (Enter moves, renames, edits or deletes one) and edit the skill, reflection and project-file settings. On the Offered tab, type to narrow the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
+            new("/skills", "List the skills (Enter moves, renames, edits, reverts or deletes one; revert lists the kept versions to pick one to put back) and edit the skill, reflection and project-file settings. On the Offered tab, type to narrow the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
             new("/skills add <search words | owner/repo[/skill] | github url | zip url> [--global | --profile]", "Install an Agent Skill from the web, with a preview first. A pane asks where it goes (the cursor starts on Cancel). Refused while a reply runs. See Installing skills."),
             new("/skills purge list <age>", "List the skills not used for that long (`30` days, `12h`, `90m`). Nothing is deleted. See Skill records."),
             new("/skills purge commit <age>", "Delete the skills not used for that long, folder and record, after a yes/no that lists them."),
-            new("/skills revert <name>", "Put a skill back as it was before the app's last change to it (a model's, a reflection's or an install's). Each revert goes one version further back. Refused after an edit by hand. See Skill history."),
         ]),
         new("/speak",
         [

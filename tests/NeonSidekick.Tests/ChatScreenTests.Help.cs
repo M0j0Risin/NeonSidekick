@@ -59,10 +59,11 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task ToolsOffered_ListsNeonHelp_InTheHelpGroup_BetweenTheTimersAndTheFiles()
+    public async Task ToolsOffered_ListsNeonHelp_InTheHelpGroup_InItsAlphabeticalPlace()
     {
+        // Alphabetical since 2026-10-04 (the user's ask; between the timers and the files, where the turn offers it, until then).
         _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 60;
+        _console.Profile.Height = 200;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/tools");
         _console.Input.PushKey(Keys.Escape);
@@ -70,10 +71,10 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        int timers = output.IndexOf("\n── Timers · 3 ─", StringComparison.Ordinal);
-        int help = output.IndexOf("\n── " + HelpText.GroupTitle + " · 1 ─", StringComparison.Ordinal);
         int files = output.IndexOf("\n── Files · ", StringComparison.Ordinal);
-        Assert.True(timers >= 0 && timers < help && help < files, $"timers {timers}, help {help}, files {files}");
+        int help = output.IndexOf("\n── " + HelpText.GroupTitle + " · 1 ─", StringComparison.Ordinal);
+        int timers = output.IndexOf("\n── Timers · 3 ─", StringComparison.Ordinal);
+        Assert.True(files >= 0 && files < help && help < timers, $"files {files}, help {help}, timers {timers}");
         Assert.Contains("\n  " + NeonHelpTool.ToolName + " ", output);
     }
 
@@ -84,13 +85,14 @@ public partial class ChatScreenTests
         _console.Profile.Height = 60;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/tools");
-        for (int i = 0; i < 6; i++)
+        foreach (char c in NeonHelpTool.ToolName)
         {
-            // From get_current_time: the two clock rows, the three timers, neon_help (the gaps and the headings no stops, 2026-10-03).
-            _console.Input.PushKey(Keys.Down);
+            // The Offered tab's filter (2026-10-03): the one row left, under the cursor, wherever its group sorts.
+            _console.Input.PushKey(Keys.Char(c));
         }
 
         _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Escape);   // clears the filter
         _console.Input.PushKey(Keys.Escape);
         _chat.EnqueueText("Hello.");
         PushLine("hi");

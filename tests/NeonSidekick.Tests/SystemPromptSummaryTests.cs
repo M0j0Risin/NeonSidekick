@@ -281,17 +281,17 @@ public class SystemPromptSummaryTests : IDisposable
 
         var groups = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, disabled: disabled);
 
-        Assert.Equal(["Clock (2 of 3)", "Timers (3)", "Files (12 of 14)", "Memory (1 of 2)"], groups.Select(g => g.Title));
+        Assert.Equal(["Clock (2 of 3)", "Files (12 of 14)", "Memory (1 of 2)", "Timers (3)"], groups.Select(g => g.Title));   // alphabetical since 2026-10-04
         Assert.All(groups, g => Assert.True(g.Offered));
-        Assert.Equal("not offered: switched off in /tools", groups[2].ToolNotes[ReadFileTool.ToolName]);
-        Assert.Equal("not offered: switched off in /tools", groups[2].ToolNotes[ZipTool.ToolName]);
-        Assert.Equal(2, groups[2].ToolNotes.Count);
-        Assert.False(groups[2].Offers(ReadFileTool.ToolName));
-        Assert.True(groups[2].Offers(WriteFileTool.ToolName));
-        Assert.Equal(SettingsField.FileTools, groups[2].Switch);
-        Assert.Equal(SettingsField.Memory, groups[3].Switch);
+        Assert.Equal("not offered: switched off in /tools", groups[1].ToolNotes[ReadFileTool.ToolName]);
+        Assert.Equal("not offered: switched off in /tools", groups[1].ToolNotes[ZipTool.ToolName]);
+        Assert.Equal(2, groups[1].ToolNotes.Count);
+        Assert.False(groups[1].Offers(ReadFileTool.ToolName));
+        Assert.True(groups[1].Offers(WriteFileTool.ToolName));
+        Assert.Equal(SettingsField.FileTools, groups[1].Switch);
+        Assert.Equal(SettingsField.Memory, groups[2].Switch);
         Assert.Null(groups[0].Switch);
-        Assert.Empty(groups[1].ToolNotes);
+        Assert.Empty(groups[3].ToolNotes);
         // The plain lines and the tab carry the note after the description.
         var lines = SystemPromptSummary.ToolLines(groups).ToList();
         Assert.Contains("  read_file             " + files.Single(t => t.Name == ReadFileTool.ToolName).Description + " — not offered: switched off in /tools", lines);
@@ -303,11 +303,11 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Contains("  not offered: switched off in /tools", console.Output);   // after the description (which wraps in a narrow console)
         // A group off by its switch keeps its own reason; a disabled tool inside it is still noted.
         var off = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, filesEnabled: false, disabled: disabled);
-        Assert.Equal("Files (12 of 14) — not offered: file tools is off", off[2].Title);
-        Assert.False(off[2].Offered);
-        Assert.False(off[2].Offers(WriteFileTool.ToolName));
+        Assert.Equal("Files (12 of 14) — not offered: file tools is off", off[1].Title);
+        Assert.False(off[1].Offered);
+        Assert.False(off[1].Offers(WriteFileTool.ToolName));
         // Nothing disabled: every string as before (the same instances of the note dictionary are not required, the counts are).
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14)", "Memory (2)"], SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, disabled: ToolsText.DisabledSet([])).Select(g => g.Title));
+        Assert.Equal(["Clock (3)", "Files (14)", "Memory (2)", "Timers (3)"], SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, disabled: ToolsText.DisabledSet([])).Select(g => g.Title));
     }
 
     [Fact]
@@ -319,11 +319,11 @@ public class SystemPromptSummaryTests : IDisposable
 
         var groups = SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false, disabled: disabled));
 
-        Assert.Equal(["Timers (3)", "Files (12)"], groups.Select(g => g.Title));   // Clock emptied, Memory off; read_file and zip gone
-        Assert.DoesNotContain(groups[1].Tools, t => t.Name is ReadFileTool.ToolName or ZipTool.ToolName);
+        Assert.Equal(["Files (12)", "Timers (3)"], groups.Select(g => g.Title));   // Clock emptied, Memory off; read_file and zip gone
+        Assert.DoesNotContain(groups[0].Tools, t => t.Name is ReadFileTool.ToolName or ZipTool.ToolName);
         Assert.All(groups, g => { Assert.True(g.Offered); Assert.Empty(g.ToolNotes); Assert.Equal("", g.Note); });
-        Assert.Equal(SettingsField.FileTools, groups[1].Switch);
-        Assert.Equal("Files", groups[1].Label);
+        Assert.Equal(SettingsField.FileTools, groups[0].Switch);
+        Assert.Equal("Files", groups[0].Label);
         Assert.DoesNotContain(SystemPromptSummary.ToolLines(groups), l => l.Contains("not offered", StringComparison.Ordinal));
         // Nothing offered: the tab and the lines say so, with the reason while LLM offer tools is off.
         var none = SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false));
@@ -345,21 +345,21 @@ public class SystemPromptSummaryTests : IDisposable
         var noted = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, skills: skills, skillInstalled: false);
         var plain = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, skills: skills);
 
-        Assert.Equal("Skills (2)", noted[4].Title);   // the count is the /tools list's alone
-        Assert.Equal("not offered: no skill installed", noted[4].ToolNotes[LoadSkillTool.ToolName]);
-        Assert.False(noted[4].Offers(LoadSkillTool.ToolName));
-        Assert.True(noted[4].Offers(SkillEditorTool.ToolName));
-        Assert.Empty(plain[4].ToolNotes);
+        Assert.Equal("Skills (2)", noted[3].Title);   // the count is the /tools list's alone
+        Assert.Equal("not offered: no skill installed", noted[3].ToolNotes[LoadSkillTool.ToolName]);
+        Assert.False(noted[3].Offers(LoadSkillTool.ToolName));
+        Assert.True(noted[3].Offers(SkillEditorTool.ToolName));
+        Assert.Empty(plain[3].ToolNotes);
         // download_file under File tools off, over the whole web list (the /tools list; /sys passes the list already cut).
         var web = ChatScreen.WebTools(new WebAccess(new HttpClient(new StubHttpMessageHandler()), new FakeHeadlessBrowser(), _time), new Files.WorkingDirectory(() => Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "unused"), _time), () => new AppSettingsData());
         var filesOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, web: web, filesEnabled: false);
-        Assert.Equal("Web (4)", filesOff[3].Title);
-        Assert.Equal("not offered: file tools is off", filesOff[3].ToolNotes[DownloadFileTool.ToolName]);
-        Assert.True(filesOff[3].Offers(WebSearchTool.ToolName));
+        Assert.Equal("Web (4)", filesOff[4].Title);
+        Assert.Equal("not offered: file tools is off", filesOff[4].ToolNotes[DownloadFileTool.ToolName]);
+        Assert.True(filesOff[4].Offers(WebSearchTool.ToolName));
         // The file list carries no note of its own (restore's under File safe edits off went with them, 2026-10-01).
-        Assert.Equal("Files (14)", plain[2].Title);
-        Assert.Empty(plain[2].ToolNotes);
-        Assert.True(plain[2].Offers(DeleteTool.ToolName));
+        Assert.Equal("Files (14)", plain[1].Title);
+        Assert.Empty(plain[1].ToolNotes);
+        Assert.True(plain[1].Offers(DeleteTool.ToolName));
     }
 
     [Fact]
@@ -458,125 +458,144 @@ public class SystemPromptSummaryTests : IDisposable
             ChatScreen.MemoryTools(new MemoryStore(_dir, _time)));
     }
 
+    /// <summary>A group by its bare label: the groups are alphabetical since 2026-10-04, so a test names the one it means.</summary>
+    private static ToolGroup G(IReadOnlyList<ToolGroup> groups, string label) => groups.Single(g => g.Label == label);
+
+    /// <summary>2026-10-04 (the user's ask): the groups come out alphabetical by their bare label, any case, whatever the turn's order.</summary>
+    [Fact]
+    public void ToolGroups_AreAlphabetical_ByTheirLabel()
+    {
+        var (clock, timers, files, memory) = Tools();
+        var web = ChatScreen.WebTools(new WebAccess(new HttpClient(new StubHttpMessageHandler()), new FakeHeadlessBrowser(), _time), new Files.WorkingDirectory(() => Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "unused"), _time), () => new AppSettingsData());
+        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new AppSettingsData());
+        var catalog = new SkillCatalog(() => new SkillRoots(Path.Combine(_dir, "p"), Path.Combine(_dir, "g"), Path.Combine(_dir, "x")));
+        var skills = ChatScreen.SkillTools(catalog, () => catalog.Roots, () => false);
+
+        var groups = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, web: web, questions: questions, skills: skills, help: ChatScreen.HelpTools());
+
+        Assert.Equal(["Clock", "Files", NeonSidekick.Help.HelpText.GroupTitle, "Memory", "Questions", "Skills", "Timers", "Web"], groups.Select(g => g.Label));
+        Assert.Equal(groups.Select(g => g.Label).Order(StringComparer.OrdinalIgnoreCase), groups.Select(g => g.Label));
+    }
+
     [Fact]
     public void ToolGroups_AreTheTurnsTools_InOrder_MemoryMarkedWhenOff()
     {
         var (clock, timers, files, memory) = Tools();
 
         var on = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true);
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14)", "Memory (2)"], on.Select(g => g.Title));
+        Assert.Equal(["Clock (3)", "Files (14)", "Memory (2)", "Timers (3)"], on.Select(g => g.Title));   // alphabetical since 2026-10-04 (the user's ask)
         Assert.All(on, g => Assert.True(g.Offered));
         // An offered group's title is its name alone: no note for the pane's description column.
         Assert.Equal(on.Select(g => g.Name), on.Select(g => g.Title));
         Assert.All(on, g => Assert.Equal("", g.Note));
         Assert.Equal(["get_current_time", "shift_date", "days_between"], on[0].Tools.Select(t => t.Name));
-        Assert.Equal(["start_timer", "stop_timer", "list_timers"], on[1].Tools.Select(t => t.Name));
-        Assert.Equal(FileToolNames.WithoutPdf, on[2].Tools.Select(t => t.Name));
-        Assert.Equal([SaveMemoryTool.ToolName, RecallMemoryTool.ToolName], on[3].Tools.Select(t => t.Name));
+        Assert.Equal(["start_timer", "stop_timer", "list_timers"], on[3].Tools.Select(t => t.Name));
+        Assert.Equal(FileToolNames.WithoutPdf, on[1].Tools.Select(t => t.Name));
+        Assert.Equal([SaveMemoryTool.ToolName, RecallMemoryTool.ToolName], on[2].Tools.Select(t => t.Name));
 
         var off = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory is off", off[3].Title);
+        Assert.Equal("Memory (2) — not offered: memory is off", off[2].Title);
         // The title is the name and the note joined: the pane draws the two apart (2026-09-16).
-        Assert.Equal("Memory (2)", off[3].Name);
-        Assert.Equal(SystemPromptSummary.NotOffered("memory is off"), off[3].Note);
-        Assert.False(off[3].Offered);
-        Assert.Equal(on.Take(3).Select(g => g.Title), off.Take(3).Select(g => g.Title));
+        Assert.Equal("Memory (2)", off[2].Name);
+        Assert.Equal(SystemPromptSummary.NotOffered("memory is off"), off[2].Note);
+        Assert.False(off[2].Offered);
+        Assert.Equal(on.Where(g => g.Label != "Memory").Select(g => g.Title), off.Where(g => g.Label != "Memory").Select(g => g.Title));
 
         // LLM offer tools off: every group not offered; memory's own reason first when it is off too.
         var none = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false);
         Assert.Equal(
-            ["Clock (3) — not offered: LLM offer tools is off", "Timers (3) — not offered: LLM offer tools is off", "Files (14) — not offered: LLM offer tools is off", "Memory (2) — not offered: LLM offer tools is off"],
+            ["Clock (3) — not offered: LLM offer tools is off", "Files (14) — not offered: LLM offer tools is off", "Memory (2) — not offered: LLM offer tools is off", "Timers (3) — not offered: LLM offer tools is off"],
             none.Select(g => g.Title));
         Assert.All(none, g => Assert.False(g.Offered));
         Assert.Equal(on.Select(g => g.Tools), none.Select(g => g.Tools));
         var neither = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false, toolsEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory is off", neither[3].Title);
-        Assert.Equal(none.Take(3).Select(g => g.Title), neither.Take(3).Select(g => g.Title));
+        Assert.Equal("Memory (2) — not offered: memory is off", neither[2].Title);
+        Assert.Equal(none.Where(g => g.Label != "Memory").Select(g => g.Title), neither.Where(g => g.Label != "Memory").Select(g => g.Title));
 
         // The web group (2026-09-15): after the files, before memory, marked when the setting Web tools is off; nothing when no list is given.
         var web = ChatScreen.WebTools(new WebAccess(new HttpClient(new StubHttpMessageHandler()), new FakeHeadlessBrowser(), _time), new Files.WorkingDirectory(() => Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "unused"), _time), () => new AppSettingsData());
         var withWeb = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true);
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14)", "Web (4)", "Memory (2)"], withWeb.Select(g => g.Title));
-        Assert.Equal(["web_search", "web_fetch", "open_url", "download_file"], withWeb[3].Tools.Select(t => t.Name));
+        Assert.Equal(["Clock (3)", "Files (14)", "Memory (2)", "Timers (3)", "Web (4)"], withWeb.Select(g => g.Title));
+        Assert.Equal(["web_search", "web_fetch", "open_url", "download_file"], withWeb[4].Tools.Select(t => t.Name));
         Assert.All(withWeb, g => Assert.True(g.Offered));
         var webOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: false);
-        Assert.Equal("Web (4) — not offered: web is off", webOff[3].Title);
-        Assert.False(webOff[3].Offered);
-        Assert.True(webOff[4].Offered);
+        Assert.Equal("Web (4) — not offered: web is off", G(webOff, "Web").Title);
+        Assert.False(G(webOff, "Web").Offered);
+        Assert.True(G(webOff, "Memory").Offered);
         var webNone = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: false);
-        Assert.Equal("Web (4) — not offered: web is off", webNone[3].Title);
-        Assert.Equal("Web (4) — not offered: LLM offer tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true)[3].Title);
+        Assert.Equal("Web (4) — not offered: web is off", G(webNone, "Web").Title);
+        Assert.Equal("Web (4) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true), "Web").Title);
 
         // The files group (2026-09-15): marked when the setting File tools is off, its own reason first like memory's and the web's.
         var filesOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: false);
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14) — not offered: file tools is off", "Web (4)", "Memory (2)"], filesOff.Select(g => g.Title));
-        Assert.False(filesOff[2].Offered);
-        Assert.True(filesOff[0].Offered && filesOff[3].Offered && filesOff[4].Offered);
-        Assert.Equal(FileToolNames.WithoutPdf, filesOff[2].Tools.Select(t => t.Name));
-        Assert.Equal("Files (14) — not offered: file tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: false)[2].Title);
+        Assert.Equal(["Clock (3)", "Files (14) — not offered: file tools is off", "Memory (2)", "Timers (3)", "Web (4)"], filesOff.Select(g => g.Title));
+        Assert.False(G(filesOff, "Files").Offered);
+        Assert.True(G(filesOff, "Clock").Offered && G(filesOff, "Web").Offered && G(filesOff, "Memory").Offered);
+        Assert.Equal(FileToolNames.WithoutPdf, G(filesOff, "Files").Tools.Select(t => t.Name));
+        Assert.Equal("Files (14) — not offered: file tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: false), "Files").Title);
 
         // The questions group (2026-09-15): last, after memory, marked when the setting Ask user is off, else when the bottom pane is (its own reasons first); nothing when no list is given.
         var questions = ChatScreen.AskTools((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new AppSettingsData());
         var withQuestions = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true);
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14)", "Web (4)", "Memory (2)", "Questions (1)"], withQuestions.Select(g => g.Title));
-        Assert.Equal([AskUserTool.ToolName], withQuestions[5].Tools.Select(t => t.Name));
+        Assert.Equal(["Clock (3)", "Files (14)", "Memory (2)", "Questions (1)", "Timers (3)", "Web (4)"], withQuestions.Select(g => g.Title));
+        Assert.Equal([AskUserTool.ToolName], G(withQuestions, "Questions").Tools.Select(t => t.Name));
         Assert.All(withQuestions, g => Assert.True(g.Offered));
         var noPane = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: false);
-        Assert.Equal("Questions (1) — not offered: no pane", noPane[5].Title);
-        Assert.False(noPane[5].Offered);
-        Assert.True(noPane[4].Offered);
+        Assert.Equal("Questions (1) — not offered: no pane", G(noPane, "Questions").Title);
+        Assert.False(G(noPane, "Questions").Offered);
+        Assert.True(G(noPane, "Memory").Offered);
         var askOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: false, paneOn: true);
-        Assert.Equal("Questions (1) — not offered: ask user is off", askOff[5].Title);
-        Assert.False(askOff[5].Offered);
-        Assert.True(askOff[4].Offered);
+        Assert.Equal("Questions (1) — not offered: ask user is off", G(askOff, "Questions").Title);
+        Assert.False(G(askOff, "Questions").Offered);
+        Assert.True(G(askOff, "Memory").Offered);
         // The setting's reason first, then the pane's, then LLM offer tools.
-        Assert.Equal("Questions (1) — not offered: ask user is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: false, paneOn: false)[5].Title);
-        Assert.Equal("Questions (1) — not offered: no pane", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: false)[5].Title);
-        Assert.Equal("Questions (1) — not offered: LLM offer tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true)[5].Title);
+        Assert.Equal("Questions (1) — not offered: ask user is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: false, paneOn: false), "Questions").Title);
+        Assert.Equal("Questions (1) — not offered: no pane", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: false), "Questions").Title);
+        Assert.Equal("Questions (1) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true), "Questions").Title);
         Assert.Equal(5, SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true).Count);
 
         // The skills group (2026-09-16): after memory, before the questions, marked when the setting Agent skills is off (its own reason first); nothing when no list is given.
         var catalog = new SkillCatalog(() => new SkillRoots(Path.Combine(_dir, "p"), Path.Combine(_dir, "g"), Path.Combine(_dir, "x")));
         var skills = ChatScreen.SkillTools(catalog, () => catalog.Roots, () => false);
         var withSkills = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true);
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14)", "Web (4)", "Memory (2)", "Skills (2)", "Questions (1)"], withSkills.Select(g => g.Title));
-        Assert.Equal([LoadSkillTool.ToolName, SkillEditorTool.ToolName], withSkills[5].Tools.Select(t => t.Name));
+        Assert.Equal(["Clock (3)", "Files (14)", "Memory (2)", "Questions (1)", "Skills (2)", "Timers (3)", "Web (4)"], withSkills.Select(g => g.Title));
+        Assert.Equal([LoadSkillTool.ToolName, SkillEditorTool.ToolName], G(withSkills, "Skills").Tools.Select(t => t.Name));
         Assert.All(withSkills, g => Assert.True(g.Offered));
         var skillsOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: false);
-        Assert.Equal("Skills (2) — not offered: agent skills is off", skillsOff[5].Title);
-        Assert.False(skillsOff[5].Offered);
-        Assert.True(skillsOff[4].Offered && skillsOff[6].Offered);
-        Assert.Equal("Skills (2) — not offered: agent skills is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: false)[5].Title);
-        Assert.Equal("Skills (2) — not offered: LLM offer tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true)[5].Title);
+        Assert.Equal("Skills (2) — not offered: agent skills is off", G(skillsOff, "Skills").Title);
+        Assert.False(G(skillsOff, "Skills").Offered);
+        Assert.True(G(skillsOff, "Memory").Offered && G(skillsOff, "Questions").Offered);
+        Assert.Equal("Skills (2) — not offered: agent skills is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: false), "Skills").Title);
+        Assert.Equal("Skills (2) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true), "Skills").Title);
 
         // The sessions group (2026-09-18): after the skills, before the questions, marked when the setting Session tool is off (its own reason first); nothing when no list is given.
         using var store = new NeonSidekick.Sessions.SessionStore(Path.Combine(_dir, "sessions"));
         var sessions = ChatScreen.SessionTools(store, () => new AppSettingsData(), () => null, TimeProvider.System);
         var withSessions = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true);
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14)", "Web (4)", "Memory (2)", "Skills (2)", "Sessions (1)", "Questions (1)"], withSessions.Select(g => g.Title));
-        Assert.Equal([SessionManagerTool.ToolName], withSessions[6].Tools.Select(t => t.Name));
+        Assert.Equal(["Clock (3)", "Files (14)", "Memory (2)", "Questions (1)", "Sessions (1)", "Skills (2)", "Timers (3)", "Web (4)"], withSessions.Select(g => g.Title));
+        Assert.Equal([SessionManagerTool.ToolName], G(withSessions, "Sessions").Tools.Select(t => t.Name));
         Assert.All(withSessions, g => Assert.True(g.Offered));
         var sessionsOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: false);
-        Assert.Equal("Sessions (1) — not offered: session tool is off", sessionsOff[6].Title);
-        Assert.False(sessionsOff[6].Offered);
-        Assert.True(sessionsOff[5].Offered && sessionsOff[7].Offered);
-        Assert.Equal("Sessions (1) — not offered: LLM offer tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true)[6].Title);
+        Assert.Equal("Sessions (1) — not offered: session tool is off", G(sessionsOff, "Sessions").Title);
+        Assert.False(G(sessionsOff, "Sessions").Offered);
+        Assert.True(G(sessionsOff, "Skills").Offered && G(sessionsOff, "Questions").Offered);
+        Assert.Equal("Sessions (1) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true), "Sessions").Title);
 
         // The MCP groups (2026-09-20): one per connected server after the sessions and before the questions, the setting MCP servers their switch, a disabled row naming /mcp.
         var echo = new EchoTool();
         var mcp = new List<McpServerTools> { new("docker", [new McpEchoStandIn("docker__echo"), new McpEchoStandIn("docker__fail")]), new("chrome", [new McpEchoStandIn("chrome__navigate")]) };
         var withMcp = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true, disabled: ToolsText.DisabledSet(["docker__fail"]), mcp: mcp, mcpEnabled: true);
-        Assert.Equal(["Clock (3)", "Timers (3)", "Files (14)", "Web (4)", "Memory (2)", "Skills (2)", "Sessions (1)", "MCP docker (1 of 2)", "MCP chrome (1)", "Questions (1)"], withMcp.Select(g => g.Title));
-        Assert.Equal(SettingsField.McpServers, withMcp[7].Switch);
-        Assert.Equal("not offered: switched off in /mcp", withMcp[7].ToolNotes["docker__fail"]);
-        Assert.False(withMcp[7].Offers("docker__fail"));
-        Assert.True(withMcp[7].Offers("docker__echo"));
-        Assert.True(withMcp[7].Offered && withMcp[8].Offered);
+        Assert.Equal(["Clock (3)", "Files (14)", "MCP chrome (1)", "MCP docker (1 of 2)", "Memory (2)", "Questions (1)", "Sessions (1)", "Skills (2)", "Timers (3)", "Web (4)"], withMcp.Select(g => g.Title));
+        Assert.Equal(SettingsField.McpServers, G(withMcp, "MCP docker").Switch);
+        Assert.Equal("not offered: switched off in /mcp", G(withMcp, "MCP docker").ToolNotes["docker__fail"]);
+        Assert.False(G(withMcp, "MCP docker").Offers("docker__fail"));
+        Assert.True(G(withMcp, "MCP docker").Offers("docker__echo"));
+        Assert.True(G(withMcp, "MCP docker").Offered && G(withMcp, "MCP chrome").Offered);
         var mcpOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true, mcp: mcp, mcpEnabled: false);
-        Assert.Equal("MCP docker (2) — not offered: MCP servers is off", mcpOff[7].Title);
-        Assert.False(mcpOff[7].Offered && mcpOff[8].Offered);
-        Assert.True(mcpOff[6].Offered && mcpOff[9].Offered);
-        Assert.Equal("MCP chrome (1) — not offered: LLM offer tools is off", SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true, mcp: mcp, mcpEnabled: true)[8].Title);
+        Assert.Equal("MCP docker (2) — not offered: MCP servers is off", G(mcpOff, "MCP docker").Title);
+        Assert.False(G(mcpOff, "MCP docker").Offered && G(mcpOff, "MCP chrome").Offered);
+        Assert.True(G(mcpOff, "Sessions").Offered && G(mcpOff, "Questions").Offered);
+        Assert.Equal("MCP chrome (1) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true, mcp: mcp, mcpEnabled: true), "MCP chrome").Title);
         Assert.Equal("MCP ", SystemPromptSummary.McpGroupPrefix);
         Assert.Equal(8, SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true, mcp: [], mcpEnabled: true).Count);   // no server connected: no group
         _ = echo;
@@ -687,9 +706,10 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(4 + 22, lines.Length);   // 23 tools until restore went, 2026-10-01
         Assert.Equal("Clock (3)", lines[0]);
         Assert.Equal("  " + "get_current_time".PadRight(22) + clock[0].Description, lines[1]);
-        Assert.Equal("Memory (2)", lines[^3]);
-        Assert.Equal("  " + "save_memory".PadRight(22) + memory[0].Description, lines[^2]);
-        Assert.Equal("  " + "recall_memory".PadRight(22) + memory[1].Description, lines[^1]);
+        Assert.Equal("Memory (2)", lines[^7]);   // Timers last since the groups went alphabetical (2026-10-04)
+        Assert.Equal("  " + "save_memory".PadRight(22) + memory[0].Description, lines[^6]);
+        Assert.Equal("  " + "recall_memory".PadRight(22) + memory[1].Description, lines[^5]);
+        Assert.Equal("Timers (3)", lines[^4]);
 
         using var console = new TestConsole();
         console.Profile.Width = 900;   // wide enough that no description wraps (patch_file and search_files are the longest, 2026-09-19)
@@ -709,12 +729,12 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(RuleLine("── Clock · 3", 900), rendered[0]);
         Assert.Equal(("  get_current_time").PadRight(column) + clock[0].Description, rendered[1]);
         Assert.Equal("", rendered[4]);   // a one-space row parts the groups
-        Assert.Equal(RuleLine("── Timers · 3", 900), rendered[5]);
-        Assert.Equal(RuleLine("── Files · 14", 900), rendered[10]);
-        Assert.Equal("  get_working_directory".PadRight(column) + files[0].Description, rendered[11]);
-        Assert.Equal(RuleLine("── Memory · 2", 900), rendered[^3]);
-        Assert.Equal("  save_memory".PadRight(column) + memory[0].Description, rendered[^2]);
-        Assert.Equal("  recall_memory".PadRight(column) + memory[1].Description, rendered[^1]);
+        Assert.Equal(RuleLine("── Files · 14", 900), rendered[5]);
+        Assert.Equal("  get_working_directory".PadRight(column) + files[0].Description, rendered[6]);
+        Assert.Equal(RuleLine("── Memory · 2", 900), rendered[21]);
+        Assert.Equal("  save_memory".PadRight(column) + memory[0].Description, rendered[22]);
+        Assert.Equal("  recall_memory".PadRight(column) + memory[1].Description, rendered[23]);
+        Assert.Equal(RuleLine("── Timers · 3", 900), rendered[^4]);
         foreach (var line in rendered.Where(l => l.Length > column && !l.StartsWith(SectionRule.Lead, StringComparison.Ordinal)))
         {
             Assert.Equal(' ', line[column - 1]);
@@ -725,7 +745,7 @@ public class SystemPromptSummaryTests : IDisposable
         using var off = new TestConsole();
         off.Profile.Width = 400;
         off.Write(SystemPromptSummary.ToolsTab(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false)));
-        Assert.Equal(RuleLine("── Memory · 2 ── " + SystemPromptSummary.NotOffered("memory is off"), 400), off.Output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()).ToArray()[^3]);
+        Assert.Contains(RuleLine("── Memory · 2 ── " + SystemPromptSummary.NotOffered("memory is off"), 400), off.Output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()));
 
         // The heading keeps the section colour whether the group is offered or not (later on 2026-09-20,
         // the user's call, the /tools rule): the same escape sequence leads "Memory" on and off.
