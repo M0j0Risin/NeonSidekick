@@ -1132,12 +1132,15 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(BotChat.PictureNotice("default"), output);
     }
 
-    [Fact]
-    public async Task BotChat_Autonomous_WhenTheModelFindsNoPicturePromised_NothingIsDrawn_Quietly()
+    /// <summary>A NONE, or an empty answer (pinned at the second 2026-10-04 review), is no picture and no notice.</summary>
+    [Theory]
+    [InlineData("NONE")]
+    [InlineData("   ")]
+    public async Task BotChat_Autonomous_WhenTheModelFindsNoPicturePromised_NothingIsDrawn_Quietly(string answer)
     {
         var stub = BotPicturesFixture(mode: "autonomous");
         _chat.EnqueueText("What a picture you paint with words.");
-        _chat.EnqueueText("NONE");
+        _chat.EnqueueText(answer);
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(3);
         PushLine("/botchat");

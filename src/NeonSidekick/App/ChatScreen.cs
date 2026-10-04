@@ -12561,6 +12561,12 @@ internal sealed partial class ChatScreen
                 Task picture = pictures.Count > 0 ? pictures[0].Job : cancelled;
                 await Task.WhenAny(done, signal, cancelled, picture).ConfigureAwait(false);
             }
+
+            // The wake that ends the loop gets the pass every other one gets at the loop's top (the second 2026-10-04 review):
+            // since the pass moved ahead of the wait, a picture done in the voice's last second waited for a later quiet point,
+            // after the next bot had begun, and an act queued then was never drained.
+            await DrainActsAsync().ConfigureAwait(false);
+            ShowReadyBotPictures(pictures);
         }
         finally
         {
@@ -13617,8 +13623,12 @@ internal sealed partial class ChatScreen
         _pane.RedrawStrip();
     }
 
-    /// <summary>The strip's order for a sandbox picture: its file's creation time and full path, as the viewer reads them; now and the given path without the file.</summary>
-    private (DateTime CreatedUtc, string Path) PictureFileStamp(ImageAttachment image)
+    /// <summary>
+    /// The strip's order for a sandbox picture: its file's creation time and full path, as the viewer reads them; without the file
+    /// no time and the given path, and <see cref="PictureStrip.Add"/> places it by arrival (the second 2026-10-04 review: "now" put
+    /// a resumed session's missing pictures ahead of every file).
+    /// </summary>
+    private (DateTime? CreatedUtc, string Path) PictureFileStamp(ImageAttachment image)
     {
         if (_files.Resolve(image.Path, forWrite: false, out string resolved) == FileOutcome.Ok && File.Exists(resolved))
         {
@@ -13628,11 +13638,11 @@ internal sealed partial class ChatScreen
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                DiagnosticLog.Debug("Comfy", $"No creation time for {Path.GetFileName(resolved)}; the strip takes it as new: {ex.Message}");
+                DiagnosticLog.Debug("Comfy", $"No creation time for {Path.GetFileName(resolved)}; the strip places it by arrival: {ex.Message}");
             }
         }
 
-        return (_time.GetUtcNow().UtcDateTime, image.Path);
+        return (null, image.Path);
     }
 
     /// <summary>Whether the strip is on the screen now: the pane, the setting, and a window that has room for it (<see cref="ScreenPane.StripRows"/> as last drawn).</summary>

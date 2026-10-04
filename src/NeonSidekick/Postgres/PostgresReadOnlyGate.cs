@@ -22,25 +22,50 @@ public static class PostgresReadOnlyGate
         String,
         Number,
         Bind,
+
+        /// <summary>
+        /// An <c>@name</c> straight after an operator character (the second 2026-10-04 review): <c>id=@id</c> is a placeholder, but
+        /// <c>tags &lt;@cols</c> and <c>v @@to_tsquery(…)</c> are an operator and a name. Npgsql rewrites either whenever the command
+        /// carries a parameter of that name and leaves the text alone otherwise (checked live on Npgsql 10.0.3), so it is bound only
+        /// when <c>params</c> names it; unbound, the server reads the name, so <see cref="Check"/> looks at it as a function's name.
+        /// </summary>
+        OperatorBind,
         Symbol,
     }
 
     public readonly record struct Token(TokenKind Kind, string Text, int Line, int Column);
 
-    /// <summary>Functions a query may not call, by name; <see cref="DeniedPrefixes"/> covers the families.</summary>
+    /// <summary>
+    /// Functions a query may not call, by name; <see cref="DeniedPrefixes"/> covers the families. The ones that run a query handed
+    /// to them as text are here because the gate sees that text as a string and nothing more: <c>query_to_xml</c> and its siblings,
+    /// <c>ts_stat</c> and <c>ts_rewrite</c> (core), tablefunc's <c>connectby</c> and xml2's <c>xpath_table</c> (crosstab is a prefix)
+    /// — <c>ts_stat('SELECT pg_terminate_backend(pid)::text::tsvector …')</c> walked past until the second 2026-10-04 review.
+    /// </summary>
     public static readonly IReadOnlySet<string> DeniedFunctions = new HashSet<string>(StringComparer.Ordinal)
     {
         "PG_READ_FILE", "PG_READ_BINARY_FILE", "PG_STAT_FILE", "NEXTVAL", "SETVAL", "PG_TERMINATE_BACKEND", "PG_CANCEL_BACKEND",
         "PG_RELOAD_CONF", "SET_CONFIG", "PG_NOTIFY", "PG_SLEEP", "PG_SLEEP_FOR", "PG_SLEEP_UNTIL", "PG_LOGICAL_EMIT_MESSAGE", "PG_SWITCH_WAL",
-        "PG_CREATE_RESTORE_POINT", "PG_ROTATE_LOGFILE", "QUERY_TO_XML", "QUERY_TO_XML_AND_XMLSCHEMA", "CURSOR_TO_XML",
+        "PG_ROTATE_LOGFILE", "PG_START_BACKUP", "PG_STOP_BACKUP", "PG_IMPORT_SYSTEM_COLLATIONS",
+        "QUERY_TO_XML", "QUERY_TO_XMLSCHEMA", "QUERY_TO_XML_AND_XMLSCHEMA", "CURSOR_TO_XML", "CURSOR_TO_XMLSCHEMA",
+        "TS_STAT", "TS_REWRITE", "CONNECTBY", "XPATH_TABLE",
     };
 
     /// <summary>
-    /// Function families a query may not call: large objects, dblink, advisory locks, the replication and file admin functions, and
+    /// Function families a query may not call: large objects, dblink, advisory locks, the replication and file admin functions,
     /// the server's directory listers (<c>PG_LS_</c>: <c>pg_ls_dir</c> and, since the 2026-10-04 review, <c>pg_ls_logdir</c>,
-    /// <c>pg_ls_waldir</c>, <c>pg_ls_tmpdir</c>, <c>pg_ls_archive_statusdir</c> and whatever later versions add).
+    /// <c>pg_ls_waldir</c>, <c>pg_ls_tmpdir</c>, <c>pg_ls_archive_statusdir</c> and whatever later versions add), and, since the
+    /// second review that day, what a rollback does not undo: replication slots made, copied, dropped or read on
+    /// (<c>PG_CREATE_</c> — <c>pg_create_restore_point</c> too — <c>PG_COPY_</c>, <c>PG_DROP_</c>, <c>PG_LOGICAL_SLOT_</c>,
+    /// <c>PG_SYNC_REPLICATION_SLOTS</c>), statistics wiped (<c>PG_STAT_RESET</c>, <c>PG_STAT_STATEMENTS_RESET</c>) or written
+    /// (<c>PG_RESTORE_</c>, <c>PG_CLEAR_</c>: PG 18's relation and attribute stats), a backup begun or ended (<c>PG_BACKUP_</c>), a
+    /// standby's replay paused (<c>PG_WAL_REPLAY_</c>), and tablefunc's <c>crosstab</c> family, which runs its text argument.
     /// </summary>
-    public static readonly IReadOnlyList<string> DeniedPrefixes = ["LO_", "DBLINK", "PG_ADVISORY", "PG_TRY_ADVISORY", "PG_FILE_", "PG_REPLICATION_", "PG_PROMOTE", "PG_LS_"];
+    public static readonly IReadOnlyList<string> DeniedPrefixes =
+    [
+        "LO_", "DBLINK", "PG_ADVISORY", "PG_TRY_ADVISORY", "PG_FILE_", "PG_REPLICATION_", "PG_PROMOTE", "PG_LS_",
+        "PG_CREATE_", "PG_COPY_", "PG_DROP_", "PG_LOGICAL_SLOT_", "PG_SYNC_REPLICATION_SLOTS", "PG_STAT_RESET", "PG_STAT_STATEMENTS_RESET",
+        "PG_RESTORE_", "PG_CLEAR_", "PG_BACKUP_", "PG_WAL_REPLAY_", "CROSSTAB",
+    ];
 
     /// <summary>The words that change data or the schema, or are not a query; refused wherever they stand.</summary>
     public static readonly IReadOnlySet<string> ChangingWords = new HashSet<string>(StringComparer.Ordinal)
@@ -89,7 +114,7 @@ public static class PostgresReadOnlyGate
 
             // A quoted name is a function's name too: "pg_read_file"('/etc/passwd') calls pg_read_file (the 2026-10-04 review found
             // it past the gate). Upper-cased to meet the lists; a quoted "PG_READ_FILE" is another name to the server, refused anyway.
-            if (t.Kind == TokenKind.Quoted)
+            if (t.Kind is TokenKind.Quoted or TokenKind.OperatorBind)
             {
                 if (IsSymbol(next, "(") && IsDeniedFunction(t.Text.ToUpperInvariant()))
                 {
@@ -123,9 +148,21 @@ public static class PostgresReadOnlyGate
         return null;
     }
 
-    /// <summary>The <c>@name</c> placeholders the text uses, each once, without the <c>@</c>; empty when the text does not lex.</summary>
-    public static IReadOnlyList<string> Binds(string sql) =>
-        Tokenize(sql ?? "", out _) is { } tokens ? tokens.Where(t => t.Kind == TokenKind.Bind).Select(t => t.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToList() : [];
+    /// <summary>
+    /// The <c>@name</c> placeholders the text uses, each once, without the <c>@</c>; empty when the text does not lex. One straight
+    /// after an operator character (<see cref="TokenKind.OperatorBind"/>) counts only when <paramref name="named"/> holds it.
+    /// </summary>
+    public static IReadOnlyList<string> Binds(string sql, IEnumerable<string>? named = null)
+    {
+        if (Tokenize(sql ?? "", out _) is not { } tokens)
+        {
+            return [];
+        }
+
+        var given = new HashSet<string>(named ?? [], StringComparer.OrdinalIgnoreCase);
+        return tokens.Where(t => t.Kind == TokenKind.Bind || (t.Kind == TokenKind.OperatorBind && given.Contains(t.Text)))
+            .Select(t => t.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     /// <summary>The text without a trailing <c>;</c>: what runs.</summary>
     public static string Body(string sql)
@@ -139,6 +176,9 @@ public static class PostgresReadOnlyGate
         DeniedFunctions.Contains(upper) || DeniedPrefixes.Any(p => upper.StartsWith(p, StringComparison.Ordinal));
 
     private static bool IsSymbol(Token token, string symbol) => token.Kind == TokenKind.Symbol && token.Text == symbol;
+
+    /// <summary>PostgreSQL's operator characters (CREATE OPERATOR's list).</summary>
+    private static bool IsOperatorChar(char c) => c is '+' or '-' or '*' or '/' or '<' or '>' or '=' or '~' or '!' or '@' or '#' or '%' or '^' or '&' or '|' or '`' or '?';
 
     private static bool IsNameStart(char c) => char.IsLetter(c) || c == '_' || c > 127;
 
@@ -340,7 +380,10 @@ public static class PostgresReadOnlyGate
                     k++;
                 }
 
-                tokens.Add(new Token(TokenKind.Bind, sql[(i + 1)..k], line, column));
+                // After an operator character the @ may be the operator's tail (<@tags, @@to_tsquery): ReadAsync bound every one to
+                // NULL, and ARRAY['x'] <@tags compared with NULL in place of the column (the second 2026-10-04 review).
+                var kind = i > 0 && IsOperatorChar(sql[i - 1]) ? TokenKind.OperatorBind : TokenKind.Bind;
+                tokens.Add(new Token(kind, sql[(i + 1)..k], line, column));
                 Advance(k);
                 continue;
             }

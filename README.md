@@ -1747,7 +1747,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 
 #### Safety
 
-1. **The gate.** The text is lexed by PostgreSQL's rules (nested comments, `E''` strings, dollar quoting) and only one `SELECT`, `WITH`, `VALUES` or `TABLE` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead a `DELETE`), `SELECT INTO`, locking reads, `COPY`, `DO`, `U&` escapes, positional `$1`, and the functions that reach files or directories, large objects, sequences, locks, settings, other backends or other databases (by any name, quoted or not).
+1. **The gate.** The text is lexed by PostgreSQL's rules (nested comments, `E''` strings, dollar quoting) and only one `SELECT`, `WITH`, `VALUES` or `TABLE` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead a `DELETE`), `SELECT INTO`, locking reads, `COPY`, `DO`, `U&` escapes, positional `$1`, and the functions that reach files or directories, large objects, sequences, locks, settings, other backends or other databases, the ones that run a query handed to them as text (`query_to_xml`, `ts_stat`, `crosstab`…), and the admin ones a rollback does not undo (replication slots, statistics resets, backups) (by any name, quoted or not).
 2. **The session.** Every transaction read-only by default, `standard_conforming_strings` on (so the server reads strings as the gate does), and `statement_timeout` and `lock_timeout` set, at connection startup.
 3. **The transaction.** `SET TRANSACTION READ ONLY`, always rolled back: Postgres refuses every write, `nextval` and a temporary table.
 4. **The account.** Give the role `SELECT` grants alone.
@@ -1762,7 +1762,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 | `postgres_describe` | `table, connection?, database?, schema?` | One table or view: comment, columns (type, nullability, default, primary key, comment), foreign keys both ways, indexes and CHECK constraints. |
 | `postgres_relationships` | `connection?, database?, schema?, table?` | Foreign keys: a schema's, or a table's either way. |
 | `postgres_indexes` | `connection?, database?, schema?, table?` | Indexes: unique, primary, the definition, scans since the statistics reset. |
-| `postgres_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+| `postgres_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name` (straight after an operator, as in `id=@id`, only a name `params` gives: `<@tags` stays the operator and a column); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 
 `--postgres-check <connection>` proves the tools against a real server on the published exe (who it is, every type, the gate, a write refused, the timeout).
 

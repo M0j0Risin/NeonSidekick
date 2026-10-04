@@ -174,7 +174,7 @@ public sealed class PostgresAccess
     private static async Task<SqlGrid> ReadAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool last, CancellationToken cancellationToken)
     {
         await using var command = new NpgsqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds + 5 };
-        var named = PostgresReadOnlyGate.Binds(sql);
+        var named = PostgresReadOnlyGate.Binds(sql, parameters.Select(p => p.Name));
         foreach (string bind in named)
         {
             var value = parameters.FirstOrDefault(p => string.Equals(p.Name, bind, StringComparison.OrdinalIgnoreCase));

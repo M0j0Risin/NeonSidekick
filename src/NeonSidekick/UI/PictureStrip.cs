@@ -50,6 +50,9 @@ public sealed class PictureStrip
     private int _version;
     private bool _closed;
 
+    /// <summary>The order key of the picture added last (kept or not), for a picture without a file; null after <see cref="Clear"/>.</summary>
+    private (DateTime CreatedUtc, string Path)? _lastAdded;
+
     /// <summary>The pictures held.</summary>
     public int Count
     {
@@ -129,53 +132,66 @@ public sealed class PictureStrip
     /// it reset all three for a tile drawn off-screen) keeps the highlight on its picture and the window on its tiles, and still
     /// opens a closed strip — the × is "just until the next generation", and it is one. A picture a full strip does not keep
     /// changes nothing at all.
+    ///
+    /// <para>A picture whose file is not found (<paramref name="createdUtc"/> null: a resumed session's pictures after a <c>/cd</c>,
+    /// or moved away) goes just newer than the picture added before it, so such pictures keep the conversation's order among
+    /// the others; the first after a <see cref="Clear"/> is older than any. They took "now" until the second 2026-10-04 review,
+    /// and went ahead of every file, among themselves by path.</para>
     /// </summary>
-    public void Add(ImageThumbnail tile, int id, DateTime createdUtc, string path)
+    public void Add(ImageThumbnail tile, int id, DateTime? createdUtc, string path)
     {
         ArgumentNullException.ThrowIfNull(tile);
         ArgumentNullException.ThrowIfNull(path);
         lock (_gate)
         {
-            int at = _entries.FindIndex(e => Older(e.CreatedUtc, e.Path, createdUtc, path));
-            if (at < 0)
-            {
-                if (_entries.Count >= MaxPictures)
-                {
-                    return;
-                }
-
-                at = _entries.Count;
-            }
-
-            _entries.Insert(at, (tile, id, createdUtc, path));
-            if (_entries.Count > MaxPictures)
-            {
-                _entries.RemoveAt(_entries.Count - 1);
-            }
-
-            if (at == 0)
-            {
-                _selected = -1;
-                _first = 0;
-            }
-            else
-            {
-                // The highlighted picture and the first tile drawn keep their pictures. The highlight on the oldest a full
-                // strip just let go is let go with it.
-                if (_selected >= at)
-                {
-                    _selected = _selected + 1 < _entries.Count ? _selected + 1 : -1;
-                }
-
-                if (_first >= at && _first + 1 < _entries.Count)
-                {
-                    _first++;
-                }
-            }
-
-            _closed = false;
-            _version++;
+            var created = createdUtc ?? (_lastAdded is { } last ? last.CreatedUtc.AddTicks(1) : DateTime.MinValue);
+            _lastAdded = (created, path);
+            Insert(tile, id, created, path);
         }
+    }
+
+    /// <summary><see cref="Add"/>'s placing, under the lock.</summary>
+    private void Insert(ImageThumbnail tile, int id, DateTime createdUtc, string path)
+    {
+        int at = _entries.FindIndex(e => Older(e.CreatedUtc, e.Path, createdUtc, path));
+        if (at < 0)
+        {
+            if (_entries.Count >= MaxPictures)
+            {
+                return;
+            }
+
+            at = _entries.Count;
+        }
+
+        _entries.Insert(at, (tile, id, createdUtc, path));
+        if (_entries.Count > MaxPictures)
+        {
+            _entries.RemoveAt(_entries.Count - 1);
+        }
+
+        if (at == 0)
+        {
+            _selected = -1;
+            _first = 0;
+        }
+        else
+        {
+            // The highlighted picture and the first tile drawn keep their pictures. The highlight on the oldest a full
+            // strip just let go is let go with it.
+            if (_selected >= at)
+            {
+                _selected = _selected + 1 < _entries.Count ? _selected + 1 : -1;
+            }
+
+            if (_first >= at && _first + 1 < _entries.Count)
+            {
+                _first++;
+            }
+        }
+
+        _closed = false;
+        _version++;
     }
 
     /// <summary>Whether the entry made at <paramref name="time"/> from <paramref name="path"/> is older than the one at <paramref name="thanTime"/> from <paramref name="thanPath"/>: the viewer's order, oldest first, the path breaking a tie.</summary>
@@ -187,6 +203,7 @@ public sealed class PictureStrip
     {
         lock (_gate)
         {
+            _lastAdded = null;
             if (_entries.Count == 0)
             {
                 return;

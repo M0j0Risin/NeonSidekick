@@ -48,13 +48,25 @@ public static class BotChatMemoryMode
         _ => "",
     };
 
-    /// <summary>The mode in force for <paramref name="effective"/>; an unknown saved value warns and uses <see cref="Default"/>.</summary>
+    /// <summary>The unknown value last warned of, so <see cref="Resolve"/>'s warning is written once per value.</summary>
+    private static string? s_warned;
+
+    /// <summary>
+    /// The mode in force for <paramref name="effective"/>; an unknown saved value uses <see cref="Default"/> and warns once while it
+    /// stays the same (the second 2026-10-04 review: it is resolved for every bot reply, so one typo filled <c>--log</c>).
+    /// </summary>
     public static BotMemoryMode Resolve(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
         if (TryParse(effective.BotChatMemoryMode, out var mode))
         {
             return mode;
+        }
+
+        string value = effective.BotChatMemoryMode ?? "";
+        if (string.Equals(Interlocked.Exchange(ref s_warned, value), value, StringComparison.Ordinal))
+        {
+            return BotMemoryMode.SharedParent;
         }
 
         DiagnosticLog.Warn(Category,

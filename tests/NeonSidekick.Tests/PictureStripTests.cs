@@ -146,6 +146,27 @@ public class PictureStripTests : IDisposable
     }
 
     /// <summary>
+    /// A picture whose file is gone goes just newer than the one added before it (the second 2026-10-04 review: "now" put a
+    /// resumed session's missing pictures ahead of every file, among themselves by path); the first after a clear is the oldest.
+    /// </summary>
+    [Fact]
+    public void Add_APictureWithoutAFile_KeepsItsArrivalPlace()
+    {
+        var strip = new PictureStrip();
+        strip.Add(Tile(4, 4), 7, null, "z-gone.png");   // first, no file: older than any
+        Put(strip, Tile(4, 4), 1);
+        strip.Add(Tile(4, 4), 8, null, "b-gone.png");   // just after 1
+        strip.Add(Tile(4, 4), 9, null, "a-gone.png");   // just after 8, whatever its name
+        Put(strip, Tile(4, 4), 2);
+        Assert.Equal([2, 9, 8, 1, 7], Ids(strip));
+
+        strip.Clear();
+        Put(strip, Tile(4, 4), 3);
+        strip.Add(Tile(4, 4), 10, null, "gone.png");
+        Assert.Equal([10, 3], Ids(strip));
+    }
+
+    /// <summary>
     /// A late picture placed right of the newest keeps the highlight on its picture (code review, 2026-10-04: it was let go for
     /// a tile drawn off-screen) and still opens a closed strip: the × is until the next generation, and it is one.
     /// </summary>

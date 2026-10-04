@@ -139,6 +139,10 @@ public class BotChatPicturesTests
     [InlineData("WORKFLOW: I'd pick: flux-dev\na red fox", "a red fox", null, "flux-dev")]     // the name only the whole line holds
     [InlineData("WORKFLOW: flux-dev (the photographic one)\na red fox", "a red fox", null, "flux-dev")]   // a note when the prompt is below
     [InlineData("WORKFLOW: pony.", "", null, "pony")]
+    // Joiners read as one another (the second 2026-10-04 review: "flux dev" took a shorter name and "dev" for its prompt).
+    [InlineData("WORKFLOW: flux dev", "", null, "flux-dev")]
+    [InlineData("WORKFLOW: flux_dev\na red fox", "a red fox", null, "flux-dev")]
+    [InlineData("WORKFLOW: fluxdev a red fox", "a red fox", null, "flux-dev")]
     public void ParseImagePrompt_ReadsTheWorkflowLine_WhenAKindHasSeveral(string text, string prompt, string? path, string? workflow)
     {
         var (read, rework, named) = BotChat.ParseImagePrompt(text, Two, TwoFresh, TwoReworks);
@@ -158,6 +162,18 @@ public class BotChatPicturesTests
 
         Assert.Equal("a red fox", read);
         Assert.Equal(workflow, named?.Name);
+    }
+
+    [Theory]
+    [InlineData("WORKFLOW: flux dev", "flux-dev", "")]               // the second 2026-10-04 review: was flux, drawing "dev"
+    [InlineData("WORKFLOW: flux a red fox", "flux", "a red fox")]    // the shorter name still leads a prompt on its line
+    [InlineData("WORKFLOW: flux-dev a red fox", "flux-dev", "a red fox")]
+    public void ParseImagePrompt_TheLongerNameWins_WhateverItsJoiner(string text, string workflow, string prompt)
+    {
+        var (read, _, named) = BotChat.ParseImagePrompt(text, [], [Workflow("flux", family: ComfyFamily.Flux), Workflow("flux-dev", family: ComfyFamily.Flux)], []);
+
+        Assert.Equal(workflow, named?.Name);
+        Assert.Equal(prompt, read);
     }
 
     [Fact]
@@ -288,6 +304,31 @@ public class BotChatPicturesTests
         Assert.Equal("shared-parent", new AppSettingsData().BotChatMemoryMode);
         Assert.True(new AppSettingsData().BotChatMemory);   // on by default (2026-10-04, the user's call)
         Assert.All(BotChatMemoryMode.Names, name => Assert.NotEmpty(BotChatMemoryMode.Describe(name)));
+    }
+
+    /// <summary>An unknown value warns once while it stays (the second 2026-10-04 review: every bot reply wrote it again).</summary>
+    [Fact]
+    public void MemoryMode_AnUnknownValue_WarnsOncePerValue()
+    {
+        var warnings = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Level >= NeonSidekick.Diagnostics.DiagnosticLevel.Warning && e.Message.Contains("BotChatMemoryMode", StringComparison.Ordinal)) warnings.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            string first = "typo-" + Guid.NewGuid().ToString("N");
+            for (int i = 0; i < 3; i++)
+            {
+                Assert.Equal(BotMemoryMode.SharedParent, BotChatMemoryMode.Resolve(new AppSettingsData { BotChatMemoryMode = first }));
+            }
+
+            Assert.Single(warnings);
+            BotChatMemoryMode.Resolve(new AppSettingsData { BotChatMemoryMode = first + "-2" });
+            Assert.Equal(2, warnings.Count);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
     }
 
     [Fact]

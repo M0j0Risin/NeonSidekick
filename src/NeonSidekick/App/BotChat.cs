@@ -763,7 +763,8 @@ public static partial class BotChat
     /// A <see cref="WorkflowAnswer"/> line's text (after the word) split into the name and what follows it on the line (code
     /// review, 2026-10-04: <c>WORKFLOW: flux — a cat on a roof</c> kept the name and lost the prompt): the line's whole text when it
     /// is a workflow's name; else the longest name of <paramref name="workflows"/> the text starts with, a mark or a space after
-    /// it; else, at the first <c>: </c> or spaced dash, the words before it — an unknown or misspelt name, for
+    /// it, its joiners (a space, <c>-</c>, <c>_</c>) read as one another or left out (the second 2026-10-04 review: with flux and
+    /// flux-dev installed, <c>WORKFLOW: flux dev</c> took flux with the prompt "dev"); else, at the first <c>: </c> or spaced dash, the words before it — an unknown or misspelt name, for
     /// <see cref="NamedWorkflow"/> to refuse — unless only the whole line holds a name (<c>I'd pick: flux-dev</c>); else the whole
     /// text is the name. Pure.
     /// </summary>
@@ -777,12 +778,13 @@ public static partial class BotChat
         }
 
         var lead = workflows
-            .Where(w => w.Name.Length > 0 && line.Length > w.Name.Length && line.StartsWith(w.Name, StringComparison.OrdinalIgnoreCase) && !IsNameChar(line[w.Name.Length]))
-            .OrderByDescending(w => w.Name.Length)
+            .Select(w => (Workflow: w, Length: LeadLength(line, w.Name)))
+            .Where(found => found.Length > 0)
+            .OrderByDescending(found => found.Workflow.Name.Length)
             .FirstOrDefault();
-        if (lead is not null)
+        if (lead.Workflow is not null)
         {
-            return (lead.Name, line[lead.Name.Length..].TrimStart(PromptLead));
+            return (lead.Workflow.Name, line[lead.Length..].TrimStart(PromptLead));
         }
 
         var split = Separators
@@ -805,6 +807,37 @@ public static partial class BotChat
 
     /// <summary>What may stand between a workflow's name and a prompt on its line, when the name is not one installed.</summary>
     private static readonly string[] Separators = [": ", " — ", " – ", " - "];
+
+    /// <summary>
+    /// How much of <paramref name="line"/> a workflow's <paramref name="name"/> leads, any case, a joiner of the name (a space,
+    /// <c>-</c>, <c>_</c>) met by any joiner on the line or by none (<c>flux dev</c> and <c>fluxdev</c> lead with flux-dev), with no
+    /// name character after it; 0 when it does not. A joiner the name has not, between two of its letters, is no match.
+    /// </summary>
+    private static int LeadLength(string line, string name)
+    {
+        int i = 0, j = 0;
+        while (j < name.Length)
+        {
+            bool lineJoins = i < line.Length && line[i] is ' ' or '-' or '_';
+            bool nameJoins = name[j] is ' ' or '-' or '_';
+            if (nameJoins)
+            {
+                i += lineJoins ? 1 : 0;
+                j++;
+            }
+            else if (i < line.Length && char.ToUpperInvariant(line[i]) == char.ToUpperInvariant(name[j]))
+            {
+                i++;
+                j++;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        return i > 0 && (i == line.Length || !IsNameChar(line[i])) ? i : 0;
+    }
 
     /// <summary>A character that may continue a workflow's name: a letter, a digit, <c>_</c> or <c>-</c>.</summary>
     private static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '-';

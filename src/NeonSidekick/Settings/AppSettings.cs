@@ -577,6 +577,8 @@ public sealed class AppSettings : IDisposable
                 var loaded = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettingsData);
                 if (loaded is not null)
                 {
+                    FillNullLists(loaded);
+
                     // The interrupt needs the wake word (2026-09-13); a profile saved before that
                     // rule loads with it off, and the file follows at the next save.
                     if (loaded.SttInterrupt && !loaded.SttWake)
@@ -617,6 +619,24 @@ public sealed class AppSettings : IDisposable
         }
 
         return new AppSettingsData();
+    }
+
+    /// <summary>
+    /// The lists that are never null in code given their defaults back when the file says <c>null</c> (the second 2026-10-04 review):
+    /// System.Text.Json writes a JSON null into a non-nullable <c>List&lt;string&gt;</c>, and <see cref="Copy"/>'s spread then threw
+    /// on the first <see cref="Update"/>, as <c>ForbiddenStrings.Find</c> did under <c>run_command</c>. The nullable lists
+    /// (<c>ToolbarItems</c> and the like) already read null as their own default. Returns <paramref name="loaded"/>.
+    /// </summary>
+    internal static AppSettingsData FillNullLists(AppSettingsData loaded)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+        var defaults = new AppSettingsData();
+        loaded.ToolsDisabled ??= defaults.ToolsDisabled;
+        loaded.ShellCommandAllowed ??= defaults.ShellCommandAllowed;
+        loaded.ShellPoliceForbiddenStrings ??= defaults.ShellPoliceForbiddenStrings;
+        loaded.ShellCodeLanguages ??= defaults.ShellCodeLanguages;
+        loaded.McpServersDisabled ??= defaults.McpServersDisabled;
+        return loaded;
     }
 
     /// <summary>

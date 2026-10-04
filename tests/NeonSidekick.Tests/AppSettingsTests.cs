@@ -692,6 +692,30 @@ public class AppSettingsTests : IDisposable
         AssertOldShapeLoaded(settings.Current);
     }
 
+    /// <summary>A JSON null in a list that is never null in code is its default again (the second 2026-10-04 review: the copy threw).</summary>
+    [Fact]
+    public void ProfileFile_NullLists_LoadAsTheirDefaults_AndAnUpdateCopies()
+    {
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        string path = Profiles.ProfileFile(_dir, Profiles.DefaultName);
+        File.WriteAllText(path,
+            "{ \"SchemaVersion\": 2, \"ToolsDisabled\": null, \"ShellCommandAllowed\": null, \"ShellPoliceForbiddenStrings\": null, \"ShellCodeLanguages\": null, \"McpServersDisabled\": null }");
+        var defaults = new AppSettingsData();
+
+        using (var settings = new AppSettings(_dir))
+        {
+            Assert.Equal(defaults.ToolsDisabled, settings.Current.ToolsDisabled);
+            Assert.Empty(settings.Current.ShellCommandAllowed);
+            Assert.Empty(settings.Current.ShellPoliceForbiddenStrings);
+            Assert.Equal(defaults.ShellCodeLanguages, settings.Current.ShellCodeLanguages);
+            Assert.Empty(settings.Current.McpServersDisabled);
+            settings.Update(d => d.TtsSpeed = 1.2);
+            Assert.Null(Shell.ForbiddenStrings.Find("rm -rf /", settings.Current.ShellPoliceForbiddenStrings));
+        }
+
+        Assert.Empty(Profiles.ReadProfileFile(path).ShellPoliceForbiddenStrings);
+    }
+
     [Fact]
     public void ProfileFile_WithARetiredOrRenamedField_LoadsAndKeepsTheOthers()
     {

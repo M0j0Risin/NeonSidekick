@@ -55,6 +55,20 @@ public sealed class PostgresReadOnlyGateTests
     [InlineData("SELECT $q$ never closed", "a dollar-quoted string never ends")]
     [InlineData("SELECT E'\\' never ends", "a string never ends")]
     [InlineData("SET ROLE postgres", "starts with SET")]
+    [InlineData("SELECT * FROM ts_stat('SELECT pg_terminate_backend(pid)::text::tsvector FROM pg_stat_activity')", "ts_stat()")]
+    [InlineData("SELECT ts_rewrite('a & b'::tsquery, 'SELECT t, s FROM aliases')", "ts_rewrite()")]
+    [InlineData("SELECT query_to_xmlschema('SELECT pg_reload_conf()', true, true, '')", "query_to_xmlschema()")]
+    [InlineData("SELECT * FROM crosstab('SELECT pg_cancel_backend(1), 1, 1') AS c(a int, b int)", "crosstab()")]
+    [InlineData("SELECT pg_create_logical_replication_slot('x', 'test_decoding')", "pg_create_logical_replication_slot()")]
+    [InlineData("SELECT pg_create_physical_replication_slot('x')", "pg_create_physical_replication_slot()")]
+    [InlineData("SELECT pg_drop_replication_slot('x')", "pg_drop_replication_slot()")]
+    [InlineData("SELECT * FROM pg_logical_slot_get_changes('x', NULL, NULL)", "pg_logical_slot_get_changes()")]
+    [InlineData("SELECT pg_stat_reset()", "pg_stat_reset()")]
+    [InlineData("SELECT pg_stat_reset_shared('bgwriter')", "pg_stat_reset_shared()")]
+    [InlineData("SELECT pg_stat_statements_reset()", "pg_stat_statements_reset()")]
+    [InlineData("SELECT pg_backup_start('x')", "pg_backup_start()")]
+    [InlineData("SELECT pg_wal_replay_pause()", "pg_wal_replay_pause()")]
+    [InlineData("SELECT * FROM t WHERE v @@pg_read_file('/etc/passwd')::tsquery", "pg_read_file()")]
     public void Refuses_TheRest_WithTheSentence(string sql, string part)
     {
         string? refused = PostgresReadOnlyGate.Check(sql);
@@ -67,6 +81,13 @@ public sealed class PostgresReadOnlyGateTests
     public void Binds_AreTheAtNames_AndBodyDropsTheSemicolon()
     {
         Assert.Equal(["id", "name"], PostgresReadOnlyGate.Binds("SELECT @id, @name, @ID, '@not', x @> y"));
+
+        // Straight after an operator character an @name is a placeholder only when params names it: <@tags and @@q are the
+        // operators' tails and a column, id=@id is a placeholder once named (Npgsql rewrites it then).
+        const string Mixed = "SELECT * FROM t WHERE ARRAY['x'] <@tags AND v @@q AND id=@id AND n = @n";
+        Assert.Equal(["n"], PostgresReadOnlyGate.Binds(Mixed));
+        Assert.Equal(["id", "n"], PostgresReadOnlyGate.Binds(Mixed, ["ID", "n"]));
+        Assert.Null(PostgresReadOnlyGate.Check(Mixed));
         Assert.Equal("SELECT 1", PostgresReadOnlyGate.Body("SELECT 1 ; "));
     }
 }
