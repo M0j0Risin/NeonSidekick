@@ -2081,7 +2081,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Claude Code CLI <c>/claude</c> starts (2026-09-27): a full path, or empty to look for <c>claude.exe</c> on the
     /// PATH, then npm's <c>claude.cmd</c>, then <c>%USERPROFILE%\.local\bin</c> (<see cref="Claude.ClaudeExecutable"/>).
-    /// The Claude tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeExeVariable"/>.
+    /// <c>/tools</c>' Claude tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeExeVariable"/>.
     /// </summary>
     public string ClaudeExecutable { get; set; } = "";
 
@@ -2138,7 +2138,7 @@ public sealed class AppSettingsData
     /// <c>/server</c> choice, off by default — every message costs money on the key's account). Offered only while a key
     /// is set too (<see cref="Llm.Anthropic.ClaudeApi.Offered"/>): then <c>/server</c> and the startup picker list a
     /// <c>Claude API</c> row, and picking it saves <see cref="Llm.Anthropic.ClaudeApi.BaseUrl"/> as the LLM URL. The
-    /// <c>/tools</c> Claude tab's first API row, under the advisor's (2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.ClaudeApiVariable"/>.
+    /// <c>/settings</c>' Claude tab's first row (2026-10-03; <c>/tools</c>' Claude tab's first API row, under the advisor's, from 2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.ClaudeApiVariable"/>.
     /// </summary>
     public bool ClaudeApi { get; set; }
 
@@ -2169,6 +2169,43 @@ public sealed class AppSettingsData
     /// </summary>
     public bool ClaudeApiPromptCaching { get; set; } = true;
 
+    // ─── OpenAI API (2026-10-03) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether the OpenAI API is offered as a server (2026-10-03, the user's ask: OpenAI's own API as one more <c>/server</c>
+    /// choice, the Claude API's twin, off by default — every message costs money on the key's account). Offered only while a
+    /// key is set too (<see cref="Llm.OpenAIPlatform.OpenAIApi.Offered"/>): then <c>/server</c> and the startup picker list an
+    /// <c>OpenAI API</c> row, and picking it saves <see cref="Llm.OpenAIPlatform.OpenAIApi.BaseUrl"/> as the LLM URL. Spoken to over Chat
+    /// Completions (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>). <c>/settings</c>' OpenAI tab's first row; a reconnect. Variable
+    /// <see cref="EnvironmentOverrides.OpenAIApiVariable"/>.
+    /// </summary>
+    public bool OpenAIApi { get; set; }
+
+    /// <summary>
+    /// The OpenAI API key (2026-10-03): kept encrypted with DPAPI as <see cref="ClaudeApiKey"/> is, sent only to the OpenAI API
+    /// (a Bearer token) — never to a local server, which gets <see cref="LlmApiKey"/>, nor to the Claude API. A saved
+    /// <see cref="LlmUrl"/> on api.openai.com took <see cref="LlmApiKey"/> as any server until then; it now needs this key and
+    /// <see cref="OpenAIApi"/>. Never logged (<see cref="SettingsDiff.Secrets"/>). Variable
+    /// <see cref="EnvironmentOverrides.OpenAIApiKeyVariable"/> (plain).
+    /// </summary>
+    public string OpenAIApiKey { get; set; } = "";
+
+    /// <summary>
+    /// The <c>max_completion_tokens</c> every OpenAI API request carries (2026-10-03, the user's ask), reasoning counted inside
+    /// it; 0 (the default) sends none and the model's own ceiling applies. Else <see cref="MinOpenAIApiMaxTokens"/> to
+    /// <see cref="MaxOpenAIApiMaxTokens"/>; a reply that reaches it stops short. A reconnect. No variable.
+    /// </summary>
+    public int OpenAIApiMaxTokens { get; set; }
+
+    public const int MinOpenAIApiMaxTokens = 1_024;
+    public const int MaxOpenAIApiMaxTokens = 128_000;
+
+    /// <summary>The <c>OpenAI-Organization</c> header (2026-10-03, the user's ask: an account in several organizations); empty sends none, the key's default organization then. A reconnect. No variable.</summary>
+    public string OpenAIApiOrganization { get; set; } = "";
+
+    /// <summary>The <c>OpenAI-Project</c> header (2026-10-03, the user's ask); empty sends none, the key's own project then (a project key names it already). A reconnect. No variable.</summary>
+    public string OpenAIApiProject { get; set; } = "";
+
     // ─── Claude CLI server (2026-09-30) ───────────────────────────────────────────
 
     /// <summary>
@@ -2177,7 +2214,7 @@ public sealed class AppSettingsData
     /// (<see cref="Claude.ClaudeCliEndpoint.Offered"/>: <see cref="ClaudeExecutable"/>, else the PATH): then <c>/server</c>
     /// and the startup picker list a <c>Claude CLI</c> row, and picking it saves <see cref="Claude.ClaudeCliEndpoint.BaseUrl"/>
     /// as the LLM URL and the <c>--model</c> word as the LLM model. Claude Code's own tools are all off there: the model gets
-    /// the app's tools, over an MCP server the app hosts. The <c>/tools</c> Claude tab's last row; a reconnect. Variable
+    /// the app's tools, over an MCP server the app hosts. <c>/settings</c>' Claude tab's last row (2026-10-03; <c>/tools</c>' Claude tab's until then); a reconnect. Variable
     /// <see cref="EnvironmentOverrides.ClaudeCliServerVariable"/>.
     /// </summary>
     public bool ClaudeCliServer { get; set; }

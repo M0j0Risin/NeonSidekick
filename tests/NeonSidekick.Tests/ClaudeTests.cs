@@ -251,26 +251,22 @@ public class ClaudeTests
     }
 
     [Fact]
-    public void ToolsMenu_TheClaudeTab_ItsFourteenRowsAndHowTheyRead()
+    public void ToolsMenu_TheClaudeTab_ItsTenRowsAndHowTheyRead()
     {
         var data = new AppSettingsData();
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle);
 
         // On /tools since later on 2026-09-27 (the user's call), after Ask, before Obsidian since later still that day (the user's order; after ComfyUI, before Options, before); gone from /settings.
         Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.OracleTabTitle) + 1, tab);   // after Oracle since 2026-10-03, the user's order (after Camera from 2026-10-02)
-        Assert.DoesNotContain(SettingsMenu.TabTitles, t => t.StartsWith("Claude", StringComparison.Ordinal));   // the Claude (API) tab too, since 2026-09-29
+        Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);   // gone since 2026-09-29; /settings' own Claude tab (2026-10-03) holds the server rows
         Assert.Equal("Claude", ToolsText.ClaudeTabTitle);   // "Claude (CLI)" until 2026-09-29 (the user's call: one Claude tab)
         Assert.Equal(
             [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort,
-             SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm,
-             SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching,
-             SettingsField.ClaudeCliServer],   // 2026-09-30, the Claude CLI server's switch
-            SettingsMenu.ToolsTabFields[tab - 1]);
+             SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm],
+            SettingsMenu.ToolsTabFields[tab - 1]);   // the Claude API's four and the Claude CLI server's went to /settings' Claude tab on 2026-10-03
         Assert.Equal(
             ["Claude executable", "Claude slash command permissions", "Claude slash command model", "Claude slash command effort",
-             "Claude advisor tool", "Claude advisor tool context", "Claude advisor tool calls per turn", "Claude advisor tool model", "Claude advisor tool effort", "Claude advisor tool confirm",
-             "Claude API", "Claude API key", "Claude API max tokens", "Claude API prompt caching",
-             "Claude CLI server"],
+             "Claude advisor tool", "Claude advisor tool context", "Claude advisor tool calls per turn", "Claude advisor tool model", "Claude advisor tool effort", "Claude advisor tool confirm"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisor, data, "C:\\p"));
         Assert.Equal("brief", SettingsMenu.FieldValue(SettingsField.ClaudeAdvisorContext, data, "C:\\p"));

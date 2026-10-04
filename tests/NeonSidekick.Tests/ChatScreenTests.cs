@@ -1898,7 +1898,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => { d.LlmUrl = "http://127.0.0.1:1234"; d.LlmModel = "llama"; d.LlmScanMode = "disabled"; });
         _geometry = new ScreenGeometry(() => null);  // the pane, so the list is tabbed
         PushLine("/settings");
-        _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right);   // the LLM tab (fourth since 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then): LLM server scan mode, then LLM URL
+        _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right);   // the LLM tab (sixth since 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then): LLM server scan mode, then LLM URL
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);          // the slot, prefilled with the URL
         _console.Input.PushKey(Keys.Ctrl(ConsoleKey.A));
@@ -5960,7 +5960,7 @@ public partial class ChatScreenTests : IDisposable
                 case 0: PushLine(input, "hi"); break;
                 case 1: PushLine(input, "/settings"); break;
                 case 2:
-                    input.Push(Keys.Right, Keys.Right, Keys.Right);   // the LLM tab (fourth since 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
+                    input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right);   // the LLM tab (sixth since 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
                     input.Push(Enumerable.Repeat(Keys.Down, 10).ToArray());   // LLM offer tools, the eleventh LLM row (first of the tools-and-limits run since 2026-10-01, the user's call; the fifteenth before: LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
                     input.Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off page, off picked, closed
                     break;
@@ -5971,7 +5971,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n  · 🖥️ LLM offer tools: off\n", output);
         Assert.Contains("  · " + ChatScreen.ToolsChangedNotice(false) + "\n", output);
         Assert.Equal("(LLM offer tools off; conversation cleared)", ChatScreen.ToolsChangedNotice(false));
@@ -8100,19 +8100,20 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task KeyCopy_Yes_WritesEveryKeyIntoTheOtherProfile()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", ClaudeApiKey = "work-claude", HomeAssistantToken = "work-ha" });
-        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = "dpapi:AQAAAN"; d.HomeAssistantToken = "dpapi:AQAAHA"; });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", ClaudeApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha" });
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = "dpapi:AQAAAN"; d.OpenAIApiKey = "dpapi:AQAAOA"; d.HomeAssistantToken = "dpapi:AQAAHA"; });
         PushLine("/keycopy work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: true), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: true), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("dpapi:AQAAAN", work.ClaudeApiKey);   // as stored: never decrypted on the way
+        Assert.Equal("dpapi:AQAAOA", work.OpenAIApiKey);   // the OpenAI API key too (2026-10-03)
         Assert.Equal("dpapi:AQAAHA", work.HomeAssistantToken);   // the Home Assistant API key too (2026-09-28)
         Assert.Equal("work-model", work.LlmModel);         // the rest of the file round-trips
         Assert.DoesNotContain("my-llm", output);           // the values are never shown
@@ -8124,7 +8125,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task KeyCopy_Mirrors_AKeyNotSetHereClearsTheTargets()
     {
         // The user's call: the target ends with exactly this profile's keys; the question says which ones go.
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", ClaudeApiKey = "work-claude", HomeAssistantToken = "work-ha" });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", ClaudeApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha" });
         _settings.Update(d => { d.LlmApiKey = "my-llm"; d.ClaudeApiKey = ""; d.HomeAssistantToken = ""; });
         PushLine("/keycopy work");
         PickYes();
@@ -8132,11 +8133,12 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, haSet: false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: false, haSet: false), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("", work.ClaudeApiKey);
+        Assert.Equal("", work.OpenAIApiKey);
         Assert.Equal("", work.HomeAssistantToken);
     }
 
@@ -8151,7 +8153,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("default", llmSet: true, claudeSet: true, haSet: false), output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("default", llmSet: true, claudeSet: true, openAISet: false, haSet: false), output);
         var data = ReadProfile(Profiles.ProfileFile(_dir, Profiles.DefaultName));
         // "work"'s plain keys were encrypted as it loaded (2026-09-28) and copied as stored.
         Assert.Equal("work-llm", SettingsSecrets.Reveal(data.LlmApiKey));
@@ -8216,16 +8218,17 @@ public partial class ChatScreenTests : IDisposable
     public void KeyCopyText_IsPinned()
     {
         // The question's wording is the contract (the clearing clause is what makes the mirror safe to say yes to).
-        const string Question = "Copy the LLM API key, the Claude API key and the Home Assistant API key into \"work\"?";
-        Assert.Equal(Question, ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: true));
-        Assert.Equal(Question + " \"work\"'s Claude API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, haSet: true));
-        Assert.Equal(Question + " \"work\"'s Home Assistant API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: false));
-        Assert.Equal(Question + " \"work\"'s LLM API key and Home Assistant API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, haSet: false));
-        Assert.Equal(Question + " \"work\"'s LLM API key, Claude API key and Home Assistant API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: false, haSet: false));
-        Assert.Equal("(copied the LLM API key, the Claude API key and the Home Assistant API key into \"work\")", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: true));
-        Assert.Equal("(copied the LLM API key and the Claude API key into \"work\"; its Home Assistant API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: false));
-        Assert.Equal("(copied the Home Assistant API key into \"work\"; its LLM API key and Claude API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, haSet: true));
-        Assert.Equal("(cleared \"work\"'s LLM API key, Claude API key and Home Assistant API key)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, haSet: false));
+        const string Question = "Copy the LLM API key, the Claude API key, the OpenAI API key and the Home Assistant API key into \"work\"?";
+        Assert.Equal(Question, ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true));
+        Assert.Equal(Question + " \"work\"'s Claude API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, openAISet: true, haSet: true));
+        Assert.Equal(Question + " \"work\"'s OpenAI API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: false, haSet: true));
+        Assert.Equal(Question + " \"work\"'s Home Assistant API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: false));
+        Assert.Equal(Question + " \"work\"'s LLM API key and Home Assistant API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, openAISet: true, haSet: false));
+        Assert.Equal(Question + " \"work\"'s LLM API key, Claude API key, OpenAI API key and Home Assistant API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false));
+        Assert.Equal("(copied the LLM API key, the Claude API key, the OpenAI API key and the Home Assistant API key into \"work\")", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true));
+        Assert.Equal("(copied the LLM API key and the Claude API key into \"work\"; its OpenAI API key and Home Assistant API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false));
+        Assert.Equal("(copied the Home Assistant API key into \"work\"; its LLM API key, Claude API key and OpenAI API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: true));
+        Assert.Equal("(cleared \"work\"'s LLM API key, Claude API key, OpenAI API key and Home Assistant API key)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false));
     }
 
     [Fact]
@@ -8240,7 +8243,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, haSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, openAISet: false, haSet: false), SettingsMenu.ConfirmKeys), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(LlmEndpoint.DefaultApiKey, work.LlmApiKey);
         Assert.Equal("sk-ant-x", work.ClaudeApiKey);
@@ -8627,7 +8630,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(false, CommandPolicyMode.Yolo, false), cwd, 239), output);
         Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
         Assert.Empty(_chat.Requests);
@@ -8679,7 +8682,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.Memory);
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
@@ -9297,7 +9300,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Enter);         // its on/off page (2026-09-17)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // off
-        _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right);   // the LLM tab (fourth since 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
+        _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right); _console.Input.PushKey(Keys.Right);   // the LLM tab (sixth since 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);          // LLM model (the scan mode and the URL above it)
         _console.Input.PushKey(Keys.Enter);         // the slot under the list
@@ -9310,7 +9313,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
-        const string strip = SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n \n▸ Profile", output);
         Assert.Contains(rule + "\n" + Row(SettingsMenu.TabKeys) + "\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · Memory: off\n", output);
@@ -9628,7 +9631,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n \n▸ Profile", output);
         Assert.DoesNotContain("› /settings", output);
         Assert.Contains("› hi!", output);
@@ -9666,7 +9669,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.StartsWith("25 tokens", UsageText.HintPart(_session.Usage, _session.ContextLength));
         int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && settings > usage, output);
         Assert.DoesNotContain("› /usage", output);
         Assert.Contains("› ok!", output);
@@ -9732,7 +9735,7 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(true, CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
         int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
@@ -9742,11 +9745,11 @@ public partial class ChatScreenTests : IDisposable
         int memory = output.IndexOf("\n" + Titled(MemoryMenu.Title) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
-        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
         int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
         Assert.Equal(1, output.Split("\n" + Titled(MemoryMenu.Title) + "\n").Length - 1);
-        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n").Length - 1);   // the gear and the blanks
+        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
         Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -9831,7 +9834,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
@@ -9904,7 +9907,7 @@ public partial class ChatScreenTests : IDisposable
 
         string model = "\n" + Titled(SettingsMenu.ServerTitle) + "\n";
         string reasoning = "\n" + Titled(SettingsMenu.ReasoningTitle) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
         string folder = "\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n";
         Assert.Equal(2, output.Split(model).Length - 1);
         Assert.Equal(1, output.Split(reasoning).Length - 1);
@@ -11817,7 +11820,7 @@ public partial class ChatScreenTests : IDisposable
         string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    Claude    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         int at = output.IndexOf(tools, StringComparison.Ordinal);
         Assert.True(at > 0, output);
@@ -12365,8 +12368,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, haSet: false)) + "\n \n▸ No\n  Yes\n", output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, haSet: false), output);
+        Assert.Contains("\n" + Titled(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false)) + "\n \n▸ No\n  Yes\n", output);
+        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false), output);
         var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("sk-ant-x", work.ClaudeApiKey);

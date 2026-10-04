@@ -460,7 +460,7 @@ public enum SettingsField
     /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeAdvisorConfirm"/>). The Claude tab's last row (2026-09-27).</summary>
     ClaudeAdvisorConfirm,
 
-    /// <summary>A toggle: whether the Claude API is offered as a server (<see cref="Settings.AppSettingsData.ClaudeApi"/>). The <c>/tools</c> Claude tab, first of the four API rows under the advisor's (2026-09-29; the first row of <c>/settings</c>' Claude (API) tab from 2026-09-27); a reconnect.</summary>
+    /// <summary>A toggle: whether the Claude API is offered as a server (<see cref="Settings.AppSettingsData.ClaudeApi"/>). <c>/settings</c>' Claude tab's first row (2026-10-03; on <c>/tools</c>' Claude tab under the advisor's from 2026-09-29, the first row of <c>/settings</c>' Claude (API) tab from 2026-09-27); a reconnect.</summary>
     ClaudeApi,
 
     /// <summary>Typed: the Claude API key, saved DPAPI-encrypted and shown masked (<see cref="Settings.AppSettingsData.ClaudeApiKey"/>); empty clears it. Under the switch (2026-09-27); a reconnect.</summary>
@@ -469,7 +469,7 @@ public enum SettingsField
     /// <summary>Typed: the <c>max_tokens</c> of every Claude API request (<see cref="Settings.AppSettingsData.ClaudeApiMaxTokens"/>). Under the key (2026-09-27); a reconnect.</summary>
     ClaudeApiMaxTokens,
 
-    /// <summary>A toggle: whether Claude API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.ClaudeApiPromptCaching"/>). The <c>/tools</c> Claude tab's last row (2026-09-29; the Claude (API) tab's from 2026-09-27); a reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether Claude API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.ClaudeApiPromptCaching"/>). Under the output cap on <c>/settings</c>' Claude tab (2026-10-03; <c>/tools</c>' Claude tab from 2026-09-29, the Claude (API) tab's from 2026-09-27); a reconnect.</summary>
     ClaudeApiPromptCaching,
 
     /// <summary>A toggle: whether the <c>/botchat</c> bots get the main chat's skills and <c>load_skill</c> (<see cref="Settings.AppSettingsData.BotChatSkills"/>). The Botchat tab's last row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
@@ -618,8 +618,8 @@ public enum SettingsField
 
     /// <summary>
     /// A toggle: whether the Claude Code CLI is offered as a server (<see cref="Settings.AppSettingsData.ClaudeCliServer"/>,
-    /// 2026-09-30, the user's ask). The <c>/tools</c> Claude tab's last row, under the Claude API's; a reconnect. Last in the
-    /// enum, as every newcomer.
+    /// 2026-09-30, the user's ask). <c>/settings</c>' Claude tab's last row, under the Claude API's (2026-10-03; <c>/tools</c>'
+    /// Claude tab's until then); a reconnect.
     /// </summary>
     ClaudeCliServer,
 
@@ -824,11 +824,26 @@ public enum SettingsField
     /// <summary>Typed: the most pictures a request carries, 0 (no cap) to 500 (<see cref="Settings.AppSettingsData.LlmPictureKeep"/>). The LLM tab, after <see cref="LlmToolCompactType"/> (2026-10-03, the user's report); no reconnect (read at each request). Last in the enum, as every newcomer.</summary>
     LlmPictureKeep,
 
-    /// <summary>Typed: the most megabytes of pictures a request carries, 0 (no cap) to 1000 (<see cref="Settings.AppSettingsData.LlmPictureMegabytes"/>). The LLM tab, under <see cref="LlmPictureKeep"/> (2026-10-03); no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the most megabytes of pictures a request carries, 0 (no cap) to 1000 (<see cref="Settings.AppSettingsData.LlmPictureMegabytes"/>). The LLM tab, under <see cref="LlmPictureKeep"/> (2026-10-03); no reconnect.</summary>
     LlmPictureMegabytes,
+
+    /// <summary>A toggle: whether the OpenAI API is offered as a server (<see cref="Settings.AppSettingsData.OpenAIApi"/>). <c>/settings</c>' OpenAI tab's first row (2026-10-03); a reconnect.</summary>
+    OpenAIApi,
+
+    /// <summary>Typed, masked: the OpenAI API key, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.OpenAIApiKey"/>); empty clears it. Under the switch (2026-10-03); a reconnect.</summary>
+    OpenAIApiKey,
+
+    /// <summary>Typed: the <c>max_completion_tokens</c> of every OpenAI API request, 0 for none (<see cref="Settings.AppSettingsData.OpenAIApiMaxTokens"/>). Under the key (2026-10-03); a reconnect.</summary>
+    OpenAIApiMaxTokens,
+
+    /// <summary>Typed: the <c>OpenAI-Organization</c> header, empty for none (<see cref="Settings.AppSettingsData.OpenAIApiOrganization"/>). Under the output cap (2026-10-03); a reconnect.</summary>
+    OpenAIApiOrganization,
+
+    /// <summary>Typed: the <c>OpenAI-Project</c> header, empty for none (<see cref="Settings.AppSettingsData.OpenAIApiProject"/>). The OpenAI tab's last row (2026-10-03); a reconnect. Last in the enum, as every newcomer.</summary>
+    OpenAIApiProject,
 }
 
-/// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
+/// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
 public enum SettingsTab
 {
     General,
@@ -843,7 +858,16 @@ public enum SettingsTab
     /// <summary>The Docker servers' rows (2026-10-02, the user's ask: a Docker tab next to Embedded): the switch, the containers, the three waits and the exit stop.</summary>
     Docker,
 
-    /// <summary>Fourth since 2026-10-02 (third from 2026-09-19; the skills' rows sat between, 2026-09-18 until then).</summary>
+    /// <summary>
+    /// The Claude servers' rows (2026-10-03, the user's ask: off <c>/tools</c>' Claude tab, which keeps <c>/claude</c>'s and the
+    /// advisor's): the Claude API's switch, key, output cap and prompt caching, then the Claude CLI server's switch.
+    /// </summary>
+    Claude,
+
+    /// <summary>The OpenAI API's rows (2026-10-03, the user's ask): the switch, the key, the output cap, the organization and the project.</summary>
+    OpenAI,
+
+    /// <summary>Sixth since 2026-10-03 (the Claude and OpenAI tabs before it); fourth from 2026-10-02, third from 2026-09-19 (the skills' rows sat between, 2026-09-18 until then).</summary>
     Llm,
     Tts,
 
@@ -1126,14 +1150,15 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", EmbeddedTabTitle, DockerTabTitle, "LLM", "TTS", "STT", "Sessions", "Botchat"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", EmbeddedTabTitle, DockerTabTitle, ClaudeTabTitle, OpenAITabTitle, "LLM", "TTS", "STT", "Sessions", "Botchat"];
 
     /// <summary>The embedded model tab's strip title (2026-09-29). Pinned.</summary>
     public const string EmbeddedTabTitle = "Embedded";
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
-    /// (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; General, Sessions, LLM, TTS, STT from 2026-09-18, Sessions right after General; the Ask,
+    /// (General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03;
+    /// General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; General, Sessions, LLM, TTS, STT from 2026-09-18, Sessions right after General; the Ask,
     /// Files and Web tabs are <c>/tools</c>' since 2026-09-19, <see cref="ToolsTabFields"/>, and the Skills tab
     /// <c>/skills</c>' Options tab since later that day, <see cref="SkillsTabFields"/>).
     /// General is spelled out in five runs (2026-10-01, the user's call: 24 rows grown by "under X" and "last" had scattered their
@@ -1162,6 +1187,8 @@ internal sealed partial class SettingsMenu
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
+        [SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
+        [SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -1206,8 +1233,8 @@ internal sealed partial class SettingsMenu
     /// then the script rows: the languages, their timeout, the tool bridge switch (later that day) and the tool-call cap it governs.
     /// Claude (2026-09-27, the user's call: <c>/claude</c>'s four rows off <c>/settings</c>, named <c>Claude command …</c>) is those four, then
     /// the advisor's six (<c>claude_advisor</c>): its switch, the context, the per-turn cap, the model, the effort and the confirm switch;
-    /// since 2026-09-29 (the user's call: one tab named <c>Claude</c>, <c>Claude (CLI)</c> until then) the Claude API's four rows follow,
-    /// off <c>/settings</c>' <c>Claude (API)</c> tab — the switch, the key, the output cap and the prompt caching, each a reconnect.
+    /// from 2026-09-29 (the user's call: one tab named <c>Claude</c>, <c>Claude (CLI)</c> until then) the Claude API's four rows and
+    /// later the Claude CLI server's followed, until 2026-10-03 (the user's call), when the five went to <c>/settings</c>' Claude tab.
     /// With <see cref="TabFields"/> and <see cref="SkillsTabFields"/> they are every <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
@@ -1223,7 +1250,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
-        [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm, SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer],
+        [SettingsField.ClaudeExecutable, SettingsField.ClaudePermissions, SettingsField.ClaudeModel, SettingsField.ClaudeEffort, SettingsField.ClaudeAdvisor, SettingsField.ClaudeAdvisorContext, SettingsField.ClaudeAdvisorCallsPerTurn, SettingsField.ClaudeAdvisorModel, SettingsField.ClaudeAdvisorEffort, SettingsField.ClaudeAdvisorConfirm],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
@@ -1400,6 +1427,7 @@ internal sealed partial class SettingsMenu
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
             or SettingsField.ClaudeApi or SettingsField.ClaudeApiKey or SettingsField.ClaudeApiMaxTokens or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer
+            or SettingsField.OpenAIApi or SettingsField.OpenAIApiKey or SettingsField.OpenAIApiMaxTokens or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
             or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVramBudget or SettingsField.EmbeddedVision
             or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly or SettingsField.DockerServers;
 
@@ -1599,7 +1627,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatImages or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeAdvisor or SettingsField.ClaudeAdvisorConfirm
-            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
+            or SettingsField.ClaudeApi or SettingsField.ClaudeApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
@@ -1810,6 +1838,11 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApiMaxTokens => "Claude API max tokens",
         SettingsField.ClaudeApiPromptCaching => "Claude API prompt caching",
         SettingsField.ClaudeCliServer => "Claude CLI server",
+        SettingsField.OpenAIApi => "OpenAI API",
+        SettingsField.OpenAIApiKey => "OpenAI API key",
+        SettingsField.OpenAIApiMaxTokens => "OpenAI API max tokens",
+        SettingsField.OpenAIApiOrganization => "OpenAI API organization",
+        SettingsField.OpenAIApiProject => "OpenAI API project",
         SettingsField.EmbeddedModels => "Embedded models",
         SettingsField.EmbeddedBackend => "Embedded backend",
         SettingsField.EmbeddedContextSize => "Embedded context size",
@@ -1973,6 +2006,11 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApiMaxTokens => Tokens(data.ClaudeApiMaxTokens),
             SettingsField.ClaudeApiPromptCaching => OnOff(data.ClaudeApiPromptCaching),
             SettingsField.ClaudeCliServer => OnOff(data.ClaudeCliServer),
+            SettingsField.OpenAIApi => OnOff(data.OpenAIApi),
+            SettingsField.OpenAIApiKey => ClaudeApiKeyLabel(data.OpenAIApiKey),
+            SettingsField.OpenAIApiMaxTokens => data.OpenAIApiMaxTokens > 0 ? Tokens(data.OpenAIApiMaxTokens) : OpenAIApiMaxTokensNoneLabel,
+            SettingsField.OpenAIApiOrganization => string.IsNullOrWhiteSpace(data.OpenAIApiOrganization) ? OpenAIApiHeaderNoneLabel : data.OpenAIApiOrganization.Trim(),
+            SettingsField.OpenAIApiProject => string.IsNullOrWhiteSpace(data.OpenAIApiProject) ? OpenAIApiHeaderNoneLabel : data.OpenAIApiProject.Trim(),
             SettingsField.EmbeddedModels => EmbeddedModelsDoorLabel,
             SettingsField.EmbeddedBackend => data.EmbeddedBackend,
             SettingsField.EmbeddedContextSize => data.EmbeddedContextSize == 0 ? EmbeddedContextFitLabel : Tokens(data.EmbeddedContextSize),
@@ -2833,6 +2871,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeAdvisorModel => data.ClaudeAdvisorModel,
         SettingsField.ClaudeAdvisorCallsPerTurn => data.ClaudeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
         SettingsField.ClaudeApiMaxTokens => data.ClaudeApiMaxTokens.ToString(CultureInfo.InvariantCulture),
+        SettingsField.OpenAIApiMaxTokens => data.OpenAIApiMaxTokens.ToString(CultureInfo.InvariantCulture),
+        SettingsField.OpenAIApiOrganization => data.OpenAIApiOrganization,
+        SettingsField.OpenAIApiProject => data.OpenAIApiProject,
         SettingsField.EmbeddedContextSize => data.EmbeddedContextSize.ToString(CultureInfo.InvariantCulture),
         SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
         SettingsField.EmbeddedVramBudget => data.EmbeddedVramBudget == NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Off ? NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.OffWord : data.EmbeddedVramBudget.ToString(CultureInfo.InvariantCulture),
@@ -2840,6 +2881,7 @@ internal sealed partial class SettingsMenu
         // The key is never put back on the line: typing replaces it, empty clears it (the LLM API key refuses empty).
         SettingsField.LlmApiKey => "",
         SettingsField.ClaudeApiKey => "",
+        SettingsField.OpenAIApiKey => "",
         SettingsField.HomeAssistantToken => "",
         SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
         SettingsField.HomeAssistantAssistAgent => data.HomeAssistantAssistAgent,
@@ -3631,6 +3673,11 @@ internal sealed partial class SettingsMenu
             return await TestHomeAssistantAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        if (field is SettingsField.ClaudeApiKey or SettingsField.OpenAIApiKey)
+        {
+            return await SetApiKeyAsync(field, page, row, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.HomeAssistantToken)
         {
             return await SetHomeAssistantTokenAsync(page, row, cancellationToken).ConfigureAwait(false);
@@ -3994,7 +4041,8 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel or SettingsField.ClaudeApiKey
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeExecutable or SettingsField.ClaudeModel or SettingsField.ClaudeAdvisorModel
+            or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
             or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
@@ -4551,15 +4599,23 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.ClaudeApiMaxTokens = claudeMax);
                 return true;
 
-            case SettingsField.ClaudeApiKey:
-                // Encrypted for this Windows user before it reaches the file (2026-09-27); where DPAPI fails, kept as typed and said so.
-                string protectedKey = Llm.Anthropic.ClaudeApi.Protect(text, out string? protectError);
-                if (protectError is not null)
+            case SettingsField.OpenAIApiMaxTokens:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int openAIMax)
+                    || (openAIMax != 0 && (openAIMax < AppSettingsData.MinOpenAIApiMaxTokens || openAIMax > AppSettingsData.MaxOpenAIApiMaxTokens)))
                 {
-                    Sink.Warning(ClaudeApiKeyPlainWarning(protectError));
+                    Sink.Error($"{FieldName(field)} {OpenAIApiMaxTokensRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
                 }
 
-                Apply(field, d => d.ClaudeApiKey = protectedKey);
+                Apply(field, d => d.OpenAIApiMaxTokens = openAIMax);
+                return true;
+
+            case SettingsField.OpenAIApiOrganization:
+                Apply(field, d => d.OpenAIApiOrganization = text);
+                return true;
+
+            case SettingsField.OpenAIApiProject:
+                Apply(field, d => d.OpenAIApiProject = text);
                 return true;
 
             case SettingsField.WebSearxngUrl:
@@ -5579,6 +5635,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeApi => data.ClaudeApi,
             SettingsField.ClaudeApiPromptCaching => data.ClaudeApiPromptCaching,
             SettingsField.ClaudeCliServer => data.ClaudeCliServer,
+            SettingsField.OpenAIApi => data.OpenAIApi,
             SettingsField.EmbeddedVision => data.EmbeddedVision,
             SettingsField.EmbeddedVramOnly => data.EmbeddedVramOnly,
             SettingsField.EmbeddedLlmServer => data.EmbeddedLlmServer,
@@ -5673,6 +5730,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeApi: data.ClaudeApi = on; break;
             case SettingsField.ClaudeApiPromptCaching: data.ClaudeApiPromptCaching = on; break;
             case SettingsField.ClaudeCliServer: data.ClaudeCliServer = on; break;
+            case SettingsField.OpenAIApi: data.OpenAIApi = on; break;
             case SettingsField.EmbeddedVision: data.EmbeddedVision = on; break;
             case SettingsField.EmbeddedVramOnly: data.EmbeddedVramOnly = on; break;
             case SettingsField.EmbeddedLlmServer: data.EmbeddedLlmServer = on; break;
@@ -5775,6 +5833,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeApi => on ? "/server offers the Claude API while a key is set (billed per message)" : "the Claude API is not offered",
         SettingsField.ClaudeApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
         SettingsField.ClaudeCliServer => on ? "/server offers the Claude CLI, run with the app's tools, not its own" : "the Claude CLI is not offered; a running one stops",
+        SettingsField.OpenAIApi => on ? "/server offers the OpenAI API while a key is set (billed per message)" : "the OpenAI API is not offered",
         SettingsField.EmbeddedVision => on ? "the embedded model loads its vision projector and reads images" : "the embedded model reads text alone; about 1 GB less memory",
         SettingsField.EmbeddedVramOnly => on ? "every layer on the GPU; a load that spills into system RAM is refused" : "a model too big for VRAM may run partly from system RAM, slowly",
         SettingsField.EmbeddedLlmServer => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",

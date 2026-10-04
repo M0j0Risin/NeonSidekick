@@ -4,6 +4,7 @@ using NeonSidekick.Diagnostics;
 using NeonSidekick.Docker;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Anthropic;
+using NeonSidekick.Llm.OpenAIPlatform;
 using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Settings;
 using NeonSidekick.Skills;
@@ -550,9 +551,10 @@ internal sealed class LlmSession : IDisposable
             DiagnosticLog.Info(Category, SamplingLogLine(sampling));
         }
 
-        // The Claude API publishes its window on the model list or nowhere: none of the native tiers live on its host. The
-        // Claude CLI's is the endpoint's own (2026-09-30): no host to ask at all.
-        if (_configuredContextLength <= 0 && _detectedContextLength is null && !ClaudeApi.IsClaudeApi(endpoint.BaseUrl) && !ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
+        // The Claude API publishes its window on the model list or nowhere: none of the native tiers live on its host; the
+        // OpenAI API's comes from the model table (2026-10-03, set at the connect). The Claude CLI's is the endpoint's own
+        // (2026-09-30): no host to ask at all.
+        if (_configuredContextLength <= 0 && _detectedContextLength is null && !ApiKeys.IsHostedApi(endpoint.BaseUrl) && !ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
         {
             _detectedContextLength = await _contextProbe.DetectAsync(endpoint.WireUrl, endpoint.ModelId, KeyFor(endpoint), cancellationToken).ConfigureAwait(false);
         }
@@ -596,12 +598,15 @@ internal sealed class LlmSession : IDisposable
     /// The scan's servers, then the embedded model's rows (<see cref="EmbeddedRows"/>, 2026-09-29), then — while the Claude
     /// API is offered (<see cref="ClaudeApi.Offered"/>, 2026-09-27) — its row: asked for its model list with its own
     /// key alongside the scan, never scanned for, and listed whatever it answered (the row's detail then says why), so
-    /// the switch and the key are all it takes to see it; then the Claude CLI's (<see cref="ClaudeCliRows"/>, 2026-09-30)
-    /// last. The scan mode governs none of them: <c>disabled</c> still lists them.
+    /// the switch and the key are all it takes to see it; then the OpenAI API's the same way (<see cref="OpenAIApi.Offered"/>,
+    /// 2026-10-03); then the Claude CLI's (<see cref="ClaudeCliRows"/>, 2026-09-30) last. The scan mode governs none of them: <c>disabled</c> still lists them.
     /// </summary>
     private async Task<IReadOnlyList<LlmServer>> WithExtraRowsAsync(AppSettingsData effective, Task<IReadOnlyList<LlmServer>> scan, CancellationToken cancellationToken)
     {
         Task<ProbeResult>? claude = ClaudeApi.Offered(effective) ? _probe.ProbeAsync(ClaudeApi.BaseUrl, ClaudeApi.Key(effective), cancellationToken) : null;
+        Task<ProbeResult>? openAI = OpenAIApi.Offered(effective)
+            ? _probe.ProbeAsync(OpenAIApi.BaseUrl, OpenAIApi.Key(effective), cancellationToken, OpenAIApi.HeadersFor(effective, OpenAIApi.BaseUrl))
+            : null;
         Task<DockerServerList>? docker = DockerOffered(effective) ? _docker!.ListAsync(effective, cancellationToken) : null;
         IReadOnlyList<LlmServer> scanned = await scan.ConfigureAwait(false);
         var dockerRows = new List<LlmServer>();
@@ -630,6 +635,13 @@ internal sealed class LlmSession : IDisposable
             servers.Add(LlmServer.From(ClaudeApi.BaseUrl, result));
         }
 
+        if (openAI is not null)
+        {
+            var result = await openAI.ConfigureAwait(false);
+            DiagnosticLog.Info(Category, $"{OpenAIApi.ServerName}: {result.Detail}.");
+            servers.Add(LlmServer.From(OpenAIApi.BaseUrl, result));
+        }
+
         servers.AddRange(ClaudeCliRows(effective));
         return servers;
     }
@@ -639,7 +651,7 @@ internal sealed class LlmSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(effective);
         var v1 = LlmEndpoint.NormalizeBaseUrl(baseUrl);
-        var result = await _probe.ProbeAsync(v1, ClaudeApi.KeyFor(effective, v1), cancellationToken).ConfigureAwait(false);
+        var result = await _probe.ProbeAsync(v1, ApiKeys.For(effective, v1), cancellationToken, OpenAIApi.HeadersFor(effective, v1)).ConfigureAwait(false);
         return LlmServer.From(v1, result);
     }
 
@@ -657,9 +669,12 @@ internal sealed class LlmSession : IDisposable
         Remember(effective);
         Endpoint = endpoint;
 
-        // The Claude CLI's window is its models' (2026-09-30), whichever way its endpoint was built (a saved URL, a picked row).
+        // The Claude CLI's window is its models' (2026-09-30), whichever way its endpoint was built (a saved URL, a picked row);
+        // the OpenAI API's the model table's (2026-10-03: its model list names none).
         _detectedContextLength = endpoint.PublishedContextLength
-            ?? (ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl) ? new ContextLength(ClaudeCliEndpoint.DefaultContextWindow, ClaudeCliSource) : null);
+            ?? (ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl) ? new ContextLength(ClaudeCliEndpoint.DefaultContextWindow, ClaudeCliSource)
+                : OpenAIApi.IsOpenAIApi(endpoint.BaseUrl) ? new ContextLength(OpenAIModelRules.ContextWindow(endpoint.ModelId), ContextLengthProbe.OpenAIModelTableSource)
+                : null);
         if (!EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl))
         {
             // Another server picked (2026-09-29): the embedded one's memory is free again.
@@ -752,7 +767,7 @@ internal sealed class LlmSession : IDisposable
                 return (null, BotLinkNoServer);
             }
 
-            string key = ClaudeApi.IsClaudeApi(starter.BaseUrl) || embedded ? starter.ApiKey
+            string key = ApiKeys.IsHostedApi(starter.BaseUrl) || embedded ? starter.ApiKey
                 : string.IsNullOrWhiteSpace(own) || own == LlmEndpoint.DefaultApiKey ? _apiKey : own;
             endpoint = starter with { ModelId = embedded || docker ? starter.ModelId : model ?? starter.ModelId, ApiKey = key, PublishedContextLength = null };
         }
@@ -805,8 +820,8 @@ internal sealed class LlmSession : IDisposable
                 return (null, ex.Message);
             }
 
-            string key = ClaudeApi.KeyFor(profile, v1);
-            var result = await _probe.ProbeAsync(v1, key, cancellationToken).ConfigureAwait(false);
+            string key = ApiKeys.For(profile, v1);
+            var result = await _probe.ProbeAsync(v1, key, cancellationToken, OpenAIApi.HeadersFor(profile, v1)).ConfigureAwait(false);
             if (!result.Exists)
             {
                 return (null, $"{v1} did not answer ({result.Detail})");
@@ -959,7 +974,7 @@ internal sealed class LlmSession : IDisposable
     }
 
     private async Task<ProbeResult?> ProbeAsync(Uri url, CancellationToken cancellationToken) =>
-        await _probe.ProbeAsync(url, ClaudeApi.IsClaudeApi(url) ? ClaudeApi.Key(_effective) : _apiKey, cancellationToken).ConfigureAwait(false);
+        await _probe.ProbeAsync(url, ApiKeys.IsHostedApi(url) ? ApiKeys.For(_effective, url) : _apiKey, cancellationToken, OpenAIApi.HeadersFor(_effective, url)).ConfigureAwait(false);
 
     /// <summary>The skill-learning reflection now running, if one is (<see cref="StartLearning"/>); the screen never awaits it here.</summary>
     public Task<SkillLearnResult>? Learning { get; private set; }
@@ -1065,13 +1080,13 @@ internal sealed class LlmSession : IDisposable
     /// The connected model's sampling defaults as the server reports them (2026-09-28, for the <c>/sampling</c> pane's
     /// <c>(server)</c> values): asked once per endpoint, model and <c>LLM sampling from Hugging Face</c> value and kept
     /// until a reconnect (<see cref="ServerSamplingProbe"/>) — so a flip of the setting asks again at the next pane. Null
-    /// while nothing is connected, over the Claude API (no sampling goes there), with no probe, or when the server said
+    /// while nothing is connected, over the Claude API or the OpenAI API (no sampling goes there), with no probe, or when the server said
     /// nothing.
     /// </summary>
     public async Task<ServerSampling?> ServerSamplingAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        if (_samplingProbe is null || Endpoint is not { } endpoint || ClaudeApi.IsClaudeApi(endpoint.BaseUrl) || ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
+        if (_samplingProbe is null || Endpoint is not { } endpoint || ApiKeys.IsHostedApi(endpoint.BaseUrl) || ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
         {
             return null;
         }

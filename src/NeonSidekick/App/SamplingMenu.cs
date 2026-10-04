@@ -112,13 +112,13 @@ internal sealed class SamplingMenu
     /// <see cref="SamplingText.ClaudeApiCaption"/> while <paramref name="claudeApi"/>, else the connected model's tab (the
     /// first, when <paramref name="server"/> is known) captioned with where the server's values came from.
     /// </summary>
-    public static MenuPage Page(Dictionary<string, LlmSamplingEntry>? map, IReadOnlyList<string> keys, int tab, bool claudeApi, ServerSampling? server = null)
+    public static MenuPage Page(Dictionary<string, LlmSamplingEntry>? map, IReadOnlyList<string> keys, int tab, bool claudeApi, ServerSampling? server = null, bool openAIApi = false)
     {
         ArgumentNullException.ThrowIfNull(keys);
         var tabs = keys.Select((k, i) =>
         {
             var reported = i == 0 && k != LlmSampling.AnyModel ? server : null;
-            string? caption = claudeApi ? SamplingText.ClaudeApiCaption : reported is null ? null : SamplingText.SourceCaption(reported);
+            string? caption = claudeApi ? SamplingText.ClaudeApiCaption : openAIApi ? SamplingText.OpenAIApiCaption : reported is null ? null : SamplingText.SourceCaption(reported);
             return new MenuTab(SamplingText.TabTitle(k), Rows(map, k, reported)) { Caption = caption };
         }).ToList();
         return MenuPage.Tabbed(SamplingText.Label, tabs, tab, SamplingText.Keys);
@@ -313,6 +313,7 @@ internal sealed class SamplingMenu
         }
 
         bool claudeApi = endpoint is not null && ClaudeApi.IsClaudeApi(endpoint.BaseUrl);
+        bool openAIApi = endpoint is not null && Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(endpoint.BaseUrl);
         int tab = 0;
         int cursor = 0;
         try
@@ -322,7 +323,7 @@ internal sealed class SamplingMenu
                 var map = _settings.Current.LlmSampling;
                 var keys = TabKeys(map, model);
                 tab = Math.Clamp(tab, 0, keys.Count - 1);
-                var page = Page(map, keys, tab, claudeApi, server);
+                var page = Page(map, keys, tab, claudeApi, server, openAIApi);
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     return;
@@ -331,7 +332,7 @@ internal sealed class SamplingMenu
                 tab = pick.Tab;
                 cursor = pick.Row;
                 string key = keys[tab];
-                var shown = pick.Tab == page.Tab ? page : Page(map, keys, tab, claudeApi, server);
+                var shown = pick.Tab == page.Tab ? page : Page(map, keys, tab, claudeApi, server, openAIApi);
                 if (cursor == ClearRow)
                 {
                     if (Entry(map, key) is { IsEmpty: false } && await _menu.ConfirmAsync(SamplingText.ClearQuestion(key), cancellationToken).ConfigureAwait(false))

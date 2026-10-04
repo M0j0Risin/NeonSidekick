@@ -66,7 +66,9 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.EmbeddedBackendVariable, " Vulkan "),
             (EnvironmentOverrides.EmbeddedContextVariable, "16384"),
             (EnvironmentOverrides.ClaudeCliServerVariable, " ON "),
-            (EnvironmentOverrides.DockerPipeVariable, " npipe:////./pipe/dockerDesktopLinuxEngine "));
+            (EnvironmentOverrides.DockerPipeVariable, " npipe:////./pipe/dockerDesktopLinuxEngine "),
+            (EnvironmentOverrides.OpenAIApiVariable, " Yes "),
+            (EnvironmentOverrides.OpenAIApiKeyVariable, " sk-openai-env "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -103,6 +105,8 @@ public class EnvironmentOverridesTests
         Assert.Equal(16_384, e.EmbeddedContextSize);   // (2026-09-29)
         Assert.True(e.ClaudeCliServer);   // a switch word, any case, trimmed (2026-09-30)
         Assert.Equal("npipe:////./pipe/dockerDesktopLinuxEngine", e.DockerEnginePipe);   // trimmed, kept as given; the pipe's bare name is read where it is used (2026-10-02)
+        Assert.True(e.OpenAIApi);   // a switch word (2026-10-03)
+        Assert.Equal("sk-openai-env", e.OpenAIApiKey);   // trimmed (2026-10-03)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

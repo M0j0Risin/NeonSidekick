@@ -35,6 +35,9 @@ public static class SamplingText
     /// <summary>The caption while the Claude API is connected: its requests carry none of this. Pinned.</summary>
     public const string ClaudeApiCaption = "The Claude API ignores sampling; these apply to OpenAI-compatible servers.";
 
+    /// <summary>The caption while the OpenAI API is the server (2026-10-03): its client sends none of these. Pinned.</summary>
+    public const string OpenAIApiCaption = "The OpenAI API ignores sampling; these apply to local servers.";
+
     /// <summary>The label column: the longest row name plus two cells.</summary>
     public static readonly int LabelWidth = SamplingField.All.Select(f => f.Wire.Length).Append(ExtraRowName.Length).Max() + 2;
 

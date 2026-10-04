@@ -6088,9 +6088,10 @@ internal sealed partial class ChatScreen
 
     public const string KeyCopySelfError = "/keycopy copies into another profile; that one is loaded.";
 
-    /// <summary>The keys' names, as the settings pane's rows read; the Home Assistant API key joined them on 2026-09-28 (the user's ask; "API key", not "token", the user's call for one word across the three).</summary>
+    /// <summary>The keys' names, as the settings pane's rows read; the Home Assistant API key joined them on 2026-09-28 (the user's ask; "API key", not "token", the user's call for one word across the three), the OpenAI API key on 2026-10-03.</summary>
     private const string LlmKeyName = "LLM API key";
     private const string ClaudeKeyName = "Claude API key";
+    private const string OpenAIKeyName = "OpenAI API key";
     private const string HomeAssistantKeyName = "Home Assistant API key";
 
     /// <summary><c>a</c>, <c>a and b</c>, <c>a, b and c</c>.</summary>
@@ -6098,26 +6099,27 @@ internal sealed partial class ChatScreen
         items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
     /// <summary>The keys' names split by whether this profile has them set, in the settings pane's order.</summary>
-    private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool haSet)
+    private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool openAISet, bool haSet)
     {
         var set = new List<string>();
         var unset = new List<string>();
         (llmSet ? set : unset).Add(LlmKeyName);
         (claudeSet ? set : unset).Add(ClaudeKeyName);
+        (openAISet ? set : unset).Add(OpenAIKeyName);
         (haSet ? set : unset).Add(HomeAssistantKeyName);
         return (set, unset);
     }
 
     /// <summary>
     /// The question before a key copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
-    /// <c>Copy the LLM API key, the Claude API key and the Home Assistant API key into "work"?</c>, and when a key is not set
+    /// <c>Copy the LLM API key, the Claude API key, the OpenAI API key and the Home Assistant API key into "work"?</c>, and when a key is not set
     /// here what the mirror does to the target's — <c> "work"'s Claude API key is cleared: none here.</c> — so the clearing
     /// is never a surprise. Pinned.
     /// </summary>
-    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet, bool haSet)
+    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet)
     {
-        string question = $"Copy the {KeySeries([LlmKeyName, "the " + ClaudeKeyName, "the " + HomeAssistantKeyName])} into \"{profile}\"?";
-        var (_, unset) = KeyNames(llmSet, claudeSet, haSet);
+        string question = $"Copy the {KeySeries([LlmKeyName, "the " + ClaudeKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName])} into \"{profile}\"?";
+        var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet);
         return unset.Count == 0
             ? question
             : $"{question} \"{profile}\"'s {KeySeries(unset)} {(unset.Count == 1 ? "is" : "are")} cleared: none here.";
@@ -6128,9 +6130,9 @@ internal sealed partial class ChatScreen
     /// <c>(copied the LLM API key and the Home Assistant API key into "work"; its Claude API key cleared)</c>, none
     /// <c>(cleared "work"'s LLM API key, Claude API key and Home Assistant API key)</c>. Pinned.
     /// </summary>
-    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet, bool haSet)
+    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet)
     {
-        var (set, unset) = KeyNames(llmSet, claudeSet, haSet);
+        var (set, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet);
         if (set.Count == 0)
         {
             return $"(cleared \"{profile}\"'s {KeySeries(unset)})";
@@ -6142,12 +6144,12 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Claude API
-    /// key</c> and <c>Home Assistant API key</c> (joined the same day, the user's ask) into another's, after a confirmation —
+    /// key</c>, <c>OpenAI API key</c> (2026-10-03) and <c>Home Assistant API key</c> (joined the same day, the user's ask) into another's, after a confirmation —
     /// <c>/cmdcopy</c>'s read-edit-write of the target's <c>profile.json</c> (<see cref="Profiles.ReadProfileFile"/>: a corrupt
     /// one is an error, never overwritten) without its switches. All are mirrored (the user's call): a key not set here clears
     /// the target's, so it ends with exactly this profile's keys, and the question says so. The stored values
     /// (<c>_settings.Current</c>, not the effective ones: a key that comes only from <c>NEONSIDEKICK_LLM_API_KEY</c>/
-    /// <c>NEONSIDEKICK_CLAUDE_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c> is a per-run override and stays out of the file),
+    /// <c>NEONSIDEKICK_CLAUDE_API_KEY</c>/<c>NEONSIDEKICK_OPENAI_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c> is a per-run override and stays out of the file),
     /// copied as stored: a <c>dpapi:</c> key or token reads the same in any profile of this Windows user on this machine, as
     /// <see cref="Profiles.KeepOnReset"/> already relies on. The values are never shown or logged.
     /// </summary>
@@ -6176,11 +6178,13 @@ internal sealed partial class ChatScreen
         var current = _settings.Current;
         string llmKey = current.LlmApiKey;
         string claudeKey = current.ClaudeApiKey;
+        string openAIKey = current.OpenAIApiKey;
         string haToken = current.HomeAssistantToken;
         bool llmSet = !string.IsNullOrWhiteSpace(llmKey) && llmKey.Trim() != LlmEndpoint.DefaultApiKey;
         bool claudeSet = !string.IsNullOrWhiteSpace(claudeKey);
+        bool openAISet = !string.IsNullOrWhiteSpace(openAIKey);
         bool haSet = !string.IsNullOrWhiteSpace(haToken);
-        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet, haSet), cancellationToken).ConfigureAwait(false))
+        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet, openAISet, haSet), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
@@ -6192,9 +6196,10 @@ internal sealed partial class ChatScreen
             var data = Profiles.ReadProfileFile(path);
             data.LlmApiKey = llmKey;
             data.ClaudeApiKey = claudeKey;
+            data.OpenAIApiKey = openAIKey;
             data.HomeAssistantToken = haToken;
             Profiles.WriteProfileFile(path, data);
-            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet, haSet));
+            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet, openAISet, haSet));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
@@ -9003,15 +9008,16 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one.
-        // So does a saved embedded URL with Embedded servers enabled off (2026-09-29), and a saved Claude CLI URL with the
+        // A saved Claude API URL with the Claude API off or keyless stands for nothing (2026-09-27): found as a blank one; the
+        // OpenAI API's likewise (2026-10-03). So does a saved embedded URL with Embedded servers enabled off (2026-09-29), and a saved Claude CLI URL with the
         // Claude CLI server off or the CLI gone (2026-09-30).
         bool blankUrl = string.IsNullOrWhiteSpace(effective.LlmUrl)
             || (Llm.Anthropic.ClaudeApi.IsClaudeApi(effective.LlmUrl) && !Llm.Anthropic.ClaudeApi.Offered(effective))
+            || (Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(effective.LlmUrl) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective))
             || EmbeddedLlm.EmbeddedEndpoint.SwitchedOff(effective)
             || (ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl) && !_session.ClaudeCliOffered(effective))
             || DockerEndpoint.IsDocker(effective.LlmUrl);   // a chosen one connected above (2026-10-02); any other stands for nothing
-        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
+        if (blankUrl && !Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(effective)) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
         {
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
@@ -9070,7 +9076,7 @@ internal sealed partial class ChatScreen
             LlmEndpoint endpoint;
             if (picked is null)
             {
-                endpoint = LlmEndpointProbe.Endpoint(answered[0], Llm.Anthropic.ClaudeApi.KeyFor(effective, answered[0].BaseUrl), ConfiguredModel(effective), configured: false);
+                endpoint = LlmEndpointProbe.Endpoint(answered[0], Llm.ApiKeys.For(effective, answered[0].BaseUrl), ConfiguredModel(effective), configured: false);
             }
             else
             {
@@ -9080,7 +9086,7 @@ internal sealed partial class ChatScreen
                 await _menu.PickModelFromListAsync(picked.Result, _settings.Current.LlmModel, cancellationToken).ConfigureAwait(false);
                 await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false);
                 effective = _effective();
-                endpoint = LlmEndpointProbe.Endpoint(picked, Llm.Anthropic.ClaudeApi.KeyFor(effective, picked.BaseUrl), ConfiguredModel(effective), configured: true);
+                endpoint = LlmEndpointProbe.Endpoint(picked, Llm.ApiKeys.For(effective, picked.BaseUrl), ConfiguredModel(effective), configured: true);
             }
 
             // The connect itself is instant; the spinner covers the context-window probe that follows it.
@@ -9501,7 +9507,7 @@ internal sealed partial class ChatScreen
         if (string.IsNullOrWhiteSpace(args))
         {
             var scope = Llm.LlmScanMode.Resolve(effective);
-            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
+            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
                 _transcript.Error(LlmSession.NoServerLine(scope));
@@ -9564,6 +9570,12 @@ internal sealed partial class ChatScreen
             if (Llm.Anthropic.ClaudeApi.IsClaudeApi(url) && !Llm.Anthropic.ClaudeApi.Offered(effective))
             {
                 _transcript.Error(Llm.Anthropic.ClaudeApiText.NotOfferedError);
+                return;
+            }
+
+            if (Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(url) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective))
+            {
+                _transcript.Error(Llm.OpenAIPlatform.OpenAIApiText.NotOfferedError);
                 return;
             }
 
@@ -10337,7 +10349,7 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Tools:
                 // The Tools pane (2026-09-19): every tool on or off by name, the Ask / Files / Web rows after it; the four tabs as lines without the pane.
-                // A Claude API row saved there reconnects once it closes (2026-09-29, off /settings), as /settings would.
+                // A reconnect row saved there reconnects once it closes, as /settings would (the Claude API's, 2026-09-29 to 2026-10-03; none since).
                 await ApplySettingsChangesAsync(await _toolsMenu.ShowAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
                 return false;
 

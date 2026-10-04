@@ -8,9 +8,9 @@ public static class ClaudeApiText
     /// looks for a server as a blank URL would. Pinned.
     /// </summary>
     public const string NotOfferedWarning =
-        "The LLM URL is the Claude API, but Claude API is off or has no key (/tools › Claude); looking for a server instead.";
+        "The LLM URL is the Claude API, but Claude API is off or has no key (/settings › Claude); looking for a server instead.";
 
     /// <summary><c>/server https://api.anthropic.com</c> while the Claude API is not offered. Pinned.</summary>
     public const string NotOfferedError =
-        "The Claude API is not offered: turn on Claude API and set Claude API key in /tools › Claude.";
+        "The Claude API is not offered: turn on Claude API and set Claude API key in /settings › Claude.";
 }

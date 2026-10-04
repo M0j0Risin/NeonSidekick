@@ -19,8 +19,9 @@ namespace NeonSidekick.App;
 /// whose switch is off shows dim on the Offered tab with the switch named after its heading — the
 /// per-tool values still flip and save. Nothing here clears the conversation: every flip is read at the next turn
 /// (<see cref="ChatScreen.PrepareTurn"/>), so the pane opens mid-turn too and edits as <c>/settings</c> does there. The
-/// one exception is the Claude tab's four Claude API rows (2026-09-29, off <c>/settings</c>): each is a reconnect
-/// (<see cref="SettingsMenu.IsLlmField"/>), refused mid-turn like there, and <see cref="ShowAsync"/> returns
+/// Claude tab's four Claude API rows and the Claude CLI server's (2026-09-29 to 2026-10-03, when they went back to
+/// <c>/settings</c>' own Claude tab, the user's call) were reconnects; the handling stays for any reconnect row
+/// (<see cref="SettingsMenu.IsLlmField"/>): refused mid-turn like there, and <see cref="ShowAsync"/> returns
 /// <see cref="SettingsChanges.Llm"/> when one saved, so the screen reconnects once the pane closes — <c>/mcp</c>'s shape.
 /// Without the pane the tabs print as plain lines. <c>/tools expand</c> and <c>/tools collapse</c> (2026-09-22) became the
 /// root <c>/expand</c> and <c>/collapse</c> later that day, the user's ask; since 2026-10-03 <c>/tools &lt;group&gt;</c> opens one
@@ -107,7 +108,7 @@ internal sealed class ToolsMenu
     }
 
     /// <param name="midTurn">The pane opened while a reply runs: the flips save and the rows edit as on <c>/settings</c>; a row refused there is refused here (none today).</param>
-    /// <returns><see cref="SettingsChanges.Llm"/> when a reconnect row (a Claude API row) saved, else none.</returns>
+    /// <returns><see cref="SettingsChanges.Llm"/> when a reconnect row saved (none on the pane since 2026-10-03), else none.</returns>
     public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn = false)
     {
         var changes = SettingsChanges.None;

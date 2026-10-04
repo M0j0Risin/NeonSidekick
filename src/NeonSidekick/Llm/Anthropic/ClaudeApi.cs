@@ -76,16 +76,6 @@ public static class ClaudeApi
     }
 
     /// <summary>
-    /// The key a request to <paramref name="baseUrl"/> carries: the Claude API's own for its host (empty when none —
-    /// the API then answers 401, which says so), the <c>LLM API key</c> for every other server.
-    /// </summary>
-    public static string KeyFor(AppSettingsData effective, Uri? baseUrl)
-    {
-        ArgumentNullException.ThrowIfNull(effective);
-        return IsClaudeApi(baseUrl) ? Key(effective) ?? "" : LlmEndpoint.KeyOf(effective);
-    }
-
-    /// <summary>
     /// The key as the settings file keeps it: <paramref name="plain"/> encrypted with DPAPI for this Windows user
     /// (<see cref="SettingsSecrets.Protect"/>); empty for empty. Where DPAPI is unavailable the plain key is kept and
     /// <paramref name="error"/> says why, so the caller can warn.

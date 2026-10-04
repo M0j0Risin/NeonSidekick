@@ -99,7 +99,7 @@ What to use instead:
 | `/timer` | Not available; there are no timers headless (nothing could deliver the alert). |
 | `/tts`, `/stt`, `/wake`, `/interrupt`, `/speak`, `/echo` | Not available; headless never speaks or listens. |
 | `/cmdlist`, `/cmdcopy`, `/cmdclear`, `/police` | Not available. Manage the allow list in the TUI; `NEONSIDEKICK_COMMAND_POLICY` sets the policy for a run. |
-| `/keycopy` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY` and `NEONSIDEKICK_HA_TOKEN` set them for a run. |
+| `/keycopy` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_CLAUDE_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY` and `NEONSIDEKICK_HA_TOKEN` set them for a run. |
 | `/usage` | Not available; `--log` records the run. |
 | `/sys` | Not available; open `/sys` in the TUI on the same profile to see the prompt. |
 | `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/theme`, `/perf`, `/tb`, `/header`, `/window`, `/expand`, `/collapse`, `/queue`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
@@ -197,6 +197,14 @@ The Claude API: switch it on and give it its key for the run, then point `--url`
 $env:NEONSIDEKICK_CLAUDE_API = "on"
 $env:NEONSIDEKICK_CLAUDE_API_KEY = (Get-Secret AnthropicKey -AsPlainText)
 "Summarise this repo's README." | NeonSidekick.exe --headless --url https://api.anthropic.com --model claude-sonnet-5
+```
+
+The OpenAI API the same way, with its own switch and key (the profile's *OpenAI API max tokens*, organization and project apply). Without a `--model` the run takes the account's newest chat model.
+
+```powershell
+$env:NEONSIDEKICK_OPENAI_API = "on"
+$env:NEONSIDEKICK_OPENAI_API_KEY = (Get-Secret OpenAIKey -AsPlainText)
+"Summarise this repo's README." | NeonSidekick.exe --headless --url https://api.openai.com --model gpt-5.4-mini
 ```
 
 The embedded LLM: `--url embedded` runs a model the app downloaded, on its own llama.cpp server, with no other server needed. `--model` names the model's id (`gemma-4-12b`, `gemma-4-12b-q5`, `gemma-4-12b-q6`, `gemma-4-12b-bf16`, `gemma-4-12b-qat`, `gemma-4-12b-qat-uncensored`, `gemma-4-26b-a4b`, `gemma-4-26b-a4b-q5`, `gemma-4-26b-a4b-q6`, `gemma-4-26b-a4b-qat`, `gemma-4-26b-a4b-qat-uncensored`, `gemma-4-26b-a4b-uncensored`, `gemma-4-26b-a4b-uncensored-q5`, `gemma-4-26b-a4b-uncensored-q6`, `gemma-4-31b`, `gemma-4-31b-q5`, `gemma-4-31b-qat`, `gemma-4-31b-qat-uncensored`, `gemma-4-e2b`, `gemma-4-e2b-uncensored`, `gemma-4-e4b`, `gemma-4-e4b-qat`, `gemma-4-e4b-uncensored`, `qwen3.6-35b-a3b`, `qwen3.6-35b-a3b-q5`, `qwen3.6-35b-a3b-uncensored`, `qwen3.8-27b`, `qwen3.8-27b-q5`, `qwen3.8-27b-q6`, `qwen3.8-27b-nvfp4-very-low`, `qwen3.8-27b-nvfp4-compact-low`, `qwen3.8-27b-nvfp4-low`, `qwen3.8-27b-nvfp4-medium`, `qwen3.8-27b-nvfp4-mid-high`, `qwen3.8-27b-nvfp4-high`, `qwen3.8-27b-nvfp4-very-high`, `qwen3.8-27b-nvfp4-highest`, `qwen3.8-27b-uncensored`, `qwen3.8-27b-uncensored-q5`); without it, the first one installed runs, in that order. A headless run never downloads a model: install it once in the app (*Install* in the **Embedded models** catalog on `/settings` › Embedded), or the run ends with an error saying it isn't installed. It does download the llama.cpp runtime on a first run (577 MB for CUDA, 33 MB for Vulkan), and loading the model takes a few seconds before the first answer. The server stops when the run ends. The profile's *Embedded servers enabled* must be on (it is by default); off, `embedded` counts as no URL. With *Embedded drafter* on (the default) a model with a drafter drafts ahead, and a Gemma 4 model installed before drafters were added fetches its small drafter at its first start. The profile's *Embedded VRAM budget* applies too (91 % by default), and an *Embedded context size* of 0 (the default) fits the context to the GPU. With *Embedded VRAM only* on (the default for a new profile), a model that does not fit in VRAM with every layer on the GPU is refused, and the run ends with that error rather than running partly from system RAM.
@@ -698,6 +706,7 @@ Flags beat variables; variables beat the profile's saved values.
 | `NEONSIDEKICK_EMBEDDED_BACKEND` / `NEONSIDEKICK_EMBEDDED_CONTEXT` | The embedded LLM's llama.cpp build (`auto`, `cuda`, `vulkan`, `cpu`) and context window in tokens (0 to fit the GPU, or 512–262144) for the run. |
 | `NEONSIDEKICK_LLM_API_KEY` | The server's key; never put it on the command line. |
 | `NEONSIDEKICK_CLAUDE_API` / `NEONSIDEKICK_CLAUDE_API_KEY` | `on` and a key offer the Claude API for the run (`--url https://api.anthropic.com`). The key is never logged and never sent to a local server. Every request is billed to the key's account. |
+| `NEONSIDEKICK_OPENAI_API` / `NEONSIDEKICK_OPENAI_API_KEY` | `on` and a key offer the OpenAI API for the run (`--url https://api.openai.com`). The key is never logged and never sent to a local server or the Claude API. Every request is billed to the key's account. |
 | `NEONSIDEKICK_CLAUDE_CLI_SERVER` | `on` offers the Claude CLI server for the run (`--url claude-cli`): Claude Code as the model, with this app's tools. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` / `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | Seconds; raise them for long agentic jobs. |
 | `NEONSIDEKICK_LLM_CONTEXT` | The context window in tokens, when the server doesn't report it. |

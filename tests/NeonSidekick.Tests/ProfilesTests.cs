@@ -301,6 +301,7 @@ public class ProfilesTests : IDisposable
             LlmModel = "work-model",
             TtsHttpUrl = "http://tts:8880/v1",
             ClaudeApiKey = "dpapi:abc",
+            OpenAIApiKey = "dpapi:oa",
             WebBrowserPath = @"C:\Chrome\chrome.exe",
             WebSearchMethod = "searxng",
             WebSearxngUrl = "http://searx:8080",
@@ -327,7 +328,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal("dpapi:llm", kept.LlmApiKey);      // joined the list later that day
         Assert.Equal("", kept.WorkingDirectory);
         Assert.Equal("dpapi:ha", kept.HomeAssistantToken);   // the Home Assistant pair (2026-09-28)
-        Assert.Equal(13, Profiles.ResetKeptSettings.Length);
+        Assert.Equal("dpapi:oa", kept.OpenAIApiKey);   // the OpenAI API key (2026-10-03)
+        Assert.Equal(14, Profiles.ResetKeptSettings.Length);
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);

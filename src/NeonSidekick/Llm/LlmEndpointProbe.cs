@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm.Anthropic;
+using NeonSidekick.Llm.OpenAIPlatform;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm;
@@ -134,16 +135,19 @@ public sealed class LlmEndpointProbe
     /// <summary>
     /// One <c>GET {v1}/models</c>. 200 → exists with the chat models it listed; 401/403 → exists
     /// (an API that wants a key is still an API); anything else, a timeout or a refused connection
-    /// → does not exist, with the reason in <see cref="ProbeResult.Detail"/>.
+    /// → does not exist, with the reason in <see cref="ProbeResult.Detail"/>. <paramref name="headers"/> go on the request
+    /// as they are (the OpenAI API's organization and project, <see cref="OpenAIApi.HeadersFor"/>, 2026-10-03).
     /// </summary>
-    public async Task<ProbeResult> ProbeAsync(Uri baseUrl, string? apiKey, CancellationToken cancellationToken)
+    public async Task<ProbeResult> ProbeAsync(Uri baseUrl, string? apiKey, CancellationToken cancellationToken, IReadOnlyList<KeyValuePair<string, string>>? headers = null)
     {
         ArgumentNullException.ThrowIfNull(baseUrl);
         var v1 = LlmEndpoint.NormalizeBaseUrl(baseUrl);
 
         // The Claude API (2026-09-27): its own key headers and a page size that lists every model at once, and a
-        // longer ceiling — it is across the internet, not on a port of this network.
+        // longer ceiling — it is across the internet, not on a port of this network. The OpenAI API (2026-10-03) takes the
+        // same ceiling and a Bearer key as any server; its list is cut to the chat models and ordered newest first.
         bool claude = ClaudeApi.IsClaudeApi(v1);
+        bool openAI = OpenAIApi.IsOpenAIApi(v1);
         var modelsUrl = claude ? ClaudeApi.ModelsUrl(v1) : LlmEndpoint.ModelsUrl(v1);
 
         try
@@ -151,7 +155,7 @@ public sealed class LlmEndpointProbe
             // A per-call ceiling on a startup probe, not the turn budget; the linked-CTS rule
             // is about the turn path, where cancellation means barge-in.
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(claude && Timeout < ClaudeApiTimeout ? ClaudeApiTimeout : Timeout);
+            budget.CancelAfter((claude || openAI) && Timeout < ClaudeApiTimeout ? ClaudeApiTimeout : Timeout);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, modelsUrl);
             if (claude)
@@ -165,12 +169,17 @@ public sealed class LlmEndpointProbe
                 request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + apiKey.Trim());
             }
 
+            foreach (var (name, value) in headers ?? [])
+            {
+                request.Headers.TryAddWithoutValidation(name, value);
+            }
+
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, budget.Token).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
                 string body = await response.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
-                var (ids, ownedBy) = ParseModels(body);
+                var (ids, ownedBy) = openAI ? (OpenAIApi.ChatModels(body), null) : ParseModels(body);
                 return new ProbeResult(true, ids, ids.Count == 1 ? "1 chat model" : $"{ids.Count.ToString(CultureInfo.InvariantCulture)} chat models", ownedBy, body);
             }
 
@@ -178,7 +187,9 @@ public sealed class LlmEndpointProbe
             {
                 return new ProbeResult(true, Array.Empty<string>(), claude
                     ? $"{(int)response.StatusCode} on /v1/models; check Claude API key"
-                    : $"{(int)response.StatusCode} on /v1/models; the server wants a key");
+                    : openAI
+                        ? $"{(int)response.StatusCode} on /v1/models; {OpenAIApiText.KeyHint}"
+                        : $"{(int)response.StatusCode} on /v1/models; the server wants a key");
             }
 
             return ProbeResult.Missing($"{(int)response.StatusCode} on /v1/models; not an OpenAI-compatible server");
@@ -240,10 +251,10 @@ public sealed class LlmEndpointProbe
         {
             var v1 = LlmEndpoint.NormalizeBaseUrl(extra);
 
-            // The Claude API is never scanned for: its row is the session's to add, with its own key (2026-09-27). Nor is the
-            // embedded model's sentinel (2026-09-29), nor the Claude CLI's (2026-09-30): their rows are the session's too, and
-            // a sentinel is no place to ask.
-            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ClaudeApi.IsClaudeApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1) && !Claude.ClaudeCliEndpoint.IsClaudeCli(v1) && !Docker.DockerEndpoint.IsDocker(v1)) urls.Add(v1);
+            // The Claude API is never scanned for: its row is the session's to add, with its own key (2026-09-27); nor the OpenAI
+            // API's (2026-10-03). Nor is the embedded model's sentinel (2026-09-29), nor the Claude CLI's (2026-09-30): their rows
+            // are the session's too, and a sentinel is no place to ask.
+            if (!urls.Contains(v1) && !(scope == ScanScope.Remote && v1.IsLoopback) && !ApiKeys.IsHostedApi(v1) && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(v1) && !Claude.ClaudeCliEndpoint.IsClaudeCli(v1) && !Docker.DockerEndpoint.IsDocker(v1)) urls.Add(v1);
         }
 
         var tasks = urls.Select(u => ProbeAsync(u, apiKey, cancellationToken)).ToArray();
@@ -343,6 +354,11 @@ public sealed class LlmEndpointProbe
             // settings' scan finds a server as a blank URL would.
             DiagnosticLog.Warn(Category, ClaudeApiText.NotOfferedWarning);
         }
+        else if (OpenAIApi.IsOpenAIApi(effective.LlmUrl) && !OpenAIApi.Offered(effective))
+        {
+            // The OpenAI API's twin (2026-10-03): saved while it was on; off or keyless, the scan finds a server instead.
+            DiagnosticLog.Warn(Category, OpenAIApiText.NotOfferedWarning);
+        }
         else if (!string.IsNullOrWhiteSpace(effective.LlmUrl))
         {
             Uri v1;
@@ -356,8 +372,8 @@ public sealed class LlmEndpointProbe
                 return null;
             }
 
-            string key = ClaudeApi.KeyFor(effective, v1);
-            var result = await ProbeAsync(v1, key, cancellationToken).ConfigureAwait(false);
+            string key = ApiKeys.For(effective, v1);
+            var result = await ProbeAsync(v1, key, cancellationToken, OpenAIApi.HeadersFor(effective, v1)).ConfigureAwait(false);
             if (!result.Exists)
             {
                 DiagnosticLog.Warn(Category, $"{v1} did not answer /v1/models ({result.Detail}); using it anyway because it was configured.");

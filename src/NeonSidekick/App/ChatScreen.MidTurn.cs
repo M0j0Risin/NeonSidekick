@@ -422,8 +422,8 @@ internal sealed partial class ChatScreen
 
                 break;
             case SlashCommand.Tools:
-                // /tools (2026-09-19): a flip saves and is read at the next turn; the settings rows edit as on /settings mid-turn (the
-                // Claude API's reconnect rows, 2026-09-29, are refused there, so nothing comes back to apply).
+                // /tools (2026-09-19): a flip saves and is read at the next turn; the settings rows edit as on /settings mid-turn (a
+                // reconnect row is refused there, so nothing comes back to apply; the Claude API's were on /tools 2026-09-29 to 2026-10-03).
                 await _toolsMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
                 break;
             case SlashCommand.Sampling:

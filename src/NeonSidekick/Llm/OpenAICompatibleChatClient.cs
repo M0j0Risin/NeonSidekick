@@ -61,7 +61,9 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// <param name="requestTimeout">Per-request ceiling, already interlocked by <see cref="LlmTimeouts.Resolve"/>.</param>
     /// <param name="httpClient">Optional transport. Tests pass one over a stub handler; it stays the caller's to dispose.</param>
     /// <param name="reasoningEstimate">How a reasoning count the server did not report is estimated (<see cref="ReasoningEstimates"/>), read at each request; null estimates nothing.</param>
-    public OpenAICompatibleChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, HttpClient? httpClient = null, Func<ReasoningEstimate>? reasoningEstimate = null)
+    /// <param name="organization">The <c>OpenAI-Organization</c> header (2026-10-03, the OpenAI API's alone), or null for none.</param>
+    /// <param name="project">The <c>OpenAI-Project</c> header (2026-10-03, the OpenAI API's alone), or null for none.</param>
+    public OpenAICompatibleChatClient(LlmEndpoint endpoint, TimeSpan requestTimeout, HttpClient? httpClient = null, Func<ReasoningEstimate>? reasoningEstimate = null, string? organization = null, string? project = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         if (string.IsNullOrWhiteSpace(endpoint.ModelId))
@@ -91,6 +93,8 @@ public sealed class OpenAICompatibleChatClient : IChatClient
             // turn budget the ceiling exists to stay under. A transient failure surfaces as a
             // Notice and the user resends; that is cheaper than a silent five-minute stall.
             RetryPolicy = new ClientRetryPolicy(maxRetries: 0),
+            OrganizationId = string.IsNullOrWhiteSpace(organization) ? null : organization.Trim(),
+            ProjectId = string.IsNullOrWhiteSpace(project) ? null : project.Trim(),
         };
 
         if (httpClient is not null)

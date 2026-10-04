@@ -29,7 +29,7 @@ public partial class SettingsMenuTests : IDisposable
 
     public SettingsMenuTests()
     {
-        _console.Profile.Width = 100;
+        _console.Profile.Width = 120;   // 100 until 2026-10-03, when the Claude and OpenAI tabs took the strip past it
         _settings = new AppSettings(_dir);
         // Speech output is off by default; the toggle test walks it on -> off, so the fixture opts in — over the server
         // (the fake is HTTP-shaped; in-process is the default since 2026-09-16, and the picker tests set it when they want it).
@@ -912,6 +912,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ShellPoliceForbiddenStrings,   // later still on 2026-10-03, /tools' Shell tab under the police: the strings it refuses
                 SettingsField.PdfEngine,   // later still on 2026-10-03, /tools' Print tab's last row: what makes a PDF
                 SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
+                SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1000,7 +1001,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
         Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Llm][SettingsMenu.TabFields[(int)SettingsTab.Llm].ToList().IndexOf(SettingsField.LlmTurnTimeoutSeconds) + 1]);   // the context run's first row, under the turn timeout, since 2026-10-01 (the user's call); [^16] before: the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
-        Assert.Equal(["General", "Embedded", "Docker", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
+        Assert.Equal(["General", "Embedded", "Docker", "Claude", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1077,7 +1078,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
         Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
         Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
-        Assert.Equal(3, (int)SettingsTab.Llm);   // fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
+        Assert.Equal(5, (int)SettingsTab.Llm);   // sixth since 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
         Assert.Equal("#-mention enabled", SettingsMenu.FieldName(SettingsField.SkillHashMention));
@@ -1099,7 +1100,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
-        Assert.Equal(8, SettingsMenu.TabFields.Count);   // Docker since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
+        Assert.Equal(10, SettingsMenu.TabFields.Count);   // Claude and OpenAI since 2026-10-03; Docker since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
         Assert.Equal(17, SettingsMenu.ToolsTabFields.Count);   // Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(16, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 15 until Reflection downloaded skills (then Reflection installed skills) came on 2026-10-02; 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
@@ -1477,9 +1478,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("only the current turn's thinking goes back to the server", SettingsMenu.ToggleDescribe(SettingsField.LlmPreserveThinking, false));
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then (2026-10-01, the user's call) the rest of the connection, how it answers, tools and limits, the context and the fun verbs; the reconnecting LLM fields keep their enum order among them.
         Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
-        // The reconnecting rows: the LLM tab's seven (in three runs since 2026-10-01, rows 2 to 8 before; their tab order is still the enum's), then the Claude API's four (2026-09-27; /tools' Claude tab's four above its last since 2026-09-29), then the
-        // Embedded tab's, then the Claude CLI server's switch (2026-09-30: the Claude tab's last row), then Embedded VRAM only (2026-10-01), then Docker servers enabled (2026-10-02).
-        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Where(SettingsMenu.IsLlmField).Concat(ToolsMenuTests.TabFields(ToolsText.ClaudeTabTitle).SkipLast(1).TakeLast(4)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedVramOnly)).OrderBy(f => f)).Append(ToolsMenuTests.TabFields(ToolsText.ClaudeTabTitle)[^1]).Append(SettingsField.EmbeddedVramOnly).Append(SettingsField.DockerServers));   // Docker servers enabled last (2026-10-02, the Docker tab's one reconnecting row); the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
+        // The reconnecting rows: the LLM tab's seven (in three runs since 2026-10-01, rows 2 to 8 before; their tab order is still the enum's), then the Claude API's four (2026-09-27; /settings' Claude tab's four above its last since 2026-10-03), then the
+        // Embedded tab's, then the Claude CLI server's switch (2026-09-30: the Claude tab's last row), then Embedded VRAM only (2026-10-01), then Docker servers enabled (2026-10-02), then the OpenAI tab's five (2026-10-03).
+        Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Where(SettingsMenu.IsLlmField).Concat(SettingsMenu.TabFields[(int)SettingsTab.Claude].SkipLast(1)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedVramOnly)).OrderBy(f => f)).Append(SettingsMenu.TabFields[(int)SettingsTab.Claude][^1]).Append(SettingsField.EmbeddedVramOnly).Append(SettingsField.DockerServers).Concat(SettingsMenu.TabFields[(int)SettingsTab.OpenAI]));   // Docker servers enabled last (2026-10-02, the Docker tab's one reconnecting row); the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmScanMode) || SettingsMenu.IsTtsField(SettingsField.LlmScanMode) || SettingsMenu.IsVoiceField(SettingsField.LlmScanMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmScanMode));
         Assert.Equal("LLM server scan mode", SettingsMenu.FieldName(SettingsField.LlmScanMode));
@@ -1531,7 +1532,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("chat", SettingsMenu.FieldValue(SettingsField.SttDestination, data, _settings.ProfileDirectory));
         Assert.Equal("draft", SettingsMenu.FieldValue(SettingsField.SttDestination, new AppSettingsData { SttDestination = "draft" }, _settings.ProfileDirectory));
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
-        Assert.Equal(["General", "Embedded", "Docker", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
+        Assert.Equal(["General", "Embedded", "Docker", "Claude", "OpenAI", "LLM", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);   // Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the Reflection tab: the cooldown, its mode and the sessions switch (last, the user's place) since 2026-09-19
@@ -1569,7 +1570,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
         Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
         Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
-        Assert.Equal(3, (int)SettingsTab.Llm);   // fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
+        Assert.Equal(5, (int)SettingsTab.Llm);   // sixth since 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
         Assert.Equal("#-mention enabled", SettingsMenu.FieldName(SettingsField.SkillHashMention));
@@ -3133,7 +3134,7 @@ public partial class SettingsMenuTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = SettingsMenu.Title + "   General    Embedded    Docker    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
+    private const string Strip = SettingsMenu.Title + "   General    Embedded    Docker    Claude    OpenAI    LLM    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
     [Fact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()
@@ -3162,16 +3163,16 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_EveryTab_ShowsItsRowsInOrder()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Right, Keys.Tab, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Escape);   // Embedded, Docker (Tab), then LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
+        Push(Keys.Right, Keys.Tab, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Escape);   // Embedded, Docker (Tab), then Claude, OpenAI (2026-10-03), LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         // Each tab under the strip, padded to its own column (28, 32, 19, 26), the whole tab in view, nothing of another tab on it.
-        AssertTabEnds("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 100);
+        AssertTabEnds("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 120);
         Assert.Contains("\n \n▸ LLM server scan mode            local\n  LLM URL                         (probe local ports)\n  LLM model                       (first listed)\n  LLM API key                     ", _console.Output);
-        AssertTabEnds("\n  LLM reasoning                   none\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n  LLM offer tools                 on\n  LLM max tool iterations         10000 round trips\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM max turns                   auto\n  LLM auto compact (%)            85 %\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM tool compact type           compact\n  LLM picture keep                20 pictures\n  LLM picture megabytes           24 MB\n  LLM use fun verbs               off\n", 100);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
-        AssertTabEnds("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n", 100);
-        AssertTabEnds("\n \n▸ STT input                 off\n  STT destination           chat\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n", 100);
+        AssertTabEnds("\n  LLM reasoning                   none\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n  LLM offer tools                 on\n  LLM max tool iterations         10000 round trips\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM max turns                   auto\n  LLM auto compact (%)            85 %\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM tool compact type           compact\n  LLM picture keep                20 pictures\n  LLM picture megabytes           24 MB\n  LLM use fun verbs               off\n", 120);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
+        AssertTabEnds("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n", 120);
+        AssertTabEnds("\n \n▸ STT input                 off\n  STT destination           chat\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n", 120);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19
         Assert.DoesNotContain("File tools", _console.Output);
         Assert.DoesNotContain("Web tools", _console.Output);
@@ -3334,7 +3335,7 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Push(Keys.Down, Keys.Enter);
         Assert.True(await menu.ConfirmAsync("💾 Forget 2 memories?", CancellationToken.None));
-        Assert.Contains("\n" + Titled("💾 Forget 2 memories?") + "\n \n▸ No\n  Yes\n" + Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", _console.Output);
+        Assert.Contains("\n" + Titled("💾 Forget 2 memories?") + "\n \n▸ No\n  Yes\n" + Rule(120) + "\n" + SettingsMenu.ConfirmKeys + "\n", _console.Output);
         Assert.Contains("\n  No\n▸ Yes\n", _console.Output);
         Assert.False(pane.OverlayOpen);
 
@@ -3405,7 +3406,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("qwen3", _settings.Current.LlmModel);
         // The edit: the tab's list under its strip with the row marked, the slot under it, the edit keys in the hint row.
         Assert.Contains("\n" + Titled(Strip) + "\n \n  LLM server scan mode            local\n  LLM URL                         (probe local ports)\n▸ LLM model                       (first listed)\n", _console.Output);
-        Assert.Contains("\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
+        Assert.Contains("\n› \n" + Rule(120) + "\n" + SettingsMenu.EditKeys, _console.Output);
         Assert.Contains("qwen3-typo", _console.Output);
         // The results on the status line, never as a › line or a notice in the flow.
         Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM model: qwen3\n", _console.Output);
@@ -3503,7 +3504,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(1.2, _settings.Current.TtsSpeed);
         Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", _console.Output);
         string afterError = _console.Output[_console.Output.IndexOf("✗ TTS speed", StringComparison.Ordinal)..];
-        Assert.Contains("\n  TTS voice mix      80 % / 20 %\n▸ TTS speed          1.2\n", afterError.Split(Rule(100))[0]);
+        Assert.Contains("\n  TTS voice mix      80 % / 20 %\n▸ TTS speed          1.2\n", afterError.Split(Rule(120))[0]);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3537,7 +3538,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await menu.PickModelFromListAsync(listed, "a", CancellationToken.None));
 
         Assert.Equal("b", _settings.Current.LlmModel);
-        Assert.Contains(Rule(100) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + Rule(100) + "\n" + SettingsMenu.KeepKeys + "\n", _console.Output);
+        Assert.Contains(Rule(120) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + Rule(120) + "\n" + SettingsMenu.KeepKeys + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.Contains("  · 🖥️ LLM model: b\n", _console.Output);
         Assert.Equal(1, pane.FlowRow);   // the notice is a transcript line, under no pane
@@ -4239,7 +4240,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_TheSessionsTab_IsSeventh_AfterStt()
     {
         var (menu, pane) = PaneMenu();
-        GoTo(SettingsTab.Sessions);                             // six Rights (Docker before LLM since 2026-10-02; five from 2026-09-29, after STT; one from 2026-09-18, the wrap from General that morning)
+        GoTo(SettingsTab.Sessions);                             // eight Rights (Claude and OpenAI before LLM since 2026-10-03; six from 2026-10-02, Docker before LLM; five from 2026-09-29, after STT; one from 2026-09-18, the wrap from General that morning)
         Push(Keys.Down, Keys.Enter);                            // Session retention (days), the second row: typed
         _console.Input.PushText("30");
         Push(Keys.Enter);
@@ -4253,17 +4254,17 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("none", _settings.Current.SessionShowName);
         Assert.Equal(30, _settings.Current.SessionRetentionDays);
         // The seven rows padded to the tab's own column (28) in the user's order (retention second, the show-name picker under the naming mode, the tool above the search cap, save thinking last since 2026-09-28), then the picker's page, then the notices on the status line.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 100);
-        Assert.Contains("\n" + Titled(Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(100), _console.Output);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 120);
+        Assert.Contains("\n" + Titled(Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(120), _console.Output);
         Assert.Contains("\n  · Session retention (days): 30 days\n", _console.Output);
         Assert.Contains("\n▸ Session retention (days)    30 days\n", _console.Output);
         Assert.Contains("\n  · Session naming mode: first-line\n", _console.Output);
         Assert.Contains("\n▸ Session naming mode         first-line\n", _console.Output);
-        Assert.Contains("\n" + Titled(Breadcrumb("Session show name")) + "\n \n▸ all-names      every session name shows on the rule above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n" + Rule(100), _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Session show name")) + "\n \n▸ all-names      every session name shows on the rule above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n" + Rule(120), _console.Output);
         Assert.Contains("\n  · Session show name: none\n", _console.Output);
         Assert.Contains("\n▸ Session show name           none\n", _console.Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));
-        Assert.Equal(SettingsTab.Sessions, (SettingsTab)6);   // fifth until Docker, 2026-10-02
+        Assert.Equal(SettingsTab.Sessions, (SettingsTab)8);   // seventh until Claude and OpenAI, 2026-10-03; fifth until Docker, 2026-10-02
         Assert.Equal(SettingsTab.Embedded, (SettingsTab)1);   // the user's order, 2026-09-29
         Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);
         // Save thinking (2026-09-28): the Sessions tab's last row, a toggle off by default.

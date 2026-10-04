@@ -6,22 +6,21 @@
 
 Neon Sidekick is an agentic terminal client for local LLMs, built on .NET 10. It draws on tools like Claude Code, Hermes Agent and Cline, combining my favourite features from them with a few ideas of my own. It's Windows-first and meant as a stable base for building agentic tools. Next on the roadmap: stronger coding capabilities and official macOS and Linux support.
 
-<div align="center">
-  <table>
-    <tr>
-      <td style="padding: 10px;">
-        <img src="assets/screenshots/screen_splash.png" alt="First Image" width="800">
-      </td>
-      <td style="padding: 10px;">
-        <img src="assets/screenshots/screen_markdown.png" alt="Second Image" width="800">
-      </td>
-    </tr>
-  </table>
-</div>
-
-## Why "Neon"
-
-Early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck. Today you can create as many themes, profiles, personas and wake words as you like.
+<details>
+  <summary>📷 Screenshots</summary>
+  <div align="center">
+    <table>
+      <tr>
+        <td style="padding: 10px;">
+          <img src="assets/screenshots/screen_splash.png" alt="First Image" width="800">
+        </td>
+        <td style="padding: 10px;">
+          <img src="assets/screenshots/screen_markdown.png" alt="Second Image" width="800">
+        </td>
+      </tr>
+    </table>
+  </div>
+</details>
 
 ## Contents
 
@@ -71,7 +70,8 @@ Early on I was trying synthwave-style themes in Spectre.Console while testing th
 * **Docker servers:** your vLLM or SGLang containers as `/server` choices, one running at a time.
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors, by room or name ("dim the den to 30%"). Anything outside a safe list asks first; `/ha` drives the house directly.
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps). The model writes prompts in each family's style, or `/imagine` sends yours as typed.
-* **Claude:** the Claude API (your key) and your installed Claude Code (with this app's tools) as `/server` choices, `/claude` to message Claude Code, and `claude_advisor` for read-only advice. All off until you turn them on in `/tools` › Claude.
+* **Claude:** the Claude API (your key) and your installed Claude Code (with this app's tools) as `/server` choices (`/settings` › Claude), `/claude` to message Claude Code, and `claude_advisor` for read-only advice (`/tools` › Claude). All off until you turn them on.
+* **OpenAI:** the OpenAI API (your key) as a `/server` choice, off until you turn it on in `/settings` › OpenAI.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
 * **Camera:** a USB webcam through Windows' Media Foundation. `/camera` takes a photo for your next message; the model can ask for one, `/botchat` bots can see you, and `/camera watch` sends a picture when the view changes.
 
@@ -96,7 +96,7 @@ Early on I was trying synthwave-style themes in Spectre.Console while testing th
 * Settings live in `%USERPROFILE%\.neonsidekick` (or `NEONSIDEKICK_HOME`), under the profile `default`.
 * With no model installed and *LLM server scan mode* `disabled` (the default), the app opens **Settings › Embedded models**: pick a model to download and run it in-app, or press ESC twice to skip.
 * Already running LM Studio, Ollama or vLLM? Set *LLM server scan mode* to `local`, `remote` or `both`, or use `/server <url>`. The startup picker lists what it finds: Enter saves your pick; ESC uses the first server for this run only.
-* For Anthropic's models, turn on *Claude API* (or *Claude CLI server* for your Claude Code install) in `/tools` › Claude.
+* For Anthropic's models, turn on *Claude API* (or *Claude CLI server* for your Claude Code install) in `/settings` › Claude; for OpenAI's, *OpenAI API* in `/settings` › OpenAI.
 
 ### Voice (optional)
 Speech output (`/tts`) and voice input (`/stt`) start off. Turning one on downloads its model the first time: Kokoro (about 326 MB) for speech; Whisper base (about 148 MB) and the small Silero detector for input; Vosk (about 41 MB) for the wake word.
@@ -106,7 +106,7 @@ Speech output (`/tts`) and voice input (`/stt`) start off. Turning one on downlo
 |---|---|
 | `/help` | Lists the commands and keys. |
 | `/settings` | Opens the settings. |
-| `/server` | Picks the LLM server (found, embedded, Claude API or Claude CLI). |
+| `/server` | Picks the LLM server (found, embedded, Claude API, OpenAI API or Claude CLI). |
 | `/model` | Picks the model on the current server. |
 | `/tools` | Chooses which tools the model may use. |
 | `/tts` / `/stt` | Turns speech output / voice input on or off. |
@@ -237,9 +237,9 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
 
 ### Panes
-* `/settings`: the app, sessions, LLM, voice and `/botchat`
+* `/settings`: the app, the embedded model, Docker, Claude and OpenAI servers, sessions, LLM, voice and `/botchat`
 * `/skills`: agent skills and self-reflection
-* `/tools`: the model's tools, and Claude (`/claude`, the advisor, the Claude servers)
+* `/tools`: the model's tools, and Claude (`/claude` and the advisor)
 * `/mcp`: external MCP servers
 * `/sys`: a read-only view of what the model is sent
 * `/usage`: LLM usage statistics (tok/s, time to first token…)
@@ -394,6 +394,54 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 | Docker server ready timeout (s) | How long a started container may take to answer on `/v1/models` (30–3600). Past it, the switch fails and the container keeps running. | 900 |
 | Docker server stop on exit | Stops the container in use when the app exits (the window's close button too). | off |
 
+#### Claude
+
+The Claude API and the Claude CLI as `/server` choices. `/claude` and `claude_advisor` are on `/tools` › Claude.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Claude API | Offers the Claude API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
+| Claude API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI). An empty entry clears it. | (none) |
+| Claude API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
+| Claude API prompt caching | Marks the tools, system prompt and conversation for Anthropic's prompt cache, so each request re-reads the last one's content cheaply. | on |
+| Claude CLI server | Offers Claude Code on `/server` while it is found (*Claude executable* on `/tools` › Claude, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude CLI stops. | off |
+
+**The Claude API** appears in `/server` as a **Claude API** row. Picking it sets *LLM URL* to `https://api.anthropic.com/v1`, then offers the account's models and the reasoning level.
+
+* Every message is billed to the key's account. Each key goes only to its own server.
+* Changing one of these settings reconnects when `/settings` closes.
+* *LLM reasoning*: `low`…`xhigh` turn on adaptive thinking at that effort (`xhigh` is `high` on the 4.6 models; Haiku 4.5 and older take a budget). `none` turns thinking off where allowed; Opus 5.5 and Fable always think.
+* The context window is the model's `max_input_tokens`. `/usage` adds *Cache* and *Cost* rows (an estimate at list price).
+
+**The Claude CLI** appears last in `/server` (or `/server claude-cli`). Picking it sets *LLM URL* to `claude-cli` and offers `fable`, `opus`, `sonnet` and `haiku`, then the reasoning level (`--effort`).
+
+* **One open session:** the first message starts `claude` and keeps it running; later messages send only the new text. A change of model, reasoning, system prompt or tools, or a crash, restarts it on the same session. `/clear`, `/new` and a profile switch start a new one; restoring an app session resumes its Claude session.
+* **The app's tools, not Claude Code's:** Claude Code runs with its own tools, skills, hooks, settings files and MCP servers off, the app's system prompt, and this turn's tools through an MCP server the app hosts (the app's own exe runs as the relay, `--mcp-relay`). Calls run as any model's do: approvals, `ask_user` and *LLM max tool iterations* apply.
+* **ESC** interrupts the reply; if Claude Code doesn't stop within 3 seconds it is closed, and the next message resumes on a new process.
+* Side requests (titles, reflections, summaries, bots) each run as a one-off `claude -p` with no tools.
+* Claude Code compacts its own conversation, so *LLM auto compact* does nothing here; the window is 200,000 tokens.
+* Messages count against your Claude Code plan; the log records each turn's cost. Switching servers stops the CLI; the session stays for a switch back.
+
+#### OpenAI
+
+The OpenAI API as a `/server` choice, over Chat Completions.
+
+| Setting | What it does | Default |
+|---|---|---|
+| OpenAI API | Offers the OpenAI API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
+| OpenAI API key | Your OpenAI key (`sk-…`), typed masked and saved encrypted (DPAPI). An empty entry clears it. | (none) |
+| OpenAI API max tokens | The output cap per request, reasoning included (`max_completion_tokens`). 0 sends none: the model's own limit. Else 1,024–128,000. | the model's own |
+| OpenAI API organization | The `OpenAI-Organization` header, for an account in several organizations. Empty sends none. | (none) |
+| OpenAI API project | The `OpenAI-Project` header. Empty sends none (a project key names its project already). | (none) |
+
+**The OpenAI API** appears in `/server` as an **OpenAI API** row, after the Claude API's. Picking it sets *LLM URL* to `https://api.openai.com/v1`, then offers the account's chat models, newest first (not the audio, realtime, image, embedding, moderation, `-pro` or `codex` ones), and the reasoning level.
+
+* Every message is billed to the key's account. The key goes only to api.openai.com: never to a local server or the Claude API, and the *LLM API key* never goes to OpenAI. A saved `https://api.openai.com` URL now needs this switch and key.
+* Changing one of these settings reconnects when `/settings` closes.
+* *LLM reasoning* is sent as `reasoning_effort`, shaped per model: `none` is `minimal` on GPT-5 and `low` where a model has neither (o-series, GPT-6 Astra and Sol); `xhigh` is `high` before GPT-5.2; GPT-4.1 and GPT-4o get none. OpenAI streams no thinking text on Chat Completions, only its token count.
+* *LLM sampling* is not sent (the reasoning models refuse a temperature), nor are thinking blocks from earlier replies.
+* The context window comes from the app's model table (the model list names none); *LLM context length* overrides it. `/usage` adds *Cache* and *Cost* rows: an estimate at OpenAI's list prices of 2026-10-03, long-context prices past 272K prompt tokens, cache writes from GPT-5.6 on.
+
 #### LLM
 
 | Setting | What it does | Default |
@@ -448,7 +496,7 @@ Until you override them, sampling is left to the server and the model's defaults
 * **Unknown fields** are ignored by a server; Ollama's `/v1` takes only the four OpenAI ones.
 * **The extra body** may not set fields the app writes (`model`, `messages`, `tools`, `stream`, `reasoning_effort`…) or the named fields above. Its `chat_template_kwargs` merge with the app's, whose `enable_thinking` and `preserve_thinking` win.
 * **Without the pane:** `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values; `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run.
-* The Claude API is not affected.
+* The Claude API and the OpenAI API are not affected.
 
 #### TTS
 
@@ -693,7 +741,7 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 
 #### Claude
 
-The Claude Code CLI, for `/claude` (you message it) and `claude_advisor` (the model asks it), then the Claude API and the Claude CLI as servers.
+The Claude Code CLI, for `/claude` (you message it) and `claude_advisor` (the model asks it). The Claude API and the Claude CLI as servers are on `/settings` › Claude.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -707,27 +755,6 @@ The Claude Code CLI, for `/claude` (you message it) and `claude_advisor` (the mo
 | Claude advisor tool model | The advisor's `--model`; the first row follows *Claude slash command model*. | (as Claude slash command model) |
 | Claude advisor tool effort | The advisor's `--effort`; the first row follows *Claude slash command effort*. | (as Claude slash command effort) |
 | Claude advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
-| Claude API | Offers the Claude API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
-| Claude API key | Your Anthropic key (`sk-ant-…`), saved encrypted (DPAPI). An empty entry clears it. | (none) |
-| Claude API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
-| Claude API prompt caching | Marks the tools, system prompt and conversation for Anthropic's prompt cache, so each request re-reads the last one's content cheaply. | on |
-| Claude CLI server | Offers Claude Code on `/server` while it is found. Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude CLI stops. | off |
-
-**The Claude API** appears in `/server` as a **Claude API** row. Picking it sets *LLM URL* to `https://api.anthropic.com/v1`, then offers the account's models and the reasoning level.
-
-* Every message is billed to the key's account. Each key goes only to its own server.
-* Changing one of these four settings reconnects when `/tools` closes.
-* *LLM reasoning*: `low`…`xhigh` turn on adaptive thinking at that effort (`xhigh` is `high` on the 4.6 models; Haiku 4.5 and older take a budget). `none` turns thinking off where allowed; Opus 5.5 and Fable always think.
-* The context window is the model's `max_input_tokens`. `/usage` adds *Cache* and *Cost* rows (an estimate at list price).
-
-**The Claude CLI** appears last in `/server` (or `/server claude-cli`). Picking it sets *LLM URL* to `claude-cli` and offers `fable`, `opus`, `sonnet` and `haiku`, then the reasoning level (`--effort`).
-
-* **One open session:** the first message starts `claude` and keeps it running; later messages send only the new text. A change of model, reasoning, system prompt or tools, or a crash, restarts it on the same session. `/clear`, `/new` and a profile switch start a new one; restoring an app session resumes its Claude session.
-* **The app's tools, not Claude Code's:** Claude Code runs with its own tools, skills, hooks, settings files and MCP servers off, the app's system prompt, and this turn's tools through an MCP server the app hosts (the app's own exe runs as the relay, `--mcp-relay`). Calls run as any model's do: approvals, `ask_user` and *LLM max tool iterations* apply.
-* **ESC** interrupts the reply; if Claude Code doesn't stop within 3 seconds it is closed, and the next message resumes on a new process.
-* Side requests (titles, reflections, summaries, bots) each run as a one-off `claude -p` with no tools.
-* Claude Code compacts its own conversation, so *LLM auto compact* does nothing here; the window is 200,000 tokens.
-* Messages count against your Claude Code plan; the log records each turn's cost. Switching servers stops the CLI; the session stays for a switch back.
 
 #### Home Assistant
 
@@ -926,7 +953,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copies *Shell allowed commands* into another profile (added, or replacing with `overwrite`). `--history` copies the command history instead (refused when that profile has *Keep command history* off). |
-| `/keycopy <profile>` | Copies the *LLM API key*, *Claude API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
+| `/keycopy <profile>` | Copies the *LLM API key*, *Claude API key*, *OpenAI API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix; the ask and yolo buttons (A, Y) switch *Shell command policy*. |
 | `/police` | Opens the on/off page for *Shell police outside paths*; its strings button (S) opens *Shell police forbidden strings*. |
@@ -984,7 +1011,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/rewind [n]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
 | `/remember <text>` | Adds a memory. |
 | `/sampling [field value]` | Edits the per-model sampling on a pane, or the connected model's directly with `<field> <value>`, `<field> clear`, `extra <json>` or `clear`. See Sampling per model. |
-| `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Claude API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. |
+| `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Claude API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | Lists, restores, renames and purges stored sessions. An age is days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name. |
 | `/settings`, `//` | Edits and saves the settings. |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab, typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
@@ -1180,7 +1207,7 @@ A USB or built-in webcam through Windows' Media Foundation; nothing to install. 
 * A name is 1 to 32 letters, digits, `-` or `_`, and can't be `neon` or one of the verbs.
 * A name starting with `_` is temporary: left off the picker and the name list (unless loaded), and the next launch opens `default` (the profile is kept). `/profile _name` still switches to one.
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch without changing the next launch's. An unknown name exits with code 2; a headless run with neither opens `default`.
-* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Claude API key, Web browser path, Web search method, Web SearXNG URL, Claude executable, Obsidian vault, ComfyUI URL, Home Assistant URL and Home Assistant API key; `--all` resets those too. `default` can only be reset while loaded.
+* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Claude API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude executable, Obsidian vault, ComfyUI URL, Home Assistant URL and Home Assistant API key; `--all` resets those too. `default` can only be reset while loaded.
 * `push <name>` copies the loaded profile's settings over another's; `pull <name>` the other way. Both ask first. Only `profile.json` is copied (the target keeps its working directory); a pull clears the conversation.
 * The API keys in `profile.json` are encrypted for your Windows account (DPAPI, `dpapi:…`); a key typed into the file by hand is encrypted at the next load. Only the same Windows user on the same machine can read them.
 
@@ -2024,6 +2051,13 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 | `NEONSIDEKICK_CLAUDE_API_KEY` | Claude API key | The key as issued. Never logged. |
 | `NEONSIDEKICK_CLAUDE_CLI_SERVER` | Claude CLI server | on/off |
 
+### OpenAI
+
+| Variable | Overrides | Accepts |
+|---|---|---|
+| `NEONSIDEKICK_OPENAI_API` | OpenAI API | on/off |
+| `NEONSIDEKICK_OPENAI_API_KEY` | OpenAI API key | The key as issued. Never logged. |
+
 ### Speech
 
 | Variable | Overrides | Accepts |
@@ -2066,6 +2100,7 @@ Only for running the tests from source; each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model not under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests (Haiku, a few cents a run).
 * `NEONSIDEKICK_TEST_CLAUDE_API_KEY`: the live Claude API tests (Sonnet 5 and Opus 5.5, a few cents a run).
+* `NEONSIDEKICK_TEST_OPENAI_API_KEY`: the live OpenAI API tests (the nano models the account lists, a few cents a run); with `NEONSIDEKICK_TEST_OPENAI_SWEEP=1`, every listed chat model's reasoning words too.
 * `NEONSIDEKICK_TEST_EMBEDDED_MODEL`: the catalog id the live embedded test runs (else the first installed; needs llama.cpp and a model already installed).
 * `NEONSIDEKICK_TEST_LLAMA_EXE` with `NEONSIDEKICK_TEST_TINY_GGUF`: any `llama-server.exe` and small GGUF (`stories15M-q4_0.gguf`, 19 MB), for the process host's test.
 
@@ -2092,3 +2127,7 @@ Only for running the tests from source; each live test is skipped unless its res
 * `Markdig`
 * `LibGit2Sharp`
 * `llama.cpp` (`llama-server`, downloaded on first use of the embedded LLM)
+
+## Why "Neon"
+
+Early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck. Today you can create as many themes, profiles, personas and wake words as you like.

@@ -428,6 +428,7 @@ public static class Profiles
         nameof(AppSettingsData.LlmApiKey),
         nameof(AppSettingsData.TtsHttpUrl),
         nameof(AppSettingsData.ClaudeApiKey),
+        nameof(AppSettingsData.OpenAIApiKey),
         nameof(AppSettingsData.WebBrowserPath),
         nameof(AppSettingsData.WebSearchMethod),
         nameof(AppSettingsData.WebSearxngUrl),
@@ -446,6 +447,7 @@ public static class Profiles
         to.LlmApiKey = from.LlmApiKey;
         to.TtsHttpUrl = from.TtsHttpUrl;
         to.ClaudeApiKey = from.ClaudeApiKey;
+        to.OpenAIApiKey = from.OpenAIApiKey;
         to.WebBrowserPath = from.WebBrowserPath;
         to.WebSearchMethod = from.WebSearchMethod;
         to.WebSearxngUrl = from.WebSearxngUrl;

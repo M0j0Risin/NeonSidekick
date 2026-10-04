@@ -35,6 +35,9 @@ public sealed class ContextLengthProbe
     public const string MaxModelLenSource = "max_model_len on /v1/models";
     public const string ContextLengthSource = "context_length on /v1/models";
     public const string MaxInputTokensSource = "max_input_tokens on /v1/models";
+
+    /// <summary>The OpenAI API's window (2026-10-03): its <c>/v1/models</c> names none, so the app's own table (<see cref="OpenAIPlatform.OpenAIModelRules.ContextWindow"/>).</summary>
+    public const string OpenAIModelTableSource = "the OpenAI model table";
     public const string LmStudioLoadedSource = "loaded_context_length on /api/v0/models";
     public const string LmStudioMaxSource = "max_context_length on /api/v0/models";
     public const string LlamaPropsSource = "n_ctx on /props";

@@ -47,6 +47,11 @@ public sealed record LlmServer(Uri BaseUrl, string Name, ProbeResult Result)
             return Anthropic.ClaudeApi.ServerName;
         }
 
+        if (OpenAIPlatform.OpenAIApi.IsOpenAIApi(baseUrl))
+        {
+            return OpenAIPlatform.OpenAIApi.ServerName;
+        }
+
         if (Claude.ClaudeCliEndpoint.IsClaudeCli(baseUrl))
         {
             return Claude.ClaudeCliEndpoint.ServerName;

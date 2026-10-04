@@ -1958,7 +1958,8 @@ public sealed class SidekickApp
     /// The production chat client for <paramref name="endpoint"/> (2026-09-27): the Claude API's own client on its host
     /// (<see cref="Llm.Anthropic.ClaudeApi.IsClaudeApi(Uri?)"/>), with the output cap and caching the effective settings
     /// hold at the connect; the Claude CLI's (<see cref="Claude.ClaudeCliChatClient"/>, 2026-09-30) over this run's one
-    /// process on its sentinel; the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
+    /// process on its sentinel; the OpenAI API's (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>, 2026-10-03) on its host, with
+    /// the output cap, organization and project held at the connect; the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
     /// comes through here, so the provider is the URL's wherever it came from.
     /// </summary>
     private IChatClient DefaultChatClient(LlmEndpoint endpoint, LlmTimeouts timeouts)
@@ -1970,6 +1971,14 @@ public sealed class SidekickApp
                 () => Claude.ClaudeExecutable.Locate(EffectiveSettings.ClaudeExecutable, _environment.System, File.Exists),
                 ClaudeCliDirectory);
             return new Claude.ClaudeCliChatClient(endpoint, host, context, timeouts.Request);
+        }
+
+        if (Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(endpoint.BaseUrl))
+        {
+            var settings = EffectiveSettings;
+            return new Llm.OpenAIPlatform.OpenAIApiChatClient(
+                endpoint, timeouts.Request, settings.OpenAIApiMaxTokens,
+                Llm.OpenAIPlatform.OpenAIApi.Organization(settings), Llm.OpenAIPlatform.OpenAIApi.Project(settings));
         }
 
         if (!Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
@@ -2015,6 +2024,8 @@ public sealed class SidekickApp
         SettingsField.ClaudeApi => _environment.ClaudeApi is not null ? EnvironmentOverrides.ClaudeApiVariable : null,
         SettingsField.ClaudeApiKey => _environment.ClaudeApiKey is not null ? EnvironmentOverrides.ClaudeApiKeyVariable : null,
         SettingsField.ClaudeCliServer => _environment.ClaudeCliServer is not null ? EnvironmentOverrides.ClaudeCliServerVariable : null,
+        SettingsField.OpenAIApi => _environment.OpenAIApi is not null ? EnvironmentOverrides.OpenAIApiVariable : null,
+        SettingsField.OpenAIApiKey => _environment.OpenAIApiKey is not null ? EnvironmentOverrides.OpenAIApiKeyVariable : null,
         SettingsField.DockerEnginePipe => _environment.DockerPipe is not null ? EnvironmentOverrides.DockerPipeVariable : null,
         _ => null,
     };

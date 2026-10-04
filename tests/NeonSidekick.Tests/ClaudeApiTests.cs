@@ -549,9 +549,9 @@ public class ClaudeApiTests
         Assert.True(ClaudeApi.Offered(new AppSettingsData { ClaudeApi = true, ClaudeApiKey = "k" }));
 
         var data = new AppSettingsData { ClaudeApiKey = "claude-key", LlmApiKey = "local-key" };
-        Assert.Equal("claude-key", ClaudeApi.KeyFor(data, ClaudeApi.BaseUrl));
-        Assert.Equal("local-key", ClaudeApi.KeyFor(data, new Uri("http://127.0.0.1:1234/v1")));
-        Assert.Equal("", ClaudeApi.KeyFor(new AppSettingsData(), ClaudeApi.BaseUrl));
+        Assert.Equal("claude-key", ApiKeys.For(data, ClaudeApi.BaseUrl));
+        Assert.Equal("local-key", ApiKeys.For(data, new Uri("http://127.0.0.1:1234/v1")));
+        Assert.Equal("", ApiKeys.For(new AppSettingsData(), ClaudeApi.BaseUrl));
 
         string stored = ClaudeApi.Protect("  sk-ant-secret ", out string? error);
         if (OperatingSystem.IsWindows())
@@ -569,17 +569,16 @@ public class ClaudeApiTests
     }
 
     [Fact]
-    public void Tools_TheClaudeTab_EndsWithTheClaudeApisFourRows()
+    public void Settings_TheClaudeTab_HoldsTheClaudeApisFourRows_AndTheCliServer()
     {
-        // /settings' Claude (API) tab went to /tools' Claude tab on 2026-09-29 (the user's call), under the advisor's confirm.
-        Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);
-        var claude = SettingsMenu.ToolsTabFields[ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeTabTitle) - 1];
-        Assert.Equal(SettingsField.ClaudeAdvisorConfirm, claude[^6]);
-        // The Claude CLI server's switch below them since 2026-09-30.
-        Assert.Equal(SettingsField.ClaudeCliServer, claude[^1]);
-        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching], claude.SkipLast(1).TakeLast(4));
-        Assert.All(SettingsMenu.TabFields, t => Assert.DoesNotContain(SettingsField.ClaudeApi, t));
-        var apiRows = claude.SkipLast(1).TakeLast(4).ToList();
+        // On /tools' Claude tab from 2026-09-29 under the advisor's confirm, the Claude CLI server's switch below them from
+        // 2026-09-30; /settings' own Claude tab since 2026-10-03 (the user's call), after Docker.
+        Assert.Equal(SettingsMenu.ClaudeTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Claude]);
+        Assert.Equal((int)SettingsTab.Docker + 1, (int)SettingsTab.Claude);
+        var claude = SettingsMenu.TabFields[(int)SettingsTab.Claude];
+        Assert.Equal([SettingsField.ClaudeApi, SettingsField.ClaudeApiKey, SettingsField.ClaudeApiMaxTokens, SettingsField.ClaudeApiPromptCaching, SettingsField.ClaudeCliServer], claude);
+        Assert.All(SettingsMenu.ToolsTabFields, t => Assert.DoesNotContain(SettingsField.ClaudeApi, t));
+        var apiRows = claude.SkipLast(1).ToList();
 
         var data = new AppSettingsData();
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeApi, data, "C:\\p"));
