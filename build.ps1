@@ -179,9 +179,28 @@ if (-not $proc.WaitForExit(120000)) {
     Fail "Smoke timed out after 120 s."
 }
 
-$smokeOut -split "`r?`n" | Where-Object { $_ -match 'PASS|FAIL' } | ForEach-Object {
-    $colour = if ($_ -match 'FAIL') { "Red" } else { "Green" }
-    Write-Host "  $_" -ForegroundColor $colour
+# One line per check, its wrapped detail joined back on (2026-10-04): the redirected console wraps at 80 columns,
+# and the old case-insensitive 'PASS|FAIL' filter kept only the continuation lines that happened to hold those
+# letters ("(Failed to connect…" from postgres:driver's expected refusal, shown red; "password" from docker's) and
+# dropped the rest. A check starts at an indented PASS/FAIL verdict, matched case-sensitively; the lines after it up
+# to the next check or a blank line are its detail; the SMOKE PASS/FAIL summary stands alone.
+$checkLines = New-Object System.Collections.Generic.List[string]
+$current = $null
+foreach ($line in $smokeOut -split "`r?`n") {
+    if ($line -cmatch '^\s+(PASS|FAIL)\s' -or $line -cmatch '^SMOKE (PASS|FAIL)\b') {
+        if ($null -ne $current) { $checkLines.Add($current) }
+        $current = $line.TrimEnd()
+    } elseif ($line.Trim().Length -eq 0) {
+        if ($null -ne $current) { $checkLines.Add($current) }
+        $current = $null
+    } elseif ($null -ne $current) {
+        $current = $current + " " + $line.Trim()
+    }
+}
+if ($null -ne $current) { $checkLines.Add($current) }
+foreach ($check in $checkLines) {
+    $colour = if ($check -cmatch '^\s*(SMOKE )?FAIL\b') { "Red" } else { "Green" }
+    Write-Host "  $check" -ForegroundColor $colour
 }
 if ($proc.ExitCode -ne 0) {
     if ($smokeErr) { Write-Host $smokeErr -ForegroundColor Red }
