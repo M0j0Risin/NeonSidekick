@@ -1,4 +1,4 @@
-# SearxNG Setup
+# SearXNG Setup
 
 ## Prerequisite
 
