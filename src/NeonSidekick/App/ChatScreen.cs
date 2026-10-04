@@ -3739,7 +3739,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote)], argText);
                 }
 
-                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
+                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyOfferedWord, ComfyOfferedNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
             }
 
             case SlashCommand.Imagine:
@@ -7293,6 +7293,10 @@ internal sealed partial class ChatScreen
     public const string ComfyPurgeWord = "purge";
     public const string ComfyPurgeNote = "delete every picture in the ComfyUI output folder, the pasted inputs too";
 
+    /// <summary><c>/comfy offered</c> (2026-10-04, the user's ask): the offered workflows as a bulleted list (<see cref="ComfyText.OfferedLines"/>). Pinned.</summary>
+    public const string ComfyOfferedWord = "offered";
+    public const string ComfyOfferedNote = "list the currently offered ComfyUI workflows";
+
     /// <summary>The two kinds of file <c>/comfy edit</c> opens (the user's call, later still that day: the graph too, not only the settings). Pinned.</summary>
     public const string ComfyJsonWord = "json";
     public const string ComfyMarkdownWord = "markdown";
@@ -7303,7 +7307,7 @@ internal sealed partial class ChatScreen
     public const string ComfyMarkdownNote = "open a workflow's .md (its settings and tips) in your editor";
 
     /// <summary>A <c>/comfy</c> argument that is not <c>edit json|markdown &lt;workflow&gt;</c>. Pinned.</summary>
-    public const string ComfyUsageError = "Usage: /comfy, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>";
+    public const string ComfyUsageError = "Usage: /comfy, /comfy offered, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>";
 
     /// <summary>The line after <c>/comfy edit</c> opened a workflow's file; <paramref name="created"/> when an <c>.md</c> had to be made first. Pinned.</summary>
     public static string ComfyEditNotice(string name, string path, bool json, bool created) =>
@@ -7465,6 +7469,19 @@ internal sealed partial class ChatScreen
 
         var (workflows, problems) = _comfy.Catalog.Scan();
         foreach (var line in ComfyText.StatusLines(workflows, problems, _comfy.Catalog.Roots, effective.ComfyTools, effective.ComfyWorkflowsOffered))
+        {
+            _transcript.Notice(line);
+        }
+    }
+
+    /// <summary>
+    /// <c>/comfy offered</c> (2026-10-04, the user's ask): the workflows the model is offered as a bulleted list, nothing asked
+    /// of the server — a fresh scan, so a workflow added or removed on disk since shows at once.
+    /// </summary>
+    private void ListComfyOffered()
+    {
+        var effective = _effective();
+        foreach (var line in ComfyText.OfferedLines(_comfy.Catalog.Workflows, effective.ComfyWorkflowsOffered, effective.ComfyTools))
         {
             _transcript.Notice(line);
         }
@@ -10295,6 +10312,12 @@ internal sealed partial class ChatScreen
                 if (string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase))
                 {
                     OpenViewer(notice: true);
+                    return false;
+                }
+
+                if (string.Equals(args.Trim(), ComfyOfferedWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    ListComfyOffered();
                     return false;
                 }
 

@@ -1011,8 +1011,11 @@ public static partial class BotChat
         return string.Concat(events.OfType<TurnEvent.TextDelta>().Select(delta => delta.Text)).Trim();
     }
 
-    /// <summary>The spinner while the model writes a reply's image prompt (2026-09-25).</summary>
-    public static string PromptSpinner(string speaker) => $"Imagining {speaker}'s picture…";
+    /// <summary>
+    /// The spinner while the model writes a reply's image prompt (2026-09-25): <c>✨ Nova</c> since 2026-10-04 (the user's
+    /// wording; it read <c>Imagining Nova's picture…</c>), the sparkles <c>/imagine</c>'s background notice leads with too.
+    /// </summary>
+    public static string PromptSpinner(string speaker) => $"✨ {speaker}";
 
     /// <summary>The line over an app's picture drawn after later lines (<c>Botchat image async</c>, 2026-09-25): whose reply it pictures. Pinned.</summary>
     public static string PictureNotice(string speaker) => $"(botchat: {speaker}'s picture)";

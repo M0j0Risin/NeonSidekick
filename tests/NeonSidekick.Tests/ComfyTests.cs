@@ -831,6 +831,31 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("pony · text → image · 1024×1024 · hidden from the model", ComfyText.CompletionNote(_studio.Catalog.Workflows[1], offered: false));
     }
 
+    /// <summary>/comfy offered (2026-10-04, the user's ask): the offered workflows one bullet each; the switch's line first while it is off; a line of its own for none installed or none ticked.</summary>
+    [Fact]
+    public void OfferedLines_BulletEachOfferedWorkflow_InTheCatalogsOrder()
+    {
+        Assert.Equal([ComfyText.NoWorkflowInstalled], ComfyText.OfferedLines([], ["pony-txt2img"], enabled: true));
+        Workflow("pony-txt2img", Txt2Img);
+        Workflow("juggernaut-xl", Txt2Img);
+        Workflow("anything", Txt2Img);
+        var workflows = _studio.Catalog.Workflows;
+
+        Assert.Equal([ComfyText.NoneOfferedLine], ComfyText.OfferedLines(workflows, null, enabled: true));
+        Assert.Equal([ComfyText.NoneOfferedLine], ComfyText.OfferedLines(workflows, ["gone"], enabled: true));
+        var lines = ComfyText.OfferedLines(workflows, ["PONY-txt2img", "anything"], enabled: true);
+        Assert.Equal(
+            [
+                ComfyText.Glyph + "2 workflows offered to the model:",
+                "  • " + ComfyText.WorkflowLine(workflows.Single(w => w.Name == "anything")),
+                "  • " + ComfyText.WorkflowLine(workflows.Single(w => w.Name == "pony-txt2img")),
+            ],
+            lines);
+        Assert.Equal("  • pony-txt2img · pony · text → image · 1024×1024", lines[2]);
+        Assert.Equal([ComfyText.ToolsOffLine, ComfyText.Glyph + "1 workflow offered to the model:", "  • " + ComfyText.WorkflowLine(workflows.Single(w => w.Name == "juggernaut-xl"))],
+            ComfyText.OfferedLines(workflows, ["juggernaut-xl"], enabled: false));
+    }
+
     [Fact]
     public void TheCaretMention_ListsEachOfferedWorkflow_WithWhatItIs()
     {

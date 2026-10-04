@@ -1088,6 +1088,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]` | Generates a picture on ComfyUI from your prompt exactly as typed. See Imagine options. |
 | `/comfy` | The ComfyUI server's status, the workflows found, skipped files and where workflows go. |
 | `/comfy edit json <workflow>`, `/comfy edit markdown <workflow>` | Opens a workflow's graph, or its `.md` (created if missing), in your editor. |
+| `/comfy offered` | Lists the workflows currently offered to the model, one bullet each. |
 | `/comfy view` | Opens the picture viewer on the output folder. |
 | `/comfy purge` | Deletes everything in the output folder, `.pasted` included, after a yes/no. Refused when it is the working directory. |
 | `/vocalia [reset \| copy <profile> [force]]` | Edits `vocalia.md` (the voice directive, empty by default, added last to every spoken reply), removes it, or copies it to another profile. |

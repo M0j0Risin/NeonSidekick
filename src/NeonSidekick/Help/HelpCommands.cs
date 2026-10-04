@@ -62,6 +62,7 @@ public static class HelpCommands
         [
             new("/comfy", "Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), skipped files and where workflows go."),
             new("/comfy edit json <workflow>, /comfy edit markdown <workflow>", "Open a workflow's graph, or its `.md`, in your editor (`md` works too; the `.md` is created with the family filled in if it doesn't exist)."),
+            new("/comfy offered", "List the workflows currently offered to the model as a bulleted list (name, family, input, size, description), without asking the server."),
             new("/comfy view", "Open the picture viewer on the output folder. Works while a reply runs."),
             new("/comfy purge", "Permanently delete everything in the output folder, `.pasted` inputs included, after a yes/no. Refused when the output folder is the working directory."),
         ]),

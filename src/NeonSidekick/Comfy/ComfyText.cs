@@ -326,9 +326,10 @@ public static class ComfyText
 
     /// <summary>
     /// <c>/imagine</c>'s notice when its generation outlasts the half-second grace and goes behind the input line (2026-10-04, the
-    /// user's report: the line was held until it ended), so the missing spinner reads as running, and how to stop it. Pinned.
+    /// user's report: the line was held until it ended), so the missing spinner reads as running, and how to stop it. Led by
+    /// <c>✨ imagining</c> since later that day (the user's wording; it read <c>generating behind the input line</c>). Pinned.
     /// </summary>
-    public const string ImagineInBackground = "(generating behind the input line: the picture shows here when it is done; double-click the 🖼️ / 🎨 on the hint row to cancel)";
+    public const string ImagineInBackground = "(✨ imagining: the picture shows here when it is done; double-click the 🖼️ / 🎨 on the hint row to cancel)";
 
     /// <summary><c>/imagine</c> with both a negative after <c>--</c> and <c>--no-negative</c> (later on 2026-09-24). Pinned.</summary>
     public const string NegativeAndNoNegative = "give a negative after -- or --no-negative, not both";
@@ -497,7 +498,7 @@ public static class ComfyText
         var lines = new List<string>();
         if (!enabled)
         {
-            lines.Add("ComfyUI tools is off on the ComfyUI tab of /tools: the model is offered no image tool (/imagine still works)");
+            lines.Add(ToolsOffLine);
         }
 
         var shown = ComfyWorkflowCatalog.Offered(workflows, offered);
@@ -514,6 +515,48 @@ public static class ComfyText
         }
 
         lines.Add("workflows go in " + string.Join(" or ", roots) + " — export them from ComfyUI with Save (API) and put {{prompt}} (and {{negative}}, {{seed}}, {{width}}, {{height}}, {{steps}}, {{cfg}}, {{image}}, {{image2}}, {{image3}}, {{denoise}}) where the values go");
+        return lines;
+    }
+
+    /// <summary>The line <c>/comfy</c> and <c>/comfy offered</c> open with while <c>ComfyUI tools</c> is off. Pinned.</summary>
+    public const string ToolsOffLine = "ComfyUI tools is off on the ComfyUI tab of /tools: the model is offered no image tool (/imagine still works)";
+
+    /// <summary><c>/comfy offered</c> with no workflow installed at all (2026-10-04). Pinned.</summary>
+    public const string NoWorkflowInstalled = "no ComfyUI workflow is installed yet: /comfy says where they go";
+
+    /// <summary><c>/comfy offered</c> with workflows installed and none ticked (2026-10-04). Pinned.</summary>
+    public const string NoneOfferedLine = "no ComfyUI workflow is offered to the model: tick them in ComfyUI workflows offered on the ComfyUI tab of /tools";
+
+    /// <summary>
+    /// <c>/comfy offered</c>'s lines (2026-10-04, the user's ask: the offered workflows as a bulleted list, without the server's
+    /// status and the rest of <c>/comfy</c>): <see cref="ToolsOffLine"/> first while the switch is off, then a count and one
+    /// <c>  • </c> line per offered workflow (<see cref="WorkflowLine"/>), in the catalog's order; <see cref="NoWorkflowInstalled"/>
+    /// or <see cref="NoneOfferedLine"/> in place of the list when it is empty. Pure; pinned.
+    /// </summary>
+    public static IReadOnlyList<string> OfferedLines(IReadOnlyList<ComfyWorkflow> workflows, IReadOnlyList<string>? offered, bool enabled)
+    {
+        ArgumentNullException.ThrowIfNull(workflows);
+        var lines = new List<string>();
+        if (!enabled)
+        {
+            lines.Add(ToolsOffLine);
+        }
+
+        var shown = ComfyWorkflowCatalog.Offered(workflows, offered);
+        if (workflows.Count == 0)
+        {
+            lines.Add(NoWorkflowInstalled);
+            return lines;
+        }
+
+        if (shown.Count == 0)
+        {
+            lines.Add(NoneOfferedLine);
+            return lines;
+        }
+
+        lines.Add(Glyph + (shown.Count == 1 ? "1 workflow" : shown.Count.ToString(CultureInfo.InvariantCulture) + " workflows") + " offered to the model:");
+        lines.AddRange(shown.Select(workflow => "  • " + WorkflowLine(workflow)));
         return lines;
     }
 

@@ -185,7 +185,7 @@ public enum SlashCommand
     /// <summary><c>/imagine [workflow] &lt;prompt&gt; [-- &lt;negative&gt;] [--seed N] …</c> (2026-09-24, the user's ask): the prompt sent to ComfyUI exactly as typed — no model in between — the picture drawn in the transcript and saved under the working directory, and handed to the model with the next message.</summary>
     Imagine,
 
-    /// <summary><c>/comfy</c> (2026-09-24): the ComfyUI server's status, the workflows found and the folders they go in; <c>/comfy edit json|markdown &lt;workflow&gt;</c> (later still that day, the user's ask) opens a workflow's <c>.json</c> or <c>.md</c> in the editor, its argument list completing the verb, the kind and the names.</summary>
+    /// <summary><c>/comfy</c> (2026-09-24): the ComfyUI server's status, the workflows found and the folders they go in; <c>/comfy edit json|markdown &lt;workflow&gt;</c> (later still that day, the user's ask) opens a workflow's <c>.json</c> or <c>.md</c> in the editor, its argument list completing the verb, the kind and the names; <c>/comfy offered</c> (2026-10-04) lists the offered workflows.</summary>
     Comfy,
 
     /// <summary>
@@ -302,7 +302,7 @@ public static class SlashCommands
             new("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"),
             new("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"),
             new("/collapse", "collapse all items in the transcript"),
-            new("/comfy", "show the ComfyUI server's status and the workflows the image tools can run, /comfy edit json|markdown <workflow> to open its file in your editor, /comfy view to watch the output folder, or /comfy purge to empty it"),
+            new("/comfy", "show ComfyUI's status and its workflows, /comfy offered for the ones the model gets, /comfy edit json|markdown <workflow> to open one in your editor, /comfy view to watch the output folder, or /comfy purge to empty it"),
             new("/compact", "shrink the current context, or /compact <focus> to steer the summary"),
             new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"),
             new("/cwd", "show or change the working directory, or /cwd <path> | ~ | browse"),

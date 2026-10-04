@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Llm;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -402,5 +403,14 @@ public class BotChatTests
         Assert.Same(botMemory, tools[1]);
         Assert.Same(botImage, tools[2]);
         Assert.Same(botSkill, tools[3]);
+    }
+
+    [Fact]
+    public void PromptSpinner_LeadsWithTheTwoCellSparkles()
+    {
+        // Windows Terminal draws ✨ (U+2728, East Asian Wide) two cells wide; the busy row's arithmetic must agree.
+        Assert.StartsWith("✨ ", BotChat.PromptSpinner("Nova"), StringComparison.Ordinal);
+        Assert.Equal(2, TextCells.Width("✨"));
+        Assert.Equal(7, TextCells.Width(BotChat.PromptSpinner("Nova")));
     }
 }

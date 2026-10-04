@@ -14754,6 +14754,28 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>/comfy offered (2026-10-04, the user's ask): the offered workflows as a bulleted list, a hidden one left out, any case; nothing asked of the model.</summary>
+    [Fact]
+    public async Task ComfyOffered_ListsTheOfferedWorkflows_AsBullets()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ComfyTools = true; d.ComfyWorkflowsOffered = ["pony-txt2img"]; });
+        string folder = _settings.ProfileComfyDirectory;
+        const string graph = "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}";
+        File.WriteAllText(Path.Combine(folder, "pony-txt2img.json"), graph);
+        File.WriteAllText(Path.Combine(folder, "pony-txt2img.md"), "---\nfamily: pony\n---\n");
+        File.WriteAllText(Path.Combine(folder, "bare.json"), graph);
+        PushLine("/comfy OFFERED");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + NeonSidekick.Comfy.ComfyText.Glyph + "1 workflow offered to the model:", output);
+        Assert.Contains("• pony-txt2img · pony · text → image · 1024×1024", output);
+        Assert.DoesNotContain("• bare", output);
+        Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.ToolsOffLine, output);
+        Assert.Empty(_chat.Requests);
+    }
+
     private string ComfyImagesDir => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, AppSettingsData.DefaultComfyOutputFolder);
 
     /// <summary>/comfy purge (later still on 2026-09-24, the user's ask): the output folder emptied after a yes, .pasted included; anything else keeps.</summary>
@@ -14814,7 +14836,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.ComfyPurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234, false));
         Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.ComfyPurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
         Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.ComfyPurgeEmptyNotice(@"D:\x\comfy_images"));
-        Assert.Equal("Usage: /comfy, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
+        Assert.Equal("Usage: /comfy, /comfy offered, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
     }
 
     [Fact]
@@ -14824,7 +14846,7 @@ public partial class ChatScreenTests : IDisposable
         var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], None, None,
             Workflows: () => [new("juggernaut-xl", "juggernaut · text → image · 1024×1024"), new("pony-txt2img", "pony · text → image · 1024×1024")]);
 
-        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyPurgeWord, NeonSidekick.Viewer.ViewerText.ViewWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyOfferedWord, ChatScreen.ComfyPurgeWord, NeonSidekick.Viewer.ViewerText.ViewWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
         Assert.Equal(["view"], ChatScreen.ArgumentItems("/comfy", "v", sources).Select(i => i.Text));
         Assert.Equal(["purge"], ChatScreen.ArgumentItems("/comfy", "pu", sources).Select(i => i.Text));
         Assert.Equal(["edit"], ChatScreen.ArgumentItems("/comfy", "ed", sources).Select(i => i.Text));
