@@ -37,6 +37,7 @@ public static class HelpCommands
         new("/claude",
         [
             new("/claude <message>", "Send the message to Claude Code (the `claude` CLI) and stream its reply into the transcript. See Claude Code from the chat."),
+            new("/claude new", "Start a new Claude conversation; the next `/claude` begins it. `/clear`, `/new` and a profile switch start one too."),
         ]),
         new("/clear",
         [

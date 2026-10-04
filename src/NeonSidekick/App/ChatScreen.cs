@@ -3588,7 +3588,9 @@ internal sealed partial class ChatScreen
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null);
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null,
+        Func<string, IReadOnlyList<CompletionItem>>? Screen = null, Func<string, IReadOnlyList<CompletionItem>>? Server = null,
+        Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -3696,7 +3698,10 @@ internal sealed partial class ChatScreen
     /// <c>reset</c> for the three prompt files. Free text (a URL, a
     /// memory, a focus, a new name, a duration, a message; <c>/loop</c> lists <c>infinite</c> alone and <c>/skills</c> <c>edit</c> then <c>edit &lt;name&gt;</c> over the catalog, 2026-09-21) and <c>/model</c>'s ids (a network probe,
     /// nothing cached; the picker lists them) get nothing — and so do <c>/speak</c> and <c>/view</c>
-    /// here: their argument is a path list, <see cref="ArgumentPaths"/>. Pure.
+    /// here: their argument is a path list, <see cref="ArgumentPaths"/>. Since 2026-10-04 (the user's report and audit) also
+    /// <c>/screen</c>'s words, monitors and windows, <c>/server</c>'s words (<see cref="ServerItems"/>), <c>/model</c>'s installed
+    /// embedded models while the embedded server is in use (read from disk, no probe), <c>/log --file</c> under <c>--log</c> and
+    /// <c>/claude new</c>. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> ArgumentItems(string command, string argText, ArgumentSources sources)
     {
@@ -4029,6 +4034,26 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(sources.Planning ? PlanVerbs : PlanVerbsIdle, argText);
             }
 
+            case SlashCommand.Screen:
+                // The words, then the monitors after monitor: and the windows after window: (2026-10-04, the user's report).
+                return sources.Screen?.Invoke(argText) ?? NeonSidekick.Screen.ScreenTarget.Complete(argText, [], null, [], null);
+
+            case SlashCommand.Server:
+                // embedded, claude-cli, docker and docker:<container>, each while it is offered (2026-10-04); a URL is free text.
+                return sources.Server?.Invoke(argText) ?? ServerItems(argText, embedded: false, claudeCli: false, dockerContainers: null);
+
+            case SlashCommand.Model:
+                // The installed embedded models while the embedded server is in use (2026-10-04); any other server's ids would be a probe.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Models?.Invoke() ?? [], argText);
+
+            case SlashCommand.Log:
+                // --file, only when there is a --log file to open (2026-10-04).
+                return sources.LogFile ? MentionCompleter.Matches([new(LogViewText.FileSwitch, LogViewText.FileSwitchNote)], argText) : [];
+
+            case SlashCommand.Claude:
+                // new (2026-10-04); a message is free text, and one that does not start with "new" closes the list at its next letter.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(ClaudeText.NewWord, ClaudeText.NewNote)], argText);
+
             default:
                 return [];
         }
@@ -4036,6 +4061,47 @@ internal sealed partial class ChatScreen
 
     private static string ProfileNote(string name, string loaded) =>
         string.Equals(name, loaded, StringComparison.OrdinalIgnoreCase) ? LoadedProfileNote : SwitchToProfileNote;
+
+    /// <summary>The notes on <c>/server</c>'s argument list (2026-10-04). Pinned.</summary>
+    public const string ServerEmbeddedNote = "the installed embedded models";
+    public const string ServerClaudeCliNote = "Claude Code as the server (the Claude CLI)";
+    public const string ServerDockerNote = "the chosen Docker containers";
+    public const string ServerDockerContainerNote = "this Docker container";
+
+    /// <summary>
+    /// <c>/server</c>'s argument list (2026-10-04, the user's audit): <c>embedded</c> while an embedded model is offered and
+    /// installed (<paramref name="embedded"/>), <c>claude-cli</c> while the Claude CLI is offered (<paramref name="claudeCli"/>),
+    /// <c>docker</c> and one <c>docker:&lt;name&gt;</c> per chosen container while Docker servers are offered
+    /// (<paramref name="dockerContainers"/>, null when not) — what <c>/server</c>'s own words pick. One word: a space ends it,
+    /// and a URL is free text. Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> ServerItems(string argText, bool embedded, bool claudeCli, IReadOnlyList<string>? dockerContainers)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        if (argText.Contains(' ', StringComparison.Ordinal))
+        {
+            return [];
+        }
+
+        var items = new List<CompletionItem>();
+        if (embedded)
+        {
+            items.Add(new(EmbeddedLlm.EmbeddedEndpoint.Alias, ServerEmbeddedNote));
+        }
+
+        if (claudeCli)
+        {
+            items.Add(new(ClaudeCliEndpoint.Alias, ServerClaudeCliNote));
+        }
+
+        if (dockerContainers is not null)
+        {
+            items.Add(new(DockerEndpoint.Alias, ServerDockerNote));
+            items.AddRange(dockerContainers.Select(name => new CompletionItem(DockerEndpoint.AliasPrefix + name, ServerDockerContainerNote)));
+        }
+
+        return MentionCompleter.Matches(items, argText);
+    }
 
     /// <summary>
     /// Whether <paramref name="command"/>'s argument is a path its own list completes: there a mention character stays the
@@ -4183,10 +4249,36 @@ internal sealed partial class ChatScreen
             prefix => _files.Complete(prefix),
             PrintChoices,
             ThemeChoices,
-            DockerChoices);
+            DockerChoices,
+            ScreenChoices,
+            ServerChoices,
+            EmbeddedModelChoices,
+            _logFile is not null);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
+    }
+
+    /// <summary><c>/server</c>'s argument list over what is offered now (2026-10-04): <see cref="ServerItems"/>, each word only while <c>/server</c> would take it.</summary>
+    private IReadOnlyList<CompletionItem> ServerChoices(string argText)
+    {
+        var effective = _effective();
+        return ServerItems(
+            argText,
+            embedded: _session.EmbeddedRows(effective).Count > 0,
+            claudeCli: _session.ClaudeCliOffered(effective),
+            dockerContainers: _session.DockerOffered(effective) && effective.DockerServers ? DockerEndpoint.ChosenNames(effective) : null);
+    }
+
+    /// <summary><c>/model</c>'s argument list (2026-10-04): the installed embedded models while the embedded server is the one in use; none for any other server.</summary>
+    private IReadOnlyList<CompletionItem> EmbeddedModelChoices()
+    {
+        if (_session.Embedded is not { } embedded || !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(_session.Endpoint?.BaseUrl))
+        {
+            return [];
+        }
+
+        return embedded.Catalog.Where(model => embedded.State(model).IsInstalled).Select(model => new CompletionItem(model.Id, model.Display)).ToList();
     }
 
     /// <summary>The catalog as the next turn would see it: rescanned now while the setting says so (a read, like <see cref="SystemPromptFacts"/>), else empty.</summary>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Screen;
 
@@ -70,6 +71,68 @@ public sealed record ScreenTarget(ScreenTargetKind Kind, string Argument = "", i
                 error = ScreenText.BadTarget(raw);
                 return null;
         }
+    }
+
+    /// <summary>
+    /// The input line's list after <c>/screen </c> (2026-10-04, the user's report: it had none): the words
+    /// (<see cref="ScreenText.CompletionWords"/>) while the first is typed; after <c>monitor:</c> each of
+    /// <paramref name="monitors"/>; after <c>window:</c> each of <paramref name="windows"/> front to back, the app's own
+    /// (<paramref name="ownWindow"/>) left out, matched by the id's start or by any part of its title or process name (the
+    /// user's pick: <c>window:note</c> offers Notepad), at most <see cref="ScreenText.MaxListed"/>. A space ends it: the
+    /// <c>monitor 2</c> and <c>window notes</c> forms are typed as they are. Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> Complete(
+        string argText, IReadOnlyList<ScreenMonitor> monitors, int? ownMonitor, IReadOnlyList<ScreenWindow> windows, long? ownWindow)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(monitors);
+        ArgumentNullException.ThrowIfNull(windows);
+        if (argText.Contains(' ', StringComparison.Ordinal))
+        {
+            return [];
+        }
+
+        if (argText.StartsWith(ScreenText.MonitorPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return MentionCompleter.Matches(
+                monitors.Select(m => new CompletionItem(ScreenText.MonitorPrefix + ScreenText.Id(m.Number), ScreenText.MonitorNote(m, ownMonitor))).ToList(), argText);
+        }
+
+        if (argText.StartsWith(ScreenText.WindowPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            string rest = argText[ScreenText.WindowPrefix.Length..];
+            var items = new List<CompletionItem>();
+            foreach (var window in windows)
+            {
+                if (window.Id == ownWindow)
+                {
+                    continue;
+                }
+
+                string id = ScreenText.Id(window.Id);
+                if (string.Equals(id, rest, StringComparison.Ordinal))
+                {
+                    // Typed in full: the list closes, as every word list does.
+                    return [];
+                }
+
+                if (rest.Length == 0
+                    || id.StartsWith(rest, StringComparison.Ordinal)
+                    || window.Title.Contains(rest, StringComparison.OrdinalIgnoreCase)
+                    || window.Process.Contains(rest, StringComparison.OrdinalIgnoreCase))
+                {
+                    items.Add(new CompletionItem(ScreenText.WindowPrefix + id, ScreenText.WindowNote(window)));
+                    if (items.Count == ScreenText.MaxListed)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return items;
+        }
+
+        return MentionCompleter.Matches(ScreenText.CompletionWords.Select(w => new CompletionItem(w.Word, w.Note)).ToList(), argText);
     }
 }
 

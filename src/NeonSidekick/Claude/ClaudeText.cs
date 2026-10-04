@@ -27,6 +27,9 @@ public static class ClaudeText
     /// <summary>The word that starts a new thread: <c>/claude new</c>. Pinned.</summary>
     public const string NewWord = "new";
 
+    /// <summary>The note beside <see cref="NewWord"/> on <c>/claude</c>'s argument list (2026-10-04). Pinned.</summary>
+    public const string NewNote = "start a new Claude conversation";
+
     /// <summary>After <c>/claude new</c>. Pinned.</summary>
     public const string NewThreadNotice = "The next /claude starts a new Claude conversation.";
 

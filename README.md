@@ -1001,6 +1001,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 |---|---|
 | `/about` | Shows the version, runtime, folders, components and licence. |
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
+| `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copies *Shell allowed commands* into another profile (added, or replacing with `overwrite`). `--history` copies the command history instead (refused when that profile has *Keep command history* off). |
 | `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
@@ -1017,7 +1018,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/camera live` | Shows the camera live in its own window until you close it or `/camera off`. |
 | `/camera watch [seconds\|off]` | Looks every *Camera watch interval* (or the seconds given); a picture that changed rides your next message. Never on at startup. |
 | `/camera off` | Ends `/camera live` and watch mode; the camera closes a few seconds later. |
-| `/screen [screen \| all \| monitor:N \| window:<id or title words> \| behind]` | Captures the monitor the app is on (or the target given) and puts the screenshot on the input line as `[Image #N]`. `behind` is the window right behind the app's own: the one you were just in. See Screen capture. |
+| `/screen [screen \| all \| monitor:N \| window:<id or title words> \| behind]` | Captures the monitor the app is on (or the target given) and puts the screenshot on the input line as `[Image #N]`. `behind` is the window right behind the app's own: the one you were just in. After `/screen ` the list offers the targets, then the monitors after `monitor:` and the open windows after `window:` (narrowed by id, title or program). See Screen capture. |
 | `/screen list` | Lists the monitors and the windows, front to back, with the target that names each. |
 | `/docker` | Docker Desktop's containers on a pane, with state, health and ports. Enter offers what fits: stop, restart or pause (asking first), start or unpause, the last 50 log lines, open a port in the browser, copy the id. |
 | `/docker ps \| status \| logs <container> [lines] \| stats [container]` | The containers; the versions and counts; a container's last lines (50 by default); CPU, memory, network and disk use. |
@@ -1038,7 +1039,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/interrupt [on\|off]` | Toggles the wake-word interrupt during a spoken reply. |
 | `/learn [note \| sessions [N \| text]]` | Writes or improves a skill in the background, from the last turn or stored sessions. |
 | `/log` | Opens the [log window](#log-window). Works without `--log`. |
-| `/log --file` | Opens the `--log` file in your editor (only when started with `--log <path>`). |
+| `/log --file` | Opens the `--log` file in your editor (only when started with `--log <path>`; the argument list offers `--file` only then). |
 | `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Sends the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
 | `/plan <requirement>` | Researches with read-only tools and presents a plan before anything changes. See Plan mode. |
 | `/botchat [profile ...] [topic]` | Lets profiles talk to each other until you stop them. See Bot conversations. |
@@ -1046,7 +1047,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/collapse` | Folds them again. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/memory [on \| off \| forget \| edit \| copy <profile> [overwrite]]` | Lists memories on a pane (Enter removes one); **● on** (N) and **○ off** (F) on its title row switch *Memory*, as `on` and `off` do. `forget` forgets all; `edit` opens `memory.json` in your editor; `copy` adds them to another profile's (or replaces with `overwrite`). `forget` and `copy` ask first. |
-| `/model [id]` | Picks or sets the model. The list is A to Z with the cursor on the model in use; type to narrow it to the ids holding the text (Backspace erases, ESC clears it, the next ESC keeps the model). On the embedded LLM, lists the installed models. |
+| `/model [id]` | Picks or sets the model. The list is A to Z with the cursor on the model in use; type to narrow it to the ids holding the text (Backspace erases, ESC clears it, the next ESC keeps the model). On the embedded LLM, lists the installed models, and the argument list offers their ids. |
 | `/new` | Starts a new conversation without clearing the screen. |
 | `/operata [reset \| copy <profile> [force]]` | Edits `operata.md` (the operating rules) in your editor, resets it, or copies it to another profile (`force` replaces theirs). |
 | `/perfbar [off \| text \| gauge \| spark \| led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
@@ -1063,7 +1064,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/rewind [n]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
 | `/remember <text>` | Adds a memory. |
 | `/sampling [field value]` | Edits the per-model sampling on a pane, or the connected model's directly with `<field> <value>`, `<field> clear`, `extra <json>` or `clear`. See Sampling per model. |
-| `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. |
+| `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. The argument list offers each of those words while it applies. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | Lists, restores, renames and purges stored sessions. An age is days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name. |
 | `/settings`, `//` | Edits and saves the settings. |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab, typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |

@@ -22,6 +22,9 @@ public static class LogViewText
     /// <summary><c>/log</c>'s switch for the <c>--log</c> file in the editor (2026-10-02, the user's word). Pinned.</summary>
     public const string FileSwitch = "--file";
 
+    /// <summary>The note beside <see cref="FileSwitch"/> on <c>/log</c>'s argument list, offered only under <c>--log</c> (2026-10-04). Pinned.</summary>
+    public const string FileSwitchNote = "open the --log file in your editor";
+
     /// <summary><c>/log</c>'s notice once the window is open (or brought forward). Pinned.</summary>
     public static string WindowOpenedNotice => $"({App.NoticeGlyphs.Log}opened the log window; /log {FileSwitch} opens the --log file in your editor)";
 

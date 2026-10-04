@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using NeonSidekick.App;
 using NeonSidekick.Files;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Screen;
@@ -153,5 +154,51 @@ public partial class ChatScreenTests
         PushLine("/exit");
 
         Assert.Contains(ScreenText.Unsupported, await RunAsync());
+    }
+
+    // ── The argument lists the 2026-10-04 audit added ─────────────────────
+
+    [Fact]
+    public void ArgumentItems_Screen_TheWords_ThenWhatTheSourceReads()
+    {
+        Assert.Equal("list", ChatScreen.ArgumentItems("/screen", "", Sources())[0].Text);   // no source: the words alone
+        var sources = Sources() with { Screen = text => ScreenTarget.Complete(text, [], null, [new(7, "Paint", "mspaint", new ScreenRect(0, 0, 1, 1))], null) };
+        Assert.Equal([new CompletionItem("window:7", "\"Paint\" (mspaint)")], ChatScreen.ArgumentItems("/screen", "window:pa", sources));
+    }
+
+    [Fact]
+    public void ServerItems_EachWord_OnlyWhileItIsOffered()
+    {
+        Assert.Empty(ChatScreen.ServerItems("", embedded: false, claudeCli: false, dockerContainers: null));
+        Assert.Equal(
+            [
+                new CompletionItem("embedded", ChatScreen.ServerEmbeddedNote),
+                new CompletionItem("claude-cli", ChatScreen.ServerClaudeCliNote),
+                new CompletionItem("docker", ChatScreen.ServerDockerNote),
+                new CompletionItem("docker:vllm", ChatScreen.ServerDockerContainerNote),
+                new CompletionItem("docker:sglang", ChatScreen.ServerDockerContainerNote),
+            ],
+            ChatScreen.ServerItems("", embedded: true, claudeCli: true, dockerContainers: ["vllm", "sglang"]));
+        Assert.Equal(["docker", "docker:vllm"], ChatScreen.ServerItems("do", embedded: true, claudeCli: true, dockerContainers: ["vllm"]).Select(i => i.Text));
+        Assert.Equal(["docker:vllm"], ChatScreen.ServerItems("docker:", embedded: false, claudeCli: false, dockerContainers: ["vllm"]).Select(i => i.Text));
+        Assert.Empty(ChatScreen.ServerItems("http://x y", embedded: true, claudeCli: true, dockerContainers: []));   // a space ends it
+        Assert.Empty(ChatScreen.ArgumentItems("/server", "", Sources()));                                          // no source: nothing offered
+        Assert.Equal(["claude-cli"], ChatScreen.ArgumentItems("/server", "c", Sources() with { Server = text => ChatScreen.ServerItems(text, false, true, null) }).Select(i => i.Text));
+    }
+
+    [Fact]
+    public void ArgumentItems_Model_TheSourcesEmbeddedModels_Log_FileOnlyUnderTheFlag_Claude_New()
+    {
+        Assert.Empty(ChatScreen.ArgumentItems("/model", "", Sources()));   // any other server: no probe per keystroke
+        var models = Sources() with { Models = () => [new("gemma-4-e4b", "Gemma 4 E4B"), new("gemma-4-26b", "Gemma 4 26B")] };
+        Assert.Equal(["gemma-4-e4b"], ChatScreen.ArgumentItems("/model", "gemma-4-e", models).Select(i => i.Text));
+        Assert.Empty(ChatScreen.ArgumentItems("/model", "gemma x", models));
+
+        Assert.Empty(ChatScreen.ArgumentItems("/log", "", Sources()));
+        Assert.Equal([new CompletionItem("--file", Viewer.LogViewText.FileSwitchNote)], ChatScreen.ArgumentItems("/log", "-", Sources() with { LogFile = true }));
+
+        Assert.Equal([new CompletionItem("new", Claude.ClaudeText.NewNote)], ChatScreen.ArgumentItems("/claude", "n", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/claude", "now tell me", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/claude", "hello", Sources()));
     }
 }

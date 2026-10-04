@@ -25,6 +25,40 @@ public static class ScreenText
 
     public static string NoSuchWindow(string words) => $"No window's title has '{words}' (screen_list or /screen list shows them).";
 
+    // ── /screen's argument list (2026-10-04, the user's report: it had none) ──
+
+    /// <summary>The words <c>/screen</c>'s list offers first, each with its note, in this order. Pinned.</summary>
+    public static readonly IReadOnlyList<(string Word, string Note)> CompletionWords =
+    [
+        ("list", "list the monitors and windows"),
+        ("screen", "the monitor the app is on"),
+        ("all", "every monitor"),
+        ("behind", "the window behind the app"),
+        (MonitorPrefix, "a monitor by number"),
+        (WindowPrefix, "a window by id or title"),
+    ];
+
+    /// <summary>The two words a target follows without a space: <c>monitor:2</c>, <c>window:1234</c>.</summary>
+    public const string MonitorPrefix = "monitor:";
+    public const string WindowPrefix = "window:";
+
+    /// <summary>A monitor's note on the list: <c>2560x1440, primary, this app's</c>. Pinned.</summary>
+    public static string MonitorNote(ScreenMonitor monitor, int? ownMonitor)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        return Size(monitor.Bounds) + (monitor.Primary ? ", primary" : "") + (monitor.Number == ownMonitor ? ", this app's" : "");
+    }
+
+    /// <summary>A window's note on the list: <c>"notes.txt - Notepad" (Notepad)</c>, as <see cref="List"/> names it. Pinned.</summary>
+    public static string WindowNote(ScreenWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        return $"\"{window.Title}\"" + (window.Process.Length > 0 ? $" ({window.Process})" : "");
+    }
+
+    /// <summary>A monitor's or a window's id as the targets write it.</summary>
+    public static string Id(long value) => N(value);
+
     /// <summary>The words more than one window has: the first few listed, with their ids, so the next call can name one. Pinned.</summary>
     public static string AmbiguousWindow(string words, IReadOnlyList<ScreenWindow> some, int total)
     {

@@ -122,6 +122,42 @@ internal sealed partial class ChatScreen
         return null;
     }
 
+    /// <summary>
+    /// <c>/screen</c>'s argument list (2026-10-04, the user's report: it had none): <see cref="ScreenTarget.Complete"/> over the
+    /// monitors, read only after <c>monitor:</c>, and the windows, only after <c>window:</c> — fresh at each keystroke, both cheap
+    /// synchronous calls (each sets and restores the thread's DPI awareness itself). No screen system, or a read that fails,
+    /// gives the words alone.
+    /// </summary>
+    private IReadOnlyList<CompletionItem> ScreenChoices(string argText)
+    {
+        IReadOnlyList<ScreenMonitor> monitors = [];
+        IReadOnlyList<ScreenWindow> windows = [];
+        int? ownMonitor = null;
+        long? ownWindow = null;
+        if (_screenSystem is { } system && !argText.Contains(' ', StringComparison.Ordinal))
+        {
+            try
+            {
+                if (argText.StartsWith(ScreenText.MonitorPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    monitors = system.Monitors();
+                    ownMonitor = system.OwnMonitor();
+                }
+                else if (argText.StartsWith(ScreenText.WindowPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    windows = system.Windows();
+                    ownWindow = system.OwnWindow();
+                }
+            }
+            catch (ScreenException e)
+            {
+                DiagnosticLog.Debug(ScreenText.Category, "/screen's argument list could not read the targets: " + e.Message);
+            }
+        }
+
+        return ScreenTarget.Complete(argText, monitors, ownMonitor, windows, ownWindow);
+    }
+
     /// <summary>The message's pictures with the screenshots marked as such (one attached from the line was loaded from its file).</summary>
     private IReadOnlyList<ImageAttachment> MarkScreenImages(IReadOnlyList<ImageAttachment> images) =>
         _screenPaths.IsEmpty || !images.Any(i => _screenPaths.ContainsKey(i.Path)) ? images

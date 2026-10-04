@@ -1,3 +1,4 @@
+using NeonSidekick.UI;
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Camera;
@@ -207,6 +208,64 @@ public sealed class ScreenPureTests
         Assert.False(ChatScreen.ScreenOffered(on, true, false, false));
         Assert.False(ChatScreen.ScreenOffered(on, true, true, true));
     }
+
+    // ── /screen's argument list (2026-10-04) ───────────────────────────────
+
+    private static readonly ScreenMonitor[] TwoMonitors =
+    [
+        new(1, "D1", new ScreenRect(0, 0, 1920, 1080), true),
+        new(2, "D2", new ScreenRect(1920, 0, 2560, 1440), false),
+    ];
+
+    private static readonly ScreenWindow[] ThreeWindows =
+    [
+        new(100, "Neon", "WindowsTerminal", new ScreenRect(0, 0, 10, 10)),
+        new(200, "notes.txt - Notepad", "Notepad", new ScreenRect(0, 0, 10, 10)),
+        new(2001, "Error - Contoso Browser", "browser", new ScreenRect(0, 0, 10, 10)),
+    ];
+
+    [Fact]
+    public void Complete_TheWordsFirst_NarrowedAsTyped_AndASpaceEndsIt()
+    {
+        var words = ScreenTarget.Complete("", TwoMonitors, 2, ThreeWindows, 100);
+        Assert.Equal(["list", "screen", "all", "behind", "monitor:", "window:"], words.Select(i => i.Text));
+        Assert.Equal("a window by id or title", words[^1].Note);
+        Assert.Equal(["window:"], ScreenTarget.Complete("WIN", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));
+        Assert.Equal(["screen"], ScreenTarget.Complete("s", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));
+        Assert.Empty(ScreenTarget.Complete("all", TwoMonitors, 2, ThreeWindows, 100));        // typed in full
+        Assert.Empty(ScreenTarget.Complete("monitor 2", TwoMonitors, 2, ThreeWindows, 100));  // the spaced form is typed as it is
+        Assert.Empty(ScreenTarget.Complete("window no", TwoMonitors, 2, ThreeWindows, 100));
+    }
+
+    [Fact]
+    public void Complete_AfterMonitor_TheMonitorsWithTheirSize()
+    {
+        var monitors = ScreenTarget.Complete("monitor:", TwoMonitors, 2, ThreeWindows, 100);
+        Assert.Equal([new("monitor:1", "1920x1080, primary"), new CompletionItem("monitor:2", "2560x1440, this app's")], monitors);
+        Assert.Equal(["monitor:2"], ScreenTarget.Complete("MONITOR:", [TwoMonitors[1]], null, [], null).Select(i => i.Text));   // any case
+        Assert.Empty(ScreenTarget.Complete("Monitor:2", TwoMonitors, null, [], null));                                        // typed in full
+        Assert.Empty(ScreenTarget.Complete("monitor:", [], null, [], null));
+    }
+
+    [Fact]
+    public void Complete_AfterWindow_TheWindowsFrontToBack_TheAppsOwnLeftOut_ByIdOrTitleOrProcess()
+    {
+        var all = ScreenTarget.Complete("window:", TwoMonitors, 2, ThreeWindows, 100);
+        Assert.Equal([new("window:200", "\"notes.txt - Notepad\" (Notepad)"), new CompletionItem("window:2001", "\"Error - Contoso Browser\" (browser)")], all);
+
+        Assert.Equal(["window:200", "window:2001"], ScreenTarget.Complete("window:20", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));  // the id's start
+        Assert.Equal(["window:200"], ScreenTarget.Complete("window:NOTE", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));             // the title, any case
+        Assert.Equal(["window:2001"], ScreenTarget.Complete("window:browser", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));         // the process
+        Assert.Empty(ScreenTarget.Complete("window:200", TwoMonitors, 2, ThreeWindows, 100));                                                // typed in full
+        Assert.Equal(["window:100", "window:200", "window:2001"], ScreenTarget.Complete("window:", [], null, ThreeWindows, null).Select(i => i.Text));  // no own window known
+    }
+
+    [Fact]
+    public void Complete_AfterWindow_AtMostTheListsCap()
+    {
+        var many = Enumerable.Range(1, ScreenText.MaxListed + 5).Select(i => new ScreenWindow(i, "w" + i, "p", new ScreenRect(0, 0, 1, 1))).ToList();
+        Assert.Equal(ScreenText.MaxListed, ScreenTarget.Complete("window:", [], null, many, null).Count);
+    }
 }
 
 /// <summary>Screenshots taken and saved, and the two tools, over the fake (2026-10-04).</summary>
@@ -324,4 +383,5 @@ public sealed class ScreenCaptureTests : IDisposable
         Assert.Equal(CameraJpeg.Encode(frame), CameraJpeg.Encode(8, 6, pixels));
         Assert.Throws<ArgumentException>(() => CameraJpeg.Encode(8, 6, new byte[4]));
     }
+
 }
