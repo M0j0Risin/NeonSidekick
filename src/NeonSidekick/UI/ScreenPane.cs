@@ -2015,12 +2015,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             var segments = renderable.GetSegments(_inner).ToList();
             // A picture's spans are known once it is rendered (later on 2026-09-24): the store tags its lines with them.
             var spans = pictures?.Spans;
+            // A diff's fold (2026-10-04): the store makes its lines a group that folds once the run is over.
+            var fold = renderable is IFoldLayout { Fold: { } layout }
+                ? new Scrollback.FoldSpec(layout.Head, layout.Keep, layout.Size, layout.Collapsed.GetSegments(_inner).ToList(), layout.Expanded.GetSegments(_inner).ToList())
+                : null;
             if (_top >= 0)
             {
                 // Scrolled: the store takes it, the screen shows the window; the count below changed
                 // (and a run that folded above it redraws the window).
                 FlushLive();
-                EmitAs(segments, member, spans);
+                EmitAs(segments, member, spans, fold);
                 if (_store.Reshaped)
                 {
                     Redraw();
@@ -2042,7 +2046,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             Lift();
             RestoreFlow();
             FlushLive();
-            EmitAs(segments, member, spans);
+            EmitAs(segments, member, spans, fold);
             if (_batch == 0)
             {
                 Draw();
@@ -2071,11 +2075,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         Track(segments);
     }
 
-    /// <summary><see cref="Emit"/> with the store told whether the segments are a tool run's line.</summary>
-    private void EmitAs(List<Segment> segments, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures = null)
+    /// <summary><see cref="Emit"/> with the store told whether the segments are a tool run's line, where pictures are and what folds.</summary>
+    private void EmitAs(List<Segment> segments, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures = null, Scrollback.FoldSpec? fold = null)
     {
         _member = member;
         _pictureSpans = pictures;
+        _foldSpec = fold;
         try
         {
             Emit(segments);
@@ -2084,11 +2089,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             _member = false;
             _pictureSpans = null;
+            _foldSpec = null;
         }
     }
 
     // Set around EmitAs for a picture's write (later on 2026-09-24): the spans the store tags its lines with.
     private IReadOnlyList<IReadOnlyList<PictureSpan>>? _pictureSpans;
+
+    // Set around EmitAs for a diff's write (2026-10-04): what of it folds.
+    private Scrollback.FoldSpec? _foldSpec;
 
     // Set around EmitAs: the segments being stored are the open tool run's line.
     private bool _member;
@@ -2096,7 +2105,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The segments into the store; a scrolled anchor follows the rows the cap dropped.</summary>
     private void Store(List<Segment> segments)
     {
-        int dropped = _store.Append(segments, Width, _member, _pictureSpans);
+        int dropped = _store.Append(segments, Width, _member, _pictureSpans, _foldSpec);
         if (_top >= 0 && dropped > 0)
         {
             _top = Math.Max(0, _top - dropped);

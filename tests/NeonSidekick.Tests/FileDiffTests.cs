@@ -338,4 +338,32 @@ public sealed class FileDiffTests : IDisposable
         // Two writes against a keep of 2: not folded, every line shows.
         Assert.Equal(["  note", "     └ Added 1 line", "     1 + x", "  m2"], store.Rows(40).Select(r => string.Concat(r.Select(s => s.Text))).ToArray());
     }
+
+    // ── The diff's fold (2026-10-04, Diff collapse count) ─────────────────
+
+    [Fact]
+    public void FoldSummary_TheTriangleInTheElbowsPlace_TheRowsCounted()
+    {
+        var diff = new FileDiff("x", false, [], 3, 1);
+        Assert.Equal("     ▸ Added 3 lines, removed 1 line · 14 rows", DiffFoldText.Summary(diff, 14, expanded: false));
+        Assert.Equal("     ▾ Added 3 lines, removed 1 line · 1 row", DiffFoldText.Summary(diff, 1, expanded: true));
+        Assert.Equal((DiffView.Indent + DiffView.Elbow).Length, DiffFoldText.Summary(diff, 2, expanded: false).IndexOf('A', StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void View_Folds_PastItsCount_ByEveryRow_PastTheCutToo()
+    {
+        var diff = FileDiff.Of("a.txt", Numbers(12), Numbers(12).Replace("line 9\n", "nine\nnine and a half\n"))!;   // 9 rows
+        var fold = Assert.IsType<FoldLayout>(new DiffView(new Text("  note"), diff, 3, collapseCount: 5).Fold);
+        Assert.Equal(1, fold.Head);   // the row after the note
+        Assert.Equal(5, fold.Keep);
+        Assert.Equal(9, fold.Size);   // every row, not the three shown
+        Assert.Equal([DiffFoldText.Summary(diff, 9, expanded: false)], Render(fold.Collapsed));
+        Assert.Equal([DiffFoldText.Summary(diff, 9, expanded: true)], Render(fold.Expanded));
+
+        Assert.Equal(0, new DiffView(null, diff, 40, collapseCount: 5).Fold!.Head);   // no head: the elbow is the first line
+        Assert.Null(new DiffView(null, diff, 40, collapseCount: 9).Fold);           // not past it
+        Assert.Null(new DiffView(null, diff, 40).Fold);                             // no count: never
+        Assert.Null(new DiffView(null, diff, 0, collapseCount: 1).Fold);            // the header alone: nothing to fold
+    }
 }

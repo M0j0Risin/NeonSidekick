@@ -129,4 +129,22 @@ public class ThemePreviewTests
     {
         Assert.Empty(ThemePreview.Lines(ThemePalette.Synthwave, 40, 0, Banner, "1.2.3"));
     }
+
+    /// <summary>Diff collapse count (2026-10-04, the user's ask): past it the sample diff's summary is the fold's row, unfolded, its rows still drawn.</summary>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(2, false)]
+    [InlineData(1, true)]
+    public void TheCardsDiff_FollowsDiffCollapseCount_InItsUnfoldedLook(int count, bool folds)
+    {
+        var texts = ThemePreview.Lines(ThemePalette.Synthwave, 72, 60, Banner, "1.2.3", diffCollapseCount: count).Select(line => Text(Row(line, 72))).ToList();
+        int note = texts.FindIndex(t => t.Contains(ThemeText.PreviewDiffNote, StringComparison.Ordinal));
+
+        string expected = folds
+            ? ToolGroupText.ExpandedGlyph + " Added 1 line, removed 1 line · 2 rows"
+            : DiffView.Elbow + "Added 1 line, removed 1 line";
+        Assert.StartsWith(" " + DiffView.Indent + expected, texts[note + 1]);
+        Assert.StartsWith(" " + DiffView.Indent + "3 - ", texts[note + 2]);
+        Assert.StartsWith(" " + DiffView.Indent + "3 + ", texts[note + 3]);
+    }
 }

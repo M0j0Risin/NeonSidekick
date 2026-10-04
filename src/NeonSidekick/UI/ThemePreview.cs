@@ -10,7 +10,8 @@ namespace NeonSidekick.UI;
 /// like the Theme Atlas", without the screen starting over at every row): a small mock screen in one palette's own styles
 /// (<see cref="Theme.StylesOf"/>, never <see cref="Theme.Use"/>) — the banner and its rule in the gradient, a user line, a
 /// reply with bold, code, italic, a bullet and a quote, a highlighted code block, a file edit's diff (2026-10-03, the user's ask:
-/// its note, summary and a removed and an added row on their slabs, as <see cref="DiffView"/> draws them), the thinking slab, the notice, good, warning
+/// its note, summary and a removed and an added row on their slabs, as <see cref="DiffView"/> draws them; past <c>Diff collapse count</c>
+/// its summary is the fold's unfolded row, 2026-10-04, the user's ask), the thinking slab, the notice, good, warning
 /// and error lines, the pane rule, a highlighted menu row, the input row with a selection, the spinner and a paste label, the
 /// hint row and the ghost text. Every cell is on the palette's <see cref="ThemePalette.Bg"/>, the way the Atlas paints each
 /// screen: the card reads as the theme's own window, apart from the list beside it. With <c>Themed background</c> off
@@ -36,9 +37,11 @@ public static class ThemePreview
     /// <summary>
     /// <paramref name="rows"/> lines of <paramref name="palette"/>'s preview for a card <paramref name="width"/> cells wide: the
     /// banner reads <paramref name="banner"/> and <c>v</c><paramref name="version"/>. None for no rows. On the palette's
-    /// <see cref="ThemePalette.Bg"/> under <paramref name="themedBackground"/>, else on the terminal's default background.
+    /// <see cref="ThemePalette.Bg"/> under <paramref name="themedBackground"/>, else on the terminal's default background. A
+    /// <paramref name="diffCollapseCount"/> the sample diff's rows pass (2026-10-04, <c>Diff collapse count</c>; 0 never) heads the
+    /// diff with its fold's row, unfolded so the slabs still show: <c>▾ Added 1 line, removed 1 line · 2 rows</c> for the elbow's.
     /// </summary>
-    public static IReadOnlyList<IRenderable> Lines(ThemePalette palette, int width, int rows, string banner, string version, bool themedBackground = true)
+    public static IReadOnlyList<IRenderable> Lines(ThemePalette palette, int width, int rows, string banner, string version, bool themedBackground = true, int diffCollapseCount = 0)
     {
         ArgumentNullException.ThrowIfNull(palette);
         ArgumentNullException.ThrowIfNull(banner);
@@ -48,7 +51,7 @@ public static class ThemePreview
             return [];
         }
 
-        var screen = Screen(palette, Math.Max(1, width - 2 * Margin), banner, version);
+        var screen = Screen(palette, Math.Max(1, width - 2 * Margin), banner, version, diffCollapseCount);
         IEnumerable<Line> kept = screen.Count <= rows
             ? screen
             : screen.Select((line, index) => (line, index)).OrderBy(x => x.line.Rank).ThenBy(x => x.index).Take(rows).OrderBy(x => x.index).Select(x => x.line);
@@ -69,7 +72,7 @@ public static class ThemePreview
     private readonly record struct Piece(string Text, Style Style);
 
     /// <summary>The whole mock screen, top to bottom, for <paramref name="inner"/> cells inside the margins.</summary>
-    private static List<Line> Screen(ThemePalette p, int inner, string banner, string version)
+    private static List<Line> Screen(ThemePalette p, int inner, string banner, string version, int diffCollapseCount)
     {
         var s = Theme.StylesOf(p);
         Piece P(ThemeStyleSlot slot, string text) => new(text, s(slot));
@@ -118,6 +121,12 @@ public static class ThemePreview
         string SealText(string value) => "string seal = " + value + ";\n";
         var diff = FileDiff.Of(ThemeText.PreviewDiffFile, SealText(ThemeText.PreviewDiffOld), SealText(ThemeText.PreviewDiffNew))!;
 
+        // The diff's summary row as the screen draws it: its fold's, unfolded, when the count folds it (DiffView.Fold's rule).
+        int diffRows = DiffView.RowsOf(diff, null).Count(row => row is not null);
+        string diffSummary = diffCollapseCount > 0 && diffRows > diffCollapseCount
+            ? DiffFoldText.Summary(diff, diffRows, expanded: true)
+            : DiffView.Indent + DiffView.Elbow + FileText.DiffSummary(diff);
+
         // The menu row: the highlight across the card, as the pane draws the cursor's row.
         string menuName = MenuPane.Pointer + p.Name.PadRight(Math.Max(10, p.Name.Length + 1));
         string menuNote = p.Description.PadRight(Math.Max(0, inner - TextCells.Width(menuName)));
@@ -144,7 +153,7 @@ public static class ThemePreview
             L(6, Slab(code[2])),
             Empty(),
             L(7, P(ThemeStyleSlot.DimText, TranscriptRenderer.ToolGlyph + ThemeText.PreviewDiffNote)),
-            L(6, P(ThemeStyleSlot.DimText, DiffView.Indent + DiffView.Elbow + FileText.DiffSummary(diff))),
+            L(6, P(ThemeStyleSlot.DimText, diffSummary)),
             L(5, DiffRow('-', ThemeStyleSlot.DiffRemoved, ThemeText.PreviewDiffOld)),
             L(5, DiffRow('+', ThemeStyleSlot.DiffAdded, ThemeText.PreviewDiffNew)),
             Empty(),

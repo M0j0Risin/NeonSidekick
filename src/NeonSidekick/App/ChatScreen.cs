@@ -1997,7 +1997,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+H", "open help (/help)"));
         rows.Add(("Ctrl+L", "cancel a running background learning turn"));
         rows.Add(("Ctrl+M", "open the model picker (/model)"));
-        rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
+        rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks, diffs and thinking (or click a summary line)"));
         rows.Add(("Ctrl+P", "open the profile pane (/profile)"));
         rows.Add(("Ctrl+R", "open the reasoning picker (/reasoning)"));
         rows.Add(("Ctrl+S", "open the server picker (/server)"));
@@ -14038,8 +14038,12 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult { Diff: { } diff } result when _effective().ShowFileDiffs:
                 // An edit's note and its diff under it, one write the run counts once (2026-10-03, the user's ask: Claude Code's look);
-                // the numbered region in the result is the model's to read.
-                _transcript.ToolDiff(FileText.DiffNote(result.Text), diff, Math.Clamp(_effective().DiffMaxLines, AppSettingsData.MinDiffMaxLines, AppSettingsData.MaxDiffMaxLines));
+                // the numbered region in the result is the model's to read. Past Diff collapse count it folds once the run is over (2026-10-04).
+                _transcript.ToolDiff(
+                    FileText.DiffNote(result.Text),
+                    diff,
+                    Math.Clamp(_effective().DiffMaxLines, AppSettingsData.MinDiffMaxLines, AppSettingsData.MaxDiffMaxLines),
+                    Math.Clamp(_effective().DiffCollapseCount, AppSettingsData.MinDiffCollapseCount, AppSettingsData.MaxDiffCollapseCount));
                 break;
             case TurnEvent.ToolResult result when QuietTools.Contains(result.Name):
                 _transcript.ToolNote(result.Text);

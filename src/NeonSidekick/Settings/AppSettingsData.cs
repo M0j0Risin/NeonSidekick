@@ -1206,6 +1206,23 @@ public sealed class AppSettingsData
     public const int MinDiffMaxLines = 0;
     public const int MaxDiffMaxLines = 500;
 
+    /// <summary>
+    /// How many rows an edit's diff (<see cref="ShowFileDiffs"/>) may have before it folds (2026-10-04, the user's ask: the tool runs'
+    /// and the code blocks' fold for diffs): one of more hunk rows than this — counted over the whole diff, rows past
+    /// <see cref="DiffMaxLines"/> included, a wrapped line once — shows open while its tool run goes on and folds to its summary row
+    /// (<c>▸ Added 3 lines, removed 1 line · 14 rows</c>, the triangle in the elbow's place) once the run is over; with no run (a
+    /// <see cref="ToolCollapseCount"/> of 0) at the next write. A click on it, Ctrl+O or <c>/expand</c> shows it again.
+    /// <see cref="MinDiffCollapseCount"/> to <see cref="MaxDiffCollapseCount"/>, the diff's own range; 0 = never fold. 10 by default
+    /// (the user's pick: with <see cref="DiffMaxLines"/> at its 10, only a diff that was cut folds). The Options tab of <c>/tools</c>,
+    /// under <see cref="DiffMaxLines"/>; read at each result, no reconnect. Only on the screen's pane (headless keeps every row). No variable.
+    /// </summary>
+    public int DiffCollapseCount { get; set; } = DefaultDiffCollapseCount;
+
+    /// <summary>The default, the least and the most <see cref="DiffCollapseCount"/> may be (0 = off).</summary>
+    public const int DefaultDiffCollapseCount = 10;
+    public const int MinDiffCollapseCount = 0;
+    public const int MaxDiffCollapseCount = 500;
+
     // ─── Ask────────────────────────────────────────────────────────────────────
 
     /// <summary>

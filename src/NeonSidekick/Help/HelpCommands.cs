@@ -56,7 +56,7 @@ public static class HelpCommands
         ]),
         new("/collapse",
         [
-            new("/collapse", "Fold the tool runs, code blocks and thinking again."),
+            new("/collapse", "Fold the tool runs, code blocks, diffs and thinking again."),
         ]),
         new("/comfy",
         [
@@ -98,7 +98,7 @@ public static class HelpCommands
         ]),
         new("/expand",
         [
-            new("/expand", "Unfold every folded tool run, code block and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`, and so does ⤡ on the rule over the input row (without a notice)."),
+            new("/expand", "Unfold every folded tool run, code block, diff and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`, and so does ⤡ on the rule over the input row (without a notice)."),
         ]),
         new("/explore",
         [

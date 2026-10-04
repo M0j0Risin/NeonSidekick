@@ -171,7 +171,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(10, SettingsMenu.TabFields.Count);   // /settings' Claude and OpenAI tabs since 2026-10-03; Docker tab since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
         Assert.Equal(20, SettingsMenu.ToolsTabFields.Count);   // Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
         Assert.Equal(["Offered", "Ask", "Web", "Shell", "Files", "UNC", "Print", "Camera", "Screen", "Obsidian", "SQL", "MySQL", "SQLite", "Postgres", "Oracle", "ClaudeCLI", "Docker", "HA", "ComfyUI", "GitLib", "Options"], ToolsText.TabTitles);   // the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04)
-        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines], TabFields(ToolsText.OptionsTabTitle));
+        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], TabFields(ToolsText.OptionsTabTitle));
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], TabFields(ToolsText.HomeAssistantTabTitle));   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
         Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
@@ -347,7 +347,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ToolsDollarMention);
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n  Show file diffs      on\n  Diff max lines       10 lines\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n  Show file diffs      on\n  Diff max lines       10 lines\n  Diff collapse count  10 lines\n", 100);
         Assert.Contains(ToolsText.Label + " › $-mention enabled", _console.Output);
         Assert.Contains("$ is ordinary text", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · $-mention enabled: off\n▸ $-mention enabled    off\n", _console.Output);
@@ -1404,7 +1404,7 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task OnThePane_DiffMaxLines_IsTheOptionsTabsLastRow_Typed_ZeroIsTheHeaderAlone_OutOfRangeRefused()
+    public async Task OnThePane_DiffMaxLines_IsTheOptionsTabsFifthRow_Typed_ZeroIsTheHeaderAlone_OutOfRangeRefused()
     {
         // Later on 2026-10-03: under Show file diffs; 0 to 500, 10 by default (40 until later that day), 0 = the header line alone.
         var (menu, pane, _) = PaneMenu();
@@ -1421,6 +1421,30 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("Diff max lines " + SettingsMenu.DiffMaxLinesRangeError + "; keeping 10.", _console.Output);
         Assert.Contains("  · Diff max lines: header only\n", _console.Output);
         Assert.Contains("  · Diff max lines: 12 lines\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_DiffCollapseCount_IsTheOptionsTabsLastRow_Typed_ZeroIsOff_OutOfRangeRefused()
+    {
+        // 2026-10-04, the user's ask and place: under Diff max lines; 0 to 500, 10 by default, 0 = off.
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Left);                                                                     // Options, the strip wrapped
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);             // Diff collapse count: the typed slot with "10"
+        Push(Keys.Backspace, Keys.Backspace, Keys.Char('5'), Keys.Char('0'), Keys.Char('1'), Keys.Enter);   // refused: 501
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);        // 0: off
+        Push(Keys.Enter, Keys.Backspace, Keys.Char('5'), Keys.Enter);                        // 5
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(5, _settings.Current.DiffCollapseCount);
+        Assert.Contains("Diff collapse count " + SettingsMenu.DiffCollapseCountRangeError + "; keeping 10.", _console.Output);
+        Assert.Contains("  · Diff collapse count: off\n", _console.Output);
+        Assert.Contains("  · Diff collapse count: 5 lines\n", _console.Output);
+        Assert.Equal("must be 0 to 500 lines (0 = off)", SettingsMenu.DiffCollapseCountRangeError);
+        Assert.Equal("Diff collapse count", SettingsMenu.FieldName(SettingsField.DiffCollapseCount));
+        Assert.Equal(10, new AppSettingsData().DiffCollapseCount);
         pane.Dispose();
     }
 

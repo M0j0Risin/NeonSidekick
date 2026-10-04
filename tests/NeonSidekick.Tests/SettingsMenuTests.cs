@@ -925,6 +925,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
                 SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
                 SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows
+                SettingsField.DiffCollapseCount,   // later still on 2026-10-04, /tools' Options tab under Diff max lines: the diff's fold
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1176,6 +1177,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("10 lines", SettingsMenu.FieldValue(SettingsField.DiffMaxLines, data, _settings.ProfileDirectory));
         Assert.Equal("header only", SettingsMenu.FieldValue(SettingsField.DiffMaxLines, new AppSettingsData { DiffMaxLines = 0 }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ShowFileDiffs) || SettingsMenu.IsLlmField(SettingsField.DiffMaxLines));
+        // Diff collapse count (2026-10-04): typed, 10 by default, 0 off.
+        Assert.False(SettingsMenu.IsToggle(SettingsField.DiffCollapseCount));
+        Assert.Equal("10 lines", SettingsMenu.FieldValue(SettingsField.DiffCollapseCount, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.DiffCollapseCount, new AppSettingsData { DiffCollapseCount = 0 }, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.DiffCollapseCount) || SettingsMenu.IsLlmField(SettingsField.DiffCollapseCount));
         // Show toolbar (2026-09-21): the General row after it, a toggle, no reconnect (the pane reads it at each draw).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolbarItems));   // a checklist since 2026-09-29, the user's ask
         Assert.Equal("Show toolbar", SettingsMenu.FieldName(SettingsField.ToolbarItems));
@@ -1604,7 +1610,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
         Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
-        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines], ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle));   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27, 11 since the Print tab, 2026-09-28); the fold's count under the switch 2026-09-22, the code fold's under it later that day
+        Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle));   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27, 11 since the Print tab, 2026-09-28); the fold's count under the switch 2026-09-22, the code fold's under it later that day
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], ToolsMenuTests.TabFields(ToolsText.AskTabTitle));   // the Ask tab: second after Options until later on 2026-09-21, between Shell and Git (native) since
         Assert.True(SettingsMenu.IsToggle(SettingsField.AskUser));
         Assert.False(SettingsMenu.IsToggle(SettingsField.AskMaxQuestions) || SettingsMenu.IsToggle(SettingsField.AskMaxChoices));

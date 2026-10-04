@@ -129,6 +129,8 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.ToolCollapseCount = 0);
         // Code collapse count is 20 by default (later on 2026-09-22): the same opt-out for a reply's long code block.
         _settings.Update(d => d.CodeCollapseCount = 0);
+        // Diff collapse count is 10 by default (2026-10-04): the same opt-out for an edit's diff; its own tests opt in.
+        _settings.Update(d => d.DiffCollapseCount = 0);
         // The reflection cooldown is 5 minutes by default (30 for an hour on 2026-09-19) and the clock here never moves, so a second automatic
         // reflection after a learned one would be skipped for good; the fixture opts out and the cooldown tests opt in. The same
         // day a reflection opens with the earlier sessions found for the turn and gets session_manager (Reflection includes
@@ -6386,6 +6388,7 @@ public partial class ChatScreenTests : IDisposable
         work.SessionNamingMode = "first-line";
         work.ToolCollapseCount = 0;
         work.CodeCollapseCount = 0;
+        work.DiffCollapseCount = 0;
         Profiles.Create(_dir, "work", work);   // the fixture's titling and tool-fold opt-outs for this profile too (a reset of it brings the defaults back)
         new MemoryStore(ProfileDir("work")).Add("They like tea.");
         File.WriteAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName), "You are Rex.");
@@ -10368,7 +10371,7 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+H", "open help (/help)"),   // from Ctrl+Alt+H, later still on 2026-10-01
             ("Ctrl+L", "cancel a running background learning turn"),   // 2026-10-04, the user's ask and wording
             ("Ctrl+M", "open the model picker (/model)"),   // later still on 2026-10-01, the user's wording
-            ("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"),   // 2026-09-22
+            ("Ctrl+O", "expand or collapse the tool calls, code blocks, diffs and thinking (or click a summary line)"),   // 2026-09-22; diffs 2026-10-04
             ("Ctrl+P", "open the profile pane (/profile)"),   // from Ctrl+Alt+P
             ("Ctrl+R", "open the reasoning picker (/reasoning)"),
             ("Ctrl+S", "open the server picker (/server)"),
@@ -17772,6 +17775,52 @@ public partial class ChatScreenTests : IDisposable
         int rows = output.LastIndexOf("     3 + three", StringComparison.Ordinal);
         Assert.True(rows >= 0 && rows < reply, output);
         Assert.DoesNotContain(ToolGroupText.CollapsedGlyph + " 🛠️ ", output);
+    }
+
+    /// <summary>
+    /// Diff collapse count (2026-10-04, the user's ask): a diff of more rows than the count shows open while the turn works and folds
+    /// to its summary row once the run is over — in a run the reply ends, and with no run (Tool collapse count 0) the next write.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task ADiffPastDiffCollapseCount_ShowsOpen_ThenFoldsToItsSummaryRow(int toolKeep)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolCollapseCount = toolKeep; d.DiffCollapseCount = 2; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.txt", ["content"] = "one\ntwo\nthree\n" }));
+        _chat.EnqueueText("Saved.");
+        PushLine("save it");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string folded = DiffFoldText.Summary(new FileDiff("a.txt", true, [], 3, 0), 3, expanded: false);
+        Assert.Equal("     ▸ Wrote 3 lines · 3 rows", folded);
+        int open = output.IndexOf("     3 + three", StringComparison.Ordinal);
+        Assert.True(open >= 0, output);
+        Assert.True(output.IndexOf(folded, StringComparison.Ordinal) > open, output);   // drawn open first, folded after
+        Assert.DoesNotContain(ToolGroupText.CollapsedGlyph + " 🛠️ ", output);          // the run itself stays within its keep
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task ADiffWithinDiffCollapseCount_OrWithItOff_NeverFolds(int count)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.DiffCollapseCount = count; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.txt", ["content"] = "one\ntwo\nthree\n" }));
+        _chat.EnqueueText("Saved.");
+        PushLine("save it");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("     3 + three", output);
+        Assert.DoesNotContain(" · 3 rows", output);
     }
 
     /// <summary>The model's own way to a picture: the 🛠️ note, the thumbnail under it, the carrier after the tool message, and the picture still there for a follow-up.</summary>

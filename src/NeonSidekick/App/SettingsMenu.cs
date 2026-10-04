@@ -920,8 +920,11 @@ public enum SettingsField
     /// <summary>A toggle: whether the <c>/botchat</c> bots get this profile's offered ComfyUI workflows (<see cref="Settings.AppSettingsData.BotChatComfy"/>). The Botchat tab, after the multi-embedded rows (later on 2026-10-04, the user's ask: in place of <c>Botchat images enabled</c> and the two workflow pickers); no reconnect (read per reply).</summary>
     BotChatComfy,
 
-    /// <summary>A checklist: the installed ComfyUI workflows the <c>/botchat</c> bots get while <see cref="BotChatComfy"/> is off (<see cref="Settings.AppSettingsData.BotChatLimitedComfyWorkflows"/>). The Botchat tab, under the switch (later on 2026-10-04, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    /// <summary>A checklist: the installed ComfyUI workflows the <c>/botchat</c> bots get while <see cref="BotChatComfy"/> is off (<see cref="Settings.AppSettingsData.BotChatLimitedComfyWorkflows"/>). The Botchat tab, under the switch (later on 2026-10-04, the user's ask); no reconnect (read per reply).</summary>
     BotChatLimitedComfyWorkflows,
+
+    /// <summary>Typed: how many rows an edit's diff may have before it folds once its tool run is over, 0 (off) to 500 (<see cref="Settings.AppSettingsData.DiffCollapseCount"/>). The Options tab of <c>/tools</c>, under <see cref="DiffMaxLines"/> (2026-10-04, the user's ask and place); no reconnect (read at each result). Last in the enum, as every newcomer.</summary>
+    DiffCollapseCount,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1155,6 +1158,10 @@ internal sealed partial class SettingsMenu
     public static readonly string DiffMaxLinesRangeError =
         "must be " + AppSettingsData.MinDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxDiffMaxLines.ToString(CultureInfo.InvariantCulture) + " lines (0 = the header alone)";
 
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.DiffCollapseCount"/> (2026-10-04).</summary>
+    public static readonly string DiffCollapseCountRangeError =
+        "must be " + AppSettingsData.MinDiffCollapseCount.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxDiffCollapseCount.ToString(CultureInfo.InvariantCulture) + " lines (0 = off)";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.CodeCollapseCount"/>. Pinned.</summary>
     public static readonly string CodeCollapseCountRangeError =
         "must be " + AppSettingsData.MinCodeCollapseCount.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxCodeCollapseCount.ToString(CultureInfo.InvariantCulture) + " lines (0 = off)";
@@ -1346,7 +1353,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
-        [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines],
+        [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
     ];
 
     /// <summary>
@@ -1994,6 +2001,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CodeCollapseCount => "Code collapse count",
         SettingsField.ShowFileDiffs => "Show file diffs",
         SettingsField.DiffMaxLines => "Diff max lines",
+        SettingsField.DiffCollapseCount => "Diff collapse count",
         SettingsField.ReflectionAutoLearn => "Reflection (auto-learn)",
         SettingsField.ReflectionReasoning => "Reflection reasoning",
         SettingsField.ReflectionWindow => "Reflection window",
@@ -2315,6 +2323,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CodeCollapseCount => Lines(data.CodeCollapseCount),
             SettingsField.ShowFileDiffs => OnOff(data.ShowFileDiffs),
             SettingsField.DiffMaxLines => DiffLines(data.DiffMaxLines),
+            SettingsField.DiffCollapseCount => Lines(data.DiffCollapseCount),
             SettingsField.ReflectionAutoLearn => OnOff(data.ReflectionAutoLearn),
             SettingsField.ReflectionReasoning => data.ReflectionReasoning,
             SettingsField.ReflectionWindow => Turns(data.ReflectionWindow),
@@ -3162,6 +3171,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.DiffMaxLines => data.DiffMaxLines.ToString(CultureInfo.InvariantCulture),
+        SettingsField.DiffCollapseCount => data.DiffCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitLibDiffMaxLines => data.GitLibDiffMaxLines.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellTimeoutSeconds => data.ShellTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellForegroundCapSeconds => data.ShellForegroundCapSeconds.ToString(CultureInfo.InvariantCulture),
@@ -4627,6 +4637,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.DiffMaxLines = diffRows);
+                return true;
+
+            case SettingsField.DiffCollapseCount:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int diffKeep) || diffKeep < AppSettingsData.MinDiffCollapseCount || diffKeep > AppSettingsData.MaxDiffCollapseCount)
+                {
+                    Sink.Error($"{FieldName(field)} {DiffCollapseCountRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.DiffCollapseCount = diffKeep);
                 return true;
 
             case SettingsField.WebSearchMaxResults:
@@ -7684,7 +7704,7 @@ internal sealed partial class SettingsMenu
     /// on the pick, as before. On the terminal's own background while <c>Themed background</c> is off (2026-10-03), read per draw.
     /// </summary>
     private Func<int, int, int, IReadOnlyList<Spectre.Console.Rendering.IRenderable>> ThemeSide(IReadOnlyList<ThemePalette> themes) =>
-        (row, width, rows) => ThemePreview.Lines(themes[row], width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, EffectiveNow().ThemedBackground);
+        (row, width, rows) => ThemePreview.Lines(themes[row], width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, EffectiveNow().ThemedBackground, EffectiveNow().DiffCollapseCount);
 
     /// <summary>One <see cref="ThemeLabel(string, IReadOnlyList{ThemePalette})"/> row per theme of <paramref name="themes"/>, in its order.</summary>
     private static List<string> ThemeRows(IReadOnlyList<ThemePalette> themes) => themes.Select(t => ThemeLabel(t.Name, themes)).ToList();

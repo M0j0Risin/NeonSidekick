@@ -942,8 +942,9 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Code collapse count | A code block longer than this folds to its label (`▸ 📜 csharp · 57 lines`) once complete; while streaming, only its last lines show (0–100; 0 never folds). Needs *Transcript markdown*. | 20 |
 | Show file diffs | A file edit (`patch_file`, `write_file`, `unc_patch`, `unc_write`) shows its diff under its line: `└ Added 3 lines, removed 1 line`, then the changed lines numbered with three of context, added ones on a green slab, removed ones on a red, coloured by the file's language. It folds with the tool run (the note and its diff count as one). The model's result is the same either way. | on |
 | Diff max lines | The most rows of an edit's diff shown; past it `… 12 more lines` ends it (0–500; 0 = the header line alone). | 10 |
+| Diff collapse count | An edit's diff of more rows than this (counted over the whole diff, past *Diff max lines* too) shows open while its tool run goes on, then folds to `▸ Added 3 lines, removed 1 line · 14 rows` once the run is over (0–500; 0 never folds). | 10 |
 
-To see a folded block, click it, press Ctrl+O, click **⤡** or use `/expand`.
+To see a folded block or diff, click it, press Ctrl+O, click **⤡** or use `/expand`.
 
 </details>
 
@@ -1041,7 +1042,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/loop <count> [delay] <message>`, `/loop infinite [delay] <message>` | Sends the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
 | `/plan <requirement>` | Researches with read-only tools and presents a plan before anything changes. See Plan mode. |
 | `/botchat [profile ...] [topic]` | Lets profiles talk to each other until you stop them. See Bot conversations. |
-| `/expand` | Unfolds every tool run, code block and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
+| `/expand` | Unfolds every tool run, code block, diff and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/memory [on \| off \| forget \| edit \| copy <profile> [overwrite]]` | Lists memories on a pane (Enter removes one); **● on** (N) and **○ off** (F) on its title row switch *Memory*, as `on` and `off` do. `forget` forgets all; `edit` opens `memory.json` in your editor; `copy` adds them to another profile's (or replaces with `overwrite`). `forget` and `copy` ask first. |

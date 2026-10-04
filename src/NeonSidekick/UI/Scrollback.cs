@@ -41,6 +41,13 @@ namespace NeonSidekick.UI;
 /// code block's kind — the header shows as drawn and every member streams while it is live — except
 /// that it keeps nothing: once over it always folds, to <c>▸ 💭 thought for 4.2s</c>, and unfolds as the
 /// runs do (a click, <see cref="ExpandAll"/>).</para>
+///
+/// <para>Diffs (2026-10-04, the user's ask, <c>Diff collapse count</c>): an edit's diff is a group too, the only one that nests —
+/// its lines stay members of the tool run they came in (<see cref="Line.Group"/>) and are a diff's besides (<see cref="Line.Fold"/>).
+/// A write carries it as a <see cref="FoldSpec"/>: its <c>└ Added …</c> row the summary, the rows under it the members, measured by
+/// the diff's rows. It is a code block's kind while live (every row shows, the summary as drawn) and stays live until the run it
+/// came in ends — with no run, until the next write of any kind (<see cref="EndGroup"/>); past its keep it then folds to
+/// <c>▸ Added 3 lines, removed 1 line · 14 rows</c>, and unfolds as the runs do. A run folded over it hides it whole.</para>
 /// </summary>
 public sealed class Scrollback
 {
@@ -54,6 +61,17 @@ public sealed class Scrollback
     private Group? _open;
     private int _nextGroup = 1;
     private bool _reshaped;
+
+    // The diffs still live (2026-10-04): they fold, past their keep, when the run they came in ends or the next write comes.
+    private readonly List<Group> _liveDiffs = new();
+
+    /// <summary>
+    /// A diff in a write (2026-10-04, <see cref="IFoldLayout"/>): its summary is the write's line <paramref name="Head"/> (counted from the
+    /// first line the write touches, an open line it continues included), its members every line after it in the write; past
+    /// <paramref name="Keep"/> (0 = never) by its <paramref name="Size"/> it folds once over, its summary then <paramref name="Collapsed"/>
+    /// or <paramref name="Expanded"/>.
+    /// </summary>
+    public sealed record FoldSpec(int Head, int Keep, int Size, IReadOnlyList<Segment> Collapsed, IReadOnlyList<Segment> Expanded);
 
     /// <summary>One logical line: its segments (no line break, no control code, no <c>\r</c>) and the rows it took at the cached width.</summary>
     private sealed class Line
@@ -77,6 +95,12 @@ public sealed class Scrollback
 
         /// <summary>The pictures drawn on this line and their columns (later on 2026-09-24): what a double-click there opens. Null for any other line.</summary>
         public IReadOnlyList<PictureSpan>? Pictures;
+
+        /// <summary>The diff this line is the summary or a row of (2026-10-04), beside the run in <see cref="Group"/>; null for any other line.</summary>
+        public Group? Fold;
+
+        /// <summary>The line is its <see cref="Fold"/>'s summary row (the diff's <see cref="Group.Summary"/>).</summary>
+        public bool FoldHead;
     }
 
     /// <summary>A tool run or a code block: its summary line, its members in order, how many stay while it runs, and its own expanded state (null = the store's <see cref="ExpandAll"/>).</summary>
@@ -101,13 +125,16 @@ public sealed class Scrollback
         /// <summary>A thinking block's group (<see cref="BeginThinkingGroup"/>): a code block's kind that is always over, so it folds the moment it ends.</summary>
         public bool Thinking;
 
-        /// <summary>Streamed at full height while live, its summary drawn as <see cref="Plain"/> until it folds: a code block or a thinking block.</summary>
-        public bool Streamed => Code || Thinking;
+        /// <summary>An edit's diff (<see cref="FoldSpec"/>, 2026-10-04): its summary is its head row as drawn until it folds, every row shows while it is live, and it is never the open group.</summary>
+        public bool Diff;
+
+        /// <summary>Shown at full height while live, its summary as drawn until it folds: a code block, a thinking block or a diff.</summary>
+        public bool Streamed => Code || Thinking || Diff;
 
         /// <summary>The code block's label line as the reply drew it; null for a tool run (its summary hides until the run folds).</summary>
         public IReadOnlyList<Segment>? Plain;
 
-        /// <summary>The code block's source lines, measured against <see cref="Keep"/> in place of the member rows; null for a tool run.</summary>
+        /// <summary>The code block's source lines (a diff's rows), measured against <see cref="Keep"/> in place of the member rows; null for a tool run.</summary>
         public int? Size;
 
         /// <summary>More writes (or source lines) than it keeps: the summary shows and the members fold.</summary>
@@ -193,7 +220,14 @@ public sealed class Scrollback
     /// <see cref="Append(IReadOnlyList{Segment}, int, bool)"/>, the lines it opens tagged in order with
     /// <paramref name="pictures"/> — the spans of a picture's rows (later on 2026-09-24), one list per line.
     /// </summary>
-    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures)
+    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures) =>
+        Append(segments, width, member, pictures, null);
+
+    /// <summary>
+    /// <see cref="Append(IReadOnlyList{Segment}, int, bool, IReadOnlyList{IReadOnlyList{PictureSpan}}?)"/>, the lines it touches from
+    /// <paramref name="fold"/>'s head on made a diff (2026-10-04): live until the run ends or, with none, the next write.
+    /// </summary>
+    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures, FoldSpec? fold)
     {
         ArgumentNullException.ThrowIfNull(segments);
         _picturing = pictures;
@@ -201,7 +235,12 @@ public sealed class Scrollback
         Layout(width);
         if (member)
         {
-            _open ??= NewGroup(0, Array.Empty<Segment>());
+            if (_open is null)
+            {
+                // A diff written with no run (the one before this run) is over.
+                EndDiffs();
+                _open = NewGroup(0, Array.Empty<Segment>());
+            }
         }
         else if (segments.Any(s => !s.IsControlCode))
         {
@@ -273,6 +312,11 @@ public sealed class Scrollback
 
         _tagging = null;
         _picturing = null;
+        if (fold is { } spec)
+        {
+            MakeDiff(spec, touched);
+        }
+
         if (member && _open!.Folds)
         {
             // The fold moved (a member hid, the summary showed or grew): the run laid out again —
@@ -300,6 +344,7 @@ public sealed class Scrollback
         _lines.Clear();
         _rows.Clear();
         _groups.Clear();
+        _liveDiffs.Clear();
         _open = null;
         _reshaped = false;
     }
@@ -426,9 +471,13 @@ public sealed class Scrollback
         SetGroupSummary(collapsed, expanded);
     }
 
-    /// <summary>The open run is over: a folded one shrinks to its summary. Nothing without one.</summary>
+    /// <summary>
+    /// The open run is over: a folded one shrinks to its summary. Every live diff is over too — its run's, or with no run the
+    /// one before this write (2026-10-04) — and one past its keep folds. Nothing else without an open run.
+    /// </summary>
     public void EndGroup()
     {
+        EndDiffs();
         if (_open is not { } group)
         {
             return;
@@ -451,6 +500,11 @@ public sealed class Scrollback
         {
             if (row < at + line.Rows)
             {
+                if (line.FoldHead && line.Fold is { Folds: true } diff)
+                {
+                    return diff.Id;
+                }
+
                 return line.Group is { } group && line.Member < 0 ? group.Id : null;
             }
 
@@ -537,6 +591,53 @@ public sealed class Scrollback
     }
 
     private bool Expanded(Group group) => group.Expanded ?? ExpandAll;
+
+    /// <summary>
+    /// The diff <paramref name="spec"/> names over the lines an append <paramref name="touched"/> (2026-10-04): its head the summary,
+    /// the rest its rows, live. Nothing when it can never fold (no keep, or not past it) or the write had no such line.
+    /// </summary>
+    private void MakeDiff(FoldSpec spec, List<Line> touched)
+    {
+        if (spec.Keep <= 0 || spec.Size <= spec.Keep || spec.Head < 0 || spec.Head >= touched.Count)
+        {
+            return;
+        }
+
+        var head = touched[spec.Head];
+        var diff = new Group(_nextGroup++, spec.Keep, head, Array.Empty<Segment>())
+        {
+            Diff = true,
+            Size = spec.Size,
+            Collapsed = spec.Collapsed.Where(s => !s.IsControlCode && !s.IsLineBreak).ToList(),
+            Open = spec.Expanded.Where(s => !s.IsControlCode && !s.IsLineBreak).ToList(),
+        };
+        for (int i = spec.Head; i < touched.Count; i++)
+        {
+            touched[i].Fold = diff;
+        }
+
+        head.FoldHead = true;
+        _groups[diff.Id] = diff;
+        _liveDiffs.Add(diff);
+    }
+
+    /// <summary>Every live diff over (2026-10-04): past its keep it folds, laid out again from the first one's summary.</summary>
+    private void EndDiffs()
+    {
+        if (_liveDiffs.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var diff in _liveDiffs)
+        {
+            diff.Live = false;
+        }
+
+        var first = _liveDiffs[0].Summary;
+        _liveDiffs.Clear();
+        Relayout(first);
+    }
 
     private Group NewGroup(int keep, IReadOnlyList<Segment> lead)
     {
@@ -630,7 +731,7 @@ public sealed class Scrollback
     {
         if (line.Group is not { } group)
         {
-            return line.Segments;
+            return Folded(line, line.Segments);
         }
 
         bool over = group.Over;
@@ -660,12 +761,32 @@ public sealed class Scrollback
                 return null;
             }
 
-            segments = line.Segments;
+            if (Folded(line, line.Segments) is not { } shown)
+            {
+                return null;
+            }
+
+            segments = shown;
         }
 
         // The summary is the first visible row whenever it shows; else every member does, the first leading.
         bool first = line.Member < 0 || (!over && line.Member == 0);
         return first && group.Lead.Count > 0 ? WithLead(group.Lead, segments) : segments;
+    }
+
+    /// <summary>
+    /// What a diff's line shows (2026-10-04): <paramref name="segments"/> while its diff does not fold (or it is in none); once it
+    /// does, the summary in the state it is in, and a row only while the diff is unfolded.
+    /// </summary>
+    private IReadOnlyList<Segment>? Folded(Line line, IReadOnlyList<Segment> segments)
+    {
+        if (line.Fold is not { Folds: true } diff)
+        {
+            return segments;
+        }
+
+        bool expanded = Expanded(diff);
+        return line.FoldHead ? (expanded ? diff.Open : diff.Collapsed) : expanded ? segments : null;
     }
 
     /// <summary><paramref name="segments"/> with <paramref name="lead"/> over its leading spaces (as many as the lead's cells), or ahead of it without them.</summary>
@@ -744,11 +865,29 @@ public sealed class Scrollback
 
                 _groups.Remove(group.Id);
             }
+            else if (_lines[0].Fold is { } diff)
+            {
+                // A diff with no run goes whole too, its summary with its rows (2026-10-04).
+                while (count < _lines.Count && _lines[count].Fold == diff)
+                {
+                    count++;
+                }
+
+                if (count >= _lines.Count)
+                {
+                    break;
+                }
+            }
 
             int rows = 0;
             for (int i = 0; i < count; i++)
             {
                 rows += _lines[i].Rows;
+                if (_lines[i] is { FoldHead: true, Fold: { } gone })
+                {
+                    _groups.Remove(gone.Id);
+                    _liveDiffs.Remove(gone);
+                }
             }
 
             _rows.RemoveRange(0, rows);

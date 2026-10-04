@@ -48,5 +48,5 @@ public static class ToolGroupText
 
     /// <summary>The transcript's notice after <c>/expand</c> or <c>/collapse</c> (<c>/tools expand|collapse</c> until later on 2026-09-22; thinking too since 2026-09-26). Pinned.</summary>
     public static string ExpandedNotice(bool expanded) =>
-        expanded ? "(tool calls, code blocks and thinking expanded; Ctrl+O or /collapse folds them)" : "(tool calls, code blocks and thinking collapsed; Ctrl+O, /expand or a click on a summary unfolds them)";
+        expanded ? "(tool calls, code blocks, diffs and thinking expanded; Ctrl+O or /collapse folds them)" : "(tool calls, code blocks, diffs and thinking collapsed; Ctrl+O, /expand or a click on a summary unfolds them)";
 }

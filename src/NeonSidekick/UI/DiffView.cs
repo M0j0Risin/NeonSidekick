@@ -15,9 +15,10 @@ namespace NeonSidekick.UI;
 /// colours of its language (<see cref="CodeLexer"/>, each side of a hunk lexed as one text so a block comment colours every
 /// line it spans) and only takes the slab's background. A dim <c>⋮</c> parts two hunks; past <paramref name="maxLines"/> rows
 /// a <c>… 12 more lines</c> ends it (0: the header alone). Long lines wrap at the cell (a tab is four), under the text column.
-/// Everything is one write, so a tool run counts it once (<see cref="Scrollback"/>'s units).
+/// Everything is one write, so a tool run counts it once (<see cref="Scrollback"/>'s units). Past a collapse count (2026-10-04,
+/// <c>Diff collapse count</c>) its rows fold under the summary row once the run is over (<see cref="Fold"/>, <see cref="DiffFoldText"/>).
 /// </summary>
-public sealed class DiffView : IRenderable
+public sealed class DiffView : IRenderable, IFoldLayout
 {
     /// <summary>What stands before every row: the width of the tools' glyph, blank (<see cref="TranscriptRenderer.ToolAnswerIndent"/>).</summary>
     public const string Indent = TranscriptRenderer.ToolAnswerIndent;
@@ -31,14 +32,46 @@ public sealed class DiffView : IRenderable
     private readonly IRenderable? _head;
     private readonly FileDiff _diff;
     private readonly int _maxLines;
+    private readonly int _collapseCount;
     private readonly CodeLanguage? _language;
 
-    public DiffView(IRenderable? head, FileDiff diff, int maxLines)
+    /// <summary>
+    /// The diff under <paramref name="head"/>, cut at <paramref name="maxLines"/> rows; one of more rows than
+    /// <paramref name="collapseCount"/> folds once it is over (0, the default, never).
+    /// </summary>
+    public DiffView(IRenderable? head, FileDiff diff, int maxLines, int collapseCount = 0)
     {
         _head = head;
         _diff = diff ?? throw new ArgumentNullException(nameof(diff));
         _maxLines = Math.Max(0, maxLines);
+        _collapseCount = Math.Max(0, collapseCount);
         _language = LanguageOf(diff.Path);
+    }
+
+    /// <summary>
+    /// What folds (2026-10-04, <c>Diff collapse count</c>): from the summary row — the line after the head, the first without one —
+    /// to the end, measured by every row of the diff (past the cut too), its summary <see cref="DiffFoldText.Summary"/>. None
+    /// without a collapse count, with the header alone (<c>Diff max lines</c> 0), or for a diff no larger than the count.
+    /// </summary>
+    public FoldLayout? Fold
+    {
+        get
+        {
+            if (_collapseCount == 0 || _maxLines == 0)
+            {
+                return null;
+            }
+
+            int rows = Rows().Count(r => r is not null);
+            if (rows <= _collapseCount)
+            {
+                return null;
+            }
+
+            var dim = new Style(foreground: Theme.Dim);
+            return new FoldLayout(_head is null ? 0 : 1, _collapseCount, rows,
+                new Text(DiffFoldText.Summary(_diff, rows, expanded: false), dim), new Text(DiffFoldText.Summary(_diff, rows, expanded: true), dim));
+        }
     }
 
     /// <summary>The language the file's extension names (<see cref="CodeLanguages.Find"/>); none for a patch file, whose own signs would colour it.</summary>

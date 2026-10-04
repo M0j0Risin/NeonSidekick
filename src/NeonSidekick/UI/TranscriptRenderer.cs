@@ -324,14 +324,16 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>
     /// A file edit's note and its diff under it (2026-10-03, the user's ask: Claude Code's look): <paramref name="note"/> as
     /// <see cref="ToolNote"/> draws it, then <see cref="DiffView"/>'s rows, cut at <paramref name="maxLines"/>. One write, so a
-    /// tool run counts it once and folds it whole past <c>Tool collapse count</c>, Ctrl+O and <c>/expand</c> opening it again.
+    /// tool run counts it once and folds it whole past <c>Tool collapse count</c>, Ctrl+O and <c>/expand</c> opening it again. A diff
+    /// of more rows than <paramref name="collapseCount"/> (2026-10-04, <c>Diff collapse count</c>; 0 never) folds on its own under its
+    /// summary row once the run is over — with no run, at the next write — on the screen's pane only.
     /// </summary>
-    public void ToolDiff(string note, FileDiff diff, int maxLines)
+    public void ToolDiff(string note, FileDiff diff, int maxLines, int collapseCount = 0)
     {
         ArgumentNullException.ThrowIfNull(note);
         ArgumentNullException.ThrowIfNull(diff);
-        var full = new DiffView(new Markup(ToolNoteMarkup(note)), diff, maxLines);
-        var inline = new DiffView(new Markup(Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit))), diff, maxLines);
+        var full = new DiffView(new Markup(ToolNoteMarkup(note)), diff, maxLines, collapseCount);
+        var inline = new DiffView(new Markup(Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit))), diff, maxLines, collapseCount);
         ToolWrite(full, () => WriteBlock(full, inline));
     }
 

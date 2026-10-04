@@ -495,4 +495,114 @@ public class ScrollbackTests
         store.Rows(5);                             // narrower than the strip: its lines wrap
         Assert.Null(store.PictureAt(1, 3));
     }
+
+    // ── Diffs (2026-10-04) ──────────────────────────────────────────────────
+
+    /// <summary>An edit's write as <see cref="DiffView"/> makes it: the note, the elbow (the fold's head, line 1), then <paramref name="rows"/> rows.</summary>
+    private static List<Segment> DiffWrite(int rows, string note = "  N")
+    {
+        var lines = new List<string> { note + "\n", "  └ H\n" };
+        for (int i = 1; i <= rows; i++)
+        {
+            lines.Add($"    r{i}\n");
+        }
+
+        return Segments([.. lines]);
+    }
+
+    private static Scrollback.FoldSpec Fold(int keep, int size) => new(1, keep, size, Segments("  ▸ F"), Segments("  ▾ O"));
+
+    [Fact]
+    public void Diff_InARun_ShowsOpenWhileTheRunGoesOn_FoldsWhenItEnds_AndTogglesOpen()
+    {
+        var store = new Scrollback();
+        store.BeginGroup(0);
+        store.Append(DiffWrite(3), 40, member: true, null, Fold(keep: 2, size: 3));
+        store.Append(Segments("  m2\n"), 40, member: true);   // the next tool line: the run goes on, the diff stays open
+
+        Assert.Equal(new[] { "  N", "  └ H", "    r1", "    r2", "    r3", "  m2" }, Texts(store.Rows(40)));
+        Assert.False(store.AnyFolds);
+        Assert.Null(store.GroupAtRow(1));   // its head is only a row while it is live
+
+        store.Append(Segments("reply\n"), 40);   // the run ends: the diff folds
+        Assert.Equal(new[] { "  N", "  ▸ F", "  m2", "reply" }, Texts(store.Rows(40)));
+        Assert.True(store.TakeReshaped());
+        Assert.True(store.AnyFolds);
+
+        int id = Assert.NotNull(store.GroupAtRow(1));
+        Assert.Null(store.GroupAtRow(0));
+        Assert.True(store.Toggle(id));
+        Assert.Equal(new[] { "  N", "  ▾ O", "    r1", "    r2", "    r3", "  m2", "reply" }, Texts(store.Rows(40)));
+        Assert.True(store.Toggle(id));
+        Assert.Equal(new[] { "  N", "  ▸ F", "  m2", "reply" }, Texts(store.Rows(40)));
+    }
+
+    [Fact]
+    public void Diff_WithinItsKeep_NeverFolds_AndItsHeadTogglesNothing()
+    {
+        var store = new Scrollback();
+        store.BeginGroup(0);
+        store.Append(DiffWrite(2), 40, member: true, null, Fold(keep: 2, size: 2));
+        store.EndGroup();
+
+        Assert.Equal(new[] { "  N", "  └ H", "    r1", "    r2" }, Texts(store.Rows(40)));
+        Assert.Null(store.GroupAtRow(1));
+        Assert.False(store.AnyFolds);
+    }
+
+    [Fact]
+    public void Diff_WithNoRun_FoldsAtTheNextWrite_AnyKind()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("● "), 40);   // the reply's bare glyph, an open line the note continues: the head is still line 1
+        store.Append(DiffWrite(3, note: "N"), 40, member: false, null, Fold(keep: 1, size: 3));
+        Assert.Equal(new[] { "● N", "  └ H", "    r1", "    r2", "    r3" }, Texts(store.Rows(40)));
+
+        store.Append(DiffWrite(2, note: "  N2"), 40, member: false, null, Fold(keep: 1, size: 2));
+        Assert.Equal(new[] { "● N", "  ▸ F", "  N2", "  └ H", "    r1", "    r2" }, Texts(store.Rows(40)));
+
+        store.Append(Segments("  m\n"), 40, member: true);   // a run's first line ends the diff before it too
+        Assert.Equal(new[] { "● N", "  ▸ F", "  N2", "  ▸ F", "  m" }, Texts(store.Rows(40)));
+    }
+
+    [Fact]
+    public void Diff_UnfoldsWithTheRuns_OnExpandAll_AndARunFoldedOverItHidesItWhole()
+    {
+        var store = new Scrollback();
+        store.BeginGroup(1);
+        store.SetGroupSummary(Segments("  S"), Segments("  E"));
+        store.Append(DiffWrite(3), 40, member: true, null, Fold(keep: 1, size: 3));
+        store.Append(Segments("  m2\n"), 40, member: true);
+        store.EndGroup();
+
+        Assert.Equal(new[] { "  S" }, Texts(store.Rows(40)));   // the run folds over it
+
+        int run = store.GroupAtRow(0)!.Value;
+        store.Toggle(run);
+        Assert.Equal(new[] { "  E", "  N", "  ▸ F", "  m2" }, Texts(store.Rows(40)));   // the run open, the diff still folded
+
+        store.SetAllExpanded(true);
+        Assert.Equal(new[] { "  E", "  N", "  ▾ O", "    r1", "    r2", "    r3", "  m2" }, Texts(store.Rows(40)));
+        store.SetAllExpanded(false);
+        Assert.Equal(new[] { "  S" }, Texts(store.Rows(40)));
+    }
+
+    [Fact]
+    public void Diff_WithNoRun_GoesWholeOnTrim_AndClearForgetsIt()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("a\n"), 40);
+        store.Append(DiffWrite(Scrollback.MaxRows), 40, member: false, null, Fold(keep: 1, size: Scrollback.MaxRows));
+        store.Append(Segments("after\n"), 40);   // folds it; the open rows were past the cap all the same
+
+        // Past the cap the oldest lines go: "a", the note, then the diff whole, its summary with its rows.
+        Assert.Equal(new[] { "after" }, Texts(store.Rows(40)));
+        Assert.False(store.AnyFolds);
+
+        store.Append(DiffWrite(3), 40, member: false, null, Fold(keep: 1, size: 3));
+        store.Clear();
+        store.Append(Segments("x\n"), 40);
+        Assert.Equal(new[] { "x" }, Texts(store.Rows(40)));
+        Assert.False(store.AnyFolds);
+    }
 }

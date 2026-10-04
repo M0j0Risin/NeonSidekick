@@ -778,6 +778,7 @@ public sealed class AppSettings : IDisposable
         CodeCollapseCount = source.CodeCollapseCount,
         ShowFileDiffs = source.ShowFileDiffs,
         DiffMaxLines = source.DiffMaxLines,
+        DiffCollapseCount = source.DiffCollapseCount,
         AskMaxChoices = source.AskMaxChoices,
         AskMaxQuestions = source.AskMaxQuestions,
         AskUser = source.AskUser,

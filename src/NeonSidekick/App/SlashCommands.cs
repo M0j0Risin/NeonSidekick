@@ -147,10 +147,10 @@ public enum SlashCommand
     /// <summary><c>/plan &lt;requirement&gt;</c> (2026-09-26, the user's ask): plan mode — the model researches with read-only tools, asks what it needs and presents a plan saved as <c>.neon/plans/&lt;name&gt;.md</c>; nothing changes until the user approves it on the pane or with <c>/plan approve [--fresh]</c>. While planning, <c>/plan</c> or <c>/plan show</c> says where it stands, <c>/plan cancel</c> leaves, anything else is more detail. Refused mid-turn like <see cref="Loop"/>.</summary>
     Plan,
 
-    /// <summary><c>/expand</c>: every folded tool run, code block and thinking block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
+    /// <summary><c>/expand</c>: every folded tool run, code block, diff (2026-10-04) and thinking block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
     Expand,
 
-    /// <summary><c>/collapse</c>: every tool run and code block past its collapse count, and every thinking block, folded again (2026-09-22, the user's ask: what <c>/tools collapse</c> did, as a root word). No argument.</summary>
+    /// <summary><c>/collapse</c>: every tool run, code block and diff past its collapse count, and every thinking block, folded again (2026-09-22, the user's ask: what <c>/tools collapse</c> did, as a root word). No argument.</summary>
     Collapse,
 
 
