@@ -6,7 +6,8 @@ namespace NeonSidekick.UI;
 /// <summary>
 /// The session's ComfyUI pictures as a strip over the pane's upper rule (later still on 2026-09-24, the user's ask: "a
 /// small strip at the bottom … new images fall into the strip at the far left and push the older ones to the right").
-/// The screen <see cref="Add"/>s each picture <c>generate_image</c> or <c>/imagine</c> made — the newest at index 0 —
+/// The screen <see cref="Add"/>s each picture <c>generate_image</c> or <c>/imagine</c> made — the newest at index 0, by
+/// the file's creation time as the viewer orders them (2026-10-04), however late the screen gets to it —
 /// and <see cref="ScreenPane"/> draws it (<see cref="Render"/>) <see cref="Rows"/> tall whenever the screen's provider
 /// answers it. With the draft empty ← / → walk a highlight (<see cref="Step"/>): nothing is highlighted at first, the
 /// first arrow takes the newest, → steps older, ← newer, and ← on the newest lets go (the user picked select-and-highlight
@@ -42,7 +43,8 @@ public sealed class PictureStrip
     private const int EdgeCells = LeadCells + TrailCells;
 
     private readonly object _gate = new();
-    private readonly List<(ImageThumbnail Tile, int Id)> _entries = [];
+    // Newest first, by the file's creation time and then its path (Add).
+    private readonly List<(ImageThumbnail Tile, int Id, DateTime CreatedUtc, string Path)> _entries = [];
     private int _selected = -1;
     private int _first;
     private int _version;
@@ -117,13 +119,22 @@ public sealed class PictureStrip
         }
     }
 
-    /// <summary>A picture at the left, the others one along; the highlight is let go, the window goes back to the start and a closed strip opens again.</summary>
-    public void Add(ImageThumbnail tile, int id)
+    /// <summary>
+    /// A picture in its place by its file's creation time, <paramref name="createdUtc"/>, the newest at the left; the same time
+    /// goes by <paramref name="path"/> (2026-10-04, the user's report: with <c>Botchat image async</c> a bot's picture reached the
+    /// strip only when the chat drew it, after pictures made later had landed left of it — the viewer orders by the files, so
+    /// the strip now does too, <c>ViewerState.Reset</c>'s key). The usual newest picture lands at the left as ever; past
+    /// <see cref="MaxPictures"/> the oldest goes, the new one too if it is that. The highlight is let go, the window goes back
+    /// to the start and a closed strip opens again.
+    /// </summary>
+    public void Add(ImageThumbnail tile, int id, DateTime createdUtc, string path)
     {
         ArgumentNullException.ThrowIfNull(tile);
+        ArgumentNullException.ThrowIfNull(path);
         lock (_gate)
         {
-            _entries.Insert(0, (tile, id));
+            int at = _entries.FindIndex(e => Older(e.CreatedUtc, e.Path, createdUtc, path));
+            _entries.Insert(at < 0 ? _entries.Count : at, (tile, id, createdUtc, path));
             if (_entries.Count > MaxPictures)
             {
                 _entries.RemoveAt(_entries.Count - 1);
@@ -135,6 +146,10 @@ public sealed class PictureStrip
             _version++;
         }
     }
+
+    /// <summary>Whether the entry made at <paramref name="time"/> from <paramref name="path"/> is older than the one at <paramref name="thanTime"/> from <paramref name="thanPath"/>: the viewer's order, oldest first, the path breaking a tie.</summary>
+    private static bool Older(DateTime time, string path, DateTime thanTime, string thanPath) =>
+        time != thanTime ? time < thanTime : StringComparer.OrdinalIgnoreCase.Compare(path, thanPath) < 0;
 
     /// <summary>Every picture gone (a new session), and the strip no longer closed.</summary>
     public void Clear()
@@ -261,7 +276,7 @@ public sealed class PictureStrip
     public (List<SegmentLine> Lines, List<PictureSpan> Spans) Render(RenderOptions options, int cells, bool highlight)
     {
         ArgumentNullException.ThrowIfNull(options);
-        List<(ImageThumbnail Tile, int Id)> shown;
+        List<(ImageThumbnail Tile, int Id, DateTime CreatedUtc, string Path)> shown;
         int selected;
         bool moreLeft;
         bool moreRight;

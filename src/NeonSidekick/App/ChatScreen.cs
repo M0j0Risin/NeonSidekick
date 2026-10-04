@@ -13585,6 +13585,8 @@ internal sealed partial class ChatScreen
     /// in the order they came, so the last one lands leftmost; each registered for a double-click as the transcript's are.
     /// Kept whatever <c>ComfyUI picture strip</c> says — the setting hides the strip, it does not stop the gathering, so a
     /// flip back on shows the session's pictures. <c>Show image thumbnails</c> is not consulted. Any thread.
+    /// Each goes in by its file's creation time (2026-10-04, the user's report: a <c>Botchat image async</c> picture drawn
+    /// late landed left of later ones, out of the viewer's order); a file not found or not read counts as made now.
     /// </summary>
     private void AddToPictureStrip(IReadOnlyList<ImageAttachment> images)
     {
@@ -13592,11 +13594,30 @@ internal sealed partial class ChatScreen
         {
             if (ImageThumbnail.Read(image, PictureStrip.MaxColumns, PictureStrip.Rows) is { } tile)
             {
-                _pictureStrip.Add(tile, RegisterPicture(image, sandbox: true));
+                var (createdUtc, path) = PictureFileStamp(image);
+                _pictureStrip.Add(tile, RegisterPicture(image, sandbox: true), createdUtc, path);
             }
         }
 
         _pane.RedrawStrip();
+    }
+
+    /// <summary>The strip's order for a sandbox picture: its file's creation time and full path, as the viewer reads them; now and the given path without the file.</summary>
+    private (DateTime CreatedUtc, string Path) PictureFileStamp(ImageAttachment image)
+    {
+        if (_files.Resolve(image.Path, forWrite: false, out string resolved) == FileOutcome.Ok && File.Exists(resolved))
+        {
+            try
+            {
+                return (File.GetCreationTimeUtc(resolved), resolved);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                DiagnosticLog.Debug("Comfy", $"No creation time for {Path.GetFileName(resolved)}; the strip takes it as new: {ex.Message}");
+            }
+        }
+
+        return (_time.GetUtcNow().UtcDateTime, image.Path);
     }
 
     /// <summary>Whether the strip is on the screen now: the pane, the setting, and a window that has room for it (<see cref="ScreenPane.StripRows"/> as last drawn).</summary>

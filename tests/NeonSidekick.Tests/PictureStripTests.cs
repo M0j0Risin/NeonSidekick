@@ -24,6 +24,30 @@ public class PictureStripTests : IDisposable
 
     private static string Blocks(int cells) => new('▀', cells);
 
+    private static readonly DateTime Epoch = new(2026, 10, 4, 12, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>A picture whose file was made <paramref name="id"/> seconds after <see cref="Epoch"/>: a higher id is newer.</summary>
+    private static void Put(PictureStrip strip, ImageThumbnail tile, int id) =>
+        strip.Add(tile, id, Epoch.AddSeconds(id), $"p{id:D3}.png");
+
+    /// <summary>The strip's ids, left to right.</summary>
+    private static List<int> Ids(PictureStrip strip)
+    {
+        var ids = new List<int>();
+        for (int i = 0; i < strip.Count; i++)
+        {
+            strip.Step(+1);
+            ids.Add(strip.SelectedId!.Value);
+        }
+
+        while (strip.Selected >= 0)
+        {
+            strip.Step(-1);
+        }
+
+        return ids;
+    }
+
     private List<string> Render(PictureStrip strip, int cells, bool highlight, out List<PictureSpan> spans)
     {
         var (lines, drawn) = strip.Render(RenderOptions.Create(_console, _console.Profile.Capabilities), cells, highlight);
@@ -36,7 +60,7 @@ public class PictureStripTests : IDisposable
         var strip = new PictureStrip();
         for (int id = 0; id < count; id++)
         {
-            strip.Add(Tile(width, height), id);
+            Put(strip, Tile(width, height), id);
         }
 
         return strip;
@@ -57,7 +81,7 @@ public class PictureStripTests : IDisposable
         Assert.Equal(1, strip.SelectedId);
 
         int version = strip.Version;
-        strip.Add(Tile(12, 12), 7);
+        Put(strip, Tile(12, 12), 7);
         Assert.Equal(-1, strip.Selected);
         Assert.True(strip.Version > version);
         Assert.True(strip.Step(-1));
@@ -103,6 +127,51 @@ public class PictureStripTests : IDisposable
         Assert.Equal(0, strip.Selected);
     }
 
+    /// <summary>
+    /// The viewer's order (2026-10-04, the user's report: a Botchat image async picture drawn late landed left of later
+    /// ones): a picture goes in by its file's creation time, the path breaking a tie, however late it is added.
+    /// </summary>
+    [Fact]
+    public void Add_PlacesALatePictureByItsFilesTime_ThePathBreakingATie()
+    {
+        var strip = new PictureStrip();
+        Put(strip, Tile(4, 4), 1);
+        Put(strip, Tile(4, 4), 5);
+        Put(strip, Tile(4, 4), 3);   // made before 5, added after it
+        Assert.Equal([5, 3, 1], Ids(strip));
+
+        strip.Add(Tile(4, 4), 8, Epoch.AddSeconds(3), "p003b.png");   // 3's time, a later name
+        strip.Add(Tile(4, 4), 9, Epoch.AddSeconds(3), "P002.png");    // 3's time, an earlier name (case aside)
+        Assert.Equal([5, 8, 3, 9, 1], Ids(strip));
+    }
+
+    /// <summary>A late picture lets go of the highlight, sends the window back and opens a closed strip, wherever it lands.</summary>
+    [Fact]
+    public void Add_ALatePicture_StillResetsTheHighlight_AndOpensAClosedStrip()
+    {
+        var strip = StripOf(3);
+        strip.Step(+1);
+        int version = strip.Version;
+        Put(strip, Tile(12, 12), -1);   // the oldest of all: the far right
+        Assert.Equal(-1, strip.Selected);
+        Assert.True(strip.Version > version);
+        Assert.Equal([2, 1, 0, -1], Ids(strip));
+
+        strip.Close();
+        Put(strip, Tile(12, 12), -2);
+        Assert.False(strip.Closed);
+    }
+
+    /// <summary>A full strip keeps the newest: a picture older than all of them is not kept.</summary>
+    [Fact]
+    public void Add_ToAFullStrip_AnOlderPictureIsNotKept()
+    {
+        var strip = StripOf(PictureStrip.MaxPictures);
+        Put(strip, Tile(12, 12), -1);
+        Assert.Equal(PictureStrip.MaxPictures, strip.Count);
+        Assert.DoesNotContain(-1, Ids(strip));
+    }
+
     [Fact]
     public void Add_PastTheCap_DropsTheOldest()
     {
@@ -124,7 +193,7 @@ public class PictureStripTests : IDisposable
         strip.Clear();
         Assert.Equal(version, strip.Version);
 
-        strip.Add(Tile(4, 4), 0);
+        Put(strip, Tile(4, 4), 0);
         strip.Step(+1);
         version = strip.Version;
         strip.Clear();
@@ -156,7 +225,7 @@ public class PictureStripTests : IDisposable
         strip.Close();   // already closed: no change
         Assert.Equal(version, strip.Version);
 
-        strip.Add(Tile(12, 12), 9);
+        Put(strip, Tile(12, 12), 9);
         Assert.False(strip.Closed);
 
         strip.Close();
@@ -254,7 +323,7 @@ public class PictureStripTests : IDisposable
     public void Render_SitsAShortTileOnTheBottom()
     {
         var strip = new PictureStrip();
-        strip.Add(Tile(12, 4), 0);   // two rows
+        Put(strip, Tile(12, 4), 0);   // two rows
 
         var lines = Render(strip, 39, highlight: false, out _);
         Assert.All(lines.Take(4), line => Assert.Equal(new string(' ', 14), line));
@@ -415,7 +484,7 @@ public class PictureStripTests : IDisposable
         Assert.Equal(0, pane.StripRows);
 
         // A picture from another thread: the tick draws it.
-        strip.Add(Tile(12, 12), 0);
+        Put(strip, Tile(12, 12), 0);
         _time.Advance(ScreenPane.Tick);
         Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
 
@@ -450,8 +519,8 @@ public class PictureStripTests : IDisposable
     {
         _cursorTop = 100;
         var strip = new PictureStrip();
-        strip.Add(Tile(12, 12), 4);
-        strip.Add(Tile(12, 4), 5);   // two rows, sat on the bottom
+        Put(strip, Tile(12, 12), 4);
+        Put(strip, Tile(12, 4), 5);   // two rows, sat on the bottom
         using var pane = Pane(strip);
         pane.Show();
 
