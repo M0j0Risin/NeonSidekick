@@ -287,7 +287,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -4417,6 +4417,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // Shell (2026-09-21)
         _console.Input.PushKey(Keys.Right);     // Ask
         _console.Input.PushKey(Keys.Right);     // Camera (2026-10-02)
+        _console.Input.PushKey(Keys.Right);     // Screen (2026-10-04)
         _console.Input.PushKey(Keys.Right);     // Git (native) (2026-09-20; so named since later on 2026-09-21 — the user's order)
         _console.Input.PushKey(Keys.Right);     // Obsidian (2026-09-22)
         _console.Input.PushKey(Keys.Right);     // SQL (2026-09-23)
@@ -4434,7 +4435,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude CLI executable                   (looked up)\n  Claude CLI slash command permissions    read-only\n  Claude CLI slash command model          (Claude Code's default)\n  Claude CLI slash command effort         (Claude Code's default)\n  Claude CLI advisor tool                 off\n  Claude CLI advisor tool context         brief\n  Claude CLI advisor tool calls per turn  2 calls\n  Claude CLI advisor tool model           (as Claude CLI slash command model)\n  Claude CLI advisor tool effort          (as Claude CLI slash command effort)\n  Claude CLI advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n▸ get_current_time      on   ", output);
@@ -4843,7 +4844,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -8750,7 +8751,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryPaneTitle) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9803,7 +9804,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9902,7 +9903,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -11880,7 +11881,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";

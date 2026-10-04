@@ -228,6 +228,15 @@ public static class HelpCommands
         [
             new("/sampling [field value]", "Edit the per-model sampling overrides on a pane. To change the connected model's values directly, use `/sampling <field> <value>`, `<field> clear`, `extra <json>` or `clear` (see Sampling per model)."),
         ]),
+        new("/screen",
+        [
+            new("/screen", "Capture the monitor the app is on and put the screenshot on the input line as `[Image #N]`. It is saved in the *Screen capture output folder* (`screen_images` by default) and shown in the picture viewer under *Screen capture preview*. Your own command: *Screen capture tool* and *Screen capture ask* never apply. See Screen capture."),
+            new("/screen all", "Capture every monitor as one picture."),
+            new("/screen monitor:<n>", "Capture monitor n (`/screen list` numbers them)."),
+            new("/screen window:<id or title words>", "Capture one window, even when another covers it: by its id from `/screen list`, or words of its title (or its process name)."),
+            new("/screen behind", "Capture the window right behind the app's own: the one you were just in."),
+            new("/screen list", "List the monitors and the windows (front to back) with the target that names each."),
+        ]),
         new("/server",
         [
             new("/server [url | embedded | claude-cli | docker | docker:<container>]", "Pick an LLM server found on the usual ports, or set one by URL. The list also offers the Anthropic API and the OpenAI API (each when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found), the installed embedded models and the chosen Docker containers (when *Docker servers enabled* is on). The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see `/settings` › Anthropic). `docker` lists only the chosen containers, and `docker:<container>` switches to one (see Docker servers); a container's model is the one it serves, so no model picker follows. Ctrl+S runs it too."),

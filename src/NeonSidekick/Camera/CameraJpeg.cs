@@ -17,12 +17,22 @@ public static class CameraJpeg
     public static byte[] Encode(CameraFrame frame, int maxSide = ImageFile.MaxSide, int quality = ImageFile.JpegQuality)
     {
         ArgumentNullException.ThrowIfNull(frame);
-        if (frame.Bgrx.Length < frame.Width * frame.Height * CameraPixels.BytesPerPixel)
+        return Encode(frame.Width, frame.Height, frame.Bgrx, maxSide, quality);
+    }
+
+    /// <summary>
+    /// Top-down BGRX rows <paramref name="sourceWidth"/>×<paramref name="sourceHeight"/> as JPEG bytes, the longer side at most
+    /// <paramref name="maxSide"/> (2026-10-04: a screenshot is no camera frame, so the rows come bare).
+    /// </summary>
+    public static byte[] Encode(int sourceWidth, int sourceHeight, byte[] bgrx, int maxSide = ImageFile.MaxSide, int quality = ImageFile.JpegQuality)
+    {
+        ArgumentNullException.ThrowIfNull(bgrx);
+        if (sourceWidth <= 0 || sourceHeight <= 0 || bgrx.Length < sourceWidth * sourceHeight * CameraPixels.BytesPerPixel)
         {
-            throw new ArgumentException("The frame holds no pixels.", nameof(frame));
+            throw new ArgumentException("The frame holds no pixels.", nameof(bgrx));
         }
 
-        var (width, height) = CameraPixels.Fit(frame.Width, frame.Height, Math.Min(maxSide, ImageFile.MaxSide));
+        var (width, height) = CameraPixels.Fit(sourceWidth, sourceHeight, Math.Min(maxSide, ImageFile.MaxSide));
         var settings = new ProcessImageSettings
         {
             Width = width,
@@ -36,7 +46,7 @@ public static class CameraJpeg
         }
 
         using var output = new MemoryStream();
-        _ = MagicImageProcessor.ProcessImage(new FrameSource(frame), output, settings);
+        _ = MagicImageProcessor.ProcessImage(new RowSource(sourceWidth, sourceHeight, bgrx), output, settings);
         return output.ToArray();
     }
 
@@ -49,20 +59,20 @@ public static class CameraJpeg
         return new ImageAttachment(name, bytes, ImageFile.Jpeg, width, height) { Camera = true };
     }
 
-    private sealed class FrameSource(CameraFrame frame) : IPixelSource
+    private sealed class RowSource(int width, int height, byte[] bgrx) : IPixelSource
     {
         public Guid Format => PixelFormats.Bgr24bpp;
 
-        public int Width => frame.Width;
+        public int Width => width;
 
-        public int Height => frame.Height;
+        public int Height => height;
 
         public void CopyPixels(Rectangle sourceArea, int cbStride, Span<byte> buffer)
         {
-            ReadOnlySpan<byte> pixels = frame.Bgrx;
+            ReadOnlySpan<byte> pixels = bgrx;
             for (int y = 0; y < sourceArea.Height; y++)
             {
-                var source = pixels.Slice((((sourceArea.Y + y) * frame.Width) + sourceArea.X) * CameraPixels.BytesPerPixel, sourceArea.Width * CameraPixels.BytesPerPixel);
+                var source = pixels.Slice((((sourceArea.Y + y) * width) + sourceArea.X) * CameraPixels.BytesPerPixel, sourceArea.Width * CameraPixels.BytesPerPixel);
                 var target = buffer.Slice(y * cbStride, sourceArea.Width * 3);
                 for (int x = 0; x < sourceArea.Width; x++)
                 {

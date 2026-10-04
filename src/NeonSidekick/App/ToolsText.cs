@@ -105,6 +105,9 @@ public static class ToolsText
     /// <summary>The camera's tab and group (2026-10-02, <c>camera_capture</c> and the camera's rows), after Print, before Obsidian, since 2026-10-03 (the user's order; right after Ask until then).</summary>
     public const string CameraTabTitle = "Camera";
 
+    /// <summary>The screen capture's tab and group (2026-10-04): <c>screen_capture</c> and <c>screen_list</c>, after Camera, before Obsidian.</summary>
+    public const string ScreenTabTitle = "Screen";
+
     /// <summary>The Docker tools' tab and group (2026-10-02), after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
     public const string DockerTabTitle = "Docker";
 
@@ -123,8 +126,8 @@ public static class ToolsText
     /// <summary>The print tools' tab and group (2026-09-28), after UNC, before Camera, since 2026-10-03 (the user's order; after Claude, before Obsidian, from later on 2026-10-01; after Home Assistant until then).</summary>
     public const string PrintTabTitle = "Print";
 
-    /// <summary>The eighteen tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, OracleTabTitle, ClaudeCliTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, GitTabTitle, OptionsTabTitle];
+    /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, OracleTabTitle, ClaudeCliTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row (<c>/mcp</c>'s Tools tab too); "type = filter" since 2026-10-03 (<see cref="MenuFilter"/>). Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
@@ -152,6 +155,9 @@ public static class ToolsText
 
     /// <summary>After the Camera heading while <c>camera_capture</c> is not offered: the switch is off, there is no camera support, or the model reads no pictures (2026-10-02). Pinned.</summary>
     public const string CameraOffSuffix = "(off: Camera tool is off, there is no camera support, or the model reads no pictures)";
+
+    /// <summary>After the Screen heading while the screen tools are not offered: the switch is off, there is no screen capture support, or the model reads no pictures (2026-10-04). Pinned.</summary>
+    public const string ScreenOffSuffix = "(off: Screen capture tool is off, there is no screen capture support, or the model reads no pictures)";
 
     /// <summary>After the ComfyUI heading while the group is not offered: the switch is off, no ComfyUI URL is set or no workflow is offered (2026-09-24). Pinned.</summary>
     public const string ComfyOffSuffix = "(off: ComfyUI tools is off, no ComfyUI URL is set or no workflow is offered)";
@@ -273,6 +279,12 @@ public static class ToolsText
         {
             // The SQL shape (2026-10-02): the switch, no camera layer here, or a model that cannot see.
             return CameraOffSuffix;
+        }
+
+        if (group.Switch == SettingsField.ScreenTools)
+        {
+            // The camera's shape (2026-10-04).
+            return ScreenOffSuffix;
         }
 
         return group.Switch is { } field ? GroupOffSuffix(SettingsMenu.FieldName(field)) : "";

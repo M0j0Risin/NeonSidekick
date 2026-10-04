@@ -848,8 +848,23 @@ public enum SettingsField
     /// <summary>A toggle: whether the <c>/botchat</c> bots remember (<see cref="Settings.AppSettingsData.BotChatMemory"/>). The Botchat tab, under the limited skills (2026-10-04, the user's ask); no reconnect (read per reply).</summary>
     BotChatMemory,
 
-    /// <summary>A picker: whose memories the bots use — <c>shared-parent</c> / <c>independent</c> (<see cref="Settings.AppSettingsData.BotChatMemoryMode"/>). The Botchat tab, under the memory switch (2026-10-04, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
+    /// <summary>A picker: whose memories the bots use — <c>shared-parent</c> / <c>independent</c> (<see cref="Settings.AppSettingsData.BotChatMemoryMode"/>). The Botchat tab, under the memory switch (2026-10-04, the user's ask); no reconnect (read per reply).</summary>
     BotChatMemoryMode,
+
+    /// <summary>A toggle: whether a turn offers <c>screen_capture</c> and <c>screen_list</c> (<see cref="Settings.AppSettingsData.ScreenTools"/>). The Screen tab's first row (2026-10-04); no reconnect (read at each turn).</summary>
+    ScreenTools,
+
+    /// <summary>A picker: whether the model's screenshot waits for the user — <c>ask</c> / <c>allow</c> (<see cref="Settings.AppSettingsData.ScreenAsk"/>). The Screen tab (2026-10-04).</summary>
+    ScreenAsk,
+
+    /// <summary>A toggle: whether the viewer opens on each screenshot (<see cref="Settings.AppSettingsData.ScreenPreview"/>). The Screen tab (2026-10-04).</summary>
+    ScreenPreview,
+
+    /// <summary>Typed: the folder under the working directory the screenshots are saved in (<see cref="Settings.AppSettingsData.ScreenOutputFolder"/>). The Screen tab (2026-10-04), the Camera output folder's shape.</summary>
+    ScreenOutputFolder,
+
+    /// <summary>A toggle: whether a stored session keeps the screenshots (<see cref="Settings.AppSettingsData.ScreenKeepInSessions"/>). The Screen tab's last row (2026-10-04). Last in the enum, as every newcomer.</summary>
+    ScreenKeepInSessions,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1259,6 +1274,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
+        [SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
@@ -1647,7 +1663,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
-            or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera;
+            or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera
+            or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1672,6 +1689,11 @@ internal sealed partial class SettingsMenu
         SettingsField.CameraResolution => "Camera resolution",
         SettingsField.CameraKeepInSessions => "Camera keep in sessions",
         SettingsField.CameraOutputFolder => "Camera output folder",
+        SettingsField.ScreenTools => "Screen capture tool",
+        SettingsField.ScreenAsk => "Screen capture ask",
+        SettingsField.ScreenPreview => "Screen capture preview",
+        SettingsField.ScreenOutputFolder => "Screen capture output folder",
+        SettingsField.ScreenKeepInSessions => "Screen capture keep in sessions",
         SettingsField.CameraWatchSeconds => "Camera watch interval (s)",
         SettingsField.CameraWatchThreshold => "Camera watch change (%)",
         SettingsField.CameraWatchUnprompted => "Camera watch speaks up",
@@ -1968,6 +1990,11 @@ internal sealed partial class SettingsMenu
             SettingsField.CameraResolution => data.CameraResolution,
             SettingsField.CameraKeepInSessions => OnOff(data.CameraKeepInSessions),
             SettingsField.CameraOutputFolder => string.IsNullOrWhiteSpace(data.CameraOutputFolder) ? CameraOutputHereLabel : data.CameraOutputFolder,
+            SettingsField.ScreenTools => OnOff(data.ScreenTools),
+            SettingsField.ScreenAsk => data.ScreenAsk,
+            SettingsField.ScreenPreview => OnOff(data.ScreenPreview),
+            SettingsField.ScreenOutputFolder => string.IsNullOrWhiteSpace(data.ScreenOutputFolder) ? CameraOutputHereLabel : data.ScreenOutputFolder,
+            SettingsField.ScreenKeepInSessions => OnOff(data.ScreenKeepInSessions),
             SettingsField.CameraWatchSeconds => Seconds(data.CameraWatchSeconds),
             SettingsField.CameraWatchThreshold => data.CameraWatchThreshold.ToString(CultureInfo.InvariantCulture) + "%",
             SettingsField.CameraWatchUnprompted => OnOff(data.CameraWatchUnprompted),
@@ -2987,6 +3014,7 @@ internal sealed partial class SettingsMenu
         SettingsField.AskMaxQuestions => data.AskMaxQuestions.ToString(CultureInfo.InvariantCulture),
         SettingsField.CameraWatchSeconds => data.CameraWatchSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.CameraOutputFolder => data.CameraOutputFolder,
+        SettingsField.ScreenOutputFolder => data.ScreenOutputFolder,
         SettingsField.CameraWatchThreshold => data.CameraWatchThreshold.ToString(CultureInfo.InvariantCulture),
         SettingsField.CameraWatchMinGapSeconds => data.CameraWatchMinGapSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.AskMaxChoices => data.AskMaxChoices.ToString(CultureInfo.InvariantCulture),
@@ -3956,7 +3984,7 @@ internal sealed partial class SettingsMenu
             return await PickSttDestinationAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field is SettingsField.CameraShutter or SettingsField.CameraPreview or SettingsField.CameraResolution or SettingsField.CameraDevice)
+        if (field is SettingsField.CameraShutter or SettingsField.CameraPreview or SettingsField.CameraResolution or SettingsField.CameraDevice or SettingsField.ScreenAsk)
         {
             return await PickCameraAsync(field, saved, cancellationToken).ConfigureAwait(false);
         }
@@ -4181,7 +4209,7 @@ internal sealed partial class SettingsMenu
 
         bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCliExecutable or SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
-            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder;
+            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -4865,6 +4893,17 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.CameraOutputFolder = text);
+                return true;
+
+            case SettingsField.ScreenOutputFolder:
+                // The Camera output folder's rule (2026-10-04): under the sandbox only.
+                if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
+                {
+                    Sink.Error($"{FieldName(field)} {CameraOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ScreenOutputFolder = text);
                 return true;
 
             case SettingsField.ImageEditor:
@@ -5773,6 +5812,9 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerWrites => data.DockerWrites,
             SettingsField.CameraTools => data.CameraTools,
             SettingsField.CameraKeepInSessions => data.CameraKeepInSessions,
+            SettingsField.ScreenTools => data.ScreenTools,
+            SettingsField.ScreenPreview => data.ScreenPreview,
+            SettingsField.ScreenKeepInSessions => data.ScreenKeepInSessions,
             SettingsField.CameraWatchUnprompted => data.CameraWatchUnprompted,
             SettingsField.BotChatCamera => data.BotChatCamera,
             SettingsField.DockerServers => data.DockerServers,
@@ -5869,6 +5911,9 @@ internal sealed partial class SettingsMenu
             case SettingsField.DockerTools: data.DockerTools = on; break;
             case SettingsField.CameraTools: data.CameraTools = on; break;
             case SettingsField.CameraKeepInSessions: data.CameraKeepInSessions = on; break;
+            case SettingsField.ScreenTools: data.ScreenTools = on; break;
+            case SettingsField.ScreenPreview: data.ScreenPreview = on; break;
+            case SettingsField.ScreenKeepInSessions: data.ScreenKeepInSessions = on; break;
             case SettingsField.CameraWatchUnprompted: data.CameraWatchUnprompted = on; break;
             case SettingsField.BotChatCamera: data.BotChatCamera = on; break;
             case SettingsField.DockerWrites: data.DockerWrites = on; break;
@@ -5974,6 +6019,9 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerTools => on ? "docker tools enabled" : "docker tools disabled",   // the user's wording, 2026-10-03
         SettingsField.CameraTools => on ? "camera tool enabled" : "camera tool disabled",   // the user's wording, 2026-10-03
         SettingsField.CameraKeepInSessions => on ? "stored sessions keep the camera's pictures" : "stored sessions name the camera's pictures, the files stay in camera/",
+        SettingsField.ScreenTools => on ? "screen capture tool enabled" : "screen capture tool disabled",
+        SettingsField.ScreenPreview => on ? "the viewer shows each screenshot sent" : "screenshots are sent without a preview",
+        SettingsField.ScreenKeepInSessions => on ? "stored sessions keep the screenshots" : "stored sessions name the screenshots, the files stay in screen_images/",
         SettingsField.CameraWatchUnprompted => on ? "watch mode shows the model a change by itself, now and then" : "watch mode's changes ride your next message",
         SettingsField.BotChatCamera => on ? "each bot sees a fresh picture from your camera (vision models)" : "the bots do not see your camera",
         SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",

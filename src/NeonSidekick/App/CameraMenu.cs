@@ -113,15 +113,16 @@ public sealed class CameraMenu
 
     public static readonly IReadOnlyList<CameraAllow> AllowChoices = [CameraAllow.Deny, CameraAllow.Once, CameraAllow.Session];
 
-    public static MenuPage AllowPage(string prompt) =>
-        new(CameraText.AllowTitle, [Markup.Escape(CameraText.DenyRow), Markup.Escape(CameraText.AllowOnceRow), Markup.Escape(CameraText.AllowSessionRow)], CameraText.AllowHint)
+    /// <summary>The allow page: <paramref name="title"/> (the camera's when null; the screen's since 2026-10-04), the three rows, the prompt as its caption.</summary>
+    public static MenuPage AllowPage(string prompt, string? title = null) =>
+        new(title ?? CameraText.AllowTitle, [Markup.Escape(CameraText.DenyRow), Markup.Escape(CameraText.AllowOnceRow), Markup.Escape(CameraText.AllowSessionRow)], CameraText.AllowHint)
         {
             Caption = prompt,
             Hotkeys = AllowHotkeys,
         };
 
     /// <summary>The allow question: the row's answer, Deny for ESC or the token, null with no pane to draw on. The pane closes with the answer.</summary>
-    public async Task<CameraAllow?> AllowAsync(string prompt, CancellationToken cancellationToken)
+    public async Task<CameraAllow?> AllowAsync(string prompt, CancellationToken cancellationToken, string? title = null)
     {
         ArgumentNullException.ThrowIfNull(prompt);
         if (!_pane.Enabled)
@@ -131,7 +132,7 @@ public sealed class CameraMenu
 
         try
         {
-            var pick = await _pane.PickAsync(AllowPage(prompt), 0, cancellationToken).ConfigureAwait(false);
+            var pick = await _pane.PickAsync(AllowPage(prompt, title), 0, cancellationToken).ConfigureAwait(false);
             return pick is { } picked && picked.Row >= 0 && picked.Row < AllowChoices.Count ? AllowChoices[picked.Row] : CameraAllow.Deny;
         }
         finally

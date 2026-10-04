@@ -282,6 +282,11 @@ public static class HelpSettings
         SettingsField.CameraWatchUnprompted => "Off: a changed picture rides your next message. On: the model is shown it unasked, no more often than the gap below, and only while no reply runs, nothing speaks and the input line is empty.",
         SettingsField.CameraWatchMinGapSeconds => "The least time between two unprompted watch turns (30–3600).",
         SettingsField.BotChatCamera => "The bots see you: the camera stays on for the chat, and each bot's turn gets a fresh picture from it, last after the chat's own pictures (4 in all), captioned as a photo of you (User, as the chat names you) and not from any bot; the bots' instructions say the same. The pictures are kept in memory only, never saved. Only for models that read images; a camera that fails is one warning and the chat goes on without it. Read when a chat starts.",
+        SettingsField.ScreenTools => "Offers `screen_capture` and `screen_list`, which let the model see a monitor, every monitor or one window. Never offered without the pane, headless, or to an embedded model without its vision projector. `/screen` works either way.",
+        SettingsField.ScreenAsk => "`ask`: a pane names what would be captured and the model's reason; Deny, Allow once, or Allow for this session (remembered until the session ends). `allow`: taken without asking; the preview still shows what was sent.",
+        SettingsField.ScreenPreview => "Opens the picture viewer on each screenshot taken (without taking the keyboard), so you see exactly what was sent.",
+        SettingsField.ScreenOutputFolder => "The folder under the working directory the screenshots are saved in, made on first use. Empty means the working directory itself.",
+        SettingsField.ScreenKeepInSessions => "Off: a stored session keeps a line naming the screenshot instead of the picture (the file stays in the *Screen capture output folder*), since a screenshot can hold anything that was on the screen. On: stored like any picture.",
         SettingsField.CameraOutputFolder => "The folder under the working directory the photos are saved in, made on first use. Empty means the working directory itself; it may be any folder under it, even the ComfyUI output folder. Watch mode's double-clicked pictures go in its `.watch` subfolder.",
         _ => "",
     };

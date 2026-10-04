@@ -112,6 +112,8 @@ public static partial class SmokeChecks
         results.Add(ProbeLogWindow());
         results.Add(ProbeCameraMf());
         results.Add(ProbeCameraEncode());
+        results.Add(ProbeScreenGdi());
+        results.Add(ProbeScreenWindows());
         results.Add(ProbePrintSpooler());
         results.Add(ProbePdfHtml());
         results.Add(ProbePdfBrowser());

@@ -38,7 +38,7 @@ internal sealed partial class SettingsMenu
     public static string CameraModeLabel(string name, string hint) => Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(Markup.Escape(hint));
 
     /// <summary>
-    /// The four camera pickers (2026-10-02): the shutter and the preview over their names with a hint each, the resolution over
+    /// The four camera pickers (2026-10-02), and the screen capture's ask (2026-10-04, the shutter's shape): the shutter and the preview over their names with a hint each, the resolution over
     /// its three sizes, the device over the cameras Windows lists now (read here; a failure is the sentence on the status line)
     /// with the first-camera row on top. The saved one under the cursor; true when a pick changed it.
     /// </summary>
@@ -58,6 +58,11 @@ internal sealed partial class SettingsMenu
                 values = CameraPreviewMode.Names;
                 rows = values.Select(n => CameraModeLabel(n, CameraPreviewMode.Describe(n))).ToList();
                 current = saved.CameraPreview;
+                break;
+            case SettingsField.ScreenAsk:
+                values = Screen.ScreenAskMode.Names;
+                rows = values.Select(n => CameraModeLabel(n, Screen.ScreenAskMode.Describe(n))).ToList();
+                current = saved.ScreenAsk;
                 break;
             case SettingsField.CameraResolution:
                 values = AppSettingsData.CameraResolutions;
@@ -97,6 +102,7 @@ internal sealed partial class SettingsMenu
                 case SettingsField.CameraShutter: d.CameraShutter = value; break;
                 case SettingsField.CameraPreview: d.CameraPreview = value; break;
                 case SettingsField.CameraResolution: d.CameraResolution = value; break;
+                case SettingsField.ScreenAsk: d.ScreenAsk = value; break;
                 default: d.CameraDevice = value; break;
             }
         });

@@ -302,6 +302,9 @@ public static class SystemPromptSummary
     /// <summary>After the Camera heading while <c>camera_capture</c> is not offered (2026-10-02). Pinned.</summary>
     public const string CameraOffSuffix = "Camera tool is off, there is no pane or camera support, or the model reads no pictures";
 
+    /// <summary>After the Screen heading while the screen tools are not offered (2026-10-04). Pinned.</summary>
+    public const string ScreenOffSuffix = "Screen capture tool is off, there is no pane or screen capture support, or the model reads no pictures";
+
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
     public const string NoInterpreterSuffix = "no interpreter found for the languages in Shell code languages";
 
@@ -571,7 +574,9 @@ public static class SystemPromptSummary
         bool dockerEnabled = true,
         IReadOnlyList<AIFunction>? camera = null,
         bool cameraEnabled = true,
-        IReadOnlyList<AIFunction>? help = null)
+        IReadOnlyList<AIFunction>? help = null,
+        IReadOnlyList<AIFunction>? screen = null,
+        bool screenEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -678,6 +683,13 @@ public static class SystemPromptSummary
             // The camera (2026-10-02): after the print tools; offered while Camera tool is on, with the pane and a model that reads pictures.
             string cameraNote = !cameraEnabled ? NotOffered(CameraOffSuffix) : standing;
             groups.Add(Group(ToolsText.CameraTabTitle, camera, cameraNote, cameraEnabled && toolsEnabled, SettingsField.CameraTools, disabled));
+        }
+
+        if (screen is not null)
+        {
+            // The screen (2026-10-04): after the camera; offered while Screen capture tool is on, with the pane and a model that reads pictures.
+            string screenNote = !screenEnabled ? NotOffered(ScreenOffSuffix) : standing;
+            groups.Add(Group(ToolsText.ScreenTabTitle, screen, screenNote, screenEnabled && toolsEnabled, SettingsField.ScreenTools, disabled));
         }
 
         if (advisor is not null)

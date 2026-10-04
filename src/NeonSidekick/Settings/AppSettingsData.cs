@@ -1331,6 +1331,44 @@ public sealed class AppSettingsData
     public const int MaxCameraWatchMinGapSeconds = 3600;
     public const int DefaultCameraWatchMinGapSeconds = 120;
 
+    // ─── Screen capture (2026-10-04) ────────────────────────────────────────────
+    // The model sees a monitor or a window (the user's ask: "what's this error on my screen?"): screen_capture and screen_list,
+    // /screen for the user's own hand. GDI in-process; /tools' Screen tab, after Camera. None of these has a variable.
+
+    /// <summary>
+    /// Whether a turn offers the model <c>screen_capture</c> and <c>screen_list</c> (2026-10-04): a monitor, every monitor or one
+    /// window, captured and shown to it; <see cref="ScreenAsk"/> says whether the user allows each first. Never offered without
+    /// the bottom pane, headless, nor to an embedded model without vision. Read at each turn. Off by default, as every powerful
+    /// tool. <c>/screen</c> works either way.
+    /// </summary>
+    public bool ScreenTools { get; set; }
+
+    /// <summary>
+    /// Whether the model's screenshot waits for the user (2026-10-04, the user's call): <c>ask</c> (the default: a pane asks Deny /
+    /// Allow once / Allow for this session, naming what would be captured) or <c>allow</c> (taken at once; the preview still shows
+    /// what was sent). One of <see cref="Screen.ScreenAskMode.Names"/>.
+    /// </summary>
+    public string ScreenAsk { get; set; } = Screen.ScreenAskMode.Default;
+
+    /// <summary>Whether the picture viewer opens (without the keyboard) on each screenshot taken, so the user sees exactly what was sent (2026-10-04). On by default.</summary>
+    public bool ScreenPreview { get; set; } = true;
+
+    /// <summary>
+    /// Whether a stored session keeps the screenshots (2026-10-04): off (the default), <c>sessions.db</c> gets a line naming the
+    /// file instead (it stays in <see cref="ScreenOutputFolder"/>); on, they are stored like any picture. A privacy default, as
+    /// <see cref="CameraKeepInSessions"/>: a screenshot can hold anything that was on the screen.
+    /// </summary>
+    public bool ScreenKeepInSessions { get; set; }
+
+    /// <summary>
+    /// The folder under the working directory the screenshots are saved in (2026-10-04, <see cref="CameraOutputFolder"/>'s shape),
+    /// made on first use; empty = the working directory itself. A path that leaves the sandbox is refused on the settings row and
+    /// at every save. <c>screen_images</c>.
+    /// </summary>
+    public string ScreenOutputFolder { get; set; } = DefaultScreenOutputFolder;
+
+    public const string DefaultScreenOutputFolder = "screen_images";
+
     // ─── Files ──────────────────────────────────────────────────────────────────
 
     /// <summary>

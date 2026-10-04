@@ -46,6 +46,8 @@ public static class PlanTools
         "recall_memory", "load_skill", "session_manager", "ask_user",
         // the camera: a photo asked of the user, as a question is (2026-10-02); the shot it saves is the user's own taking
         "camera_capture",
+        // the screen (2026-10-04): a look at what is on it, asked like the camera's photo; screen_list names windows, no pixels
+        "screen_capture", "screen_list",
         // the advisor: Claude reads and answers, read-only whatever Claude CLI slash command permissions says (2026-09-27)
         "claude_advisor_cli",
     };

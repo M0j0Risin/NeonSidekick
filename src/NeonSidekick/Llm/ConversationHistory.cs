@@ -46,6 +46,9 @@ public sealed class ConversationHistory
     /// </summary>
     public const string CameraKey = "neon.camera";
 
+    /// <summary>The additional property a screenshot's image part carries (2026-10-04, the camera's twin): its path; <c>SessionHistory</c> stores a line naming it unless <c>Screen capture keep in sessions</c> is on.</summary>
+    public const string ScreenKey = "neon.screen";
+
     /// <summary>
     /// The <see cref="AIContent.AdditionalProperties"/> key that holds a picture part's path or name, a <see cref="string"/>
     /// (2026-10-03): what <see cref="PictureBudget.LeftOut"/> names when the picture is taken out of a request, so the model
@@ -75,12 +78,21 @@ public sealed class ConversationHistory
             (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[CameraKey] = image.Path;
         }
 
+        if (image.Screen)
+        {
+            (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[ScreenKey] = image.Path;
+        }
+
         return part;
     }
 
     /// <summary>The photo's path when <paramref name="content"/> is a camera picture's part (<see cref="CameraKey"/>); null otherwise.</summary>
     public static string? CameraPath(AIContent content) =>
         content is DataContent && content.AdditionalProperties?.TryGetValue(CameraKey, out var path) == true ? path as string ?? "" : null;
+
+    /// <summary>The screenshot's path when <paramref name="content"/> is a screenshot's part (<see cref="ScreenKey"/>); null otherwise.</summary>
+    public static string? ScreenPath(AIContent content) =>
+        content is DataContent && content.AdditionalProperties?.TryGetValue(ScreenKey, out var path) == true ? path as string ?? "" : null;
 
     /// <summary>A picture part's path or name (<see cref="PathKey"/>); null when it carries none.</summary>
     public static string? PicturePath(AIContent content) =>

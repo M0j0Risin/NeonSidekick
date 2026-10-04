@@ -83,6 +83,9 @@ public sealed class SidekickApp
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
     private readonly Func<string, Docker.DockerClient>? _dockerClient;
     private readonly Camera.ICameraSystem? _camera;
+
+    /// <summary>The screen for <c>screen_capture</c>, <c>screen_list</c> and <c>/screen</c> (2026-10-04); null off Windows.</summary>
+    private readonly Screen.IScreenSystem? _screenSystem;
     private readonly Func<string, Action, Viewer.ILiveView>? _liveView;
     private readonly Action<string>? _showShot;
 
@@ -197,8 +200,11 @@ public sealed class SidekickApp
         Action<string>? showShot = null,
         Action? openLogWindow = null,
         Func<bool>? closeLogWindow = null,
-        Func<bool>? closeViewer = null)
+        Func<bool>? closeViewer = null,
+        Screen.IScreenSystem? screenSystem = null)
     {
+        // The screen (2026-10-04): GDI in the app on Windows, a fake in tests, none elsewhere.
+        _screenSystem = screenSystem;
         // The camera (2026-10-02): Media Foundation in the app on Windows, a fake in tests, none elsewhere; its previews in the
         // picture viewer (live, and a shot opened without the keyboard), none in tests.
         _camera = camera;
@@ -883,6 +889,39 @@ public sealed class SidekickApp
                     foreach (var (cameraLine, cameraError) in await Camera.CameraCommand.ListAsync(camera, EffectiveSettings.CameraDevice, cancellationToken).ConfigureAwait(false))
                     {
                         await HeadlessLineAsync((cameraError ? "[error] " : "") + cameraLine).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
+                // /screen (2026-10-04): the camera's shape; headless lists the targets and captures nothing (a screenshot goes on a line).
+                if (SlashCommands.Parse(text) is (SlashCommand.Screen, var screenArgs))
+                {
+                    if (!string.Equals(screenArgs.Trim(), "list", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await HeadlessLineAsync("[error] " + Screen.ScreenText.NeedsScreen).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (_screenSystem is not { } screenSystem)
+                    {
+                        await HeadlessLineAsync("[error] " + Screen.ScreenText.Unsupported).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    IReadOnlyList<string> screenLines;
+                    try
+                    {
+                        screenLines = Screen.ScreenText.List(screenSystem.Monitors(), screenSystem.OwnMonitor(), screenSystem.Windows(), screenSystem.OwnWindow());
+                    }
+                    catch (Screen.ScreenException e)
+                    {
+                        screenLines = ["[error] " + e.Message];
+                    }
+
+                    foreach (string screenLine in screenLines)
+                    {
+                        await HeadlessLineAsync(screenLine).ConfigureAwait(false);
                     }
 
                     continue;
@@ -1862,7 +1901,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

@@ -119,15 +119,17 @@ public static class SessionHistory
     /// <summary>
     /// The stored form of <paramref name="messages"/>, compact JSON. A camera picture (<see cref="ConversationHistory.CameraKey"/>)
     /// is stored as a line naming its file (<see cref="Camera.CameraText.NotKept"/>) unless <paramref name="keepCamera"/>
-    /// (<c>Camera keep in sessions</c>, 2026-10-02: off by default, so a resumed session does not carry the user's face).
+    /// (<c>Camera keep in sessions</c>, 2026-10-02: off by default, so a resumed session does not carry the user's face); a
+    /// screenshot (<see cref="ConversationHistory.ScreenKey"/>) likewise unless <paramref name="keepScreen"/> (<c>Screen capture keep
+    /// in sessions</c>, 2026-10-04).
     /// </summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false)
     {
         ArgumentNullException.ThrowIfNull(messages);
         var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeAdvisorSessionId = claudeAdvisorSessionId, ClaudeServerSessionId = claudeServerSessionId };
         foreach (var message in messages)
         {
-            document.Messages.Add(Store(message, withThinking, keepCamera));
+            document.Messages.Add(Store(message, withThinking, keepCamera, keepScreen));
         }
 
         return JsonSerializer.Serialize(document, SessionJsonContext.Default.StoredHistory);
@@ -172,7 +174,7 @@ public static class SessionHistory
     }
 
 
-    internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false)
+    internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false, bool keepScreen = false)
     {
         bool carrier = ConversationHistory.IsImageCarrier(message);
         var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Ordinal = ConversationHistory.TurnOrdinal(message), Source = carrier ? ConversationHistory.CarrierSource(message) : null };
@@ -185,6 +187,9 @@ public static class SessionHistory
                     break;
                 case DataContent data when !keepCamera && ConversationHistory.CameraPath(data) is { } cameraPath:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Camera.CameraText.NotKept(cameraPath) });
+                    break;
+                case DataContent data when !keepScreen && ConversationHistory.ScreenPath(data) is { } screenPath:
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Screen.ScreenText.NotKept(screenPath) });
                     break;
                 case DataContent data when data.HasTopLevelMediaType("image"):
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType, Path = ConversationHistory.PicturePath(data) });

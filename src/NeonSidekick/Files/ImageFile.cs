@@ -14,6 +14,12 @@ public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType
     /// unless <c>Camera keep in sessions</c> is on (<c>SessionHistory</c>).
     /// </summary>
     public bool Camera { get; init; }
+
+    /// <summary>
+    /// A screenshot (2026-10-04, <c>screen_capture</c> and <c>/screen</c>): marked as <see cref="Camera"/> is, so a stored session keeps a
+    /// line naming it unless <c>Screen capture keep in sessions</c> is on (<c>SessionHistory</c>).
+    /// </summary>
+    public bool Screen { get; init; }
 }
 
 /// <summary>

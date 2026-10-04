@@ -743,6 +743,16 @@ Every tool, grouped, with the description the model reads. Enter or Space switch
 | Camera watch speaks up | Off, a changed picture rides your next message. On, the model is shown it unasked, at most once per gap below, when nothing else is going on. | off |
 | Camera watch min gap (s) | The least time between unprompted watch turns (30–3600). | 120 |
 
+#### Screen
+
+| Setting | What it does | Default |
+|---|---|---|
+| Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. | off |
+| Screen capture ask | `ask`: a pane names what would be captured and why; Deny, Allow once, or Allow for this session. `allow`: taken without asking. | `ask` |
+| Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
+| Screen capture output folder | Where screenshots are saved, under the working directory (empty = the working directory). | `screen_images` |
+| Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
+
 #### ClaudeCLI
 
 The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (the model asks it). The Anthropic API and the Claude CLI as servers are on `/settings` › Anthropic.
@@ -971,6 +981,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/camera live` | Shows the camera live in its own window until you close it or `/camera off`. |
 | `/camera watch [seconds\|off]` | Looks every *Camera watch interval* (or the seconds given); a picture that changed rides your next message. Never on at startup. |
 | `/camera off` | Ends `/camera live` and watch mode; the camera closes a few seconds later. |
+| `/screen [screen \| all \| monitor:N \| window:<id or title words> \| behind]` | Captures the monitor the app is on (or the target given) and puts the screenshot on the input line as `[Image #N]`. `behind` is the window right behind the app's own: the one you were just in. See Screen capture. |
+| `/screen list` | Lists the monitors and the windows, front to back, with the target that names each. |
 | `/docker` | Docker Desktop's containers on a pane, with state, health and ports. Enter offers what fits: stop, restart or pause (asking first), start or unpause, the last 50 log lines, open a port in the browser, copy the id. |
 | `/docker ps \| status \| logs <container> [lines] \| stats [container]` | The containers; the versions and counts; a container's last lines (50 by default); CPU, memory, network and disk use. |
 | `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container by name, part of a name or id. Your own hand: *Docker writes* doesn't apply and nothing is asked, but every change is logged. |
@@ -1207,6 +1219,16 @@ A USB or built-in webcam through Windows' Media Foundation; nothing to install. 
 * **Failures** say why: Windows' *Let desktop apps access your camera* is off (Settings › Privacy & security › Camera), another app has the camera, it was unplugged, or Media Foundation is missing (Windows N needs the Media Feature Pack).
 * **Watching** uses stills: each picture is compared on your machine with the last one the model saw, and sent only when enough changed.
 
+#### Screen capture
+
+A monitor, every monitor or one window, through Windows' own GDI; nothing to install. Windows only.
+
+* **Targets:** `screen` (the monitor the app is on, the default), `all`, `monitor:N`, `window:<id or title words>` (a title's words, or its process name; an id from `screen_list` or `/screen list` when several match) and `behind` (the window right behind the app's).
+* **A window** is drawn by itself, so it comes out whole even when another covers it; a minimized one must be restored first. Protected video and some HDR content come out black: Windows keeps it out of every screenshot.
+* **Screenshots** are JPEGs in *Screen capture output folder* (`screen_images` by default), named by time, scaled to 2048 pixels on the longer side at most.
+* **Asking:** under *Screen capture ask* `ask` the pane says what would be captured and the model's reason; a denial isn't retried that turn, and *Allow for this session* lasts until the session ends.
+* **Stored sessions** keep a line instead of the picture unless *Screen capture keep in sessions* is on: a screenshot can hold anything that was on the screen.
+
 #### Profiles
 
 * A name is 1 to 32 letters, digits, `-` or `_`, and can't be `neon` or one of the verbs.
@@ -1322,7 +1344,7 @@ Forty-one more presets come with the repo in [`assets/voices`](assets/voices), o
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Claude CLI advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *Claude CLI advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -1972,6 +1994,13 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 | Tool | Arguments | What it does |
 |---|---|---|
 | `camera_capture` | `prompt` | Shows the model's request ("Hold the label up to the camera."), then waits for you to take the photo (*Camera shutter* `user`) or for your permission (`model`). The photo is saved in *Camera output folder* and attached after the result; a decline isn't retried that turn. Allowed in plan mode. |
+
+### Screen
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see Screen capture), after your yes under *Screen capture ask* `ask`. The screenshot is saved in *Screen capture output folder* and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
+| `screen_list` | (none) | Lists the monitors and the windows with the target that names each. Titles and sizes only. Allowed in plan mode. |
 
 ### Questions
 
