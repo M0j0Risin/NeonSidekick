@@ -420,6 +420,8 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 | LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows the summary (or one line per pruned result) and how many messages were kept. | off |
 | LLM tool compact type | What happens when one turn's tool calls reach the auto-compact share. `compact` prunes, then if needed summarises earlier turns and then this turn's earlier calls. `prune` stubs this turn's older results. `stop` ends the turn. `nothing` does nothing. | `compact` |
+| LLM picture keep | The most pictures one request carries (0–500; 0 = no cap). Past it the oldest leave the conversation until half the cap is left, each a line naming its file (`view_image` shows it again); the newest message's pictures always stay. Every picture is sent again with every request, so a long picture session can outgrow what a server takes. | 20 |
+| LLM picture megabytes | The most megabytes of pictures one request carries, as sent (0–1000; 0 = no cap); past it the oldest leave until half is left. A request with pictures that the server drops as it is sent is tried once more with half of them. | 24 |
 | LLM use fun verbs | The thinking spinner shows a random verb instead of `thinking` / `writing`. | off |
 
 #### Sampling per model
@@ -1100,7 +1102,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 #### Imagine options
 
-* The picture is drawn in the transcript, saved in *ComfyUI output folder*, and handed to the model with your next message.
+* The picture is drawn in the transcript, saved in *ComfyUI output folder*, and handed to the model with your next message. The model gets it as a JPEG (a transparent picture stays PNG), so every request after carries a fraction of the bytes; the file saved is the server's own.
 * The first word names the workflow when it matches one; otherwise an offered workflow is used.
 * `-- <negative>` sets the negative; `--no-negative` sends none, not even the workflow's default.
 * `--count` is capped by *ComfyUI max pictures per call*.
@@ -1854,7 +1856,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `generate_image` | `prompt?, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?` | Runs a workflow (the only fitting one when none is named), saving 1 to *ComfyUI max pictures per call* pictures, each with the next seed. The result names the files and seed; the pictures follow in the next message. `prompt` may be left out only for a workflow without `{{prompt}}`. |
+| `generate_image` | `prompt?, workflow?, negative?, negative_extra?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?` | Runs a workflow (the only fitting one when none is named), saving 1 to *ComfyUI max pictures per call* pictures, each with the next seed. The result names the files and seed; the pictures follow in the next message, as JPEG unless transparent. `prompt` may be left out only for a workflow without `{{prompt}}`. |
 | `set_splash_image` | `path, name?` | Copies a picture from the working directory into the profile's `splash` folder, so it shows at start and on `/splash`. The first one replaces the bundled set. |
 
 * A refused run names the node and input at fault (a missing checkpoint, a bad value).

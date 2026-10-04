@@ -293,6 +293,9 @@ public sealed class ComfyTests : IDisposable
         Assert.DoesNotContain("sampler", result.Text);
         Assert.Equal("comfy_images\\pony-txt2img-1234.png", Assert.Single(result.Images).Path);
         Assert.True(File.Exists(Path.Combine(_root, "comfy_images", "pony-txt2img-1234.png")));
+        // To the model as a JPEG (2026-10-03, a render rides every request after); the file saved is the server's own bytes.
+        Assert.Equal(ImageFile.Jpeg, result.Images[0].MediaType);
+        Assert.Equal(Picture(), File.ReadAllBytes(Path.Combine(_root, "comfy_images", "pony-txt2img-1234.png")));
         Assert.Equal("score_9, score_8_up, 1girl", QueuedGraph().GetProperty("6").GetProperty("inputs").GetProperty("text").GetString());
         Assert.Contains("pony (Pony Diffusion XL)", tool.Description);
         Assert.Contains("pony-txt2img · pony · text → image · 1024×1024", tool.Description);

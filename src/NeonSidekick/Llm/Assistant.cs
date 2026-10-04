@@ -629,6 +629,13 @@ public sealed class Assistant
     public bool LastRoundAnswers { get; set; }
 
     /// <summary>
+    /// How many pictures, and megabytes of them, a request may carry (2026-10-03, <see cref="Llm.PictureBudget"/>): applied to the
+    /// history before every request of a turn, the oldest taken out in a batch with <see cref="Llm.PictureBudget.TakenOutNotice"/>
+    /// shown. The compiled defaults until the shell sets the profile's (<c>LLM picture keep</c>, <c>LLM picture megabytes</c>).
+    /// </summary>
+    public PictureBudget PictureBudget { get; set; } = PictureBudget.Default;
+
+    /// <summary>
     /// The context window the tool loop measures a request's usage against (<see cref="WindowTokens"/>,
     /// the figure behind <c>/usage</c>), the share of it that trips the guard (<see cref="Percent"/>,
     /// the setting <c>LLM auto compact (%)</c>; 0 = never) and what the loop then does (<see cref="Mode"/>,
@@ -885,6 +892,51 @@ public sealed class Assistant
     public const string ToolRoleHint = " — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (the LLM tab of /settings) to talk to it without tools";
 
     /// <summary>
+    /// Whether a failed request reads as one the server would not take for its size (2026-10-03, the user's report: a
+    /// llama-server closed the connection on a ~120 MB request of pictures, <c>SocketException: An existing connection was
+    /// forcibly closed by the remote host</c>): an HTTP 413, or the connection reset or aborted under us. A reset has other
+    /// causes too (a server that crashed), so the loop only acts on it for a request that carried pictures and got nothing back.
+    /// </summary>
+    public static bool LooksLikeOversizedRequest(Exception ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is AggregateException aggregate && aggregate.InnerExceptions.Count > 0)
+            {
+                current = aggregate.InnerExceptions[0];
+            }
+
+            switch (current)
+            {
+                case ClientResultException { Status: 413 }:
+                case HttpRequestException { StatusCode: System.Net.HttpStatusCode.RequestEntityTooLarge }:
+                case System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionReset or System.Net.Sockets.SocketError.ConnectionAborted }:
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The notice before the one retry of a request the server dropped as it was sent: <c>The server dropped the request
+    /// as it was sent (118 MB, 54 pictures); the 27 oldest pictures are now their file names. Trying again.</c> Pinned.
+    /// </summary>
+    public static string DroppedRequestNotice(long bytes, int pictures, int takenOut) =>
+        "The server dropped the request as it was sent (" + PictureBudget.FormatMegabytes(bytes) + ", " + pictures.ToString(CultureInfo.InvariantCulture)
+        + (pictures == 1 ? " picture" : " pictures") + "); the " + (takenOut == 1 ? "oldest picture is now its file name" : takenOut.ToString(CultureInfo.InvariantCulture) + " oldest pictures are now their file names") + ". Trying again.";
+
+    /// <summary>
+    /// Appended to the <c>Model error:</c> notice when a request with pictures was dropped and no retry could help:
+    /// <c> — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (the
+    /// LLM tab of /settings) caps them</c>. Pinned.
+    /// </summary>
+    public static string OversizedRequestHint(long bytes, int pictures) =>
+        " — the request was " + PictureBudget.FormatMegabytes(bytes) + " with " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures")
+        + "; /compact prune takes older pictures out, and LLM picture keep (the LLM tab of /settings) caps them";
+
+    /// <summary>
     /// Whether a failure's explanation is a chat template rejecting the <c>tool</c> role:
     /// <c>Only user, system and assistant roles are supported!</c> (Mistral-family templates; SGLang
     /// and vLLM answer HTTP 400 with the template's own words). Case-insensitive on the stable part.
@@ -1095,6 +1147,9 @@ public sealed class Assistant
         // than once but a turn hovering over the share does not pay for a summariser request every iteration.
         bool compactArmed = true;
 
+        // Whether a request the server dropped as it was sent has been tried again with fewer pictures (2026-10-03): once a turn.
+        bool picturesRetried = false;
+
         for (int iteration = 1; iteration <= MaxToolIterations; iteration++)
         {
             if (_time.GetElapsedTime(started) >= _timeouts.Turn)
@@ -1126,7 +1181,18 @@ public sealed class Assistant
             // A turn cancelled before its request (2026-09-25: the /botchat ESC that ends the chat can land as the next bot's
             // turn opens) asks nothing: the server never sees a request its caller has already given up on.
             cancellationToken.ThrowIfCancellationRequested();
+
+            // The picture budget (2026-10-03): the oldest pictures out of the history itself, in a batch, before the request is built.
+            var trimmed = _history.ApplyPictureBudget(PictureBudget);
+            if (trimmed.Pictures > 0)
+            {
+                string notice = PictureBudget.TakenOutNotice(trimmed.Pictures, trimmed.Bytes);
+                DiagnosticLog.Info(Category, notice);
+                yield return new TurnEvent.Notice(notice, IsError: false);
+            }
+
             var request = _history.BuildRequest();
+            var (sentPictures, sentBytes) = PictureBudget.Measure(request);
             log.Requests++;
 
             // The last round trip without the tools, when the turn asks for it (LastRoundAnswers, 2026-09-30).
@@ -1266,6 +1332,27 @@ public sealed class Assistant
 
                 string explained = ExplainFailure(failure!, lastUsage);
                 DiagnosticLog.Info(Category, "Model call failed: " + explained);
+                if (first is null && partial.Length == 0 && sentPictures > 0 && LooksLikeOversizedRequest(failure!))
+                {
+                    // A request with pictures dropped before a byte came back (2026-10-03): most likely its size. Once a
+                    // turn, half the pictures it carried come out of the history and the same round goes again.
+                    if (!picturesRetried)
+                    {
+                        picturesRetried = true;
+                        var cut = _history.TakePicturesOut(sentPictures / 2, sentBytes / 2);
+                        if (cut.Pictures > 0)
+                        {
+                            string retry = DroppedRequestNotice(sentBytes, sentPictures, cut.Pictures);
+                            DiagnosticLog.Info(Category, retry);
+                            yield return new TurnEvent.Notice(retry, IsError: false);
+                            iteration--;
+                            continue;
+                        }
+                    }
+
+                    explained += OversizedRequestHint(sentBytes, sentPictures);
+                }
+
                 if (options.Tools is not null && LooksLikeToolRoleRejection(explained))
                 {
                     explained += ToolRoleHint;
@@ -1557,10 +1644,23 @@ public sealed class Assistant
     /// </summary>
     private async Task<(string Text, TokenUsage? Usage)> SummarizeAsync(string instruction, IReadOnlyList<ChatMessage> transcript, string requestLine, CancellationToken cancellationToken)
     {
+        // Within the picture budget (2026-10-03): a copy, the history untouched; a summary of a picture-heavy past sent every
+        // picture once and could fail as the turn had.
         var request = new List<ChatMessage>(transcript.Count + 2) { new(ChatRole.System, instruction) };
-        request.AddRange(transcript);
+        request.AddRange(PictureBudget.Apply(transcript).Messages);
         request.Add(new ChatMessage(ChatRole.User, requestLine));
-        var attempt = await RequestSummaryAsync(request, cancellationToken).ConfigureAwait(false);
+        SummaryAttempt attempt;
+        try
+        {
+            attempt = await RequestSummaryAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested && PictureBudget.Measure(request).Pictures > 0)
+        {
+            // A first try with pictures that failed outright (2026-10-03) goes on to the lean transcript, which has none.
+            DiagnosticLog.Debug(Category, "Summary request failed with pictures in it (" + Explain(ex) + ").");
+            attempt = new SummaryAttempt("", null, null, 0, null);
+        }
+
         var usage = attempt.Usage;
         if (attempt.Text.Length == 0)
         {

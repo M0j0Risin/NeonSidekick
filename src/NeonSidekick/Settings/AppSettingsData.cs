@@ -416,6 +416,29 @@ public sealed class AppSettingsData
     public int LlmCompactKeepRecent { get; set; } = 2;
 
     /// <summary>
+    /// The most pictures a request carries (2026-10-03, the user's report of a ComfyUI session whose ~50 pictures made a
+    /// ~120 MB request the embedded llama-server dropped): over it, the oldest come out of the conversation until half
+    /// are left, each a line naming its file (<see cref="Llm.PictureBudget"/>); the newest message's never. 0 = no cap.
+    /// <see cref="MinLlmPictureKeep"/> to <see cref="MaxLlmPictureKeep"/>. The LLM tab, after the compact rows; read at each request. No variable.
+    /// </summary>
+    public int LlmPictureKeep { get; set; } = Llm.PictureBudget.DefaultPictures;
+
+    /// <summary>
+    /// The most megabytes of pictures (as sent, base64) a request carries (2026-10-03, with <see cref="LlmPictureKeep"/>): over
+    /// it, the oldest come out until half the figure is left. 0 = no cap. <see cref="MinLlmPictureMegabytes"/> to
+    /// <see cref="MaxLlmPictureMegabytes"/>. The LLM tab, under <c>LLM picture keep</c>. No variable.
+    /// </summary>
+    public int LlmPictureMegabytes { get; set; } = Llm.PictureBudget.DefaultMegabytes;
+
+    /// <summary>The least and the most <see cref="LlmPictureKeep"/> may be (0 = no cap).</summary>
+    public const int MinLlmPictureKeep = 0;
+    public const int MaxLlmPictureKeep = 500;
+
+    /// <summary>The least and the most <see cref="LlmPictureMegabytes"/> may be (0 = no cap).</summary>
+    public const int MinLlmPictureMegabytes = 0;
+    public const int MaxLlmPictureMegabytes = 1000;
+
+    /// <summary>
     /// After a compact the transcript shows what it did (2026-09-21, the user's call): in summary mode
     /// the summary's lines dim under the compact notice, in prune mode one line per pruned result
     /// (the tool's name and the size), and last (later that day) how many messages were protected at

@@ -20,6 +20,13 @@ public sealed class StoredMessage
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Ordinal { get; set; }
 
+    /// <summary>
+    /// The tool a carrier's pictures came from (<see cref="ConversationHistory.SourceKey"/>, 2026-10-03), what a prune's stub
+    /// credits. Left out while null, so an older row reads the same and its stub credits <c>view_image</c> as before.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Source { get; set; }
+
     public List<StoredPart> Parts { get; set; } = new();
 }
 
@@ -46,6 +53,13 @@ public sealed class StoredPart
     public string? Name { get; set; }
     public string? Arguments { get; set; }
     public bool SkillResult { get; set; }
+
+    /// <summary>
+    /// An image part's path or name (<see cref="ConversationHistory.PathKey"/>, 2026-10-03), what the picture budget names
+    /// when it takes the picture out (<see cref="PictureBudget.LeftOut"/>). Left out while null; an older row's picture has none.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Path { get; set; }
 }
 
 /// <summary>The document a session row's <c>history_json</c> holds.</summary>
@@ -160,7 +174,8 @@ public static class SessionHistory
 
     internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false)
     {
-        var stored = new StoredMessage { Role = message.Role.Value, Carrier = ConversationHistory.IsImageCarrier(message), Ordinal = ConversationHistory.TurnOrdinal(message) };
+        bool carrier = ConversationHistory.IsImageCarrier(message);
+        var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Ordinal = ConversationHistory.TurnOrdinal(message), Source = carrier ? ConversationHistory.CarrierSource(message) : null };
         foreach (var content in message.Contents)
         {
             switch (content)
@@ -172,7 +187,7 @@ public static class SessionHistory
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Camera.CameraText.NotKept(cameraPath) });
                     break;
                 case DataContent data when data.HasTopLevelMediaType("image"):
-                    stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType });
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType, Path = ConversationHistory.PicturePath(data) });
                     break;
                 case FunctionCallContent call:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.CallKind, CallId = call.CallId, Name = call.Name, Arguments = Assistant.SerializeArguments(call.Arguments) });
@@ -200,7 +215,13 @@ public static class SessionHistory
                     contents.Add(new TextContent(part.Text ?? ""));
                     break;
                 case StoredPart.ImageKind when part.Bytes is not null && !string.IsNullOrEmpty(part.MediaType):
-                    contents.Add(new DataContent(Convert.FromBase64String(part.Bytes), part.MediaType));
+                    var picture = new DataContent(Convert.FromBase64String(part.Bytes), part.MediaType);
+                    if (!string.IsNullOrWhiteSpace(part.Path))
+                    {
+                        picture.AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.PathKey] = part.Path };
+                    }
+
+                    contents.Add(picture);
                     break;
                 case StoredPart.CallKind when part.CallId is not null && part.Name is not null:
                     contents.Add(new FunctionCallContent(part.CallId, part.Name, ParseArguments(part.Arguments)));
@@ -229,6 +250,10 @@ public static class SessionHistory
         if (stored.Carrier)
         {
             message.AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.CarrierKey] = true };
+            if (!string.IsNullOrWhiteSpace(stored.Source))
+            {
+                message.AdditionalProperties[ConversationHistory.SourceKey] = stored.Source;
+            }
         }
 
         if (stored.Ordinal is { } ordinal)

@@ -32,9 +32,10 @@ public class ImageFileTests : IDisposable
 
     private static bool IsJpeg(byte[] bytes) => bytes.Length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
 
-    /// <summary>A black 8-bit RGB PNG built by hand: one IDAT of deflated zeros, so a huge picture is a small file.</summary>
-    internal static byte[] BlackPng(int width, int height)
+    /// <summary>A black 8-bit RGB PNG built by hand: one IDAT of deflated zeros, so a huge picture is a small file. With <paramref name="alpha"/> RGBA (all transparent).</summary>
+    internal static byte[] BlackPng(int width, int height, bool alpha = false)
     {
+        int channels = alpha ? 4 : 3;
         using var stream = new MemoryStream();
         stream.Write([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A]);
         byte[] ihdr = new byte[17];
@@ -42,14 +43,14 @@ public class ImageFileTests : IDisposable
         System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(ihdr.AsSpan(4), width);
         System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(ihdr.AsSpan(8), height);
         ihdr[12] = 8;   // bit depth
-        ihdr[13] = 2;   // colour type: RGB
+        ihdr[13] = alpha ? (byte)6 : (byte)2;   // colour type: RGBA or RGB
         Chunk(stream, ihdr);
         using (var idat = new MemoryStream())
         {
             idat.Write("IDAT"u8);
             using (var deflate = new System.IO.Compression.ZLibStream(idat, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
             {
-                byte[] row = new byte[1 + width * 3];   // filter byte 0, then black pixels
+                byte[] row = new byte[1 + width * channels];   // filter byte 0, then black pixels
                 for (int y = 0; y < height; y++)
                 {
                     deflate.Write(row);
@@ -398,6 +399,49 @@ public class ImageFileTests : IDisposable
         Assert.Equal(ImageLoadFailure.TooLarge, failure);
         Assert.Throws<ArgumentNullException>(() => ImageFile.Load((byte[])null!, "x", out _));
         Assert.Throws<ArgumentNullException>(() => ImageFile.Load([], null!, out _));
+    }
+
+    // ── A photo for the model (2026-10-03: ComfyUI's renders) ─────────
+
+    [Fact]
+    public void TryLoad_AsAPhoto_SendsAnOpaquePngAsJpeg_AtItsOwnSize()
+    {
+        byte[] png = BlackPng(64, 48);
+
+        Assert.True(ImageFile.TryLoad(png, "comfy_images/a.png", out var image, out var failure, photo: true));
+
+        Assert.Equal(ImageLoadFailure.None, failure);
+        Assert.NotNull(image);
+        Assert.Equal(ImageFile.Jpeg, image.MediaType);
+        Assert.True(IsJpeg(image.Bytes));
+        Assert.Equal((64, 48), (image.Width, image.Height));
+        Assert.Equal("comfy_images/a.png", image.Path);
+    }
+
+    [Fact]
+    public void TryLoad_AsAPhoto_KeepsAPngWithAlpha_AndAJpeg_AsTheyAre()
+    {
+        byte[] transparent = BlackPng(16, 16, alpha: true);
+        byte[] jpeg = File.ReadAllBytes(Jpeg("photo.jpg", 8, 6));
+
+        Assert.True(ImageFile.TryLoad(transparent, "t.png", out var kept, out _, photo: true));
+        Assert.True(ImageFile.TryLoad(jpeg, "p.jpg", out var photo, out _, photo: true));
+
+        Assert.Equal(ImageFile.Png, kept!.MediaType);
+        Assert.Same(transparent, kept.Bytes);
+        Assert.Equal(ImageFile.Jpeg, photo!.MediaType);
+        Assert.Same(jpeg, photo.Bytes);
+    }
+
+    [Fact]
+    public void TryLoad_NotAsAPhoto_SendsAFittingPng_ByteForByte_AsEver()
+    {
+        byte[] png = BlackPng(64, 48);
+
+        Assert.True(ImageFile.TryLoad(png, "shot.png", out var image, out _));
+
+        Assert.Equal(ImageFile.Png, image!.MediaType);
+        Assert.Same(png, image.Bytes);
     }
 
     [Fact]

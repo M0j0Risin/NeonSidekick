@@ -12953,6 +12953,9 @@ internal sealed partial class ChatScreen
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaker is not null);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         // The shells found are probed afresh per turn (2026-09-21): an install during the session shows without a restart, and the schema and the run agree.
+        // The picture budget (2026-10-03), a bot's turn too: read at each turn, so an edit lands at the next request.
+        assistant.PictureBudget = new PictureBudget(effective.LlmPictureKeep, effective.LlmPictureMegabytes);
+
         // A /botchat turn's prompt and (empty) tool list are its own, set by HandleBotChatAsync.
         if (bot is null)
         {

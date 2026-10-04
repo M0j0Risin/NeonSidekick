@@ -268,9 +268,16 @@ public static class ConversationCompactor
     public static string PrunedStub(int length) =>
         "(a " + length.ToString("N0", CultureInfo.InvariantCulture) + "-character result, pruned by /compact)";
 
-    /// <summary>What a carrier's pictures become: <c>(a picture from view_image, pruned by /compact)</c>, <c>(2 pictures …)</c>. Pinned.</summary>
-    public static string PrunedImageStub(int pictures) =>
-        (pictures == 1 ? "(a picture" : "(" + pictures.ToString(CultureInfo.InvariantCulture) + " pictures") + " from " + Tools.ViewImageTool.ToolName + ", pruned by /compact)";
+    /// <summary>
+    /// What a carrier's pictures become: <c>(a picture from view_image, pruned by /compact)</c>, <c>(2 pictures …)</c>.
+    /// Since 2026-10-03 <paramref name="source"/> is the tool the carrier credits (<see cref="ConversationHistory.CarrierSource"/>:
+    /// <c>generate_image</c>'s pictures once read as <c>view_image</c>'s too), <c>view_image</c> when none is known. Pinned.
+    /// </summary>
+    public static string PrunedImageStub(int pictures, string? source = null) =>
+        (pictures == 1 ? "(a picture" : "(" + pictures.ToString(CultureInfo.InvariantCulture) + " pictures") + " from " + (string.IsNullOrWhiteSpace(source) ? Tools.ViewImageTool.ToolName : source) + ", pruned by /compact)";
+
+    /// <summary>The <see cref="PrunedEntry"/> tool a user's own picture is listed under in the prune report (2026-10-03, <c>2 pictures from you</c>): it came from no tool. Pinned.</summary>
+    public const string UserPictureEntry = "you";
 
     /// <summary>
     /// Splits <paramref name="messages"/> at a user-message boundary: the last <paramref name="keepRecent"/>
@@ -332,7 +339,7 @@ public static class ConversationCompactor
     {
         ArgumentNullException.ThrowIfNull(plan);
         var messages = new List<ChatMessage>(plan.Older.Count + plan.Recent.Count);
-        int pruned = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, entries is null ? null : CallNames(plan.Older), dropThinking: true);
+        int pruned = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, entries is null ? null : CallNames(plan.Older), dropThinking: true, userPictures: true);
         messages.AddRange(plan.Recent);
         return (messages, pruned);
     }
@@ -409,8 +416,10 @@ public static class ConversationCompactor
     /// is not while <paramref name="protectSkills"/> — the <c>Skill compact mode</c> setting.
     /// With <paramref name="entries"/> each stub is logged there, its tool looked up in <paramref name="names"/> (<see cref="CallNames"/>).
     /// With <paramref name="dropThinking"/> an assistant message goes without its <see cref="TextReasoningContent"/>, not counted.
+    /// With <paramref name="userPictures"/> (the older turns' prune, 2026-10-03) a user message's own pictures go too, each
+    /// <see cref="PictureBudget.LeftOut"/>, counted; never in the turn in flight, whose pictures the user just gave.
     /// </summary>
-    private static int Stub(IReadOnlyList<ChatMessage> messages, int from, int to, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries, IReadOnlyDictionary<string, string>? names, bool dropThinking = false)
+    private static int Stub(IReadOnlyList<ChatMessage> messages, int from, int to, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries, IReadOnlyDictionary<string, string>? names, bool dropThinking = false, bool userPictures = false)
     {
         int pruned = 0;
         for (int index = from; index < to; index++)
@@ -425,12 +434,28 @@ public static class ConversationCompactor
                     continue;
                 }
 
-                into.Add(new ChatMessage(ChatRole.User, PrunedImageStub(pictures))
+                string? source = ConversationHistory.CarrierSource(message);
+                var properties = new AdditionalPropertiesDictionary { [ConversationHistory.CarrierKey] = true };
+                if (source is not null)
                 {
-                    AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.CarrierKey] = true },
-                });
+                    properties[ConversationHistory.SourceKey] = source;
+                }
+
+                into.Add(new ChatMessage(ChatRole.User, PrunedImageStub(pictures, source)) { AdditionalProperties = properties });
                 pruned += pictures;
-                entries?.Add(new PrunedEntry(Tools.ViewImageTool.ToolName, 0, pictures));
+                entries?.Add(new PrunedEntry(source ?? Tools.ViewImageTool.ToolName, 0, pictures));
+                continue;
+            }
+
+            if (userPictures && message.Role == ChatRole.User && message.Contents.Any(c => c is DataContent))
+            {
+                // An older turn's own pictures (2026-10-03: pasted, /imagine's, the camera's), each its line naming the file, the text kept.
+                var kept = message.Clone();
+                kept.Contents = message.Contents.Select(c => c is DataContent picture ? new TextContent(PictureBudget.LeftOut(ConversationHistory.PicturePath(picture))) : c).ToList();
+                int pictures = message.Contents.Count(c => c is DataContent);
+                into.Add(kept);
+                pruned += pictures;
+                entries?.Add(new PrunedEntry(UserPictureEntry, 0, pictures));
                 continue;
             }
 

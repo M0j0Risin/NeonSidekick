@@ -315,7 +315,18 @@ public static class ImageFile
     /// caps and the same re-encode as a file; <see cref="ImageLoadFailure.NotFound"/> never.
     /// Never throws for bad bytes.
     /// </summary>
-    public static bool TryLoad(byte[] bytes, string name, out ImageAttachment? image, out ImageLoadFailure failure)
+    public static bool TryLoad(byte[] bytes, string name, out ImageAttachment? image, out ImageLoadFailure failure) =>
+        TryLoad(bytes, name, out image, out failure, photo: false);
+
+    /// <summary>
+    /// <see cref="TryLoad(byte[], string, out ImageAttachment?, out ImageLoadFailure)"/> for a picture that is a photo or a
+    /// painting rather than a screenshot (2026-10-03, the user's ask after a session of ComfyUI pictures outgrew what the
+    /// embedded llama-server would take in one request): with <paramref name="photo"/> a picture with no alpha goes to the
+    /// model as a JPEG at <see cref="JpegQuality"/> even when it fits — a 1152×896 render is ~1.6 MB as PNG and ~250 KB
+    /// as JPEG, and every request carries it again. One with transparency stays as it would have been (a JPEG would
+    /// flatten it); a JPEG source is as before. Only the bytes for the model: the file on disk is the caller's and is never touched.
+    /// </summary>
+    public static bool TryLoad(byte[] bytes, string name, out ImageAttachment? image, out ImageLoadFailure failure, bool photo)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         ArgumentNullException.ThrowIfNull(name);
@@ -347,13 +358,14 @@ public static class ImageFile
             string source = loaded.MimeType ?? "";
             bool keepsPng = string.Equals(source, Png, StringComparison.OrdinalIgnoreCase);
             bool keepsJpeg = string.Equals(source, Jpeg, StringComparison.OrdinalIgnoreCase);
-            if (fits && (keepsPng || keepsJpeg) && frame.ExifOrientation == Orientation.Normal)
+            bool toJpeg = photo && !keepsJpeg && !frame.HasAlpha;
+            if (fits && !toJpeg && (keepsPng || keepsJpeg) && frame.ExifOrientation == Orientation.Normal)
             {
                 image = new ImageAttachment(name, bytes, keepsPng ? Png : Jpeg, frame.Width, frame.Height);
                 return true;
             }
 
-            string mediaType = SentAs(source);
+            string mediaType = toJpeg ? Jpeg : SentAs(source);
             var settings = new ProcessImageSettings
             {
                 Width = MaxSide,

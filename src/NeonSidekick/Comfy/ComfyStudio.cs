@@ -376,7 +376,8 @@ public sealed class ComfyStudio : IDisposable
                 }
 
                 saved.Add(relative);
-                if (ImageFile.TryLoad(picture.Bytes, relative, out var attachment, out _) && attachment is not null)
+                // As a JPEG for the model (2026-10-03): a render is a painting, not a screenshot, and rides every request after.
+                if (ImageFile.TryLoad(picture.Bytes, relative, out var attachment, out _, photo: true) && attachment is not null)
                 {
                     images.Add(attachment with { Path = relative });
                 }

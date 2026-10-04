@@ -820,6 +820,12 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Pdf.PdfEngine.Names"/>: what makes a PDF (<see cref="Settings.AppSettingsData.PdfEngine"/>). The Print tab of <c>/tools</c>, after <see cref="PrintFontSize"/> (2026-10-03, the user's ask); no reconnect (read at each PDF). Last in the enum, as every newcomer.</summary>
     PdfEngine,
+
+    /// <summary>Typed: the most pictures a request carries, 0 (no cap) to 500 (<see cref="Settings.AppSettingsData.LlmPictureKeep"/>). The LLM tab, after <see cref="LlmToolCompactType"/> (2026-10-03, the user's report); no reconnect (read at each request). Last in the enum, as every newcomer.</summary>
+    LlmPictureKeep,
+
+    /// <summary>Typed: the most megabytes of pictures a request carries, 0 (no cap) to 1000 (<see cref="Settings.AppSettingsData.LlmPictureMegabytes"/>). The LLM tab, under <see cref="LlmPictureKeep"/> (2026-10-03); no reconnect. Last in the enum, as every newcomer.</summary>
+    LlmPictureMegabytes,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -981,6 +987,17 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ReflectionWindow"/>. Pinned.</summary>
     public static readonly string ReflectionWindowRangeError = "must be " + AppSettingsData.MinReflectionWindow.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxReflectionWindow.ToString(CultureInfo.InvariantCulture) + " turns";
+
+    /// <summary>How the menu shows a 0 <see cref="SettingsField.LlmPictureKeep"/> or <see cref="SettingsField.LlmPictureMegabytes"/> (2026-10-03). Pinned.</summary>
+    public const string NoCapLabel = "no cap";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmPictureKeep"/> (2026-10-03). Pinned.</summary>
+    public static readonly string LlmPictureKeepRangeError =
+        "must be " + AppSettingsData.MinLlmPictureKeep.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxLlmPictureKeep.ToString(CultureInfo.InvariantCulture) + " pictures (0 = no cap)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmPictureMegabytes"/> (2026-10-03). Pinned.</summary>
+    public static readonly string LlmPictureMegabytesRangeError =
+        "must be " + AppSettingsData.MinLlmPictureMegabytes.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxLlmPictureMegabytes.ToString(CultureInfo.InvariantCulture) + " MB (0 = no cap)";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmCompactKeepRecent"/>. Pinned.</summary>
     public static readonly string LlmCompactKeepRecentRangeError = "must be 0 to " + Llm.ConversationHistory.DefaultMaxTurns.ToString(CultureInfo.InvariantCulture) + " turns";
@@ -1149,7 +1166,7 @@ internal sealed partial class SettingsMenu
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
-         SettingsField.LlmUseFunVerbs],
+         SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         [SettingsField.SttInput, SettingsField.SttDestination, .. Fields.Where(f => IsVoiceField(f) && f != SettingsField.SttInput)],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
@@ -1644,6 +1661,8 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmAutoCompactPercent => "LLM auto compact (%)",
         SettingsField.LlmMaxTurns => "LLM max turns",
         SettingsField.LlmToolCompactType => "LLM tool compact type",
+        SettingsField.LlmPictureKeep => "LLM picture keep",
+        SettingsField.LlmPictureMegabytes => "LLM picture megabytes",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max length",
@@ -1924,6 +1943,8 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmAutoCompactPercent => data.LlmAutoCompactPercent > 0 ? Percent(data.LlmAutoCompactPercent) : CompactAtOffLabel,
             SettingsField.LlmMaxTurns => data.LlmMaxTurns > 0 ? Turns(data.LlmMaxTurns) : LlmMaxTurnsAutoLabel,
             SettingsField.LlmToolCompactType => data.LlmToolCompactType,
+            SettingsField.LlmPictureKeep => data.LlmPictureKeep > 0 ? ComfyPictures(data.LlmPictureKeep) : NoCapLabel,
+            SettingsField.LlmPictureMegabytes => data.LlmPictureMegabytes > 0 ? data.LlmPictureMegabytes.ToString(CultureInfo.InvariantCulture) + " MB" : NoCapLabel,
             SettingsField.LlmMaxToolIterations => RoundTrips(data.LlmMaxToolIterations),
             SettingsField.ImageThumbnailSize => data.ImageThumbnailSize,
             SettingsField.FileTreeMaxLength => Entries(data.FileTreeMaxLength),
@@ -2793,6 +2814,8 @@ internal sealed partial class SettingsMenu
         SettingsField.SttInterruptEchoGuard => data.SttInterruptEchoGuard.ToString(CultureInfo.InvariantCulture),
         SettingsField.SttInterruptConfirmMs => data.SttInterruptConfirmMs.ToString(CultureInfo.InvariantCulture),
         SettingsField.LlmCompactKeepRecent => data.LlmCompactKeepRecent.ToString(CultureInfo.InvariantCulture),
+        SettingsField.LlmPictureKeep => data.LlmPictureKeep.ToString(CultureInfo.InvariantCulture),
+        SettingsField.LlmPictureMegabytes => data.LlmPictureMegabytes.ToString(CultureInfo.InvariantCulture),
         SettingsField.ReflectionWindow => data.ReflectionWindow.ToString(CultureInfo.InvariantCulture),
         SettingsField.ReflectionMinToolCalls => data.ReflectionMinToolCalls.ToString(CultureInfo.InvariantCulture),
         SettingsField.ReflectionMaxRequests => data.ReflectionMaxRequests.ToString(CultureInfo.InvariantCulture),
@@ -4013,6 +4036,26 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.LlmCompactKeepRecent = keep);
+                return true;
+
+            case SettingsField.LlmPictureKeep:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int pictureKeep) || pictureKeep < AppSettingsData.MinLlmPictureKeep || pictureKeep > AppSettingsData.MaxLlmPictureKeep)
+                {
+                    Sink.Error($"{FieldName(field)} {LlmPictureKeepRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.LlmPictureKeep = pictureKeep);
+                return true;
+
+            case SettingsField.LlmPictureMegabytes:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int pictureMegabytes) || pictureMegabytes < AppSettingsData.MinLlmPictureMegabytes || pictureMegabytes > AppSettingsData.MaxLlmPictureMegabytes)
+                {
+                    Sink.Error($"{FieldName(field)} {LlmPictureMegabytesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.LlmPictureMegabytes = pictureMegabytes);
                 return true;
 
             case SettingsField.ReflectionWindow:

@@ -332,6 +332,38 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · 🖥️ LLM context length: 32,768 tokens", _console.Output);
     }
 
+    /// <summary>The picture budget (2026-10-03): two typed rows, 20 pictures and 24 MB by default, 0 = no cap, out of range refused; no reconnect.</summary>
+    [Fact]
+    public async Task ThePictureBudgetRows_AreTyped_ZeroIsNoCap_OutOfRangeRefused()
+    {
+        _console.Profile.Width = 240;
+        Assert.Equal("LLM picture keep", SettingsMenu.FieldName(SettingsField.LlmPictureKeep));
+        Assert.Equal("LLM picture megabytes", SettingsMenu.FieldName(SettingsField.LlmPictureMegabytes));
+        Assert.Equal("20 pictures", SettingsMenu.FieldValue(SettingsField.LlmPictureKeep, new AppSettingsData(), _settings.ProfileDirectory));
+        Assert.Equal("24 MB", SettingsMenu.FieldValue(SettingsField.LlmPictureMegabytes, new AppSettingsData(), _settings.ProfileDirectory));
+        Assert.Equal("no cap", SettingsMenu.FieldValue(SettingsField.LlmPictureKeep, new AppSettingsData { LlmPictureKeep = 0 }, _settings.ProfileDirectory));
+        Assert.Equal("no cap", SettingsMenu.FieldValue(SettingsField.LlmPictureMegabytes, new AppSettingsData { LlmPictureMegabytes = 0 }, _settings.ProfileDirectory));
+        Assert.Equal("20", SettingsMenu.EditableValue(SettingsField.LlmPictureKeep, new AppSettingsData()));
+        Assert.Equal("must be 0 to 500 pictures (0 = no cap)", SettingsMenu.LlmPictureKeepRangeError);
+        Assert.Equal("must be 0 to 1000 MB (0 = no cap)", SettingsMenu.LlmPictureMegabytesRangeError);
+        Assert.False(SettingsMenu.IsToggle(SettingsField.LlmPictureKeep) || SettingsMenu.IsLlmField(SettingsField.LlmPictureKeep) || SettingsMenu.IsLlmField(SettingsField.LlmPictureMegabytes));
+
+        Down((int)SettingsField.LlmPictureKeep);
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace);       // "20" gone
+        _console.Input.PushText("501");
+        Push(Keys.Enter);                                       // refused
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace);
+        _console.Input.PushText("8");
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Backspace, Keys.Backspace);   // LLM picture megabytes: "24" gone
+        _console.Input.PushText("0");
+        Push(Keys.Enter, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
+        Assert.Equal(8, _settings.Current.LlmPictureKeep);
+        Assert.Equal(0, _settings.Current.LlmPictureMegabytes);
+        Assert.Contains("LLM picture keep " + SettingsMenu.LlmPictureKeepRangeError + "; keeping 20.", _console.Output);
+    }
+
     [Theory]
     [InlineData("-1")]
     [InlineData("32k")]
@@ -879,6 +911,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines,   // later on 2026-10-03, /tools' Options tab: the diff under a file edit
                 SettingsField.ShellPoliceForbiddenStrings,   // later still on 2026-10-03, /tools' Shell tab under the police: the strings it refuses
                 SettingsField.PdfEngine,   // later still on 2026-10-03, /tools' Print tab's last row: what makes a PDF
+                SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -909,7 +942,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("the summary's lines or the pruned results, then the protected counts", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, true));
         Assert.Equal("the one compact notice alone", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, false));
         // The LLM tab in five runs (2026-10-01, the user's call): the connection, how it answers, tools and limits, the context, the fun verbs; the tools toggle still ABOVE the tool-compact picker (the user's order, 2026-09-15).
-        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);   // before that: LLM reasoning estimate under preserve thinking since 2026-09-29;   // LLM sampling last (2026-09-28)
+        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);   // before that: LLM reasoning estimate under preserve thinking since 2026-09-29;   // LLM sampling last (2026-09-28)
         // The tool-compact row (2026-09-15): a picker under LLM offer tools, no reconnect, read at each turn.
         Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmToolCompactType));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmToolCompactType));
@@ -1443,7 +1476,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("every turn's thinking goes back to the server", SettingsMenu.ToggleDescribe(SettingsField.LlmPreserveThinking, true));
         Assert.Equal("only the current turn's thinking goes back to the server", SettingsMenu.ToggleDescribe(SettingsField.LlmPreserveThinking, false));
         // The LLM tab: the scan mode first (where a blank URL looks, so above the URL; a picker, no reconnect), then (2026-10-01, the user's call) the rest of the connection, how it answers, tools and limits, the context and the fun verbs; the reconnecting LLM fields keep their enum order among them.
-        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
+        Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Llm]);
         // The reconnecting rows: the LLM tab's seven (in three runs since 2026-10-01, rows 2 to 8 before; their tab order is still the enum's), then the Claude API's four (2026-09-27; /tools' Claude tab's four above its last since 2026-09-29), then the
         // Embedded tab's, then the Claude CLI server's switch (2026-09-30: the Claude tab's last row), then Embedded VRAM only (2026-10-01), then Docker servers enabled (2026-10-02).
         Assert.Equal(Enum.GetValues<SettingsField>().Where(SettingsMenu.IsLlmField), SettingsMenu.TabFields[(int)SettingsTab.Llm].Where(SettingsMenu.IsLlmField).Concat(ToolsMenuTests.TabFields(ToolsText.ClaudeTabTitle).SkipLast(1).TakeLast(4)).Concat(SettingsMenu.TabFields[(int)SettingsTab.Embedded].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedVramOnly)).OrderBy(f => f)).Append(ToolsMenuTests.TabFields(ToolsText.ClaudeTabTitle)[^1]).Append(SettingsField.EmbeddedVramOnly).Append(SettingsField.DockerServers));   // Docker servers enabled last (2026-10-02, the Docker tab's one reconnecting row); the Embedded LLM tab's rows all reconnect (2026-09-29) but the filter type, display only (later that day), and the HF download type (2026-09-30)
@@ -3136,7 +3169,7 @@ public partial class SettingsMenuTests : IDisposable
         // Each tab under the strip, padded to its own column (28, 32, 19, 26), the whole tab in view, nothing of another tab on it.
         AssertTabEnds("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 100);
         Assert.Contains("\n \n▸ LLM server scan mode            local\n  LLM URL                         (probe local ports)\n  LLM model                       (first listed)\n  LLM API key                     ", _console.Output);
-        AssertTabEnds("\n  LLM reasoning                   none\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n  LLM offer tools                 on\n  LLM max tool iterations         10000 round trips\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM max turns                   auto\n  LLM auto compact (%)            85 %\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM tool compact type           compact\n  LLM use fun verbs               off\n", 100);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
+        AssertTabEnds("\n  LLM reasoning                   none\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n  LLM offer tools                 on\n  LLM max tool iterations         10000 round trips\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM max turns                   auto\n  LLM auto compact (%)            85 %\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM tool compact type           compact\n  LLM picture keep                20 pictures\n  LLM picture megabytes           24 MB\n  LLM use fun verbs               off\n", 100);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
         AssertTabEnds("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n", 100);
         AssertTabEnds("\n \n▸ STT input                 off\n  STT destination           chat\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n", 100);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19

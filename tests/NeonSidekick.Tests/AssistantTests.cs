@@ -1744,6 +1744,165 @@ public class AssistantTests
         Assert.Contains("(1,234 characters)", Assistant.EmptySummaryThinkingError(1234));
     }
 
+    // ── The picture budget and a dropped request (2026-10-03) ─────────
+
+    /// <summary>The socket reset a llama-server's refusal of an oversized body reads as, the way the SDK wraps it.</summary>
+    private static HttpRequestException ConnectionReset() =>
+        new("Error while copying content to a stream.", new IOException("Unable to write data to the transport connection.", new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionReset)));
+
+    private static ImageAttachment Shot(string path) => new(path, new byte[300_000], ImageFile.Jpeg, 8, 8);
+
+    /// <summary>A history holding <paramref name="count"/> earlier turns of one picture each.</summary>
+    private static void Pictures(ConversationHistory history, int count)
+    {
+        for (int i = 1; i <= count; i++)
+        {
+            history.AddUser("look " + i, [Shot("shot" + i + ".png")]);
+            history.AddAssistant("seen " + i);
+        }
+    }
+
+    private static int PicturesIn(IEnumerable<ChatMessage> messages) => messages.Sum(m => m.Contents.Count(c => c is DataContent));
+
+    [Fact]
+    public void LooksLikeOversizedRequest_IsAResetOrA413()
+    {
+        Assert.True(Assistant.LooksLikeOversizedRequest(ConnectionReset()));
+        Assert.True(Assistant.LooksLikeOversizedRequest(new HttpRequestException("too big", null, System.Net.HttpStatusCode.RequestEntityTooLarge)));
+        Assert.True(Assistant.LooksLikeOversizedRequest(new AggregateException(new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionAborted))));
+        Assert.False(Assistant.LooksLikeOversizedRequest(new HttpRequestException("boom", new IOException("socket closed"))));
+        Assert.False(Assistant.LooksLikeOversizedRequest(new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused)));
+    }
+
+    [Fact]
+    public void TheDroppedRequestWording_IsPinned()
+    {
+        Assert.Equal("The server dropped the request as it was sent (118 MB, 54 pictures); the 27 oldest pictures are now their file names. Trying again.", Assistant.DroppedRequestNotice(118_000_000, 54, 27));
+        Assert.Equal("The server dropped the request as it was sent (3 MB, 2 pictures); the oldest picture is now its file name. Trying again.", Assistant.DroppedRequestNotice(3_000_000, 2, 1));
+        Assert.Equal(" — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (the LLM tab of /settings) caps them", Assistant.OversizedRequestHint(118_000_000, 54));
+    }
+
+    [Fact]
+    public async Task PicturesOverTheBudget_AreTakenOutBeforeTheRequest_WithANotice()
+    {
+        var (client, history, assistant) = Build();
+        Pictures(history, 4);
+        assistant.PictureBudget = new PictureBudget(2, 0);
+        client.EnqueueText("ok");
+
+        var events = await Run(assistant, "and now?");
+
+        var notice = Assert.IsType<TurnEvent.Notice>(events.First(e => e is TurnEvent.Notice));
+        Assert.False(notice.IsError);
+        Assert.Equal(PictureBudget.TakenOutNotice(3, 1_200_000), notice.Text);   // 4 → 1, half of 2; the newest stays
+        Assert.Equal(1, PicturesIn(client.Requests[0]));
+        Assert.Equal(1, PicturesIn(history.Messages));                             // out of the history itself
+    }
+
+    [Fact]
+    public async Task ADefaultBudget_UnderItsCaps_TakesNothingOut()
+    {
+        var (client, history, assistant) = Build();
+        Pictures(history, 3);
+        client.EnqueueText("ok");
+
+        var events = await Run(assistant, "and now?");
+
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice);
+        Assert.Equal(3, PicturesIn(client.Requests[0]));
+    }
+
+    [Fact]
+    public async Task ARequestWithPictures_DroppedAsItWasSent_IsTriedOnceMore_WithHalfThePictures()
+    {
+        var (client, history, assistant) = Build();
+        Pictures(history, 4);
+        assistant.PictureBudget = new PictureBudget(0, 0);
+        client.EnqueueText("never");
+        client.EnqueueText("answered");
+        client.BeforeUpdateOf = (request, _, _) => request == 0 ? throw ConnectionReset() : Task.CompletedTask;
+
+        var events = await Run(assistant, "and now?");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(4, PicturesIn(client.Requests[0]));
+        Assert.Equal(2, PicturesIn(client.Requests[1]));
+        var notice = Assert.IsType<TurnEvent.Notice>(events.First(e => e is TurnEvent.Notice));
+        Assert.False(notice.IsError);
+        Assert.Equal(Assistant.DroppedRequestNotice(1_600_000, 4, 2), notice.Text);
+        Assert.Equal(["answered"], Deltas(events));
+        Assert.Equal("answered", history.Messages[^1].Text);
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+    }
+
+    [Fact]
+    public async Task ASecondDrop_EndsTheTurn_WithTheHint()
+    {
+        var (client, history, assistant) = Build();
+        Pictures(history, 4);
+        assistant.PictureBudget = new PictureBudget(0, 0);
+        client.EnqueueText("never");
+        client.EnqueueText("never");
+        client.ThrowAt = 0;
+        client.Failure = ConnectionReset();
+
+        var events = await Run(assistant, "and now?");
+
+        Assert.Equal(2, client.Requests.Count);
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.True(error.IsError);
+        Assert.EndsWith(Assistant.OversizedRequestHint(800_000, 2), error.Text);
+    }
+
+    [Fact]
+    public async Task AReset_WithNoPictures_IsNotRetried_NorHinted()
+    {
+        var (client, _, assistant) = Build();
+        client.EnqueueText("never");
+        client.ThrowAt = 0;
+        client.Failure = ConnectionReset();
+
+        var events = await Run(assistant, "hi");
+
+        Assert.Single(client.Requests);
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.True(error.IsError);
+        Assert.DoesNotContain("/compact prune", error.Text);
+    }
+
+    [Fact]
+    public async Task AResetAfterTheReplyBegan_IsNotRetried()
+    {
+        var (client, history, assistant) = Build();
+        Pictures(history, 4);
+        assistant.PictureBudget = new PictureBudget(0, 0);
+        client.EnqueueText("par", "tial");
+        client.ThrowAt = 1;
+        client.Failure = ConnectionReset();
+
+        var events = await Run(assistant, "and now?");
+
+        Assert.Single(client.Requests);
+        Assert.True(Assert.IsType<TurnEvent.Notice>(events[^1]).IsError);
+        Assert.Equal(4, PicturesIn(history.Messages));
+    }
+
+    [Fact]
+    public async Task Summarize_AFailureWithPicturesInIt_AsksAgainOverTheLeanTranscript()
+    {
+        var (client, _, assistant) = Build();
+        client.EnqueueText("never");
+        client.EnqueueText("They looked at a photo.");
+        client.BeforeUpdateOf = (request, _, _) => request == 0 ? throw ConnectionReset() : Task.CompletedTask;
+        List<ChatMessage> transcript = [new(ChatRole.User, [new TextContent("look"), ConversationHistory.ImagePart(Shot("a.png"))]), new(ChatRole.Assistant, "a cat")];
+
+        var (text, _) = await assistant.SummarizeAsync(transcript, null, CancellationToken.None);
+
+        Assert.Equal("They looked at a photo.", text);
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(0, PicturesIn(client.Requests[1]));
+    }
+
     [Fact]
     public async Task Summarize_ATransportFailure_IsNotAskedAgain()
     {

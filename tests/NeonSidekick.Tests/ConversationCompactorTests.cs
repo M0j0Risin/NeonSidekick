@@ -206,6 +206,45 @@ public class ConversationCompactorTests
         Assert.Same(stub, again[3]);
     }
 
+    /// <summary>2026-10-03: a carrier's stub credits the tool its pictures came from, and keeps that source for the next prune and the session.</summary>
+    [Fact]
+    public void Prune_ACarrierFromGenerateImage_CreditsIt()
+    {
+        var history = new ConversationHistory("s");
+        history.AddUser("one");
+        history.AddToolImages([new NeonSidekick.Files.ImageAttachment("comfy_images\\a.png", [1, 2, 3], NeonSidekick.Files.ImageFile.Jpeg, 4, 4)], "generate_image");
+        history.AddAssistant("reply one");
+        history.AddUser("two");
+        var entries = new List<ConversationCompactor.PrunedEntry>();
+
+        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(history.Messages.ToList(), keepRecent: 1), entries: entries);
+
+        Assert.Equal(1, count);
+        Assert.Equal(ConversationCompactor.PrunedImageStub(1, "generate_image"), pruned[1].Text);
+        Assert.Equal("generate_image", ConversationHistory.CarrierSource(pruned[1]));
+        Assert.Equal([new ConversationCompactor.PrunedEntry("generate_image", 0, 1)], entries);
+    }
+
+    /// <summary>2026-10-03: an older turn's own pictures (pasted, /imagine's, the camera's) go too, each a line naming its file, the text kept.</summary>
+    [Fact]
+    public void Prune_AnOlderTurnsOwnPictures_BecomeTheirLines_TheTextKept()
+    {
+        var history = new ConversationHistory("s");
+        history.AddUser("what is this [Image #1]", [new NeonSidekick.Files.ImageAttachment("cat.png", [1, 2, 3], NeonSidekick.Files.ImageFile.Png, 4, 4)]);
+        history.AddAssistant("a cat");
+        history.AddUser("and this [Image #1]", [new NeonSidekick.Files.ImageAttachment("dog.png", [1, 2, 3], NeonSidekick.Files.ImageFile.Png, 4, 4)]);
+        var entries = new List<ConversationCompactor.PrunedEntry>();
+
+        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(history.Messages.ToList(), keepRecent: 1), entries: entries);
+
+        Assert.Equal(1, count);
+        Assert.Equal(["what is this [Image #1]", NeonSidekick.Llm.PictureBudget.LeftOut("cat.png")], pruned[0].Contents.OfType<TextContent>().Select(t => t.Text));
+        Assert.Empty(pruned[0].Contents.OfType<DataContent>());
+        Assert.False(ConversationHistory.IsImageCarrier(pruned[0]));
+        Assert.Single(pruned[2].Contents.OfType<DataContent>());   // the recent turn's picture stays
+        Assert.Equal([new ConversationCompactor.PrunedEntry(ConversationCompactor.UserPictureEntry, 0, 1)], entries);
+    }
+
     [Fact]
     public void Prune_LeavesShortResults_AndTheOpeningPairs_WhateverTheirLength()
     {
@@ -293,6 +332,8 @@ public class ConversationCompactorTests
         Assert.Equal("(a 4,312-character result, pruned by /compact)", ConversationCompactor.PrunedStub(4312));
         Assert.Equal("(a picture from view_image, pruned by /compact)", ConversationCompactor.PrunedImageStub(1));
         Assert.Equal("(2 pictures from view_image, pruned by /compact)", ConversationCompactor.PrunedImageStub(2));
+        Assert.Equal("(a picture from generate_image, pruned by /compact)", ConversationCompactor.PrunedImageStub(1, "generate_image"));
+        Assert.Equal("you", ConversationCompactor.UserPictureEntry);
         Assert.StartsWith("You are compacting a conversation between a user and Neon", ConversationCompactor.SummaryInstruction);
         Assert.Contains("do not mention that this is a summary", ConversationCompactor.SummaryInstruction);
         Assert.Equal(200, ConversationCompactor.PruneThreshold);

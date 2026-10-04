@@ -46,14 +46,33 @@ public sealed class ConversationHistory
     /// </summary>
     public const string CameraKey = "neon.camera";
 
-    /// <summary>An attachment's image part: its bytes and type, marked <see cref="CameraKey"/> when it came off the camera.</summary>
+    /// <summary>
+    /// The <see cref="AIContent.AdditionalProperties"/> key that holds a picture part's path or name, a <see cref="string"/>
+    /// (2026-10-03): what <see cref="PictureBudget.LeftOut"/> names when the picture is taken out of a request, so the model
+    /// can look again. Kept in a stored session (<c>StoredPart.Path</c>). Never on the wire.
+    /// </summary>
+    public const string PathKey = "neon.path";
+
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a carrier that holds the tool (or tools) its pictures came
+    /// from, a <see cref="string"/> (2026-10-03): what a prune's stub credits (<see cref="ConversationCompactor.PrunedImageStub"/>),
+    /// once always <c>view_image</c>. Kept in a stored session (<c>StoredMessage.Source</c>). Never on the wire.
+    /// </summary>
+    public const string SourceKey = "neon.imageSource";
+
+    /// <summary>An attachment's image part: its bytes and type, its path under <see cref="PathKey"/>, marked <see cref="CameraKey"/> when it came off the camera.</summary>
     public static DataContent ImagePart(ImageAttachment image)
     {
         ArgumentNullException.ThrowIfNull(image);
         var part = new DataContent(image.Bytes, image.MediaType);
+        if (!string.IsNullOrWhiteSpace(image.Path))
+        {
+            part.AdditionalProperties = new AdditionalPropertiesDictionary { [PathKey] = image.Path };
+        }
+
         if (image.Camera)
         {
-            part.AdditionalProperties = new AdditionalPropertiesDictionary { [CameraKey] = image.Path };
+            (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[CameraKey] = image.Path;
         }
 
         return part;
@@ -62,6 +81,17 @@ public sealed class ConversationHistory
     /// <summary>The photo's path when <paramref name="content"/> is a camera picture's part (<see cref="CameraKey"/>); null otherwise.</summary>
     public static string? CameraPath(AIContent content) =>
         content is DataContent && content.AdditionalProperties?.TryGetValue(CameraKey, out var path) == true ? path as string ?? "" : null;
+
+    /// <summary>A picture part's path or name (<see cref="PathKey"/>); null when it carries none.</summary>
+    public static string? PicturePath(AIContent content) =>
+        content.AdditionalProperties?.TryGetValue(PathKey, out var path) == true && path is string { Length: > 0 } text ? text : null;
+
+    /// <summary>The tool a carrier's pictures came from (<see cref="SourceKey"/>); null when it names none (a session stored before it did).</summary>
+    public static string? CarrierSource(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties?.TryGetValue(SourceKey, out var source) == true && source is string { Length: > 0 } text ? text : null;
+    }
 
     /// <summary>
     /// The <see cref="AIContent.AdditionalProperties"/> key that marks a <see cref="FunctionResultContent"/>
@@ -192,7 +222,39 @@ public sealed class ConversationHistory
             contents.Add(ImagePart(image));
         }
 
-        _messages.Add(new ChatMessage(ChatRole.User, contents) { AdditionalProperties = new AdditionalPropertiesDictionary { [CarrierKey] = true } });
+        var properties = new AdditionalPropertiesDictionary { [CarrierKey] = true };
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            properties[SourceKey] = source;
+        }
+
+        _messages.Add(new ChatMessage(ChatRole.User, contents) { AdditionalProperties = properties });
+    }
+
+    /// <summary>
+    /// Takes pictures out of the transcript itself to keep it within <paramref name="budget"/> (2026-10-03,
+    /// <see cref="PictureBudget.Apply"/>): in history, not just on the wire, so the stored session and the process's memory
+    /// shrink with the request. Returns what was taken out; message order and count never change.
+    /// </summary>
+    public PictureTrim ApplyPictureBudget(PictureBudget budget) => Swap(budget.Apply(_messages));
+
+    /// <summary>
+    /// <see cref="ApplyPictureBudget"/> to explicit limits (<see cref="PictureBudget.TakeOut"/>): the retry after a
+    /// request the server dropped as it was sent keeps half the pictures that request carried.
+    /// </summary>
+    public PictureTrim TakePicturesOut(int keepPictures, long keepBytes) => Swap(PictureBudget.TakeOut(_messages, keepPictures, keepBytes));
+
+    private PictureTrim Swap(PictureTrim trim)
+    {
+        if (trim.Pictures > 0)
+        {
+            for (int i = 0; i < _messages.Count; i++)
+            {
+                _messages[i] = trim.Messages[i];
+            }
+        }
+
+        return trim;
     }
 
     public void AddUser(string text) => AddUser(text, []);

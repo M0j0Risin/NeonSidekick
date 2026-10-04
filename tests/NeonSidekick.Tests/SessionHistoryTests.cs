@@ -180,4 +180,26 @@ public class SessionHistoryTests
         var old = SessionHistory.FromJson("{\"SchemaVersion\":1,\"Messages\":[{\"Role\":\"user\",\"Carrier\":false,\"Parts\":[{\"Kind\":\"text\",\"Text\":\"hi\"}]}]}");
         Assert.Null(ConversationHistory.TurnOrdinal(Assert.Single(old)));
     }
+
+    /// <summary>A picture's path and a carrier's tool (2026-10-03, the picture budget and the prune stub) round-trip; an older document reads as neither.</summary>
+    [Fact]
+    public void APicturesPath_AndACarriersSource_RoundTrip_AndAnOlderRowHasNeither()
+    {
+        var history = new ConversationHistory("");
+        history.AddUser("draw");
+        history.AddToolImages([new ImageAttachment("comfy_images\\a.png", [9, 9], "image/jpeg", 1, 2)], "generate_image");
+
+        string json = SessionHistory.ToJson(history.Messages);
+        var back = SessionHistory.FromJson(json);
+
+        Assert.Equal("generate_image", ConversationHistory.CarrierSource(back[1]));
+        Assert.Equal("comfy_images\\a.png", ConversationHistory.PicturePath(Assert.IsType<DataContent>(back[1].Contents[1])));
+        Assert.Null(ConversationHistory.CarrierSource(back[0]));
+        Assert.Equal(1, json.Split("\"Source\"").Length - 1);
+        var old = SessionHistory.FromJson("{\"SchemaVersion\":1,\"Messages\":[{\"Role\":\"user\",\"Carrier\":true,\"Parts\":[{\"Kind\":\"image\",\"Bytes\":\"CQk=\",\"MediaType\":\"image/png\"}]}]}");
+        var carrier = Assert.Single(old);
+        Assert.True(ConversationHistory.IsImageCarrier(carrier));
+        Assert.Null(ConversationHistory.CarrierSource(carrier));
+        Assert.Null(ConversationHistory.PicturePath(Assert.IsType<DataContent>(carrier.Contents[0])));
+    }
 }

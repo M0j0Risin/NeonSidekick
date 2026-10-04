@@ -674,6 +674,8 @@ public sealed class AppSettings : IDisposable
         LlmAutoCompactPercent = source.LlmAutoCompactPercent,
         LlmMaxTurns = source.LlmMaxTurns,
         LlmCompactKeepRecent = source.LlmCompactKeepRecent,
+        LlmPictureKeep = source.LlmPictureKeep,
+        LlmPictureMegabytes = source.LlmPictureMegabytes,
         LlmCompactShowSummary = source.LlmCompactShowSummary,
         LlmCompactType = source.LlmCompactType,
         LlmContextLength = source.LlmContextLength,
