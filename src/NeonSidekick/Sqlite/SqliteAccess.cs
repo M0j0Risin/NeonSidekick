@@ -165,10 +165,13 @@ public sealed class SqliteAccess
                     command.Transaction = transaction;
                     command.CommandText = sql;
                     // A placeholder params does not name binds as NULL, PostgresAccess's way (the 2026-10-04 review): left unbound,
-                    // Microsoft.Data.Sqlite threw an InvalidOperationException past the SqliteException catches below.
+                    // Microsoft.Data.Sqlite threw an InvalidOperationException past the SqliteException catches below. Each
+                    // placeholder takes the params name in its own case first, else any case (:id and :ID are two to SQLite).
                     foreach (string bind in SqliteReadOnlyGate.Binds(sql))
                     {
-                        var value = parameters.FirstOrDefault(p => string.Equals(p.Name, bind[1..], StringComparison.OrdinalIgnoreCase));
+                        string name = bind[1..];
+                        var value = parameters.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.Ordinal))
+                            ?? parameters.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
                         command.Parameters.Add(Bind(bind, value?.Value));
                     }
 

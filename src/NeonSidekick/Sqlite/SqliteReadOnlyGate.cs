@@ -131,9 +131,13 @@ public static class SqliteReadOnlyGate
         return null;
     }
 
-    /// <summary>The named placeholders the text uses, each once, as written (<c>@id</c>, <c>:name</c>); empty when the text does not lex.</summary>
+    /// <summary>
+    /// The named placeholders the text uses, each once, as written (<c>@id</c>, <c>:name</c>); empty when the text does not lex.
+    /// Told apart by case (code review, 2026-10-04): SQLite's names are case-sensitive, so <c>:id</c> and <c>:ID</c> are two, and
+    /// folding them left one unbound for Microsoft.Data.Sqlite to throw on.
+    /// </summary>
     public static IReadOnlyList<string> Binds(string sql) =>
-        Tokenize(sql ?? "", out _) is { } tokens ? tokens.Where(t => t.Kind == TokenKind.Bind).Select(t => t.Text).Distinct(StringComparer.OrdinalIgnoreCase).ToList() : [];
+        Tokenize(sql ?? "", out _) is { } tokens ? tokens.Where(t => t.Kind == TokenKind.Bind).Select(t => t.Text).Distinct(StringComparer.Ordinal).ToList() : [];
 
     /// <summary>The text without a trailing <c>;</c> (and what follows it of blanks and comments): what runs.</summary>
     public static string Body(string sql)

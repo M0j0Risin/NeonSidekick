@@ -54,7 +54,7 @@ public sealed class SqliteReadOnlyGateTests
     [Fact]
     public void Binds_AndBody()
     {
-        Assert.Equal(["@id", ":name", "$x"], SqliteReadOnlyGate.Binds("SELECT @id, :name, $x, @ID, '@not'"));
+        Assert.Equal(["@id", ":name", "$x", "@ID"], SqliteReadOnlyGate.Binds("SELECT @id, :name, $x, @ID, @id, '@not'"));
         Assert.Equal("SELECT 1", SqliteReadOnlyGate.Body("SELECT 1 ;  "));
         Assert.Equal("SELECT 1", SqliteReadOnlyGate.Body("SELECT 1"));
     }
@@ -182,6 +182,12 @@ public sealed class SqliteToolsTests : IDisposable
         var unbound = await access.RunAsync("shop", null, ["SELECT @missing IS NULL"], [], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, unbound.Outcome);
         Assert.Equal("1", unbound.Grids[0].Rows[0][0]);
+
+        // SQLite's placeholder names are case-sensitive: :x and :X are two, each bound (code review, 2026-10-04: one was left
+        // unbound and threw past the catches), a params name in the same case first, else any case.
+        var cased = await access.RunAsync("shop", null, ["SELECT :x, :X, :y IS NULL, :Y IS NULL, :z"], [new("x", 1L), new("X", 2L), new("Z", 3L)], 10, 5, CancellationToken.None);
+        Assert.Equal(SqlOutcome.Ok, cased.Outcome);
+        Assert.Equal(["1", "2", "1", "1", "3"], cased.Grids[0].Rows[0]);
 
         var capped = await access.RunAsync("shop", null, ["SELECT * FROM customers"], [], 2, 5, CancellationToken.None);
         Assert.True(capped.Grids[0].More);

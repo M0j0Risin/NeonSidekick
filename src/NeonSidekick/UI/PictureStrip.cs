@@ -124,8 +124,11 @@ public sealed class PictureStrip
     /// goes by <paramref name="path"/> (2026-10-04, the user's report: with <c>Botchat image async</c> a bot's picture reached the
     /// strip only when the chat drew it, after pictures made later had landed left of it — the viewer orders by the files, so
     /// the strip now does too, <c>ViewerState.Reset</c>'s key). The usual newest picture lands at the left as ever; past
-    /// <see cref="MaxPictures"/> the oldest goes, the new one too if it is that. The highlight is let go, the window goes back
-    /// to the start and a closed strip opens again.
+    /// <see cref="MaxPictures"/> the oldest goes, the new one too if it is that. The newest picture lets the highlight go, takes
+    /// the window back to the start and opens a closed strip, as ever. A late one placed further right (code review, 2026-10-04:
+    /// it reset all three for a tile drawn off-screen) keeps the highlight on its picture and the window on its tiles, and still
+    /// opens a closed strip — the × is "just until the next generation", and it is one. A picture a full strip does not keep
+    /// changes nothing at all.
     /// </summary>
     public void Add(ImageThumbnail tile, int id, DateTime createdUtc, string path)
     {
@@ -134,14 +137,42 @@ public sealed class PictureStrip
         lock (_gate)
         {
             int at = _entries.FindIndex(e => Older(e.CreatedUtc, e.Path, createdUtc, path));
-            _entries.Insert(at < 0 ? _entries.Count : at, (tile, id, createdUtc, path));
+            if (at < 0)
+            {
+                if (_entries.Count >= MaxPictures)
+                {
+                    return;
+                }
+
+                at = _entries.Count;
+            }
+
+            _entries.Insert(at, (tile, id, createdUtc, path));
             if (_entries.Count > MaxPictures)
             {
                 _entries.RemoveAt(_entries.Count - 1);
             }
 
-            _selected = -1;
-            _first = 0;
+            if (at == 0)
+            {
+                _selected = -1;
+                _first = 0;
+            }
+            else
+            {
+                // The highlighted picture and the first tile drawn keep their pictures. The highlight on the oldest a full
+                // strip just let go is let go with it.
+                if (_selected >= at)
+                {
+                    _selected = _selected + 1 < _entries.Count ? _selected + 1 : -1;
+                }
+
+                if (_first >= at && _first + 1 < _entries.Count)
+                {
+                    _first++;
+                }
+            }
+
             _closed = false;
             _version++;
         }

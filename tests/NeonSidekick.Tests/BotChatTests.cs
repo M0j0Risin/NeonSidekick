@@ -385,4 +385,22 @@ public class BotChatTests
         Assert.Empty(BotChat.TurnTools([], [], null, null));
         Assert.Equal(["generate_image", "load_skill", "recall_memory", "save_memory"], BotChat.CaughtWrittenCalls.Order(StringComparer.Ordinal));
     }
+
+    [Fact]
+    public void TurnTools_ANameTheMainChatShares_IsBotchatsOwn_AndEachNameOnce()
+    {
+        var botImage = new NamedTool("generate_image");
+        var botSkill = new NamedTool("load_skill");
+        var botMemory = new NamedTool("save_memory");
+        var tools = BotChat.TurnTools(
+            [new NamedTool("generate_image"), new NamedTool("get_current_time"), new NamedTool("save_memory"), new NamedTool("load_skill"), new NamedTool("get_current_time")],
+            [botMemory],
+            botImage,
+            botSkill);
+
+        Assert.Equal(["get_current_time", "save_memory", "generate_image", "load_skill"], tools.Select(t => t.Name));
+        Assert.Same(botMemory, tools[1]);
+        Assert.Same(botImage, tools[2]);
+        Assert.Same(botSkill, tools[3]);
+    }
 }

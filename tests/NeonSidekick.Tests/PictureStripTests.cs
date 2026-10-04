@@ -145,31 +145,85 @@ public class PictureStripTests : IDisposable
         Assert.Equal([5, 8, 3, 9, 1], Ids(strip));
     }
 
-    /// <summary>A late picture lets go of the highlight, sends the window back and opens a closed strip, wherever it lands.</summary>
+    /// <summary>
+    /// A late picture placed right of the newest keeps the highlight on its picture (code review, 2026-10-04: it was let go for
+    /// a tile drawn off-screen) and still opens a closed strip: the × is until the next generation, and it is one.
+    /// </summary>
     [Fact]
-    public void Add_ALatePicture_StillResetsTheHighlight_AndOpensAClosedStrip()
+    public void Add_ALatePicture_KeepsTheHighlightOnItsPicture_AndOpensAClosedStrip()
     {
-        var strip = StripOf(3);
+        var strip = StripOf(3);   // newest first: 2, 1, 0
         strip.Step(+1);
+        strip.Step(+1);
+        Assert.Equal(1, strip.SelectedId);
         int version = strip.Version;
-        Put(strip, Tile(12, 12), -1);   // the oldest of all: the far right
-        Assert.Equal(-1, strip.Selected);
+        strip.Add(Tile(12, 12), 9, Epoch.AddSeconds(1.5), "p001b.png");   // between 2 and 1: left of the highlight
+        Assert.Equal(1, strip.SelectedId);
+        Assert.Equal(2, strip.Selected);
         Assert.True(strip.Version > version);
-        Assert.Equal([2, 1, 0, -1], Ids(strip));
+
+        Put(strip, Tile(12, 12), -1);   // the oldest of all, right of the highlight
+        Assert.Equal(1, strip.SelectedId);
+        while (strip.Selected >= 0)
+        {
+            strip.Step(-1);   // Ids walks from no highlight
+        }
+
+        Assert.Equal([2, 9, 1, 0, -1], Ids(strip));
 
         strip.Close();
         Put(strip, Tile(12, 12), -2);
         Assert.False(strip.Closed);
+
+        Put(strip, Tile(12, 12), 10);   // the newest lets go, as ever
+        Assert.Equal(-1, strip.Selected);
     }
 
-    /// <summary>A full strip keeps the newest: a picture older than all of them is not kept.</summary>
+    /// <summary>A late picture keeps the window on the tiles it showed: one placed left of them moves it along.</summary>
     [Fact]
-    public void Add_ToAFullStrip_AnOlderPictureIsNotKept()
+    public void Add_ALatePicture_KeepsTheWindowOnItsTiles()
+    {
+        var strip = StripOf(10);   // newest first: 9 … 0
+        for (int i = 0; i < 8; i++)
+        {
+            strip.Step(+1);
+        }
+
+        Render(strip, 40, highlight: true, out var before);
+        strip.Add(Tile(12, 12), 99, Epoch.AddSeconds(8.5), "p008b.png");   // between 9 and 8, left of the window
+        Render(strip, 40, highlight: true, out var after);
+        Assert.Equal(before.Select(s => s.Id), after.Select(s => s.Id));
+        Assert.Equal(2, strip.SelectedId);
+    }
+
+    /// <summary>A full strip keeps the newest: a picture older than all of them is not kept, and changes nothing (code review, 2026-10-04: it reopened a closed strip and let the highlight go).</summary>
+    [Fact]
+    public void Add_ToAFullStrip_AnOlderPictureIsNotKept_AndChangesNothing()
     {
         var strip = StripOf(PictureStrip.MaxPictures);
+        strip.Step(+1);
+        strip.Close();
+        strip.Step(+1);
+        int version = strip.Version;
+        int selected = strip.Selected;
         Put(strip, Tile(12, 12), -1);
         Assert.Equal(PictureStrip.MaxPictures, strip.Count);
+        Assert.Equal(version, strip.Version);
+        Assert.True(strip.Closed);
+        Assert.Equal(selected, strip.Selected);
         Assert.DoesNotContain(-1, Ids(strip));
+    }
+
+    /// <summary>On a full strip a late picture pushes out the oldest, and a highlight on that one goes with it.</summary>
+    [Fact]
+    public void Add_ToAFullStrip_ALatePicture_DropsTheOldest_AndItsHighlight()
+    {
+        var strip = StripOf(PictureStrip.MaxPictures);   // ids 63 … 0
+        Assert.True(strip.Highlight(id => id == 0));
+        strip.Add(Tile(12, 12), 99, Epoch.AddSeconds(10.5), "p010b.png");
+        Assert.Equal(PictureStrip.MaxPictures, strip.Count);
+        Assert.Equal(-1, strip.Selected);
+        Assert.DoesNotContain(0, Ids(strip));
     }
 
     [Fact]

@@ -12237,26 +12237,16 @@ internal sealed partial class ChatScreen
 
         var (prompt, reworked, named) = BotChat.ParseImagePrompt(written, candidates, fresh, rework);
         // No rework chosen means fresh has one: with none, ParseImagePrompt takes the latest candidate. A kind of several with no
-        // workflow named (2026-10-04) takes its first, and the log says so.
+        // workflow named (2026-10-04) takes its first, and the log says so — only for a picture that will be drawn (code review,
+        // 2026-10-04: a NONE, an empty answer or a failed request had the warning written beside them).
         var kind = reworked is null ? fresh : rework;
-        if (named is null)
-        {
-            DiagnosticLog.Warn(AppCategory, BotChat.UnnamedWorkflowLogLine(bot.Name, kind[0].Name));
-        }
-
         string workflow = (named ?? kind[0]).Name;
         // AnyWorkflow: the named one out of every installed workflow, as /imagine's — the botchat workflows need not be offered.
         var job = new ComfyRequest(prompt, Workflow: workflow, Images: reworked is null ? null : [reworked.Path], AnyWorkflow: true);
-        if (promised)
+        if (promised && BotChat.IsNoPicture(prompt))
         {
-            if (BotChat.IsNoPicture(prompt))
-            {
-                // The picture word was only a word: the reply promised nothing, so nothing is owed.
-                return null;
-            }
-
-            DiagnosticLog.Info(AppCategory, BotChat.PromisedPictureLogLine(bot.Name, workflow, prompt));
-            return job;
+            // The picture word was only a word: the reply promised nothing, so nothing is owed.
+            return null;
         }
 
         if (prompt.Length == 0)
@@ -12265,7 +12255,14 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        DiagnosticLog.Info(AppCategory, reworked is null ? BotChat.ImagePromptLogLine(bot.Name, workflow, prompt) : BotChat.ReworkLogLine(bot.Name, workflow, reworked, prompt));
+        if (named is null)
+        {
+            DiagnosticLog.Warn(AppCategory, BotChat.UnnamedWorkflowLogLine(bot.Name, workflow));
+        }
+
+        DiagnosticLog.Info(AppCategory, promised
+            ? BotChat.PromisedPictureLogLine(bot.Name, workflow, prompt)
+            : reworked is null ? BotChat.ImagePromptLogLine(bot.Name, workflow, prompt) : BotChat.ReworkLogLine(bot.Name, workflow, reworked, prompt));
         return job;
     }
 

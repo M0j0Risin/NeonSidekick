@@ -568,9 +568,24 @@ public sealed class SidekickApp
 
     // ── Modes ───────────────────────────────────────────────────────────────
 
-    /// <summary>Prints one PASS/FAIL line per check and returns 0 only if every check passed.</summary>
+    /// <summary>
+    /// The width a smoke run's redirected console writes at (code review, 2026-10-04): wide enough that no check's line wraps.
+    /// <c>build.ps1</c> reads the output, and Spectre wraps a redirected console at 80 columns, cutting a word too long for a line
+    /// every 80 — a piece that ends a word looks the same as one in its middle, so the script could not tell how to join them back.
+    /// </summary>
+    public const int SmokeRedirectedWidth = 4096;
+
+    /// <summary>
+    /// Prints one PASS/FAIL line per check and returns 0 only if every check passed. With stdout not a terminal, each on one
+    /// line however long (<see cref="SmokeRedirectedWidth"/>).
+    /// </summary>
     private int RunSmoke()
     {
+        if (!_console.Profile.Out.IsTerminal)
+        {
+            _console.Profile.Width = SmokeRedirectedWidth;
+        }
+
         IReadOnlyList<SmokeCheck> checks;
         try
         {

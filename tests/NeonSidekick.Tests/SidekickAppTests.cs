@@ -195,6 +195,20 @@ public partial class SidekickAppTests : IDisposable
     }
 
     [Fact]
+    public async Task Smoke_Redirected_KeepsEachCheckOnOneLine()
+    {
+        // build.ps1 reads the redirected output (code review, 2026-10-04): a long word's last piece of exactly 80 columns
+        // looked the same as one in its middle, so the script glued the next word on.
+        string path = "C:\\" + new string('x', 160);
+        var app = App(smoke: () => [new SmokeCheck("native:long", true, path + " (exit 0)")]);
+
+        Assert.Equal(0, await app.RunAsync(SidekickOptions.None with { Smoke = true }, CancellationToken.None));
+
+        Assert.False(_console.Profile.Out.IsTerminal);
+        Assert.Contains(_console.Lines, line => line.Contains("native:long", StringComparison.Ordinal) && line.Contains(path + " (exit 0)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task AudioCheck_UsesThePlaybackFactory_AndExitsWithItsCode()
     {
         var fake = new FakeAudioPlayback();

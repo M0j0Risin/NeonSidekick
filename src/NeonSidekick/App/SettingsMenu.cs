@@ -2372,14 +2372,14 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.SqlDefaultConnection"/> (2026-09-23): a call naming no connection gets the first in <c>sql.json</c>. Pinned.</summary>
     public const string FirstSqlConnectionLabel = "(the first connection)";
 
-    /// <summary>A <c>Botchat limited …</c> row's value while it names none (2026-09-27 as the two workflow pickers' none, which went on 2026-10-04). Pinned.</summary>
-    public const string NoBotChatWorkflowLabel = "(none)";
+    /// <summary>A <c>Botchat limited …</c> row's value while it names none (2026-09-27 as the two workflow pickers' none, which went on 2026-10-04; renamed from <c>NoBotChatWorkflowLabel</c> in that day's second code review). Pinned.</summary>
+    public const string NoLimitedNamesLabel = "(none)";
 
-    /// <summary>The <c>Botchat limited skills</c>, <c>Botchat limited tools</c> and <c>Botchat ComfyUI limited workflows</c> value (2026-09-27 as the preloaded skills'; all three since 2026-10-04): <see cref="NoBotChatWorkflowLabel"/> with none, else the names, comma-joined. Pinned.</summary>
+    /// <summary>The <c>Botchat limited skills</c>, <c>Botchat limited tools</c> and <c>Botchat ComfyUI limited workflows</c> value (2026-09-27 as the preloaded skills'; all three since 2026-10-04): <see cref="NoLimitedNamesLabel"/> with none, else the names, comma-joined. Pinned.</summary>
     public static string LimitedNamesValue(IReadOnlyList<string>? names)
     {
         var kept = names?.Select(n => n.Trim()).Where(n => n.Length > 0).ToList() ?? [];
-        return kept.Count == 0 ? NoBotChatWorkflowLabel : string.Join(", ", kept);
+        return kept.Count == 0 ? NoLimitedNamesLabel : string.Join(", ", kept);
     }
 
     /// <summary>When the <c>Botchat limited skills</c> checklist has nothing to list (2026-09-27 as the preloaded skills'). Pinned.</summary>
@@ -7182,58 +7182,18 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The <c>Botchat ComfyUI limited workflows</c> checklist (later on 2026-10-04, the user's ask; in place of the
     /// <c>Botchat txt2img workflow</c> / <c>Botchat img2img workflow</c> pickers of 2026-09-25 and 2026-09-27):
-    /// <see cref="EditComfyOfferedAsync"/>'s loop over every installed workflow — <c>ComfyUI workflows offered</c> has no say (the
+    /// <see cref="EditWorkflowChecklistAsync"/>, <c>ComfyUI workflows offered</c>'s loop, over every installed workflow — <c>ComfyUI workflows offered</c> has no say (the
     /// user's pick, the pickers' rule) — each row with its kind, family and size (<see cref="ComfyOfferedRow"/>). Enter or Space flips
     /// one, A every one, N none, saved at once; a name ticked before but no longer installed stays in the list. Its caption says the
     /// list waits while <c>Botchat ComfyUI enabled</c> is on.
     /// </summary>
-    private async Task<bool> EditBotChatLimitedComfyAsync(CancellationToken cancellationToken)
-    {
-        bool changed = false;
-        int cursor = 0;
-        while (true)
-        {
-            var installed = InstalledComfyWorkflows(_settings.ProfileDirectory);
-            if (installed.Count == 0)
-            {
-                Sink.Error(Comfy.ComfyText.NoWorkflows(ComfyRoots));
-                return changed;
-            }
-
-            var chosen = _settings.Current.BotChatLimitedComfyWorkflows ?? [];
-            var on = chosen.Select(n => n.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            int width = installed.Max(w => w.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatLimitedComfyWorkflows)), installed.Select(w => ComfyOfferedRow(w, on.Contains(w.Name), width)).ToList(), ToggleKeys)
-            {
-                SpaceToggles = true,
-                Caption = _settings.Current.BotChatComfy ? LimitedComfyUnusedCaption : null,
-            };
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, installed.Count - 1), cancellationToken).ConfigureAwait(false);
-            if (picked is not { } pick)
-            {
-                if (!changed)
-                {
-                    Sink.Notice(UnchangedNotice);
-                }
-
-                return changed;
-            }
-
-            cursor = pick.Row;
-            string name = installed[pick.Row].Name;
-            var next = pick.Button == SelectAllIndex ? installed.Select(w => w.Name).ToList()
-                : pick.Button == SelectNoneIndex ? []
-                : installed.Select(w => w.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (next.Count == installed.Count(w => on.Contains(w.Name)) && next.All(on.Contains))
-            {
-                continue;   // a button that changes nothing saves nothing
-            }
-
-            next.AddRange(chosen.Where(n => !installed.Any(w => string.Equals(w.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
-            Apply(SettingsField.BotChatLimitedComfyWorkflows, d => d.BotChatLimitedComfyWorkflows = next.Count == 0 ? null : next);
-            changed = true;
-        }
-    }
+    private Task<bool> EditBotChatLimitedComfyAsync(CancellationToken cancellationToken) =>
+        EditWorkflowChecklistAsync(
+            SettingsField.BotChatLimitedComfyWorkflows,
+            d => d.BotChatLimitedComfyWorkflows,
+            (d, next) => d.BotChatLimitedComfyWorkflows = next.Count == 0 ? null : next,
+            d => d.BotChatComfy ? LimitedComfyUnusedCaption : null,
+            cancellationToken);
 
     /// <summary>The botchat-memory-mode picker under the settings list (2026-10-04): one <see cref="BotChatMemoryModeLabel"/> row per <see cref="App.BotChatMemoryMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickBotChatMemoryModeAsync(AppSettingsData saved, CancellationToken cancellationToken)

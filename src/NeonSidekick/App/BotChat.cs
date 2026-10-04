@@ -258,25 +258,31 @@ public static partial class BotChat
 
     /// <summary>
     /// A bot's tool list, in order (2026-10-04): the main chat's tools it is offered (in the main chat's order), the memory tools,
-    /// <c>generate_image</c>, then <c>load_skill</c>. Pure.
+    /// <c>generate_image</c>, then <c>load_skill</c>. Each name once, botchat's own tool winning (code review, 2026-10-04: the
+    /// main chat's <c>generate_image</c> sat beside botchat's narrowed one, the general one first, and the bots drew with the
+    /// profile's workflows — the bots' general tools now leave the ComfyUI group out, and this keeps any other name the main
+    /// chat shares with a bot's own tool from doing the same); a name the general list repeats is kept once, the first. Pure.
     /// </summary>
     public static IReadOnlyList<AIFunction> TurnTools(IReadOnlyList<AIFunction> general, IReadOnlyList<AIFunction> memory, AIFunction? image, AIFunction? skill)
     {
         ArgumentNullException.ThrowIfNull(general);
         ArgumentNullException.ThrowIfNull(memory);
-        var tools = new List<AIFunction>(general.Count + memory.Count + 2);
-        tools.AddRange(general);
-        tools.AddRange(memory);
+        var own = new List<AIFunction>(memory.Count + 2);
+        own.AddRange(memory);
         if (image is not null)
         {
-            tools.Add(image);
+            own.Add(image);
         }
 
         if (skill is not null)
         {
-            tools.Add(skill);
+            own.Add(skill);
         }
 
+        var seen = new HashSet<string>(own.Select(tool => tool.Name), StringComparer.Ordinal);
+        var tools = new List<AIFunction>(general.Count + own.Count);
+        tools.AddRange(general.Where(tool => seen.Add(tool.Name)));
+        tools.AddRange(own.DistinctBy(tool => tool.Name, StringComparer.Ordinal));
         return tools;
     }
 
@@ -685,7 +691,8 @@ public static partial class BotChat
     /// castle at dusk</c> reworked the latest picture and lost its first word. <c>**Rework #1:**</c> is still read.</para>
     ///
     /// <para>The workflow (2026-10-04, the writer's pick when a kind has several): a <see cref="WorkflowAnswer"/> line — first, or
-    /// right after the rework line, or before it — names one of the chosen kind (any case, or the longest name the line holds); the
+    /// right after the rework line, or before it — names one of the chosen kind (any case, or the longest name the line holds as a
+    /// whole word); a prompt on the same line after the name is read when no line follows it (<see cref="SplitWorkflowLine"/>); the
     /// same capitals-or-a-mark rule keeps a fresh prompt such as <c>Workflow of a busy kitchen</c> whole, and the line is read only
     /// while the set has several workflows, so a set of one parses as before. With one of the kind it is that one; null when the kind
     /// has several and none was named — the caller takes the first and says so in the log.</para>
@@ -719,8 +726,11 @@ public static partial class BotChat
 
             if (named && workflowName is null && WorkflowFirstLine().Match(first) is { Success: true } line)
             {
-                workflowName = line.Groups["name"].Value;
-                body = CleanImagePrompt(after);
+                string rest;
+                (workflowName, rest) = SplitWorkflowLine(line.Groups["name"].Value, reworkable ? [.. fresh, .. rework] : fresh);
+                // Words after the name are the prompt only when nothing follows the line: with the prompt below it they are a
+                // note on the choice ("flux-dev (the photographic one)"), never the picture's.
+                body = CleanImagePrompt(after.Trim().Length > 0 ? after : rest);
                 continue;
             }
 
@@ -740,10 +750,70 @@ public static partial class BotChat
     [GeneratedRegex(@"^\W*(?:REWORK\b|(?i:rework)(?=\s*(?:[#:*.\-–—\d]|$)))[\s#:*.\-–—]*(?<n>\d+)?[\s:*.\-–—]*(?<rest>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex ReworkFirstLine();
 
-    [GeneratedRegex(@"^\W*(?:WORKFLOW\b|(?i:workflow)(?=\s*[#:*\-–—]))[\s#:*\-–—""'`]*(?<name>.*?)[\s""'`*.]*$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\W*(?:WORKFLOW\b|(?i:workflow)(?=\s*[#:*\-–—]))[\s#:*\-–—""'`]*(?<name>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex WorkflowFirstLine();
 
-    /// <summary>The workflow of <paramref name="kind"/> a <see cref="WorkflowAnswer"/> line names: by its name (any case), else the longest name the line holds; null with none.</summary>
+    /// <summary>The marks around a workflow's name on its line: quotes, bold, a full stop.</summary>
+    private static readonly char[] NameMarks = [' ', '\t', '"', '\'', '`', '*', '.'];
+
+    /// <summary>The marks between a workflow's name and a prompt on the same line.</summary>
+    private static readonly char[] PromptLead = [' ', '\t', '"', '\'', '`', '*', ':', ',', ';', '-', '–', '—'];
+
+    /// <summary>
+    /// A <see cref="WorkflowAnswer"/> line's text (after the word) split into the name and what follows it on the line (code
+    /// review, 2026-10-04: <c>WORKFLOW: flux — a cat on a roof</c> kept the name and lost the prompt): the line's whole text when it
+    /// is a workflow's name; else the longest name of <paramref name="workflows"/> the text starts with, a mark or a space after
+    /// it; else, at the first <c>: </c> or spaced dash, the words before it — an unknown or misspelt name, for
+    /// <see cref="NamedWorkflow"/> to refuse — unless only the whole line holds a name (<c>I'd pick: flux-dev</c>); else the whole
+    /// text is the name. Pure.
+    /// </summary>
+    private static (string Name, string Prompt) SplitWorkflowLine(string text, IReadOnlyList<ComfyWorkflow> workflows)
+    {
+        string line = text.Trim();
+        string whole = line.TrimEnd(NameMarks);
+        if (workflows.Any(w => string.Equals(w.Name, whole, StringComparison.OrdinalIgnoreCase)))
+        {
+            return (whole, "");
+        }
+
+        var lead = workflows
+            .Where(w => w.Name.Length > 0 && line.Length > w.Name.Length && line.StartsWith(w.Name, StringComparison.OrdinalIgnoreCase) && !IsNameChar(line[w.Name.Length]))
+            .OrderByDescending(w => w.Name.Length)
+            .FirstOrDefault();
+        if (lead is not null)
+        {
+            return (lead.Name, line[lead.Name.Length..].TrimStart(PromptLead));
+        }
+
+        var split = Separators
+            .Select(separator => (At: line.IndexOf(separator, StringComparison.Ordinal), separator.Length))
+            .Where(found => found.At > 0)
+            .OrderBy(found => found.At)
+            .FirstOrDefault();
+        if (split.Length > 0)
+        {
+            string before = line[..split.At].TrimEnd(NameMarks);
+            bool onlyWhole = !workflows.Any(w => HoldsWord(before, w.Name)) && workflows.Any(w => HoldsWord(whole, w.Name));
+            if (!onlyWhole)
+            {
+                return (before, line[(split.At + split.Length)..].TrimStart(PromptLead));
+            }
+        }
+
+        return (whole, "");
+    }
+
+    /// <summary>What may stand between a workflow's name and a prompt on its line, when the name is not one installed.</summary>
+    private static readonly string[] Separators = [": ", " — ", " – ", " - "];
+
+    /// <summary>A character that may continue a workflow's name: a letter, a digit, <c>_</c> or <c>-</c>.</summary>
+    private static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '-';
+
+    /// <summary>
+    /// The workflow of <paramref name="kind"/> a <see cref="WorkflowAnswer"/> line names: by its name (any case), else the longest
+    /// name the line holds as a whole word — never inside a longer one (code review, 2026-10-04: <c>sdxl-lightning</c>, not
+    /// installed, quietly took a workflow named <c>sd</c>); null with none, so the caller's warning is written.
+    /// </summary>
     private static ComfyWorkflow? NamedWorkflow(IReadOnlyList<ComfyWorkflow> kind, string? name)
     {
         string wanted = name?.Trim() ?? "";
@@ -753,7 +823,27 @@ public static partial class BotChat
         }
 
         return kind.FirstOrDefault(w => string.Equals(w.Name, wanted, StringComparison.OrdinalIgnoreCase))
-            ?? kind.Where(w => wanted.Contains(w.Name, StringComparison.OrdinalIgnoreCase)).OrderByDescending(w => w.Name.Length).FirstOrDefault();
+            ?? kind.Where(w => HoldsWord(wanted, w.Name)).OrderByDescending(w => w.Name.Length).FirstOrDefault();
+    }
+
+    /// <summary>Whether <paramref name="text"/> holds <paramref name="word"/> (any case) with no name character either side of it.</summary>
+    private static bool HoldsWord(string text, string word)
+    {
+        if (word.Length == 0)
+        {
+            return false;
+        }
+
+        for (int at = text.IndexOf(word, StringComparison.OrdinalIgnoreCase); at >= 0; at = text.IndexOf(word, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            int end = at + word.Length;
+            if ((at == 0 || !IsNameChar(text[at - 1])) && (end == text.Length || !IsNameChar(text[end])))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

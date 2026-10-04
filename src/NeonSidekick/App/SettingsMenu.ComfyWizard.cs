@@ -806,7 +806,18 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary><c>EditSqlOfferedAsync</c>'s loop over the installed workflows: Enter or Space flips one, saved at once; nothing is ticked until the user ticks it (2026-10-01).</summary>
-    private async Task<bool> EditComfyOfferedAsync(CancellationToken cancellationToken)
+    private Task<bool> EditComfyOfferedAsync(CancellationToken cancellationToken) =>
+        EditWorkflowChecklistAsync(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered, (d, next) => d.ComfyWorkflowsOffered = next, _ => null, cancellationToken);
+
+    /// <summary>
+    /// A checklist of every installed workflow saved to a list of names (<c>ComfyUI workflows offered</c>, and since 2026-10-04
+    /// <c>Botchat ComfyUI limited workflows</c>; one loop for both since that day's second code review): each row with its kind,
+    /// family and size (<see cref="ComfyOfferedRow"/>), the names <paramref name="read"/> gives ticked. Enter or Space flips one,
+    /// A every one installed now (one added later still starts unticked, 2026-09-29, the user's call), N none, each saved at once
+    /// through <paramref name="write"/>; a button that changes nothing saves nothing. A name ticked before but no longer installed
+    /// stays in the list: it counts again if the workflow comes back. <paramref name="caption"/> is read afresh for every page.
+    /// </summary>
+    private async Task<bool> EditWorkflowChecklistAsync(SettingsField field, Func<AppSettingsData, List<string>?> read, Action<AppSettingsData, List<string>> write, Func<AppSettingsData, string?> caption, CancellationToken cancellationToken)
     {
         bool changed = false;
         int cursor = 0;
@@ -819,10 +830,15 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            var offered = _settings.Current.ComfyWorkflowsOffered;
-            var on = ComfyWorkflowCatalog.Offered(installed, offered).Select(w => w.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var current = _settings.Current;
+            var chosen = read(current) ?? [];
+            var on = ComfyWorkflowCatalog.Offered(installed, chosen).Select(w => w.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             int width = installed.Max(w => w.Name.Length) + 2;
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ComfyWorkflowsOffered)), installed.Select(w => ComfyOfferedRow(w, on.Contains(w.Name), width)).ToList(), ToggleKeys) { SpaceToggles = true };
+            var page = new MenuPage(Crumb(FieldName(field)), installed.Select(w => ComfyOfferedRow(w, on.Contains(w.Name), width)).ToList(), ToggleKeys)
+            {
+                SpaceToggles = true,
+                Caption = caption(current),
+            };
             var picked = await PickChecklistAsync(page, Math.Min(cursor, installed.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
@@ -836,7 +852,6 @@ internal sealed partial class SettingsMenu
 
             cursor = pick.Row;
             string name = installed[pick.Row].Name;
-            // Select all ticks the workflows installed now, one added later still starting hidden (2026-09-29, the user's call).
             var next = pick.Button == SelectAllIndex ? installed.Select(w => w.Name).ToList()
                 : pick.Button == SelectNoneIndex ? []
                 : installed.Select(w => w.Name).Where(n => on.Contains(n) != string.Equals(n, name, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -845,13 +860,8 @@ internal sealed partial class SettingsMenu
                 continue;   // a button that changes nothing saves nothing (null and empty both offer none, 2026-10-01)
             }
 
-            // A name ticked before but no longer installed stays in the list: it counts again if the workflow comes back.
-            if (offered is not null)
-            {
-                next.AddRange(offered.Where(n => !installed.Any(w => string.Equals(w.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
-            }
-
-            Apply(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered = next);
+            next.AddRange(chosen.Where(n => !installed.Any(w => string.Equals(w.Name, n.Trim(), StringComparison.OrdinalIgnoreCase))));
+            Apply(field, d => write(d, next));
             changed = true;
         }
     }

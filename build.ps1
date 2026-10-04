@@ -184,14 +184,12 @@ if (-not $proc.WaitForExit(120000)) {
 # letters ("(Failed to connect…" from postgres:driver's expected refusal, shown red; "password" from docker's) and
 # dropped the rest. A check starts at an indented PASS/FAIL verdict, matched case-sensitively; the lines after it up
 # to the next check or a blank line are its detail; the SMOKE PASS/FAIL summary stands alone.
-# A wrapped line is joined back with a space, save one piece of a word too long for a line (the 2026-10-04 review: a path
-# came back "…keeps-going-an d-going…"): Spectre starts such a word on a line of its own and cuts it every 80 columns, so a
-# line of exactly 80 with no space in it is a piece, and what follows it is glued on. A word-boundary wrap can fill 80
-# columns too, but always has a space in it.
-$SmokeWidth = 80
+# Since the second 2026-10-04 review the smoke run writes each check on one line when its output is redirected
+# (SidekickApp.SmokeRedirectedWidth): a long word's last piece of exactly 80 columns looked the same as one in its middle,
+# so no rule here could tell whether to glue the next line on. A continuation line, should one still come, is joined back
+# with a space.
 $checkLines = New-Object System.Collections.Generic.List[string]
 $current = $null
-$previous = ""
 foreach ($line in $smokeOut -split "`r?`n") {
     if ($line -cmatch '^\s+(PASS|FAIL)\s' -or $line -cmatch '^SMOKE (PASS|FAIL)\b') {
         if ($null -ne $current) { $checkLines.Add($current) }
@@ -200,10 +198,8 @@ foreach ($line in $smokeOut -split "`r?`n") {
         if ($null -ne $current) { $checkLines.Add($current) }
         $current = $null
     } elseif ($null -ne $current) {
-        $piece = $previous.Length -eq $SmokeWidth -and -not $previous.Contains(' ')
-        $current = $current + $(if ($piece) { "" } else { " " }) + $line.Trim()
+        $current = $current + " " + $line.Trim()
     }
-    $previous = $line
 }
 if ($null -ne $current) { $checkLines.Add($current) }
 foreach ($check in $checkLines) {

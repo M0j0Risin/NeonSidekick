@@ -605,6 +605,44 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// The "named no workflow" warning is only for a picture that is drawn (code review, 2026-10-04: an empty answer, a NONE or a
+    /// failed request had it written beside them); a drawn picture with no WORKFLOW line still has it, and takes the first.
+    /// </summary>
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("a dog surfing a wave", true)]
+    public async Task BotChat_Automatic_WithTwoTxt2ImgWorkflows_WarnsOfNoWorkflowNamed_OnlyForAPictureDrawn(string written, bool drawn)
+    {
+        var stub = BotPicturesFixture();
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"),
+            "{\"3\":{\"class_type\":\"OtherSampler\",\"inputs\":{\"seed\":\"{{seed}}\"}},\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}");
+        _settings.Update(d => d.BotChatLimitedComfyWorkflows = ["pony", "other-t2i"]);
+        _chat.EnqueueText(DogReply);
+        _chat.EnqueueText(written);
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+        var warnings = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Level >= NeonSidekick.Diagnostics.DiagnosticLevel.Warning) { lock (warnings) { warnings.Add(e.Message); } } };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        string warning = BotChat.UnnamedWorkflowLogLine("default", "other-t2i");
+        Assert.Equal(drawn, warnings.Contains(warning));
+        Assert.Equal(drawn ? 1 : 0, stub.Requests.Count(r => r.Uri.AbsolutePath == "/prompt"));
+        Assert.Equal(!drawn, output.Contains(BotChat.NoPromptNotice, StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Autonomous with both workflows (2026-09-27, the user's ask: the bots limited as automatic is): generate_image lists the
     /// txt2img workflow alone until there is a picture, then the img2img one too, and the next bot's turn names the picture's path.
     /// </summary>

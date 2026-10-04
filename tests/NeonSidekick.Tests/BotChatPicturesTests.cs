@@ -131,12 +131,32 @@ public class BotChatPicturesTests
     [InlineData("REWORK 1\nWORKFLOW restyle\na red fox", "a red fox", "a.png", "restyle")]
     [InlineData("WORKFLOW restyle\nREWORK 1\na red fox", "a red fox", "a.png", "restyle")]  // either order
     [InlineData("REWORK 2\nWORKFLOW pony\na red fox", "a red fox", "b.png", null)]          // a name of the other kind is none of the rework's
+    // The name and the prompt on one line (code review, 2026-10-04: the prompt was lost).
+    [InlineData("WORKFLOW: flux-dev — a cat on a moonlit roof", "a cat on a moonlit roof", null, "flux-dev")]
+    [InlineData("**Workflow:** `flux-dev`: a red fox.", "a red fox.", null, "flux-dev")]
+    [InlineData("REWORK 1\nWORKFLOW restyle, a red fox", "a red fox", "a.png", "restyle")]
+    [InlineData("WORKFLOW: gone — a red fox", "a red fox", null, null)]                       // an unknown name before a separator: none
+    [InlineData("WORKFLOW: I'd pick: flux-dev\na red fox", "a red fox", null, "flux-dev")]     // the name only the whole line holds
+    [InlineData("WORKFLOW: flux-dev (the photographic one)\na red fox", "a red fox", null, "flux-dev")]   // a note when the prompt is below
+    [InlineData("WORKFLOW: pony.", "", null, "pony")]
     public void ParseImagePrompt_ReadsTheWorkflowLine_WhenAKindHasSeveral(string text, string prompt, string? path, string? workflow)
     {
         var (read, rework, named) = BotChat.ParseImagePrompt(text, Two, TwoFresh, TwoReworks);
 
         Assert.Equal(prompt, read);
         Assert.Equal(path, rework?.Path);
+        Assert.Equal(workflow, named?.Name);
+    }
+
+    [Theory]
+    [InlineData("WORKFLOW: sdxl-lightning\na red fox", null)]   // code review, 2026-10-04: took "sd", inside a longer name, quietly
+    [InlineData("WORKFLOW: the sd one\na red fox", "sd")]
+    [InlineData("WORKFLOW: sd_turbo\na red fox", null)]
+    public void ParseImagePrompt_ANameInsideALongerWord_IsNoneOfTheSet(string text, string? workflow)
+    {
+        var (read, _, named) = BotChat.ParseImagePrompt(text, [], [Workflow("sd"), Workflow("flux-dev", family: ComfyFamily.Flux)], []);
+
+        Assert.Equal("a red fox", read);
         Assert.Equal(workflow, named?.Name);
     }
 
@@ -350,7 +370,7 @@ public class BotChatPicturesTests
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatComfy));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedComfyWorkflows));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatComfy, data, "."));
-        Assert.Equal(SettingsMenu.NoBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedComfyWorkflows, data, "."));
+        Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedComfyWorkflows, data, "."));
         Assert.Equal("flux, edit", SettingsMenu.FieldValue(SettingsField.BotChatLimitedComfyWorkflows, new AppSettingsData { BotChatLimitedComfyWorkflows = ["flux", " edit ", ""] }, "."));
         Assert.Equal("the bots get this profile's offered ComfyUI workflows", SettingsMenu.ToggleDescribe(SettingsField.BotChatComfy, true));
         Assert.Equal("the bots get the Botchat ComfyUI limited workflows alone", SettingsMenu.ToggleDescribe(SettingsField.BotChatComfy, false));
@@ -373,13 +393,13 @@ public class BotChatPicturesTests
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatSkills, new AppSettingsData { BotChatSkills = true }, "."));
         // Limited skills (2026-10-04; the preloaded skills' checklist of 2026-09-27): a checklist, none by default.
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedSkills));
-        Assert.Equal(SettingsMenu.NoBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedSkills, data, "."));
+        Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedSkills, data, "."));
         Assert.Equal("haiku, pony-prompts", SettingsMenu.FieldValue(SettingsField.BotChatLimitedSkills, new AppSettingsData { BotChatLimitedSkills = ["haiku", " pony-prompts ", ""] }, "."));
         // Tools (2026-10-04): a toggle, off by default, and its checklist, none by default.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatTools));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatTools, data, "."));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedTools));
-        Assert.Equal(SettingsMenu.NoBotChatWorkflowLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedTools, data, "."));
+        Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedTools, data, "."));
         Assert.Equal("web_search, read_file", SettingsMenu.FieldValue(SettingsField.BotChatLimitedTools, new AppSettingsData { BotChatLimitedTools = ["web_search", "read_file"] }, "."));
         Assert.Equal("the bots get every tool this chat would offer", SettingsMenu.ToggleDescribe(SettingsField.BotChatTools, true));
         // Memory (2026-10-04): a toggle, on by default, and its mode, shared-parent by default.
