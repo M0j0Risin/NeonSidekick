@@ -893,8 +893,38 @@ public enum SettingsField
     /// <summary>An edit row: Enter opens the profile's <c>sqlite.json</c> in the editor (made with <see cref="Sqlite.SqliteConfigFile.EmptyText"/> when missing). The SQLite tab (2026-10-04).</summary>
     SqliteDatabasesProfile,
 
-    /// <summary>An edit row: Enter opens the home's <c>sqlite.json</c>, every profile's. The SQLite tab's last row (2026-10-04). Last in the enum, as every newcomer.</summary>
+    /// <summary>An edit row: Enter opens the home's <c>sqlite.json</c>, every profile's. The SQLite tab's last row (2026-10-04).</summary>
     SqliteDatabasesGlobal,
+
+    /// <summary>A toggle: whether a turn offers the nine PostgreSQL tools (<see cref="Settings.AppSettingsData.PostgresTools"/>). The PostgreSQL tab's first row (2026-10-04); no reconnect.</summary>
+    PostgresTools,
+
+    /// <summary>A checklist: which connections of <c>postgres.json</c> this profile offers (<see cref="Settings.AppSettingsData.PostgresConnectionsOffered"/>). The PostgreSQL tab (2026-10-04).</summary>
+    PostgresConnectionsOffered,
+
+    /// <summary>A pick: the connection a PostgreSQL tool uses when the call names none (<see cref="Settings.AppSettingsData.PostgresDefaultConnection"/>). The PostgreSQL tab (2026-10-04).</summary>
+    PostgresDefaultConnection,
+
+    /// <summary>An action row (2026-10-04): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="Postgres.PostgresSecrets.Save"/>). The PostgreSQL tab.</summary>
+    PostgresSetPassword,
+
+    /// <summary>An action row (2026-10-04): Enter walks a new connection through every choice, tests it and adds it to that <c>postgres.json</c> (<c>SettingsMenu.Postgres.cs</c>). The PostgreSQL tab.</summary>
+    PostgresAddConnection,
+
+    /// <summary>A toggle: whether <c>%</c> and part of a name lists the PostgreSQL connections too (<see cref="Settings.AppSettingsData.PostgresPercentMention"/>). The PostgreSQL tab (2026-10-04).</summary>
+    PostgresPercentMention,
+
+    /// <summary>Typed: how many rows a <c>postgres_query</c> without <c>max_rows</c> returns, 1 to 100,000 (<see cref="Settings.AppSettingsData.PostgresQueryMaxRows"/>). The PostgreSQL tab (2026-10-04).</summary>
+    PostgresQueryMaxRows,
+
+    /// <summary>Typed: seconds a PostgreSQL tool's statement may run, 1 to 600 (<see cref="Settings.AppSettingsData.PostgresQueryTimeoutSeconds"/>). The PostgreSQL tab (2026-10-04).</summary>
+    PostgresQueryTimeoutSeconds,
+
+    /// <summary>An edit row: Enter opens the profile's <c>postgres.json</c> in the editor (made with <see cref="Postgres.PostgresConfigFile.EmptyText"/> when missing). The PostgreSQL tab (2026-10-04).</summary>
+    PostgresConnectionsProfile,
+
+    /// <summary>An edit row: Enter opens the home's <c>postgres.json</c>, every profile's. The PostgreSQL tab's last row (2026-10-04). Last in the enum, as every newcomer.</summary>
+    PostgresConnectionsGlobal,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1309,6 +1339,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.SqliteTools, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
+        [SettingsField.PostgresTools, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort, SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
@@ -1696,7 +1727,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
             or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera
             or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions
-            or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention;
+            or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
+            or SettingsField.PostgresTools or SettingsField.PostgresPercentMention;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1888,6 +1920,16 @@ internal sealed partial class SettingsMenu
         SettingsField.SqliteQueryTimeoutSeconds => "SQLite query timeout (s)",
         SettingsField.SqliteDatabasesProfile => "SQLite databases (profile)",
         SettingsField.SqliteDatabasesGlobal => "SQLite databases (global)",
+        SettingsField.PostgresTools => "PostgreSQL tools",
+        SettingsField.PostgresConnectionsOffered => "PostgreSQL connections offered",
+        SettingsField.PostgresDefaultConnection => "PostgreSQL default connection",
+        SettingsField.PostgresSetPassword => "PostgreSQL set password",
+        SettingsField.PostgresAddConnection => "PostgreSQL add connection",
+        SettingsField.PostgresPercentMention => "PostgreSQL %-mention enabled",
+        SettingsField.PostgresQueryMaxRows => "PostgreSQL max rows",
+        SettingsField.PostgresQueryTimeoutSeconds => "PostgreSQL query timeout (s)",
+        SettingsField.PostgresConnectionsProfile => "PostgreSQL connections (profile)",
+        SettingsField.PostgresConnectionsGlobal => "PostgreSQL connections (global)",
         SettingsField.UncTools => "UNC tools",
         SettingsField.UncWrites => "UNC writes",
         SettingsField.UncSharesOffered => "UNC shares offered",
@@ -2214,6 +2256,16 @@ internal sealed partial class SettingsMenu
             SettingsField.SqliteQueryTimeoutSeconds => Seconds(data.SqliteQueryTimeoutSeconds),
             SettingsField.SqliteDatabasesProfile => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.ProfilePath(profileDirectory)),
             SettingsField.SqliteDatabasesGlobal => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
+            SettingsField.PostgresTools => OnOff(data.PostgresTools),
+            SettingsField.PostgresDefaultConnection => string.IsNullOrWhiteSpace(data.PostgresDefaultConnection) ? FirstSqlConnectionLabel : data.PostgresDefaultConnection,
+            SettingsField.PostgresSetPassword => SqlSetPasswordLabel,
+            SettingsField.PostgresAddConnection => SqlAddConnectionLabel,
+            SettingsField.PostgresConnectionsOffered => PostgresOfferedValue(data.PostgresConnectionsOffered, Postgres.PostgresConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
+            SettingsField.PostgresPercentMention => OnOff(data.PostgresPercentMention),
+            SettingsField.PostgresQueryMaxRows => SqlRows(data.PostgresQueryMaxRows),
+            SettingsField.PostgresQueryTimeoutSeconds => Seconds(data.PostgresQueryTimeoutSeconds),
+            SettingsField.PostgresConnectionsProfile => PostgresConnectionsLabel(Postgres.PostgresConfigFile.ProfilePath(profileDirectory)),
+            SettingsField.PostgresConnectionsGlobal => PostgresConnectionsLabel(Postgres.PostgresConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.UncTools => OnOff(data.UncTools),
             SettingsField.UncWrites => OnOff(data.UncWrites),
             SettingsField.UncSharesOffered => UncOfferedValue(data.UncSharesOffered, Unc.UncConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
@@ -3062,6 +3114,8 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlQueryTimeoutSeconds => data.MySqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqliteQueryMaxRows => data.SqliteQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqliteQueryTimeoutSeconds => data.SqliteQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.PostgresQueryMaxRows => data.PostgresQueryMaxRows.ToString(CultureInfo.InvariantCulture),
+        SettingsField.PostgresQueryTimeoutSeconds => data.PostgresQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitLibEmail => data.GitLibEmail,
         SettingsField.GitLibName => data.GitLibName,
         SettingsField.ObsidianVault => data.ObsidianVault,
@@ -4145,6 +4199,35 @@ internal sealed partial class SettingsMenu
             return await AddComfyWorkflowAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.PostgresDefaultConnection)
+        {
+            return await PickPostgresConnectionAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PostgresConnectionsOffered)
+        {
+            return await EditPostgresOfferedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PostgresAddConnection)
+        {
+            return await AddPostgresConnectionAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PostgresSetPassword)
+        {
+            return await SetPostgresPasswordAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field is SettingsField.PostgresConnectionsProfile or SettingsField.PostgresConnectionsGlobal)
+        {
+            // An edit row (2026-10-04), the MySQL tab's.
+            OpenPostgresFile(field == SettingsField.PostgresConnectionsProfile
+                ? Postgres.PostgresConfigFile.ProfilePath(_settings.ProfileDirectory)
+                : Postgres.PostgresConfigFile.GlobalPath(_settings.StorageDirectory));
+            return false;
+        }
+
         if (field == SettingsField.SqliteDefaultDatabase)
         {
             return await PickSqliteDatabaseAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -4610,6 +4693,26 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.SqliteQueryTimeoutSeconds = sqliteTimeout);
+                return true;
+
+            case SettingsField.PostgresQueryMaxRows:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int postgresRows) || postgresRows < AppSettingsData.MinSqlQueryMaxRows || postgresRows > AppSettingsData.MaxSqlQueryMaxRows)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryMaxRowsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.PostgresQueryMaxRows = postgresRows);
+                return true;
+
+            case SettingsField.PostgresQueryTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int postgresTimeout) || postgresTimeout < AppSettingsData.MinSqlQueryTimeoutSeconds || postgresTimeout > AppSettingsData.MaxSqlQueryTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.PostgresQueryTimeoutSeconds = postgresTimeout);
                 return true;
 
             case SettingsField.ComfyTimeoutSeconds:
@@ -5906,6 +6009,8 @@ internal sealed partial class SettingsMenu
             SettingsField.SqliteTools => data.SqliteTools,
             SettingsField.SqliteSandboxFiles => data.SqliteSandboxFiles,
             SettingsField.SqlitePercentMention => data.SqlitePercentMention,
+            SettingsField.PostgresTools => data.PostgresTools,
+            SettingsField.PostgresPercentMention => data.PostgresPercentMention,
             SettingsField.UncTools => data.UncTools,
             SettingsField.UncWrites => data.UncWrites,
             SettingsField.UncStarMention => data.UncStarMention,
@@ -6009,6 +6114,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.SqliteTools: data.SqliteTools = on; break;
             case SettingsField.SqliteSandboxFiles: data.SqliteSandboxFiles = on; break;
             case SettingsField.SqlitePercentMention: data.SqlitePercentMention = on; break;
+            case SettingsField.PostgresTools: data.PostgresTools = on; break;
+            case SettingsField.PostgresPercentMention: data.PostgresPercentMention = on; break;
             case SettingsField.UncTools: data.UncTools = on; break;
             case SettingsField.UncWrites: data.UncWrites = on; break;
             case SettingsField.UncStarMention: data.UncStarMention = on; break;
@@ -6120,6 +6227,8 @@ internal sealed partial class SettingsMenu
         SettingsField.SqliteTools => on ? "SQLite tools enabled" : "SQLite tools disabled",
         SettingsField.SqliteSandboxFiles => on ? "a SQLite file in the working directory can be named by its path" : "only the databases of sqlite.json",
         SettingsField.SqlitePercentMention => on ? "% and part of a name lists the SQLite databases on the line" : "% lists no SQLite database",
+        SettingsField.PostgresTools => on ? "PostgreSQL tools enabled" : "PostgreSQL tools disabled",
+        SettingsField.PostgresPercentMention => on ? "% and part of a name lists the PostgreSQL connections on the line" : "% lists no PostgreSQL connection",
         SettingsField.UncTools => on ? "UNC tools enabled" : "UNC tools disabled",
         SettingsField.UncWrites => on ? "read-write shares may write" : "read-only forced for all shares",
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",

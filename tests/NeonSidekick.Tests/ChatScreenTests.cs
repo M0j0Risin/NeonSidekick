@@ -4424,6 +4424,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // Oracle (2026-09-30)
         _console.Input.PushKey(Keys.Right);     // MySQL (later on 2026-09-30)
         _console.Input.PushKey(Keys.Right);     // SQLite (2026-10-04)
+        _console.Input.PushKey(Keys.Right);     // Postgres (2026-10-04)
         _console.Input.PushKey(Keys.Right);     // UNC (later still on 2026-09-30)
         _console.Input.PushKey(Keys.Right);     // Docker (2026-10-02)
         _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
@@ -4436,7 +4437,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude CLI executable                   (looked up)\n  Claude CLI slash command permissions    read-only\n  Claude CLI slash command model          (Claude Code's default)\n  Claude CLI slash command effort         (Claude Code's default)\n  Claude CLI advisor tool                 off\n  Claude CLI advisor tool context         brief\n  Claude CLI advisor tool calls per turn  2 calls\n  Claude CLI advisor tool model           (as Claude CLI slash command model)\n  Claude CLI advisor tool effort          (as Claude CLI slash command effort)\n  Claude CLI advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n▸ get_current_time      on   ", output);
@@ -4845,7 +4846,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("  · get_current_time: off", output);
         Assert.Equal(["get_current_time"], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -8617,7 +8618,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of shell, files, web, claude, docker, obsidian, sql, oracle, mysql, sqlite, unc, ha, comfy, camera, print, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of shell, files, web, claude, docker, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
@@ -8752,7 +8753,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
         string memory = "\n" + Titled(MemoryPaneTitle) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9805,7 +9806,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
@@ -9904,7 +9905,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -10032,7 +10033,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
+        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📈", ChatScreen.ToolbarStripFor(Items("perf", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29)
     }
@@ -10102,7 +10103,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊";
-        const string Rest = "🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈";
+        const string Rest = "🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈";
         Assert.Equal(Panes + " 💾 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask)
         Assert.Equal(Panes + " 💾 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -10159,7 +10160,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(28, glyphs.Length);   // 🪶 SQLite since 2026-10-04
+        Assert.Equal(29, glyphs.Length);   // 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));
@@ -11882,7 +11883,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    Embedded    Docker    Anthropic    OpenAI    LLM    TTS    STT    Sessions    Botchat ") + "\n";

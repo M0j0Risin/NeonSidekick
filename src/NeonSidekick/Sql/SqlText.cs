@@ -181,6 +181,8 @@ public static class SqlText
             bool b => b ? "true" : "false",
             DateTime d => d.ToString(d.TimeOfDay == TimeSpan.Zero ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture),
             DateTimeOffset o => o.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF zzz", CultureInfo.InvariantCulture),
+            DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),   // Npgsql's date (2026-10-04): ISO, never the invariant culture's MM/dd/yyyy
+            TimeOnly t => t.ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture),
             TimeSpan t => t.ToString("c", CultureInfo.InvariantCulture),
             byte[] bytes => Hex(bytes),
             Guid g => g.ToString("D"),

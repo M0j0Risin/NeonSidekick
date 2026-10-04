@@ -702,7 +702,7 @@ Flags beat variables; variables beat the profile's saved values.
 | Variable | Use in a headless run |
 |---|---|
 | `NEONSIDEKICK_PROFILE` | The profile, when there is no `--profile`; with neither, `default`. |
-| `NEONSIDEKICK_HOME` | A whole separate home (its own `settings.json`, profiles, models, llama.cpp runtimes, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`, `sqlite.json`, `unc.json`). |
+| `NEONSIDEKICK_HOME` | A whole separate home (its own `settings.json`, profiles, models, llama.cpp runtimes, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`, `sqlite.json`, `postgres.json`, `unc.json`). |
 | `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. `embedded` and an embedded model's id run the embedded LLM; `docker:<container>` a chosen Docker container. |
 | `NEONSIDEKICK_EMBEDDED_BACKEND` / `NEONSIDEKICK_EMBEDDED_CONTEXT` | The embedded LLM's llama.cpp build (`auto`, `cuda`, `vulkan`, `cpu`) and context window in tokens (0 to fit the GPU, or 512–262144) for the run. |
 | `NEONSIDEKICK_LLM_API_KEY` | The server's key; never put it on the command line. |
@@ -724,7 +724,7 @@ Flags beat variables; variables beat the profile's saved values.
 
 ## Flags that don't combine with `--headless`
 
-`--smoke`, `--audio-check`, `--voice-check`, `--sql-check <connection>`, `--oracle-check <connection>`, `--mysql-check <connection>`, `--sqlite-check <database>`, `--unc-check <share>`, `--docker-check` and `--camera-check` are separate modes; given together with
+`--smoke`, `--audio-check`, `--voice-check`, `--sql-check <connection>`, `--oracle-check <connection>`, `--mysql-check <connection>`, `--sqlite-check <database>`, `--postgres-check <connection>`, `--unc-check <share>`, `--docker-check` and `--camera-check` are separate modes; given together with
 `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit before
 any mode runs.
 

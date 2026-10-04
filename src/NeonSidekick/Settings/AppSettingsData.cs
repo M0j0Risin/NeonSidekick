@@ -1701,6 +1701,28 @@ public sealed class AppSettingsData
     /// <summary>Seconds a SQLite tool's statement may run before it is interrupted: <see cref="MinSqlQueryTimeoutSeconds"/>–<see cref="MaxSqlQueryTimeoutSeconds"/>.</summary>
     public int SqliteQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
 
+    // ─── PostgreSQL (2026-10-04) ────────────────────────────────────────────────
+    // The PostgreSQL tools (the user's pick of the integration ideas): read-only queries over the named connections of
+    // postgres.json (the profile's and the home's), MySQL's shape over Npgsql.
+
+    /// <summary>Whether a turn offers the nine PostgreSQL tools over the connections in <c>postgres.json</c> (2026-10-04); read at each turn, no reconnect. Off by default. No variable.</summary>
+    public bool PostgresTools { get; set; }
+
+    /// <summary>The <c>postgres.json</c> connection a PostgreSQL tool uses when the call names none; empty = the first offered.</summary>
+    public string PostgresDefaultConnection { get; set; } = "";
+
+    /// <summary>The connections of <c>postgres.json</c> this profile offers; null or empty offers none, as for <see cref="MySqlConnectionsOffered"/>.</summary>
+    public List<string>? PostgresConnectionsOffered { get; set; }
+
+    /// <summary>Whether <c>%</c> and part of a name lists the PostgreSQL connections on the input line too; on by default.</summary>
+    public bool PostgresPercentMention { get; set; } = true;
+
+    /// <summary>The rows a <c>postgres_query</c> without <c>max_rows</c> returns: <see cref="MinSqlQueryMaxRows"/>–<see cref="MaxSqlQueryMaxRows"/>.</summary>
+    public int PostgresQueryMaxRows { get; set; } = DefaultSqlQueryMaxRows;
+
+    /// <summary>Seconds a PostgreSQL tool's statement may run (<c>statement_timeout</c> on the server): <see cref="MinSqlQueryTimeoutSeconds"/>–<see cref="MaxSqlQueryTimeoutSeconds"/>.</summary>
+    public int PostgresQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
+
     // ─── UNC ────────────────────────────────────────────────────────────────────
     // The UNC tools (2026-09-30, the user's ask: SQL's integrated auth and run-as for UNC paths, "gated access to file systems on
     // UNC paths outside the working directory for searching files, researching files"): the named shares of unc.json (the

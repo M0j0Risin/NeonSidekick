@@ -53,6 +53,8 @@ internal sealed record TurnToolInputs
     public bool MySqlEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Sqlite { get; init; }
     public bool SqliteEnabled { get; init; }
+    public IReadOnlyList<AIFunction>? Postgres { get; init; }
+    public bool PostgresEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Unc { get; init; }
     public bool UncEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Docker { get; init; }
@@ -104,6 +106,7 @@ internal sealed partial class ChatScreen
         var oracleTools = inputs.Oracle;
         var mysqlTools = inputs.MySql;
         var sqliteTools = inputs.Sqlite;
+        var postgresTools = inputs.Postgres;
         var uncTools = inputs.Unc;
         var dockerTools = inputs.Docker;
         var comfyTools = inputs.Comfy;
@@ -124,13 +127,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, advisorTools, homeTools, printTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, advisorTools, homeTools, printTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -146,6 +149,7 @@ internal sealed partial class ChatScreen
             oracleTools = oracleTools is null ? null : Without(oracleTools, disabledTools);
             mysqlTools = mysqlTools is null ? null : Without(mysqlTools, disabledTools);
             sqliteTools = sqliteTools is null ? null : Without(sqliteTools, disabledTools);
+            postgresTools = postgresTools is null ? null : Without(postgresTools, disabledTools);
             uncTools = uncTools is null ? null : Without(uncTools, disabledTools);
             dockerTools = dockerTools is null ? null : Without(dockerTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
@@ -200,6 +204,9 @@ internal sealed partial class ChatScreen
         // The SQLite tools after the MySQL tools (2026-10-04): the setting SQLite tools and a database to open (named, or the sandbox's files) are the group's switch.
         bool sqlite = inputs.SqliteEnabled && sqliteTools is { Count: > 0 };
         tools = sqlite ? [.. tools, .. sqliteTools!] : tools;
+        // The PostgreSQL tools after the SQLite tools (2026-10-04): the setting PostgreSQL tools and a connection in postgres.json are the group's switch.
+        bool postgres = inputs.PostgresEnabled && postgresTools is { Count: > 0 };
+        tools = postgres ? [.. tools, .. postgresTools!] : tools;
         // The UNC tools after the MySQL tools (2026-09-30): the setting UNC tools and a share in unc.json are the group's switch;
         // unc_fetch and unc_put have the working directory at their other end, so they ride only with the file tools offered.
         uncTools = uncTools is null || files ? uncTools : uncTools.Where(t => t is not (UncFetchTool or UncPutTool)).ToList();
@@ -253,7 +260,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres);
         return new TurnToolSet(
             tools,
             offered,

@@ -37,6 +37,8 @@ public sealed class SqlTextTests
         Assert.Equal("NULL", SqlText.Cell(DBNull.Value));
         Assert.Equal("12345678901234567890.123456789", SqlText.Cell(12345678901234567890.123456789m));   // every digit, never a float
         Assert.Equal("0.1", SqlText.Cell(0.1d));
+        Assert.Equal("2026-10-04", SqlText.Cell(new DateOnly(2026, 10, 4)));   // Npgsql's date (2026-10-04)
+        Assert.Equal("10:15:00.123", SqlText.Cell(new TimeOnly(10, 15, 0, 123)));
         Assert.Equal("2009-01-07", SqlText.Cell(new DateTime(2009, 1, 7)));
         Assert.Equal("2009-01-07 13:05:09.5", SqlText.Cell(new DateTime(2009, 1, 7, 13, 5, 9, 500)));
         Assert.Equal("2009-01-07 13:05:09 -05:00", SqlText.Cell(new DateTimeOffset(2009, 1, 7, 13, 5, 9, TimeSpan.FromHours(-5))));

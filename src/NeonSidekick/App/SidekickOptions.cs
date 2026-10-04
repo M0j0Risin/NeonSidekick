@@ -68,6 +68,7 @@ public sealed record SidekickOptions(
     public const string OracleCheckFlag = "--oracle-check";
     public const string MySqlCheckFlag = "--mysql-check";
     public const string SqliteCheckFlag = "--sqlite-check";
+    public const string PostgresCheckFlag = "--postgres-check";
     public const string UncCheckFlag = "--unc-check";
     public const string DockerCheckFlag = "--docker-check";
     public const string CameraCheckFlag = "--camera-check";
@@ -101,6 +102,9 @@ public sealed record SidekickOptions(
     /// <summary><c>--sqlite-check &lt;name|path&gt;</c> (2026-10-04): run <see cref="App.SqliteCheck"/> over that database of <c>sqlite.json</c> (or file of the working directory) and exit 0/1, <see cref="MySqlCheck"/>'s twin.</summary>
     public string? SqliteCheck { get; init; }
 
+    /// <summary><c>--postgres-check &lt;connection&gt;</c> (2026-10-04): run <see cref="App.PostgresCheck"/> over that connection of <c>postgres.json</c> and exit 0/1, <see cref="MySqlCheck"/>'s twin.</summary>
+    public string? PostgresCheck { get; init; }
+
     /// <summary>
     /// <c>--oracle-check &lt;connection&gt;</c> (2026-09-30): run <see cref="OracleCheck"/> over that connection of the loaded
     /// profile's <c>oracle.json</c> and exit 0/1 — the Oracle tools' proof on the published binary. A check mode: no screen, no
@@ -111,7 +115,7 @@ public sealed record SidekickOptions(
 
     /// <summary>The help text. Pinned wording; tests assert on it.</summary>
     public const string Usage =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--unc-check <share>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"default\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -122,6 +126,7 @@ public sealed record SidekickOptions(
         "  --oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1\n" +
         "  --mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1\n" +
         "  --sqlite-check <database>    prove the SQLite tools against that database of sqlite.json, or a file in the working directory (reads only), exit 0/1\n" +
+        "  --postgres-check <connection>  prove the PostgreSQL tools against that connection of postgres.json (reads only), exit 0/1\n" +
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
         "  --docker-check               prove the Docker tools against Docker Desktop's engine pipe (reads only), exit 0/1\n" +
         "  --camera-check               open the camera, read frames and encode one (nothing saved), exit 0/1\n" +
@@ -252,6 +257,17 @@ public sealed record SidekickOptions(
                 continue;
             }
 
+            if (TryValueFlag(PostgresCheckFlag, args, ref i, arg, lower, out var postgres, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { PostgresCheck = postgres };
+                continue;
+            }
+
             if (TryValueFlag(UncCheckFlag, args, ref i, arg, lower, out var unc, out error))
             {
                 if (error is not null)
@@ -355,7 +371,7 @@ public sealed record SidekickOptions(
     public string? LaunchProfile(string? environmentProfile) =>
         Profile ?? environmentProfile ?? (Headless ? Profiles.DefaultName : null);
 
-    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>sql-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>sqlite-check</c>, <c>unc-check</c>, <c>docker-check</c>, <c>camera-check</c>.</summary>
+    /// <summary>The mode this launch runs: <c>interactive</c>, <c>headless</c>, <c>smoke</c>, <c>audio-check</c>, <c>voice-check</c>, <c>sql-check</c>, <c>oracle-check</c>, <c>mysql-check</c>, <c>sqlite-check</c>, <c>postgres-check</c>, <c>unc-check</c>, <c>docker-check</c>, <c>camera-check</c>.</summary>
     public string Mode =>
         Headless ? "headless"
         : Smoke ? "smoke"
@@ -365,13 +381,14 @@ public sealed record SidekickOptions(
         : OracleCheck is not null ? "oracle-check"
         : MySqlCheck is not null ? "mysql-check"
         : SqliteCheck is not null ? "sqlite-check"
+        : PostgresCheck is not null ? "postgres-check"
         : UncCheck is not null ? "unc-check"
         : DockerCheck ? "docker-check"
         : CameraCheck ? "camera-check"
         : "interactive";
 
-    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--sql-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--sqlite-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || UncCheck is not null || DockerCheck || CameraCheck;
+    /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--sql-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--sqlite-check</c>, <c>--postgres-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || PostgresCheck is not null || UncCheck is not null || DockerCheck || CameraCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

@@ -131,6 +131,7 @@ Options that set something apply to this launch only. Both `--option value` and 
 | `--oracle-check <connection>` | The same for a connection of `oracle.json`. |
 | `--mysql-check <connection>` | The same for a connection of `mysql.json`. |
 | `--sqlite-check <database>` | The same for a database of `sqlite.json`, or a SQLite file in the working directory by its path. |
+| `--postgres-check <connection>` | The same for a connection of `postgres.json`. |
 | `--unc-check <share>` | The same for a share of `unc.json`. |
 | `--docker-check` | The same for Docker Desktop's engine. |
 | `--camera-check` | Opens the camera until the picture settles, reports its brightness and noise and encodes a test photo (nothing is saved; the light comes on briefly), then exits. |
@@ -228,7 +229,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 / 🥷 | *Shell police outside paths* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
-| 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page |
+| 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -882,6 +883,21 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | (none) |
 | SQLite databases (global) | Opens the global `sqlite.json` in your editor. | (none) |
 
+#### Postgres
+
+| Setting | What it does | Default |
+|---|---|---|
+| PostgreSQL tools | Offers the PostgreSQL tools (connections, databases, schemas, tables, columns, describe, relationships, indexes, query). | off |
+| PostgreSQL connections offered | As *SQL connections offered*. | none |
+| PostgreSQL default connection | As *SQL default connection*; `database` works in another database on the same server. | (the first connection) |
+| PostgreSQL set password | As *SQL set password*. | — |
+| PostgreSQL add connection | The wizard; its test shows who it signs in as, the version, and a warning when the role could change data (a superuser is warned of, not refused). See PostgreSQL. | — |
+| PostgreSQL %-mention enabled | Lists the PostgreSQL connections in the `%` list too, marked `PostgreSQL ·`. | on |
+| PostgreSQL max rows | As *SQL max rows*, for `postgres_query`. | 100 |
+| PostgreSQL query timeout (s) | How long one statement may run (1–600): the server's own `statement_timeout`. | 30 |
+| PostgreSQL connections (profile) | As *SQL connections (profile)*. | (none) |
+| PostgreSQL connections (global) | As *SQL connections (global)*. | (none) |
+
 #### UNC
 
 | Setting | What it does | Default |
@@ -1061,7 +1077,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/timer [duration [name] \| stop <name> \| stop all]` | Lists, starts (`10m`, `90s`, `1h30m`) or stops timers. |
 | `/toolbar [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
 | `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
-| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. |
+| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. |
 | `/tree [path]` | Prints a tree of the working directory (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
 | `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
@@ -1360,7 +1376,7 @@ Forty-one more presets come with the repo in [`assets/voices`](assets/voices), o
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *Claude CLI advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *Claude CLI advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -1702,6 +1718,54 @@ SQLite database files, through the same Microsoft.Data.Sqlite the sessions use: 
 | `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name` or `$name`; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 
 `--sqlite-check <database>` proves the tools against a real file on the published exe (it opens and counts, every storage class, the gate, a write refused, the interrupt).
+
+</details>
+
+<details>
+<summary><b>🐘 PostgreSQL</b></summary>
+
+### PostgreSQL
+
+The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence, built slim for NativeAOT), over `postgres.json` (home and profile files, as for SQL).
+
+#### Connection settings
+
+* **`host`**, **`port`** (5432 by default), **`database`** (the default for calls; `postgres` when absent).
+* **`user`**, and **`passwordStore`** `file` or `credman` (`NeonSidekick/postgres/<connection_name>`), as for SQL.
+* **`sslMode`**: `prefer` (default), `require`, `verify-ca`, `verify-full` or `disable`.
+* **`connectTimeoutSeconds`**: 1–120 (default 15).
+
+```json
+{
+  "connections": {
+    "shop": { "host": "localhost", "database": "shop", "user": "shop_reader", "password": "type-password-here-once", "description": "The sample retail database" },
+    "billing": { "host": "db01.example.com", "database": "billing", "user": "billing_ro", "passwordStore": "credman", "sslMode": "verify-full" }
+  }
+}
+```
+
+**PostgreSQL add connection** (the Postgres tab of `/tools`) walks through a new one and can **test** it: who it signs in as, the version, and a warning when the role is a superuser or holds write grants. **PostgreSQL set password** updates a password.
+
+#### Safety
+
+1. **The gate.** The text is lexed by PostgreSQL's rules (nested comments, `E''` strings, dollar quoting) and only one `SELECT`, `WITH`, `VALUES` or `TABLE` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead a `DELETE`), `SELECT INTO`, locking reads, `COPY`, `DO`, `U&` escapes, positional `$1`, and the functions that reach files, large objects, sequences, locks, settings, other backends or other databases.
+2. **The session.** Every transaction read-only by default, and `statement_timeout` and `lock_timeout` set, at connection startup.
+3. **The transaction.** `SET TRANSACTION READ ONLY`, always rolled back: Postgres refuses every write, `nextval` and a temporary table.
+4. **The account.** Give the role `SELECT` grants alone.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `postgres_connections` | — | The named connections (host, database, user, description), the default marked. Touches no server. |
+| `postgres_databases` | `connection?` | The databases the account may connect to, with size and encoding. |
+| `postgres_schemas` | `connection?, database?` | The schemas the account may use, with table counts and owners. |
+| `postgres_tables` | `connection?, database?, schema?, pattern?` | Tables and views as `schema.name`, with kind, approximate rows and comment. |
+| `postgres_columns` | `pattern, connection?, database?, schema?` | Every column whose name matches: table, type, nullability, comment. |
+| `postgres_describe` | `table, connection?, database?, schema?` | One table or view: comment, columns (type, nullability, default, primary key, comment), foreign keys both ways, indexes and CHECK constraints. |
+| `postgres_relationships` | `connection?, database?, schema?, table?` | Foreign keys: a schema's, or a table's either way. |
+| `postgres_indexes` | `connection?, database?, schema?, table?` | Indexes: unique, primary, the definition, scans since the statistics reset. |
+| `postgres_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+
+`--postgres-check <connection>` proves the tools against a real server on the published exe (who it is, every type, the gate, a write refused, the timeout).
 
 </details>
 

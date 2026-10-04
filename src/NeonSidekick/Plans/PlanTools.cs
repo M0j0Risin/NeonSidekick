@@ -50,6 +50,9 @@ public static class PlanTools
         "screen_capture", "screen_list",
         // SQLite (2026-10-04): every call reads, on a file opened read-only
         "sqlite_databases", "sqlite_tables", "sqlite_describe", "sqlite_query",
+        // PostgreSQL (2026-10-04): every call reads, in a read-only transaction rolled back
+        "postgres_connections", "postgres_databases", "postgres_schemas", "postgres_tables", "postgres_columns", "postgres_describe",
+        "postgres_relationships", "postgres_indexes", "postgres_query",
         // the advisor: Claude reads and answers, read-only whatever Claude CLI slash command permissions says (2026-09-27)
         "claude_advisor_cli",
     };

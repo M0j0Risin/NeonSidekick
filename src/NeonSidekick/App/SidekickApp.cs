@@ -376,6 +376,7 @@ public sealed class SidekickApp
                 EncryptSqlPasswords();
                 EncryptOraclePasswords();
                 EncryptMySqlPasswords();
+                EncryptPostgresPasswords();
                 EncryptUncPasswords();
                 // The screen wipes and draws the banner itself, inside the alternate buffer its
                 // pane enters (RenderScreen(IAnsiConsole) through the pane), so the shell's screen is untouched.
@@ -420,6 +421,12 @@ public sealed class SidekickApp
         {
             var catalog = MySql.MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
             return await MySqlCheck.RunAsync(_console, catalog, mysqlConnection, EffectiveSettings.MySqlQueryTimeoutSeconds, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (options.PostgresCheck is { } postgresConnection)
+        {
+            var catalog = Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
+            return await PostgresCheck.RunAsync(_console, catalog, postgresConnection, EffectiveSettings.PostgresQueryTimeoutSeconds, cancellationToken).ConfigureAwait(false);
         }
 
         if (options.SqliteCheck is { } sqliteDatabase)
@@ -612,6 +619,7 @@ public sealed class SidekickApp
         EncryptSqlPasswords();
         EncryptOraclePasswords();
         EncryptMySqlPasswords();
+        EncryptPostgresPasswords();
         EncryptUncPasswords();
         await using var embedded = _embeddedLlm?.Invoke();
         await using var claudeServer = _claudeServerFactory();
@@ -653,6 +661,9 @@ public sealed class SidekickApp
         // The SQLite tools (2026-10-04): no console needed, so headless has them too.
         var sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqliteDatabasesOffered), () => EffectiveSettings.SqliteSandboxFiles ? files : null);
         var sqliteTools = ChatScreen.SqliteTools(sqlite, () => EffectiveSettings);
+        // The PostgreSQL tools (2026-10-04): no console needed, so headless has them too.
+        var postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.PostgresConnectionsOffered));
+        var postgresTools = ChatScreen.PostgresTools(postgres, () => EffectiveSettings);
         // The UNC tools (2026-09-30): no console needed, so headless has them too; every change still needs UNC writes and a readwrite share.
         var uncTools = ChatScreen.UncTools(unc, files, () => EffectiveSettings);
         // The image tools (2026-09-24): no console needed, so headless has them too.
@@ -1031,7 +1042,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeCliAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, EffectiveSettings.Memory, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPoliceOutsidePaths, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeCliAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres));
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude CLI server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
@@ -1971,6 +1982,9 @@ public sealed class SidekickApp
 
     /// <summary>A plain password typed into any <c>mysql.json</c> encrypted before the first screen or turn (2026-09-30), as for <c>sql.json</c> and <c>oracle.json</c>.</summary>
     private void EncryptMySqlPasswords() => MySql.MySqlConfigFile.EncryptAll(_settings.StorageDirectory);
+
+    /// <summary>A plain password typed into any <c>postgres.json</c> encrypted before the first screen or turn (2026-10-04), as for <c>mysql.json</c>.</summary>
+    private void EncryptPostgresPasswords() => Postgres.PostgresConfigFile.EncryptAll(_settings.StorageDirectory);
 
     /// <summary>A plain runas password typed into any <c>unc.json</c> encrypted before the first screen or turn (2026-09-30), as <see cref="EncryptSqlPasswords"/> does for <c>sql.json</c>.</summary>
     private void EncryptUncPasswords() => Unc.UncConfigFile.EncryptAll(_settings.StorageDirectory);

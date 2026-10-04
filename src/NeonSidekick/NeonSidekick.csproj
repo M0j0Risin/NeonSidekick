@@ -156,6 +156,14 @@
       probe mysql:driver and the check mode mysql-check are the proof on the published binary.
     -->
     <PackageReference Include="MySqlConnector" Version="2.6.2" />
+    <!--
+      The PostgreSQL tools (Postgres/, Llm/Tools/Postgres*Tool.cs, `PostgreSQL tools`, 2026-10-04): read-only queries over the
+      connections of postgres.json. Npgsql, PostgreSQL licence, fully managed (no native DLL), NativeAOT-supported since 8.0
+      through NpgsqlSlimDataSourceBuilder: the tools build their data source slim and opt into the type handlers a read needs
+      (arrays, ranges, records, JSON as text). The smoke probe postgres:driver and the check mode postgres-check are the proof
+      on the published binary.
+    -->
+    <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
   <ItemGroup>

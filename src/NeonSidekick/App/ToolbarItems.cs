@@ -45,6 +45,7 @@ public static class ToolbarItems
     public const string Oracle = "oracle";
     public const string MySql = "mysql";
     public const string Sqlite = "sqlite";     // 2026-10-04
+    public const string Postgres = "postgres"; // 2026-10-04
     public const string Unc = "unc";
     public const string Ha = "ha";
     public const string Comfy = "comfy";
@@ -65,7 +66,7 @@ public static class ToolbarItems
     public static readonly string[] Names =
     [
         Settings, Profile, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
-        Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Unc, Ha, Comfy, Camera, Print,
+        Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, LiveView, ComfyView, Perf, Path,
     ];
 
@@ -106,6 +107,7 @@ public static class ToolbarItems
         Oracle => ChatScreen.OracleToolGlyph,
         MySql => ChatScreen.MySqlToolGlyph,
         Sqlite => ChatScreen.SqliteToolGlyph,
+        Postgres => ChatScreen.PostgresToolGlyph,
         Unc => ChatScreen.UncToolGlyph,
         Ha => ChatScreen.HaToolGlyph,
         Comfy => ChatScreen.ComfyToolGlyph,
@@ -143,6 +145,7 @@ public static class ToolbarItems
         Oracle => "Oracle",
         MySql => "MySQL",
         Sqlite => "SQLite",
+        Postgres => "PostgreSQL",
         Unc => "UNC",
         Ha => "HA",
         Comfy => "ComfyUI",

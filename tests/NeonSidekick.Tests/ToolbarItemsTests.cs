@@ -15,10 +15,10 @@ public sealed class ToolbarItemsTests
         Assert.Equal(
         [
             "settings", "profile", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police",
-            "shell", "files", "web", "claude", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "unc", "ha", "comfy", "camera", "print",
+            "shell", "files", "web", "claude", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "postgres", "unc", "ha", "comfy", "camera", "print",
             "log", "liveview", "comfyview", "perf", "path",
         ], ToolbarItems.Names);
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
         Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
@@ -77,10 +77,10 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("7 of 31", ToolbarItems.Value(null));   // the defaults (2026-10-03; 3 from 2026-10-02, of 13 until 2026-10-03)
+        Assert.Equal("7 of 32", ToolbarItems.Value(null));   // the defaults (2026-10-03; 3 from 2026-10-02, of 13 until 2026-10-03)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
-        Assert.Equal("2 of 31", ToolbarItems.Value(["usage", "path"]));
+        Assert.Equal("2 of 32", ToolbarItems.Value(["usage", "path"]));
         Assert.Equal("[[x]] ⚙️  Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
         Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse"), ToolbarItems.Label("path", false));
         Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory"), ToolbarItems.Label("memory", true));
