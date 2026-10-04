@@ -48,6 +48,8 @@ public static class PlanTools
         "camera_capture",
         // the screen (2026-10-04): a look at what is on it, asked like the camera's photo; screen_list names windows, no pixels
         "screen_capture", "screen_list",
+        // SQLite (2026-10-04): every call reads, on a file opened read-only
+        "sqlite_databases", "sqlite_tables", "sqlite_describe", "sqlite_query",
         // the advisor: Claude reads and answers, read-only whatever Claude CLI slash command permissions says (2026-09-27)
         "claude_advisor_cli",
     };

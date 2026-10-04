@@ -1673,6 +1673,34 @@ public sealed class AppSettingsData
     /// <summary>Seconds a MySQL tool's statement may run, on the server (<c>max_execution_time</c> / <c>max_statement_time</c>) and in the driver (2026-09-30): the SQL tools' range.</summary>
     public int MySqlQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
 
+    // ─── SQLite (2026-10-04) ────────────────────────────────────────────────────
+    // The SQLite tools (the user's pick of the integration ideas): read-only queries on SQLite files — the named databases of
+    // sqlite.json (the profile's and the home's) and, with SqliteSandboxFiles on, any file in the working directory by its path.
+
+    /// <summary>Whether a turn offers the four SQLite tools (2026-10-04); read at each turn, no reconnect. Off by default. No variable.</summary>
+    public bool SqliteTools { get; set; }
+
+    /// <summary>The <c>sqlite.json</c> database a SQLite tool uses when the call names none; empty = the first offered.</summary>
+    public string SqliteDefaultDatabase { get; set; } = "";
+
+    /// <summary>The names of <c>sqlite.json</c> this profile offers (the checklist on the SQLite tab); null or empty offers none, as for <see cref="MySqlConnectionsOffered"/>.</summary>
+    public List<string>? SqliteDatabasesOffered { get; set; }
+
+    /// <summary>
+    /// Whether a SQLite tool may also open any file in the working directory by its path (2026-10-04, the user's call: named and
+    /// sandbox); the sandbox's own rule refuses a path outside it. On by default: the working directory is the user's already.
+    /// </summary>
+    public bool SqliteSandboxFiles { get; set; } = true;
+
+    /// <summary>Whether <c>%</c> and part of a name lists the <c>sqlite.json</c> databases on the input line too; on by default.</summary>
+    public bool SqlitePercentMention { get; set; } = true;
+
+    /// <summary>The rows a <c>sqlite_query</c> without <c>max_rows</c> returns: <see cref="MinSqlQueryMaxRows"/>–<see cref="MaxSqlQueryMaxRows"/>.</summary>
+    public int SqliteQueryMaxRows { get; set; } = DefaultSqlQueryMaxRows;
+
+    /// <summary>Seconds a SQLite tool's statement may run before it is interrupted: <see cref="MinSqlQueryTimeoutSeconds"/>–<see cref="MaxSqlQueryTimeoutSeconds"/>.</summary>
+    public int SqliteQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
+
     // ─── UNC ────────────────────────────────────────────────────────────────────
     // The UNC tools (2026-09-30, the user's ask: SQL's integrated auth and run-as for UNC paths, "gated access to file systems on
     // UNC paths outside the working directory for searching files, researching files"): the named shares of unc.json (the

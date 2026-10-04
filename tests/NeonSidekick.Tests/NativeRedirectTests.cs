@@ -78,7 +78,7 @@ public sealed class NativeRedirectTests
         [
             ReadFileTool.ToolName, SearchFilesTool.ToolName, CopyTool.ToolName, MoveTool.ToolName, DeleteTool.ToolName, CreateDirectoryTool.ToolName,
             ZipTool.ToolName, UnzipTool.ToolName, GitStatusTool.ToolName, GitLogTool.ToolName, GitDiffTool.ToolName, GitShowTool.ToolName, GitBlameTool.ToolName,
-            GitStageTool.ToolName, GitCommitTool.ToolName, GitBranchTool.ToolName, GitStashTool.ToolName, WebFetchTool.ToolName, SqlQueryTool.ToolName, OracleQueryTool.ToolName, MySqlQueryTool.ToolName,
+            GitStageTool.ToolName, GitCommitTool.ToolName, GitBranchTool.ToolName, GitStashTool.ToolName, WebFetchTool.ToolName, SqlQueryTool.ToolName, OracleQueryTool.ToolName, MySqlQueryTool.ToolName, SqliteQueryTool.ToolName,
             UncSharesTool.ToolName,
         ];
         Assert.All(NativeRedirect.Table.Values, tool => Assert.Contains(tool, known));

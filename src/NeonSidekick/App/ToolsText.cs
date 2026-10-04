@@ -37,7 +37,7 @@ public static class ToolsText
     public static readonly string[] SwitchWords =
     [
         ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Docker, ToolbarItems.Obsidian,
-        ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
+        ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print,
     ];
 
@@ -53,6 +53,7 @@ public static class ToolsText
         ToolbarItems.Sql => SettingsField.SqlTools,
         ToolbarItems.Oracle => SettingsField.OracleTools,
         ToolbarItems.MySql => SettingsField.MySqlTools,
+        ToolbarItems.Sqlite => SettingsField.SqliteTools,
         ToolbarItems.Unc => SettingsField.UncTools,
         ToolbarItems.Ha => SettingsField.HomeAssistantTools,
         ToolbarItems.Comfy => SettingsField.ComfyTools,
@@ -99,6 +100,9 @@ public static class ToolsText
     /// <summary>The MySQL tools' tab and group (2026-09-30), after SQL, before Oracle, since 2026-10-03 (the user's order; after Oracle before): the database tabs together.</summary>
     public const string MySqlTabTitle = "MySQL";
 
+    /// <summary>The SQLite tools' tab and group (2026-10-04), after MySQL, before Oracle.</summary>
+    public const string SqliteTabTitle = "SQLite";
+
     /// <summary>The UNC tools' tab and group (2026-09-30), after Files, before Print, since 2026-10-03 (the user's order; after MySQL, before Docker, until then).</summary>
     public const string UncTabTitle = "UNC";
 
@@ -127,7 +131,7 @@ public static class ToolsText
     public const string PrintTabTitle = "Print";
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, OracleTabTitle, ClaudeCliTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, GitTabTitle, OptionsTabTitle];
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, OracleTabTitle, ClaudeCliTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row (<c>/mcp</c>'s Tools tab too); "type = filter" since 2026-10-03 (<see cref="MenuFilter"/>). Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
@@ -149,6 +153,9 @@ public static class ToolsText
 
     /// <summary>After the MySQL heading while the group is not offered: the switch is off or no connection of <c>mysql.json</c> is offered (2026-09-30). Pinned.</summary>
     public const string MySqlOffSuffix = "(off: MySQL tools is off or no connection of mysql.json is offered)";
+
+    /// <summary>After the SQLite heading while the group is not offered: the switch is off, or no database of <c>sqlite.json</c> is offered and the sandbox's files are not allowed (2026-10-04). Pinned.</summary>
+    public const string SqliteOffSuffix = "(off: SQLite tools is off, or no database of sqlite.json is offered and SQLite sandbox files is off)";
 
     /// <summary>After the UNC heading while the group is not offered: the switch is off or no share of <c>unc.json</c> is offered (2026-09-30). Pinned.</summary>
     public const string UncOffSuffix = "(off: UNC tools is off or no share of unc.json is offered)";
@@ -267,6 +274,12 @@ public static class ToolsText
         {
             // The SQL shape (2026-09-30): the switch, or no connection defined.
             return MySqlOffSuffix;
+        }
+
+        if (group.Switch == SettingsField.SqliteTools)
+        {
+            // The SQL shape (2026-10-04): the switch, or nothing to open.
+            return SqliteOffSuffix;
         }
 
         if (group.Switch == SettingsField.UncTools)

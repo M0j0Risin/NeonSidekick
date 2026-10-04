@@ -863,8 +863,38 @@ public enum SettingsField
     /// <summary>Typed: the folder under the working directory the screenshots are saved in (<see cref="Settings.AppSettingsData.ScreenOutputFolder"/>). The Screen tab (2026-10-04), the Camera output folder's shape.</summary>
     ScreenOutputFolder,
 
-    /// <summary>A toggle: whether a stored session keeps the screenshots (<see cref="Settings.AppSettingsData.ScreenKeepInSessions"/>). The Screen tab's last row (2026-10-04). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether a stored session keeps the screenshots (<see cref="Settings.AppSettingsData.ScreenKeepInSessions"/>). The Screen tab's last row (2026-10-04).</summary>
     ScreenKeepInSessions,
+
+    /// <summary>A toggle: whether a turn offers the four SQLite tools (<see cref="Settings.AppSettingsData.SqliteTools"/>). The SQLite tab's first row (2026-10-04); no reconnect.</summary>
+    SqliteTools,
+
+    /// <summary>A checklist: which databases of <c>sqlite.json</c> this profile offers (<see cref="Settings.AppSettingsData.SqliteDatabasesOffered"/>). The SQLite tab (2026-10-04).</summary>
+    SqliteDatabasesOffered,
+
+    /// <summary>A pick: the database a SQLite tool uses when the call names none (<see cref="Settings.AppSettingsData.SqliteDefaultDatabase"/>). The SQLite tab (2026-10-04).</summary>
+    SqliteDefaultDatabase,
+
+    /// <summary>A toggle: whether a file in the working directory may be named by its path (<see cref="Settings.AppSettingsData.SqliteSandboxFiles"/>). The SQLite tab (2026-10-04).</summary>
+    SqliteSandboxFiles,
+
+    /// <summary>An action row (2026-10-04): Enter walks a new database through its name, file and description, opens it and adds it to that <c>sqlite.json</c> (<c>SettingsMenu.SqliteWizard.cs</c>). The SQLite tab.</summary>
+    SqliteAddDatabase,
+
+    /// <summary>A toggle: whether <c>%</c> and part of a name lists the SQLite databases too (<see cref="Settings.AppSettingsData.SqlitePercentMention"/>). The SQLite tab (2026-10-04).</summary>
+    SqlitePercentMention,
+
+    /// <summary>Typed: how many rows a <c>sqlite_query</c> without <c>max_rows</c> returns, 1 to 100,000 (<see cref="Settings.AppSettingsData.SqliteQueryMaxRows"/>). The SQLite tab (2026-10-04).</summary>
+    SqliteQueryMaxRows,
+
+    /// <summary>Typed: seconds a SQLite tool's statement may run, 1 to 600 (<see cref="Settings.AppSettingsData.SqliteQueryTimeoutSeconds"/>). The SQLite tab (2026-10-04).</summary>
+    SqliteQueryTimeoutSeconds,
+
+    /// <summary>An edit row: Enter opens the profile's <c>sqlite.json</c> in the editor (made with <see cref="Sqlite.SqliteConfigFile.EmptyText"/> when missing). The SQLite tab (2026-10-04).</summary>
+    SqliteDatabasesProfile,
+
+    /// <summary>An edit row: Enter opens the home's <c>sqlite.json</c>, every profile's. The SQLite tab's last row (2026-10-04). Last in the enum, as every newcomer.</summary>
+    SqliteDatabasesGlobal,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1278,6 +1308,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
+        [SettingsField.SqliteTools, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort, SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
@@ -1664,7 +1695,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
             or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera
-            or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions;
+            or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions
+            or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1846,6 +1878,16 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlQueryTimeoutSeconds => "MySQL query timeout (s)",
         SettingsField.MySqlConnectionsProfile => "MySQL connections (profile)",
         SettingsField.MySqlConnectionsGlobal => "MySQL connections (global)",
+        SettingsField.SqliteTools => "SQLite tools",
+        SettingsField.SqliteDatabasesOffered => "SQLite databases offered",
+        SettingsField.SqliteDefaultDatabase => "SQLite default database",
+        SettingsField.SqliteSandboxFiles => "SQLite sandbox files",
+        SettingsField.SqliteAddDatabase => "SQLite add database",
+        SettingsField.SqlitePercentMention => "SQLite %-mention enabled",
+        SettingsField.SqliteQueryMaxRows => "SQLite max rows",
+        SettingsField.SqliteQueryTimeoutSeconds => "SQLite query timeout (s)",
+        SettingsField.SqliteDatabasesProfile => "SQLite databases (profile)",
+        SettingsField.SqliteDatabasesGlobal => "SQLite databases (global)",
         SettingsField.UncTools => "UNC tools",
         SettingsField.UncWrites => "UNC writes",
         SettingsField.UncSharesOffered => "UNC shares offered",
@@ -2162,6 +2204,16 @@ internal sealed partial class SettingsMenu
             SettingsField.MySqlQueryTimeoutSeconds => Seconds(data.MySqlQueryTimeoutSeconds),
             SettingsField.MySqlConnectionsProfile => MySqlConnectionsLabel(MySql.MySqlConfigFile.ProfilePath(profileDirectory)),
             SettingsField.MySqlConnectionsGlobal => MySqlConnectionsLabel(MySql.MySqlConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
+            SettingsField.SqliteTools => OnOff(data.SqliteTools),
+            SettingsField.SqliteDefaultDatabase => string.IsNullOrWhiteSpace(data.SqliteDefaultDatabase) ? FirstSqliteDatabaseLabel : data.SqliteDefaultDatabase,
+            SettingsField.SqliteDatabasesOffered => SqliteOfferedValue(data.SqliteDatabasesOffered, Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
+            SettingsField.SqliteSandboxFiles => OnOff(data.SqliteSandboxFiles),
+            SettingsField.SqliteAddDatabase => SqliteAddDatabaseLabel,
+            SettingsField.SqlitePercentMention => OnOff(data.SqlitePercentMention),
+            SettingsField.SqliteQueryMaxRows => SqlRows(data.SqliteQueryMaxRows),
+            SettingsField.SqliteQueryTimeoutSeconds => Seconds(data.SqliteQueryTimeoutSeconds),
+            SettingsField.SqliteDatabasesProfile => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.ProfilePath(profileDirectory)),
+            SettingsField.SqliteDatabasesGlobal => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.UncTools => OnOff(data.UncTools),
             SettingsField.UncWrites => OnOff(data.UncWrites),
             SettingsField.UncSharesOffered => UncOfferedValue(data.UncSharesOffered, Unc.UncConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
@@ -3008,6 +3060,8 @@ internal sealed partial class SettingsMenu
         SettingsField.OracleQueryTimeoutSeconds => data.OracleQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.MySqlQueryMaxRows => data.MySqlQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.MySqlQueryTimeoutSeconds => data.MySqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.SqliteQueryMaxRows => data.SqliteQueryMaxRows.ToString(CultureInfo.InvariantCulture),
+        SettingsField.SqliteQueryTimeoutSeconds => data.SqliteQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitLibEmail => data.GitLibEmail,
         SettingsField.GitLibName => data.GitLibName,
         SettingsField.ObsidianVault => data.ObsidianVault,
@@ -4091,6 +4145,30 @@ internal sealed partial class SettingsMenu
             return await AddComfyWorkflowAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.SqliteDefaultDatabase)
+        {
+            return await PickSqliteDatabaseAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.SqliteDatabasesOffered)
+        {
+            return await EditSqliteOfferedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.SqliteAddDatabase)
+        {
+            return await AddSqliteDatabaseAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field is SettingsField.SqliteDatabasesProfile or SettingsField.SqliteDatabasesGlobal)
+        {
+            // An edit row (2026-10-04), the MySQL tab's: the file in the editor, made with its commented shape first; nothing saved here.
+            OpenSqliteFile(field == SettingsField.SqliteDatabasesProfile
+                ? Sqlite.SqliteConfigFile.ProfilePath(_settings.ProfileDirectory)
+                : Sqlite.SqliteConfigFile.GlobalPath(_settings.StorageDirectory));
+            return false;
+        }
+
         if (field == SettingsField.OracleDefaultConnection)
         {
             return await PickOracleConnectionAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -4512,6 +4590,26 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.MySqlQueryTimeoutSeconds = mysqlTimeout);
+                return true;
+
+            case SettingsField.SqliteQueryMaxRows:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int sqliteRows) || sqliteRows < AppSettingsData.MinSqlQueryMaxRows || sqliteRows > AppSettingsData.MaxSqlQueryMaxRows)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryMaxRowsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.SqliteQueryMaxRows = sqliteRows);
+                return true;
+
+            case SettingsField.SqliteQueryTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int sqliteTimeout) || sqliteTimeout < AppSettingsData.MinSqlQueryTimeoutSeconds || sqliteTimeout > AppSettingsData.MaxSqlQueryTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.SqliteQueryTimeoutSeconds = sqliteTimeout);
                 return true;
 
             case SettingsField.ComfyTimeoutSeconds:
@@ -5805,6 +5903,9 @@ internal sealed partial class SettingsMenu
             SettingsField.OraclePercentMention => data.OraclePercentMention,
             SettingsField.MySqlTools => data.MySqlTools,
             SettingsField.MySqlPercentMention => data.MySqlPercentMention,
+            SettingsField.SqliteTools => data.SqliteTools,
+            SettingsField.SqliteSandboxFiles => data.SqliteSandboxFiles,
+            SettingsField.SqlitePercentMention => data.SqlitePercentMention,
             SettingsField.UncTools => data.UncTools,
             SettingsField.UncWrites => data.UncWrites,
             SettingsField.UncStarMention => data.UncStarMention,
@@ -5905,6 +6006,9 @@ internal sealed partial class SettingsMenu
             case SettingsField.OraclePercentMention: data.OraclePercentMention = on; break;
             case SettingsField.MySqlTools: data.MySqlTools = on; break;
             case SettingsField.MySqlPercentMention: data.MySqlPercentMention = on; break;
+            case SettingsField.SqliteTools: data.SqliteTools = on; break;
+            case SettingsField.SqliteSandboxFiles: data.SqliteSandboxFiles = on; break;
+            case SettingsField.SqlitePercentMention: data.SqlitePercentMention = on; break;
             case SettingsField.UncTools: data.UncTools = on; break;
             case SettingsField.UncWrites: data.UncWrites = on; break;
             case SettingsField.UncStarMention: data.UncStarMention = on; break;
@@ -6013,6 +6117,9 @@ internal sealed partial class SettingsMenu
         SettingsField.OraclePercentMention => on ? "% and part of a name lists the Oracle connections on the line" : "% lists no Oracle connection",
         SettingsField.MySqlTools => on ? "MySQL tools enabled" : "MySQL tools disabled",
         SettingsField.MySqlPercentMention => on ? "% and part of a name lists the MySQL connections on the line" : "% lists no MySQL connection",
+        SettingsField.SqliteTools => on ? "SQLite tools enabled" : "SQLite tools disabled",
+        SettingsField.SqliteSandboxFiles => on ? "a SQLite file in the working directory can be named by its path" : "only the databases of sqlite.json",
+        SettingsField.SqlitePercentMention => on ? "% and part of a name lists the SQLite databases on the line" : "% lists no SQLite database",
         SettingsField.UncTools => on ? "UNC tools enabled" : "UNC tools disabled",
         SettingsField.UncWrites => on ? "read-write shares may write" : "read-only forced for all shares",
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",

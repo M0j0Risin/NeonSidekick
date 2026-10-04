@@ -46,7 +46,8 @@ public static class NativeRedirect
         Map(Llm.Tools.WebFetchTool.ToolName, "curl", "wget", "invoke-webrequest", "iwr", "invoke-restmethod", "irm");
         Map(Llm.Tools.SqlQueryTool.ToolName, "sqlcmd", "invoke-sqlcmd");
         Map(Llm.Tools.OracleQueryTool.ToolName, "sqlplus");
-        Map(Llm.Tools.MySqlQueryTool.ToolName, "mysql", "mariadb");   // 2026-09-30; SQLcl's bare "sql" is too common a word to take
+        Map(Llm.Tools.MySqlQueryTool.ToolName, "mysql", "mariadb");
+        Map(Llm.Tools.SqliteQueryTool.ToolName, "sqlite3");   // 2026-10-04   // 2026-09-30; SQLcl's bare "sql" is too common a word to take
         Map(Llm.Tools.UncSharesTool.ToolName, "net use", "net share", "net view", "get-smbshare", "get-smbmapping");   // 2026-10-03: "my UNC shares" went to net use
         return table;
     }

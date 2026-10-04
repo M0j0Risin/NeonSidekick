@@ -255,6 +255,17 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.MySqlQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params.";
 
     /// <summary>
+    /// The sentence the default rules gain while the SQLite tools are offered (the setting <c>SQLite tools</c> on and a database named
+    /// in <c>sqlite.json</c> or the sandbox's files allowed, 2026-10-04): appended after <see cref="MySqlRule"/> by
+    /// <see cref="DefaultRules"/>, its twin — the dialect, that the tools only read, and the order a question is worked in. Pinned.
+    /// </summary>
+    public const string SqliteRule =
+        "The SQLite tools read SQLite database files (SQLite SQL: LIMIT n; \"double quotes\" for names) — the user's named databases, or a file in the working directory by its path — and never change data: " +
+        NeonSidekick.Llm.Tools.SqliteDatabasesTool.ToolName + " lists the databases and " + NeonSidekick.Llm.Tools.SqliteTablesTool.ToolName + " a file's tables; " +
+        NeonSidekick.Llm.Tools.SqliteDescribeTool.ToolName + " shows a table's columns, keys and indexes — look before you query, never guess a column; " +
+        NeonSidekick.Llm.Tools.SqliteQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params.";
+
+    /// <summary>
     /// The sentence the default rules gain while the UNC tools are offered (the setting <c>UNC tools</c> on and a share in
     /// <c>unc.json</c>, 2026-09-30): appended after <see cref="MySqlRule"/> by <see cref="DefaultRules"/> — what the shares are, the
     /// read tools, how a path is given, and that a share is neither the working directory nor the shell's. <see cref="UncFetchRule"/>
@@ -350,7 +361,7 @@ public sealed class Assistant
     /// words it replaces, since a small model follows a named word better than a principle; empty when none is, so a
     /// shell-only turn gains nothing. <c>run_command</c> backs it at the call (<see cref="Shell.NativeRedirect"/>). Pinned.
     /// </summary>
-    public static string ShellNativeRule(bool files, bool git, bool web, bool sql, bool oracle = false, bool mysql = false, bool unc = false)
+    public static string ShellNativeRule(bool files, bool git, bool web, bool sql, bool oracle = false, bool mysql = false, bool unc = false, bool sqlite = false)
     {
         var parts = new List<string>(6);
         if (files)
@@ -381,6 +392,11 @@ public sealed class Assistant
         if (mysql)
         {
             parts.Add(NeonSidekick.Llm.Tools.MySqlQueryTool.ToolName + " reads the MySQL databases (not mysql or mariadb)");
+        }
+
+        if (sqlite)
+        {
+            parts.Add(NeonSidekick.Llm.Tools.SqliteQueryTool.ToolName + " reads the SQLite files (not sqlite3)");
         }
 
         if (unc)
@@ -493,14 +509,14 @@ public sealed class Assistant
     /// (the setting <c>Shell prefer native tools</c>, 2026-09-26) when it names a group. <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
     /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23), <see cref="OracleRule"/> after it with <paramref name="oracle"/> (2026-09-30), <see cref="MySqlRule"/> after that with <paramref name="mysql"/> (the same day), <see cref="HomeAssistantRule"/> after it with <paramref name="homeAssistant"/> (2026-09-28), <see cref="DockerRule"/> after it with <paramref name="docker"/> and <see cref="DockerWriteRule"/> with <paramref name="dockerWrite"/> (2026-10-02), <see cref="ClaudeAdvisorRule"/> after that with <paramref name="advisor"/> (2026-09-27). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
     /// </summary>
-    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false) =>
+    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false) =>
         tools
-            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (oracle ? " " + OracleRule : "") + (mysql ? " " + MySqlRule : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (oracle ? " " + OracleRule : "") + (mysql ? " " + MySqlRule : "") + (sqlite ? " " + SqliteRule : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
 
     /// <summary><see cref="ShellNativeRule"/> after a space, or nothing: off, or no group to name.</summary>
-    private static string NativeTail(bool native, bool files, bool git, bool web, bool sql, bool oracle, bool mysql, bool unc) =>
-        native && ShellNativeRule(files, git, web, sql, oracle, mysql, unc) is { Length: > 0 } rule ? " " + rule : "";
+    private static string NativeTail(bool native, bool files, bool git, bool web, bool sql, bool oracle, bool mysql, bool unc, bool sqlite) =>
+        native && ShellNativeRule(files, git, web, sql, oracle, mysql, unc, sqlite) is { Length: > 0 } rule ? " " + rule : "";
 
     /// <summary>
     /// The system prompt for a turn, in this order: the persona (<paramref name="persona"/> from
@@ -540,11 +556,11 @@ public sealed class Assistant
     /// the third (2026-09-20) is a whole group: <paramref name="timers"/> false (no timer tool offered — headless, or the
     /// three switched off) drops <see cref="TimerRule"/>.
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
-        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help);
+        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite);
         var sb = new StringBuilder((customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));
         if (project is not null)
         {

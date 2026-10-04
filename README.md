@@ -130,6 +130,7 @@ Options that set something apply to this launch only. Both `--option value` and 
 | `--sql-check <connection>` | Proves the SQL tools against a connection of `sql.json`, then exits. |
 | `--oracle-check <connection>` | The same for a connection of `oracle.json`. |
 | `--mysql-check <connection>` | The same for a connection of `mysql.json`. |
+| `--sqlite-check <database>` | The same for a database of `sqlite.json`, or a SQLite file in the working directory by its path. |
 | `--unc-check <share>` | The same for a share of `unc.json`. |
 | `--docker-check` | The same for Docker Desktop's engine. |
 | `--camera-check` | Opens the camera until the picture settles, reports its brightness and noise and encodes a test photo (nothing is saved; the light comes on briefly), then exits. |
@@ -227,7 +228,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 / 🥷 | *Shell police outside paths* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
-| 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page |
+| 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -866,6 +867,21 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | MySQL connections (profile) | As *SQL connections (profile)*. | (none) |
 | MySQL connections (global) | As *SQL connections (global)*. | (none) |
 
+#### SQLite
+
+| Setting | What it does | Default |
+|---|---|---|
+| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases named in `sqlite.json` and, below, the working directory's files. | off |
+| SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. | none |
+| SQLite default database | The database a call uses when it names none. | (the first database) |
+| SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`). | on |
+| SQLite add database | The wizard: the file to save in, the name, the database file, a description; its test opens the file read-only and counts the tables. | — |
+| SQLite %-mention enabled | Lists the SQLite databases in the `%` list too, marked `SQLite ·`. | on |
+| SQLite max rows | As *SQL max rows*, for `sqlite_query`. | 100 |
+| SQLite query timeout (s) | How long one statement may run before it is interrupted (1–600). | 30 |
+| SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | (none) |
+| SQLite databases (global) | Opens the global `sqlite.json` in your editor. | (none) |
+
 #### UNC
 
 | Setting | What it does | Default |
@@ -1045,7 +1061,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/timer [duration [name] \| stop <name> \| stop all]` | Lists, starts (`10m`, `90s`, `1h30m`) or stops timers. |
 | `/toolbar [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
 | `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
-| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. |
+| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. |
 | `/tree [path]` | Prints a tree of the working directory (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
 | `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
@@ -1344,7 +1360,7 @@ Forty-one more presets come with the repo in [`assets/voices`](assets/voices), o
 ## Tools
 [↑ Back to top](#neon-sidekick)
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *Claude CLI advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *Claude CLI advisor tool*, *Web tools*, *Memory*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 <details>
 <summary><b>🕒 Clock & Timers</b></summary>
@@ -1651,6 +1667,41 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 | `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` as for SQL (`@id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 
 `--mysql-check <connection>` proves the tools against a real server on the published exe (every type, the gate, the session, the transaction, a cancel and a timeout).
+
+</details>
+
+<details>
+<summary><b>🪶 SQLite</b></summary>
+
+### SQLite
+
+SQLite database files, through the same Microsoft.Data.Sqlite the sessions use: no server, no password, nothing new to install. A database is a name from `sqlite.json` (home and profile files, as for SQL; a relative `path` is taken from the file's folder) or, with *SQLite sandbox files* on, any file in the working directory by its path.
+
+```json
+{
+  "databases": {
+    "chinook": { "path": "D:\\data\\chinook.db", "description": "The music store sample" }
+  }
+}
+```
+
+**SQLite add database** (the SQLite tab of `/tools`) walks through a new one and can **test** it: it opens the file read-only and counts its tables.
+
+#### Safety
+
+1. **The gate.** The text is lexed by SQLite's rules and only one `SELECT`, `WITH … SELECT` or `VALUES` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead an `INSERT`), `REPLACE INTO`, `ATTACH`/`DETACH`, `PRAGMA`, transaction words, `load_extension()` and positional `?` placeholders.
+2. **The file.** Opened read-only, without pooling.
+3. **The session.** `PRAGMA query_only = ON`.
+4. **The transaction.** Always rolled back. A statement past the timeout (or ESC) is interrupted.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `sqlite_databases` | — | The named databases (file, description), the default marked, and whether working-directory files may be named. Opens nothing. |
+| `sqlite_tables` | `database?, pattern?` | Tables and views with their kind. |
+| `sqlite_describe` | `table, database?` | One table or view: columns (type, nullability, primary key, default; generated and hidden columns marked), foreign keys both ways, indexes and the `CREATE` statement. |
+| `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name` or `$name`; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+
+`--sqlite-check <database>` proves the tools against a real file on the published exe (it opens and counts, every storage class, the gate, a write refused, the interrupt).
 
 </details>
 

@@ -109,7 +109,9 @@ public sealed record SystemPromptFacts(
     bool DockerEnabled = false,
     int DockerTools = 0,
     bool DockerWrite = false,
-    int HelpTools = 0)
+    int HelpTools = 0,
+    bool SqliteEnabled = false,
+    int SqliteTools = 0)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.HomeAssistantRule"/>: tools on, the server set with the switch on, and at least one Home Assistant tool offered (2026-09-28).</summary>
     public bool HomeAssistant => ToolsEnabled && HomeAssistantEnabled && HomeAssistantTools > 0;
@@ -149,6 +151,9 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether the rules carry <see cref="Assistant.MySqlRule"/>: tools on, a connection defined with the switch on, and at least one MySQL tool offered (2026-09-30).</summary>
     public bool MySql => ToolsEnabled && MySqlEnabled && MySqlTools > 0;
+
+    /// <summary>Whether the rules carry <see cref="Assistant.SqliteRule"/>: tools on, something to open with the switch on, and at least one SQLite tool offered (2026-10-04).</summary>
+    public bool Sqlite => ToolsEnabled && SqliteEnabled && SqliteTools > 0;
 
     /// <summary>Whether the rules carry <see cref="Assistant.UncRule"/>: tools on, a share defined with the switch on, and at least one UNC tool offered (2026-09-30).</summary>
     public bool Unc => ToolsEnabled && UncEnabled && UncTools > 0;
@@ -281,6 +286,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the MySQL group while the MySQL tools cannot be offered (2026-09-30). Pinned.</summary>
     public const string MySqlOffSuffix = "MySQL tools is off or no connection of mysql.json is offered";
 
+    /// <summary>After the SQLite heading while the group is not offered (2026-10-04). Pinned.</summary>
+    public const string SqliteOffSuffix = "SQLite tools is off, or no database of sqlite.json is offered and SQLite sandbox files is off";
+
     /// <summary>The tail of the UNC group while the UNC tools cannot be offered: the switch off, or no share of <c>unc.json</c> offered (2026-09-30). Pinned.</summary>
     public const string UncOffSuffix = "UNC tools is off or no share of unc.json is offered";
 
@@ -343,7 +351,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -459,7 +467,8 @@ public static class SystemPromptSummary
             uncWrite: facts.Unc && facts.UncWrite,
             docker: facts.Docker,
             dockerWrite: facts.Docker && facts.DockerWrite,
-            help: facts.Help);
+            help: facts.Help,
+            sqlite: facts.Sqlite);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -576,7 +585,9 @@ public static class SystemPromptSummary
         bool cameraEnabled = true,
         IReadOnlyList<AIFunction>? help = null,
         IReadOnlyList<AIFunction>? screen = null,
-        bool screenEnabled = true)
+        bool screenEnabled = true,
+        IReadOnlyList<AIFunction>? sqlite = null,
+        bool sqliteEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -641,6 +652,13 @@ public static class SystemPromptSummary
             // The MySQL tools (2026-09-30): after the Oracle tools, the database groups together.
             string mysqlNote = !mysqlEnabled ? NotOffered(MySqlOffSuffix) : standing;
             groups.Add(Group(ToolsText.MySqlTabTitle, mysql, mysqlNote, mysqlEnabled && toolsEnabled, SettingsField.MySqlTools, disabled));
+        }
+
+        if (sqlite is not null)
+        {
+            // The SQLite tools (2026-10-04): after MySQL; offered while SQLite tools is on with a database to open.
+            string sqliteNote = !sqliteEnabled ? NotOffered(SqliteOffSuffix) : standing;
+            groups.Add(Group(ToolsText.SqliteTabTitle, sqlite, sqliteNote, sqliteEnabled && toolsEnabled, SettingsField.SqliteTools, disabled));
         }
 
         if (unc is not null)
