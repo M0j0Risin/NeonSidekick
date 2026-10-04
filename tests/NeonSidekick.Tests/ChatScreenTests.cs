@@ -9744,7 +9744,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.StartsWith("25 tokens", UsageText.HintPart(_session.Usage, _session.ContextLength));
-        int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
+        int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && settings > usage, output);
         Assert.DoesNotContain("› /usage", output);
@@ -9817,7 +9817,7 @@ public partial class ChatScreenTests : IDisposable
         int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
         int sessions = output.IndexOf("\n" + Titled(SessionsMenu.Title) + "\n", StringComparison.Ordinal);
-        int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
+        int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
@@ -9917,7 +9917,7 @@ public partial class ChatScreenTests : IDisposable
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Options ") + "\n";
         string memory = "\n" + Titled(MemoryPaneTitle) + "\n";
-        string usage = "\n" + Titled(UsageText.Label + "   Statistics ") + "\n";
+        string usage = "\n" + Titled(UsageText.Label) + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         string police = "\n" + Titled(PoliceTitle) + "\n";
         int[] at = [output.IndexOf(tools, StringComparison.Ordinal), output.IndexOf(settings, StringComparison.Ordinal)];
@@ -10067,7 +10067,7 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow("📊", cwd, 239), output);
         Assert.DoesNotContain(ChatScreen.SettingsToolGlyph + " ", output);
-        int usage = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
+        int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && folder > usage, output);
     }
@@ -10924,16 +10924,16 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(UsageText.Label + "   Statistics ") + "\n\n";
+        string strip = rule + "\n" + Titled(UsageText.Label) + "\n\n";
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
         Assert.Contains(strip + UsageText.NothingCounted + "\n", output);
         // After the reply the upper rule names the session (2026-09-18), the pane's title row under it.
-        strip = TitledRule("hi") + "\n" + Titled(UsageText.Label + "   Statistics ") + "\n\n";
+        strip = TitledRule("hi") + "\n" + Titled(UsageText.Label) + "\n\n";
         // The Statistics tab after the reply: the Context section (no window from the stub's server), then the three scopes, the last reply's with its timings.
         Assert.Contains(strip + "Context              unknown\nWindow               unknown\nIn use               25\n\nLast reply\nTotal                25\nPrompt               10\nCompletion           15\nReasoning            —\nRequests             1\nTime to first token  0.5 s\nSpeed                3.0 tok/s\n\nThis conversation    every request summed\nTotal                25\n", output);
         Assert.Contains("\nSince launch         every request summed\nTotal                25\nPrompt               10\nCompletion           15\nReasoning            —\nRequests             1\nTime to first token  0.5 s\nSpeed                3.0 tok/s\n", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        Assert.Contains(rule + "\n" + Row(InfoPane.SingleTabHintText) + "\n", output);
         // Nothing went to the transcript: the pane held it all.
         Assert.DoesNotContain("  · Tokens —", output);
         Assert.DoesNotContain("  · " + UsageText.NothingCounted, output);
@@ -11035,7 +11035,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(UsageText.Label + "   Statistics ") + "\n\n";
+        string strip = rule + "\n" + Titled(UsageText.Label) + "\n\n";
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
         // Before the reply: the Context section over the empty note (the label column sized to that note).
         Assert.Contains(strip + "Context                  loaded_context_length on /api/v0/models\nWindow                   100\n\n" + UsageText.NothingCounted + "\n", output);
@@ -11043,7 +11043,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null, "25 / 100 · 25% · 3 tok/s")), output);
         // After /clear: the window stays, the context in use went with the history; the hint row's share with it.
         Assert.Contains(strip + "Context              loaded_context_length on /api/v0/models\nWindow               100\n\nLast reply\nTotal                25\n", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        Assert.Contains(rule + "\n" + Row(InfoPane.SingleTabHintText) + "\n", output);
     }
 
     [Fact]
@@ -11767,10 +11767,10 @@ public partial class ChatScreenTests : IDisposable
 
         // The pane under the busy row, its keys named after the spinner's count; the reply whole and uncancelled.
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        int pane = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
+        int pane = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         Assert.True(pane > 0);
         // The first delta has streamed by then: the row reads the writing stage.
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, InfoPane.HintText), output);
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, InfoPane.SingleTabHintText), output);
         Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -11798,7 +11798,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        int pane = output.IndexOf("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", StringComparison.Ordinal);
+        int pane = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         Assert.True(pane > 0, output);
         Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
         Assert.DoesNotContain("› /usage", output);
@@ -12237,7 +12237,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        Assert.Contains("\n" + Titled("/tree   /tree ") + "\n", output);
+        Assert.Contains("\n" + Titled("/tree") + "\n", output);   // the label alone: one tab (2026-10-04)
         Assert.Contains("zebra-notes.txt", output);
         Assert.DoesNotContain("  · " + TreeText.LastBranch + "docs", output);   // no tree lines as notices
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tree"), output);
@@ -15906,7 +15906,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        Assert.Contains("\n" + Titled(UsageText.Label + "   Statistics ") + "\n", output);
+        Assert.Contains("\n" + Titled(UsageText.Label) + "\n", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
         Assert.Equal(1, _session.History.TurnCount);
@@ -16367,7 +16367,7 @@ public partial class ChatScreenTests : IDisposable
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
         int help = output.IndexOf(InfoPane.Title + "   Commands (basic)", StringComparison.Ordinal);
         Assert.True(help > 0, output);
-        Assert.True(output.IndexOf(UsageText.Label + "   Statistics ", help, StringComparison.Ordinal) > help, output);
+        Assert.True(output.IndexOf(UsageText.Label, help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
         Assert.Equal(1, _session.History.TurnCount);

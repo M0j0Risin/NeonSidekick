@@ -38,6 +38,9 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content);
 /// <c>Menus max height</c> share of the window (<see cref="ScreenPane.MenuContentRows"/>, 2026-10-01), and
 /// every tab is padded with blank rows under its content to the tallest tab's height (the same day, the
 /// user's ask: the pane jumped as one tabbed through <c>/help</c> and <c>/usage</c>).</para>
+///
+/// <para>One tab (2026-10-04, the user's report: the one-tab list panes read <c>/screen list   /screen list</c>): the strip is the
+/// label alone, no chip, and the hint is <see cref="SingleTabHintText"/>, with nothing to switch to.</para>
 /// </summary>
 public sealed class InfoPane
 {
@@ -46,6 +49,9 @@ public sealed class InfoPane
 
     /// <summary>The hint row under the pane. Pinned.</summary>
     public const string HintText = "ESC closes · ←/→ tabs · ↑/↓ scroll";
+
+    /// <summary>The hint row under a pane of one tab (2026-10-04): no tabs to switch. Pinned.</summary>
+    public const string SingleTabHintText = "ESC closes · ↑/↓ scroll";
 
     /// <summary>The rows above the content when the strip fits one row: the strip and the spacer; a strip that takes more rows (<see cref="TabStripLayout"/>) adds them.</summary>
     public const int HeaderRows = 2;
@@ -319,7 +325,7 @@ public sealed class InfoPane
 
                     _clicks.Reset();
                     if (click.Button == MouseButton.Left && _pane.TryHitOverlay(click.X, click.Y, out int at) && at < _stripRows
-                        && TabAt(label, Titles(tabs), _width, click.X, at) is int hit)
+                        && TabAt(label, Shown(tabs), _width, click.X, at) is int hit)
                     {
                         next = hit;
                     }
@@ -422,9 +428,12 @@ public sealed class InfoPane
         return titles;
     }
 
+    /// <summary>The titles the strip draws: none for a pane of one tab, whose label says it all (2026-10-04).</summary>
+    private static string[] Shown(IReadOnlyList<InfoTab> tabs) => tabs.Count == 1 ? [] : Titles(tabs);
+
     private void Show(string label, IReadOnlyList<InfoTab> tabs, int active)
     {
-        var titles = Titles(tabs);
+        var titles = Shown(tabs);
         int width = Math.Max(1, _pane.Profile.Width);
         int height = _pane.Profile.Height > 0 ? _pane.LayoutHeight : DefaultHeight;   // less the toolbar's row (2026-09-21)
         var strip = TabStripRows(label, titles, active, width);
@@ -484,6 +493,6 @@ public sealed class InfoPane
             lines.Add(new Text(" "));
         }
 
-        _pane.ShowOverlay(new Rows(lines), HintText, close: true);
+        _pane.ShowOverlay(new Rows(lines), tabs.Count == 1 ? SingleTabHintText : HintText, close: true);
     }
 }

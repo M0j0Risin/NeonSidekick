@@ -56,6 +56,24 @@ public class InfoPaneTests : IDisposable
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
+    /// <summary>One tab (2026-10-04, the user's report: the list panes read "/screen list   /screen list"): the label alone, the hint without tabs.</summary>
+    [Fact]
+    public async Task OneTab_IsTheLabelAlone_TheHintWithoutTabs_AndTheTabKeysAndAStripClickChangeNothing()
+    {
+        using var pane = Pane();
+        pane.Show();
+        _console.Input.PushKey(Keys.Right);   // nothing to switch to: no redraw
+        _console.Input.PushKey(Keys.Tab);
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync("/screen list", [Tab("/screen list", "Monitors:")], 0, CancellationToken.None);
+
+        Assert.Contains(Rule(40) + "\n" + Titled("/screen list") + "\n \nMonitors:\n" + Rule(40) + "\n" + InfoPane.SingleTabHintText + "\n", Output);
+        Assert.DoesNotContain("/screen list   /screen list", Output);
+        Assert.Single(_built);   // built once: the keys drew nothing again
+        Assert.Equal("ESC closes · ↑/↓ scroll", InfoPane.SingleTabHintText);
+    }
+
     [Fact]
     public async Task CtrlC_ClosesThePane_LikeEsc()
     {
@@ -269,7 +287,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        Assert.Contains("\nline1\nline2\nline3\nline4\nline5\n" + MenuPane.MoreHint + "\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Contains("\nline1\nline2\nline3\nline4\nline5\n" + MenuPane.MoreHint + "\n" + Rule(40) + "\n" + InfoPane.SingleTabHintText + "\n", Output);   // one tab: nothing to switch (2026-10-04)
         Assert.DoesNotContain("line6", Output);
     }
 

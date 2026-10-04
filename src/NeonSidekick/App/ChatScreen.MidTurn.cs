@@ -608,7 +608,8 @@ internal sealed partial class ChatScreen
     /// A read-only list on the info pane, one tab under <paramref name="label"/> (later on 2026-09-27 for <c>/tree</c> and <c>/vault</c>
     /// under a reply; 2026-10-04, the user's pick, for every list one reads and dismisses: the trees at the idle line too,
     /// <c>/docker logs</c>, <c>/ha states</c>, <c>/comfy</c>, <c>/comfy offered</c>, <c>/print printers</c>, <c>/plan open</c>,
-    /// <c>/camera list</c>, <c>/screen list</c>). Without the pane (a redirected console) the lines as notices through
+    /// <c>/camera list</c>, <c>/screen list</c>); one tab, so the strip is the label alone (<see cref="InfoPane.SingleTabHintText"/>).
+    /// Without the pane (a redirected console) the lines as notices through
     /// <paramref name="sink"/>, as before. A failure never comes here: it stays an error line in the chat.
     /// </summary>
     private async Task ShowLinesAsync(string label, IReadOnlyList<string> lines, INoticeSink sink, CancellationToken cancellationToken)

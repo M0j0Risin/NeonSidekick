@@ -145,7 +145,9 @@ public partial class ChatScreenTests
 
         string output = await RunListPaneAsync("/screen list");
 
-        Assert.Contains("/screen list", output);
+        Assert.Contains("\n" + Titled("/screen list") + "\n", output);   // the label once: one tab, no chip (2026-10-04)
+        Assert.DoesNotContain("/screen list   /screen list", output);
+        Assert.Contains(InfoPane.SingleTabHintText, output);
         OnThePaneOnly(output, "window:200  \"notes.txt - Notepad\"");
     }
 }
