@@ -233,6 +233,24 @@ public class KeysTests
     }
 
     [Fact]
+    public void IsLearnCancel_IsPlainCtrlL_AndNeverAShortcutLine()
+    {
+        // 2026-10-04 (the user's ask): the test factory's '\0' and the console's FF count; Ctrl+Alt+L (/cmdlist), Shift, and a
+        // typed L (Spectre's test input marks a capital with Control) do not. A chord with no command: never a ShortcutLine.
+        Assert.True(Keys.IsLearnCancel(Keys.CtrlL));
+        Assert.True(Keys.IsLearnCancel(Keys.Ctrl(ConsoleKey.L)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
+        Assert.Equal("/cmdlist", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.L)));
+        Assert.False(Keys.IsLearnCancel(Keys.CtrlAlt(ConsoleKey.L)));
+        Assert.False(Keys.IsLearnCancel(new ConsoleKeyInfo('\x0c', ConsoleKey.L, shift: true, alt: false, control: true)));
+        Assert.False(Keys.IsLearnCancel(new ConsoleKeyInfo('L', ConsoleKey.L, shift: true, alt: false, control: true)));
+        Assert.False(Keys.IsLearnCancel(new ConsoleKeyInfo('l', ConsoleKey.L, shift: false, alt: false, control: false)));
+        Assert.False(Keys.IsLearnCancel(Keys.Char('l')));
+        Assert.False(Keys.IsLearnCancel(Keys.Ctrl(ConsoleKey.K)));
+        Assert.False(Keys.IsKillSwitch(Keys.CtrlL));
+    }
+
+    [Fact]
     public void ToolGroupText_IsPinned()
     {
         Assert.Equal(1, TextCells.Width(ToolGroupText.CollapsedGlyph));

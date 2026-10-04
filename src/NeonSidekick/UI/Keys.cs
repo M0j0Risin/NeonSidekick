@@ -198,6 +198,22 @@ public static class Keys
         && key.KeyChar is '\0' or '\x18'
         && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift)) == (ConsoleModifiers.Control | ConsoleModifiers.Alt);
 
+    /// <summary>
+    /// Ctrl+L, the background learning's cancel (2026-10-04, the user's ask: "cancels a running background learning turn") — what a
+    /// double-click on the strip's 🧠 does, from the keyboard. A chord with no command, so never a <see cref="ShortcutLine"/>:
+    /// <see cref="KeySource.LearnCancel"/> spends it wherever the key is read, <see cref="IsKillSwitch"/>'s way, so it never waits
+    /// for a reply or a pane and a pane stays open. Control held, Alt and Shift not (Ctrl+Alt+L is still <c>/cmdlist</c>), and no
+    /// character but the console's own FF (<c>'\x0c'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>), so a typed "L" stays an "L".
+    /// One press: a cancelled reflection costs nothing to start again (<c>/learn</c>).
+    /// </summary>
+    public static bool IsLearnCancel(ConsoleKeyInfo key) =>
+        key.Key == ConsoleKey.L
+        && key.KeyChar is '\0' or '\x0c'
+        && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift)) == ConsoleModifiers.Control;
+
+    /// <summary>Ctrl+L as the console delivers it: the FF character with the key and Control (the background learning's cancel).</summary>
+    public static ConsoleKeyInfo CtrlL => new('\x0c', ConsoleKey.L, false, false, true);
+
     /// <summary>Ctrl+Alt+C, Ctrl+Alt+N and Ctrl+Alt+S as a US layout delivers them: no character, the key with Control and Alt.</summary>
     public static ConsoleKeyInfo CtrlAltC => new('\0', ConsoleKey.C, false, true, true);
 

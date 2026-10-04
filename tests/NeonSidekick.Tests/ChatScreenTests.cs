@@ -10334,9 +10334,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 42)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03
-    [InlineData(true, false, 43)]
-    [InlineData(true, true, 44)]
+    [InlineData(false, false, 43)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L on 2026-10-04
+    [InlineData(true, false, 44)]
+    [InlineData(true, true, 45)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -10352,9 +10352,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^34]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^33]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^32]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^35]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^34]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^33]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask), Ctrl+. and Ctrl+/ ahead of them.
         Assert.Equal(
         [
@@ -10365,6 +10365,7 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+E", "open the working directory in your file browser (/explore)"),   // later on 2026-10-01, the user's place and wording
             ("Ctrl+F", "show or hide the performance bar (/perfbar)"),   // from Ctrl+Alt+E, later still on 2026-10-01
             ("Ctrl+H", "open help (/help)"),   // from Ctrl+Alt+H, later still on 2026-10-01
+            ("Ctrl+L", "cancel a running background learning turn"),   // 2026-10-04, the user's ask and wording
             ("Ctrl+M", "open the model picker (/model)"),   // later still on 2026-10-01, the user's wording
             ("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"),   // 2026-09-22
             ("Ctrl+P", "open the profile pane (/profile)"),   // from Ctrl+Alt+P
@@ -10374,9 +10375,10 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
             ("Ctrl+X", "cut the selected text"),   // 2026-09-25
             ("Ctrl+Y", "open the system prompt pane (/sys)"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
-        ], rows[^31..^15]);
-        // Each plain-Ctrl chord's row names its command.
-        foreach (var (row, key) in new[] { (rows[^31], Keys.CtrlPeriod), (rows[^30], Keys.CtrlSlash), (rows[^27], Keys.CtrlE), (rows[^26], Keys.CtrlF), (rows[^25], Keys.CtrlH), (rows[^24], Keys.CtrlM), (rows[^22], Keys.CtrlP), (rows[^21], Keys.CtrlR), (rows[^20], Keys.CtrlS), (rows[^19], Keys.CtrlT), (rows[^18], Keys.CtrlU), (rows[^16], Keys.Ctrl(ConsoleKey.Y)) })
+        ], rows[^32..^15]);
+        // Each plain-Ctrl chord's row names its command; Ctrl+L (the learning's cancel, 2026-10-04) has none.
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
+        foreach (var (row, key) in new[] { (rows[^32], Keys.CtrlPeriod), (rows[^31], Keys.CtrlSlash), (rows[^28], Keys.CtrlE), (rows[^27], Keys.CtrlF), (rows[^26], Keys.CtrlH), (rows[^24], Keys.CtrlM), (rows[^22], Keys.CtrlP), (rows[^21], Keys.CtrlR), (rows[^20], Keys.CtrlS), (rows[^19], Keys.CtrlT), (rows[^18], Keys.CtrlU), (rows[^16], Keys.Ctrl(ConsoleKey.Y)) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -18768,6 +18770,147 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);   // the reply ran on
         Assert.False(_session.IsLearning);
         Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "greeting")));
+    }
+
+    [Fact]
+    public async Task CtrlL_AtTheIdleLine_CancelsTheReflection_AndKeepsTheDraft()
+    {
+        // Ctrl+L (2026-10-04, the user's ask): the brain's double-click from the keyboard — the pinned notice at once, no learned
+        // line, and the key spent on the hook, so the draft typed around it comes back whole.
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("Hello.");
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));   // request 1: the reflection, held until cancelled
+        _chat.EnqueueText("Bye.");
+        _chat.BeforeUpdateOf = async (r, i, token) => { if (r == 1 && i == 0) await Task.Delay(Timeout.Infinite, token); };
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2:
+                    step++;
+                    WaitForRequests(2);
+                    Assert.True(_session.IsLearning);
+                    PushText(input, "dra");
+                    input.Push(Keys.CtrlL);
+                    PushText(input, "ft");
+                    break;
+                case 3:
+                    if (_session.Learning is { IsCompleted: true } && Output.Contains(ChatScreen.LearnCancelledNotice, StringComparison.Ordinal))
+                    {
+                        step++;
+                        input.Push(Keys.Enter);   // the draft, sent
+                    }
+
+                    break;
+                case 4: step++; PushLine(input, "/exit"); break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.LearnCancelledNotice, output);
+        Assert.DoesNotContain("learned:", output);
+        Assert.False(_session.IsLearning);
+        Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "greeting")));
+        Assert.Equal("draft", _chat.Requests[^1].Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    [Fact]
+    public async Task CtrlL_MidTurn_CancelsTheReflection_AndSaysSoAfterTheReply()
+    {
+        // Ctrl+L under a reply (2026-10-04): spent on the watcher, the reply goes on, the line waits for its end as the busy row's 🧠 does.
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("Hello.");
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("greeting")));   // request 1: the reflection, held until cancelled
+        _chat.EnqueueText("Sure thing.");                                                                     // request 2: the reply, Ctrl+L under it
+        bool cancelledUnderTheReply = false;
+        _chat.BeforeUpdateOf = async (r, i, token) =>
+        {
+            if (r == 1 && i == 0)
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            else if (r == 2 && i == 0)
+            {
+                Assert.True(_session.IsLearning);
+                Scripted().Push(Keys.CtrlL);
+                var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+                while (_session.Learning is not { IsCompleted: true } && DateTime.UtcNow < until)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                cancelledUnderTheReply = _session.Learning is { IsCompleted: true };
+                Assert.DoesNotContain(ChatScreen.LearnCancelledNotice, Output);   // not mid-reply
+            }
+        };
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushLine(input, "hi"); break;
+                case 1: step++; PushLine(input, "/learn keep the greeting"); break;
+                case 2: step++; WaitForRequests(2); PushLine(input, "and now?"); break;
+                case 3:
+                    if (Output.Contains(ChatScreen.LearnCancelledNotice, StringComparison.Ordinal))
+                    {
+                        step++;
+                        PushLine(input, "/exit");
+                    }
+
+                    break;
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.True(cancelledUnderTheReply);
+        Assert.True(output.IndexOf("Sure thing.", StringComparison.Ordinal) < output.IndexOf(ChatScreen.LearnCancelledNotice, StringComparison.Ordinal));
+        Assert.DoesNotContain("learned:", output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);   // the reply ran on
+        Assert.False(_session.IsLearning);
+        Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "greeting")));
+    }
+
+    [Fact]
+    public async Task CtrlL_WithNothingLearning_DoesNothing()
+    {
+        // No reflection running (2026-10-04): no notice, only the Debug line; the key never reaches the line.
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("Hello.");
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            switch (step)
+            {
+                case 0: step++; PushText(input, "h"); input.Push(Keys.CtrlL); PushText(input, "i"); input.Push(Keys.Enter); break;
+                case 1: step++; PushLine(input, "/exit"); break;
+            }
+        };
+
+        var log = new List<string>();
+        void Collect(DiagnosticEvent e) { lock (log) { log.Add(e.Message); } }
+        DiagnosticLog.Emitted += Collect;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= Collect;
+        }
+
+        Assert.DoesNotContain(ChatScreen.LearnCancelledNotice, output);
+        Assert.Contains(ChatScreen.LearnKeyIdleLog, log);
+        Assert.Equal("hi", _chat.Requests[^1].Last(m => m.Role == ChatRole.User).Text);
     }
 
     [Fact]

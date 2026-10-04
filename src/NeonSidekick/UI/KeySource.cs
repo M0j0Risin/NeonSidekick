@@ -135,21 +135,39 @@ public sealed class KeySource : IAnsiConsoleInput
     /// </summary>
     public Action? KillSwitch { get; set; }
 
-    /// <summary>Whether <paramref name="e"/> is the kill switch's key and a hook took it (<see cref="KillSwitch"/>).</summary>
-    private bool SpentOnKillSwitch(InputEvent? e)
+    /// <summary>
+    /// The background learning's cancel (2026-10-04, the user's ask: Ctrl+L, <see cref="Keys.IsLearnCancel"/>): run for the key
+    /// wherever it is read, <see cref="KillSwitch"/>'s contract — spent there, never type-ahead, on the reading task, must not
+    /// block, never throws. Null (the default, headless) and the key passes as any other.
+    /// </summary>
+    public Action? LearnCancel { get; set; }
+
+    /// <summary>
+    /// Whether <paramref name="e"/> is a hooked chord's key and its hook took it: the kill switch's (<see cref="KillSwitch"/>) or
+    /// the learning's cancel (<see cref="LearnCancel"/>, 2026-10-04; the method was the kill switch's alone until then).
+    /// </summary>
+    private bool SpentOnHook(InputEvent? e)
     {
-        if (KillSwitch is not { } kill || e is not InputEvent.Key { Info: var key } || !Keys.IsKillSwitch(key))
+        if (e is not InputEvent.Key { Info: var key })
+        {
+            return false;
+        }
+
+        var (hook, name) = Keys.IsKillSwitch(key) ? (KillSwitch, "kill switch")
+            : Keys.IsLearnCancel(key) ? (LearnCancel, "learning's cancel")
+            : (null, "");
+        if (hook is null)
         {
             return false;
         }
 
         try
         {
-            kill();
+            hook();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            DiagnosticLog.Debug("Keys", "The kill switch failed: " + ex.Message);
+            DiagnosticLog.Debug("Keys", "The " + name + " failed: " + ex.Message);
         }
 
         return true;
@@ -313,7 +331,7 @@ public sealed class KeySource : IAnsiConsoleInput
                 }
             }
 
-            if (!SpentOnKillSwitch(e))
+            if (!SpentOnHook(e))
             {
                 return e;
             }
@@ -324,7 +342,7 @@ public sealed class KeySource : IAnsiConsoleInput
     /// The next event when it is already waiting and <paramref name="match"/> takes it; else null, nothing taken, never waiting
     /// (2026-10-03, the user's ask: a held arrow queued presses faster than a long pane drew them, and the pane went on
     /// scrolling after the key was let go). A pane folds the queued run of its scroll keys into one move and draws once. An
-    /// event that does not match stays the next one read, in order; the kill switch's key is spent here as anywhere. Without
+    /// event that does not match stays the next one read, in order; the kill switch's and the learning cancel's keys are spent here as anywhere. Without
     /// a keyboard, null: the reader's own next read is what says so.
     /// </summary>
     public InputEvent? TakeQueued(Func<InputEvent, bool> match)
@@ -341,7 +359,7 @@ public sealed class KeySource : IAnsiConsoleInput
                     return null;
                 }
 
-                bool spent = SpentOnKillSwitch(e);
+                bool spent = SpentOnHook(e);
                 if (!spent && !match(e))
                 {
                     // Not wanted: left at the buffer's head, or put there when it came off the source (the buffer was empty),
@@ -442,7 +460,7 @@ public sealed class KeySource : IAnsiConsoleInput
     {
         while (_buffer.Count > 0)
         {
-            if (_buffer.Dequeue() is InputEvent.Key buffered && !SpentOnKillSwitch(buffered))
+            if (_buffer.Dequeue() is InputEvent.Key buffered && !SpentOnHook(buffered))
             {
                 return buffered.Info;
             }
@@ -452,7 +470,7 @@ public sealed class KeySource : IAnsiConsoleInput
         {
             DropMouse();
             var e = _events.Read();
-            if (!SpentOnKillSwitch(e))
+            if (!SpentOnHook(e))
             {
                 return e is InputEvent.Key key ? key.Info : null;
             }
@@ -598,9 +616,9 @@ public sealed class KeySource : IAnsiConsoleInput
                         e = null;
                     }
 
-                    if (SpentOnKillSwitch(e))
+                    if (SpentOnHook(e))
                     {
-                        // The kill switch (2026-10-01): spent here, under a reply or a spinner, ahead of every other key.
+                        // The kill switch (2026-10-01) and the learning's cancel (2026-10-04): spent here, under a reply or a spinner, ahead of every other key.
                         continue;
                     }
 

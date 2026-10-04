@@ -164,6 +164,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+E | `/explore` | at once |
 | Ctrl+F | `/perfbar` (performance bar on/off) | at once |
 | Ctrl+H | `/help` | opens over the reply |
+| Ctrl+L | cancels the background learning (🧠) | at once |
 | Ctrl+M | `/model` | waits for the reply |
 | Ctrl+P | `/profile` | waits for the reply |
 | Ctrl+R | `/reasoning` | opens over the reply |
@@ -187,10 +188,11 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+Alt+V | `/camera live`: opens or closes the camera's window | at once |
 | Ctrl+Alt+X ×2 | unloads the embedded model (see below) | at once |
 
-* **Inside a pane** (a menu, `/help`, the folder picker, a value being typed), a shortcut closes every level of the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`. A pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+T, the three window chords and Ctrl+Alt+X act and leave the pane open.
+* **Inside a pane** (a menu, `/help`, the folder picker, a value being typed), a shortcut closes every level of the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`. A pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+L, Ctrl+T, the three window chords and Ctrl+Alt+X act and leave the pane open.
 * **Panes that ask you something** (a command's approval, `ask_user`, the plan's approval, a confirmation, *Did you mean /clear?*) ignore the shortcuts, so none can answer them by accident.
 * **Window chords** close their window when pressed again (Ctrl+Alt+V only the window `/camera live` opened); the typed command only opens it or brings it forward.
 * **Ctrl+Alt+X**, pressed twice within two seconds, unloads the embedded model at once and frees its memory, cancelling any reply, load or botchat using it. No server is connected until you pick one with `/server`; the saved *LLM URL* is kept, so the next start loads the model again. The first press only shows a reminder. With any other server it does nothing.
+* **Ctrl+L** cancels a running skill-learning reflection (the 🧠 on the hint row), as a double-click on the 🧠 does; *(🧠 learning cancelled)* prints once the reply, if any, ends. With none running it does nothing.
 * An AltGr key that types a character on your layout still types it.
 
 ### Commands typed during a reply

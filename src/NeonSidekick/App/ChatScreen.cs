@@ -1143,6 +1143,7 @@ internal sealed partial class ChatScreen
         _pane.ChordInPlace = ChordInPlace;
         // Ctrl+Alt+X (2026-10-01): the embedded model's kill switch, wherever the key is read.
         _keys.KillSwitch = KillSwitch;
+        _keys.LearnCancel = CancelLearnByKey;
         _transcript = new TranscriptRenderer(_pane)
         {
             // Tool collapse count (2026-09-22): read when a tool run opens, clamped as the menu saves it.
@@ -1961,6 +1962,8 @@ internal sealed partial class ChatScreen
     /// <c>/sys</c> moved from Ctrl+Alt+Y to plain Ctrl+Y on 2026-10-03 (the user's ask), its row's wording kept, after Ctrl+X.
     /// Ctrl+Alt+E (<c>/sessions</c>) later on 2026-10-03, the user's ask and wording, in its letter's place; Ctrl+. (<c>/terminal</c>)
     /// the same day, ahead of Ctrl+/.
+    /// Ctrl+L (the background learning's cancel, <see cref="Keys.IsLearnCancel"/>) on 2026-10-04, the user's ask and wording, in its
+    /// letter's place; a chord with no command, as the kill switch's, so its row names none.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -1995,6 +1998,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
         rows.Add(("Ctrl+F", "show or hide the performance bar (/perfbar)"));
         rows.Add(("Ctrl+H", "open help (/help)"));
+        rows.Add(("Ctrl+L", "cancel a running background learning turn"));
         rows.Add(("Ctrl+M", "open the model picker (/model)"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks and thinking (or click a summary line)"));
         rows.Add(("Ctrl+P", "open the profile pane (/profile)"));
@@ -2998,6 +3002,32 @@ internal sealed partial class ChatScreen
 
     /// <summary>A cancel the user asked for (the brain's double-click): the paused reflection, if any, never runs again. Safe from the watcher task.</summary>
     private void ForgetPausedLearn() => Interlocked.Exchange(ref _pausedLearn, null);
+
+    /// <summary>The log line when Ctrl+L finds no reflection to cancel. Pinned.</summary>
+    public const string LearnKeyIdleLog = "Ctrl+L: no reflection is running; nothing to cancel.";
+
+    /// <summary>
+    /// Ctrl+L (2026-10-04, the user's ask: "cancels a running background learning turn"), <see cref="UI.KeySource.LearnCancel"/>'s
+    /// hook: on whatever task read the key — the idle line, a pane, the watch under a reply or a spinner. The brain's double-click
+    /// from the keyboard, the busy row's shape: the paused reflection forgotten (one put aside for the turn counts as running,
+    /// so it never comes back after the reply), the running one cancelled, and <see cref="LearnCancelledNotice"/> queued for
+    /// <see cref="DrainLearn"/> — the turn task is the transcript's one writer — with the idle read nudged so it prints at once
+    /// there; under a reply it follows the reply. A reflection waiting in the slot is the turn task's and stays, as the brain's
+    /// click leaves it. With nothing running, nothing at all (a Debug line).
+    /// </summary>
+    private void CancelLearnByKey()
+    {
+        if (!_session.IsLearning && Volatile.Read(ref _pausedLearn) is null)
+        {
+            DiagnosticLog.Debug(SkillCatalog.Category, LearnKeyIdleLog);
+            return;
+        }
+
+        ForgetPausedLearn();
+        _session.CancelLearning();
+        _learnNotices.Enqueue(LearnCancelledNotice);
+        SignalAlert();
+    }
 
     /// <summary>
     /// The one starter: the job under <see cref="LlmSession.StartLearning"/> (nothing printed — the

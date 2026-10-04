@@ -272,6 +272,72 @@ public class KeySourceTests
         Assert.Equal('h', (await keys.ReadKeyAsync(CancellationToken.None))!.Value.KeyChar);
     }
 
+    /// <summary>The learning's cancel (2026-10-04): a read spends Ctrl+L on its hook, the kill switch's on its own; without a hook the key passes.</summary>
+    [Fact]
+    public async Task ReadInputAsync_LearnCancel_IsSpentOnItsHook_OrPassesWithoutOne()
+    {
+        var input = new TestConsoleInput();
+        var keys = new KeySource(input, FastPoll);
+        int cancels = 0;
+        int kills = 0;
+        keys.LearnCancel = () => cancels++;
+        keys.KillSwitch = () => kills++;
+        input.PushKey(Keys.CtrlL);
+        input.PushKey(Keys.Char('a'));
+
+        Assert.Equal(new InputEvent.Key(Keys.Char('a')), await keys.ReadInputAsync(CancellationToken.None));
+        Assert.Equal((1, 0), (cancels, kills));
+
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+        input.PushKey(Keys.Ctrl(ConsoleKey.L));
+        input.PushKey(Keys.Char('b'));
+        Assert.Equal('b', (await keys.ReadKeyAsync(CancellationToken.None))!.Value.KeyChar);
+        input.PushKey(Keys.CtrlL);
+        input.PushKey(Keys.Char('c'));
+        Assert.Equal('c', ((IAnsiConsoleInput)keys).ReadKey(intercept: true)!.Value.KeyChar);
+        Assert.Equal((3, 1), (cancels, kills));
+
+        // Ctrl+Alt+L is /cmdlist's chord, never the cancel.
+        input.PushKey(Keys.CtrlAlt(ConsoleKey.L));
+        Assert.Equal(new InputEvent.Key(Keys.CtrlAlt(ConsoleKey.L)), await keys.ReadInputAsync(CancellationToken.None));
+
+        // A hook that throws still spends the key.
+        keys.LearnCancel = () => throw new InvalidOperationException("boom");
+        input.PushKey(Keys.CtrlL);
+        input.PushKey(Keys.Char('d'));
+        Assert.Equal(new InputEvent.Key(Keys.Char('d')), await keys.ReadInputAsync(CancellationToken.None));
+
+        keys.LearnCancel = null;
+        input.PushKey(Keys.CtrlL);
+        Assert.Equal(new InputEvent.Key(Keys.CtrlL), await keys.ReadInputAsync(CancellationToken.None));
+        Assert.Equal(3, cancels);
+    }
+
+    /// <summary>The learning's cancel under a reply (2026-10-04): run on the watcher, never a cancel, never type-ahead, never a line.</summary>
+    [Fact]
+    public async Task Watch_LearnCancel_RunsTheHook_NeverBufferedNorALine()
+    {
+        var input = new TestConsoleInput();
+        var keys = new KeySource(input, FastPoll);
+        int cancels = 0;
+        keys.LearnCancel = () => cancels++;
+        input.PushKey(Keys.CtrlL);
+        input.PushKey(Keys.Char('h'));
+        using var turn = new CancellationTokenSource();
+        using var stop = new CancellationTokenSource();
+        var lines = new List<KeySource.WatchedLine>();
+
+        var watch = keys.WatchAsync(turn, stop.Token, null, null, line => { lines.Add(line); return Task.FromResult(true); });
+        await WaitUntilAsync(() => keys.Buffered == 1);
+        stop.Cancel();
+
+        Assert.Equal(Interrupt.None, await watch);
+        Assert.Equal(1, cancels);
+        Assert.False(turn.IsCancellationRequested);
+        Assert.Empty(lines);
+        Assert.Equal('h', (await keys.ReadKeyAsync(CancellationToken.None))!.Value.KeyChar);
+    }
+
     [Fact]
     public async Task Watch_CtrlQ_IsJustAnotherKey()
     {
