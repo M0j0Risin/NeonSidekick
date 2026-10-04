@@ -93,7 +93,8 @@ public sealed class SqliteAccess
 
     /// <summary>
     /// Runs <paramref name="statements"/> on the database <paramref name="database"/> means: each one's rows read to
-    /// <paramref name="maxRows"/> (one past to learn whether more are left), each bound only the placeholders it names, all inside
+    /// <paramref name="maxRows"/> (one past to learn whether more are left), each bound only the placeholders it names (one params
+    /// does not give as NULL), all inside
     /// one transaction that is rolled back. A timeout, a failed open and an SQLite error are outcomes; a cancelled token throws.
     /// </summary>
     public async Task<SqlRun> RunAsync(string? database, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
@@ -163,12 +164,12 @@ public sealed class SqliteAccess
                     using var command = connection.CreateCommand();
                     command.Transaction = transaction;
                     command.CommandText = sql;
+                    // A placeholder params does not name binds as NULL, PostgresAccess's way (the 2026-10-04 review): left unbound,
+                    // Microsoft.Data.Sqlite threw an InvalidOperationException past the SqliteException catches below.
                     foreach (string bind in SqliteReadOnlyGate.Binds(sql))
                     {
-                        if (parameters.FirstOrDefault(p => string.Equals(p.Name, bind[1..], StringComparison.OrdinalIgnoreCase)) is { } value)
-                        {
-                            command.Parameters.Add(Bind(bind, value.Value));
-                        }
+                        var value = parameters.FirstOrDefault(p => string.Equals(p.Name, bind[1..], StringComparison.OrdinalIgnoreCase));
+                        command.Parameters.Add(Bind(bind, value?.Value));
                     }
 
                     using var reader = command.ExecuteReader();

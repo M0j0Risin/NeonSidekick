@@ -87,6 +87,8 @@ public sealed class OracleReadOnlyGateTests
         Assert.Equal(OracleText.Forbidden("EXTERNAL(…) (an inline external table: files on the server)"), OracleReadOnlyGate.Check("SELECT * FROM EXTERNAL ((x VARCHAR2(10)) TYPE oracle_loader DEFAULT DIRECTORY d LOCATION ('secret.txt'))"));
         Assert.Equal(OracleText.Forbidden("BFILENAME (files on the server)"), OracleReadOnlyGate.Check("SELECT DBMS_LOB.GETLENGTH(BFILENAME('DATA_PUMP_DIR', 'x.dmp')) FROM dual"));
         Assert.Equal(OracleText.SelectInto, OracleReadOnlyGate.Check("SELECT x INTO v FROM t"));
+        Assert.Equal(OracleText.Forbidden("NEXTVAL (a sequence moves on, and no rollback moves it back)"), OracleReadOnlyGate.Check("SELECT hr.seq.\"NEXTVAL\" FROM dual"));
+        Assert.Equal(OracleText.Forbidden("BFILENAME (files on the server)"), OracleReadOnlyGate.Check("SELECT \"BFILENAME\"('DATA_PUMP_DIR', 'x.dmp') FROM dual"));
     }
 
     [Theory]
@@ -96,6 +98,8 @@ public sealed class OracleReadOnlyGateTests
     [InlineData("SELECT DBMS_PIPE.RECEIVE_MESSAGE('p', 10) FROM dual", "DBMS_PIPE")]
     [InlineData("SELECT DBMS_XMLGEN.GETXML('SELECT 1 FROM dual') FROM dual", "DBMS_XMLGEN")]
     [InlineData("SELECT dbms_lock.request(1) FROM dual", "DBMS_LOCK")]
+    [InlineData("SELECT \"DBMS_LOCK\".SLEEP(5) FROM dual", "DBMS_LOCK")]
+    [InlineData("SELECT \"SYS\".\"UTL_HTTP\".REQUEST('http://evil.example/') FROM dual", "UTL_HTTP")]
     [InlineData("SELECT x FROM t WHERE DBMS_SCHEDULER.x = 1", "DBMS_SCHEDULER")]
     public void ThePackagesThatReachOut_AreRefused(string sql, string package) =>
         Assert.Equal(OracleText.Forbidden(package), OracleReadOnlyGate.Check(sql));

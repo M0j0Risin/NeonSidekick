@@ -25,6 +25,7 @@ public sealed class PostgresReadOnlyGateTests
     [InlineData("SELECT $$it's; DROP$$, $tag$ ; $tag$")]
     [InlineData("SELECT E'it\\'s; fine', substring('abc' FROM 1 FOR 2)")]
     [InlineData("SELECT * FROM t WHERE id = @id AND tags @> ARRAY['a'] AND x::text = @name")]
+    [InlineData("SELECT \"pg_read_file\", \"nextval\" FROM t")]
     public void Allows_OneRead(string sql) => Assert.Null(PostgresReadOnlyGate.Check(sql));
 
     [Theory]
@@ -41,6 +42,13 @@ public sealed class PostgresReadOnlyGateTests
     [InlineData("SELECT nextval('s')", "nextval()")]
     [InlineData("SELECT pg_advisory_lock(1)", "pg_advisory_lock()")]
     [InlineData("SELECT dblink_exec('x', 'DROP TABLE t')", "dblink_exec()")]
+    [InlineData("SELECT \"pg_read_file\"('/etc/passwd')", "pg_read_file()")]
+    [InlineData("SELECT pg_catalog.\"set_config\"('search_path', 'x', false)", "set_config()")]
+    [InlineData("SELECT \"pg_terminate_backend\"(pid) FROM pg_stat_activity", "pg_terminate_backend()")]
+    [InlineData("SELECT \"dblink_exec\"('dbname=postgres', 'DROP TABLE t')", "dblink_exec()")]
+    [InlineData("SELECT * FROM pg_ls_waldir()", "pg_ls_waldir()")]
+    [InlineData("SELECT * FROM pg_ls_logdir()", "pg_ls_logdir()")]
+    [InlineData("SELECT * FROM pg_ls_dir('.')", "pg_ls_dir()")]
     [InlineData("SELECT * FROM t WHERE id = $1", "$1 placeholder")]
     [InlineData("SELECT U&'\\0041'", "U& string")]
     [InlineData("SELECT /* /* nested */ 1", "a comment never ends")]
@@ -96,6 +104,7 @@ public sealed class PostgresToolsTests : IDisposable
         Assert.Equal(("db", 5432, "postgres", "reader", "secret", false), (builder.Host, builder.Port, builder.Database, builder.Username, builder.Password, builder.Pooling));
         Assert.Equal(SslMode.VerifyFull, builder.SslMode);
         Assert.Contains("-c default_transaction_read_only=on", builder.Options);
+        Assert.Contains("-c standard_conforming_strings=on", builder.Options);
         Assert.Contains("-c statement_timeout=30000", builder.Options);
         Assert.Equal("shop", new PostgresConnectionConfig { Host = "db", User = "reader", Database = "shop" }.Builder(null, null, 30).Database);
         Assert.Equal("other", new PostgresConnectionConfig { Host = "db", User = "reader", Database = "shop" }.Builder(null, "other", 30).Database);

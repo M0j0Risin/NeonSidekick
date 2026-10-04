@@ -1,7 +1,4 @@
-using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
-using NeonSidekick.Diagnostics;
 using NeonSidekick.Sql;
 
 namespace NeonSidekick.Oracle;
@@ -21,8 +18,7 @@ public sealed record OracleCatalog(IReadOnlyList<OracleNamedConnection> Connecti
     /// </summary>
     public OracleCatalog Offered(IReadOnlyList<string>? names)
     {
-        var wanted = new HashSet<string>((names ?? []).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
-        var kept = Connections.Where(c => wanted.Contains(c.Name)).ToList();
+        var kept = ConnectionCatalog.Offered(Connections, names);
         return this with { Connections = kept, Hidden = Hidden + Connections.Count - kept.Count };
     }
 
@@ -30,21 +26,7 @@ public sealed record OracleCatalog(IReadOnlyList<OracleNamedConnection> Connecti
     /// The connection a call means: <paramref name="name"/> when given (case-insensitive), else <paramref name="defaultName"/>
     /// when that names one, else the first. Null when nothing matches.
     /// </summary>
-    public OracleNamedConnection? Find(string? name, string? defaultName)
-    {
-        if (!string.IsNullOrWhiteSpace(name))
-        {
-            return Connections.FirstOrDefault(c => string.Equals(c.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!string.IsNullOrWhiteSpace(defaultName)
-            && Connections.FirstOrDefault(c => string.Equals(c.Name, defaultName.Trim(), StringComparison.OrdinalIgnoreCase)) is { } named)
-        {
-            return named;
-        }
-
-        return Connections.Count > 0 ? Connections[0] : null;
-    }
+    public OracleNamedConnection? Find(string? name, string? defaultName) => ConnectionCatalog.Find(Connections, name, defaultName);
 }
 
 /// <summary>
@@ -52,7 +34,8 @@ public sealed record OracleCatalog(IReadOnlyList<OracleNamedConnection> Connecti
 /// the home, the <see cref="SqlConfigFile"/> pair: the profile's wins by name. A missing file is empty; a corrupt or
 /// unreadable one is a problem and one warning, never a crash. Read afresh at every call (<see cref="OracleAccess"/>), so an
 /// edit in the editor counts on the next tool call. A plain <c>password</c> is DPAPI-encrypted in place at the first read
-/// that sees it; the byte-level edits are <see cref="ConnectionsFileEdit"/>'s.
+/// that sees it; the byte-level edits are <see cref="ConnectionsFileEdit"/>'s. The work is <see cref="Family"/>'s, shared with the
+/// other password families since the 2026-10-04 review; this class is the file's shape and the family's facts.
 /// </summary>
 public sealed class OracleConfigFile
 {
@@ -95,167 +78,49 @@ public sealed class OracleConfigFile
     /// <summary>The connections by name, in file order (the deserializer keeps it).</summary>
     public Dictionary<string, OracleConnectionConfig?> Connections { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>The family's code over this file's facts.</summary>
+    public static readonly ConnectionFamily<OracleConnectionConfig, OracleNamedConnection> Family = new()
+    {
+        FileName = FileName,
+        Category = Category,
+        EmptyText = EmptyText,
+        Tab = "the Oracle tab",
+        NullEntry = OracleText.NoDataSource,
+        Deserialize = json => JsonSerializer.Deserialize(json, OracleJsonContext.Default.OracleConfigFile)?.Connections,
+        EntryInfo = OracleJsonContext.Default.OracleConnectionConfig,
+        Named = (name, config, source) => new OracleNamedConnection(name, config, source),
+        NoPassword = OracleText.NoPassword,
+        NoCredential = OracleText.NoCredential,
+        ProfilesUnlistedLogLine = OracleText.ProfilesUnlistedLogLine,
+    };
+
     /// <summary>The profile's file: <c>&lt;profile&gt;\oracle.json</c>.</summary>
-    public static string ProfilePath(string profileDirectory) => Path.Combine(profileDirectory, FileName);
+    public static string ProfilePath(string profileDirectory) => Family.ProfilePath(profileDirectory);
 
     /// <summary>The home's file: <c>&lt;home&gt;\oracle.json</c>, every profile's.</summary>
-    public static string GlobalPath(string home) => Path.Combine(home, FileName);
+    public static string GlobalPath(string home) => Family.GlobalPath(home);
 
-    /// <summary>
-    /// Reads <paramref name="path"/>: the usable connections in file order and a problem per entry that cannot connect
-    /// (<see cref="OracleConnectionConfig.Problem"/>) or has a blank name — for a file that is not JSON or cannot be read,
-    /// one problem for the file and one <c>Oracle</c> warning. A missing file is empty. Never throws.
-    /// </summary>
+    /// <summary>Reads <paramref name="path"/> (<see cref="ConnectionFamily{TConfig, TNamed}.Load"/>): the usable connections and the problems. Never throws.</summary>
     public static OracleCatalog Load(string path)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        if (!File.Exists(path))
-        {
-            return OracleCatalog.Empty;
-        }
-
-        OracleConfigFile? file;
-        try
-        {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), OracleJsonContext.Default.OracleConfigFile);
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            string detail = LogText.Excerpt(ex.Message);
-            DiagnosticLog.Warn(Category, SqlText.ConfigProblemLogLine(path, detail));
-            return new OracleCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail))]);
-        }
-
-        if (file is null || file.Connections.Count == 0)
-        {
-            return OracleCatalog.Empty;
-        }
-
-        var connections = new List<OracleNamedConnection>(file.Connections.Count);
-        var problems = new List<SqlConfigProblem>();
-        foreach (var (name, config) in file.Connections)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                problems.Add(new SqlConfigProblem(path, SqlText.BlankName));
-                continue;
-            }
-
-            string? reason = config is null ? OracleText.NoDataSource : config.Problem;
-            if (reason is not null)
-            {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason));
-                continue;
-            }
-
-            EncryptInPlace(path, name.Trim(), config!);
-            connections.Add(new OracleNamedConnection(name.Trim(), config!, path));
-        }
-
-        return new OracleCatalog(connections, problems);
-    }
-
-    /// <summary>
-    /// The safety net under the Oracle tab's masked prompt, <see cref="SqlConfigFile"/>'s: a plain-text <c>password</c> under
-    /// the <c>file</c> store is DPAPI-encrypted and written back over that one value at the first read that sees it, the
-    /// file's comments and layout kept. A file that cannot be written keeps working with the plain value, and says so once
-    /// per read in the log.
-    /// </summary>
-    private static void EncryptInPlace(string path, string name, OracleConnectionConfig config)
-    {
-        if (config.InCredentialManager || string.IsNullOrEmpty(config.Password) || WindowsCredentials.IsProtected(config.Password) || !OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        var encrypted = WindowsCredentials.Protect(config.Password);
-        string? error = encrypted.Error ?? WritePassword(path, name, encrypted.Value!);
-        if (error is null)
-        {
-            config.Password = encrypted.Value;
-            DiagnosticLog.Info(Category, SqlText.EncryptedLogLine(name, path));
-        }
-        else
-        {
-            DiagnosticLog.Warn(Category, SqlText.EncryptFailedLogLine(name, path, error));
-        }
+        var (connections, problems) = Family.Load(path);
+        return connections.Count == 0 && problems.Count == 0 ? OracleCatalog.Empty : new OracleCatalog(connections, problems);
     }
 
     /// <summary>Writes <paramref name="value"/> as the <c>password</c> of connection <paramref name="name"/> in <paramref name="path"/>, touching nothing else (<see cref="ConnectionsFileEdit.WritePassword"/>). Null on success, else why not.</summary>
     public static string? WritePassword(string path, string name, string value) => ConnectionsFileEdit.WritePassword(path, name, value);
 
-    /// <summary>
-    /// Adds connection <paramref name="name"/> to <paramref name="path"/> (the Oracle tab's <c>Oracle add connection</c> wizard),
-    /// the file's comments and layout kept (<see cref="ConnectionsFileEdit.AddConnection"/>; a missing file is made with
-    /// <see cref="EmptyText"/> first). The entry is <paramref name="config"/> through <see cref="OracleJsonContext"/>, its
-    /// <c>password</c> left out: the caller stores it after (<see cref="OracleSecrets.Save"/>). Null on success, else why not.
-    /// </summary>
-    public static string? AddConnection(string path, string name, OracleConnectionConfig config)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(config);
-        string? password = config.Password;
-        config.Password = null;
-        try
-        {
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
-            {
-                JsonSerializer.Serialize(writer, config, OracleJsonContext.Default.OracleConnectionConfig);
-            }
+    /// <summary>Adds connection <paramref name="name"/> to <paramref name="path"/> (the Oracle tab's wizard), its <c>password</c> left out (<see cref="ConnectionFamily{TConfig, TNamed}.AddConnection"/>). Null on success, else why not.</summary>
+    public static string? AddConnection(string path, string name, OracleConnectionConfig config) => Family.AddConnection(path, name, config);
 
-            return ConnectionsFileEdit.AddConnection(path, name, Encoding.UTF8.GetString(stream.ToArray()), EmptyText);
-        }
-        finally
-        {
-            config.Password = password;
-        }
-    }
-
-    /// <summary>
-    /// Every <c>oracle.json</c> under <paramref name="home"/> read once — the home's and each profile's — so <see cref="Load"/>'s
-    /// encryption runs over them all at startup (<see cref="SqlConfigFile.EncryptAll"/>'s part). The files read, in order;
-    /// a profiles folder that cannot be listed is a warning and the home's file alone. Never throws.
-    /// </summary>
-    public static IReadOnlyList<string> EncryptAll(string home)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(home);
-        var paths = new List<string> { GlobalPath(home) };
-        try
-        {
-            paths.AddRange(Settings.Profiles.List(home).Select(name => ProfilePath(Settings.Profiles.Directory(home, name))));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Warn(Category, OracleText.ProfilesUnlistedLogLine(Settings.Profiles.Root(home), LogText.Excerpt(ex.Message)));
-        }
-
-        var read = new List<string>();
-        foreach (string path in paths.Where(File.Exists))
-        {
-            Load(path);
-            read.Add(path);
-        }
-
-        return read;
-    }
+    /// <summary>Every <c>oracle.json</c> under <paramref name="home"/> read once, so a plain password is encrypted at startup (<see cref="ConnectionFamily{TConfig, TNamed}.EncryptAll"/>). The files read. Never throws.</summary>
+    public static IReadOnlyList<string> EncryptAll(string home) => Family.EncryptAll(home);
 
     /// <summary>The profile's file over the home's (<paramref name="home"/> null = the profile's alone): a name in both is the profile's.</summary>
     public static OracleCatalog LoadCatalog(string profileDirectory, string? home)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(profileDirectory);
-        var profile = Load(ProfilePath(profileDirectory));
-        if (home is null || string.Equals(Path.GetFullPath(ProfilePath(profileDirectory)), Path.GetFullPath(GlobalPath(home)), StringComparison.OrdinalIgnoreCase))
-        {
-            return profile;
-        }
-
-        var global = Load(GlobalPath(home));
-        var names = new HashSet<string>(profile.Connections.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
-        return new OracleCatalog(
-            [.. profile.Connections, .. global.Connections.Where(c => !names.Contains(c.Name))],
-            [.. profile.Problems, .. global.Problems]);
+        var (connections, problems) = Family.LoadCatalog(profileDirectory, home);
+        return new OracleCatalog(connections, problems);
     }
 
     /// <summary>Writes <see cref="EmptyText"/> to <paramref name="path"/> when no file is there (the folder made first); true when it wrote. Throws on an IO failure — the caller's notice.</summary>

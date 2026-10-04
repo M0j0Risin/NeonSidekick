@@ -120,6 +120,30 @@ public static class OracleReadOnlyGate
                 return OracleText.Forbidden("a database link (@name: another server)");
             }
 
+            // A quoted name names the same object as the bare one when it is upper case: "DBMS_LOCK".SLEEP(5) and seq."NEXTVAL" are the
+            // denied package and the sequence move (the PostgreSQL and SQLite gates' hole, found in the 2026-10-04 review and closed here
+            // as well). Upper-cased to meet the lists; a quoted lower-case "dbms_lock" is another name to Oracle, refused anyway.
+            if (t.Kind == TokenKind.Quoted)
+            {
+                string quoted = t.Text.ToUpperInvariant();
+                if (DeniedPackages.Contains(quoted))
+                {
+                    return OracleText.Forbidden(quoted);
+                }
+
+                if (quoted == "NEXTVAL")
+                {
+                    return OracleText.Forbidden("NEXTVAL (a sequence moves on, and no rollback moves it back)");
+                }
+
+                if (quoted == "BFILENAME")
+                {
+                    return OracleText.Forbidden("BFILENAME (files on the server)");
+                }
+
+                continue;
+            }
+
             if (t.Kind != TokenKind.Word)
             {
                 continue;

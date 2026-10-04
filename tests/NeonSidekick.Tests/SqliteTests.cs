@@ -24,6 +24,7 @@ public sealed class SqliteReadOnlyGateTests
     [InlineData("SELECT \"update\", [delete], `drop` FROM t -- a DROP in a comment\n")]
     [InlineData("SELECT replace(name, 'a', 'b') FROM t /* REPLACE INTO */")]
     [InlineData("SELECT * FROM t WHERE id = @id OR id = :id OR id = $id")]
+    [InlineData("SELECT \"load_extension\", [readfile] FROM t")]
     public void Allows_OneRead(string sql) => Assert.Null(SqliteReadOnlyGate.Check(sql));
 
     [Theory]
@@ -35,6 +36,9 @@ public sealed class SqliteReadOnlyGateTests
     [InlineData("ATTACH 'x.db' AS x", "starts with ATTACH")]
     [InlineData("PRAGMA query_only = OFF", "starts with PRAGMA")]
     [InlineData("SELECT load_extension('evil')", "uses load_extension()")]
+    [InlineData("SELECT \"load_extension\"('evil.dll')", "uses load_extension()")]
+    [InlineData("SELECT [fts3_tokenizer]('simple', x'00')", "uses fts3_tokenizer()")]
+    [InlineData("SELECT `writefile`('x', 'y')", "uses writefile()")]
     [InlineData("SELECT * FROM t WHERE id = ?", "? placeholder")]
     [InlineData("SELECT 'never ends", "a string never ends")]
     [InlineData("SELECT 1 /* never ends", "a comment never ends")]
@@ -174,6 +178,10 @@ public sealed class SqliteToolsTests : IDisposable
         var run = await access.RunAsync("shop", null, ["SELECT name FROM customers WHERE id IN (@a, :b, $c) ORDER BY id"], [new("a", 1L), new("b", 2), new("c", true)], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, run.Outcome);
         Assert.Equal(["Ada", "Grace"], run.Grids[0].Rows.Select(r => r[0]));
+
+        var unbound = await access.RunAsync("shop", null, ["SELECT @missing IS NULL"], [], 10, 5, CancellationToken.None);
+        Assert.Equal(SqlOutcome.Ok, unbound.Outcome);
+        Assert.Equal("1", unbound.Grids[0].Rows[0][0]);
 
         var capped = await access.RunAsync("shop", null, ["SELECT * FROM customers"], [], 2, 5, CancellationToken.None);
         Assert.True(capped.Grids[0].More);

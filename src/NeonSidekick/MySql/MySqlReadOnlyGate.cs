@@ -97,12 +97,25 @@ public static class MySqlReadOnlyGate
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
+            var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
+
+            // A backticked name is a function's name too: `load_file`('/etc/passwd') resolves to the native function (the PostgreSQL and
+            // SQLite gates' hole, found in the 2026-10-04 review and closed here as well). Function names are case-blind.
+            if (t.Kind == TokenKind.Quoted)
+            {
+                if (IsSymbol(next, "(") && DeniedFunctions.Contains(t.Text.ToUpperInvariant()))
+                {
+                    return MySqlText.Forbidden(t.Text.ToUpperInvariant());
+                }
+
+                continue;
+            }
+
             if (t.Kind != TokenKind.Word)
             {
                 continue;
             }
 
-            var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
             var after = i + 2 < tokens.Count ? tokens[i + 2] : default;
             string word = t.Text;
             if (word == "INTO")

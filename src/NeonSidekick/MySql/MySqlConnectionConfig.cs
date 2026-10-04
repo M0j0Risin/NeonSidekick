@@ -12,7 +12,7 @@ namespace NeonSidekick.MySql;
 /// connection without TLS. Never a client-side <c>LOAD DATA LOCAL</c>, never user variables (<see cref="Builder"/>). A password is
 /// never shown, logged or sent to the model. Read through <see cref="MySqlJsonContext"/> alone.
 /// </summary>
-public sealed class MySqlConnectionConfig
+public sealed class MySqlConnectionConfig : Sql.ISignInConfig
 {
     /// <summary>The <see cref="PasswordStore"/> word for a DPAPI value in <see cref="Password"/> (the default).</summary>
     public const string FileStore = Sql.SqlConnectionConfig.FileStore;
@@ -161,4 +161,4 @@ public sealed class MySqlConnectionConfig
 }
 
 /// <summary>A connection by its name, and the file it came from.</summary>
-public sealed record MySqlNamedConnection(string Name, MySqlConnectionConfig Config, string Source);
+public sealed record MySqlNamedConnection(string Name, MySqlConnectionConfig Config, string Source) : Sql.INamedConnection<MySqlConnectionConfig>;

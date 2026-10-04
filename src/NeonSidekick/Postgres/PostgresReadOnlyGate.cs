@@ -30,13 +30,17 @@ public static class PostgresReadOnlyGate
     /// <summary>Functions a query may not call, by name; <see cref="DeniedPrefixes"/> covers the families.</summary>
     public static readonly IReadOnlySet<string> DeniedFunctions = new HashSet<string>(StringComparer.Ordinal)
     {
-        "PG_READ_FILE", "PG_READ_BINARY_FILE", "PG_LS_DIR", "PG_STAT_FILE", "NEXTVAL", "SETVAL", "PG_TERMINATE_BACKEND", "PG_CANCEL_BACKEND",
+        "PG_READ_FILE", "PG_READ_BINARY_FILE", "PG_STAT_FILE", "NEXTVAL", "SETVAL", "PG_TERMINATE_BACKEND", "PG_CANCEL_BACKEND",
         "PG_RELOAD_CONF", "SET_CONFIG", "PG_NOTIFY", "PG_SLEEP", "PG_SLEEP_FOR", "PG_SLEEP_UNTIL", "PG_LOGICAL_EMIT_MESSAGE", "PG_SWITCH_WAL",
         "PG_CREATE_RESTORE_POINT", "PG_ROTATE_LOGFILE", "QUERY_TO_XML", "QUERY_TO_XML_AND_XMLSCHEMA", "CURSOR_TO_XML",
     };
 
-    /// <summary>Function families a query may not call: large objects, dblink, advisory locks, the replication and file admin functions.</summary>
-    public static readonly IReadOnlyList<string> DeniedPrefixes = ["LO_", "DBLINK", "PG_ADVISORY", "PG_TRY_ADVISORY", "PG_FILE_", "PG_REPLICATION_", "PG_PROMOTE"];
+    /// <summary>
+    /// Function families a query may not call: large objects, dblink, advisory locks, the replication and file admin functions, and
+    /// the server's directory listers (<c>PG_LS_</c>: <c>pg_ls_dir</c> and, since the 2026-10-04 review, <c>pg_ls_logdir</c>,
+    /// <c>pg_ls_waldir</c>, <c>pg_ls_tmpdir</c>, <c>pg_ls_archive_statusdir</c> and whatever later versions add).
+    /// </summary>
+    public static readonly IReadOnlyList<string> DeniedPrefixes = ["LO_", "DBLINK", "PG_ADVISORY", "PG_TRY_ADVISORY", "PG_FILE_", "PG_REPLICATION_", "PG_PROMOTE", "PG_LS_"];
 
     /// <summary>The words that change data or the schema, or are not a query; refused wherever they stand.</summary>
     public static readonly IReadOnlySet<string> ChangingWords = new HashSet<string>(StringComparer.Ordinal)
@@ -81,12 +85,25 @@ public static class PostgresReadOnlyGate
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
+            var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
+
+            // A quoted name is a function's name too: "pg_read_file"('/etc/passwd') calls pg_read_file (the 2026-10-04 review found
+            // it past the gate). Upper-cased to meet the lists; a quoted "PG_READ_FILE" is another name to the server, refused anyway.
+            if (t.Kind == TokenKind.Quoted)
+            {
+                if (IsSymbol(next, "(") && IsDeniedFunction(t.Text.ToUpperInvariant()))
+                {
+                    return PostgresText.Forbidden(t.Text.ToLowerInvariant() + "()");
+                }
+
+                continue;
+            }
+
             if (t.Kind != TokenKind.Word)
             {
                 continue;
             }
 
-            var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
             if (ChangingWords.Contains(t.Text))
             {
                 return t.Text == "INTO" ? PostgresText.SelectInto : PostgresText.Forbidden(t.Text);
@@ -97,7 +114,7 @@ public static class PostgresReadOnlyGate
                 return PostgresText.Forbidden("FOR " + next.Text + " … (it locks rows)");
             }
 
-            if (IsSymbol(next, "(") && (DeniedFunctions.Contains(t.Text) || DeniedPrefixes.Any(p => t.Text.StartsWith(p, StringComparison.Ordinal))))
+            if (IsSymbol(next, "(") && IsDeniedFunction(t.Text))
             {
                 return PostgresText.Forbidden(t.Text.ToLowerInvariant() + "()");
             }
@@ -117,6 +134,9 @@ public static class PostgresReadOnlyGate
         string trimmed = sql.TrimEnd();
         return trimmed.EndsWith(';') ? trimmed[..^1].TrimEnd() : trimmed;
     }
+
+    private static bool IsDeniedFunction(string upper) =>
+        DeniedFunctions.Contains(upper) || DeniedPrefixes.Any(p => upper.StartsWith(p, StringComparison.Ordinal));
 
     private static bool IsSymbol(Token token, string symbol) => token.Kind == TokenKind.Symbol && token.Text == symbol;
 

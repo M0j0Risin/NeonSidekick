@@ -93,12 +93,25 @@ public static class SqliteReadOnlyGate
                 return SqliteText.Positional;
             }
 
+            var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
+
+            // A quoted name is a function's name too: "load_extension"('x.dll') and [fts3_tokenizer](…) call them (the 2026-10-04
+            // review found both past the gate, held only by Microsoft.Data.Sqlite's defaults). SQLite's names are case-blind.
+            if (t.Kind == TokenKind.Quoted)
+            {
+                if (IsSymbol(next, "(") && DeniedFunctions.Contains(t.Text.ToUpperInvariant()))
+                {
+                    return SqliteText.Forbidden(t.Text.ToLowerInvariant() + "()");
+                }
+
+                continue;
+            }
+
             if (t.Kind != TokenKind.Word)
             {
                 continue;
             }
 
-            var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
             if (ChangingWords.Contains(t.Text))
             {
                 return SqliteText.Forbidden(t.Text);

@@ -30,6 +30,10 @@ public sealed class ScreenPureTests
     [InlineData("screen:2", ScreenTargetKind.Monitor, "2", 2)]
     [InlineData("window:notepad", ScreenTargetKind.Window, "notepad", 0)]
     [InlineData("window Error - Contoso", ScreenTargetKind.Window, "Error - Contoso", 0)]
+    [InlineData("window Untitled: Notepad", ScreenTargetKind.Window, "Untitled: Notepad", 0)]
+    [InlineData("window:Untitled: Notepad", ScreenTargetKind.Window, "Untitled: Notepad", 0)]
+    [InlineData("window : notepad", ScreenTargetKind.Window, "notepad", 0)]
+    [InlineData("monitor :2", ScreenTargetKind.Monitor, "2", 2)]
     public void Parse_TakesEveryForm(string text, ScreenTargetKind kind, string argument, int monitor)
     {
         var target = ScreenTarget.Parse(text, out string? error);

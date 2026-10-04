@@ -11,7 +11,7 @@ namespace NeonSidekick.Postgres;
 /// Credential Manager), the TLS mode and the connect timeout. A password is never shown, logged or sent to the model. Read through
 /// <see cref="PostgresJsonContext"/> alone.
 /// </summary>
-public sealed class PostgresConnectionConfig
+public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 {
     public const string FileStore = Sql.SqlConnectionConfig.FileStore;
 
@@ -109,7 +109,10 @@ public sealed class PostgresConnectionConfig
     /// when blank), <paramref name="password"/> the resolved one. The session is set at startup through <c>Options</c> — every
     /// transaction read-only by default, and <c>statement_timeout</c> and <c>lock_timeout</c> at <paramref name="timeoutSeconds"/> — so the
     /// server enforces both even for a statement the gate let through; a connection per call (<see cref="PostgresAccess"/> builds a data
-    /// source per call, unpooled, disposed after). Call only on an entry without a <see cref="Problem"/>.
+    /// source per call, unpooled, disposed after). <c>standard_conforming_strings</c> is pinned on (the 2026-10-04 review, MySQL's
+    /// <c>NO_BACKSLASH_ESCAPES</c> strip in reverse): the gate reads a backslash in a plain <c>'…'</c> string as a character, and a
+    /// server, database or role with it off would read <c>\'</c> as an escaped quote and split the text where the gate did not.
+    /// Call only on an entry without a <see cref="Problem"/>.
     /// </summary>
     public NpgsqlConnectionStringBuilder Builder(string? password, string? database, int timeoutSeconds)
     {
@@ -125,7 +128,7 @@ public sealed class PostgresConnectionConfig
             CommandTimeout = Math.Max(1, timeoutSeconds) + 5,
             ApplicationName = "NeonSidekick",
             Pooling = false,
-            Options = "-c default_transaction_read_only=on -c statement_timeout=" + millis.ToString(CultureInfo.InvariantCulture)
+            Options = "-c default_transaction_read_only=on -c standard_conforming_strings=on -c statement_timeout=" + millis.ToString(CultureInfo.InvariantCulture)
                 + " -c lock_timeout=" + millis.ToString(CultureInfo.InvariantCulture) + " -c idle_in_transaction_session_timeout=" + (millis * 2).ToString(CultureInfo.InvariantCulture),
             SslMode = (SslMode?.Trim().ToLowerInvariant() ?? "") switch
             {
@@ -140,4 +143,4 @@ public sealed class PostgresConnectionConfig
 }
 
 /// <summary>A connection by its name, and the file it came from.</summary>
-public sealed record PostgresNamedConnection(string Name, PostgresConnectionConfig Config, string Source);
+public sealed record PostgresNamedConnection(string Name, PostgresConnectionConfig Config, string Source) : Sql.INamedConnection<PostgresConnectionConfig>;

@@ -1705,7 +1705,7 @@ SQLite database files, through the same Microsoft.Data.Sqlite the sessions use: 
 
 #### Safety
 
-1. **The gate.** The text is lexed by SQLite's rules and only one `SELECT`, `WITH … SELECT` or `VALUES` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead an `INSERT`), `REPLACE INTO`, `ATTACH`/`DETACH`, `PRAGMA`, transaction words, `load_extension()` and positional `?` placeholders.
+1. **The gate.** The text is lexed by SQLite's rules and only one `SELECT`, `WITH … SELECT` or `VALUES` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead an `INSERT`), `REPLACE INTO`, `ATTACH`/`DETACH`, `PRAGMA`, transaction words, `load_extension()` and its kin (by any name, quoted or not) and positional `?` placeholders.
 2. **The file.** Opened read-only, without pooling.
 3. **The session.** `PRAGMA query_only = ON`.
 4. **The transaction.** Always rolled back. A statement past the timeout (or ESC) is interrupted.
@@ -1748,8 +1748,8 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 
 #### Safety
 
-1. **The gate.** The text is lexed by PostgreSQL's rules (nested comments, `E''` strings, dollar quoting) and only one `SELECT`, `WITH`, `VALUES` or `TABLE` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead a `DELETE`), `SELECT INTO`, locking reads, `COPY`, `DO`, `U&` escapes, positional `$1`, and the functions that reach files, large objects, sequences, locks, settings, other backends or other databases.
-2. **The session.** Every transaction read-only by default, and `statement_timeout` and `lock_timeout` set, at connection startup.
+1. **The gate.** The text is lexed by PostgreSQL's rules (nested comments, `E''` strings, dollar quoting) and only one `SELECT`, `WITH`, `VALUES` or `TABLE` passes. Refused: a second statement, DML and DDL words anywhere (a `WITH` can lead a `DELETE`), `SELECT INTO`, locking reads, `COPY`, `DO`, `U&` escapes, positional `$1`, and the functions that reach files or directories, large objects, sequences, locks, settings, other backends or other databases (by any name, quoted or not).
+2. **The session.** Every transaction read-only by default, `standard_conforming_strings` on (so the server reads strings as the gate does), and `statement_timeout` and `lock_timeout` set, at connection startup.
 3. **The transaction.** `SET TRANSACTION READ ONLY`, always rolled back: Postgres refuses every write, `nextval` and a temporary table.
 4. **The account.** Give the role `SELECT` grants alone.
 

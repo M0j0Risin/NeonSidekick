@@ -77,6 +77,8 @@ public sealed class MySqlReadOnlyGateTests
         Assert.Equal(MySqlText.Forbidden("LOCK"), MySqlReadOnlyGate.Check("SELECT * FROM t LOCK IN SHARE MODE"));
         Assert.Equal(MySqlText.Forbidden("LOAD_FILE"), MySqlReadOnlyGate.Check("SELECT LOAD_FILE('/etc/passwd')"));
         Assert.Equal(MySqlText.Forbidden("GET_LOCK"), MySqlReadOnlyGate.Check("SELECT GET_LOCK('x', 10)"));
+        Assert.Equal(MySqlText.Forbidden("LOAD_FILE"), MySqlReadOnlyGate.Check("SELECT `load_file`('/etc/passwd')"));
+        Assert.Null(MySqlReadOnlyGate.Check("SELECT `load_file` FROM t"));
         Assert.Equal(MySqlText.Forbidden("NEXTVAL"), MySqlReadOnlyGate.Check("SELECT NEXTVAL(s)"));
         Assert.Equal(MySqlText.Forbidden("NEXT VALUE FOR (a sequence moves on, and no rollback moves it back)"), MySqlReadOnlyGate.Check("SELECT NEXT VALUE FOR s"));
         Assert.Equal(MySqlText.Forbidden("SYS_EXEC"), MySqlReadOnlyGate.Check("SELECT sys_exec('rm -rf /')"));

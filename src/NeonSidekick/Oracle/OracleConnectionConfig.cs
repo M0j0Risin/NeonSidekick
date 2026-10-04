@@ -14,7 +14,7 @@ namespace NeonSidekick.Oracle;
 /// (<see cref="Problem"/>): Oracle does not hold SYS to a read-only transaction, the tools' third guard; the connect
 /// never asks for a <c>DBA Privilege</c> either. Read through <see cref="OracleJsonContext"/> alone.
 /// </summary>
-public sealed class OracleConnectionConfig
+public sealed class OracleConnectionConfig : Sql.ISignInConfig
 {
     /// <summary>The <see cref="PasswordStore"/> word for a DPAPI value in <see cref="Password"/> (the default).</summary>
     public const string FileStore = Sql.SqlConnectionConfig.FileStore;
@@ -127,4 +127,4 @@ public sealed class OracleConnectionConfig
 }
 
 /// <summary>A connection by its name, and the file it came from.</summary>
-public sealed record OracleNamedConnection(string Name, OracleConnectionConfig Config, string Source);
+public sealed record OracleNamedConnection(string Name, OracleConnectionConfig Config, string Source) : Sql.INamedConnection<OracleConnectionConfig>;

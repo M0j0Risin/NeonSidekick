@@ -38,10 +38,16 @@ public sealed record ScreenTarget(ScreenTargetKind Kind, string Argument = "", i
             return new ScreenTarget(ScreenTargetKind.Screen);
         }
 
-        int colon = raw.IndexOf(':');
-        int split = colon >= 0 ? colon : raw.IndexOf(' ');
+        // The keyword ends at whichever comes first, a colon or a space (the 2026-10-04 review: the first colon anywhere split
+        // "window Untitled: Notepad" inside the title); a colon after the space ("monitor : 2") still belongs to the keyword.
+        int colon = raw.IndexOf(':'), space = raw.IndexOf(' ');
+        int split = colon < 0 ? space : space < 0 ? colon : Math.Min(colon, space);
         string word = (split < 0 ? raw : raw[..split]).Trim().ToLowerInvariant();
         string rest = split < 0 ? "" : raw[(split + 1)..].Trim();
+        if (split == space && rest.StartsWith(':'))
+        {
+            rest = rest[1..].Trim();
+        }
         switch (word)
         {
             case "screen" or "monitor" when rest.Length == 0:
