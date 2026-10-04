@@ -951,7 +951,7 @@ internal sealed partial class ChatScreen
         Func<bool>? closeLogWindow = null,
         Func<bool>? closeViewer = null,
         Action<string>? openTerminal = null,
-        Screen.IScreenSystem? screenSystem = null)
+        Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null)
     {
         _logFile = logFile;
         _openTerminal = openTerminal;
@@ -1042,6 +1042,7 @@ internal sealed partial class ChatScreen
         _showShot = showShot;
         // The screen (2026-10-04): screenshots into the Screen capture output folder; the model's asks on the pane per Screen capture ask.
         _screenSystem = screenSystem;
+        _hotkeyProbe = hotkeyProbe;
         _screenCapture = screenSystem is null ? null : new Screen.ScreenCapture(screenSystem, () => _files, () => _effective().ScreenOutputFolder, _time);
         _screenTools = ScreenTools(CaptureForModelAsync, screenSystem);
         _printTools = PrintTools(_print, ConfirmPrintAsync);
@@ -10480,6 +10481,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Usage:
                 await ShowUsageAsync(cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.KeyCheck:
+                await ShowKeyCheckAsync(_transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Perf:

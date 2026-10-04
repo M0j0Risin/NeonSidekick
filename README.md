@@ -194,12 +194,13 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 * **Ctrl+Alt+X**, pressed twice within two seconds, unloads the embedded model at once and frees its memory, cancelling any reply, load or botchat using it. No server is connected until you pick one with `/server`; the saved *LLM URL* is kept, so the next start loads the model again. The first press only shows a reminder. With any other server it does nothing.
 * **Ctrl+L** cancels a running skill-learning reflection (the 🧠 on the hint row), as a double-click on the 🧠 does; *(🧠 learning cancelled)* prints once the reply, if any, ends. With none running it does nothing.
 * An AltGr key that types a character on your layout still types it.
+* **A chord that does nothing** may be held by another program as a global hotkey (a graphics card's overlay, say), so it never reaches the app. `/keycheck` lists every chord here and whether another program holds it; free it in that program.
 
 ### Commands typed during a reply
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/persona`, `/operata`, `/vocalia` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/persona`, `/operata`, `/vocalia` |
 | Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera list`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
@@ -1004,6 +1005,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/cmdcopy <profile> [--history] [overwrite]` | Copies *Shell allowed commands* into another profile (added, or replacing with `overwrite`). `--history` copies the command history instead (refused when that profile has *Keep command history* off). |
+| `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey, the held ones first, in a pane. A held chord never reaches the app. Only hotkeys registered with Windows show; a keyboard hook (AutoHotkey, PowerToys Keyboard Manager) or a Windows Terminal key binding can still take a key. |
 | `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix; the ask and yolo buttons (A, Y) switch *Shell command policy*. |

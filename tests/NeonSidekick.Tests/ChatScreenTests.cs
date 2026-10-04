@@ -289,7 +289,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -11703,6 +11703,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.HomeAssistant, false, MidTurnClass.Pane)]   // 2026-09-30: on the watcher, the reply streaming on
     [InlineData(SlashCommand.HomeAssistant, true, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Window, false, MidTurnClass.Quick)]   // later on 2026-09-27
+    [InlineData(SlashCommand.KeyCheck, false, MidTurnClass.Pane)]   // 2026-10-04: its pane over the reply, as /usage's
     [InlineData(SlashCommand.Perf, false, MidTurnClass.Quick)]     // later on 2026-09-29: display only
     [InlineData(SlashCommand.Perf, true, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Persona, false, MidTurnClass.Pane)]   // later on 2026-09-27: the prompt was built at the turn's start

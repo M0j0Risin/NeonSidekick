@@ -134,6 +134,10 @@ public static class HelpCommands
         [
             new("/interrupt [on|off]", "Toggle the wake-word interrupt during a spoken reply."),
         ]),
+        new("/keycheck",
+        [
+            new("/keycheck", "List the app's key chords (the Keys tab of `/help`) and whether another program holds each as a global hotkey, the held ones first. A held chord never reaches the app: free it in the program that holds it, such as a graphics card's overlay. Only hotkeys registered with Windows show; a keyboard hook or a Windows Terminal key binding can still take a key."),
+        ]),
         new("/keycopy",
         [
             new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Anthropic API key* and *Home Assistant API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that isn't set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not copied."),

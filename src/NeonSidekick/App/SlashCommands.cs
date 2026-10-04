@@ -160,6 +160,9 @@ public enum SlashCommand
     /// <summary><c>/window</c> (<c>/windowsize</c> until later on 2026-09-19): the terminal window's width and height, for information.</summary>
     Window,
 
+    /// <summary><c>/keycheck</c> (2026-10-04, the user's ask): every key chord of the app asked of Windows — free, or held by another program as a global hotkey — on an info pane. No argument; a pane under a reply.</summary>
+    KeyCheck,
+
     /// <summary>
     /// <c>/log</c> (2026-09-22, the user's ask): the <c>--log</c> file opened in the editor Windows associates with it, and only
     /// a command under <c>--log</c>. Since 2026-10-02 (the user's ask) a command in every run: the bare word opens the log window
@@ -318,6 +321,7 @@ public static class SlashCommands
             new("/help", "show help"),
             new("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"),
             new("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"),
+            new("/keycheck", "list the app's key chords and whether another program holds them as global hotkeys"),
             new("/keycopy", "copy this profile's LLM API key, Anthropic API key and Home Assistant API key into another profile, replacing its own (asks first): /keycopy <profile>"),
             new("/learn", "write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]"),
             new("/log", "open the diagnostic log in a window that follows it, or /log --file for the --log file in your editor"),
@@ -429,7 +433,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -495,6 +499,7 @@ public static class SlashCommands
             "/remember" => SlashCommand.Remember,
             "/memory" => SlashCommand.Memory,
             "/cmdcopy" => SlashCommand.CmdCopy,
+            "/keycheck" => SlashCommand.KeyCheck,
             "/keycopy" => SlashCommand.KeyCopy,
             "/cmdclear" => SlashCommand.CmdClear,
             "/cmdlist" => SlashCommand.CmdList,

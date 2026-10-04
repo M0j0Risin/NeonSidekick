@@ -162,7 +162,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
             or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
-            or SlashCommand.HomeAssistant or SlashCommand.Docker => MidTurnClass.Pane,
+            or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -400,6 +400,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Usage:
                 await _info.ShowAsync(UsageText.Label, UsageTabs(), 0, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.KeyCheck:
+                // /keycheck (2026-10-04): its pane over the reply, as /usage's; an error through the flow sink.
+                await ShowKeyCheckAsync(_flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.About:
                 await _info.ShowAsync(AboutText.Label, AboutTabs(), 0, cancellationToken).ConfigureAwait(false);
