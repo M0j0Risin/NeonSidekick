@@ -57,7 +57,7 @@ public static class HelpSettings
         SettingsField.LlmUseFunVerbs => "The thinking spinner shows a random verb instead of `thinking` / `writing`.",
         SettingsField.LlmScanMode => "Where the app looks for a server while *LLM URL* is blank: `local` (the usual ports on this machine), `remote` (the same ports across the local network), `both`, or `disabled`. With `disabled` nothing is scanned: set the URL by hand, or pick the embedded model or the Anthropic API in `/server`.",
         SettingsField.WebTools => "Offers `web_search`, `web_fetch`, `open_url` and `download_file`.",
-        SettingsField.WebBrowserMode => "How pages are fetched. `default` uses the HTTP client and falls back to a headless browser when a page is blocked or empty. `httpclient` never falls back. `chromium` uses the browser for every page.",
+        SettingsField.WebBrowserMode => "How pages are fetched. `default` uses the HTTP client and falls back to a headless browser when a page is blocked or empty. `httpclient` never falls back. `chromium` uses the browser for every page. The buttons at the top of the *Web tools* on/off page (D, H, C; the toolbar's 🌐 opens it) switch it too.",
         SettingsField.WebBrowserPath => "The Chromium-based browser used for headless fetches and for making PDFs (`convert_to_pdf`, `/pdf`). Empty finds Edge, Chrome or Brave in their standard folders.",
         SettingsField.WebBrowserNetworkMode => "Where a fetch may reach: `internet` (public addresses only), `local_area_network` (this machine and the LAN only) or `both`.",
         SettingsField.WebSearxngUrl => "A SearXNG instance's base URL, used while the method is `searxng`.",

@@ -8597,7 +8597,8 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.True(_settings.Current.WebTools);
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools)) + "\n", output);
+        // The Web page carries the browser-mode buttons on its title row since 2026-10-04 (the user's ask).
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools) + "   " + string.Join("    ", BrowserMode.Names.Select(SettingsMenu.WebModeButtonTitle)) + " ") + "\n", output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandPolicy)) + "\n", output);
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", output);
         Assert.DoesNotContain(ToolsText.Label + "   Offered", output);   // the crumb, never the tabs

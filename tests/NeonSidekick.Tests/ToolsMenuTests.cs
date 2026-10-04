@@ -1224,6 +1224,60 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The Web page's browser-mode buttons (2026-10-04, the user's ask): C saves chromium at once with the picker's own notice,
+    /// the page comes back, ESC leaves with no "unchanged" over it, the switch untouched.
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_Web_TheModeButtons_SwitchTheBrowserMode()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('c'), Keys.Escape);
+
+        await menu.ShowSwitchAsync(SettingsField.WebTools, CancellationToken.None);
+
+        Assert.Equal("chromium", _settings.Current.WebBrowserMode);
+        Assert.True(_settings.Current.WebTools);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools   ⇄ default    ↓ httpclient    ◎ chromium ") + "\n", _console.Output);
+
+        Assert.Contains(SettingsMenu.WebToggleKeys, _console.Output);
+        Assert.Contains("  · Web browser mode: chromium\n", _console.Output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>The lit button saves nothing; a mode and the switch both change in one visit (2026-10-04).</summary>
+    [Fact]
+    public async Task ShowSwitch_Web_TheLitButtonSavesNothing_AndTheSwitchStillWorks()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('d'));                         // default, already lit
+        Push(Keys.Char('h'), Keys.Down, Keys.Enter);  // httpclient, then off
+
+        await menu.ShowSwitchAsync(SettingsField.WebTools, CancellationToken.None);
+
+        Assert.Equal("httpclient", _settings.Current.WebBrowserMode);
+        Assert.False(_settings.Current.WebTools);
+        Assert.DoesNotContain("Web browser mode: default", _console.Output);
+        Assert.Contains("  · Web browser mode: httpclient\n", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public void WebModeButtons_LightTheSavedMode()
+    {
+        // 2026-10-04: a radio group over BrowserMode.Names, keys D, H, C; a hand-edited case still lights, an unknown word none.
+        Assert.Equal(["⇄ default", "↓ httpclient", "◎ chromium"], SettingsMenu.WebModeButtons("default").Select(b => b.Title));
+        Assert.Equal(['d', 'h', 'c'], SettingsMenu.WebModeButtons("default").Select(b => b.Key!.Value));
+        Assert.Equal([false, false, true], SettingsMenu.WebModeButtons("chromium").Select(b => b.On));
+        Assert.Equal([false, true, false], SettingsMenu.WebModeButtons(" HttpClient ").Select(b => b.On));
+        Assert.All(SettingsMenu.WebModeButtons("firefox"), b => Assert.False(b.On));
+        Assert.All(SettingsMenu.WebModeButtons("default"), b => Assert.Equal(1, TextCells.Width(b.Title[..1])));
+        Assert.Equal("Enter = choose · D / H / C = browser mode · ESC = back", SettingsMenu.WebToggleKeys);
+    }
+
     /// <summary>The shell's is the policy picker (2026-10-03): a move into yolo asks first, No keeps the policy; off asks nothing.</summary>
     [Fact]
     public async Task ShowSwitch_TheShell_IsThePolicyPicker_YoloAsksFirst()

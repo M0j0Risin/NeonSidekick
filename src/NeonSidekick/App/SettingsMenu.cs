@@ -2843,6 +2843,33 @@ internal sealed partial class SettingsMenu
     /// <summary>The police's on/off page's one button, <see cref="PoliceStringsButton"/> (2026-10-03). Pinned.</summary>
     public static IReadOnlyList<MenuButton> PoliceButtons { get; } = [new(PoliceStringsButton, PoliceStringsKey, false)];
 
+    /// <summary>
+    /// One of the Web tools page's title-row buttons (2026-10-04, the user's ask: "actions at the top", as Memory's and
+    /// <c>/cmdlist</c>'s): a <see cref="Web.BrowserMode.Names"/> word with a monochrome glyph before it, as every header button
+    /// has since 2026-10-03 — ⇄ the client then the browser, ↓ the client alone, ◎ the browser. Pinned.
+    /// </summary>
+    public static string WebModeButtonTitle(string name) => name switch
+    {
+        "default" => "⇄ default",
+        "httpclient" => "↓ httpclient",
+        "chromium" => "◎ chromium",
+        _ => name,
+    };
+
+    /// <summary>
+    /// The Web tools page's buttons (2026-10-04, the user's ask): one per <see cref="Web.BrowserMode.Names"/>, keys D, H and C
+    /// (each word's first letter, as the perf bar's looks), the saved <c>Web browser mode</c> lit — a radio group, as
+    /// <see cref="CommandPolicyButtons"/>; a hand-edited value that is none of them lights none. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> WebModeButtons(string mode)
+    {
+        string? lit = Web.BrowserMode.TryParse(mode, out var engine) ? Web.BrowserMode.Name(engine) : null;
+        return Web.BrowserMode.Names.Select(name => new MenuButton(WebModeButtonTitle(name), name[0], string.Equals(name, lit, StringComparison.Ordinal))).ToList();
+    }
+
+    /// <summary>The Web tools page's hint: <see cref="PickKeys"/> with the browser-mode buttons' keys (2026-10-04). Pinned.</summary>
+    public const string WebToggleKeys = "Enter = choose · D / H / C = browser mode · ESC = back";
+
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
 
@@ -5888,7 +5915,9 @@ internal sealed partial class SettingsMenu
     /// A toggle's on/off page opened straight, over the saved values (2026-09-22, for <see cref="ToolsMenu.ShowPoliceAsync"/>:
     /// <c>/police</c>, the toolbar's officer) — the page its row's Enter opens, under whatever <see cref="Root"/> the caller set.
     /// Police going off asks <see cref="PoliceOffConfirmQuestion"/> on the same pane first (2026-10-02). The police's page carries
-    /// <see cref="PoliceButtons"/> (2026-10-03): S opens the forbidden-strings list, ESC there comes back here. True when the value changed.
+    /// <see cref="PoliceButtons"/> (2026-10-03): S opens the forbidden-strings list, ESC there comes back here. The Web tools page
+    /// carries <see cref="WebModeButtons"/> (2026-10-04, the user's ask): D, H and C switch <c>Web browser mode</c> at once, wherever
+    /// the page opens — the toolbar's 🌐, <c>/tools web</c>, the Web tab's row. True when the value (or the browser mode) changed.
     /// </summary>
     internal Task<bool> EditToggleAsync(SettingsField field, CancellationToken cancellationToken) =>
         PickToggleAsync(field, _settings.Current, cancellationToken);
@@ -5919,6 +5948,7 @@ internal sealed partial class SettingsMenu
         }
 
         bool was = IsOn(field, saved);
+        bool modeChanged = false;
         int? picked;
         if (field == SettingsField.ShellPoliceOutsidePaths)
         {
@@ -5939,6 +5969,33 @@ internal sealed partial class SettingsMenu
                 break;
             }
         }
+        else if (field == SettingsField.WebTools)
+        {
+            // The Web page carries the browser-mode buttons (2026-10-04, the user's ask): a press saves the mode at once, the
+            // picker's own save and notice on the status line, and the page comes back with it lit; the lit one saves nothing.
+            var web = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], _pane.Enabled ? WebToggleKeys : PickKeys);
+            int cursor = was ? 0 : 1;
+            while (true)
+            {
+                var buttons = WebModeButtons(_settings.Current.WebBrowserMode);
+                var pressed = await PickChecklistAsync(web, cursor, cancellationToken, buttons).ConfigureAwait(false);
+                if (pressed is { Button: >= 0 } button)
+                {
+                    cursor = button.Row;
+                    if (!buttons[button.Button].On)
+                    {
+                        string name = Web.BrowserMode.Names[button.Button];
+                        Apply(SettingsField.WebBrowserMode, d => d.WebBrowserMode = name);
+                        modeChanged = true;
+                    }
+
+                    continue;
+                }
+
+                picked = pressed?.Row;
+                break;
+            }
+        }
         else
         {
             var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], PickKeys);
@@ -5947,7 +6004,8 @@ internal sealed partial class SettingsMenu
 
         if (picked is not { } index || (index == 0) == was)
         {
-            return Unchanged();
+            // A browser mode switched on the Web page is a change of its own: no "unchanged" over its notice.
+            return modeChanged || Unchanged();
         }
 
         bool on = index == 0;
