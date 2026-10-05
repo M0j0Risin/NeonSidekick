@@ -854,6 +854,8 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | Setting | What it does | Default |
 |---|---|---|
 | SQL tools | Offers the SQL tools (connections, databases, tables, columns, describe, relationships, indexes, query) over `sql.json`'s connections. | off |
+| SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See SQL › Changes. | read-only |
+| SQL statements allowed | Under `read-write`: the kinds of statement `sql_execute` may run (a checklist; A all, N none, D the default). See SQL › Changes. | changing data, creating, reading |
 | SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). **A** / **N** tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. A ticked name no longer in the files is dropped when the checklist opens, and the status line names it; not while a file can't be read, nor a name an entry with a problem still holds. | none |
 | SQL default connection | The connection a call uses when it names none: an offered one, or the first. | (the first connection) |
 | SQL set password | Pick a `sql` or `runas` connection and type its password, masked; it goes to that connection's store. | — |
@@ -1581,11 +1583,12 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 * **`auth`**: `sql` (a SQL login: `user` and `password`), `windows` (your account), or `runas` (another Windows account, `DOMAIN\name` or `name@domain`, plus `password`; like `runas /netonly`, it signs in to the server only as that account).
 * **`encrypt`**: `strict`, `mandatory` (default) or `optional`. **`trustServerCertificate`**: `true` accepts a self-signed certificate.
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
+* **`access`**: `read` (default) or `readwrite`. Changes through `sql_execute` need `readwrite` **and** *SQL mode* `read-write`, both checked at every call.
 * **`passwordStore`**: `file` (default; a password typed into the file is encrypted in place with DPAPI on the next read) or `credman` (Windows Credential Manager, `NeonSidekick/sql/<connection_name>`).
 
 #### Managing connections
 
-* **SQL add connection** (the SQL tab of `/tools`) walks through a new connection one page per choice. Its summary can **test** the draft (`SELECT @@VERSION`, nothing written) and saves it with the file's comments kept, offered or hidden until ticked. ESC steps back. It only adds; edit the file to change one.
+* **SQL add connection** (the SQL tab of `/tools`) walks through a new connection one page per choice. Its summary can **test** the draft (`SELECT @@VERSION`, nothing written) and saves it with the file's comments kept, offered or hidden until ticked. It asks for the access too (`read` or `readwrite`). ESC steps back. It only adds; edit the file to change one.
 * **SQL set password** updates a password.
 * Or edit `%USERPROFILE%\.neonsidekick\sql.json` (global) or `…\profiles\<profile>\sql.json` directly (comments and trailing commas allowed).
 
@@ -1639,8 +1642,32 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 | `sql_relationships` | `connection?, database?, table?` | Foreign-key join paths as `from_table.from_column -> to_table.to_column`, all or touching a table. |
 | `sql_indexes` | `connection?, database?, table?, schema?, missing?` | The indexes of a table, schema or database: kind, key and included columns, filter, size, and seeks, scans, lookups and updates since restart (unread ones marked). `missing: true` adds the optimizer's suggestions. Usage needs `VIEW SERVER STATE`. |
 | `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–100000 (*SQL max rows* by default). Cut at *SQL query result max chars*. |
+| `sql_execute` | `sql, connection?, database?, params?, max_rows?` | Only under *SQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *SQL statements allowed* ticks. Answers with the rows changed and any rows the statement returned (an `OUTPUT` clause's, a procedure's). |
 
 `--sql-check <connection>` proves the tools against a real server on the published exe (the sign-in, every type, the gate, the rollback, a cancel and a timeout).
+
+#### Changes
+
+With *SQL mode* set to `read-write`, the model gets `sql_execute` beside the eight reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
+
+1. **The kinds.** *SQL statements allowed* decides which kinds of statement may run; a statement needs every kind it does, and the refusal names the kinds that are ticked.
+
+   | Kind | Statements | Default |
+   |---|---|---|
+   | changing data | `INSERT`, `UPDATE`, `MERGE` (`OUTPUT` included) | ✓ |
+   | deleting | `DELETE`, `TRUNCATE TABLE`, a `MERGE` that deletes |  |
+   | creating | `CREATE TABLE`, `INDEX`, `VIEW`, `SEQUENCE`, `TYPE`, `SCHEMA`, `SYNONYM`; `SELECT … INTO` | ✓ |
+   | changing structure | `ALTER TABLE`, `VIEW`, `SEQUENCE`, `SCHEMA` |  |
+   | dropping | `DROP` of those, and of procedures, functions and triggers |  |
+   | upkeep | `UPDATE STATISTICS`, `CREATE STATISTICS`, `ALTER INDEX` (rebuild, reorganize) |  |
+   | procedures and triggers | `EXEC` of a procedure (`sp_rename` and a few system ones that act on the database's own objects), `INSERT … EXEC`, and `CREATE`/`ALTER` of a procedure, function or trigger: code whose effects can't be read from the statement, so it's off by default. T-SQL reads a batch's lone first word as `EXEC` of it, so a typo there is a procedure call |  |
+   | reading | `SELECT`: never asks, and runs as `sql_query` does (read-only intent, rolled back) once its gate passes it too | ✓ |
+
+2. **The gate.** One batch, one statement, parsed by ScriptDom as the reading gate is (a procedure's body is one statement; `GO` makes two). An allow-list of statement types: one it doesn't know is refused. Every data change inside counts (an `INSERT … SELECT FROM (MERGE … OUTPUT …)` deletes too). Always refused: `BEGIN TRAN`/`COMMIT`/`ROLLBACK`/`SAVE` and `BEGIN … END` blocks (each call is its own transaction), `SET` and `USE`, `GRANT`/`DENY`/`REVOKE`, `EXECUTE AS`, logins, users, roles, keys and certificates, databases, `DBCC`, `BACKUP`/`RESTORE`, `KILL`, `SHUTDOWN`, `RECONFIGURE`, `CHECKPOINT`, `BULK INSERT`, `WAITFOR`, dynamic SQL (`EXEC` of a string, `sp_executesql`, a procedure named by a variable), every other `xp_`/`sp_` procedure, `EXEC … AT` a linked server, and the reading gate's doors out (`OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE`, `OPENXML`, four-part names; `NEXT VALUE FOR` is allowed here).
+3. **Your allow.** Every change asks on a pane that names the connection and database and shows the statement: **Deny**, **Allow once**, or **Allow for this session** (that connection and database only, until `/new`, `/clear` or a profile switch).
+4. **The run.** The connection asks for read-write intent (its own pool), and signs in as for a read (`runas` too). There's no transaction of the app's: SQL Server commits the one statement on its own, atomically (a procedure's own transactions are its own). A failed, timed-out or cancelled statement changes nothing.
+5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
+6. **The account.** It's still the real guard. Give a `readwrite` connection a login with only the permissions you want the model to use.
 
 </details>
 

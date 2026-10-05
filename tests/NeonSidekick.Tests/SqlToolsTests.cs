@@ -44,8 +44,8 @@ public sealed class SqlToolsTests
     [Fact]
     public void Names_Schemas_AndDescriptions_ArePinned()
     {
-        Assert.Equal(SqlToolNames.All, _tools.Select(t => t.Name));
-        Assert.Equal(SqlToolNames.All.Order(StringComparer.Ordinal), ChatScreen.SqlToolNames.Order(StringComparer.Ordinal));
+        Assert.Equal(SqlToolNames.WithExecute, _tools.Select(t => t.Name));
+        Assert.Equal(SqlToolNames.WithExecute.Order(StringComparer.Ordinal), ChatScreen.SqlToolNames.Order(StringComparer.Ordinal));
         foreach (var tool in _tools)
         {
             Assert.Equal("object", tool.JsonSchema.GetProperty("type").GetString());

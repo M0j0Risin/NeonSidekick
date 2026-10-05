@@ -24,7 +24,7 @@ public sealed class SqlConnectionsTool : SqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe() => SqlText.Connections(Sql.Catalog(), Effective.SqlDefaultConnection);
+    public string Describe() => SqlText.Connections(Sql.Catalog(), Effective.SqlDefaultConnection, DatabaseWriteModes.IsReadWrite(Effective.SqlMode));
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         new(Describe());

@@ -334,6 +334,12 @@ public enum SettingsField
     /// <summary>A toggle: whether a turn offers the eight SQL tools (<see cref="Settings.AppSettingsData.SqlTools"/>). The SQL tab of <c>/tools</c>' first row (2026-09-23); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     SqlTools,
 
+    /// <summary>A picker: what the SQL tools may do — <c>read-only</c> / <c>read-write</c> (<see cref="Settings.AppSettingsData.SqlMode"/>). The SQL tab's second row (2026-10-05).</summary>
+    SqlMode,
+
+    /// <summary>A checklist: the kinds of statement <c>sql_execute</c> may run under read-write (<see cref="Settings.AppSettingsData.SqlStatementsAllowed"/>). The SQL tab's third row (2026-10-05).</summary>
+    SqlStatementsAllowed,
+
     /// <summary>A pick: the connection a SQL tool uses when the call names none (<see cref="Settings.AppSettingsData.SqlDefaultConnection"/>), from the names in <c>sql.json</c> or the first. The SQL tab's second row (2026-09-23); no reconnect (read at each call).</summary>
     SqlDefaultConnection,
 
@@ -1382,7 +1388,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
         [SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
-        [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
+        [SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
         [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
@@ -1892,6 +1898,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ObsidianTools => "Obsidian tools",
         SettingsField.ObsidianVault => "Obsidian vault",
         SettingsField.SqlTools => "SQL tools",
+        SettingsField.SqlMode => "SQL mode",
+        SettingsField.SqlStatementsAllowed => "SQL statements allowed",
         SettingsField.ComfyTools => "ComfyUI tools",
         SettingsField.HomeAssistantTools => "Home Assistant tools",
         SettingsField.HomeAssistantUrl => "Home Assistant URL",
@@ -2235,6 +2243,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ObsidianTools => OnOff(data.ObsidianTools),
             SettingsField.ObsidianAllowDelete => OnOff(data.ObsidianAllowDelete),
             SettingsField.SqlTools => OnOff(data.SqlTools),
+            SettingsField.SqlMode => data.SqlMode,
+            SettingsField.SqlStatementsAllowed => WriteStatementsValue(data.SqlStatementsAllowed, data.SqlMode),
             SettingsField.ComfyTools => OnOff(data.ComfyTools),
             SettingsField.HomeAssistantTools => OnOff(data.HomeAssistantTools),
             SettingsField.HomeAssistantUrl => string.IsNullOrWhiteSpace(data.HomeAssistantUrl) ? NoHomeAssistantUrlLabel : data.HomeAssistantUrl,

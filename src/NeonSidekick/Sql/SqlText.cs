@@ -59,13 +59,14 @@ public static class SqlText
     public static string ConfigProblemLogLine(string path, string detail) => $"{path} could not be read, so its connections are skipped: {detail}";
 
     /// <summary>One connection as <c>sql_connections</c> lists it: the name, where, how it signs in, the description — never the password.</summary>
-    public static string ConnectionLine(SqlNamedConnection connection, bool isDefault)
+    /// <remarks>A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>SQL mode</c> read-write) lets it change.</remarks>
+    public static string ConnectionLine(SqlNamedConnection connection, bool isDefault, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = string.IsNullOrWhiteSpace(config.Database) ? "(the login's default database)" : config.Database.Trim();
         string login = config.IsWindows ? "windows sign-in" : config.IsRunAs ? $"windows sign-in as {config.User?.Trim()} (runas)" : $"sql login {config.User?.Trim()}";
-        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Server?.Trim()} / {database}, {login}";
+        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Server?.Trim()} / {database}, {login}{ServerWriteText.AccessNote(SqlStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -85,7 +86,7 @@ public static class SqlText
     }
 
     /// <summary><c>sql_connections</c>' whole answer: a count, then one line each, then the problems that kept any out.</summary>
-    public static string Connections(SqlCatalog catalog, string? defaultName)
+    public static string Connections(SqlCatalog catalog, string? defaultName, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -99,7 +100,7 @@ public static class SqlText
             sb.Append(Count(catalog.Connections.Count, "SQL connection")).Append(" (every SQL tool takes one by name in \"connection\"; the default is used when it is left out):");
             foreach (var connection in catalog.Connections)
             {
-                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen)));
+                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
             }
         }
 
@@ -156,6 +157,7 @@ public static class SqlText
             SqlOutcome.UnknownConnection => UnknownConnection(run.Connection, run.Detail),
             SqlOutcome.ConnectFailed => ConnectFailed(run.Connection, run.Detail),
             SqlOutcome.Timeout => Timeout(run.Connection, run.Detail),
+            SqlOutcome.ReadOnlyConnection => ServerWriteText.ReadOnlyConnection(SqlStatementKinds.Family, run.Connection),
             _ => Failed(run.Connection, run.Detail),
         };
     }

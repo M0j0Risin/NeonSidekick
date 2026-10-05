@@ -272,6 +272,111 @@ public sealed class SqlAccess
     }
 
     /// <summary>
+    /// <c>sql_execute</c>'s run (2026-10-05, <c>SQL mode</c> <c>read-write</c>): one statement the write gate passed, on a connection
+    /// whose entry says <c>"access": "readwrite"</c> (any other is <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the caller
+    /// checked), in <paramref name="database"/> when given, with read-write intent (<see cref="SqlConnectionConfig.Builder"/>) and the
+    /// <c>runas</c> sign-in as for a read. No transaction of the app's: SQL Server commits the one statement on its own, atomically (a
+    /// procedure's own transactions are its own). Every result set (an <c>OUTPUT</c> clause's rows, a procedure's) is read to
+    /// <paramref name="maxRows"/> and the rest drained, never cancelled — a cancel would undo the statement. <see cref="SqlRun.Changes"/>
+    /// is the rows the server counts. A timeout, a failed connect and a server error are outcomes; a cancelled token throws (the
+    /// server undoes the statement).
+    /// </summary>
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? database, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        if (Resolve(name, defaultName, out var refused) is not { } target)
+        {
+            return refused!;
+        }
+
+        if (!target.Config.IsReadWrite)
+        {
+            return SqlRun.Refused(SqlOutcome.ReadOnlyConnection, "", target.Name);
+        }
+
+        var secret = SqlSecrets.Resolve(target);
+        if (secret.Error is { } missing)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
+        }
+
+        var builder = target.Config.Builder(database, secret.Value, readOnlyIntent: false);
+        string catalogName = builder.InitialCatalog;
+        await using var connection = new SqlConnection(builder.ConnectionString);
+        try
+        {
+            if (target.Config.IsRunAs)
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    return SqlRun.Refused(SqlOutcome.ConnectFailed, WindowsCredentials.NotWindows, target.Name);
+                }
+
+                if (await OpenAsAsync(connection, target, secret.Value!, cancellationToken).ConfigureAwait(false) is { } refusedLogon)
+                {
+                    return refusedLogon;
+                }
+            }
+            else
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (SqlException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            DiagnosticLog.Warn(SqlConfigFile.Category, SqlText.ConnectFailedLogLine(target.Name, catalogName, ex.Number, LogText.Excerpt(ex.Message)));
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, Message(ex), target.Name);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException && !cancellationToken.IsCancellationRequested)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, LogText.Excerpt(ex.Message), target.Name);
+        }
+
+        string databaseName = connection.Database;
+        var watch = Stopwatch.StartNew();
+        var grids = new List<SqlGrid>();
+        int? changes;
+        try
+        {
+            await using var command = new SqlCommand(sql, connection) { CommandTimeout = timeoutSeconds };
+            foreach (var parameter in parameters)
+            {
+                command.Parameters.Add(Bind(parameter));
+            }
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                do
+                {
+                    if (reader.FieldCount > 0)
+                    {
+                        grids.Add(await SqlGrid.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false));
+                    }
+                }
+                while (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false));
+
+                await reader.CloseAsync().ConfigureAwait(false);
+                changes = reader.RecordsAffected >= 0 ? reader.RecordsAffected : null;
+            }
+        }
+        catch (SqlException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
+        }
+        catch (SqlException ex) when (ex.Number == -2)
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture), target.Name, databaseName, grids, watch.Elapsed);
+        }
+        catch (SqlException ex)
+        {
+            return new SqlRun(SqlOutcome.Failed, Message(ex), target.Name, databaseName, grids, watch.Elapsed);
+        }
+
+        return new SqlRun(SqlOutcome.Ok, "", target.Name, databaseName, grids, watch.Elapsed) { Changes = changes };
+    }
+
+    /// <summary>
     /// Opens <paramref name="connection"/> signed in as the <c>runas</c> account (later on 2026-09-23): a
     /// <c>NEW_CREDENTIALS</c> token (<see cref="WindowsCredentials.LogonNetOnly"/>), and the <b>synchronous</b> open run
     /// impersonated on a worker thread — the sign-in's SSPI handshake takes the calling thread's token, and a sync open

@@ -16,4 +16,7 @@ public static class SqlToolNames
         SqlIndexesTool.ToolName,
         SqlQueryTool.ToolName,
     };
+
+    /// <summary>The eight reads and <c>sql_execute</c> (2026-10-05): what <c>ChatScreen.SqlTools</c> makes; plan mode and the read rule know only the eight.</summary>
+    public static readonly string[] WithExecute = [.. All, SqlExecuteTool.ToolName];
 }

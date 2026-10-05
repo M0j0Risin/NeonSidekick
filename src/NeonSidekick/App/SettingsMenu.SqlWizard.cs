@@ -8,8 +8,8 @@ namespace NeonSidekick.App;
 /// <summary>
 /// <c>SQL add connection</c> (2026-09-23, the user's ask: "a kind of wizard to step the user through all the choices
 /// before updating whichever sql.json"): one page per choice — which file, the name, the server, the database, the
-/// sign-in, the account, where its password is kept, the password (masked), the TLS pair, the connect timeout, the
-/// description — every row of the draft on each page, the current one marked, the question in the caption; then a
+/// sign-in, the account, where its password is kept, the password (masked), the TLS pair, the connect timeout, the access
+/// (2026-10-05: read, or readwrite for <c>sql_execute</c>), the description — every row of the draft on each page, the current one marked, the question in the caption; then a
 /// summary that tests the unsaved draft (<c>SELECT @@VERSION</c>, nothing written) and saves it
 /// (<see cref="SqlConfigFile.AddConnection"/>, the password after it through <see cref="SqlSecrets.Save"/>). ESC steps
 /// back, and on the first page ends the visit with nothing written; Enter on a summary row changes that choice and comes
@@ -27,7 +27,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The wizard's rows, one per <see cref="SqlWizardStep"/> before the summary, in its order. Pinned.</summary>
     public static readonly IReadOnlyList<string> SqlWizardLabels =
-        ["File", "Name", "Server", "Database", "Sign-in", "User", "Password store", "Password", "Encryption", "Trust server certificate", "Connect timeout (s)", "Description"];
+        ["File", "Name", "Server", "Database", "Sign-in", "User", "Password store", "Password", "Encryption", "Trust server certificate", "Connect timeout (s)", "Access", "Description"];
 
     public const string SqlWizardFileQuestion = "Scope for sql.json?";
     public const string SqlWizardNameQuestion = "Its name: what the model passes as \"connection\" and %name picks on the input line.";
@@ -101,6 +101,7 @@ internal sealed partial class SettingsMenu
         Encrypt,
         Trust,
         Timeout,
+        Access,
         Description,
         Summary,
     }
@@ -175,6 +176,7 @@ internal sealed partial class SettingsMenu
             SqlWizardStep.Encrypt => c.Encrypt ?? SqlWizardEncryptWords[0],
             SqlWizardStep.Trust => c.TrustServerCertificate ? "yes" : "no",
             SqlWizardStep.Timeout => Invariant(c.ConnectTimeoutSeconds ?? SqlConnectionConfig.DefaultConnectTimeoutSeconds),
+            SqlWizardStep.Access => DatabaseWizardAccessValue(c.IsReadWrite),
             _ => OrUnset(c.Description),
         };
     }
@@ -425,6 +427,18 @@ internal sealed partial class SettingsMenu
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
+            case SqlWizardStep.Access:
+            {
+                if (await SqlWizardPickAsync(DatabaseWizardAccessQuestion, DatabaseWizardAccessRows(Sql.SqlStatementKinds.Family), c.IsReadWrite ? 1 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    return false;
+                }
+
+                c.Access = Sql.ConnectionAccess.Stored(picked == 1);
+                NoticeAccessModeOff(Sql.SqlStatementKinds.Family, c.IsReadWrite, _settings.Current.SqlMode);
+                return true;
+            }
+
             default:
                 return await SqlWizardTypeAsync(step, draft, SqlWizardDescriptionQuestion, c.Description ?? "", allowEmpty: true, mask: false, text =>
                 {
@@ -558,6 +572,7 @@ internal sealed partial class SettingsMenu
             Encrypt = c.Encrypt,
             TrustServerCertificate = c.TrustServerCertificate,
             ConnectTimeoutSeconds = c.ConnectTimeoutSeconds,
+            Access = c.Access,
         };
         if (copy.Problem is { } problem)
         {

@@ -286,6 +286,15 @@ public sealed class Assistant
         "Change only what the user asks for, describe a table before changing it, say what you changed, and do not retry one they decline.";
 
     /// <summary>
+    /// The sentence after <see cref="SqlRule"/> while <c>sql_execute</c> is offered (2026-10-05, <c>SQL mode</c> <c>read-write</c> and a
+    /// <c>readwrite</c> connection), <see cref="PostgresWriteRule"/>'s twin. Pinned.
+    /// </summary>
+    public const string SqlWriteRule =
+        "The user has allowed changes too: " + NeonSidekick.Llm.Tools.SqlExecuteTool.ToolName + " runs one statement per call on a connection the user has opened to changes, " +
+        "only of the kinds its description lists; each change waits for the user's allow and is permanent once run. " +
+        "Change only what the user asks for, describe a table before changing it, say what you changed, and do not retry one they decline.";
+
+    /// <summary>
     /// The sentence after <see cref="PostgresRule"/> while <c>postgres_execute</c> is offered (2026-10-05, <c>PostgreSQL mode</c> <c>read-write</c> and a
     /// <c>readwrite</c> connection), <see cref="SqliteWriteRule"/>'s twin. Pinned.
     /// </summary>
@@ -556,7 +565,7 @@ public sealed class Assistant
     /// </summary>
     public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None) =>
         tools
-            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule : "") + (oracle ? " " + OracleRule : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + (timers ? ToolRules : ToolRulesWithoutTimers) + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule + WriteTail(serverWrites, ServerWrites.Sql, SqlWriteRule) : "") + (oracle ? " " + OracleRule : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (advisor ? " " + ClaudeAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
 
     /// <summary>A family's write sentence after a space while <paramref name="writes"/> holds <paramref name="family"/> (2026-10-05), else nothing.</summary>

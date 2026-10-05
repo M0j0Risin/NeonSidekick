@@ -696,7 +696,8 @@ public sealed class SidekickApp
         var gitTools = ChatScreen.GitTools(git, () => EffectiveSettings);
         var vaultTools = ChatScreen.ObsidianTools(new Obsidian.ObsidianVault(() => EffectiveSettings.ObsidianVault, _time), () => EffectiveSettings);
         var sql = new Sql.SqlAccess(() => Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqlConnectionsOffered));
-        var sqlTools = ChatScreen.SqlTools(sql, () => EffectiveSettings);
+        // sql_execute never headless (2026-10-05): no pane to allow a change on.
+        var sqlTools = ChatScreen.SqlToolsFor(ChatScreen.SqlTools(sql, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, sql.Catalog());
         var oracle = new Oracle.OracleAccess(() => Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.OracleConnectionsOffered));
         var oracleTools = ChatScreen.OracleTools(oracle, () => EffectiveSettings);
         var mysql = new MySql.MySqlAccess(() => MySql.MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.MySqlConnectionsOffered));

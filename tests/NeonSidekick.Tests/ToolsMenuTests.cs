@@ -180,7 +180,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));
         Assert.Equal([SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName], TabFields(ToolsText.GitTabTitle));   // the switch first, then the limits, then the identity pair (2026-09-21); the GitLib labels later that day
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], TabFields(ToolsText.ObsidianTabTitle));   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
-        Assert.Equal([SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], TabFields(ToolsText.SqlTabTitle));   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the three engines' text cap (2026-10-01), the two edit rows (2026-09-23)
+        Assert.Equal([SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], TabFields(ToolsText.SqlTabTitle));   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the three engines' text cap (2026-10-01), the two edit rows (2026-09-23)
         Assert.Equal([SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal], TabFields(ToolsText.OracleTabTitle));   // the SQL tab's rows, in its order (2026-09-30)
         Assert.Equal([SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal], TabFields(ToolsText.MySqlTabTitle));   // the Oracle tab's rows, in its order (later on 2026-09-30)
         Assert.Equal([SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal], TabFields(ToolsText.UncTabTitle));   // the two switches, the offered list, the default, the password prompt, the wizard, the %-mention switch, the two edit rows (later still on 2026-09-30)
@@ -451,7 +451,7 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (the third since the offered list): the pick
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (the third since the offered list): the pick
         Push(Keys.Enter);                                               // prod, the one connection that takes a password
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
         Push(Keys.Escape);
@@ -817,7 +817,7 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>The SQL tab, the add-connection row (the fifth, under the password prompt): the wizard.</summary>
-    private void OpenSqlWizard() => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
+    private void OpenSqlWizard() => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
 
     /// <summary>
     /// <c>SQL add connection</c> (later on 2026-09-23, the user's ask): a SQL login walked through every page into the profile's
@@ -846,6 +846,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                         // mandatory
         Push(Keys.Char('y'), Keys.Enter);         // trust the certificate
         Push(Keys.Enter);                         // the default timeout
+        Push(Keys.Enter);                         // read, the default access (2026-10-05)
         Type("the sample");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
@@ -899,6 +900,7 @@ public partial class ToolsMenuTests : IDisposable
         Type("abc");
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace);
         Type("30");
+        Push(Keys.Down, Keys.Enter);              // readwrite (2026-10-05), while SQL mode is read-only
         Push(Keys.Enter);                         // no description
         Push(Keys.Enter);                         // Save, and offer it
         Push(Keys.Escape);
@@ -912,6 +914,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Null(me.Config.Password);
         Assert.Null(me.Config.Database);
         Assert.Equal(30, me.Config.ConnectTimeoutSeconds);
+        Assert.Equal("readwrite", me.Config.Access);
+        Assert.Contains(SettingsMenu.DatabaseWizardModeOffNotice(NeonSidekick.Sql.SqlStatementKinds.Family), _console.Output);
         Assert.Equal(["other", "me"], _settings.Current.SqlConnectionsOffered);
         Assert.Contains(SettingsMenu.SqlWizardTimeoutError("abc"), _console.Output);
         Assert.Contains(SettingsMenu.SqlWizardSaveHiddenRow, _console.Output);
@@ -963,7 +967,7 @@ public partial class ToolsMenuTests : IDisposable
         Type(@"CONTOSO\svc");
         Push(Keys.Down, Keys.Enter);              // credman
         Type("pw");
-        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, no description
+        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows): refused
         Push(Keys.Down, Keys.Enter);              // Cancel
         Push(Keys.Escape);
@@ -995,8 +999,8 @@ public partial class ToolsMenuTests : IDisposable
         int encrypt = SettingsMenu.SqlWizardEncryptWords.ToList().IndexOf(live.Encrypt!);
         Push([.. Enumerable.Repeat(Keys.Down, encrypt), Keys.Enter]);
         Push(live.TrustServerCertificate ? Keys.Char('y') : Keys.Char('n'), Keys.Enter);
-        Push(Keys.Enter, Keys.Enter);             // the default timeout, no description
-        Push(Keys.Down, Keys.Enter);              // Test
+        Push(Keys.Enter, Keys.Enter, Keys.Enter); // the default timeout, read, no description
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows since 2026-10-01; this live test had not followed)
         Push(Keys.Down, Keys.Enter);              // Cancel
         Push(Keys.Escape);
 
@@ -1019,7 +1023,7 @@ public partial class ToolsMenuTests : IDisposable
         Type("sqlhost01");
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);              // windows
-        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);
+        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
         // The summary: the two save rows, Test, Cancel, then the rows File, Name, Server, Database, Sign-in (the ninth).
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         Push(Keys.Up, Keys.Enter);                // sql: the user page, then the password page, then the summary
@@ -1047,7 +1051,7 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Enter]);   // SQL, the offered row: the checklist
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row: the checklist
         Push(Keys.Enter);                                    // aw on
         Push(Keys.Char(' '));                                // and off again (Space flips too)
         Push(Keys.Enter);                                    // and on
@@ -1642,7 +1646,7 @@ public partial class ToolsMenuTests : IDisposable
         // 2026-10-01, the user's ask: 1,000 to 1,000,000, 32,000 by default (the file tools' cap until then); the three query tools read it at their next call.
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.SqlTabTitle));   // SQL
-        Push(Enumerable.Repeat(Keys.Down, 8).Append(Keys.Enter).ToArray());   // the ninth row, under the timeout: the typed slot with "32000"
+        Push(Enumerable.Repeat(Keys.Down, 10).Append(Keys.Enter).ToArray());   // the eleventh row (the mode and the statements above since 2026-10-05), under the timeout: the typed slot with "32000"
         Push(Enumerable.Repeat(Keys.Backspace, 5).Append(Keys.Char('9')).Append(Keys.Enter).ToArray());   // refused: 9
         Push(new[] { Keys.Enter }.Concat(Enumerable.Repeat(Keys.Backspace, 5)).Concat("200,000".Select(Keys.Char)).Append(Keys.Enter).ToArray());   // 200,000, the separator allowed
         Push(Keys.Escape);
@@ -1737,7 +1741,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
         Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", _console.Output);
         Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", _console.Output);
-        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL mode: read-only\n  ·   MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: off\n  ·   SQLite add database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL mode: read-only\n  ·   PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add connection: Enter to start connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL mode: read-only\n  ·   SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL mode: read-only\n  ·   MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: off\n  ·   SQLite add database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL mode: read-only\n  ·   PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add connection: Enter to start connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2021,7 +2025,7 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Enter]);   // SQL, the offered row
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row
         Push(Keys.Char('a'));
         Push(Keys.Escape, Keys.Escape);
 
@@ -2030,7 +2034,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(["aw", "prod"], _settings.Current.SqlConnectionsOffered);
 
         (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Enter]);
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
         Push(Keys.Char('n'));
         Push(Keys.Escape, Keys.Escape);
 

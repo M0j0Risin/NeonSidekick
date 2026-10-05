@@ -40,7 +40,7 @@ public partial class ToolsMenuTests
     {
         WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "aw": { "server": "x", "auth": "windows" } } }""");
         await AssertDroppedAsItOpensAsync(SettingsField.SqlConnectionsOffered, (d, v) => d.SqlConnectionsOffered = v, d => d.SqlConnectionsOffered,
-            () => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Enter]), "aw");
+            () => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]), "aw");
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public partial class ToolsMenuTests
         WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "broken": { "auth": "windows" } } }""");
         _settings.Update(d => d.SqlConnectionsOffered = ["gone", "broken"]);
         var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Enter]);
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
         Push(Keys.Enter);                                    // aw on
         Push(Keys.Escape, Keys.Escape);
 
@@ -110,7 +110,7 @@ public partial class ToolsMenuTests
         WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "aw": { "server": "x", "auth": "windows" } } }""");
         _settings.Update(d => d.SqlConnectionsOffered = ["mine", "aw"]);
         var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Enter]);
+        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);

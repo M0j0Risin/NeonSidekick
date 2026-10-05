@@ -177,13 +177,15 @@ public sealed class SqlConnectionConfig
     /// token, with pooling <b>off</b> and its own application name, since SqlClient keys an integrated pool by the
     /// process's SID, which a <c>NEW_CREDENTIALS</c> token keeps, and a socket signed in as the other account must never
     /// be handed to a plain <c>windows</c> connection to the same server. Call only on an entry without a <see cref="Problem"/>.
+    /// <paramref name="readOnlyIntent"/> false (2026-10-05, <c>sql_execute</c> on a <c>readwrite</c> connection) asks for the primary:
+    /// read-write intent, a pool of its own.
     /// </summary>
-    public SqlConnectionStringBuilder Builder(string? database = null, string? password = null)
+    public SqlConnectionStringBuilder Builder(string? database = null, string? password = null, bool readOnlyIntent = true)
     {
         var builder = new SqlConnectionStringBuilder
         {
             DataSource = Server!.Trim(),
-            ApplicationIntent = ApplicationIntent.ReadOnly,
+            ApplicationIntent = readOnlyIntent ? ApplicationIntent.ReadOnly : ApplicationIntent.ReadWrite,
             ApplicationName = "NeonSidekick",
             ConnectTimeout = ConnectTimeoutSeconds ?? DefaultConnectTimeoutSeconds,
             TrustServerCertificate = TrustServerCertificate,
