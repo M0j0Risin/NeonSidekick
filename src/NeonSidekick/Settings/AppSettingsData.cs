@@ -1767,6 +1767,14 @@ public sealed class AppSettingsData
     /// <summary>Whether a turn offers the four SQLite tools (2026-10-04); read at each turn, no reconnect. Off by default. No variable.</summary>
     public bool SqliteTools { get; set; }
 
+    /// <summary>
+    /// What the SQLite tools may do (2026-10-05, the user's ask): <c>read-only</c> (the default, the tools as they were) or
+    /// <c>read-write</c>, which adds <c>sqlite_execute</c> — one change per call (DML, DDL, PRAGMA), each allowed on the pane, and a
+    /// new database file in the working directory with <c>create</c>. <c>sqlite_query</c> stays read-only either way; read at each
+    /// call. One of <see cref="Sqlite.SqliteProtectionMode.Names"/>. No variable.
+    /// </summary>
+    public string SqliteProtectionMode { get; set; } = Sqlite.SqliteProtectionMode.Default;
+
     /// <summary>The <c>sqlite.json</c> database a SQLite tool uses when the call names none; empty = the first offered.</summary>
     public string SqliteDefaultDatabase { get; set; } = "";
 

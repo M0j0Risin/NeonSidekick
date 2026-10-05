@@ -64,6 +64,30 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
+    /// <summary>One row of the <c>SQLite protection mode</c> pick: the name padded past <c>read-write</c>, then its hint, dim. Pinned.</summary>
+    public static string SqliteProtectionLabel(string name) => Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(Markup.Escape(SqliteProtectionMode.Describe(name)));
+
+    /// <summary>
+    /// The <c>SQLite protection mode</c> pick (2026-10-05, the <c>Screen capture ask</c> picker's shape): each mode with its hint, the
+    /// saved one under the cursor; true when a pick changed it. Read at every call, so the next one goes by it.
+    /// </summary>
+    private async Task<bool> PickSqliteProtectionAsync(Settings.AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var values = SqliteProtectionMode.Names;
+        var rows = values.Select(SqliteProtectionLabel).ToList();
+        var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteProtectionMode)), rows, PickKeys);
+        int at = Math.Max(0, Array.FindIndex(values, v => string.Equals(v, saved.SqliteProtectionMode?.Trim(), StringComparison.OrdinalIgnoreCase)));
+        int? picked = await PickAsync(page, at, cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index || index >= values.Length)
+        {
+            return Unchanged();
+        }
+
+        string value = values[index];
+        Apply(SettingsField.SqliteProtectionMode, d => d.SqliteProtectionMode = value);
+        return true;
+    }
+
     /// <summary><c>SQLite databases offered</c>, <see cref="EditMySqlOfferedAsync"/>'s twin: every named database, ticked or not, Enter or Space flipping one until ESC. True when anything changed.</summary>
     private async Task<bool> EditSqliteOfferedAsync(CancellationToken cancellationToken)
     {

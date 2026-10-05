@@ -32,7 +32,7 @@ public partial class ToolsMenuTests
     {
         Assert.Equal(TabIndex(ToolsText.MySqlTabTitle) + 1, TabIndex(ToolsText.SqliteTabTitle));
         Assert.Equal(
-            [SettingsField.SqliteTools, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
+            [SettingsField.SqliteTools, SettingsField.SqliteProtectionMode, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
             TabFields(ToolsText.SqliteTabTitle));
         Assert.Equal("Enter to start database wizard", SettingsMenu.SqliteAddDatabaseLabel);
         Assert.Equal("Opened 'shop' read-only: 3 tables and views.", SettingsMenu.SqliteWizardTestOk("shop", 3));
@@ -47,7 +47,7 @@ public partial class ToolsMenuTests
         string db = MakeSqliteFile("shop.db");
         string path = SqliteConfigFile.ProfilePath(_settings.ProfileDirectory);
         var (menu, _, _) = PaneMenu();
-        OpenSqliteRow(4);
+        OpenSqliteRow(5);
         Push(Keys.Enter);                         // the profile's file
         Type("my shop");                          // refused: a space
         Push([.. Enumerable.Repeat(Keys.Backspace, 7)]);
@@ -68,13 +68,30 @@ public partial class ToolsMenuTests
         Assert.Equal(["shop"], _settings.Current.SqliteDatabasesOffered);
     }
 
+    /// <summary><c>SQLite protection mode</c> (2026-10-05): read-only by default, the pick lists both with their hints, read-write saved.</summary>
+    [Fact]
+    public async Task OnThePane_TheProtectionMode_PicksReadWrite()
+    {
+        Assert.Equal("read-only", _settings.Current.SqliteProtectionMode);
+        Assert.StartsWith("read-write  ", SettingsMenu.SqliteProtectionLabel("read-write"), StringComparison.Ordinal);   // a gap past the longest name
+        var (menu, _, _) = PaneMenu();
+        OpenSqliteRow(1);
+        Push(Keys.Down, Keys.Enter);              // read-write
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("read-write", _settings.Current.SqliteProtectionMode);
+        Assert.Contains(SqliteProtectionMode.Describe("read-only"), _console.Output);
+    }
+
     /// <summary>The checklist ticks a named database, the default pick lists the offered ones, ESC out of the wizard's first page writes nothing.</summary>
     [Fact]
     public async Task OnThePane_TheChecklist_TheDefault_AndEscOutOfTheWizard()
     {
         Assert.Null(SqliteConfigFile.AddDatabase(SqliteConfigFile.GlobalPath(_settings.StorageDirectory), "notes", new SqliteDatabaseConfig { Path = MakeSqliteFile("notes.db") }));
         var (menu, _, _) = PaneMenu();
-        OpenSqliteRow(1);
+        OpenSqliteRow(2);
         Push(Keys.Enter);                         // tick notes
         Push(Keys.Escape);
         Push(Keys.Down, Keys.Enter);              // SQLite default database, under the checklist

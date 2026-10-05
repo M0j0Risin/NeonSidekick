@@ -299,8 +299,11 @@ public sealed class SqliteToolsTests : IDisposable
         _settings.SqliteTools = false;
         Assert.False(ChatScreen.SqliteOffered(_settings, Access()));
 
-        Assert.All(ChatScreen.SqliteTools(Access(), () => _settings), t => Assert.True(PlanTools.Allowed(t.Name), t.Name));
-        Assert.Equal(ChatScreen.SqliteToolNames, ChatScreen.SqliteTools(Access(), () => _settings).Select(t => t.Name).ToHashSet());
+        // The reads stay in plan mode; sqlite_execute (2026-10-05) changes the file, so plan mode drops it.
+        var all = ChatScreen.SqliteTools(Access(), () => _settings, allow: null);
+        Assert.All(all.Where(t => t.Name != SqliteExecuteTool.ToolName), t => Assert.True(PlanTools.Allowed(t.Name), t.Name));
+        Assert.Contains(SqliteExecuteTool.ToolName, PlanTools.Mutating);
+        Assert.Equal(ChatScreen.SqliteToolNames, all.Select(t => t.Name).ToHashSet());
         Assert.Equal(["shop", "notes"], ChatScreen.SqliteChoices(SqliteConfigFile.LoadCatalog(_profile, _home)).Select(c => c.Text));
     }
 
@@ -321,7 +324,7 @@ public sealed class SqliteToolsTests : IDisposable
         var assistant = new Assistant(new FakeChatClient(), new ConversationHistory(""), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5)));
         var memory = new NeonSidekick.Memory.MemoryStore(_dir);
         string home = Path.Combine(_dir, "profile");
-        var tools = ChatScreen.SqliteTools(Access(), () => _settings);
+        var tools = ChatScreen.SqliteTools(Access(), () => _settings, allow: null);
 
         ChatScreen.PrepareTurn(assistant, memory, [], [], new PersonaFile(home), new OperataFile(home), new VocaliaFile(home), memoryEnabled: false, speechOutput: false, sqliteTools: tools, sqliteEnabled: true);
         Assert.Contains(Assistant.SqliteRule, assistant.History.SystemPrompt);

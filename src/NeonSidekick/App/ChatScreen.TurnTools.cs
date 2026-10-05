@@ -208,6 +208,8 @@ internal sealed partial class ChatScreen
         // The SQLite tools after the MySQL tools (2026-10-04): the setting SQLite tools and a database to open (named, or the sandbox's files) are the group's switch.
         bool sqlite = inputs.SqliteEnabled && sqliteTools is { Count: > 0 };
         tools = sqlite ? [.. tools, .. sqliteTools!] : tools;
+        // The callers pass the list SqliteToolsFor cut (sqlite_execute only under read-write with a pane, 2026-10-05); the write sentence rides while it is left.
+        bool sqliteWrite = sqlite && sqliteTools!.Any(t => SqliteWriteToolNames.Contains(t.Name));
         // The PostgreSQL tools after the SQLite tools (2026-10-04): the setting PostgreSQL tools and a connection in postgres.json are the group's switch.
         bool postgres = inputs.PostgresEnabled && postgresTools is { Count: > 0 };
         tools = postgres ? [.. tools, .. postgresTools!] : tools;
@@ -264,7 +266,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite);
         return new TurnToolSet(
             tools,
             offered,

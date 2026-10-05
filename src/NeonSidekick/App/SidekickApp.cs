@@ -701,7 +701,8 @@ public sealed class SidekickApp
         var mysqlTools = ChatScreen.MySqlTools(mysql, () => EffectiveSettings);
         // The SQLite tools (2026-10-04): no console needed, so headless has them too.
         var sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqliteDatabasesOffered), () => EffectiveSettings.SqliteSandboxFiles ? files : null);
-        var sqliteTools = ChatScreen.SqliteTools(sqlite, () => EffectiveSettings);
+        // sqlite_execute (2026-10-05) never: every change waits for the user's allow on a pane, and headless has none.
+        var sqliteTools = ChatScreen.SqliteToolsFor(ChatScreen.SqliteTools(sqlite, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false);
         // The PostgreSQL tools (2026-10-04): no console needed, so headless has them too.
         var postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.PostgresConnectionsOffered));
         var postgresTools = ChatScreen.PostgresTools(postgres, () => EffectiveSettings);

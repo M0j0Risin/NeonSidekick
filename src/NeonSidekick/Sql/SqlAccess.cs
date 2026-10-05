@@ -94,6 +94,9 @@ public sealed record SqlGrid(IReadOnlyList<string> Columns, IReadOnlyList<string
 public sealed record SqlRun(SqlOutcome Outcome, string Detail, string Connection, string Database, IReadOnlyList<SqlGrid> Grids, TimeSpan Elapsed)
 {
     public static SqlRun Refused(SqlOutcome outcome, string detail, string connection = "") => new(outcome, detail, connection, "", [], TimeSpan.Zero);
+
+    /// <summary>The rows a change changed (2026-10-05, <c>sqlite_execute</c>'s <c>sqlite3_changes</c>); null for a read.</summary>
+    public int? Changes { get; init; }
 }
 
 /// <summary>

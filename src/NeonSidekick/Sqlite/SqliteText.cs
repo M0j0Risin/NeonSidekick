@@ -85,6 +85,71 @@ public static class SqliteText
     public static string NotASelect(string word) => $"Error: the SQL starts with {word}; the SQLite tools only read — send one SELECT (a WITH clause may lead it, or VALUES)";
     public static string Forbidden(string what) => $"Error: the SQL uses {what}, which the SQLite tools refuse (they only read this one file)";
 
+    // ─── sqlite_execute's gate (2026-10-05) ─────────────────────────────────────
+
+    public const string NoStatement = "Error: give the statement to run in \"sql\"";
+    public static string WriteNotOneStatement(int count) => $"Error: the SQL is {Invariant(count)} statements; sqlite_execute runs exactly one per call — send the next one in the next call";
+    public static string WriteForbidden(string what, string why) => $"Error: the SQL uses {what}, which sqlite_execute refuses: {why}";
+    public const string OwnTransaction = "each call is a transaction of its own, committed when its statement succeeds";
+    public const string AnotherFile = "it reaches a file other than this database";
+    public const string Corrupts = "it can corrupt the database file";
+    public const string OutsideCode = "it loads code or reads and writes other files";
+
+    // ─── sqlite_execute (2026-10-05) ────────────────────────────────────────────
+
+    public const string ReadOnlyMode = "Error: SQLite protection mode is read-only, so nothing may change a SQLite database; the user switches it to read-write on the SQLite tab of /tools";
+    public const string NoPane = "Error: sqlite_execute needs the user to allow each change on a pane, and there is none here";
+    public const string Declined = "The user declined the change; nothing was run. Do not run it again unless the user asks for it.";
+    public const string CreateNeedsSandbox = "Error: a new database file can only be made in the working directory, and SQLite sandbox files is off";
+    public const string CreateNeedsPath = "Error: \"create\" needs the new file's path in the working directory as \"database\", e.g. \"data/app.db\"";
+    public static string BadExtension(string path) => $"Error: '{path}' is no database file name; a new database's file ends .db, .sqlite, .sqlite3 or .db3";
+    public static string NoFolder(string path) => $"Error: the folder for '{path}' does not exist; make it first (create_directory)";
+
+    /// <summary>The allow pane's title. Pinned.</summary>
+    public const string AllowTitle = "Change a SQLite database?";
+
+    /// <summary>The allow pane's caption: what would change (or be made), and the statement. Pinned.</summary>
+    public static string AllowCaption(SqliteTarget target, string sql, bool creating)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(sql);
+        string where = creating ? $"The model wants to create the new database {target.FullPath} and run:" : $"The model wants to change {target.Name} ({target.FullPath}):";
+        return where + "\n" + Clip(sql.Trim(), 1200);
+    }
+
+    /// <summary>The audit line of a change (every one run): the database, the file, whether it was made, the rows changed, the statement. Pinned.</summary>
+    public static string AuditLogLine(string database, string path, bool created, int changes, string sql) =>
+        $"{database} ({path}){(created ? " created" : "")}: {SqlText.Count(changes, "row")} changed by {sql}";
+
+    /// <summary>
+    /// <c>sqlite_execute</c>'s answer: <c>Changed N rows in database (T ms)</c>, the file's making when it was made, then the rows
+    /// a RETURNING or a PRAGMA gave back, as <see cref="Query"/> shows them.
+    /// </summary>
+    public static string Executed(SqlRun run, bool created, int maxRows, int maxChars)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        string head = (created ? $"Created {run.Connection}. " : "") + $"Changed {SqlText.Count(run.Changes ?? 0, "row")} in {run.Connection} ({Millis(run.Elapsed)})";
+        if (run.Grids is not [{ Columns.Count: > 0 } grid, ..])
+        {
+            return head;
+        }
+
+        string table = SqlText.Table(grid, maxChars, out int shown);
+        var header = new StringBuilder(head);
+        header.Append("; it returned ").Append(SqlText.Count(grid.Rows.Count, "row")).Append(grid.More ? "+" : "");
+        if (grid.More)
+        {
+            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown");
+        }
+
+        if (shown < grid.Rows.Count)
+        {
+            header.Append(" — ").Append(Invariant(shown)).Append(" fit the text cap");
+        }
+
+        return header + "\n\n" + table;
+    }
+
     // ─── arguments ──────────────────────────────────────────────────────────────
 
     public const string NoTable = "Error: give the table or view in \"table\"";
@@ -103,6 +168,7 @@ public static class SqliteText
     public static string Timeout(string database, string seconds) => $"Error: the query on {database} ran past {seconds} s and was stopped; narrow it (WHERE, LIMIT, fewer joins)";
     public static string Failed(string database, string detail) => $"Error: SQLite refused it ({database}): {detail}";
     public static string OpenFailedLogLine(string database, string detail) => $"{database} did not open: {detail}";
+    public static string UnmakeFailedLogLine(string path, string detail) => $"{path}, made by a create whose statement failed, could not be removed: {detail}";
 
     /// <summary>The sentence for a run that did not return rows.</summary>
     public static string Error(SqlRun run)

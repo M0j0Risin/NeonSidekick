@@ -7,7 +7,7 @@ using NeonSidekick.Sqlite;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// What the four SQLite tools share (2026-10-04), <see cref="MySqlTool"/>'s shape: the <see cref="SqliteAccess"/> door, the settings
+/// What the SQLite tools share (2026-10-04; four, and <c>sqlite_execute</c> since 2026-10-05), <see cref="MySqlTool"/>'s shape: the <see cref="SqliteAccess"/> door, the settings
 /// in force at each call, the optional <c>database</c> (a name from <c>sqlite.json</c>, or a file in the working directory by its
 /// path while <c>SQLite sandbox files</c> is on; the default when left out), the statement timeout, and the table lookup
 /// <c>sqlite_describe</c> needs. A refused run is <see cref="SqliteText.Error"/>'s sentence.
@@ -249,22 +249,155 @@ public sealed class SqliteQueryTool : SqliteTool
             return ClockText.BadInteger(MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (ReadParams(arguments, out var error) is not { } parameters)
         {
-            return SqliteText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error, SqliteReadOnlyGate.ParamName, SqliteText.BadParamName) is not { } read)
-            {
-                return error;
-            }
-
-            parameters = read;
+            return error;
         }
 
         return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>params</c> as <c>sqlite_query</c> and <c>sqlite_execute</c> take it: one object, each name read as SQLite reads a
+    /// placeholder's; null with the <c>Error:</c> sentence in <paramref name="error"/>.
+    /// </summary>
+    internal static IReadOnlyList<SqlParameterValue>? ReadParams(AIFunctionArguments arguments, out string error)
+    {
+        error = "";
+        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        {
+            error = SqliteText.BadParams(sent);
+            return null;
+        }
+
+        if (objects.Count == 0)
+        {
+            return [];
+        }
+
+        if (SqlQueryTool.ReadParameters(objects[0], out var bad, SqliteReadOnlyGate.ParamName, SqliteText.BadParamName) is not { } read)
+        {
+            error = bad ?? "";
+            return null;
+        }
+
+        return read;
+    }
+}
+
+/// <summary>
+/// <c>sqlite_execute(sql, database?, params?, max_rows?, create?)</c> (2026-10-05, the user's ask): one statement that may change
+/// the database — DML, DDL, PRAGMA — offered only while <c>SQLite protection mode</c> is <c>read-write</c> and a pane can ask
+/// (checked again at every call). <see cref="SqliteWriteGate"/> first, then the database (with <c>create</c>, a new file in the
+/// working directory), then the user's allow — Deny / Allow once / Allow for this session, per file — then
+/// <see cref="SqliteAccess.Execute"/>, committed as it runs. Every change is written to the log (the audit line). The answer is
+/// the rows changed and any rows a RETURNING or PRAGMA gave back. Plan mode drops it.
+/// </summary>
+public sealed class SqliteExecuteTool : SqliteTool
+{
+    public const string ToolName = "sqlite_execute";
+    public const string CreateArgument = "create";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        $$"""
+        {
+          "type": "object",
+          "properties": {
+            "sql": { "type": "string", "description": "One SQLite statement: INSERT, UPDATE, DELETE (RETURNING allowed), CREATE, DROP, ALTER, PRAGMA, VACUUM. No ATTACH, BEGIN/COMMIT or second statement." },
+            {{DatabaseProperty}},
+            "params": { "type": "object", "description": "Values for the named placeholders in the SQL (@name, :name, $name), each by its name, e.g. {\"id\": 101} for @id or :id; strings, numbers, true, false or null." },
+            "max_rows": { "type": "integer", "description": "How many returned rows (RETURNING, PRAGMA) to show at most, 1 to 100000. Leave it out for the user's default." },
+            "create": { "type": "boolean", "description": "true to create a new database file at \"database\", a path in the working directory ending .db, .sqlite, .sqlite3 or .db3 (its folder must exist); an existing file is just opened." }
+          },
+          "required": ["sql"]
+        }
+        """);
+
+    private readonly Func<SqliteTarget, string, bool, CancellationToken, Task<bool?>>? _allow;
+
+    /// <param name="allow">The user's allow for one change (the target, the statement, whether the file is made): true to run, false declined, null when no pane could ask. Null where nothing can ask: every call is refused.</param>
+    public SqliteExecuteTool(SqliteAccess sqlite, Func<AppSettingsData> effective, Func<SqliteTarget, string, bool, CancellationToken, Task<bool?>>? allow) : base(sqlite, effective)
+    {
+        _allow = allow;
+    }
+
+    public override string Name => ToolName;
+
+    public override string Description =>
+        "Runs one statement that changes a SQLite database — INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, PRAGMA — or, with create, makes a new " +
+        "database file in the working directory. The user allows each change first; a change is permanent once it runs. " +
+        "Bind values as @name through params. For reading, use sqlite_query.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    public async Task<string> RunAsync(string sql, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, bool create, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        var effective = Effective;
+        if (SqliteProtectionMode.Resolve(effective) != SqliteProtection.ReadWrite)
+        {
+            return SqliteText.ReadOnlyMode;
+        }
+
+        int rows = maxRows ?? SqliteQueryTool.DefaultRows(effective);
+        if (rows < SqliteQueryTool.MinRows || rows > SqliteQueryTool.MaxRows)
+        {
+            return SqlText.BadMaxRows(SqliteQueryTool.MinRows, SqliteQueryTool.MaxRows);
+        }
+
+        if (SqliteWriteGate.Check(sql) is { } refused)
+        {
+            return refused;
+        }
+
+        if (_allow is null)
+        {
+            return SqliteText.NoPane;
+        }
+
+        if (Files.Resolve(database, effective.SqliteDefaultDatabase, create, out var unresolved, out bool creating) is not { } target)
+        {
+            return SqliteText.Error(unresolved!);
+        }
+
+        string body = SqliteReadOnlyGate.Body(sql);
+        switch (await _allow(target, body, creating, cancellationToken).ConfigureAwait(false))
+        {
+            case null:
+                return SqliteText.NoPane;
+            case false:
+                return SqliteText.Declined;
+        }
+
+        var run = await SqliteAccess.ExecuteAsync(target, creating, body, parameters, rows, TimeoutSeconds(effective), cancellationToken).ConfigureAwait(false);
+        if (run.Outcome != SqlOutcome.Ok)
+        {
+            return SqliteText.Error(run);
+        }
+
+        Diagnostics.DiagnosticLog.Info(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating, run.Changes ?? 0, Diagnostics.LogText.Excerpt(body)));
+        return SqliteText.Executed(run, creating, rows, SqlTool.ResultChars(effective));
+    }
+
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (!ToolArguments.TryReadInt32(arguments, SqliteQueryTool.MaxRowsArgument, out var max, out var raw))
+        {
+            return ClockText.BadInteger(SqliteQueryTool.MaxRowsArgument, raw);
+        }
+
+        if (!ToolArguments.TryReadBoolean(arguments, CreateArgument, out var create, out raw))
+        {
+            return NeonSidekick.Files.FileText.BadBoolean(CreateArgument, raw);
+        }
+
+        if (SqliteQueryTool.ReadParams(arguments, out var error) is not { } parameters)
+        {
+            return error;
+        }
+
+        return await RunAsync(ToolArguments.ReadString(arguments, SqliteQueryTool.SqlArgument), Optional(arguments, DatabaseArgument), parameters, max, create ?? false, cancellationToken).ConfigureAwait(false);
     }
 }
