@@ -15288,6 +15288,43 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
+    public async Task Startup_WelcomeSplash_AHeldArrowsQueuedPresses_AreOneStep_DrawnOnce()
+    {
+        // 2026-10-05, the user's ask: a held arrow queued presses faster than the splash loaded and drew its pictures. The
+        // queued run of bare arrows is one step, one load and one redraw; Shift+→ (nothing on an empty line) ends the run,
+        // and the ← after it is a step of its own.
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        _random = new Random(7);
+        SplashOf((2380, 100), (2380, 200), (2380, 60));   // five, ten and three half-block rows
+        StepsWhenIdle(
+            input =>
+            {
+                input.Push(Keys.Right);
+                input.Push(Keys.Right);
+                input.Push(Keys.Shift(ConsoleKey.RightArrow));
+                input.Push(Keys.Left);
+            },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        int first = new Random(7).Next(3);   // the startup pick, the screen's Random
+        int[] walk = [first, (first + 2) % 3, (first + 1) % 3];
+        Assert.Equal(walk.Select(SplashName), _splashLoads);
+        Assert.Equal(3, Refreshes(output));   // the folded run, the ←, then the sent line's wipe
+        string wide = " " + new string('▀', 238) + " ";
+        int[] rows = [5, 10, 3];
+        int[] screens = Enumerable.Range(0, 4).Select(i => NthScreen(output, i)).ToArray();
+        for (int i = 0; i < 3; i++)
+        {
+            Assert.Equal(rows[walk[i]], Count(output[screens[i]..screens[i + 1]], wide));
+        }
+
+        Assert.DoesNotContain("▀", output[screens[3]..]);
+    }
+
+    [Fact]
     public async Task Startup_WelcomeSplash_TheProfilesOwnFolder_ReplacesTheEmbeddedSet_AndTheArrowsWalkItsFiles()
     {
         // A splash folder under the loaded profile (later on 2026-09-19, the user's ask): its pictures instead of the
@@ -15590,6 +15627,27 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ChatScreen.SplashPageHint(1, 2), output[screens[1]..screens[2]]);
         Assert.DoesNotContain(ChatScreen.SplashHint, output);
         Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task Startup_TiledSplash_AHeldArrowsQueuedPresses_PageOnce_AndARunBackWhereItStoodDrawsNothing()
+    {
+        // 2026-10-05, the user's ask: the queued run is one page step, one redraw — three → over two pages is page 2 — and
+        // a run that nets to nothing (→ ←) draws nothing at all.
+        TiledSplashOfTen();
+        StepsWhenIdle(
+            input => { input.Push(Keys.Right); input.Push(Keys.Right); input.Push(Keys.Right); },
+            input => { input.Push(Keys.Right); input.Push(Keys.Left); },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, Refreshes(output));   // the folded run and the sent line's wipe: the run back drew nothing
+        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
+        Assert.Equal(8 * 12, Count(output[screens[0]..screens[1]], TileLine));   // page 1
+        Assert.Equal(2 * 12, Count(output[screens[1]..screens[2]], TileLine));   // page 2, straight from page 1
+        Assert.DoesNotContain(ChatScreen.SplashPageHint(0, 2), output[screens[1]..screens[2]]);
+        Assert.DoesNotContain("▀", output[screens[2]..]);
     }
 
     [Fact]

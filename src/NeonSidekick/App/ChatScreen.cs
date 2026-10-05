@@ -9308,7 +9308,9 @@ internal sealed partial class ChatScreen
     /// <c>/splash</c> drew the picture, which the setting never gates) or with
     /// fewer than two pictures. The input line's <c>emptyArrow</c> hook. Over the tiled splash
     /// (2026-09-24) the arrows page instead: the previous or next set, wrapping, re-paged live
-    /// (<see cref="ShowSplashPage"/>), so a resize or a dropped file counts.
+    /// (<see cref="ShowSplashPage"/>), so a resize or a dropped file counts. A held arrow's queued presses
+    /// (2026-10-05, the user's ask, the <c>/sys</c> pane's fold of 2026-10-03) are one step, drawn once
+    /// (<see cref="FoldQueuedSplashArrows"/>).
     /// </summary>
     private bool CycleSplash(int step)
     {
@@ -9317,6 +9319,12 @@ internal sealed partial class ChatScreen
             if (!SplashArrowsOffered() || CurrentSplash() is not { } pages)
             {
                 return false;
+            }
+
+            step += FoldQueuedSplashArrows();
+            if (step == 0)
+            {
+                return true;
             }
 
             bool pageForced = _splashForced;
@@ -9335,6 +9343,12 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        step += FoldQueuedSplashArrows();
+        if (step == 0)
+        {
+            return true;
+        }
+
         if (SplashImages.Next(source.Names, _splashName, step) is not { } next)
         {
             return false;
@@ -9349,6 +9363,26 @@ internal sealed partial class ChatScreen
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The net step of the bare ← / → presses already waiting behind the one <see cref="CycleSplash"/> was handed (2026-10-05,
+    /// the user's ask: a held arrow queued presses faster than the splash loaded and drew its pictures, and the slideshow went
+    /// on flipping after the key was let go — <see cref="InfoPane"/>'s fold of 2026-10-03 over the same
+    /// <see cref="KeySource.TakeQueued"/>). Taken only once the walk is offered, so a key the hook refuses is never eaten; any
+    /// other event, a chord included, ends the run and stays the next one read. A run that comes back to where it stood is 0
+    /// and draws nothing.
+    /// </summary>
+    private int FoldQueuedSplashArrows()
+    {
+        int net = 0;
+        while (_keys.TakeQueued(e => e is InputEvent.Key { Info: { Modifiers: 0, Key: ConsoleKey.LeftArrow or ConsoleKey.RightArrow } })
+               is InputEvent.Key { Info: var more })
+        {
+            net += more.Key == ConsoleKey.RightArrow ? 1 : -1;
+        }
+
+        return net;
     }
 
     /// <summary>
