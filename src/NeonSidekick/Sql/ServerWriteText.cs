@@ -27,6 +27,12 @@ public sealed record ServerWriteFamily(
 
     /// <summary>Where the user changes either: <c>the PostgreSQL tab of /tools</c>.</summary>
     public string Tab => "the " + Title + " tab of /tools";
+
+    /// <summary>
+    /// Whether a statement (the first argument) may reach past the place a call names (the second): the family's
+    /// <c>NamesElsewhere</c> (the review, 2026-10-05). Null where a connection cannot leave its place (PostgreSQL's database).
+    /// </summary>
+    public Func<string, string, bool>? NamesElsewhere { get; init; }
 }
 
 /// <summary>
@@ -45,6 +51,10 @@ public static class ServerWriteText
     public static string Forbidden(ServerWriteFamily family, string what, string why) => $"Error: the SQL uses {what}, which {family.ToolName} refuses: {why}";
 
     public static string UnknownStatement(ServerWriteFamily family, string word) => $"Error: the SQL starts with {word}, which is no statement {family.ToolName} runs";
+
+    /// <summary>A routine's body the gate cannot read for sure (the review, 2026-10-05: a name spelled BEGIN or END could hide a second statement). Pinned.</summary>
+    public static string UnclearBody(ServerWriteFamily family) =>
+        $"Error: {family.ToolName} cannot tell where the routine's body ends; write the body as BEGIN … END and quote any name spelled like a block word (BEGIN, END, a label)";
 
     /// <summary>A statement of a kind the user has not ticked: its kind, then what is allowed. Pinned.</summary>
     public static string KindNotAllowed(ServerWriteFamily family, ServerStatementKind kind, IReadOnlyList<ServerStatementKind> allowed)
@@ -105,12 +115,20 @@ public static class ServerWriteText
     public static string AllowTitle(ServerWriteFamily family) => $"Change a {family.Engine} database?";
 
     /// <summary>The allow pane's caption: where the change would land, and the statement. Pinned.</summary>
-    public static string AllowCaption(ServerWriteFamily family, string connection, string place, string sql)
+    public static string AllowCaption(ServerWriteFamily family, string connection, string place, string sql, bool elsewhere = false)
     {
         ArgumentNullException.ThrowIfNull(family);
         ArgumentNullException.ThrowIfNull(sql);
         string where = place.Length == 0 ? connection : connection + "/" + place;
-        return $"The model wants to change {where} ({family.Engine}, {family.Place} {(place.Length == 0 ? "the connection's own" : place)}):\n" + Clip(sql.Trim(), 1200);
+        return $"The model wants to change {where} ({family.Engine}, {family.Place} {(place.Length == 0 ? "the connection's own" : place)}):\n" + Clip(sql.Trim(), 1200)
+            + (elsewhere ? "\n" + NamesElsewhere(family) : "");
+    }
+
+    /// <summary>The allow caption's last line for a statement that qualifies a name with something but the place (the review, 2026-10-05). Pinned.</summary>
+    public static string NamesElsewhere(ServerWriteFamily family)
+    {
+        ArgumentNullException.ThrowIfNull(family);
+        return $"It qualifies a name with something other than the {family.Place}, so it may reach another one; a session's allow never covers it.";
     }
 
     /// <summary>The audit line of a change (every one run): where, the rows changed (when the server counts them), the statement. Pinned.</summary>

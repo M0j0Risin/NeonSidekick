@@ -125,7 +125,7 @@ public static class PostgresStatementKinds
         ServerStatementKind.Data => "INSERT, UPDATE, MERGE",
         ServerStatementKind.Delete => "DELETE, TRUNCATE, a MERGE that deletes",
         ServerStatementKind.Create => "CREATE TABLE, INDEX, VIEW, MATERIALIZED VIEW, SEQUENCE, TYPE, DOMAIN, SCHEMA",
-        ServerStatementKind.Alter => "ALTER TABLE, INDEX, VIEW, SEQUENCE, TYPE, DOMAIN, SCHEMA; COMMENT ON",
+        ServerStatementKind.Alter => "ALTER TABLE, INDEX, VIEW, SEQUENCE, TYPE, DOMAIN, SCHEMA; COMMENT ON; CREATE OR REPLACE VIEW (with creating)",
         ServerStatementKind.Drop => "DROP TABLE, INDEX, VIEW, SEQUENCE, TYPE, DOMAIN, SCHEMA, FUNCTION, PROCEDURE, TRIGGER",
         ServerStatementKind.Upkeep => "VACUUM, ANALYZE, REINDEX, CLUSTER, REFRESH MATERIALIZED VIEW",
         ServerStatementKind.Procedures => "CALL, DO; CREATE or ALTER FUNCTION, PROCEDURE, TRIGGER, RULE",

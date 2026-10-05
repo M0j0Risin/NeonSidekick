@@ -10,7 +10,8 @@ namespace NeonSidekick.Sqlite;
 /// <c>writable_schema</c> (both can corrupt the file), a positional <c>?</c>. Refused as the statement's first word only, since
 /// BEGIN, END and ROLLBACK stand inside a trigger and an <c>ON CONFLICT</c>: the transaction words (each call is a transaction
 /// of its own). And <c>VACUUM INTO</c>, which writes another file outside the sandbox's reach. Since later on 2026-10-05 the
-/// statement's kind (<see cref="Classify"/>) must also be one of those <c>SQLite statements allowed</c> ticks.
+/// statement's kind (<see cref="Classify(string)"/>) must also be one of those <c>SQLite statements allowed</c> ticks — a trigger's, and
+/// those its body's changes need (the review, 2026-10-05).
 /// </summary>
 public static class SqliteWriteGate
 {
@@ -98,12 +99,20 @@ public static class SqliteWriteGate
             }
         }
 
-        if (Classify(tokens, lead) is not { } kind)
+        if (Kinds(tokens, lead) is not { } kinds)
         {
             return SqliteText.UnknownStatement(first.Kind == SqliteReadOnlyGate.TokenKind.Word ? first.Text : "'" + first.Text + "'");
         }
 
-        return allowed is null || allowed.Contains(kind) ? null : SqliteText.KindNotAllowed(kind, allowed);
+        foreach (var kind in kinds)
+        {
+            if (allowed is not null && !allowed.Contains(kind))
+            {
+                return SqliteText.KindNotAllowed(kind, allowed);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The kind of the one statement <paramref name="sql"/> is; null when it does not lex or is none <c>sqlite_execute</c> knows.</summary>
@@ -169,35 +178,87 @@ public static class SqliteWriteGate
     }
 
     /// <summary>
-    /// The <c>;</c>s that end a statement: every one, but in a <c>CREATE [TEMP|TEMPORARY] TRIGGER</c> only those outside its
-    /// BEGIN … END body (a CASE … END inside it nests, so its END does not close the body).
+    /// The <c>;</c>s that end a statement: every one, but in a <c>CREATE [TEMP|TEMPORARY] TRIGGER</c> only those before its first
+    /// BEGIN and after its body's END (<see cref="TriggerEnd"/>).
     /// </summary>
     private static int Separators(List<SqliteReadOnlyGate.Token> tokens, int lead)
     {
-        bool trigger = IsWord(tokens, lead, "CREATE")
-            && (IsWord(tokens, lead + 1, "TRIGGER") || (IsWord(tokens, lead + 1, "TEMP") || IsWord(tokens, lead + 1, "TEMPORARY")) && IsWord(tokens, lead + 2, "TRIGGER"));
-        int count = 0, depth = 0;
+        int end = IsTrigger(tokens, lead) ? TriggerEnd(tokens, lead) : -1;
+        int begin = end < 0 ? -1 : tokens.FindIndex(lead, end - lead, t => t.Kind == SqliteReadOnlyGate.TokenKind.Word && t.Text == "BEGIN");
+        if (begin < 0)
+        {
+            end = -1;   // no body: every ; counts
+        }
+
+        int count = 0;
         for (int i = lead; i < tokens.Count; i++)
         {
-            var t = tokens[i];
-            if (IsSymbol(t, ";"))
+            count += IsSymbol(tokens[i], ";") && (end < 0 || i < begin || i > end) ? 1 : 0;
+        }
+
+        return count;
+    }
+
+    private static bool IsTrigger(List<SqliteReadOnlyGate.Token> tokens, int lead) => IsWord(tokens, lead, "CREATE")
+        && (IsWord(tokens, lead + 1, "TRIGGER") || (IsWord(tokens, lead + 1, "TEMP") || IsWord(tokens, lead + 1, "TEMPORARY")) && IsWord(tokens, lead + 2, "TRIGGER"));
+
+    /// <summary>
+    /// Where a trigger's body ends: the first END straight after a <c>;</c>, or -1. Since the review of 2026-10-05 (BEGIN and END
+    /// were counted as they came, and SQLite lets both stand as names: <c>… UPDATE OF begin ON x BEGIN SELECT 1; END; DELETE FROM
+    /// users</c> passed as one statement, and the DELETE ran) the end is found as SQLite's grammar finds it: every statement of a
+    /// body ends with <c>;</c>, the body with END, and after a <c>;</c> there only another statement or that END may stand, so the
+    /// first END after a <c>;</c> is the body's whatever BEGIN, END or CASE words its header or its expressions hold.
+    /// </summary>
+    private static int TriggerEnd(List<SqliteReadOnlyGate.Token> tokens, int lead)
+    {
+        for (int i = lead + 1; i < tokens.Count; i++)
+        {
+            if (IsWord(tokens, i, "END") && IsSymbol(tokens[i - 1], ";"))
             {
-                count += depth == 0 ? 1 : 0;
+                return i;
             }
-            else if (trigger && t.Kind == SqliteReadOnlyGate.TokenKind.Word)
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// The kinds a statement needs: its own (<c>Classify</c>), and for a trigger also
+    /// those of its body's changes (the review, 2026-10-05: creating is on by default, and a trigger whose body deletes, made under
+    /// it, deleted on the next INSERT although deleting was off). The body is read from the first BEGIN to its END, so a header's
+    /// name spelled BEGIN can only add a kind. A word before <c>(</c> is a function's (<c>replace()</c>).
+    /// </summary>
+    private static List<SqliteStatementKind>? Kinds(List<SqliteReadOnlyGate.Token> tokens, int lead)
+    {
+        if (Classify(tokens, lead) is not { } own)
+        {
+            return null;
+        }
+
+        var kinds = new HashSet<SqliteStatementKind> { own };
+        if (IsTrigger(tokens, lead))
+        {
+            int begin = tokens.FindIndex(lead, t => t.Kind == SqliteReadOnlyGate.TokenKind.Word && t.Text == "BEGIN");
+            int end = TriggerEnd(tokens, lead);
+            for (int i = Math.Max(begin, lead); i < (end < 0 ? tokens.Count : end); i++)
             {
-                if (t.Text is "BEGIN" or "CASE")
+                if (tokens[i].Kind != SqliteReadOnlyGate.TokenKind.Word || (i + 1 < tokens.Count && IsSymbol(tokens[i + 1], "(")))
                 {
-                    depth++;
+                    continue;
                 }
-                else if (t.Text == "END" && depth > 0)
+
+                if (tokens[i].Text is "INSERT" or "UPDATE" or "REPLACE")
                 {
-                    depth--;
+                    kinds.Add(SqliteStatementKind.Data);
+                }
+                else if (tokens[i].Text == "DELETE")
+                {
+                    kinds.Add(SqliteStatementKind.Delete);
                 }
             }
         }
 
-        return count;
+        return Enum.GetValues<SqliteStatementKind>().Where(kinds.Contains).ToList();
     }
 
     private static bool IsWord(List<SqliteReadOnlyGate.Token> tokens, int index, string word) =>

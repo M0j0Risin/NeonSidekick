@@ -2537,6 +2537,9 @@ public sealed class WorkingDirectory
 
             using var zip = ZipFile.OpenRead(source);
             var plan = new List<(ZipArchiveEntry Entry, string Target)>();
+
+            // Taken once (the review, 2026-10-05): the guard reads the sqlite.json files, so a call per entry read them per entry.
+            var databases = Databases?.Invoke();
             foreach (var entry in zip.Entries)
             {
                 if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
@@ -2556,7 +2559,7 @@ public sealed class WorkingDirectory
                 }
 
                 // An entry that would land on a database file (2026-10-05): the whole archive refused, nothing extracted.
-                if (Databases?.Invoke() is { } databases && databases.IsDatabaseFile(target))
+                if (databases is not null && databases.IsDatabaseFile(target))
                 {
                     return new ZipResult(FileOutcome.DatabaseProtected, display, Relative(target), 0, 0);
                 }

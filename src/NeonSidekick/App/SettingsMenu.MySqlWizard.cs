@@ -587,7 +587,11 @@ internal sealed partial class SettingsMenu
             Sink.Error(notice);
         }
 
-        ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        if (saved)
+        {
+            ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        }
+
         return ApplyOfferedAfterSave(SettingsField.MySqlConnectionsOffered, _settings.Current.MySqlConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.MySqlConnectionsOffered = next);
     }
 }

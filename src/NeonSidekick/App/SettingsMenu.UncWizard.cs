@@ -621,9 +621,10 @@ internal sealed partial class SettingsMenu
         }
 
         Sink.Notice(draft.Original is null ? SqlText.ConnectionAdded(draft.Name, path) : SqlText.ConnectionChanged(draft.Name, path));
+        bool saved = true;
         if (c.NeedsPassword)
         {
-            var (saved, notice) = UncSecrets.Save(new UncNamedShare(draft.Name, c, path), draft.Password);
+            (saved, string notice) = UncSecrets.Save(new UncNamedShare(draft.Name, c, path), draft.Password);
             if (saved)
             {
                 Sink.Notice(notice);
@@ -634,7 +635,11 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        ForgetOldCredential(draft.OriginalTarget, c.NeedsPassword && c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        if (saved)
+        {
+            ForgetOldCredential(draft.OriginalTarget, c.NeedsPassword && c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        }
+
         return ApplyOfferedAfterSave(SettingsField.UncSharesOffered, _settings.Current.UncSharesOffered, draft.Original, draft.Name, offer, (d, next) => d.UncSharesOffered = next);
     }
 }

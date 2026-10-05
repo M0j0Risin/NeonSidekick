@@ -48,7 +48,9 @@ internal sealed partial class ChatScreen
     /// A server family's <c>_execute</c> allow (2026-10-05, the user's pick: <see cref="AllowSqliteWriteAsync"/>'s way, per connection
     /// and database), on the turn task: a place allowed for the session runs at once; else the camera's allow pane — Deny, Allow once,
     /// Allow for this session — titled <see cref="ServerWriteText.AllowTitle"/>, its caption the place and the statement. Null when no
-    /// pane could ask.
+    /// pane could ask. A statement that qualifies a name with anything but the place (<see cref="ServerWriteFamily.NamesElsewhere"/>,
+    /// the review of 2026-10-05: <c>DELETE FROM payroll.dbo.salaries</c> under an allow for <c>scratch</c>) is asked about every
+    /// time, its caption saying why: the place is what the call names, not what the text reaches.
     /// </summary>
     private async Task<bool?> AllowDatabaseWriteAsync(ServerWriteFamily family, string connection, string place, string sql, CancellationToken turnToken)
     {
@@ -58,15 +60,16 @@ internal sealed partial class ChatScreen
         }
 
         string key = family.Title + "\n" + connection + "\n" + place;
+        bool elsewhere = family.NamesElsewhere?.Invoke(sql, place) == true;
         lock (_databaseAllowed)
         {
-            if (_databaseAllowed.Contains(key))
+            if (!elsewhere && _databaseAllowed.Contains(key))
             {
                 return true;
             }
         }
 
-        var allow = await RunCameraPaneAsync(token => _cameraMenu.AllowAsync(ServerWriteText.AllowCaption(family, connection, place, sql), token, ServerWriteText.AllowTitle(family)), null, turnToken).ConfigureAwait(false);
+        var allow = await RunCameraPaneAsync(token => _cameraMenu.AllowAsync(ServerWriteText.AllowCaption(family, connection, place, sql, elsewhere), token, ServerWriteText.AllowTitle(family)), null, turnToken).ConfigureAwait(false);
         if (allow is not { } choice)
         {
             return null;

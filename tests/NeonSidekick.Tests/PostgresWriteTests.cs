@@ -85,6 +85,13 @@ public sealed class ServerWriteTests
     {
         Assert.Equal("The model wants to change shop/sales (PostgreSQL, database sales):\nDELETE FROM t", ServerWriteText.AllowCaption(Family, "shop", "sales", " DELETE FROM t "));
         Assert.Equal("Change a PostgreSQL database?", ServerWriteText.AllowTitle(Family));
+        Assert.Equal(
+            "The model wants to change shop/sales (PostgreSQL, database sales):\nDELETE FROM t\nIt qualifies a name with something other than the database, so it may reach another one; a session's allow never covers it.",
+            ServerWriteText.AllowCaption(Family, "shop", "sales", "DELETE FROM t", elsewhere: true));
+        Assert.Null(Family.NamesElsewhere);
+        Assert.Equal(
+            "Error: mysql_execute cannot tell where the routine's body ends; write the body as BEGIN … END and quote any name spelled like a block word (BEGIN, END, a label)",
+            ServerWriteText.UnclearBody(NeonSidekick.MySql.MySqlStatementKinds.Family));
         Assert.Equal("shop/sales: 2 rows changed by INSERT …", ServerWriteText.AuditLogLine("shop/sales", 2, "INSERT …"));
         Assert.Equal("shop/sales: ran by CREATE TABLE t (a int)", ServerWriteText.AuditLogLine("shop/sales", null, "CREATE TABLE t (a int)"));
         Assert.Equal(
@@ -118,7 +125,6 @@ public sealed class PostgresWriteGateTests
     [InlineData("WITH c AS (SELECT 1 AS a) INSERT INTO t SELECT * FROM c")]
     [InlineData("CREATE TABLE t (id serial PRIMARY KEY, a text, b int REFERENCES u (id) ON DELETE CASCADE)")]
     [InlineData("CREATE UNIQUE INDEX t_a ON t (a)")]
-    [InlineData("CREATE OR REPLACE VIEW v AS SELECT * FROM t")]
     [InlineData("CREATE MATERIALIZED VIEW mv AS SELECT 1")]
     [InlineData("CREATE TEMP TABLE x (a int)")]
     [InlineData("CREATE SCHEMA app")]
@@ -186,6 +192,16 @@ public sealed class PostgresWriteGateTests
     [InlineData("ANALYZE t", new[] { ServerStatementKind.Upkeep })]
     [InlineData("DO $$ BEGIN END $$", new[] { ServerStatementKind.Procedures })]
     public void Kinds_EveryChangeInTheStatement(string sql, ServerStatementKind[] kinds) => Assert.Equal(kinds, PostgresWriteGate.Kinds(sql));
+
+    /// <summary>CREATE OR REPLACE VIEW changes the view that is there (the review, 2026-10-05); a function's is code either way.</summary>
+    [Fact]
+    public void Kinds_OrReplace_AViewChangesStructure()
+    {
+        Assert.Equal([ServerStatementKind.Create, ServerStatementKind.Alter], PostgresWriteGate.Kinds("CREATE OR REPLACE VIEW v AS SELECT * FROM t"));
+        Assert.Equal([ServerStatementKind.Create, ServerStatementKind.Alter], PostgresWriteGate.Kinds("CREATE OR REPLACE TEMP VIEW v AS SELECT 1"));
+        Assert.Equal([ServerStatementKind.Procedures], PostgresWriteGate.Kinds("CREATE OR REPLACE FUNCTION f() RETURNS int AS 'select 1' LANGUAGE sql"));
+        Assert.StartsWith("Error: the SQL is changing structure", PostgresWriteGate.Check("CREATE OR REPLACE VIEW v AS SELECT 1", ServerStatementKinds.Resolve(null)));
+    }
 
     [Fact]
     public void Check_RefusesAKindNotTicked_NamingWhatIs()

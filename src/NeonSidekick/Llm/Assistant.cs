@@ -225,7 +225,7 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.SqlTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.SqlColumnsTool.ToolName + " a column, " +
         NeonSidekick.Llm.Tools.SqlDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.SqlRelationshipsTool.ToolName + " the joins and " +
         NeonSidekick.Llm.Tools.SqlIndexesTool.ToolName + " the indexes with their use — look before you query, never guess a column; " +
-        NeonSidekick.Llm.Tools.SqlQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and TOP, values bound as @name through params." +
+        NeonSidekick.Llm.Tools.SqlQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and TOP, values bound as @name through params. " +
         "Reach SQL Server only through these tools — never a client or a script in the shell, which are refused.";
 
     /// <summary>
@@ -240,7 +240,7 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.OracleTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.OracleColumnsTool.ToolName + " a column, " +
         NeonSidekick.Llm.Tools.OracleDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.OracleRelationshipsTool.ToolName + " the joins and " +
         NeonSidekick.Llm.Tools.OracleIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +
-        NeonSidekick.Llm.Tools.OracleQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and FETCH FIRST, values bound as :name through params." +
+        NeonSidekick.Llm.Tools.OracleQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and FETCH FIRST, values bound as :name through params. " +
         "Reach Oracle only through these tools — never a client or a script in the shell, which are refused.";
 
     /// <summary>
@@ -254,7 +254,7 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.MySqlTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.MySqlColumnsTool.ToolName + " a column, " +
         NeonSidekick.Llm.Tools.MySqlDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.MySqlRelationshipsTool.ToolName + " the joins and " +
         NeonSidekick.Llm.Tools.MySqlIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +
-        NeonSidekick.Llm.Tools.MySqlQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params." +
+        NeonSidekick.Llm.Tools.MySqlQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params. " +
         "Reach MySQL only through these tools — never a client or a script in the shell, which are refused.";
 
     /// <summary>
@@ -325,7 +325,7 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.PostgresSchemasTool.ToolName + " a database's schemas; " + NeonSidekick.Llm.Tools.PostgresTablesTool.ToolName + " finds a table and " +
         NeonSidekick.Llm.Tools.PostgresColumnsTool.ToolName + " a column, " + NeonSidekick.Llm.Tools.PostgresDescribeTool.ToolName + " shows a table's columns, keys and constraints, " +
         NeonSidekick.Llm.Tools.PostgresRelationshipsTool.ToolName + " the joins and " + NeonSidekick.Llm.Tools.PostgresIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +
-        NeonSidekick.Llm.Tools.PostgresQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params." +
+        NeonSidekick.Llm.Tools.PostgresQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params. " +
         "Reach PostgreSQL only through these tools — never a client or a script in the shell, which are refused.";
 
     /// <summary>

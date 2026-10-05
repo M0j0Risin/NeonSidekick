@@ -21,7 +21,6 @@ public sealed class MySqlWriteGateTests
     [InlineData("REPLACE INTO t VALUES (1, 'a')")]
     [InlineData("WITH c AS (SELECT 1 AS a) SELECT * FROM c")]
     [InlineData("CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(10), b INT REFERENCES u (id) ON DELETE CASCADE)")]
-    [InlineData("CREATE OR REPLACE ALGORITHM = MERGE SQL SECURITY INVOKER VIEW v AS SELECT * FROM t")]
     [InlineData("CREATE TEMPORARY TABLE x (a INT)")]
     [InlineData("CREATE UNIQUE INDEX t_a ON t (a)")]
     [InlineData("INSERT INTO t VALUES ('grant; revoke') # GRANT in a comment")]
@@ -83,6 +82,69 @@ public sealed class MySqlWriteGateTests
     [InlineData("DROP PROCEDURE p", new[] { ServerStatementKind.Drop })]
     [InlineData("ANALYZE TABLE t", new[] { ServerStatementKind.Upkeep })]
     public void Kinds_EveryChangeInTheStatement(string sql, ServerStatementKind[] kinds) => Assert.Equal(kinds, MySqlWriteGate.Kinds(sql));
+
+    /// <summary>CREATE OR REPLACE changes what is there (the review, 2026-10-05): a view's definition, MariaDB's table and its rows.</summary>
+    [Theory]
+    [InlineData("CREATE OR REPLACE ALGORITHM = MERGE SQL SECURITY INVOKER VIEW v AS SELECT * FROM t", new[] { ServerStatementKind.Create, ServerStatementKind.Alter })]
+    [InlineData("CREATE OR REPLACE TABLE customers (id INT)", new[] { ServerStatementKind.Create, ServerStatementKind.Drop })]
+    [InlineData("CREATE OR REPLACE SEQUENCE s", new[] { ServerStatementKind.Create, ServerStatementKind.Drop })]
+    [InlineData("CREATE OR REPLACE PROCEDURE p() SELECT 1", new[] { ServerStatementKind.Procedures })]
+    public void Kinds_OrReplace_AlsoChangesOrDrops(string sql, ServerStatementKind[] kinds)
+    {
+        Assert.Equal(kinds, MySqlWriteGate.Kinds(sql));
+        Assert.StartsWith("Error:", MySqlWriteGate.Check(sql, ServerStatementKinds.Resolve(null)));
+        Assert.Null(MySqlWriteGate.Check(sql, Every));
+    }
+
+    /// <summary>
+    /// A routine's body read as MySQL reads it (the review, 2026-10-05): BEGIN and END are no reserved words, so a name spelled like
+    /// one never hides a second statement — counted as one, or refused as a body the gate cannot read.
+    /// </summary>
+    [Theory]
+    [InlineData("CREATE VIEW v AS SELECT 1 AS function, 2 AS begin; DROP DATABASE prod")]
+    [InlineData("CREATE PROCEDURE p(begin INT) BEGIN SELECT 1; END; DELETE FROM users; END")]
+    [InlineData("CREATE PROCEDURE p() SELECT begin FROM t; DELETE FROM users; END")]
+    [InlineData("CREATE FUNCTION f() RETURNS INT RETURN begin; DELETE FROM users; END")]
+    [InlineData("CREATE TRIGGER begin BEFORE INSERT ON t FOR EACH ROW BEGIN SET NEW.a = 1; END; DELETE FROM users")]
+    public void Refuses_ASecondStatement_BehindABlockWordAsAName(string sql) =>
+        Assert.Contains("statements; mysql_execute runs exactly one per call", MySqlWriteGate.Check(sql, Every));
+
+    [Theory]
+    [InlineData("CREATE PROCEDURE p() BEGIN SET @x = CASE WHEN 1 THEN begin END; END; DELETE FROM users; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN SET @x = CASE WHEN 1 THEN end END; END; DELETE FROM users; END")]
+    [InlineData("CREATE PROCEDURE p(begin INT) BEGIN DO begin; END; DELETE FROM users; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN SELECT end FROM t; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN DECLARE CONTINUE HANDLER FOR begin BEGIN END; END; DELETE FROM t; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN begin: LOOP LEAVE begin; END LOOP; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN IF 1 THEN SELECT 1; END; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN SELECT 1;")]
+    public void Refuses_ABodyItCannotReadForSure(string sql) =>
+        Assert.Equal(ServerWriteText.UnclearBody(MySqlStatementKinds.Family), MySqlWriteGate.Check(sql, Every));
+
+    [Theory]
+    [InlineData("CREATE PROCEDURE p() BEGIN IF NOT done THEN SELECT 1; END IF; SELECT 2; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN IF (x > 1) THEN SELECT 1; ELSEIF x < 0 THEN BEGIN END; ELSE SELECT IF(x, 1, 2); END IF; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN IF NOT EXISTS (SELECT 1 FROM t) THEN INSERT INTO t VALUES (1); END IF; DROP TABLE IF EXISTS x; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION, NOT FOUND, SQLSTATE VALUE '23000', 1062 BEGIN SET @e = 1; END; SELECT 1; END")]
+    [InlineData("CREATE PROCEDURE p() lbl: BEGIN SELECT t.end, t.begin FROM t; END lbl")]
+    [InlineData("CREATE FUNCTION f(x INT) RETURNS VARCHAR(10) CHARSET utf8mb4 COMMENT 'f' DETERMINISTIC BEGIN RETURN CASE WHEN x > 0 THEN 'a' ELSE 'b' END; END")]
+    [InlineData("CREATE PROCEDURE p() BEGIN CASE WHEN 1 THEN SELECT 1; ELSE BEGIN END; END CASE; WHILE 0 DO SELECT 2; END WHILE; REPEAT SET @x = 1; UNTIL TRUE END REPEAT; END")]
+    [InlineData("CREATE TRIGGER tr AFTER INSERT ON t FOR EACH ROW FOLLOWS other BEGIN INSERT INTO log VALUES (NEW.id); END")]
+    public void Allows_ABodyItReads(string sql) => Assert.Null(MySqlWriteGate.Check(sql, Every));
+
+    /// <summary>What may reach past the database a call names (the review, 2026-10-05): any qualifier but the place, a table's too.</summary>
+    [Theory]
+    [InlineData("DELETE FROM payroll.salaries WHERE id = 1", "scratch", true)]
+    [InlineData("DELETE FROM salaries WHERE id = 1", "scratch", false)]
+    [InlineData("UPDATE scratch.t SET a = 1", "SCRATCH", false)]
+    [InlineData("UPDATE `payroll`.t SET a = 1", "scratch", true)]
+    [InlineData("UPDATE t SET t.a = 1", "scratch", true)]
+    [InlineData("INSERT INTO t VALUES (1.5)", "scratch", false)]
+    public void NamesElsewhere_AnyQualifierButThePlace(string sql, string place, bool elsewhere)
+    {
+        Assert.Equal(elsewhere, MySqlWriteGate.NamesElsewhere(sql, place));
+        Assert.Equal(elsewhere, MySqlStatementKinds.Family.NamesElsewhere!(sql, place));
+    }
 
     [Fact]
     public void Check_RefusesAKindNotTicked_AndARoutineIsCode()

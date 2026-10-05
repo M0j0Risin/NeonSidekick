@@ -21,7 +21,6 @@ public sealed class SqlWriteGateTests
     [InlineData("MERGE t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET a = s.a WHEN NOT MATCHED THEN INSERT (id, a) VALUES (s.id, s.a);")]
     [InlineData("CREATE TABLE dbo.t (id int PRIMARY KEY, a nvarchar(10), b int REFERENCES u (id) ON DELETE CASCADE)")]
     [InlineData("CREATE NONCLUSTERED INDEX ix ON t (a)")]
-    [InlineData("CREATE OR ALTER VIEW v AS SELECT * FROM t")]
     [InlineData("CREATE SCHEMA app")]
     [InlineData("SELECT a INTO #scratch FROM t")]
     [InlineData("SELECT 1")]
@@ -94,6 +93,43 @@ public sealed class SqlWriteGateTests
     [InlineData("ALTER TABLE t DROP COLUMN a", new[] { ServerStatementKind.Alter })]
     [InlineData("SELEC 1", new[] { ServerStatementKind.Procedures })]   // a batch's first word alone is EXEC of that procedure (T-SQL's rule): a typo is a procedure call
     public void Kinds_EveryChangeInTheStatement(string sql, ServerStatementKind[] kinds) => Assert.Equal(kinds, SqlWriteGate.Kinds(sql));
+
+    /// <summary>The read rules' last sentence (the shell's) stands apart from the one before it (the review, 2026-10-05: "params.Reach").</summary>
+    [Fact]
+    public void TheReadRules_KeepASpaceBeforeTheShellsSentence()
+    {
+        foreach (string rule in new[] { Assistant.SqlRule, Assistant.OracleRule, Assistant.MySqlRule, Assistant.PostgresRule, Assistant.SqliteRule })
+        {
+            Assert.Contains("params. Reach ", rule, StringComparison.Ordinal);
+            Assert.DoesNotContain(".Reach", rule, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>CREATE OR ALTER VIEW changes the view that is there (the review, 2026-10-05).</summary>
+    [Fact]
+    public void Kinds_CreateOrAlterView_AlsoChangesStructure()
+    {
+        Assert.Equal([ServerStatementKind.Create, ServerStatementKind.Alter], SqlWriteGate.Kinds("CREATE OR ALTER VIEW v AS SELECT * FROM t"));
+        Assert.Equal([ServerStatementKind.Create], SqlWriteGate.Kinds("CREATE VIEW v AS SELECT * FROM t"));
+        Assert.StartsWith("Error: the SQL is changing structure", SqlWriteGate.Check("CREATE OR ALTER VIEW v AS SELECT * FROM t", ServerStatementKinds.Resolve(null)));
+    }
+
+    /// <summary>What may reach past the database a call names (the review, 2026-10-05): ScriptDom tells a database's part from a schema's.</summary>
+    [Theory]
+    [InlineData("DELETE FROM payroll.dbo.salaries WHERE id = 1", "scratch", true)]
+    [InlineData("DELETE FROM dbo.salaries WHERE id = 1", "scratch", false)]
+    [InlineData("DELETE FROM Scratch.dbo.t", "scratch", false)]
+    [InlineData("DELETE FROM scratch.dbo.t", "", true)]
+    [InlineData("INSERT INTO t SELECT x FROM other.dbo.u", "scratch", true)]
+    [InlineData("UPDATE t SET a = other.dbo.f(1)", "scratch", true)]
+    [InlineData("UPDATE t SET a = dbo.f(1), b = t.c", "scratch", false)]
+    [InlineData("EXEC payroll.dbo.p", "scratch", true)]
+    [InlineData("not sql at all (", "scratch", true)]
+    public void NamesElsewhere_ADatabaseButThePlace(string sql, string place, bool elsewhere)
+    {
+        Assert.Equal(elsewhere, SqlWriteGate.NamesElsewhere(sql, place));
+        Assert.Equal(elsewhere, SqlStatementKinds.Family.NamesElsewhere!(sql, place));
+    }
 
     [Fact]
     public void Check_RefusesAKindNotTicked_AndARoutineIsCode()

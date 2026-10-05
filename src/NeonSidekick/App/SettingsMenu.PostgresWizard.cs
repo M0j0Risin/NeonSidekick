@@ -591,7 +591,11 @@ internal sealed partial class SettingsMenu
             Sink.Error(notice);
         }
 
-        ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        if (saved)
+        {
+            ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        }
+
         return ApplyOfferedAfterSave(SettingsField.PostgresConnectionsOffered, _settings.Current.PostgresConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.PostgresConnectionsOffered = next);
     }
 }

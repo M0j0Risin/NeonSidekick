@@ -79,6 +79,26 @@ public static class SqlWriteGate
         return forbidden.Found is null ? Kinds(statement) : null;
     }
 
+    /// <summary>
+    /// Whether <paramref name="sql"/> names an object in a database other than <paramref name="place"/> (the review, 2026-10-05): a
+    /// three-part name (<c>payroll.dbo.salaries</c>), a function called as <c>db.schema.f()</c>, a four-part column. ScriptDom tells a
+    /// database's part from a schema's, so <c>dbo.t</c> and <c>scratch.dbo.t</c> under <c>scratch</c> stay inside; with no place
+    /// known (the login's default) any database named counts, and so does a text that does not parse.
+    /// </summary>
+    public static bool NamesElsewhere(string sql, string place)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(place);
+        if (Parse(sql, out _) is not { } statement)
+        {
+            return true;
+        }
+
+        var names = new OtherDatabases(place);
+        statement.Accept(names);
+        return names.Found;
+    }
+
     /// <summary>The one statement of one batch, or null with the <c>Error:</c> sentence.</summary>
     private static TSqlStatement? Parse(string sql, out string? error)
     {
@@ -213,6 +233,11 @@ public static class SqlWriteGate
         }
 
         var found = new HashSet<ServerStatementKind> { kind };
+        if (statement is CreateOrAlterViewStatement)
+        {
+            found.Add(ServerStatementKind.Alter);   // it changes a view that is there (the review, 2026-10-05)
+        }
+
         if (kind is ServerStatementKind.Data or ServerStatementKind.Delete || statement is SelectStatement)
         {
             var changes = new Changes();
@@ -280,6 +305,46 @@ public static class SqlWriteGate
         }
     }
 
+    /// <summary>Whether any name in the statement says a database other than the place (<see cref="NamesElsewhere"/>).</summary>
+    private sealed class OtherDatabases(string place) : TSqlFragmentVisitor
+    {
+        public bool Found { get; private set; }
+
+        private void Judge(string? database)
+        {
+            if (database is not null && (place.Length == 0 || !database.Equals(place, StringComparison.OrdinalIgnoreCase)))
+            {
+                Found = true;
+            }
+        }
+
+        public override void Visit(SchemaObjectName node)
+        {
+            Judge(node.DatabaseIdentifier?.Value);
+            base.Visit(node);
+        }
+
+        public override void Visit(MultiPartIdentifierCallTarget node)
+        {
+            if (node.MultiPartIdentifier.Identifiers.Count >= 2)
+            {
+                Judge(node.MultiPartIdentifier.Identifiers[0].Value);
+            }
+
+            base.Visit(node);
+        }
+
+        public override void Visit(ColumnReferenceExpression node)
+        {
+            if (node.MultiPartIdentifier is { Identifiers.Count: >= 4 } parts)
+            {
+                Judge(parts.Identifiers[0].Value);
+            }
+
+            base.Visit(node);
+        }
+    }
+
     /// <summary>What is refused anywhere in the statement: the read gate's doors out (not <c>NEXT VALUE FOR</c>), and an <c>INSERT … EXEC</c> of a string or a system procedure.</summary>
     private sealed class Forbidden : TSqlFragmentVisitor
     {
@@ -329,7 +394,7 @@ public static class SqlStatementKinds
         ServerStatementKind.Data => "INSERT, UPDATE, MERGE",
         ServerStatementKind.Delete => "DELETE, TRUNCATE TABLE, a MERGE that deletes",
         ServerStatementKind.Create => "CREATE TABLE, INDEX, VIEW, SEQUENCE, TYPE, SCHEMA, SYNONYM; SELECT … INTO",
-        ServerStatementKind.Alter => "ALTER TABLE, VIEW, SEQUENCE, SCHEMA",
+        ServerStatementKind.Alter => "ALTER TABLE, VIEW, SEQUENCE, SCHEMA; CREATE OR ALTER VIEW (with creating)",
         ServerStatementKind.Drop => "DROP TABLE, INDEX, VIEW, SEQUENCE, TYPE, SCHEMA, SYNONYM, PROCEDURE, FUNCTION, TRIGGER",
         ServerStatementKind.Upkeep => "UPDATE STATISTICS, CREATE STATISTICS, ALTER INDEX",
         ServerStatementKind.Procedures => "EXEC of a procedure (sp_rename and a few system ones); CREATE or ALTER PROCEDURE, FUNCTION, TRIGGER",
@@ -338,5 +403,8 @@ public static class SqlStatementKinds
 
     public static readonly ServerWriteFamily Family = new(
         "SQL", "SQL Server", "sql_execute", "sql.json", "database", SqlConfigFile.Category,
-        nameof(Settings.AppSettingsData.SqlMode), Statements);
+        nameof(Settings.AppSettingsData.SqlMode), Statements)
+    {
+        NamesElsewhere = SqlWriteGate.NamesElsewhere,
+    };
 }

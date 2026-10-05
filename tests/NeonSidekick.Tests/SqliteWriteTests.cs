@@ -105,6 +105,40 @@ public sealed class SqliteWriteGateTests
         Assert.Null(SqliteWriteGate.Classify("WITH c AS (SELECT 1)"));
     }
 
+    /// <summary>
+    /// A trigger's body ends at the first END after a <c>;</c>, as SQLite's grammar has it (the review, 2026-10-05): BEGIN, END and
+    /// CASE spelled as names, or a CASE … END inside the body, never move it.
+    /// </summary>
+    [Theory]
+    [InlineData("CREATE TRIGGER t AFTER UPDATE OF begin ON x BEGIN SELECT 1; END; DELETE FROM users", 1)]
+    [InlineData("CREATE TRIGGER t AFTER INSERT ON x WHEN new.begin = 1 BEGIN SELECT 1; END; DELETE FROM users", 1)]
+    [InlineData("CREATE TRIGGER t AFTER INSERT ON x BEGIN UPDATE y SET end = CASE WHEN 1 THEN 2 END; END; DELETE FROM users; DROP TABLE y", 2)]
+    [InlineData("CREATE TRIGGER t AFTER INSERT ON x; DELETE FROM users; END", 2)]
+    public void Refuses_ASecondStatement_AfterATriggersBody(string sql, int separators) =>
+        Assert.Equal(SqliteText.WriteNotOneStatement(separators + 1), SqliteWriteGate.Check(sql));
+
+    [Theory]
+    [InlineData("CREATE TRIGGER t AFTER UPDATE OF begin, end ON x BEGIN UPDATE y SET end = CASE WHEN new.begin THEN 2 END; END;")]
+    [InlineData("CREATE TRIGGER t AFTER INSERT ON x BEGIN SELECT CASE WHEN 1 THEN 2 END; SELECT 3; END")]
+    public void Allows_ATriggerWhoseBodyHoldsBlockWords(string sql) => Assert.Null(SqliteWriteGate.Check(sql));
+
+    /// <summary>A trigger needs its body's kinds as well as creating (the review, 2026-10-05): one that deletes, deleting.</summary>
+    [Fact]
+    public void ATrigger_NeedsTheKindsOfItsBodysChanges()
+    {
+        var defaults = SqliteStatementKinds.Resolve((IReadOnlyList<string>?)null);
+        string wipe = "CREATE TRIGGER wipe AFTER INSERT ON log BEGIN DELETE FROM orders; END";
+        Assert.Equal(SqliteText.KindNotAllowed(SqliteStatementKind.Delete, defaults), SqliteWriteGate.Check(wipe, defaults));
+        Assert.Null(SqliteWriteGate.Check(wipe, [.. defaults, SqliteStatementKind.Delete]));
+
+        // The event (AFTER DELETE, UPDATE OF) is no change of the body's, and a function named like a verb is a function.
+        Assert.Null(SqliteWriteGate.Check("CREATE TRIGGER tr AFTER DELETE ON t BEGIN INSERT INTO log VALUES (replace(old.a, 'x', 'y')); END", defaults));
+        Assert.Equal(
+            SqliteText.KindNotAllowed(SqliteStatementKind.Data, [SqliteStatementKind.Create]),
+            SqliteWriteGate.Check("CREATE TRIGGER tr AFTER UPDATE OF a ON t BEGIN UPDATE u SET b = 1; END", [SqliteStatementKind.Create]));
+        Assert.Null(SqliteWriteGate.Check("CREATE TRIGGER tr AFTER UPDATE OF a ON t BEGIN SELECT RAISE(ABORT, 'no'); END", [SqliteStatementKind.Create]));
+    }
+
     [Fact]
     public void TheKinds_ChangingDataByDefault_ReadCaseBlind()
     {

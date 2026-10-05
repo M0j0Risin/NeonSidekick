@@ -137,6 +137,19 @@ public static class OracleWriteGate
         return at < tokens.Count && tokens[at].Kind == GateTokenKind.Word && tokens[at].Text is "PROCEDURE" or "FUNCTION" or "PACKAGE" or "TRIGGER" or "TYPE";
     }
 
+    /// <summary>The words after a dot that name no object: a sequence's values.</summary>
+    private static readonly IReadOnlySet<string> Members = ServerWriteGate.Words("NEXTVAL", "CURRVAL");
+
+    /// <summary>
+    /// Whether <paramref name="sql"/> qualifies a name with anything but the schema <paramref name="place"/> (the review, 2026-10-05:
+    /// <see cref="ServerWriteGate.NamesElsewhere"/>; <c>seq.NEXTVAL</c> and a bind's <c>:NEW.x</c> do not count). Text that does not lex counts.
+    /// </summary>
+    public static bool NamesElsewhere(string sql, string place)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        return Lex(sql, out _) is not { } tokens || ServerWriteGate.NamesElsewhere(tokens, place, Members);
+    }
+
     private static List<GateToken>? Lex(string sql, out string? error)
     {
         if (OracleReadOnlyGate.Tokenize(sql, out error) is not { } tokens)
@@ -246,7 +259,7 @@ public static class OracleStatementKinds
         ServerStatementKind.Data => "INSERT, UPDATE, MERGE",
         ServerStatementKind.Delete => "DELETE, TRUNCATE, a MERGE that deletes",
         ServerStatementKind.Create => "CREATE TABLE, INDEX, VIEW, MATERIALIZED VIEW, SEQUENCE, SYNONYM",
-        ServerStatementKind.Alter => "ALTER TABLE, INDEX, VIEW, SEQUENCE, SYNONYM; RENAME; COMMENT ON",
+        ServerStatementKind.Alter => "ALTER TABLE, INDEX, VIEW, SEQUENCE, SYNONYM; RENAME; COMMENT ON; CREATE OR REPLACE VIEW, SYNONYM (with creating)",
         ServerStatementKind.Drop => "DROP TABLE, INDEX, VIEW, SEQUENCE, SYNONYM, PROCEDURE, FUNCTION, PACKAGE, TRIGGER, TYPE",
         ServerStatementKind.Upkeep => "ANALYZE",
         ServerStatementKind.Procedures => "CALL, a BEGIN … END or DECLARE block; CREATE or ALTER PROCEDURE, FUNCTION, PACKAGE, TRIGGER, TYPE",
@@ -255,5 +268,8 @@ public static class OracleStatementKinds
 
     public static readonly ServerWriteFamily Family = new(
         "Oracle", "Oracle", "oracle_execute", "oracle.json", "schema", OracleConfigFile.Category,
-        nameof(Settings.AppSettingsData.OracleMode), Statements);
+        nameof(Settings.AppSettingsData.OracleMode), Statements)
+    {
+        NamesElsewhere = OracleWriteGate.NamesElsewhere,
+    };
 }

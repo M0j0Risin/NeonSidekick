@@ -28,11 +28,17 @@ public partial class ChatScreenTests
     {
         _settings.Update(d => { d.TtsOutput = false; d.PostgresTools = true; d.PostgresMode = "read-write"; d.PostgresConnectionsOffered = ["shop"]; });
         PostgresConnectionsFile();
+        ExecuteFixture(PostgresStatementKinds.Family, answers, reply, calls);
+    }
+
+    /// <summary>The allow pane's script for any family's <c>_execute</c> tool, its settings and connections file already set.</summary>
+    private void ExecuteFixture(ServerWriteFamily family, ConsoleKeyInfo[][] answers, string reply, params Dictionary<string, object?>[] calls)
+    {
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);   // the pane: nothing can ask without it
         for (int i = 0; i < calls.Length; i++)
         {
-            _chat.Enqueue(FakeChatClient.Call("c" + i, PostgresExecuteTool.ToolName, calls[i]));
+            _chat.Enqueue(FakeChatClient.Call("c" + i, family.ToolName, calls[i]));
         }
 
         _chat.EnqueueText(reply);
@@ -40,7 +46,7 @@ public partial class ChatScreenTests
         StepsWhenIdle(Line("change the shop"), Line("/exit"));
         var idle = input.OnWait!;
         var pending = new Queue<ConsoleKeyInfo[]>(answers);
-        string title = ServerWriteText.AllowTitle(PostgresStatementKinds.Family);
+        string title = ServerWriteText.AllowTitle(family);
         int asked = 0;
         input.OnWait = () =>
         {
@@ -77,6 +83,31 @@ public partial class ChatScreenTests
         Assert.StartsWith("Error: could not connect to shop", results[0]);   // allowed, then no server: it was run
         Assert.StartsWith("Error: could not connect to shop", results[1]);   // not asked: allowed for shop/sales
         Assert.Equal(ServerWriteText.Declined, results[2]);                  // shop/archive asked again, and denied
+    }
+
+    /// <summary>
+    /// A statement that qualifies a name with another database is asked about although the call's database is allowed for the
+    /// session (the review, 2026-10-05: <c>UPDATE payroll.t</c> under an allow for <c>sales</c>), its caption saying why.
+    /// </summary>
+    [Fact]
+    public async Task MySqlExecute_ANameQualifiedElsewhere_IsAsked_DespiteTheSessionsAllow()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.MySqlTools = true; d.MySqlMode = "read-write"; d.MySqlConnectionsOffered = ["shop"]; d.MySqlStatementsAllowed = ["data"]; });
+        string path = MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{ \"connections\": { \"shop\": { \"host\": \"127.0.0.1\", \"port\": 9, \"database\": \"sales\", \"user\": \"u\", \"password\": \"p\", \"connectTimeoutSeconds\": 1, \"access\": \"readwrite\" } } }");
+        ExecuteFixture(MySql.MySqlStatementKinds.Family, [[Keys.Char('s'), Keys.Enter], [Keys.Enter]], "Done.",
+            new() { ["sql"] = "INSERT INTO t VALUES (1)" },
+            new() { ["sql"] = "UPDATE sales.t SET a = 2" },
+            new() { ["sql"] = "UPDATE payroll.t SET a = 3" });
+
+        string output = await RunAsync();
+
+        var results = Results(_chat.Requests[^1]).Select(r => (string)r.Result!).ToList();
+        Assert.StartsWith("Error: could not connect to shop", results[0]);   // allowed for the session, then no server
+        Assert.StartsWith("Error: could not connect to shop", results[1]);   // its own database by name: not asked
+        Assert.Equal(ServerWriteText.Declined, results[2]);                  // payroll: asked again, and denied
+        Assert.Contains(ServerWriteText.NamesElsewhere(MySql.MySqlStatementKinds.Family)[..30], output);
     }
 
     [Fact]

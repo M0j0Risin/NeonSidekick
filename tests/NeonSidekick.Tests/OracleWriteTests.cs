@@ -21,7 +21,6 @@ public sealed class OracleWriteGateTests
     [InlineData("MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.a = s.a WHEN NOT MATCHED THEN INSERT (id, a) VALUES (s.id, s.a)")]
     [InlineData("INSERT ALL INTO t VALUES (1) INTO u VALUES (2) SELECT * FROM dual")]
     [InlineData("CREATE TABLE t (id NUMBER PRIMARY KEY, a VARCHAR2(10), b NUMBER REFERENCES u (id) ON DELETE CASCADE)")]
-    [InlineData("CREATE OR REPLACE FORCE VIEW v AS SELECT * FROM t")]
     [InlineData("CREATE GLOBAL TEMPORARY TABLE g (a NUMBER) ON COMMIT PRESERVE ROWS")]
     [InlineData("CREATE UNIQUE INDEX ix ON t (a)")]
     [InlineData("SELECT 1 FROM dual")]
@@ -85,6 +84,26 @@ public sealed class OracleWriteGateTests
     [InlineData("DROP PACKAGE pk", new[] { ServerStatementKind.Drop })]
     [InlineData("ALTER PROCEDURE p COMPILE", new[] { ServerStatementKind.Procedures })]
     public void Kinds_EveryChangeInTheStatement(string sql, ServerStatementKind[] kinds) => Assert.Equal(kinds, OracleWriteGate.Kinds(sql));
+
+    /// <summary>CREATE OR REPLACE changes the view or synonym that is there (the review, 2026-10-05); a routine's is code either way.</summary>
+    [Fact]
+    public void Kinds_OrReplace_AViewOrSynonymChangesStructure()
+    {
+        Assert.Equal([ServerStatementKind.Create, ServerStatementKind.Alter], OracleWriteGate.Kinds("CREATE OR REPLACE FORCE VIEW v AS SELECT * FROM t"));
+        Assert.Equal([ServerStatementKind.Create, ServerStatementKind.Alter], OracleWriteGate.Kinds("CREATE OR REPLACE SYNONYM s FOR t"));
+        Assert.Equal([ServerStatementKind.Procedures], OracleWriteGate.Kinds("CREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;"));
+    }
+
+    /// <summary>What may reach past the schema a call names (the review, 2026-10-05): any qualifier but the place; a sequence's values and a bind's fields do not count.</summary>
+    [Theory]
+    [InlineData("DELETE FROM hr.employees", "NEON", true)]
+    [InlineData("DELETE FROM neon.employees", "NEON", false)]
+    [InlineData("INSERT INTO t VALUES (s.NEXTVAL)", "NEON", false)]
+    [InlineData("INSERT INTO t VALUES (hr.s.NEXTVAL)", "NEON", true)]
+    [InlineData("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN :NEW.a := 1; END;", "NEON", false)]
+    [InlineData("UPDATE t SET t.a = 1", "NEON", true)]
+    public void NamesElsewhere_AnyQualifierButThePlace(string sql, string place, bool elsewhere) =>
+        Assert.Equal(elsewhere, OracleStatementKinds.Family.NamesElsewhere!(sql, place));
 
     [Fact]
     public void TheBody_KeepsAPlSqlUnitsSemicolon_AndDropsPlainSqls()

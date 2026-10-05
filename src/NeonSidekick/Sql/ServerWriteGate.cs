@@ -34,7 +34,7 @@ public sealed record ObjectVerb(IReadOnlyDictionary<string, ServerStatementKind>
 /// led by one, or by <c>WITH</c>, needs the kind of every such verb in it — a <c>WITH … DELETE … RETURNING</c> feeding an <c>INSERT</c>
 /// deletes too), the reading first words, the object verbs and the modifiers between a verb and its object (<c>CREATE OR REPLACE
 /// TEMP</c>), a scan for what is refused wherever it stands (a denied function, a database link), and how the <c>;</c>s that end a
-/// statement are counted (a routine's body holds its own).
+/// statement are counted (a routine's body holds its own; a negative count is a body the gate cannot read for sure, refused).
 /// </summary>
 public sealed record WriteGateRules(
     ServerWriteFamily Family,
@@ -82,6 +82,11 @@ public static class ServerWriteGate
         }
 
         int separators = rules.Separators is { } count ? count(body, lead) : body.Count(t => t.IsSymbol(";"));
+        if (separators < 0)
+        {
+            return ServerWriteText.UnclearBody(family);
+        }
+
         if (separators > 0)
         {
             return ServerWriteText.NotOneStatement(family, separators + 1);
@@ -190,8 +195,10 @@ public static class ServerWriteGate
         }
 
         int at = lead + 1;
+        bool replace = false;
         while (at < body.Count && body[at].Kind == GateTokenKind.Word && rules.Modifiers.Contains(body[at].Text))
         {
+            replace |= body[at].Text == "OR" && at + 1 < body.Count && body[at + 1].IsWord("REPLACE");
             // A modifier may carry a value (MySQL's ALGORITHM = MERGE): the = and the value are skipped with it.
             at += at + 2 < body.Count && body[at + 1].IsSymbol("=") ? 3 : 1;
         }
@@ -209,7 +216,54 @@ public static class ServerWriteGate
             return null;
         }
 
-        return verb.Kinds.TryGetValue(target, out var objectKind) ? [objectKind] : null;
+        if (!verb.Kinds.TryGetValue(target, out var objectKind))
+        {
+            return null;
+        }
+
+        // CREATE OR REPLACE (the review, 2026-10-05) changes what is there as well as making it: a view's or a synonym's definition
+        // (changing structure), and MariaDB's table or sequence, which goes with its rows or its place (dropping). A routine's OR
+        // REPLACE is the procedures kind either way.
+        if (replace && objectKind == ServerStatementKind.Create)
+        {
+            return [ServerStatementKind.Create, target is "TABLE" or "SEQUENCE" ? ServerStatementKind.Drop : ServerStatementKind.Alter];
+        }
+
+        return [objectKind];
+    }
+
+    /// <summary>
+    /// Whether a statement names something by a qualifier other than <paramref name="place"/> (the review, 2026-10-05): the head of an
+    /// <c>x.y</c> chain, which may be another database or schema. A lexer cannot tell a table's qualifier (<c>t.col</c>) from a
+    /// database's (<c>payroll.salaries</c>), so any head but the place counts: such a statement is asked about every time, since
+    /// "Allow for this session" is for the place a call names, not what its text reaches. A head after <c>:</c> is a bind's (Oracle's
+    /// <c>:NEW.x</c>); <paramref name="members"/> are the words after a dot that name no object (Oracle's <c>NEXTVAL</c>).
+    /// </summary>
+    public static bool NamesElsewhere(IReadOnlyList<GateToken> tokens, string place, IReadOnlySet<string>? members = null)
+    {
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(place);
+        for (int i = 0; i + 1 < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".")
+                || (i > 0 && (tokens[i - 1].IsSymbol(".") || tokens[i - 1].IsSymbol(":"))))
+            {
+                continue;
+            }
+
+            if (members is not null && i + 2 < tokens.Count && tokens[i + 2].Kind == GateTokenKind.Word && members.Contains(tokens[i + 2].Text))
+            {
+                continue;
+            }
+
+            if (!string.Equals(t.Text, place, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>A word list as a set, ordinal (the lexers upper-case words).</summary>

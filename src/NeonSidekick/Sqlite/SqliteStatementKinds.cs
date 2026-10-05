@@ -67,7 +67,7 @@ public static class SqliteStatementKinds
     {
         SqliteStatementKind.Data => "INSERT, UPDATE, REPLACE",
         SqliteStatementKind.Delete => "DELETE",
-        SqliteStatementKind.Create => "CREATE TABLE, INDEX, VIEW, TRIGGER, VIRTUAL TABLE",
+        SqliteStatementKind.Create => "CREATE TABLE, INDEX, VIEW, TRIGGER (and the kinds its body's changes need), VIRTUAL TABLE",
         SqliteStatementKind.Alter => "ALTER TABLE",
         SqliteStatementKind.Drop => "DROP TABLE, INDEX, VIEW, TRIGGER",
         SqliteStatementKind.Upkeep => "VACUUM, REINDEX, ANALYZE",
