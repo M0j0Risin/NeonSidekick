@@ -171,6 +171,14 @@ public enum SlashCommand
     /// </summary>
     Log,
 
+    /// <summary>
+    /// <c>/process</c> (2026-10-05, the user's pick from the external windows brainstorm): the background processes the model
+    /// started (<c>run_command</c>'s <c>background</c>) listed on the info pane; <c>/process &lt;id&gt;</c> (any unique prefix) shows
+    /// one's output live in the process window (<see cref="Viewer.ProcessWindow"/>), switching the open window to it. A pane
+    /// under a reply bare, quick with an id.
+    /// </summary>
+    Process,
+
     /// <summary><c>/about</c>: the app's version, runtime, folders, servers, third-party components and licence, in the info pane.</summary>
     About,
 
@@ -337,6 +345,7 @@ public static class SlashCommands
             new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
             new("/police", "switch shell police on or off"),
             new("/pdf", "make a PDF in the working directory: /pdf <file|https://url> [to=<out.pdf>] [paper=letter|a4|legal] [landscape] [overwrite], /pdf reply for the last reply"),
+            new(Viewer.ProcessWindowText.Word, "list the background processes the model started, or /process <id> to watch one's output live in a window (Ctrl+K twice there stops it)"),
             new("/print", "print a file of the working directory: /print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape], /print reply for the last reply, /print printers"),
             new("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"),
             new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
@@ -434,7 +443,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -545,6 +554,7 @@ public static class SlashCommands
             "/gituser" => SlashCommand.GitUser,
             "/window" => SlashCommand.Window,
             "/log" => SlashCommand.Log,
+            "/process" => SlashCommand.Process,
             "/about" => SlashCommand.About,
             "/skills" => SlashCommand.Skills,
             "/learn" => SlashCommand.Learn,
@@ -574,5 +584,5 @@ public static class SlashCommands
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
-        or SlashCommand.Log or SlashCommand.Tools or SlashCommand.Settings;
+        or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings;
 }

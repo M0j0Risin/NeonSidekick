@@ -10,6 +10,7 @@ public readonly record struct OutputLine(string Text, bool IsError);
 /// numbered from 1 over everything ever written (<see cref="TotalLines"/>), and
 /// <see cref="FirstKeptLine"/> says where the kept ones start, so a <c>log</c> offset stays stable
 /// across drops. Thread-safe: the two pumps append from the pool, the tools read on the turn task.
+/// Since 2026-10-05 <see cref="Appended"/> tells a reader (<c>/process</c>'s window) of each line, outside the lock.
 /// </summary>
 public sealed class OutputBuffer
 {
@@ -33,6 +34,12 @@ public sealed class OutputBuffer
         _maxLines = maxLines;
         _maxBytes = maxBytes;
     }
+
+    /// <summary>
+    /// Raised after each line is appended, outside the lock, on the pump's pool thread (2026-10-05, <c>/process</c>'s window).
+    /// A subscriber must not block: the window only posts itself a message and reads with <see cref="CopyFrom"/>.
+    /// </summary>
+    public event Action? Appended;
 
     /// <summary>How many lines were ever written.</summary>
     public long TotalLines
@@ -90,6 +97,36 @@ public sealed class OutputBuffer
                 _lines.RemoveFirst();
                 _dropped++;
             }
+        }
+
+        try
+        {
+            Appended?.Invoke();
+        }
+        catch
+        {
+            // A reader that fails must not take the pump down with it (DiagnosticBuffer's rule).
+        }
+    }
+
+    /// <summary>
+    /// Every kept line numbered <paramref name="from"/> or later (1-based over everything written), oldest first, added to
+    /// <paramref name="into"/>; returns <see cref="FirstKeptLine"/> as the copy saw it, so the first line copied is numbered
+    /// <c>Math.Max(from, returned)</c> — <c>DiagnosticBuffer.CopySince</c>'s contract, for <c>/process</c>'s window (2026-10-05).
+    /// </summary>
+    public long CopyFrom(long from, ICollection<OutputLine> into)
+    {
+        ArgumentNullException.ThrowIfNull(into);
+        lock (_lock)
+        {
+            long first = _dropped + 1;
+            long skip = Math.Max(0, from - first);
+            foreach (var line in _lines.Skip((int)Math.Min(skip, _lines.Count)))
+            {
+                into.Add(line);
+            }
+
+            return first;
         }
     }
 

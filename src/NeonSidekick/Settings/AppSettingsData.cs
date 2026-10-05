@@ -137,6 +137,16 @@ public sealed class AppSettingsData
     public int? LogWindowTop { get; set; }
 
     /// <summary>
+    /// The process window's top-left corner as it last closed (2026-10-05, <c>/process &lt;id&gt;</c>'s window): the
+    /// <see cref="LogWindowLeft"/> pair's twin, set by the window itself (<see cref="Viewer.ProcessWindow.Placed"/>). No menu row;
+    /// null opens it where Windows puts it. Switching the window to another process keeps the place.
+    /// </summary>
+    public int? ProcessWindowLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="ProcessWindowLeft"/>.</summary>
+    public int? ProcessWindowTop { get; set; }
+
+    /// <summary>
     /// The thumbnail browser's top-left corner as it last closed (2026-10-04, <c>/view --thumbs</c>' window, <c>/thumbs</c>' until later that day): the <see cref="ViewerLeft"/>
     /// pair's twin, set by the window itself (<see cref="Viewer.ThumbsWindow.Placed"/>). No menu row; null opens it where Windows puts it.
     /// </summary>

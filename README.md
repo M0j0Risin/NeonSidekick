@@ -208,8 +208,8 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/process`, `/persona`, `/operata`, `/vocalia` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -1074,6 +1074,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/pdf <file> [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see Making PDFs). |
 | `/pdf https://… [to=<out.pdf>] [overwrite]` | Makes a PDF of a web page as the browser shows it; *Web browser network mode* still applies. |
 | `/pdf reply [options]` | Makes a PDF of the last reply as formatted Markdown. |
+| `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. |
+| `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). Another id switches the window. |
 | `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switches, creates, deletes, renames or resets a profile, or copies its settings to (`push`) or from (`pull`) another. `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. See Profiles. |
 | `/queue [clear]` | Lists and prunes the queued messages (`⊠ clear all` or `c` drops them); `/queue clear` drops them without the pane. |
 | `/reasoning [level]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
@@ -1290,6 +1292,15 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 | Any other Ctrl or Alt chord | Runs in the chat as if pressed there (Ctrl+Alt+G closes this window); the keyboard stays in the window |
 
 Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. A second `/log` brings it forward; `/log --file` opens the `--log` file instead.
+
+#### Process window
+
+`/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone lists the processes.
+
+* **One window:** `/process` with another id switches it to that process, in the same place on screen.
+* **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. A process that has ended ignores Ctrl+K.
+
+Otherwise it is read-only: scroll, follow, select and copy as in the log window, Tab back to the terminal. It reopens where it was closed and closes with the app.
 
 #### Camera
 
@@ -2110,6 +2121,7 @@ Runs commands on your machine, starting in the working directory (`workdir` pick
 
 * Commands run hidden, output read as UTF-8 with colours and pagers off, and stdin closed (background processes keep it for `process`).
 * A command that times out is killed with everything it started. Background processes stop when the app closes; a crash leaves running commands running.
+* `/process` lists the background processes, and `/process <id>` watches one's output live in the [process window](#process-window), where Ctrl+K twice stops it.
 
 #### Headless runs
 

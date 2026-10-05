@@ -139,13 +139,18 @@ public static class ShellText
         return $"{session.Id}  {state,-9} {Elapsed(session.Elapsed),-9} {session.Kind,-10} {session.Label}";
     }
 
-    /// <summary><c>proc_3f2a1b running for 3 m 12 s (powershell): npm run dev — 14 new lines</c> / <c>proc_… exited 0 after 34.2 s (cmd): … — no new output</c>. Pinned.</summary>
+    /// <summary>
+    /// <c>proc_3f2a1b running for 3 m 12 s (powershell): npm run dev — 14 new lines</c> / <c>proc_… exited 0 after 34.2 s (cmd): … — no new output</c>;
+    /// <c>proc_… stopped by the user after 2 m 5 s (cmd): …</c> once the user stopped it from <c>/process</c>'s window (2026-10-05). Pinned.
+    /// </summary>
     public static string PollHeader(ProcessSession session, int newLines)
     {
         ArgumentNullException.ThrowIfNull(session);
-        string state = session.HasExited
-            ? $"exited {N(session.ExitCode ?? -1)} after {Elapsed(session.Elapsed)}"
-            : $"running for {Elapsed(session.Elapsed)}";
+        string state = !session.HasExited
+            ? $"running for {Elapsed(session.Elapsed)}"
+            : session.StoppedByUser
+                ? $"{StoppedByUserWords} after {Elapsed(session.Elapsed)}"
+                : $"exited {N(session.ExitCode ?? -1)} after {Elapsed(session.Elapsed)}";
         string fresh = newLines == 0 ? "no new output" : $"{Count(newLines)} new {(newLines == 1 ? "line" : "lines")}";
         return $"{session.Id} {state} ({session.Kind}): {session.Label} — {fresh}";
     }
@@ -188,9 +193,15 @@ public static class ShellText
         return $"closed {session.Id} (exit {N(session.ExitCode ?? -1)}, {Count(session.Output.TotalLines)} {(session.Output.TotalLines == 1 ? "line" : "lines")} forgotten)";
     }
 
-    /// <summary>The transcript's alert when a notified process exits: <c>proc_3f2a1b exited 0 after 34.2 s: npm test</c>. Pinned.</summary>
+    /// <summary>
+    /// The transcript's alert when a notified process exits: <c>proc_3f2a1b exited 0 after 34.2 s: npm test</c>; <c>… was stopped by you
+    /// after …</c> when the user stopped it from <c>/process</c>'s window (2026-10-05). Pinned.
+    /// </summary>
     public static string AlertLine(ProcessAlert alert) =>
-        $"{alert.Id} {(alert.Killed ? "was killed" : "exited " + N(alert.ExitCode))} after {Elapsed(alert.Elapsed)}: {alert.Label}";
+        $"{alert.Id} {(alert.ByUser ? "was stopped by you" : alert.Killed ? "was killed" : "exited " + N(alert.ExitCode))} after {Elapsed(alert.Elapsed)}: {alert.Label}";
+
+    /// <summary>The model's words for a process the user stopped (2026-10-05, <see cref="PollHeader"/>). Pinned.</summary>
+    public const string StoppedByUserWords = "stopped by the user";
 
     /// <summary>The lines of a poll or a log as one text, oldest first, empty for none.</summary>
     public static string Lines(IReadOnlyList<OutputLine> lines)

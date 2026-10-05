@@ -158,6 +158,8 @@ internal sealed partial class ChatScreen
     /// default — would hold the streaming reply that long. On the watcher the reply streams on, its lines go through the flow
     /// sink, and the turn's end awaits the watcher's line before the idle line (<see cref="EndTurnAsync"/>), so none is lost;
     /// the keys wait only while the call runs. <c>HaSession</c> holds its own lock, as the completion's background read needs.</para>
+    /// <para><c>/process</c> (2026-10-05) is a <see cref="MidTurnClass.Pane"/> bare (the list, read-only) and
+    /// <see cref="MidTurnClass.Quick"/> with an id (the process window, its own thread, as <c>/log</c>'s).</para>
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, bool hasArgs) => command switch
     {
@@ -168,6 +170,7 @@ internal sealed partial class ChatScreen
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
+        SlashCommand.Process => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
@@ -413,6 +416,10 @@ internal sealed partial class ChatScreen
                 // /keycheck (2026-10-04): its pane over the reply, as /usage's; an error through the flow sink.
                 await ShowKeyCheckAsync(_flow, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Process:
+                // The bare /process (2026-10-05): its list over the reply; none yet is a line through the flow sink.
+                await ListProcessesAsync(_flow, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Camera:
                 // /camera list (2026-10-04, the user's pick): its pane over the reply; the policy sends no other camera word here.
                 await ListCamerasAsync(_flow, cancellationToken).ConfigureAwait(false);
@@ -576,6 +583,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Log:
                 HandleLog(args);
+                break;
+            case SlashCommand.Process:
+                // /process <id> (2026-10-05): the window is its own thread, as the log window's.
+                OpenProcessWindow(args);
                 break;
             case SlashCommand.Timer:
                 HandleTimer(args);

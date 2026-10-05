@@ -3,8 +3,11 @@ using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Shell;
 
-/// <summary>One exit to tell the user about: printed as an alert line, and carried to the model as a seeded <c>process poll</c> pair.</summary>
-public readonly record struct ProcessAlert(string Id, string Label, string Kind, int ExitCode, TimeSpan Elapsed, bool Killed);
+/// <summary>
+/// One exit to tell the user about: printed as an alert line, and carried to the model as a seeded <c>process poll</c> pair.
+/// <paramref name="ByUser"/> (2026-10-05): the user stopped it from <c>/process</c>'s window (<see cref="ProcessRegistry.StopByUser"/>).
+/// </summary>
+public readonly record struct ProcessAlert(string Id, string Label, string Kind, int ExitCode, TimeSpan Elapsed, bool Killed, bool ByUser = false);
 
 /// <summary>How <see cref="ProcessRegistry.Find"/> read a session id.</summary>
 public enum FindOutcome
@@ -116,7 +119,7 @@ public sealed class ProcessRegistry : IDisposable
 
         if (tell)
         {
-            _alerts.Enqueue(new ProcessAlert(session.Id, session.Label, session.Kind, code, session.Elapsed, session.Killed));
+            _alerts.Enqueue(new ProcessAlert(session.Id, session.Label, session.Kind, code, session.Elapsed, session.Killed, session.StoppedByUser));
             _signal();
         }
     }
@@ -146,6 +149,31 @@ public sealed class ProcessRegistry : IDisposable
             session = found.Count == 1 ? found[0] : null;
             return found.Count switch { 0 => FindOutcome.None, 1 => FindOutcome.Found, _ => FindOutcome.Ambiguous };
         }
+    }
+
+    /// <summary>
+    /// The user's own stop (2026-10-05, Ctrl+K twice in <c>/process</c>'s window): the session marked <see cref="ProcessSession.StoppedByUser"/>
+    /// and notified whatever the model asked, then killed, so its exit goes the way of every notified one — an alert line in the
+    /// chat and a seeded poll on the next turn that tells the model. Called on the window's thread: it never writes, the alert's
+    /// <c>signal</c> wakes the screen. False when it is not this registry's, or has exited already.
+    /// </summary>
+    public bool StopByUser(ProcessSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        lock (_lock)
+        {
+            if (_disposed || session.HasExited || !_sessions.Contains(session))
+            {
+                return false;
+            }
+
+            session.MarkUserStop();
+            session.Notify = true;
+        }
+
+        DiagnosticLog.Info(ShellKinds.Category, $"{session.Id}: stopped by the user ({session.Kind}) {session.Label}");
+        session.Kill();
+        return true;
     }
 
     /// <summary>Every session, oldest first.</summary>

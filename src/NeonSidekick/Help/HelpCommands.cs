@@ -211,6 +211,11 @@ public static class HelpCommands
             new("/print reply [options]", "Print the last reply, formatted as markdown."),
             new("/print printers", "List the installed printers in a pane, marking the Windows default and *Print default printer*."),
         ]),
+        new("/process",
+        [
+            new("/process", "List the background processes the model started with `run_command`'s `background` option on a pane: the id, running or how it ended, how long it has run, the shell and the command."),
+            new("/process <id>", "Open the process window on one (any unique start of its id; Tab completes it): its output live, following the newest line while at the bottom, stderr in the warning colour, the title its state. Scroll, select and copy as in the log window (`/log`); TAB brings the terminal forward. `/process` with another id switches the window to that process in the same place. Ctrl+K twice within 3 seconds stops the process: the chat says it was stopped by you, and the model hears of it on its next turn."),
+        ]),
         new("/profile",
         [
             new("/profile [name | add <name> | delete <name> | rename <name> <new> | reset [name] [--all] | push <name> | pull <name> | edit | reload]", "Switch, create, delete, rename or reset a profile, or copy its settings to another (`push`) or from another (`pull`). `edit` opens `profile.json` in your editor; `reload` reads it back and reconnects only what changed. Profiles whose name starts with `_` are left off the picker and the name list (unless loaded); `/profile _name` still switches to one. See Profiles. Ctrl+P runs the bare `/profile` too."),

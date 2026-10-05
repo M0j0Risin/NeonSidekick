@@ -88,6 +88,7 @@ public partial class ChatScreenTests : IDisposable
     private Action<string, string>? _openImage;   // a double-clicked picture (later on 2026-09-24): null = the plain opener, _openedFiles   // /imagine and the image tools (2026-09-24): a client over a stub server
     private string? _logFile;   // /log --file (2026-09-22): the --log file the screen is handed; null = started without --log
     private Action? _openLogWindow;   // /log (2026-10-02): the log window's opener; null = no window here
+    private Action<ProcessSession, Action<ProcessSession>>? _openProcessWindow;   // /process <id> (2026-10-05): the process window's opener; null = no window here
     private Func<bool>? _closeLogWindow;   // Ctrl+Alt+G's second press (later on 2026-10-02): true when a window was open
     private Func<bool>? _closeViewer;      // Ctrl+Alt+U's second press (later on 2026-10-02): true when a viewer was open
     private Action<bool>? _mouse;
@@ -289,7 +290,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -11808,6 +11809,8 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.HomeAssistant, true, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Window, false, MidTurnClass.Quick)]   // later on 2026-09-27
     [InlineData(SlashCommand.KeyCheck, false, MidTurnClass.Pane)]   // 2026-10-04: its pane over the reply, as /usage's
+    [InlineData(SlashCommand.Process, false, MidTurnClass.Pane)]    // 2026-10-05: the list over the reply
+    [InlineData(SlashCommand.Process, true, MidTurnClass.Quick)]    // 2026-10-05: the process window, its own thread
     [InlineData(SlashCommand.Perf, false, MidTurnClass.Quick)]     // later on 2026-09-29: display only
     [InlineData(SlashCommand.Perf, true, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Persona, false, MidTurnClass.Pane)]   // later on 2026-09-27: the prompt was built at the turn's start

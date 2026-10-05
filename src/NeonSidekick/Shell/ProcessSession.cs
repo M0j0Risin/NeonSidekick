@@ -27,6 +27,7 @@ public sealed class ProcessSession : IDisposable
     private long _ended;
     private bool _inputClosed;
     private bool _disposed;
+    private bool _userStop;
 
     internal ProcessSession(string id, ProcessLaunch launch, Process process, TimeProvider time)
     {
@@ -62,6 +63,16 @@ public sealed class ProcessSession : IDisposable
 
     /// <summary>Whether <see cref="Kill"/> ended it (a timeout, a <c>kill</c>, the app's exit) rather than its own exit.</summary>
     public bool Killed { get; private set; }
+
+    /// <summary>
+    /// Whether the user stopped it by hand (2026-10-05, Ctrl+K twice in <c>/process</c>'s window, <see cref="ProcessRegistry.StopByUser"/>):
+    /// the alert and the model's poll say "stopped by you" / "stopped by the user" rather than a bare kill. Only when the kill
+    /// landed: a child that exited on its own just before the stop keeps its own exit.
+    /// </summary>
+    public bool StoppedByUser => Killed && Volatile.Read(ref _userStop);
+
+    /// <summary>The user's stop asked for (<see cref="ProcessRegistry.StopByUser"/>), before the kill.</summary>
+    internal void MarkUserStop() => Volatile.Write(ref _userStop, true);
 
     /// <summary>Completes with the exit code once the process is gone and both pumps have drained.</summary>
     public Task<int> Exited => _exited.Task;

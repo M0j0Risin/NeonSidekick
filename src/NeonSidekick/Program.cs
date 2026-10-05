@@ -163,7 +163,7 @@ Console.CancelKeyPress += (_, e) =>
 var geometry = ScreenGeometry.ForConsole();
 bool interactive = !options.Headless && !options.IsCheck;
 using var consoleInput = interactive && geometry is not null ? WindowsConsoleInput.TryCreate() : null;
-var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : null, liveView: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null);
+var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: WindowsClipboard.TryReadText, copyToClipboard: WindowsClipboard.TrySetText, clipboardImage: WindowsClipboard.TryReadImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : null, liveView: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, openProcessWindow: NeonSidekick.Viewer.ProcessWindow.IsAvailable ? NeonSidekick.Viewer.ProcessWindow.Show : null, closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null);
 
 // The console window closed by its X button (2026-10-02, the user's report: Docker server stop on exit never ran then).
 // SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, and Windows ends the
@@ -238,6 +238,19 @@ NeonSidekick.Viewer.LogWindow.Placed = (x, y) =>
         });
     }
 };
+// The process window keeps a place of its own too (2026-10-05), whichever process it shows.
+NeonSidekick.Viewer.ProcessWindow.Position = () => settings.Current is { ProcessWindowLeft: int x, ProcessWindowTop: int y } ? (x, y) : null;
+NeonSidekick.Viewer.ProcessWindow.Placed = (x, y) =>
+{
+    if (settings.Current is not { ProcessWindowLeft: int left, ProcessWindowTop: int top } || left != x || top != y)
+    {
+        settings.Update(d =>
+        {
+            d.ProcessWindowLeft = x;
+            d.ProcessWindowTop = y;
+        });
+    }
+};
 // The thumbnail browser keeps a place of its own too (2026-10-04).
 NeonSidekick.Viewer.ThumbsWindow.Position = () => settings.Current is { ThumbsWindowLeft: int x, ThumbsWindowTop: int y } ? (x, y) : null;
 NeonSidekick.Viewer.ThumbsWindow.Placed = (x, y) =>
@@ -272,6 +285,7 @@ catch (Exception ex) when (ex is not OperationCanceledException)
 // this is the tidy way (and the log window remembers its place).
 NeonSidekick.Viewer.PictureWindow.CloseAll();
 NeonSidekick.Viewer.LogWindow.Close();
+NeonSidekick.Viewer.ProcessWindow.Close();
 NeonSidekick.Viewer.ThumbsWindow.Close();
 
 // A change made in the last quarter-second before quitting must not be lost to the debounce.

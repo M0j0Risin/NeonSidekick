@@ -687,6 +687,8 @@ public sealed class AppSettings : IDisposable
         CameraWindowTop = source.CameraWindowTop,
         LogWindowLeft = source.LogWindowLeft,
         LogWindowTop = source.LogWindowTop,
+        ProcessWindowLeft = source.ProcessWindowLeft,
+        ProcessWindowTop = source.ProcessWindowTop,
         ThumbsWindowLeft = source.ThumbsWindowLeft,
         ThumbsWindowTop = source.ThumbsWindowTop,
         HideExitAutocomplete = source.HideExitAutocomplete,

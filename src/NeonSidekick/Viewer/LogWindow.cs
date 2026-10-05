@@ -51,7 +51,7 @@ public static class LogWindow
                 return;
             }
 
-            var window = new LogWindowThread(buffer);
+            var window = new LogWindowThread(new DiagnosticFeed(buffer), "Log window", Position, Placed);
             window.Start();
             s_open = window;
         }
@@ -91,7 +91,11 @@ public static class LogWindow
     }
 }
 
-/// <summary>The log window and the thread that pumps its messages (<see cref="LogWindow"/>).</summary>
+/// <summary>
+/// The log window and the thread that pumps its messages (<see cref="LogWindow"/>). Since 2026-10-05 it reads an
+/// <see cref="ILineFeed"/>, so <c>/process</c>'s window (<see cref="ProcessWindow"/>) is the same window over a process's output:
+/// the class, the drawing and the smoke's probe are shared, and only the feed, the name and the place differ.
+/// </summary>
 internal sealed unsafe class LogWindowThread
 {
     private const uint AppendedMessage = WmApp + 1;
@@ -119,9 +123,12 @@ internal sealed unsafe class LogWindowThread
     private static IntPtr s_className;
     private static ushort s_atom;
 
-    private readonly DiagnosticBuffer _buffer;
+    private readonly ILineFeed _feed;
+    private readonly string _name;
+    private readonly Func<(int X, int Y)?>? _position;
+    private readonly Action<int, int>? _placed;
     private readonly LogViewState _state = new();
-    private readonly WindowChrome _chrome = new("log window");
+    private readonly WindowChrome _chrome;
     private readonly ManualResetEventSlim _ready = new();
     private readonly List<LogLine> _scratch = [];
     private Thread? _thread;
@@ -146,11 +153,19 @@ internal sealed unsafe class LogWindowThread
     private int? _thumbGrab;
     private (int X, int Y) _mouse;
     private int _wheel;
-    private bool _titleFollowing = true;
+    private string? _title;
 
-    public LogWindowThread(DiagnosticBuffer buffer)
+    /// <param name="feed">The lines shown; the window owns it and disposes it as it closes.</param>
+    /// <param name="name">The window's name in the log and on its thread: <c>Log window</c>, <c>Process window</c>.</param>
+    /// <param name="position">Where it last closed, read as it opens (<see cref="LogWindow.Position"/>); null is Windows' place.</param>
+    /// <param name="placed">Told its corner as it closes (<see cref="LogWindow.Placed"/>), on its thread.</param>
+    public LogWindowThread(ILineFeed feed, string name, Func<(int X, int Y)?>? position, Action<int, int>? placed)
     {
-        _buffer = buffer;
+        _feed = feed;
+        _name = name;
+        _position = position;
+        _placed = placed;
+        _chrome = new WindowChrome(name.ToLowerInvariant());
     }
 
     public bool Alive => _alive;
@@ -158,7 +173,7 @@ internal sealed unsafe class LogWindowThread
     /// <summary>The thread started and the window made; throws with the reason when it could not be (the picture viewer's <c>Start</c>).</summary>
     public void Start()
     {
-        _thread = new Thread(Run) { IsBackground = true, Name = "Log window" };
+        _thread = new Thread(Run) { IsBackground = true, Name = _name };
         _thread.Start();
         if (!_ready.Wait(TimeSpan.FromSeconds(10)) || !_started)
         {
@@ -361,21 +376,21 @@ internal sealed unsafe class LogWindowThread
 
             // Where it last closed first, so the size and the font are the DPI of the monitor it opens on.
             _chrome.Window = _hwnd;
-            _chrome.RestorePosition(LogWindow.Position);
+            _chrome.RestorePosition(_position);
             _chrome.SizeForDpi(DefaultWidth, DefaultHeight);
             SetFont(Math.Max(96u, GetDpiForWindow(_hwnd)));
             ApplyStyle();   // before it is shown: the bar is never light first
 
             // The run so far, then every line as it comes; a line between the two is read by the second take.
             TakeAppended();
-            _buffer.Appended += OnAppended;
+            _feed.Appended += OnAppended;
             _subscribed = true;
             TakeAppended();
             Layout();
             UpdateTitle(force: true);
             ShowWindow(_hwnd, SwShow);
             _chrome.BringForward();
-            DiagnosticLog.Info("Viewer", "Log window opened.");
+            DiagnosticLog.Info("Viewer", $"{_name} opened.");
 
             _started = true;
             _ready.Set();
@@ -390,15 +405,17 @@ internal sealed unsafe class LogWindowThread
         catch (Exception ex)
         {
             _failure ??= $"{ex.GetType().Name}: {ex.Message}";
-            DiagnosticLog.Error("Viewer", "The log window's thread failed.", ex);
+            DiagnosticLog.Error("Viewer", $"The {_name.ToLowerInvariant()}'s thread failed.", ex);
         }
         finally
         {
             _alive = false;
             if (_subscribed)
             {
-                _buffer.Appended -= OnAppended;
+                _feed.Appended -= OnAppended;
             }
+
+            _feed.Dispose();
 
             if (!_started && _hwnd != IntPtr.Zero)
             {
@@ -423,7 +440,7 @@ internal sealed unsafe class LogWindowThread
 
             self.Free();
             _ready.Set();
-            DiagnosticLog.Info("Viewer", "Log window closed.");
+            DiagnosticLog.Info("Viewer", $"{_name} closed.");
         }
     }
 
@@ -464,6 +481,13 @@ internal sealed unsafe class LogWindowThread
                 var action = TerminalHandoff.AltHeld() ? LogViewAction.None : LogViewState.ActionFor((int)wParam, GetKeyState(VkControl) < 0, _chrome.FullScreen);
                 if (action == LogViewAction.None)
                 {
+                    // The feed's own key first (2026-10-05: the process window's Ctrl+K), its title read again.
+                    if (!TerminalHandoff.AltHeld() && _feed.Key((int)wParam, GetKeyState(VkControl) < 0))
+                    {
+                        UpdateTitle();
+                        return IntPtr.Zero;
+                    }
+
                     // TAB to the terminal, a Ctrl or Alt chord to the chat (2026-10-03); Alt+F4 and the rest to the default.
                     if (TerminalHandoff.Take((int)wParam))
                     {
@@ -583,7 +607,7 @@ internal sealed unsafe class LogWindowThread
                 _chrome.BringForward();
                 return IntPtr.Zero;
             case WmClose:
-                _chrome.RememberPosition(LogWindow.Placed);
+                _chrome.RememberPosition(_placed);
                 DestroyWindow(hwnd);
                 return IntPtr.Zero;
             case WmDestroy:
@@ -594,7 +618,7 @@ internal sealed unsafe class LogWindowThread
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
-    // From the logging thread (DiagnosticBuffer.Appended): one message in flight however many lines arrive, so a burst of
+    // From the logging thread (DiagnosticBuffer.Appended) or a process's pump (OutputBuffer.Appended): one message in flight however many lines arrive, so a burst of
     // Trace lines is one read and one paint. Nothing here may log: it would raise itself again.
     private void OnAppended()
     {
@@ -609,10 +633,14 @@ internal sealed unsafe class LogWindowThread
     {
         Volatile.Write(ref _appendPosted, 0);
         _scratch.Clear();
-        long first = _buffer.CopySince(_state.NextSeq, _scratch);
+        long first = _feed.CopySince(_state.NextSeq, _scratch);
         if (_state.Append(_scratch, first) && _hwnd != IntPtr.Zero)
         {
             Refresh();
+        }
+        else if (_hwnd != IntPtr.Zero)
+        {
+            UpdateTitle();   // no new line, but the feed's title may have changed (a process's exit, a lapsed kill key)
         }
     }
 
@@ -663,13 +691,14 @@ internal sealed unsafe class LogWindowThread
         InvalidateRect(_hwnd, null, false);
     }
 
-    // The title says whether the window follows the log (LogViewText.TitleFor); set only when that changes.
+    // The title the feed gives (whether the window follows, and since 2026-10-05 a process's state); set only when it changes.
     private void UpdateTitle(bool force = false)
     {
-        if (force || _state.Following != _titleFollowing)
+        string title = _feed.Title(_state.Following);
+        if (force || !string.Equals(title, _title, StringComparison.Ordinal))
         {
-            _titleFollowing = _state.Following;
-            SetWindowTextW(_hwnd, LogViewText.TitleFor(_titleFollowing));
+            _title = title;
+            SetWindowTextW(_hwnd, title);
         }
     }
 
@@ -909,7 +938,8 @@ internal sealed unsafe class LogWindowThread
             {
                 if (_state.LineCount == 0)
                 {
-                    Text(dc, left, top, LogViewText.Empty, 0, LogViewText.Empty.Length, _style.Dim);
+                    string empty = _feed.Empty;
+                    Text(dc, left, top, empty, 0, empty.Length, _style.Dim);
                 }
 
                 var rows = _state.Rows();

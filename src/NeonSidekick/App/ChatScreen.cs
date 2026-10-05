@@ -540,6 +540,12 @@ internal sealed partial class ChatScreen
     /// <summary>The log window closed, true when one was open (later on 2026-10-02, Ctrl+Alt+G's second press: <c>Viewer.LogWindow.Close</c>). Null = no window here.</summary>
     private readonly Func<bool>? _closeLogWindow;
 
+    /// <summary>
+    /// The process window on a session, with Ctrl+K's stop (2026-10-05, <c>/process &lt;id&gt;</c>; <c>Viewer.ProcessWindow.Show</c>).
+    /// Null = no window here: <c>/process &lt;id&gt;</c> says so, the list still shows.
+    /// </summary>
+    private readonly Action<ProcessSession, Action<ProcessSession>>? _openProcessWindow;
+
     /// <summary>The picture viewer closed, the camera's window left alone, true when one was open (later on 2026-10-02, Ctrl+Alt+U's second press: <c>Viewer.PictureWindow.CloseViewer</c>). Null = no viewer here.</summary>
     private readonly Func<bool>? _closeViewer;
     private readonly Func<string, string, CancellationToken, Task>? _editDraft;
@@ -959,9 +965,11 @@ internal sealed partial class ChatScreen
         Action<string, string?>? openThumbs = null,
         Action<string>? followThumbs = null,
         Action<string>? showInViewer = null,
-        Func<bool>? closeThumbs = null)
+        Func<bool>? closeThumbs = null,
+        Action<ProcessSession, Action<ProcessSession>>? openProcessWindow = null)
     {
         _logFile = logFile;
+        _openProcessWindow = openProcessWindow;
         _openTerminal = openTerminal;
         _openLogWindow = openLogWindow;
         _closeLogWindow = closeLogWindow;
@@ -3724,7 +3732,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null,
         Func<string, IReadOnlyList<CompletionItem>>? Screen = null, Func<string, IReadOnlyList<CompletionItem>>? Server = null,
-        Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false);
+        Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false, Func<IReadOnlyList<CompletionItem>>? Processes = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -4188,6 +4196,10 @@ internal sealed partial class ChatScreen
                 // --file, only when there is a --log file to open (2026-10-04).
                 return sources.LogFile ? MentionCompleter.Matches([new(LogViewText.FileSwitch, LogViewText.FileSwitchNote)], argText) : [];
 
+            case SlashCommand.Process:
+                // The background processes' ids, newest first, with their state and command (2026-10-05); one id, so a space closes the list.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Processes?.Invoke() ?? [], argText);
+
             case SlashCommand.Claude:
                 // new (2026-10-04); a message is free text, and one that does not start with "new" closes the list at its next letter.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(ClaudeText.NewWord, ClaudeText.NewNote)], argText);
@@ -4392,7 +4404,8 @@ internal sealed partial class ChatScreen
             ScreenChoices,
             ServerChoices,
             EmbeddedModelChoices,
-            _logFile is not null);
+            _logFile is not null,
+            ProcessChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -10698,6 +10711,14 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Log:
                 HandleLog(args);
+                return false;
+
+            case SlashCommand.Process when args.Trim().Length == 0:
+                await ListProcessesAsync(_transcript, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Process:
+                OpenProcessWindow(args);
                 return false;
 
             case SlashCommand.Window:
