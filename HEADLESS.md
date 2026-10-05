@@ -407,6 +407,9 @@ The same holds for the profile's *Shell police forbidden strings*: while the pol
 script or `process` write containing one (case and spacing ignored) is refused and counts toward exit code 3.
 And while *SQLite tools* is on, so is a command, script or `process` write that reaches SQLite (the word `sqlite`, a
 `.db`/`.sqlite` file, a database sqlite.json names, or a script file the line runs that does): the SQLite tools are the way in.
+Likewise while *SQL tools*, *Oracle tools*, *MySQL tools* or *PostgreSQL tools* is on, for a command, script or `process` write
+that reaches that family (its clients and drivers — sqlcmd, sqlplus, mysql, psql, pyodbc, psycopg… — or a host its connections
+name, a loopback one only with its port): its tools are the way in.
 
 ### With the flag
 

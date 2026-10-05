@@ -452,6 +452,13 @@ public sealed class WorkingDirectory
     /// </summary>
     public Func<DatabaseGuard?>? Databases { get; set; }
 
+    /// <summary>
+    /// The server families the shell police guards (2026-10-05, the user's call: SQLite's rule mirrored for SQL Server, Oracle, MySQL
+    /// and PostgreSQL), read at each shell call: null, or a null answer, while none of their tools is on. The file tools never read
+    /// it (a server's database is no file here); the shell tools do (<c>Shell.ServerDatabasePolice</c>).
+    /// </summary>
+    public Func<Shell.ServerDatabaseGuard?>? ServerDatabases { get; set; }
+
     /// <summary>The setting's meaning: blank is the profile's <see cref="DefaultFolderName"/> folder, anything else a full path.</summary>
     public static string Resolve(string configured, string profileDirectory)
     {

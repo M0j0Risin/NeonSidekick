@@ -678,6 +678,7 @@ public sealed class SidekickApp
         var files = BuildWorkingDirectory();
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05).
         files.Databases = () => EffectiveSettings.SqliteTools ? ChatScreen.SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
+        files.ServerDatabases = () => Shell.ServerDatabasePolice.For(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
         // The UNC shares' door first (2026-10-01): open reaches the offered shares too.
         var unc = new Unc.UncAccess(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.UncSharesOffered), _time);
         // The printing door before the file tools (2026-10-03): convert_to_pdf makes its PDFs with the web tools' headless browser or Microsoft Print to PDF.

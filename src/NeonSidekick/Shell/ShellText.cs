@@ -400,11 +400,37 @@ public static class ShellText
         return $"police: sqlite ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
     }
 
+    /// <summary>What a result the server-database police refused opens with (<see cref="ServerDatabasePolice"/>, 2026-10-05).</summary>
+    public const string ServerDatabaseHead = "Error: refused by the shell police — database";
+
+    /// <summary>
+    /// What the model is told when the server-database police tripped (2026-10-05, the user's call): while a family's tools are on,
+    /// its databases are theirs alone, and no other way is to be tried. Pinned.
+    /// </summary>
+    public static string ServerDatabasePoliced(ServerDatabaseGuard.Family family)
+    {
+        ArgumentNullException.ThrowIfNull(family);
+        return $"{ServerDatabaseHead}: while the {family.Title} tools are on, a {family.Title} database is reached only through them — " +
+            $"{family.QueryTool} to read, and {family.ExecuteTool} to change one when its mode allows it. Do not try another way (a client, a script, " +
+            "another driver); tell the user if a change is needed that the tools refuse.";
+    }
+
+    /// <summary>The 👮 line the user reads for <see cref="ServerDatabasePoliced"/>: <c>PostgreSQL: 'psql' in load.py — not run</c>. Pinned.</summary>
+    public static string ServerDatabaseShown(string family, string token, string? file) =>
+        file is null ? $"{family}: '{token}' — not run" : $"{family}: '{token}' in {file} — not run";
+
+    /// <summary><c>police: PostgreSQL ('psql' in load.py) — powershell "python load.py"</c>: the server-database police's line, before the gate is asked.</summary>
+    public static string ServerDatabaseLogLine(CommandRequest request, string family, string token, string? file)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return $"police: {family} ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
+    }
+
     /// <summary>Whether <paramref name="result"/> is any police's refusal: the transcript draws it behind 👮 rather than 🛠️.</summary>
     public static bool IsPoliced(string result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal) || result.StartsWith(SqliteHead, StringComparison.Ordinal);
+        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal) || result.StartsWith(SqliteHead, StringComparison.Ordinal) || result.StartsWith(ServerDatabaseHead, StringComparison.Ordinal);
     }
 
     /// <summary>

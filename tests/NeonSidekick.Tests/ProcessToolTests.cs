@@ -163,9 +163,16 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal("SQLite: 'sqlite3' — not run", policed.Shown);
         _files.Databases = null;
 
+        // The server-database police (2026-10-05): stdin that reaches a family whose tools are on.
+        _files.ServerDatabases = () => new Shell.ServerDatabaseGuard([new("PostgreSQL", "postgres_query", "postgres_execute", Shell.ServerDatabasePolice.PostgresWords, ["pg01"])]);
+        policed = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("action", "submit"), ("session_id", guarded.Id), ("data", "psql -h pg01"))));
+        Assert.StartsWith(ShellText.ServerDatabaseHead, policed.Text);
+        Assert.Equal("PostgreSQL: 'psql' — not run", policed.Shown);
+        _files.ServerDatabases = null;
+
         Assert.Equal("sent a line to " + guarded.Id, await Invoke(("action", "submit"), ("session_id", guarded.Id), ("data", "sub")));
         Assert.Equal(guarded.Id + " exited 0 after 0.0 s (cmd): set /p name=&& call echo hello %name% — 1 new line\nhello sub", await Invoke(("action", "wait"), ("session_id", guarded.Id), ("timeout", 30)));
-        Assert.Equal([@"cd C:\", "cd ..", "SHUTDOWN /s", "sqlite3 shop.db"], _gate.Refusals);
+        Assert.Equal([@"cd C:\", "cd ..", "SHUTDOWN /s", "sqlite3 shop.db", "psql -h pg01"], _gate.Refusals);
         _settings.ShellPoliceForbiddenStrings = [];
 
         var sleeper = Start("ping -n 30 127.0.0.1 >nul");

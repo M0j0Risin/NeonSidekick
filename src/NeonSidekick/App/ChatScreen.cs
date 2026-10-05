@@ -1014,6 +1014,7 @@ internal sealed partial class ChatScreen
         _files = new WorkingDirectory(() => WorkingDirectory.Resolve(_effective().WorkingDirectory, _settings.ProfileDirectory), time);
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05).
         _files.Databases = () => _effective().SqliteTools ? SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
+        _files.ServerDatabases = () => Shell.ServerDatabasePolice.For(_effective(), _settings.ProfileDirectory, _settings.StorageDirectory);
         // The UNC shares' door (2026-09-30) before the file tools: open reaches the offered shares too (2026-10-01).
         // The profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
         _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);

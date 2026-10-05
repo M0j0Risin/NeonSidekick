@@ -180,6 +180,30 @@ public sealed class RunCommandToolTests : IDisposable
     }
 
     [Fact]
+    public async Task ServerDatabasePolice_RefusesALineOrItsScriptFile_EvenUnderYolo_WhileAFamilysToolsAreOn()
+    {
+        // 2026-10-05, SQLite's rule mirrored: a client, a driver or a configured host of a family whose tools are on.
+        _files.ServerDatabases = () => new Shell.ServerDatabaseGuard([new("PostgreSQL", "postgres_query", "postgres_execute", Shell.ServerDatabasePolice.PostgresWords, ["pg01"])]);
+        var shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("command", "psql -h pg01 -c \"DROP TABLE t\""))));
+        Assert.StartsWith(ShellText.ServerDatabaseHead + ": while the PostgreSQL tools are on", shown.Text);
+        Assert.Equal("PostgreSQL: 'psql' — not run", shown.Shown);
+
+        File.WriteAllText(Path.Combine(_root, "load.py"), "import psycopg\npsycopg.connect('host=pg01')\n");
+        shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("command", "python load.py"))));
+        Assert.Equal("PostgreSQL: 'psycopg' in load.py — not run", shown.Shown);
+        Assert.Equal(["psql -h pg01 -c \"DROP TABLE t\"", "python load.py"], _gate.Refusals);
+        Assert.Contains("fine", await Invoke(("command", "echo fine")));
+
+        _settings.ShellPolice = false;
+        Assert.False(ShellText.IsPoliced(await Invoke(("command", "echo pg01"))));
+        _settings.ShellPolice = true;
+        _files.ServerDatabases = () => null;
+        Assert.False(ShellText.IsPoliced(await Invoke(("command", "echo pg01"))));
+        Assert.Equal(2, _gate.Refusals.Count);
+        _files.ServerDatabases = null;
+    }
+
+    [Fact]
     public async Task PreferNative_SendsALineBackToItsTool_OnceATurn_BeforeTheGate()
     {
         // Shell prefer native tools (2026-09-26): under ask, a line a tool the turn offers covers comes back not run, and the asker is never called.

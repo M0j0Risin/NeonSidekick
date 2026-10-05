@@ -230,6 +230,14 @@ public sealed class ExecuteCodeTool : AIFunction
             return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, null));
         }
 
+        // The server-database police (2026-10-05): a script that reaches a server family whose tools are on is refused whatever the policy.
+        if (effective.ShellPolice && _files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Find(code, servers) is { } server)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(request, server.Family, server.Token, null));
+            _gate.NoteRefused(request);
+            return new ToolShownResult(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, null));
+        }
+
         // The police before the gate (Shell police, 2026-09-22): a script naming a path outside the working directory is refused, and the pane is never asked about it.
         if (effective.ShellPolice && PathPolice.Judge(code, _files, workingDirectory, isScript: true) is { } outside)
         {

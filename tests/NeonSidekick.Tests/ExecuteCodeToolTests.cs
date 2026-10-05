@@ -196,6 +196,18 @@ public sealed class ExecuteCodeToolTests : IDisposable
     }
 
     [Fact]
+    public async Task ServerDatabasePolice_AScriptReachingAFamily_IsRefusedBeforeTheGate()
+    {
+        // 2026-10-05: while a server family's tools are on, a script that reaches it never runs, yolo or not.
+        _files.ServerDatabases = () => new Shell.ServerDatabaseGuard([new("PostgreSQL", "postgres_query", "postgres_execute", Shell.ServerDatabasePolice.PostgresWords, ["pg01"])]);
+        var shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("language", "python"), ("code", "import asyncpg\nawait asyncpg.connect(host='pg01')"))));
+        Assert.StartsWith(ShellText.ServerDatabaseHead, shown.Text);
+        Assert.Equal("PostgreSQL: 'asyncpg' — not run", shown.Shown);
+        Assert.Equal(["python script"], _gate.Refusals);
+        _files.ServerDatabases = null;
+    }
+
+    [Fact]
     public async Task ForbiddenStrings_AnywhereInTheScript_AreRefusedBeforeTheGate()
     {
         // Shell police forbidden strings (2026-10-03): a line break counts as one space, so the words split over two lines still match.

@@ -741,6 +741,11 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
   * a `.db`, `.db3`, `.sqlite` or `.sqlite3` file name (with `-journal`, `-wal` or `-shm` too). In a script it counts only quoted or after a slash, so `self.db` passes.
 
   A script file a `run_command` line runs (`python insert.py`) is read and judged too. The model gets `Error: refused by the shell police — SQLite…`, sent to the sqlite_ tools; the 👮 line shows what tripped it (`SQLite: 'sqlite3' in insert.py — not run`). It reads text, so a script that builds the word in pieces gets past it; only `ask` shows you every command.
+* **Server databases:** the same rule for SQL Server, Oracle, MySQL and PostgreSQL, each while its tools switch (*SQL tools*, *Oracle tools*, *MySQL tools*, *PostgreSQL tools*) is on, in either mode, so their `_execute` tools' modes, statement kinds, access keys and Allow pane can't be walked around. Reaching one means:
+  * its clients and drivers, found inside a longer name too (`pymysql`, `Microsoft.Data.SqlClient`, `psycopg2`): SQL Server's `sqlcmd`, `osql`, `bcp`, `sqlpackage`, `Invoke-Sqlcmd`, `SqlServer`, `SqlClient`, `pyodbc`, `pymssql`, `mssql`; Oracle's `sqlplus`, `sqlcl`, `oracledb`, `cx_Oracle`, `ManagedDataAccess`, `tnsping`, `expdp`, `impdp`, `rman`; `mysql` and `mariadb`; `postgres`, `psql`, `pg_dump`, `pg_dumpall`, `pg_restore`, `pgcli`, `psycopg`, `asyncpg`, `npgsql`, `pg8000`. The short ones (`bcp`, `osql`, `psql`, `rman`, `sqlcl`) count only standing alone;
+  * a host one of its connections names (offered or not), as a whole name; a loopback host (`localhost`, `127.0.0.1`, `.`) only with its port (`localhost:5432`, `localhost,1433`), so `curl localhost:8080` passes.
+
+  Script files a line runs are judged too. The model gets `Error: refused by the shell police — database…`, sent to that family's tools; the 👮 line shows what tripped it (`PostgreSQL: 'psql' — not run`). A tripwire, as above.
 * **Prefer native tools:** the operating rules name the tools offered that turn and the commands each replaces:
   * `cat`/`type`/`Get-Content`/`dir`/`ls`/`grep` → `read_file`/`search_files`
   * `git status`/`log`/`diff`/`add`/`commit` → the GitLib tools

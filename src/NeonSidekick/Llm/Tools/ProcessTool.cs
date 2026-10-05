@@ -223,6 +223,15 @@ public sealed class ProcessTool : AIFunction
                     return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, null));
                 }
 
+                // The server-database police (2026-10-05): a process's stdin that reaches a server family whose tools are on.
+                if (effective.ShellPolice && _files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Find(data, servers) is { } server)
+                {
+                    var refused = new CommandRequest(session.Kind, data, []);
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(refused, server.Family, server.Token, null));
+                    _gate?.NoteRefused(refused);
+                    return new ToolShownResult(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, null));
+                }
+
                 // The police (Shell police, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
                 if (effective.ShellPolice && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
                 {
