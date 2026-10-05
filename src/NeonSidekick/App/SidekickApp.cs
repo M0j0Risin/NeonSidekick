@@ -528,12 +528,15 @@ public sealed class SidekickApp
     /// </summary>
     public void RenderBanner() => RenderBanner(_console);
 
+    /// <summary>The folder the banner's path shows as <c>~</c> (2026-10-04, <see cref="ScreenPane.HomeTilde"/>): the user's profile; tests set their own.</summary>
+    public string UserProfileFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
     public void RenderBanner(IAnsiConsole console)
     {
         ArgumentNullException.ThrowIfNull(console);
         var effective = EffectiveSettings;
         string? directory = effective.ShowWorkingDirectory
-            ? WorkingDirectory.Resolve(effective.WorkingDirectory, _settings.ProfileDirectory)
+            ? ScreenPane.HomeTilde(WorkingDirectory.Resolve(effective.WorkingDirectory, _settings.ProfileDirectory), UserProfileFolder)   // ~ for the profile (2026-10-04)
             : null;
         int width = Width();
         console.WriteLine();

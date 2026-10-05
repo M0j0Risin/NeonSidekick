@@ -1180,7 +1180,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         ArgumentNullException.ThrowIfNull(strip);
         ArgumentNullException.ThrowIfNull(path);
-        string left = Fit(strip, cells);
+        string left = FitStrip(strip, cells);
         int leftCells = TextCells.Width(left);
         int room = cells - leftCells - ToolbarGap;
         string shown = path.Length == 0 || room < ToolbarPathMinCells ? "" : FitTail(path, room);
@@ -4900,7 +4900,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     {
         int cells = Math.Max(1, width - 1);
         string row = ToolbarRow(toolbar.Strip, toolbar.Path, cells);
-        string strip = Fit(toolbar.Strip, cells);   // as ToolbarRow placed it: the path is what follows the blanks
+        string strip = FitStrip(toolbar.Strip, cells);   // as ToolbarRow placed it: the path is what follows the blanks
         string path = row[strip.Length..].TrimStart(' ');
         foreach (var (text, off) in ToolbarStripRuns(strip, toolbar.Off))
         {
@@ -4953,7 +4953,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             string element = strip.Substring(i, length);
             if (!string.IsNullOrWhiteSpace(element))
             {
-                if (off.Contains(glyph) && element != "…")
+                if (off.Contains(glyph) && element != "…" && !(element.Length == 1 && char.IsAscii(element[0])))   // nor the +N (2026-10-04)
                 {
                     if (i > plainStart)
                     {
@@ -5392,6 +5392,54 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         return text[..end] + "…";
+    }
+
+    /// <summary>
+    /// The toolbar's strip in <paramref name="cells"/> (2026-10-04, the UI review: a cut strip ended on <c>…</c>, which said nothing of
+    /// how many were left off): whole when it fits, else as many glyphs as fit and <c>+N</c> after them for the N left off;
+    /// <see cref="Fit"/> where not even one glyph and its count fit. The glyphs are the strip's, one blank between. Pinned.
+    /// </summary>
+    public static string FitStrip(string strip, int cells)
+    {
+        ArgumentNullException.ThrowIfNull(strip);
+        if (TextCells.Width(strip) <= cells)
+        {
+            return strip;
+        }
+
+        string[] glyphs = strip.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int keep = glyphs.Length - 1; keep > 0; keep--)
+        {
+            string shown = string.Join(' ', glyphs, 0, keep) + " +" + (glyphs.Length - keep).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (TextCells.Width(shown) <= cells)
+            {
+                return shown;
+            }
+        }
+
+        return Fit(strip, cells);
+    }
+
+    /// <summary>
+    /// <paramref name="path"/> with <paramref name="home"/> (the user's profile folder) as <c>~</c> (2026-10-04, the UI review: the
+    /// profile's <c>C:\Users\name</c> took the toolbar's room and said nothing): <c>~\Repo\app</c>; the path as it is outside it or
+    /// with no home. Ignores case, as Windows paths do. Pure; pinned.
+    /// </summary>
+    public static string HomeTilde(string path, string? home)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string root = (home ?? "").TrimEnd('\\', '/');
+        if (root.Length == 0 || !path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            return path;
+        }
+
+        if (path.Length == root.Length)
+        {
+            return "~";
+        }
+
+        return path[root.Length] is '\\' or '/' ? "~" + path[root.Length..] : path;
     }
 
     /// <summary>

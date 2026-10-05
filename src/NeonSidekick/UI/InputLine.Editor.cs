@@ -973,6 +973,12 @@ public sealed partial class InputLine
                     EndRow();
                     return new EditOutcome.End(new InputResult.ToolbarRow(_text.ToString(), tool));
                 }
+
+                if (tool.Zone == ScreenPane.ToolbarZone.Glyph)
+                {
+                    // One click says what the glyph is (2026-10-04, the UI review): its note on the hint row.
+                    _line.ToolbarNote?.Invoke(tool);
+                }
             }
             else if (pane.TryHitStripButton(click.X, click.Y))
             {

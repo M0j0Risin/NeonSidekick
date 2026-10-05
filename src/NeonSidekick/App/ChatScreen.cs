@@ -1178,6 +1178,7 @@ internal sealed partial class ChatScreen
         _input.OpenViewer = () => OpenViewer();
         _input.CloseStrip = ClosePictureStrip;
         _input.ReopenStrip = ReopenPictureStrip;
+        _input.ToolbarNote = tool => ShowToolbarNote(tool.Glyph);
         _input.PictureFile = DroppedPictureOf;
         // The picture strip's keys under a reply too (2026-09-28, the user's report); the splash is gone before any turn.
         _input.Chat.SetLiveHooks(StepPictureStrip, OpenStripPicture);
@@ -1466,6 +1467,55 @@ internal sealed partial class ChatScreen
         };
     }
 
+    /// <summary>
+    /// The toolbar item a strip glyph stands for (2026-10-04): the lock either way <see cref="ToolbarItems.CmdList"/>, the officer or the
+    /// ninja <see cref="ToolbarItems.Police"/>, every other glyph its item's; null for anything else (a cut strip's <c>+N</c>). Pinned.
+    /// </summary>
+    public static string? ToolbarItemOf(string glyph) => glyph switch
+    {
+        CmdAskToolGlyph or CmdYoloToolGlyph => ToolbarItems.CmdList,
+        PoliceToolGlyph or NinjaToolGlyph => ToolbarItems.Police,
+        _ => Array.Find(ToolbarItems.Names, id => id != ToolbarItems.Path && ToolbarItems.Glyph(id) == glyph),
+    };
+
+    /// <summary>
+    /// The hint row's note for one click on toolbar glyph <paramref name="glyph"/> under <paramref name="shown"/> (2026-10-04, the UI
+    /// review; <see cref="ToolbarItems.Note"/>): the shell and the lock the policy, the officer its switch, the disk Memory mode, a
+    /// tool switch on or off, a pane or a window its name alone; null for a glyph that is no item's. Pure; pinned.
+    /// </summary>
+    public static string? ToolbarGlyphNote(string glyph, AppSettingsData shown)
+    {
+        ArgumentNullException.ThrowIfNull(glyph);
+        ArgumentNullException.ThrowIfNull(shown);
+        if (ToolbarItemOf(glyph) is not string id)
+        {
+            return null;
+        }
+
+        MemoryMode.TryParse(shown.MemoryMode, out var memory);   // a hand-edited word reads as the default, without the turn's warning
+        string? state = id switch
+        {
+            ToolbarItems.Shell or ToolbarItems.CmdList => Shell.CommandPolicy.Name(ToolbarPolicy(shown)),
+            ToolbarItems.Police => shown.ShellPoliceOutsidePaths ? ToolbarItems.OnWord : ToolbarItems.OffWord,
+            ToolbarItems.Memory => MemoryMode.Name(memory),
+            _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
+            _ => null,
+        };
+        return ToolbarItems.Note(glyph, id, state);
+    }
+
+    /// <summary>One click on a toolbar glyph (2026-10-04): its note flashed on the hint row (<see cref="ToolbarGlyphNote"/>), idle or under a reply; the pair still waits for its second click.</summary>
+    private void ShowToolbarNote(string glyph)
+    {
+        if (ToolbarGlyphNote(glyph, _effective()) is string note)
+        {
+            _pane.Flash(note);
+        }
+    }
+
+    /// <summary>The folder the toolbar's path shows as <c>~</c> (2026-10-04, <see cref="ScreenPane.HomeTilde"/>): the user's profile; tests set their own.</summary>
+    public string UserProfileFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
     /// <summary>The one walk over <see cref="ToolbarItems.Names"/> the strips share: the glyphs drawn and the places of the ones <paramref name="off"/> names.</summary>
     private static (string Strip, IReadOnlyList<int> Off) ToolbarGlyphs(IReadOnlySet<string> items, Shell.CommandPolicyMode policy, bool police, Func<string, bool> off)
     {
@@ -1677,7 +1727,8 @@ internal sealed partial class ChatScreen
         var shown = _effective();
         var items = ToolbarItems.Resolve(shown.ToolbarItems);
         var (strip, off) = ToolbarStripFor(items, shown);
-        string path = items.Contains(ToolbarItems.Path) ? WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory) : "";
+        // The profile folder as ~ (2026-10-04, the UI review).
+        string path = items.Contains(ToolbarItems.Path) ? ScreenPane.HomeTilde(WorkingDirectory.Resolve(shown.WorkingDirectory, _settings.ProfileDirectory), UserProfileFolder) : "";
         return strip.Length == 0 && path.Length == 0 ? null : new ScreenPane.ToolbarParts(strip, path, off);
     }
 
@@ -2315,7 +2366,17 @@ internal sealed partial class ChatScreen
                 };
                 if (word is not null)
                 {
-                    return _queuedClicks.Second(InputLine.ToolbarPairKey(tool)) ? word : null;
+                    if (_queuedClicks.Second(InputLine.ToolbarPairKey(tool)))
+                    {
+                        return word;
+                    }
+
+                    if (tool.Zone == ScreenPane.ToolbarZone.Glyph)
+                    {
+                        ShowToolbarNote(tool.Glyph);   // one click says what it is (2026-10-04), as at idle
+                    }
+
+                    return null;
                 }
 
                 _queuedClicks.Reset();

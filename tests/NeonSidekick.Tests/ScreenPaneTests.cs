@@ -4391,6 +4391,7 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(new (string, bool)[] { ("⚙️ ", false), ("🌐", true), (" 🐳", false) }, ScreenPane.ToolbarStripRuns(strip, [1]));
         Assert.Equal(new (string, bool)[] { ("⚙️", true), (" 🌐 ", false), ("🐳", true) }, ScreenPane.ToolbarStripRuns(strip, [0, 2]));
         Assert.Equal(new (string, bool)[] { ("⚙️ 🌐 …", false) }, ScreenPane.ToolbarStripRuns("⚙️ 🌐 …", [2]));
+        Assert.Equal(new (string, bool)[] { ("⚙️ 🌐 +12", false) }, ScreenPane.ToolbarStripRuns("⚙️ 🌐 +12", [2, 3, 4]));   // nor the count (2026-10-04)
     }
 
     /// <summary>
@@ -4920,5 +4921,30 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal("thinking 00:12", ScreenPane.BusyText("thinking", TimeSpan.FromSeconds(12), null));
         Assert.Equal("esc to stop", ScreenPane.StopHint);
         Assert.Equal(TimeSpan.FromSeconds(2), ScreenPane.FlashLasts);
+    }
+
+    /// <summary>A cut toolbar strip (2026-10-04, the UI review): as many glyphs as fit and +N for the rest; whole when it fits; Fit's cut where not one glyph and its count fit.</summary>
+    [Fact]
+    public void FitStrip_CountsWhatItLeavesOff()
+    {
+        const string strip = "⚙️ 🌐 🐳 🐚 📁";   // five glyphs, fourteen cells
+        Assert.Equal(strip, ScreenPane.FitStrip(strip, 14));
+        Assert.Equal("⚙️ 🌐 🐳 +2", ScreenPane.FitStrip(strip, 13));
+        Assert.Equal("⚙️ +4", ScreenPane.FitStrip(strip, 5));
+        Assert.Equal(ScreenPane.Fit(strip, 4), ScreenPane.FitStrip(strip, 4));
+        Assert.Equal("", ScreenPane.FitStrip(strip, 0));
+    }
+
+    /// <summary>The profile folder as ~ (2026-10-04, the UI review): under it, it alone, any case; outside it, a longer name beside it, or no home, as it is.</summary>
+    [Fact]
+    public void HomeTilde_ShowsTheProfileAsTilde()
+    {
+        Assert.Equal(@"~\Repo\app", ScreenPane.HomeTilde(@"C:\Users\neo\Repo\app", @"C:\Users\neo"));
+        Assert.Equal(@"~\Repo", ScreenPane.HomeTilde(@"c:\users\NEO\Repo", @"C:\Users\neo\"));
+        Assert.Equal("~", ScreenPane.HomeTilde(@"C:\Users\neo", @"C:\Users\neo"));
+        Assert.Equal(@"C:\Users\neon\x", ScreenPane.HomeTilde(@"C:\Users\neon\x", @"C:\Users\neo"));
+        Assert.Equal(@"D:\Repo", ScreenPane.HomeTilde(@"D:\Repo", @"C:\Users\neo"));
+        Assert.Equal(@"D:\Repo", ScreenPane.HomeTilde(@"D:\Repo", null));
+        Assert.Equal(@"D:\Repo", ScreenPane.HomeTilde(@"D:\Repo", ""));
     }
 }

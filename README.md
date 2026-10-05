@@ -231,7 +231,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 **⤡** at the left end of that rule appears when something can fold; a click does what Ctrl+O does (unfold all if anything is folded, else fold all).
 
-**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch, and 💾 while *Memory mode* is `disabled`, sits on a dark slab. By default it shows 🛠️, the lock, 👮, 🐚, 📁, 🌐 and the working directory.
+**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch, and 💾 while *Memory mode* is `disabled`, sits on a dark slab. By default it shows 🛠️, the lock, 👮, 🐚, 📁, 🌐 and the working directory. One click on a glyph says what it is on the hint row (`🐚 Shell: ask · double-click to open`); a double-click opens it. A strip too wide for the window ends in `+N` for the glyphs it leaves off, and the working directory shows your profile folder as `~` (`~\Repo\app`), cut from the front when it does not fit.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|

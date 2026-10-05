@@ -290,6 +290,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
         var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer);
+        screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -298,6 +299,9 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>The picture the input line's own paste finds on the clipboard; null (the default) = none.</summary>
     private Func<byte[]?>? _clipboardImage;
+
+    /// <summary>The folder the toolbar's path shows as ~ (2026-10-04): none by default, so the paths under the temp folder stand whole.</summary>
+    private string _userProfile = "";
 
     /// <summary>The clipboard recorder: what /copy wrote, unless the test says the clipboard is busy.</summary>
     private bool CopyToClipboard(string text)
@@ -10140,6 +10144,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task ToolbarItems_TheChartAndThePath_DrawThoseAlone_AndTheirClicksStillWork()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["usage", "path"]; });
+        _userProfile = _dir;   // the path under it reads from ~ (2026-10-04)
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -10153,7 +10158,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
-        Assert.Contains("\n" + ScreenPane.ToolbarRow("📊", cwd, 239), output);
+        Assert.StartsWith("~" + Path.DirectorySeparatorChar, ScreenPane.HomeTilde(cwd, _dir), StringComparison.Ordinal);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow("📊", ScreenPane.HomeTilde(cwd, _dir), 239), output);
         Assert.DoesNotContain(ChatScreen.SettingsToolGlyph + " ", output);
         int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n", StringComparison.Ordinal);
@@ -21515,5 +21521,40 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("ab   " + Theme.DimMarkup("note"), ChatScreen.ConnectRow("ab", "note", 5));
         Assert.Equal("🖥️ Connect a model", ChatScreen.ConnectTitle);
         Assert.Equal("🖥️ http://x:9/v1 did not answer /v1/models; using it anyway, as it is the configured URL. " + ModelErrorText.UnreachableNextStep, ChatScreen.NotAnsweringNotice(new Uri("http://x:9/v1")));
+    }
+
+    /// <summary>
+    /// One click on a toolbar glyph says what it is (2026-10-04, the UI review): its note flashed on the hint row, the state with it —
+    /// the shell's policy, a tool switch on or off, a pane's name alone; the second click still opens it.
+    /// </summary>
+    [Fact]
+    public void AToolbarGlyphsNote_NamesItsItem_AndItsState()
+    {
+        var shown = new AppSettingsData { ShellCommandPolicy = "ask", WebTools = false };
+        Assert.Equal("🐚 Shell: ask · double-click to open", ChatScreen.ToolbarGlyphNote(ChatScreen.ShellToolGlyph, shown));
+        Assert.Equal(ChatScreen.WebToolGlyph + " Web: off · " + ToolbarItems.DoubleClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.WebToolGlyph, shown));
+        Assert.Equal(ChatScreen.SettingsToolGlyph + " Settings · " + ToolbarItems.DoubleClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.SettingsToolGlyph, shown));
+        Assert.Equal(ChatScreen.MemoryToolGlyph + " Memory: read-write · " + ToolbarItems.DoubleClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.MemoryToolGlyph, shown));
+        Assert.Equal(ToolbarItems.CmdList, ChatScreen.ToolbarItemOf(ChatScreen.CmdYoloToolGlyph));
+        Assert.Equal(ToolbarItems.Police, ChatScreen.ToolbarItemOf(ChatScreen.NinjaToolGlyph));
+        Assert.Null(ChatScreen.ToolbarGlyphNote("+", shown));
+        Assert.All(ToolbarItems.Names.Where(id => id != ToolbarItems.Path), id => Assert.Equal(id, ChatScreen.ToolbarItemOf(ToolbarItems.Glyph(id))));
+    }
+
+    /// <summary>One click on a glyph at the idle line flashes its note; the pair's second click opens the pane as before (2026-10-04).</summary>
+    [Fact]
+    public async Task OneClickOnAToolbarGlyph_FlashesItsNote()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["settings"]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        StepsWhenIdle(
+            input => input.PushClick(0, 103),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.SettingsToolGlyph + " Settings · " + ToolbarItems.DoubleClickNote, output);
     }
 }

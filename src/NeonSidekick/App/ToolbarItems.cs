@@ -183,6 +183,17 @@ public static class ToolbarItems
         _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
 
+    /// <summary>The tail of a glyph's note (<see cref="Note"/>): what the second click does. Pinned.</summary>
+    public const string DoubleClickNote = "double-click to open";
+
+    /// <summary>
+    /// What one click on a toolbar glyph puts on the hint row (2026-10-04, the UI review: a row of glyphs and no way to tell them
+    /// apart but to open each): the glyph, the item's name, its state where it has one, and <see cref="DoubleClickNote"/> —
+    /// <c>🐚 Shell: ask · double-click to open</c>, <c>⚙️ Settings · double-click to open</c>. Pinned.
+    /// </summary>
+    public static string Note(string glyph, string id, string? state) =>
+        glyph + " " + Title(id) + (state is null ? "" : ": " + state) + " · " + DoubleClickNote;
+
     /// <summary>The checklist's name column: "Working directory path" (22) plus two.</summary>
     public const int TitleWidth = 24;
 
