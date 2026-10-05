@@ -435,7 +435,7 @@ public class SlashCommandsTests
         Assert.Equal((SlashCommand.Overloaded, "off"), SlashCommands.Parse("/police off"));
         Assert.False(SlashCommands.TakesArgument(SlashCommand.Police));
         Assert.Equal("/police", SlashCommands.PoliceWord);
-        Assert.Equal("switch shell police on or off", SlashCommands.HelpEntries.Single(e => e.Command == "/police").Summary);   // the shorter wording since 2026-09-26
+        Assert.DoesNotContain(" on or off", SlashCommands.HelpEntries.Single(e => e.Command == "/police").Summary);   // 2026-10-05: it takes no on|off, so the description never says it does
     }
 
     [Fact]
@@ -483,11 +483,11 @@ public class SlashCommandsTests
         var entries = SlashCommands.HelpEntries.ToList();
         int log = entries.FindIndex(e => e.Command == "/log");
         Assert.True(log > 0);
-        Assert.Equal("open the diagnostic log in a window that follows it, or /log --file for the --log file in your editor", entries[log].Summary);
         Assert.Equal("/learn", entries[log - 1].Command);   // A to Z since 2026-09-27 (directly above /help until then)
         Assert.Equal("/loop", entries[log + 1].Command);
         Assert.Contains("/log", SlashCommands.Words);
-        Assert.Contains(Row("/learn", entries[log - 1].Summary) + Row("/log", entries[log].Summary) + Row("/loop", entries[log + 1].Summary), SlashCommands.HelpText);
+        Assert.Contains(Row(entries[log - 1]) + Row(entries[log]) + Row(entries[log + 1]), SlashCommands.HelpText);
+        Assert.Contains(Row("/log", entries[log].Summary, "/log", "/log --file"), SlashCommands.HelpText);   // both forms, stacked
         Assert.Contains(new NeonSidekick.UI.CompletionItem("/log", entries[log].Summary), SlashCommands.Completions);
         Assert.Contains(SlashCommands.CompletionsWithoutExit, i => i.Text == "/log");
         Assert.False(SlashCommands.IsBasic(entries[log]));
@@ -542,9 +542,23 @@ public class SlashCommandsTests
         Assert.Equal(SlashCommand.None, SlashCommands.Parse(line).Command);
     }
 
-    /// <summary>A line of <see cref="SlashCommands.HelpText"/> built the way the text builds it — through the measured width, never a literal run of spaces.</summary>
-    private static string Row(string label, string summary) =>
-        "  " + label.PadRight(SlashCommands.LabelWidth + SlashCommands.HelpColumnGap) + summary + "\n";
+    /// <summary>
+    /// An entry's lines of <see cref="SlashCommands.HelpText"/> built the way the text builds them — through the measured widths,
+    /// never a literal run of spaces: the label, the description, the first form, and each further form under it (2026-10-05).
+    /// </summary>
+    private static string Row(string label, string summary, params string[] forms)
+    {
+        string head = "  " + label.PadRight(SlashCommands.LabelWidth + SlashCommands.HelpColumnGap);
+        if (forms.Length == 0)
+        {
+            return head + summary + "\n";
+        }
+
+        string under = new(' ', head.Length + SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap);
+        return head + summary.PadRight(SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap) + forms[0] + "\n" + string.Concat(forms.Skip(1).Select(f => under + f + "\n"));
+    }
+
+    private static string Row(SlashCommands.HelpEntry entry) => Row(entry.Label, entry.Summary, [.. Help.HelpSyntax.Forms(entry.Command)]);
 
     [Fact]
     public void HelpText_NamesEveryCommandAndTheKeys()
@@ -557,39 +571,15 @@ public class SlashCommandsTests
         Assert.Contains("ESC", SlashCommands.HelpText);
         Assert.DoesNotContain("Ctrl+Q", SlashCommands.HelpText);
         Assert.DoesNotContain("(also", SlashCommands.HelpText);
-        Assert.StartsWith("Commands:\n" + Row("/about", "show general information about the app and profile") + Row("/botchat", SlashCommands.HelpEntries.Single(e => e.Command == "/botchat").Summary), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
-        Assert.Contains(Row("/gituser", "write the GitLib email and GitLib name into the working directory's repository") + Row("/ha", SlashCommands.HelpEntries.Single(e => e.Command == "/ha").Summary) + Row("/header", "show or hide the header at the next clear, or /header on|off") + Row("/help", "show help") + Row("/imagine", SlashCommands.HelpEntries.Single(e => e.Command == "/imagine").Summary), SlashCommands.HelpText);   // neighbours by the alphabet since 2026-09-27
-        Assert.Contains(Row("/settings, //", "edit and save settings"), SlashCommands.HelpText);
-        Assert.Contains(Row("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"), SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28
-        Assert.Contains(Row("/exit", "exit/quit the application"), SlashCommands.HelpText);
-        Assert.Contains(Row("/server", "pick an LLM server found on the usual ports, or /server <url>"), SlashCommands.HelpText);
-        Assert.Contains(Row("/model", "pick a model from the LLM server, or /model <id>"), SlashCommands.HelpText);
-        Assert.Contains(Row("/reasoning", "pick the LLM reasoning effort, or /reasoning <level>"), SlashCommands.HelpText);
-        Assert.Contains(Row("/sys", "show the system prompt and tools sent to the model"), SlashCommands.HelpText);
-        Assert.Contains(Row("/usage", "show token usage and performance statistics"), SlashCommands.HelpText);
-        Assert.Contains(Row("/compact", "shrink the current context, or /compact <focus> to steer the summary"), SlashCommands.HelpText);
-        Assert.Contains(Row("/clear", "start a new conversation and clear the screen"), SlashCommands.HelpText);
-        Assert.Contains(Row("/new", "start a new conversation but do not clear the screen"), SlashCommands.HelpText);
-        Assert.Contains(Row("/splash", "start a new conversation, clear and show the splash screen"), SlashCommands.HelpText);   // 2026-09-19; this wording since 2026-09-26
-        Assert.Contains(Row("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"), SlashCommands.HelpText);
-        Assert.Contains(Row("/tts", "toggle speech output, or /tts on|off"), SlashCommands.HelpText);
-        Assert.Contains(Row("/stt", "toggle speech input, or /stt on|off"), SlashCommands.HelpText);
-        Assert.Contains(Row("/wake", "toggle the speech input wake word, or /wake on|off"), SlashCommands.HelpText);
-        Assert.Contains(Row("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"), SlashCommands.HelpText);
-        Assert.Contains(Row("/remember", "add a memory: /remember <text>"), SlashCommands.HelpText);
-        Assert.Contains(Row("/memory", "list and prune memory items, or /memory on | off | forget | edit | copy <profile> [overwrite]"), SlashCommands.HelpText);   // the forget word folded in 2026-09-22 and /forget's row went, the copy word later that day and /memcopy's row with it
-        Assert.Contains(Row("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"), SlashCommands.HelpText);   // 2026-09-21
-        Assert.Contains(Row("/cwd", "show or change the working directory, or /cwd <path> | ~ | browse"), SlashCommands.HelpText);
-        Assert.Contains(Row("/tree", "print a tree of the working directory's folders and files, or /tree <path>"), SlashCommands.HelpText);
-        Assert.Contains(Row("/explore", "open the working directory in your file browser, or /explore <path>"), SlashCommands.HelpText);
-        Assert.Contains(Row("/terminal", "open a new Windows Terminal in the working directory, or /terminal <folder>"), SlashCommands.HelpText);   // 2026-10-03
-        Assert.Contains(Row("/gituser", "write the GitLib email and GitLib name into the working directory's repository"), SlashCommands.HelpText);   // 2026-09-21 (/git until 2026-09-26)
-        Assert.Contains(Row("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), SlashCommands.HelpText);
-        Assert.Contains(Row("/window", "show the terminal window's width and height"), SlashCommands.HelpText);
-        Assert.Contains(Row("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);   // copy 2026-09-21
-        Assert.Contains(Row("/operata", "export and manage operata.md (the operating rules) in your editor, or /operata reset to go back to the default, or /operata copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);
-        Assert.Contains(Row("/vocalia", "export and manage vocalia.md (the spoken-reply directive) in your editor, or /vocalia reset to remove it, or /vocalia copy <profile> [force] to copy it into another profile"), SlashCommands.HelpText);
-        Assert.Contains(Row("/about", "show general information about the app and profile"), SlashCommands.HelpText);
+        string Summary(string command) => SlashCommands.HelpEntries.Single(e => e.Command == command).Summary;
+        Assert.StartsWith("Commands:\n" + Row("/about", Summary("/about")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/botchat")), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
+        Assert.Contains(Row("/settings, //", Summary("/settings"), "/settings", "/settings <words>", "/settings changed"), SlashCommands.HelpText);
+        Assert.Contains(
+            Row("/profile", Summary("/profile"), "/profile [<name>]", "/profile add|delete <name>", "/profile rename <name> <new-name>", "/profile reset [<name>] [--all]", "/profile push|pull <name>", "/profile edit|reload"),
+            SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28; one form a line since 2026-10-05
+        Assert.Contains(Row("/clear", Summary("/clear")), SlashCommands.HelpText);   // a bare command: no forms column
+        Assert.Contains(Row("/timer", Summary("/timer"), "/timer [<duration> [<name>]]", "/timer stop <name>|all"), SlashCommands.HelpText);
+        Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(Row(e), SlashCommands.HelpText));
         Assert.DoesNotContain("M5", SlashCommands.HelpText);
         Assert.EndsWith("F4 = talk (push-to-talk key)", SlashCommands.HelpText);
 
@@ -613,8 +603,8 @@ public class SlashCommandsTests
         // The basic tab's list (later on 2026-09-27, the user's): a rename or a typo would drop a row silently.
         Assert.Equal(31, SlashCommands.BasicCommands.Count);   // /rename 2026-10-05   // /terminal later on 2026-10-03; /about, /explore, /perfbar, /stt, /toolbar, /tts and /wake 2026-10-03; /rewind 2026-09-30, the user's picks
         Assert.All(SlashCommands.BasicCommands, c => Assert.Contains(SlashCommands.HelpEntries, e => e.Command == c));
-        Assert.Equal("Commands (basic)", SlashCommands.BasicTabTitle);
-        Assert.Equal("Commands (advanced)", SlashCommands.AdvancedTabTitle);
+        Assert.Equal("Basic", SlashCommands.BasicTabTitle);
+        Assert.Equal("Advanced", SlashCommands.AdvancedTabTitle);
     }
 
     [Fact]
@@ -633,36 +623,18 @@ public class SlashCommandsTests
         ], SlashCommands.HelpEntries.Select(e => e.Command));
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));
 
-        string Summary(string command) => SlashCommands.HelpEntries.Single(e => e.Command == command).Summary;
-        Assert.Equal("list, restore, rename and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title [<text>]]", Summary("/sessions"));
-        Assert.Equal("switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane, or /tools <group> for one group's switch", Summary("/tools"));   // expand | collapse came and went on 2026-09-22 (the root /expand and /collapse now); <group> 2026-10-03
-        Assert.Equal("connect external MCP servers and switch their tools on or off on a pane", Summary("/mcp"));
-        Assert.Equal("list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane; /skills add <search words | owner/repo[/skill] | url> installs one from skills.sh or GitHub", Summary("/skills"));   // add 2026-09-26; edit 2026-09-21, the scope page's edit row in its place 2026-09-23
-        Assert.Equal("write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]", Summary("/learn"));   // the sessions form 2026-09-19
-        Assert.Equal("start a new conversation, clear and show the splash screen", Summary("/splash"));   // this wording since 2026-09-26
-        Assert.Equal("switch the colour theme, starting a new conversation with the splash screen, or /theme <name>", Summary("/theme"));
-        Assert.Equal("list and prune the messages queued while a reply runs, or /queue clear", Summary("/queue"));   // the clear word since 2026-09-21
-        Assert.Equal("copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too", Summary("/copy"));
-        Assert.Equal("write the next message in your editor: a temporary file, sent when it is saved and closed", Summary("/draft"));
-        Assert.Equal("repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)", Summary("/loop"));
-        Assert.Equal("plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up", Summary("/plan"));
-        Assert.Equal("expand all items in the transcript", Summary("/expand"));   // the shorter wording since 2026-09-26
-        Assert.Equal("collapse all items in the transcript", Summary("/collapse"));
-        Assert.Equal("list and prune memory items, or /memory on | off | forget | edit | copy <profile> [overwrite]", Summary("/memory"));   // the forget word folded in 2026-09-22, the copy one later that day
-        Assert.Equal("add a memory: /remember <text>", Summary("/remember"));
-        Assert.Equal("copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]", Summary("/cmdcopy"));
-        Assert.Equal("clear this profile's command history (the Up/Down recall), stored and in memory (asks first)", Summary("/cmdclear"));
-        Assert.Equal("list this profile's allowed shell commands on a pane, Enter removes one", Summary("/cmdlist"));
-        Assert.Equal("print a tree of the Obsidian vault's folders and notes, or /vault <path>", Summary("/vault"));   // the path since 2026-09-23
-        Assert.Equal("read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n", Summary("/speak"));
-        Assert.Equal("print a line as a reply and read it aloud when speech is on: /echo <text>", Summary("/echo"));
-        Assert.Equal("open an image, or a folder of images, from the working directory in the picture viewer; --chat draws it in the transcript, --thumbs opens its folder as thumbnails: /view <image or folder> [--chat | --thumbs]", Summary("/view"));   // --thumbs later on 2026-10-04
-        Assert.Equal("show the terminal window's width and height", Summary("/window"));
-        Assert.Equal("write the GitLib email and GitLib name into the working directory's repository", Summary("/gituser"));   // /git until 2026-09-26
-        Assert.Equal("let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one, or /botchat --kill to stop the extra embedded servers", Summary("/botchat"));   // --resume 2026-09-25, --kill later on 2026-09-29
-        Assert.Equal("list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all", Summary("/timer"));
-        Assert.Equal("send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation", Summary("/claude"));   // 2026-09-27
-        Assert.Equal("run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them", Summary("/test"));   // 2026-09-28
+        // Each description says what the command covers in a few words (2026-10-05, the user's ask: the summaries had grown
+        // too tight with every form folded in): lowercase first, no full stop, no command word or form in it, 40 cells at most.
+        // The forms are HelpCommands' (HelpSyntaxTests holds them to the notation).
+        Assert.All(SlashCommands.HelpEntries, e =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(e.Summary), e.Command);
+            Assert.True(char.IsLower(e.Summary[0]), e.Command + ": " + e.Summary);
+            Assert.False(e.Summary.EndsWith('.'), e.Command + ": " + e.Summary);
+            Assert.DoesNotContain("/", e.Summary);
+            Assert.True(e.Summary.Length <= 40, e.Command + ": " + e.Summary);
+        });
+        Assert.Equal(SlashCommands.HelpEntries.Max(e => e.Summary.Length), SlashCommands.DescriptionWidth);
 
         // Every word is one entry's command or one of its aliases — never in a summary.
         var labels = SlashCommands.HelpEntries.SelectMany(e => e.Aliases.Prepend(e.Command)).ToList();
@@ -675,15 +647,9 @@ public class SlashCommandsTests
         Assert.Equal(SlashCommands.HelpEntries.Max(e => e.Label.Length), SlashCommands.LabelWidth);
         Assert.Equal("/settings, //".Length, SlashCommands.LabelWidth);   // 13 since every other alias went (2026-09-16); 22 while it was /settings, /config, //; "/skills, ////" (part of 2026-09-21) was 13 too
 
-        // The plain text is the heading, one line per entry in the same order, and the key line — no blank lines.
-        string[] lines = SlashCommands.HelpText.Split('\n');
-        Assert.Equal(1 + SlashCommands.HelpEntries.Count + 1, lines.Length);
-        Assert.Equal("Commands:", lines[0]);
-        Assert.Equal(SlashCommands.KeysLine, lines[^1]);
-        for (var i = 0; i < SlashCommands.HelpEntries.Count; i++)
-        {
-            Assert.Equal(Row(SlashCommands.HelpEntries[i].Label, SlashCommands.HelpEntries[i].Summary).TrimEnd('\n'), lines[i + 1]);
-        }
+        // The plain text is the heading, each entry's lines in the same order (its forms stacked under the first), and the key
+        // line — no blank lines.
+        Assert.Equal("Commands:\n" + string.Concat(SlashCommands.HelpEntries.Select(Row)) + SlashCommands.KeysLine, SlashCommands.HelpText);
     }
 
     /// <summary>The words the hint row and the toolbar send through the line hooks (2026-09-18, 2026-09-21): each parses to its command, so the pane opens as the typed command's does.</summary>

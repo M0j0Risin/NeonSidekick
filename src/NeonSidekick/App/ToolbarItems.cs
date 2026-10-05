@@ -263,7 +263,7 @@ public static class ToolbarItems
     };
 
     /// <summary><c>/toolbar</c>'s row on <c>/help</c>. Pinned.</summary>
-    public const string HelpSummary = "show or hide the toolbar, or /toolbar on|off";
+    public const string HelpSummary = "show or hide the toolbar";
 
     /// <summary>What <c>/toolbar</c> says it did. Pinned.</summary>
     public static string Notice(bool shown) => shown ? "(toolbar on)" : "(toolbar off)";

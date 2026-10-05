@@ -2165,18 +2165,43 @@ internal sealed partial class ChatScreen
     /// 2026-09-22 until 2026-10-02). Since later on 2026-09-27 the entries are split over two tabs:
     /// <see cref="SlashCommands.BasicCommands"/>, or every other one under <paramref name="advanced"/> (<c>/log</c> among them).
     /// The label column is <see cref="SlashCommands.LabelWidth"/> on both, so switching tabs never moves the summaries.
+    /// Since 2026-10-05 (the user's ask: the summaries were too tight) three columns: the label, a short description
+    /// (<see cref="SlashCommands.DescriptionWidth"/> on both tabs), and the command's forms one per line
+    /// (<see cref="Help.HelpSyntax.Forms"/>) in two tones — <see cref="Theme.HelpForm"/> for what is typed, <see cref="Theme.HelpSlot"/>
+    /// for placeholders and brackets — wrapping only inside their own column on a narrow console.
     /// </summary>
     public static IRenderable CommandsTab(bool advanced)
     {
         var grid = new Grid()
             .AddColumn(new GridColumn().NoWrap().Width(SlashCommands.LabelWidth).PadRight(SlashCommands.HelpColumnGap))
+            .AddColumn(new GridColumn().NoWrap().Width(SlashCommands.DescriptionWidth).PadRight(SlashCommands.HelpColumnGap))
             .AddColumn(new GridColumn().PadRight(0));
         foreach (var entry in SlashCommands.HelpEntries.Where(entry => SlashCommands.IsBasic(entry) != advanced))
         {
-            grid.AddRow(new Text(entry.Label, Theme.AccentSecondary), new Text(entry.Summary, Theme.Body));
+            grid.AddRow(new Text(entry.Label, Theme.AccentSecondary), new Text(entry.Summary, Theme.Body), FormsCell(Help.HelpSyntax.Forms(entry.Command)));
         }
 
         return grid;
+    }
+
+    /// <summary>A command's forms, one per line, each in <see cref="Help.HelpSyntax.Runs"/>' two tones; never Markup (brackets).</summary>
+    internal static Paragraph FormsCell(IReadOnlyList<string> forms)
+    {
+        var cell = new Paragraph();
+        for (int i = 0; i < forms.Count; i++)
+        {
+            if (i > 0)
+            {
+                cell.Append("\n");
+            }
+
+            foreach (var (text, part) in Help.HelpSyntax.Runs(forms[i]))
+            {
+                cell.Append(text, part == Help.HelpSyntaxPart.Word ? Theme.HelpForm : part == Help.HelpSyntaxPart.Space ? Theme.Body : Theme.HelpSlot);
+            }
+        }
+
+        return cell;
     }
 
     private IRenderable KeysTab()

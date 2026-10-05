@@ -25,7 +25,7 @@ public static class HeaderToggle
     };
 
     /// <summary><c>/header</c>'s row on <c>/help</c>. Pinned.</summary>
-    public const string HelpSummary = "show or hide the header at the next clear, or /header on|off";
+    public const string HelpSummary = "show or hide the header";
 
     /// <summary>What <c>/header</c> says it did: the setting, and when the screen follows. Pinned.</summary>
     public static string Notice(bool shown) => shown ? "(header on: drawn from the next clear)" : "(header off: gone from the next clear)";

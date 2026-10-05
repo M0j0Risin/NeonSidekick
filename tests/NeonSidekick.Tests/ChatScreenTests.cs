@@ -9500,11 +9500,11 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
-        _settings.Update(d => d.TtsOutput = false);
-        _console.Profile.Height = 58;   // the basic tab's 29 rows (2026-10-03; the advanced tab's 34 the tallest until then) (the one Commands tab's 54 until later on 2026-09-27) and the pane's four; the pane scrolls past 40
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab
+        _console.Profile.Height = 112;   // the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
-        _console.Input.PushKey(Keys.Right);   // Commands (advanced), since later on 2026-09-27
+        _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
         _console.Input.PushKey(Keys.Right);   // Keys
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
@@ -9514,19 +9514,21 @@ public partial class ChatScreenTests : IDisposable
         // Nothing in the transcript: the list is in the pane, under the rule, with its own hint.
         Assert.DoesNotContain("  · Commands:", output);
         string rule = new(ScreenPane.RuleGlyph, 240);
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then; /clear first until /about joined it, 2026-10-03)
-        Assert.Contains(HelpRow("/sessions", SlashCommands.HelpEntries.Single(e => e.Command == "/sessions").Summary), output);   // the column is the widest label of all; the cell is padded out to the longest summary
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \n/about ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then; /clear first until /about joined it, 2026-10-03)
+        Assert.Contains(HelpRows(Entry("/sessions"))[0], output);   // the label column is the widest label of all, the description column the longest description
+        Assert.Contains(HelpRows(Entry("/sessions"))[1], output);   // and its further forms stacked under the first (2026-10-05)
         // → the advanced tab: the rest, A to Z, in the same label column.
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/botchat ", output);   // /about first until 2026-10-03, when it moved to the basic tab
-        Assert.Contains(HelpRow("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"), output);
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \n/botchat ", output);   // /about first until 2026-10-03, when it moved to the basic tab
+        Assert.Contains(HelpRow("/timer", Entry("/timer").Summary) + new string(' ', SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap - Entry("/timer").Summary.Length) + "/timer [<duration> [<name>]]", output);
+        Assert.Contains("\n" + new string(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap) + "/timer stop <name>|all", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \nEnter", output);
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04) + the gap of 2.
         Assert.Contains("Ctrl+Home                scroll to top of the chat pane", output);
         Assert.Contains("Ctrl+End                 scroll to bottom of the chat pane", output);
         Assert.Contains("Ctrl+C                   copy the selected text · stop the speech · cancel the reply · twice to exit", output);
-        Assert.DoesNotContain("F4", output[output.IndexOf("Help   Commands (basic)    Commands (advanced)    Keys", StringComparison.Ordinal)..]);
+        Assert.DoesNotContain("F4", output[output.IndexOf("Help   Basic    Advanced    Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
     }
@@ -9583,9 +9585,9 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · Commands:", output);
-        Assert.Contains("  ·   " + HelpRow("/profile", "switch profiles"), output);
-        Assert.Contains("  ·   " + HelpRow("/reasoning", "pick the LLM reasoning effort, or /reasoning <level>") + "\n  ·   " + HelpRow("/remember", "add a memory"), output);   // A to Z, no blank rows since 2026-09-27
-        Assert.Contains("  ·   " + HelpRow("/window", "show the terminal window's width and height") + "\n  · " + SlashCommands.KeysLine, output);   // /window the last command row, right above the keys, since 2026-09-27 (/exit from 2026-09-16)
+        Assert.Contains("  ·   " + HelpRows(Entry("/profile"))[0], output);
+        Assert.Contains("  ·   " + HelpRows(Entry("/reasoning"))[0] + "\n  ·   " + HelpRows(Entry("/remember"))[0], output);   // A to Z, no blank rows since 2026-09-27
+        Assert.Contains("  ·   " + HelpRows(Entry("/window"))[0] + "\n  · " + SlashCommands.KeysLine, output);   // /window the last command row, right above the keys, since 2026-09-27 (/exit from 2026-09-16)
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 
@@ -10080,7 +10082,7 @@ public partial class ChatScreenTests : IDisposable
 
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
-        string help = "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n";
+        string help = "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Options ") + "\n";
@@ -10628,17 +10630,9 @@ public partial class ChatScreenTests : IDisposable
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
         Assert.Equal(31, basicEntries.Length);   // /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
-        Assert.Equal(basicEntries.Length, basic.Length);
-        Assert.Equal(advancedEntries.Length, advanced.Length);
-        for (var i = 0; i < basic.Length; i++)
-        {
-            Assert.StartsWith(HelpRow(basicEntries[i].Label, basicEntries[i].Summary), basic[i]);
-        }
-
-        for (var i = 0; i < advanced.Length; i++)
-        {
-            Assert.StartsWith(HelpRow(advancedEntries[i].Label, advancedEntries[i].Summary), advanced[i]);
-        }
+        // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
+        Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
+        Assert.Equal(advancedEntries.SelectMany(HelpRows), advanced.Select(l => l.TrimEnd()));
 
         Assert.Equal(
         [
@@ -10648,12 +10642,11 @@ public partial class ChatScreenTests : IDisposable
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
-        Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), basic[0]);   // advanced[0] until 2026-10-03
-        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[21]);   // sorted by the command, not the label
-        Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), advanced[0]);
-        Assert.StartsWith(HelpRow(NeonSidekick.Camera.CameraText.Word, NeonSidekick.Camera.CameraText.HelpSummary), advanced[1]);   // /camera 2026-10-02
-        Assert.StartsWith(HelpRow("/claude", "send a message to Claude Code and add its reply to the conversation"), advanced[2]);
-        Assert.StartsWith(HelpRow("/window", "show the terminal window's width and height"), advanced[^1]);
+        Assert.StartsWith(HelpRow("/about", Entry("/about").Summary), basic[0]);   // advanced[0] until 2026-10-03; a bare command, no forms
+        Assert.Contains(basic, l => l.StartsWith(HelpRow("/settings, //", Entry("/settings").Summary), StringComparison.Ordinal));   // sorted by the command, not the label
+        Assert.StartsWith(HelpRow("/botchat", Entry("/botchat").Summary), advanced[0]);
+        Assert.EndsWith("/botchat [<profile> ...] [--] [<topic>]", advanced[0].TrimEnd());
+        Assert.StartsWith(HelpRow("/window", Entry("/window").Summary), advanced[^1]);
         string all = string.Join("\n", basic.Concat(advanced));
         Assert.DoesNotContain("/windowsize", all);
         Assert.DoesNotContain("(also", all);
@@ -10662,7 +10655,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("/web", all);
     }
 
-    /// <summary>A Commands tab's rows, drawn wide enough that no summary wraps (the /profile row is the longest, 125 cells with its label).</summary>
+    /// <summary>A Commands tab's lines, drawn wide enough that no form wraps (/imagine's are the longest, under 170 cells with the two columns before them).</summary>
     private string[] CommandsTabLines(bool advanced)
     {
         var console = new TestConsole();
@@ -10674,6 +10667,24 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>A row of the Commands tab as the pane lays it out: the label padded to the measured column, then the summary.</summary>
     private static string HelpRow(string label, string summary) =>
         label.PadRight(SlashCommands.LabelWidth + SlashCommands.HelpColumnGap) + summary;
+
+    private static SlashCommands.HelpEntry Entry(string command) => SlashCommands.HelpEntries.Single(e => e.Command == command);
+
+    /// <summary>
+    /// An entry's lines on a Commands tab (2026-10-05), trailing blanks dropped: the label and the description padded to their
+    /// measured columns and the first form, then each further form under it; a bare command is the label and the description.
+    /// </summary>
+    private static string[] HelpRows(SlashCommands.HelpEntry entry)
+    {
+        var forms = NeonSidekick.Help.HelpSyntax.Forms(entry.Command);
+        if (forms.Count == 0)
+        {
+            return [HelpRow(entry.Label, entry.Summary)];
+        }
+
+        string under = new(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap);
+        return [HelpRow(entry.Label, entry.Summary.PadRight(SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap)) + forms[0], .. forms.Skip(1).Select(f => under + f)];
+    }
 
     /// <summary>
     /// A group heading of the Tools tab as the pane lays it out (a rule since 2026-10-03): <c>── Web · 3</c> for the
@@ -13415,7 +13426,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n", output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n", output);
         Assert.Contains("three.", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -13805,8 +13816,9 @@ public partial class ChatScreenTests : IDisposable
         string[] lines = CommandsTabLines(advanced: true);
         Assert.DoesNotContain(CommandsTabLines(advanced: false), l => l.StartsWith("/log", StringComparison.Ordinal));
         int log = Array.FindIndex(lines, l => l.StartsWith(HelpRow("/log", LogSummary), StringComparison.Ordinal));
-        Assert.StartsWith(HelpRow("/learn", "write or improve a skill"), lines[log - 1]);   // A to Z since 2026-09-27 (directly above /help until then)
-        Assert.StartsWith(HelpRow("/loop", "repeat a message"), lines[log + 1]);
+        Assert.StartsWith(HelpRows(Entry("/learn"))[^1].TrimStart(), lines[log - 1].TrimStart());   // A to Z since 2026-09-27 (directly above /help until then): /learn's last form
+        Assert.StartsWith(HelpRows(Entry("/log"))[1], lines[log + 1]);   // its own --file form under it
+        Assert.StartsWith(HelpRow("/loop", Entry("/loop").Summary), lines[log + 2]);
     }
 
     // ── /speak (2026-09-17) ─────────────────────────────────────────────────
@@ -16082,7 +16094,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \n/about ", output);   // /clear first until 2026-10-03
+        Assert.Contains(Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \n/about ", output);   // /clear first until 2026-10-03
         Assert.DoesNotContain("› /help", output);
         Assert.Empty(_chat.Requests);
     }
@@ -16119,7 +16131,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.DoesNotContain(InfoPane.Title + "   Commands (basic)", output);
+        Assert.DoesNotContain(InfoPane.Title + "   Basic", output);
         Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
         Assert.False(_settings.Current.ShowHeader);
         Assert.Contains(HeaderToggle.Notice(false), output);
@@ -16196,7 +16208,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        int help = output.IndexOf(InfoPane.Title + "   Commands (basic)", StringComparison.Ordinal);
+        int help = output.IndexOf(InfoPane.Title + "   Basic", StringComparison.Ordinal);
         Assert.True(help > 0, output);
         Assert.True(output.IndexOf(SystemPromptSummary.Label + "   Prompt    Tools ", help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain("› /sys", output);
@@ -16539,7 +16551,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        int help = output.IndexOf(InfoPane.Title + "   Commands (basic)", StringComparison.Ordinal);
+        int help = output.IndexOf(InfoPane.Title + "   Basic", StringComparison.Ordinal);
         Assert.True(help > 0, output);
         Assert.True(output.IndexOf(SettingsMenu.ReasoningTitle, help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain("› /reasoning", output);
@@ -16606,7 +16618,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(InfoPane.Title + "   Commands (basic)", output);
+        Assert.Contains(InfoPane.Title + "   Basic", output);
         Assert.Contains(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
         Assert.Equal(1, Refreshes(output));     // /clear's wipe, at the idle line after the cancel
@@ -16634,7 +16646,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        int help = output.IndexOf(InfoPane.Title + "   Commands (basic)", StringComparison.Ordinal);
+        int help = output.IndexOf(InfoPane.Title + "   Basic", StringComparison.Ordinal);
         Assert.True(help > 0, output);
         Assert.True(output.IndexOf(UsageText.Label, help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
@@ -16706,7 +16718,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(InfoPane.Title + "   Commands (basic)", output);
+        Assert.Contains(InfoPane.Title + "   Basic", output);
         Assert.True(barWhileOpen, output);
         Assert.NotNull(_settings.Current.PerformanceBarItems);
         Assert.Single(_chat.Requests);
@@ -20394,7 +20406,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("edit the skill settings and the project file on a pane", output);   // the help, not the skill
+        Assert.Contains(Entry("/skills").Summary, output);   // the help, not the skill
         Assert.DoesNotContain("loaded skill 'help'", output);
         Assert.Empty(_chat.Requests);
     }
@@ -20451,7 +20463,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.HideExitAutocomplete = false);
         StepsWhenIdle([.. Typed("/ex"), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
         string off = await RunAsync();
-        Assert.Contains("/exit" + new string(' ', MentionCompleter.NoteGap) + "exit/quit the application", off[on.Length..]);   // the output accumulates over the two runs
+        Assert.Contains("/exit" + new string(' ', MentionCompleter.NoteGap) + Entry("/exit").Summary, off[on.Length..]);   // the output accumulates over the two runs
         Assert.Empty(_chat.Requests);
     }
 
@@ -20485,7 +20497,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.QueueMessages = true);
         StepsWhenIdle([.. Typed("/qu"), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
         string on = await RunAsync();
-        Assert.Contains(MenuPane.Pointer + "/queue" + new string(' ', MentionCompleter.NoteGap) + "list and prune the messages queued while a reply runs", on[off.Length..]);
+        Assert.Contains(MenuPane.Pointer + "/queue" + new string(' ', MentionCompleter.NoteGap) + Entry("/queue").Summary, on[off.Length..]);
         Assert.Empty(_chat.Requests);
     }
 
@@ -20764,7 +20776,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(MenuPane.Pointer + "/server", output);
-        Assert.Contains("/settings" + new string(' ', MentionCompleter.NoteGap) + "edit and save settings", output);
+        Assert.Contains("/settings" + new string(' ', MentionCompleter.NoteGap) + Entry("/settings").Summary, output);
         Assert.Contains(MentionCompleter.Hint, output);
         Assert.DoesNotContain("/srv", output);
         Assert.Empty(_chat.Requests);

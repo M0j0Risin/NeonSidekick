@@ -311,78 +311,78 @@ public static class SlashCommands
     public static readonly IReadOnlyList<HelpEntry> HelpEntries =
         new HelpEntry[]
         {
-            new("/about", "show general information about the app and profile"),
-            new("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic], or /botchat --resume [line] to carry on the last one, or /botchat --kill to stop the extra embedded servers"),
-            new("/claude", "send a message to Claude Code and add its reply to the conversation: /claude <message>, or /claude new to start a new Claude conversation"),
+            new("/about", "show info about the app and profile"),
+            new("/botchat", "let the profiles talk to each other"),
+            new("/claude", "ask Claude Code from the chat"),
             new(Camera.CameraText.Word, Camera.CameraText.HelpSummary),
             new(NeonSidekick.Screen.ScreenText.Word, NeonSidekick.Screen.ScreenText.HelpSummary),
-            new("/clear", "start a new conversation and clear the screen"),
+            new("/clear", "start over and clear the screen"),
             new(RewindText.Word, RewindText.HelpSummary),
-            new("/cmdclear", "clear this profile's command history (the Up/Down recall), stored and in memory (asks first)"),
-            new("/cmdcopy", "copy this profile's allowed shell commands into another, or with --history its command history: /cmdcopy <profile> [--history] [overwrite]"),
-            new("/cmdlist", "list this profile's allowed shell commands on a pane, Enter removes one"),
-            new("/collapse", "collapse all items in the transcript"),
-            new("/comfy", "show ComfyUI's status and its workflows, /comfy offered for the ones the model gets, /comfy edit json|markdown <workflow> to open one in your editor, /comfy view to watch the output folder, or /comfy purge to empty it"),
-            new("/compact", "shrink the current context, or /compact <focus> to steer the summary"),
-            new("/copy", "copy the last reply to the clipboard as markdown, or /copy <n> | all; --thinking for the model's thinking too"),
-            new("/cwd", "show or change the working directory, or /cwd <path> | ~ | browse"),
-            new("/docker", "Docker Desktop's containers on a pane (start, stop, restart, logs, open a port), or /docker ps | status | logs <container> [lines] | stats [container] | start|stop|restart|pause|unpause <container>"),
-            new("/draft", "write the next message in your editor: a temporary file, sent when it is saved and closed"),
-            new("/echo", "print a line as a reply and read it aloud when speech is on: /echo <text>"),
-            new("/exit", "exit/quit the application"),
-            new("/expand", "expand all items in the transcript"),
-            new("/explore", "open the working directory in your file browser, or /explore <path>"),
-            new("/gituser", "write the GitLib email and GitLib name into the working directory's repository"),
-            new("/ha", "Home Assistant: /ha for the overview, /ha on|off|toggle <room or light> [brightness%], /ha scene <name>, /ha tv on|off|mute|unmute|up|down|vol <n>|source <name>, /ha states [filter], /ha say <sentence> (Assist)"),
+            new("/cmdclear", "clear this profile's command history"),
+            new("/cmdcopy", "copy allowed commands to a profile"),
+            new("/cmdlist", "list and remove allowed shell commands"),
+            new("/collapse", "fold every item in the transcript"),
+            new("/comfy", "manage ComfyUI and its workflows"),
+            new("/compact", "shrink the conversation's context"),
+            new("/copy", "copy replies to the clipboard"),
+            new("/cwd", "show or change the working directory"),
+            new("/docker", "manage Docker Desktop's containers"),
+            new("/draft", "write the next message in your editor"),
+            new("/echo", "print a line as a reply"),
+            new("/exit", "exit the application"),
+            new("/expand", "unfold every item in the transcript"),
+            new("/explore", "open a folder in your file browser"),
+            new("/gituser", "set the repository's git user"),
+            new("/ha", "control Home Assistant"),
             new("/header", HeaderToggle.HelpSummary),
-            new("/help", "show help"),
-            new("/imagine", "generate a picture on ComfyUI from your own prompt, sent as typed: /imagine [workflow] <prompt> [-- <negative>] [--seed N] [--size WxH]"),
-            new("/interrupt", "toggle the speech input wake word interrupt, or /interrupt on|off"),
-            new("/keycheck", "list the app's key chords and whether another program holds them as global hotkeys"),
-            new("/keycopy", "copy this profile's LLM API key, Anthropic API key and Home Assistant API key into another profile, replacing its own (asks first): /keycopy <profile>"),
-            new("/learn", "write or improve a skill from the last turn or the stored sessions, in the background: /learn [what to keep] | sessions [N | what to search]"),
-            new("/log", "open the diagnostic log in a window that follows it, or /log --file for the --log file in your editor"),
-            new("/loop", "repeat a message, each reply waited for: /loop <count> [delay] <message> | infinite [delay] <message> (ESC ends it)"),
-            new("/mcp", "connect external MCP servers and switch their tools on or off on a pane"),
-            new("/memory", "list and prune memory items, or /memory on | off | forget | edit | copy <profile> [overwrite]"),
-            new("/model", "pick a model from the LLM server, or /model <id>"),
-            new("/new", "start a new conversation but do not clear the screen"),
-            new("/operata", "export and manage operata.md (the operating rules) in your editor, or /operata reset to go back to the default, or /operata copy <profile> [force] to copy it into another profile"),
-            new("/perfbar", "show or hide the performance bar, or /perfbar off|text|gauge|spark|led for its look"),
-            new("/persona", "export and manage persona.md (the personality) in your editor, or /persona reset to go back to the default, or /persona copy <profile> [force] to copy it into another profile"),
-            new("/plan", "plan before doing: /plan <requirement> — read-only research and questions until you approve the plan (saved under .neon/plans/); then /plan approve [--fresh] | cancel | show | save [name]; /plan open [name] picks one up"),
-            new("/police", "switch shell police on or off"),
-            new("/pdf", "make a PDF in the working directory: /pdf <file|https://url> [to=<out.pdf>] [paper=letter|a4|legal] [landscape] [overwrite], /pdf reply for the last reply"),
-            new(Viewer.ProcessWindowText.Word, "list the background processes the model started, or /process <id> to watch one's output live in a window (Ctrl+K twice there stops it)"),
-            new("/print", "print a file of the working directory: /print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape], /print reply for the last reply, /print printers"),
-            new("/profile", "switch profiles, or /profile <name> | add <name> | delete <name> | rename <name> <new-name> | reset [name] | push <name> | pull <name> | edit | reload"),
-            new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
-            new("/reasoning", "pick the LLM reasoning effort, or /reasoning <level>"),
-            new("/remember", "add a memory: /remember <text>"),
-            new("/rename", "rename the current session: /rename <name>, or /rename alone for the rename box"),
-            new("/sampling", "edit the LLM sampling overrides per model on a pane (temperature, top_p, top_k, min_p, penalties, extra body), or /sampling <field> <value|clear> | extra <json> | clear for the connected model"),
-            new("/server", "pick an LLM server found on the usual ports, or /server <url>"),
-            new("/sessions", "list, restore, rename and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title [<text>]]"),
-            new("/settings", "edit and save settings", "//"),
-            new("/skills", "list the skills (Enter on one moves, renames, edits or deletes it), edit the skill settings and the project file on a pane; /skills add <search words | owner/repo[/skill] | url> installs one from skills.sh or GitHub"),
-            new("/speak", "read a text file from the working directory aloud, as a reply: /speak <file> [n], or /speak to resume, or /speak <n> from sentence n"),
-            new("/splash", "start a new conversation, clear and show the splash screen"),
-            new("/stt", "toggle speech input, or /stt on|off"),
-            new("/sys", "show the system prompt and tools sent to the model"),
-            new("/terminal", "open a new Windows Terminal in the working directory, or /terminal <folder>"),
-            new("/test", "run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them"),
-            new("/theme", "switch the colour theme, starting a new conversation with the splash screen, or /theme <name>"),
-            new("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"),
+            new("/help", "show the commands and keys"),
+            new("/imagine", "make a picture on ComfyUI"),
+            new("/interrupt", "toggle the wake-word interrupt"),
+            new("/keycheck", "check which key chords are held"),
+            new("/keycopy", "copy this profile's API keys"),
+            new("/learn", "write or improve a skill"),
+            new("/log", "show the diagnostic log"),
+            new("/loop", "repeat a message or command"),
+            new("/mcp", "manage MCP servers and their tools"),
+            new("/memory", "manage the model's memory"),
+            new("/model", "pick or set the model"),
+            new("/new", "start over, keeping the screen"),
+            new("/operata", "edit the operating rules"),
+            new("/perfbar", "show or hide the performance bar"),
+            new("/persona", "edit the personality"),
+            new("/plan", "plan before doing"),
+            new("/police", "open the shell police switch"),
+            new("/pdf", "make a PDF of a file, page or reply"),
+            new(Viewer.ProcessWindowText.Word, "watch the model's background processes"),
+            new("/print", "print a file or the last reply"),
+            new("/profile", "switch or manage profiles"),
+            new("/queue", "manage the queued messages"),
+            new("/reasoning", "pick or set the reasoning effort"),
+            new("/remember", "add a memory"),
+            new("/rename", "rename the current session"),
+            new("/sampling", "tune the model's sampling"),
+            new("/server", "pick or set the LLM server"),
+            new("/sessions", "restore, rename or purge sessions"),
+            new("/settings", "edit, search and save settings", "//"),
+            new("/skills", "manage and install skills"),
+            new("/speak", "read a text file aloud"),
+            new("/splash", "start over with the splash screen"),
+            new("/stt", "toggle speech input"),
+            new("/sys", "show the system prompt and tools"),
+            new("/terminal", "open a terminal in a folder"),
+            new("/test", "benchmark the connected model"),
+            new("/theme", "switch or export the colour theme"),
+            new("/timer", "set, list and stop timers"),
             new("/toolbar", ToolbarItems.HelpSummary),
-            new("/tools", "switch the model's tools on or off and edit the Options, Ask, Files and Web settings on a pane, or /tools <group> for one group's switch"),
-            new("/tree", "print a tree of the working directory's folders and files, or /tree <path>"),
-            new("/tts", "toggle speech output, or /tts on|off"),
-            new("/usage", "show token usage and performance statistics"),
-            new("/vault", "print a tree of the Obsidian vault's folders and notes, or /vault <path>"),
-            new("/view", "open an image, or a folder of images, from the working directory in the picture viewer; --chat draws it in the transcript, --thumbs opens its folder as thumbnails: /view <image or folder> [--chat | --thumbs]"),
-            new("/vocalia", "export and manage vocalia.md (the spoken-reply directive) in your editor, or /vocalia reset to remove it, or /vocalia copy <profile> [force] to copy it into another profile"),
-            new("/wake", "toggle the speech input wake word, or /wake on|off"),
-            new("/window", "show the terminal window's width and height"),
+            new("/tools", "switch the model's tools on or off"),
+            new("/tree", "show the working directory's tree"),
+            new("/tts", "toggle speech output"),
+            new("/usage", "show token usage and statistics"),
+            new("/vault", "show the Obsidian vault's tree"),
+            new("/view", "view images or a folder of them"),
+            new("/vocalia", "edit the spoken-reply directive"),
+            new("/wake", "toggle the wake word"),
+            new("/window", "show the terminal window's size"),
         }.OrderBy(entry => entry.Command, StringComparer.Ordinal).ToArray();
 
     /// <summary>
@@ -402,11 +402,11 @@ public static class SlashCommands
     /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>
     public static bool IsBasic(HelpEntry entry) => BasicCommands.Contains(entry.Command);
 
-    /// <summary>The title of <c>/help</c>'s first tab, <see cref="BasicCommands"/> (2026-09-27; one <c>Commands</c> tab until then). Pinned.</summary>
-    public const string BasicTabTitle = "Commands (basic)";
+    /// <summary>The title of <c>/help</c>'s first tab, <see cref="BasicCommands"/> (2026-09-27; one <c>Commands</c> tab until then; <c>Commands (basic)</c> until 2026-10-05, the user's call). Pinned.</summary>
+    public const string BasicTabTitle = "Basic";
 
-    /// <summary>The title of <c>/help</c>'s second tab, every command not in <see cref="BasicCommands"/> (2026-09-27). Pinned.</summary>
-    public const string AdvancedTabTitle = "Commands (advanced)";
+    /// <summary>The title of <c>/help</c>'s second tab, every command not in <see cref="BasicCommands"/> (2026-09-27; <c>Commands (advanced)</c> until 2026-10-05). Pinned.</summary>
+    public const string AdvancedTabTitle = "Advanced";
 
     /// <summary>
     /// The input line's command list (<see cref="UI.MentionCompleter.TryFindCommand"/>): every base
@@ -434,18 +434,41 @@ public static class SlashCommands
     /// </summary>
     public static readonly int LabelWidth = HelpEntries.Max(entry => entry.Label.Length);
 
+    /// <summary>
+    /// The description column's width (2026-10-05, the forms in a third column of their own): the longest
+    /// <see cref="HelpEntry.Summary"/>, measured as <see cref="LabelWidth"/> is, so the forms start in one column on both tabs.
+    /// </summary>
+    public static readonly int DescriptionWidth = HelpEntries.Max(entry => entry.Summary.Length);
+
     /// <summary>The key line of <see cref="HelpText"/>. Pinned by tests.</summary>
     public const string KeysLine = "Keys: Enter = send   ESC = stop the speech / clear the line / cancel the reply   Up/Down = history, or the draft's rows when it wraps   F4 = talk (push-to-talk key)";
 
-    /// <summary>Printed by <c>/help</c> when there is no pane to open (a redirected console): a line per command, A to Z, no blank lines (the groups with a blank line between them until 2026-09-27). Pinned by tests.</summary>
+    /// <summary>
+    /// Printed by <c>/help</c> when there is no pane to open (a redirected console): the Commands tabs' three columns in plain
+    /// text, A to Z, no blank lines (the groups with a blank line between them until 2026-09-27) — the label, the description, the
+    /// first form (<see cref="Help.HelpSyntax.Forms"/>), and each further form on a line of its own under it (2026-10-05). Pinned by tests.
+    /// </summary>
     public static readonly string HelpText = BuildHelpText(HelpEntries);
 
     private static string BuildHelpText(IReadOnlyList<HelpEntry> entries)
     {
         var text = new System.Text.StringBuilder("Commands:\n");
+        string under = new(' ', 2 + LabelWidth + HelpColumnGap + DescriptionWidth + HelpColumnGap);
         foreach (var entry in entries)
         {
-            text.Append("  ").Append(entry.Label.PadRight(LabelWidth + HelpColumnGap)).Append(entry.Summary).Append('\n');
+            var forms = Help.HelpSyntax.Forms(entry.Command);
+            text.Append("  ").Append(entry.Label.PadRight(LabelWidth + HelpColumnGap));
+            if (forms.Count == 0)
+            {
+                text.Append(entry.Summary).Append('\n');
+                continue;
+            }
+
+            text.Append(entry.Summary.PadRight(DescriptionWidth + HelpColumnGap)).Append(forms[0]).Append('\n');
+            foreach (string form in forms.Skip(1))
+            {
+                text.Append(under).Append(form).Append('\n');
+            }
         }
 
         return text.Append(KeysLine).ToString();

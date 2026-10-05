@@ -153,6 +153,10 @@ public static class Theme
     public static Style ToolbarOff => new(Hint.Foreground, MarkdownCodeBlock.Background);
     /// <summary>The mark after the trailer on the hint row (the reasoning glyph beside the model): violet, plain — the user's call, 2026-09-15.</summary>
     public static Style TrailerMark => s_current[ThemeStyleSlot.TrailerMark];
+    /// <summary>A command form's typed words on <c>/help</c>'s Commands tabs (2026-10-05, the user's pick): the tertiary accent, <see cref="TrailerMark"/>'s.</summary>
+    public static Style HelpForm => s_current[ThemeStyleSlot.HelpForm];
+    /// <summary>A command form's placeholders and brackets (<c>&lt;name&gt;</c>, <c>[ ] | ...</c>), dimmed beside <see cref="HelpForm"/>.</summary>
+    public static Style HelpSlot => s_current[ThemeStyleSlot.HelpSlot];
     /// <summary>The highlighted row of a selection menu.</summary>
     public static Style MenuHighlight => s_current[ThemeStyleSlot.MenuHighlight];
     /// <summary>The dim part of a highlighted row (the note beside a command or skill name on the input line's list, 2026-09-16).</summary>

@@ -90,6 +90,8 @@ public enum ThemeStyleSlot
     CodeDeleted,
     DiffAdded,
     DiffRemoved,
+    HelpForm,
+    HelpSlot,
 }
 
 /// <summary>
@@ -136,7 +138,7 @@ public static class ThemeKeys
         "markdownCodeBlock", "markdownCodeLabel", "thinking", "markdownHeading1", "markdownHeading", "markdownHeading3", "markdownBullet", "markdownQuoteBar",
         "markdownQuote", "markdownLinkUrl", "markdownRule", "codeKeyword", "codeType", "codeString", "codeNumber", "codeComment",
         "codePunctuation", "codeFunction", "codeVariable", "codeAttribute", "codeTag", "codeHeading", "codeInserted", "codeDeleted",
-        "diffAdded", "diffRemoved",
+        "diffAdded", "diffRemoved", "helpForm", "helpSlot",
     ];
 
     /// <summary>The word of <paramref name="slot"/>.</summary>
@@ -181,6 +183,8 @@ public static class ThemeKeys
         ThemeStyleSlot.MarkdownRule => ThemeStyleSlot.PaneRule,
         ThemeStyleSlot.CodeAttribute => ThemeStyleSlot.CodeType,
         ThemeStyleSlot.CodeTag => ThemeStyleSlot.CodeKeyword,
+        ThemeStyleSlot.HelpForm => ThemeStyleSlot.TrailerMark,   // /help's command forms: the words typed (2026-10-05)
+        ThemeStyleSlot.HelpSlot => ThemeStyleSlot.DimText,       // and their placeholders and brackets, dimmed
         _ => null,
     };
 

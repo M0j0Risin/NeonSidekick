@@ -39,7 +39,7 @@ public static class RewindText
     public const string CompactedNotice = "(" + NoticeGlyphs.Rewind + "earlier turns were compacted into a summary)";
 
     /// <summary>The <c>/help</c> row's summary. Pinned.</summary>
-    public const string HelpSummary = "go back to an earlier message: it and everything after it leave the conversation and its text returns to the input; /rewind <n> starts the list n messages back";
+    public const string HelpSummary = "go back to an earlier message";
 
     /// <summary>The Keys tab's row for the double ESC. Pinned.</summary>
     public const string KeyMeaning = "on an empty line, rewind the conversation to an earlier message (/rewind)";

@@ -176,7 +176,7 @@ public static class ScreenText
 
     public const string Word = "/screen";
 
-    public const string HelpSummary = "capture a monitor or a window and put it on the input line, or /screen list";
+    public const string HelpSummary = "capture a monitor or a window";
 
     public const string Usage = "Usage: /screen [screen | all | monitor:N | window:<id or title words> | behind | list]";
 
