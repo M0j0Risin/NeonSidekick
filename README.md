@@ -94,7 +94,8 @@ Neon Sidekick is an agentic terminal client built primarily for local LLMs, buil
 
 ### First launch
 * Settings live in `%USERPROFILE%\.neonsidekick` (or `NEONSIDEKICK_HOME`), under the profile `default`.
-* With no model installed and *LLM server scan mode* `disabled` (the default), the app opens **Settings › Embedded models**: pick a model to download and run it in-app, or press ESC twice to skip.
+* When no server answers, the app opens **Connect a model**: look for a server again, enter a server's URL, download an embedded model to run in-app, use the Anthropic or OpenAI API with your key, or use Claude Code. Each opens the setting it needs and connects; ESC (or *Not now*) skips, and `/server` opens the page again while nothing is connected.
+* A failed request says what went wrong in one line with the next step (the server could not be reached, the key was refused, no such model, the rate limit); the full error stays in the log.
 * Already running LM Studio, Ollama or vLLM? Set *LLM server scan mode* to `local`, `remote` or `both`, or use `/server <url>`. The startup picker lists what it finds: Enter saves your pick; ESC uses the first server for this run only.
 * For Anthropic's models, turn on *Anthropic API* (or *Claude CLI server* for your Claude Code install) in `/settings` › Anthropic; for OpenAI's, *OpenAI API* in `/settings` › OpenAI.
 

@@ -21504,4 +21504,16 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Path.Combine(ChatScreen.PictureTempFolder, "01.bmp"), _openedFiles);
         Assert.DoesNotContain("🖼️ opened", output);
     }
+
+    /// <summary>The "Connect a model" page's rows (2026-10-04, the UI review): every way to a model, the embedded one only where it can run, "Not now" last.</summary>
+    [Fact]
+    public void ConnectRows_AreEveryWayToAModel()
+    {
+        Assert.Equal([ConnectChoice.Scan, ConnectChoice.Url, ConnectChoice.Embedded, ConnectChoice.Anthropic, ConnectChoice.OpenAI, ConnectChoice.ClaudeCli, ConnectChoice.NotNow], ChatScreen.ConnectRows(embedded: true).Select(r => r.Choice));
+        Assert.DoesNotContain(ChatScreen.ConnectRows(embedded: false), r => r.Choice == ConnectChoice.Embedded);
+        Assert.Equal("Not now", ChatScreen.ConnectRows(embedded: false)[^1].Label);
+        Assert.Equal("ab   " + Theme.DimMarkup("note"), ChatScreen.ConnectRow("ab", "note", 5));
+        Assert.Equal("🖥️ Connect a model", ChatScreen.ConnectTitle);
+        Assert.Equal("🖥️ http://x:9/v1 did not answer /v1/models; using it anyway, as it is the configured URL. " + ModelErrorText.UnreachableNextStep, ChatScreen.NotAnsweringNotice(new Uri("http://x:9/v1")));
+    }
 }

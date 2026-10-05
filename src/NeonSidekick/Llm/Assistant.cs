@@ -1397,6 +1397,7 @@ public sealed class Assistant
                 }
 
                 string explained = ExplainFailure(failure!, lastUsage);
+                bool hinted = false;
                 DiagnosticLog.Info(Category, "Model call failed: " + explained);
                 if (first is null && partial.Length == 0 && sentPictures > 0 && LooksLikeOversizedRequest(failure!))
                 {
@@ -1417,14 +1418,20 @@ public sealed class Assistant
                     }
 
                     explained += OversizedRequestHint(sentBytes, sentPictures);
+                    hinted = true;
                 }
 
                 if (options.Tools is not null && LooksLikeToolRoleRejection(explained))
                 {
                     explained += ToolRoleHint;
+                    hinted = true;
                 }
 
-                yield return new TurnEvent.Notice("Model error: " + explained, IsError: true);
+                // One readable line with the way on when the failure is one a user can act on (2026-10-04, the UI review); the
+                // chain stays in the log above, and a failure this loop has its own hint for keeps the chain and the hint.
+                yield return new TurnEvent.Notice(
+                    !hinted && !LooksLikeRequestTimeout(failure!) && ModelErrorText.Readable(failure!) is { } readable ? readable : "Model error: " + explained,
+                    IsError: true);
                 yield break;
             }
 

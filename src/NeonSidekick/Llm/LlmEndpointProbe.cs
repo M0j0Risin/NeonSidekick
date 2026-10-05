@@ -300,11 +300,14 @@ public sealed class LlmEndpointProbe
     /// the model, if any, rides along (<see cref="LlmEndpoint.PublishedContextLength"/>): the same
     /// payload read twice, no second request.
     /// </summary>
+    /// <summary>The endpoint's source when the configured URL did not answer <c>/v1/models</c> and is used anyway. Pinned.</summary>
+    public const string NotAnsweringSource = "configured, not answering";
+
     public static LlmEndpoint Endpoint(LlmServer server, string? apiKey, string? configuredModel, bool configured)
     {
         ArgumentNullException.ThrowIfNull(server);
         string source = configured
-            ? !server.Result.Exists ? "configured, not answering" : configuredModel is null ? "first listed" : "configured"
+            ? !server.Result.Exists ? NotAnsweringSource : configuredModel is null ? "first listed" : "configured"
             : "probed " + server.BaseUrl;
         string modelId = configuredModel ?? FirstOrFallback(server.Result.ModelIds);
         var published = server.Result.ModelsJson is { } json ? ContextLengthProbe.ParseModelsWindow(json, modelId) : null;
@@ -376,7 +379,9 @@ public sealed class LlmEndpointProbe
             var result = await ProbeAsync(v1, key, cancellationToken, OpenAIApi.HeadersFor(effective, v1)).ConfigureAwait(false);
             if (!result.Exists)
             {
-                DiagnosticLog.Warn(Category, $"{v1} did not answer /v1/models ({result.Detail}); using it anyway because it was configured.");
+                // The log's line (Info since 2026-10-04, the UI review: a yellow [Llm] line on the first screen); the screen says it as a
+                // dim notice with the way on once connected (ChatScreen.ReportLlm, NotAnsweringSource).
+                DiagnosticLog.Info(Category, $"{v1} did not answer /v1/models ({result.Detail}); using it anyway because it was configured.");
             }
 
             return Endpoint(LlmServer.From(v1, result), key, configuredModel, configured: true);

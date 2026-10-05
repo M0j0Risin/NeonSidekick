@@ -1299,15 +1299,15 @@ public partial class SidekickAppTests : IDisposable
     }
 
     [Fact]
-    public async Task Headless_WarningsGoToStdoutAsLines_AndTheEchoIsRestored()
+    public async Task Headless_ADeadConfiguredUrl_IsSaidOnItsLlmLine_AndTheEchoIsRestored()
     {
-        // A configured URL that does not answer produces a Warning from the probe.
+        // A configured URL that does not answer: the probe's line is the log's alone since 2026-10-04 (Info), the LLM line says it.
         var env = new EnvironmentOverrides(n => n == EnvironmentOverrides.LlmUrlVariable ? "http://127.0.0.1:9" : null);
         bool echoBefore = DiagnosticLog.EchoToConsole;
 
         string output = await Headless("/exit\n", env);
 
-        Assert.Contains("[Llm] http://127.0.0.1:9/v1 did not answer /v1/models", output);
+        Assert.DoesNotContain("[Llm] http://127.0.0.1:9/v1 did not answer /v1/models", output);
         Assert.Contains("LLM: http://127.0.0.1:9/v1 model=local-model (configured, not answering)", output);
         Assert.Equal(echoBefore, DiagnosticLog.EchoToConsole);
     }

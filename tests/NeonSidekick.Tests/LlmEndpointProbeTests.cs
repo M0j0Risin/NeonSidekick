@@ -249,7 +249,7 @@ public class LlmEndpointProbeTests
     }
 
     [Fact]
-    public async Task Resolve_ConfiguredButDeadUrl_IsStillReturned_WithAWarning()
+    public async Task Resolve_ConfiguredButDeadUrl_IsStillReturned_WithALogLine()
     {
         var (stub, probe) = Probe();
         var host = "dead-" + Guid.NewGuid().ToString("N");
@@ -266,7 +266,7 @@ public class LlmEndpointProbeTests
             Assert.Equal("configured, not answering", endpoint.Source);
             Assert.Single(stub.Requests);
             var warning = Assert.Single(warnings);
-            Assert.Equal(DiagnosticLevel.Warning, warning.Level);
+            Assert.Equal(DiagnosticLevel.Info, warning.Level);   // the log's alone since 2026-10-04: the screen says it as a dim notice
             Assert.Equal("Llm", warning.Category);
         }
         finally

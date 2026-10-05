@@ -9341,11 +9341,11 @@ internal sealed partial class ChatScreen
         }
 
         ReportLlm(quiet);
-        if (startup && _session.Endpoint is null && NoEmbeddedDownloaded(effective))
+        if (startup && _session.Endpoint is null)
         {
-            // Nothing to connect to but a model to download (2026-09-30, the user's ask): the app's start opens Settings ›
-            // Embedded models, where the startup picker would have stood. ESC leaves it on the settings list, a second closes it.
-            await OpenSettingsAsync(cancellationToken, SettingsField.EmbeddedModels).ConfigureAwait(false);
+            // Nothing to connect to (2026-10-04, the UI review; Settings › Embedded models alone from 2026-09-30, when no model was
+            // downloaded): the Connect a model page, every way to one, where the startup picker would have stood.
+            await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -9765,10 +9765,14 @@ internal sealed partial class ChatScreen
                 if (NoEmbeddedDownloaded(effective))
                 {
                     ReportNoEmbedded();
-                    return;
+                }
+                else
+                {
+                    _transcript.Error(LlmSession.NoServerLine(scope));
                 }
 
-                _transcript.Error(LlmSession.NoServerLine(scope));
+                // Nothing answered (2026-10-04): the Connect a model page, as at the start, while nothing is connected.
+                await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -9911,8 +9915,16 @@ internal sealed partial class ChatScreen
         else if (!quiet || !SettingsNameEndpoint(_effective()))
         {
             _transcript.Notice(NoticeGlyphs.Llm + LlmSession.ConnectedLine(_session.Endpoint));   // the screen's glyph (2026-09-22); the log and headless keep the bare line
+            if (_session.Endpoint.Source == LlmEndpointProbe.NotAnsweringSource)
+            {
+                _transcript.Notice(NotAnsweringNotice(_session.Endpoint.BaseUrl));   // 2026-10-04: a dim line with the way on, no yellow [Llm] one
+            }
         }
     }
+
+    /// <summary>The configured server that did not answer <c>/v1/models</c> and is used anyway (2026-10-04, the UI review). Pinned.</summary>
+    public static string NotAnsweringNotice(Uri baseUrl) =>
+        $"{NoticeGlyphs.Llm}{baseUrl} did not answer /v1/models; using it anyway, as it is the configured URL. " + Llm.ModelErrorText.UnreachableNextStep;
 
     /// <summary>The no-server line when nothing was looked for and no embedded model is downloaded (2026-09-30, one line since later that day).</summary>
     private void ReportNoEmbedded() => _transcript.Error(LlmSession.NoEmbeddedLine);

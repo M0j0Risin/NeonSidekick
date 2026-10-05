@@ -389,4 +389,22 @@ public class OpenAICompatibleChatClientTests
         Assert.Contains("answer", json);
         Assert.DoesNotContain("tool_calls", json);
     }
+
+    /// <summary>A refused key (2026-10-04, the UI review): one line with the way on, never the exception chain.</summary>
+    [Fact]
+    public async Task RefusedKey_IsOneLineWithTheWayOn()
+    {
+        var stub = new StubHttpMessageHandler().Map("http://127.0.0.1:1234/v1/chat/completions", HttpStatusCode.Unauthorized, "{\"error\":{\"message\":\"bad key\"}}");
+        using var http = new HttpClient(stub);
+        using var client = new OpenAICompatibleChatClient(Endpoint(), TimeSpan.FromSeconds(5), http);
+        var assistant = new Assistant(client, new ConversationHistory("sys"), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10)));
+
+        var events = new List<TurnEvent>();
+        await foreach (var evt in assistant.RunTurnAsync("hi")) events.Add(evt);
+
+        var notice = Assert.IsType<TurnEvent.Notice>(Assert.Single(events));
+        Assert.True(notice.IsError);
+        Assert.StartsWith("The LLM server refused the key (HTTP 401", notice.Text);
+        Assert.EndsWith(ModelErrorText.KeyNextStep, notice.Text);
+    }
 }

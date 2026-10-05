@@ -452,7 +452,8 @@ public partial class ChatScreenTests
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         var model = EmbeddedModelCatalog.Models[0];
         var input = new ScriptedInput();
-        input.Push(Keys.Enter);                           // the catalog, open by itself: the first model's page
+        input.Push(Keys.Down, Keys.Down, Keys.Enter);     // the Connect a model page (2026-10-04): its third row, the embedded catalog
+        input.Push(Keys.Enter);                           // the catalog: the first model's page
         input.Push(Keys.Enter);                           // Install: the pane closes, the screen downloads
         PushLine(input, "/exit");
 
@@ -474,14 +475,15 @@ public partial class ChatScreenTests
         UsePane();
         var embedded = UseEmbedded(new FakeEmbeddedLlm());
         var input = new ScriptedInput();
-        input.Push(Keys.Escape);                          // out of the catalog: the settings list
-        input.Push(Keys.Escape);                          // the pane closes
+        input.Push(Keys.Escape);                          // the Connect a model page (2026-10-04; the catalog by itself until then): not now
         PushLine(input, "/server");                       // never opens the catalog itself
+        input.Push(Keys.Escape);                          // its Connect a model page: not now
         PushLine(input, "/exit");
 
         string output = await RunAsync(input);
 
-        Assert.Contains(EmbeddedModelCatalog.Models[0].Display, output);   // the catalog's rows were shown
+        Assert.Equal(2, Count(output, ChatScreen.ConnectTitle));   // the launch's page, then /server's
+        Assert.DoesNotContain(EmbeddedModelCatalog.Models[0].Display, output);   // the catalog only on a pick
         Assert.Equal(2, Count(output, "✗ " + LlmSession.NoEmbeddedLine));   // the launch, then /server
         Assert.Empty(embedded.Installs);
         Assert.Empty(embedded.Starts);
