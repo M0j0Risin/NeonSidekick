@@ -2835,8 +2835,19 @@ public partial class ChatScreenTests : IDisposable
     {
         var lines = Output.Split('\n');
         int title = Array.FindLastIndex(lines, l => l.EndsWith(ScreenPane.CloseGlyph, StringComparison.Ordinal));
-        int rule = Array.FindIndex(lines, title, l => l == new string(ScreenPane.RuleGlyph, _console.Profile.Width));
+        string full = new(ScreenPane.RuleGlyph, _console.Profile.Width);
+        int rule = Array.FindIndex(lines, title, l => l == full);
+        if (rule >= 0 && IsFooterSlab(rule + 1))
+        {
+            // A menu footer's rule (2026-10-05) is full width too: the pane's own edge is the next one, under the slab.
+            rule = Array.FindIndex(lines, rule + 1, l => l == full);
+        }
+
         return rule - title;
+
+        // The slab's rows: every one indented and padded to the window's width.
+        bool IsFooterSlab(int first) => first + MenuPane.FooterRows <= lines.Length
+            && lines.Skip(first).Take(MenuPane.FooterRows).All(l => l.StartsWith(MenuPane.NoPointer, StringComparison.Ordinal) && TextCells.Width(l) == _console.Profile.Width);
     }
 
     private int HintRowUnderPane() => 100 + OverlayRowsDrawn() + 1;
@@ -3840,7 +3851,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         // The prompt carries the directive, never the list (2026-09-17): the list is the recall_memory
         // pair's result, the last of the three opening pairs, so it is the freshest context before the reply.
@@ -3869,7 +3880,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var request = _chat.Requests[0];
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, files: false), request[0].Text);
@@ -3933,7 +3944,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>()), _chat.Requests[0][0].Text);
         Assert.DoesNotContain(WebSearchTool.ToolName, _chat.Requests[0][0].Text!);
@@ -4043,7 +4054,7 @@ public partial class ChatScreenTests : IDisposable
 
         // An emptied group reads as its switch off: the Turn_FilesOff shape with the switch still on.
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var request = _chat.Requests[0];
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, files: false), request[0].Text);
@@ -4936,7 +4947,7 @@ public partial class ChatScreenTests : IDisposable
         await RunAsync();
 
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.Equal(SkilledPrompt(false, null, web: true), _chat.Requests[0][0].Text);
         Assert.DoesNotContain("Chris", _chat.Requests[0][0].Text!);
@@ -4980,7 +4991,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true), _chat.Requests[2][0].Text);
         Assert.StartsWith("You are Rex, a gruff pirate.\n\n" + Assistant.OperatingRules, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.Equal(
-            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
+            (string[])[GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, SkillEditorTool.ToolName, SessionManagerTool.ToolName],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
     }
 
@@ -6128,7 +6139,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
@@ -9595,7 +9606,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 116;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again
+        _console.Profile.Height = 117;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);
@@ -18241,7 +18252,7 @@ public partial class ChatScreenTests : IDisposable
         return directory;
     }
 
-    private static readonly string[] StandingAndFileTools = [GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DaysBetweenTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName];
+    private static readonly string[] StandingAndFileTools = [GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, NeonHelpTool.ToolName, .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SaveMemoryTool.ToolName, RecallMemoryTool.ToolName];
 
     [Fact]
     public async Task Turn_SkillsInstalled_OffersBothSkillTools_AndListsThemInThePrompt()
@@ -20737,7 +20748,7 @@ public partial class ChatScreenTests : IDisposable
         StepsWhenIdle([.. Typed("$d"), Key(Keys.Escape), Key(Keys.Escape), Line("/exit")]);
         string noFiles = await RunAsync();
         Assert.DoesNotContain(MenuPane.Pointer + DownloadFileTool.ToolName, noFiles[flipped.Length..]);
-        Assert.Contains(MenuPane.Pointer + DaysBetweenTool.ToolName, noFiles[flipped.Length..]);   // the clock's days_between still there
+        Assert.Contains(MenuPane.Pointer + DateDifferenceTool.ToolName, noFiles[flipped.Length..]);   // the clock's date_difference still there
 
         // The switch off: nothing, whatever is offered.
         _settings.Update(d => { d.FileTools = true; d.ToolsDollarMention = false; });

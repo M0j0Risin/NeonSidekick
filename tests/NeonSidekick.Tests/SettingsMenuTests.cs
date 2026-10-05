@@ -3084,7 +3084,7 @@ public partial class SettingsMenuTests : IDisposable
     /// <param name="browseFolder">The folder picker the Working directory (cwd) row opens (2026-09-22); null leaves the row asking for a typed path, as it did before the picker.</param>
     private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null, Func<IReadOnlyList<Skill>>? botChatSkills = null, Func<IReadOnlyList<ToolGroup>>? botChatTools = null)
     {
-        _console.Profile.Height = 40;
+        _console.Profile.Height = 41;   // 40 until 2026-10-05, when the footer's rule took a row and the LLM tab no longer fit
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, botChatSkills: botChatSkills, botChatTools: botChatTools);

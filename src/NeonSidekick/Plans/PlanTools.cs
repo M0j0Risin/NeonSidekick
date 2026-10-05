@@ -17,7 +17,7 @@ public static class PlanTools
     public static readonly IReadOnlySet<string> ReadOnly = new HashSet<string>(StringComparer.Ordinal)
     {
         // clock and timers
-        "get_current_time", "days_between", "shift_date", "list_timers",
+        "get_current_time", "date_difference", "shift_date", "list_timers",
         // the app's own manual (2026-10-02): documentation only
         "neon_help",
         // files

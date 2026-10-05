@@ -239,7 +239,7 @@ public partial class ToolsMenuTests : IDisposable
 
         // The strip, the Clock heading, the cursor on get_current_time (the first tool row, past its heading), the hint with the flip keys; nothing reached the transcript.
         // The headings are rules with a gap before each but the first (2026-10-03).
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DaysBetweenTool.ToolName, true) + "\n  \n" + Heading("── Files · 16") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 16") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
         Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", _console.Output);
         Assert.Contains("\n" + Heading("── Files · 16") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
         Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", _console.Output);   // 39 rows over 30: the list scrolls

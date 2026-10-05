@@ -17,8 +17,9 @@ internal static class MenuLayout
     }
 
     /// <summary>
-    /// The footer's <see cref="MenuPane.FooterRows"/> rows as printed under the list at <paramref name="width"/> columns for the cursor on
-    /// <paramref name="field"/> (null for a row with none: blank rows), each ending in a line break.
+    /// The footer as printed under the list at <paramref name="width"/> columns for the cursor on <paramref name="field"/> (null for a
+    /// row with none: blank rows): its rule, then its <see cref="MenuPane.FooterRows"/> rows padded to the width (the slab, 2026-10-05),
+    /// each ending in a line break.
     /// </summary>
     public static string Footer(SettingsField? field, int width) => Footer(field is { } f ? SettingsMenu.FieldFooter(f) : null, width);
 
@@ -26,15 +27,16 @@ internal static class MenuLayout
     public static string Footer(MenuFooter? footer, int width)
     {
         var lines = footer is { } f ? MenuPane.FooterLines(f, width - TextCells.Width(MenuPane.NoPointer)) : [];
-        var sb = new System.Text.StringBuilder();
+        var sb = new System.Text.StringBuilder(new string(ScreenPane.RuleGlyph, width)).Append('\n');
         for (int i = 0; i < MenuPane.FooterRows; i++)
         {
-            sb.Append(i < lines.Count ? MenuPane.NoPointer + lines[i] : " ").Append('\n');
+            string row = MenuPane.NoPointer + (i < lines.Count ? lines[i] : "");
+            sb.Append(row).Append(' ', Math.Max(0, width - TextCells.Width(row))).Append('\n');
         }
 
         return sb.ToString();
     }
 
-    /// <summary>Blank footer rows: a row that says nothing under the list (the servers, a heading, the off line).</summary>
-    public static string BlankFooter => Footer((MenuFooter?)null, 1);
+    /// <summary>A footer that says nothing at <paramref name="width"/> columns: a row with no text under the list (the servers, a heading, the off line).</summary>
+    public static string BlankFooter(int width) => Footer((MenuFooter?)null, width);
 }

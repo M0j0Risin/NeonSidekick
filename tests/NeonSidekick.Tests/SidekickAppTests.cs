@@ -726,7 +726,7 @@ public partial class SidekickAppTests : IDisposable
         await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "save_memory", "recall_memory", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "save_memory", "recall_memory", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.DoesNotContain(Assistant.WebRule, _chat.Requests[0][0].Text!);
     }
@@ -781,7 +781,7 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "save_memory", "recall_memory", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "save_memory", "recall_memory", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var request = _chat.Requests[0];
         Assert.Equal(SkilledPrompt(false, [], web: true, files: false), request[0].Text);
@@ -811,7 +811,7 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("a haiku\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "save_memory", "recall_memory", "load_skill", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "save_memory", "recall_memory", "load_skill", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         var haiku = new Skill("haiku", "Writes haiku.", SkillScope.Profile, skills);
         Assert.Equal(Assistant.SystemPrompt(false, [], web: true, project: new ProjectNotes("AGENTS.md", "The notes."), skills: [haiku], sessions: true, timers: false, git: true, shell: true, native: true, help: true), _chat.Requests[0][0].Text);
@@ -837,7 +837,7 @@ public partial class SidekickAppTests : IDisposable
         await Headless("hello\n");
 
         Assert.Equal(
-            (string[])["get_current_time", "shift_date", "days_between", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "skill_editor", "session_manager"],
+            (string[])["get_current_time", "shift_date", "date_difference", "neon_help", .. FileToolNames.All, .. GitToolNames.All, .. ShellToolNames.All, "web_search", "web_fetch", "open_url", "download_file", "skill_editor", "session_manager"],
             _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray());
         Assert.Equal(SkilledPrompt(false, null, web: true), _chat.Requests[0][0].Text);
     }
@@ -929,13 +929,13 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_AClockCall_PrintsTheGenericToolLines()
     {
         ServerOn1234("llama");
-        _chat.Enqueue(FakeChatClient.Call("c1", "days_between", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
+        _chat.Enqueue(FakeChatClient.Call("c1", "date_difference", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
         _chat.EnqueueText("105 days.");
 
         string output = await Headless("how long until christmas?\n");
 
-        Assert.Contains("[tool] days_between {", output);
-        Assert.Contains("[tool] days_between -> 105 days (15 weeks) from 2026-09-11 to 2026-12-25", output);
+        Assert.Contains("[tool] date_difference {", output);
+        Assert.Contains("[tool] date_difference -> 105 days (15 weeks) from 2026-09-11 to 2026-12-25, which is 3 months and 14 days", output);
         Assert.Contains("105 days.", output);
     }
 
@@ -966,8 +966,8 @@ public partial class SidekickAppTests : IDisposable
     {
         ServerOn1234("llama");
         _settings.Update(d => d.LlmMaxToolIterations = 1);
-        _chat.Enqueue(FakeChatClient.Call("c1", "days_between", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
-        _chat.Enqueue(FakeChatClient.Call("c2", "days_between", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
+        _chat.Enqueue(FakeChatClient.Call("c1", "date_difference", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
+        _chat.Enqueue(FakeChatClient.Call("c2", "date_difference", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
 
         string output = await Headless("how long?\n");
 

@@ -161,6 +161,11 @@ public static class Theme
     public static Style MenuHighlight => s_current[ThemeStyleSlot.MenuHighlight];
     /// <summary>The dim part of a highlighted row (the note beside a command or skill name on the input line's list, 2026-09-16).</summary>
     public static Style MenuHighlightDim => s_current[ThemeStyleSlot.MenuHighlightDim];
+    /// <summary>
+    /// The slab a menu's footer is drawn on, the cursor's row described under the list (2026-10-05, the user's ask: the
+    /// description read as more rows of the list): the dim text on the lifted fill the highlighted row and code blocks use.
+    /// </summary>
+    public static Style MenuFooter => s_current[ThemeStyleSlot.MenuFooter];
     /// <summary>A disabled menu row.</summary>
     public static Style MenuDisabled => s_current[ThemeStyleSlot.MenuDisabled];
     /// <summary>The selected stretch of the input row (a drag or Shift+arrows): the user's colour inverted.</summary>
@@ -502,6 +507,7 @@ public static class Theme
             ThemeStyleSlot.CodeDeleted => new(foreground: p.Bad, background: p.PanelBg),
             ThemeStyleSlot.DiffAdded => new(foreground: p.Ink, background: Lerp(p.Bg, p.Good, DiffSlabShare)),
             ThemeStyleSlot.DiffRemoved => new(foreground: p.Ink, background: Lerp(p.Bg, p.Bad, DiffSlabShare)),
+            ThemeStyleSlot.MenuFooter => new(foreground: p.Dim, background: p.PanelBg),
             _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, "An alias slot has no style of its own."),
         };
     }

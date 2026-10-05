@@ -1214,7 +1214,7 @@ public class AssistantTests
             "Reply in plain text: no markdown headings, tables or code fences unless the user asks for code. " +
             "Use a tool when it helps; otherwise answer directly. " +
             "You do not know the current date or time; call get_current_time when a question depends on it, " +
-            "and use shift_date or days_between for calendar arithmetic instead of counting yourself. " +
+            "and use shift_date or date_difference for calendar arithmetic instead of counting yourself. " +
             "For a countdown, use start_timer, stop_timer and list_timers; never guess what is left on a timer. " +
             "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
             "(get_working_directory gives its path); every path you pass is relative to it and nothing outside it is reachable; delete removes a file or a folder for good, with everything in it. " +

@@ -1466,7 +1466,7 @@ The easiest start is `/theme export <name> [new-name]`, which writes any theme t
 
 * **Text:** `body`, `dimText`, `accent`, `accentSecondary`, `accentTertiary`, `label`, `errorText`, `goodText`, `warnText`.
 * **Screen:** `user` (your lines), `assistant` (the reply), `systemText` (notices), `sectionHeading`, `border`, `tableHeader`, `spinner`, `paneRule`, `hint`, `trailerMark`, `pasteLabel`, `placeholder`, `selectedText`.
-* **Menus:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`.
+* **Menus:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`, `menuFooter` (the slab under a list describing the cursor's row).
 * **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
 * **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.
 * **File diffs:** `diffAdded`, `diffRemoved` (the added and removed lines' slabs under a file edit; the text keeps its code colours, only `bg` counts).
@@ -1518,7 +1518,7 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
 |---|---|---|
 | `get_current_time` | `zone?` | The current date, time, weekday and time zone. Seeded at the start of every conversation. |
 | `shift_date` | `date, days?, weeks?, months?, years?` | Moves a date by days, weeks, months or years and gives its weekday. |
-| `days_between` | `from, to` | The days from one date to another (negative when the second is earlier). |
+| `date_difference` | `from, to` | The days from one date to another (negative when the second is earlier), and in years, months and days once the gap is a month or more. `days_between` until 2026-10-05. |
 
 ### Timers
 

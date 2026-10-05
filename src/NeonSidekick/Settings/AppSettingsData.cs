@@ -1537,6 +1537,8 @@ public sealed class AppSettingsData
     // (NEONSIDEKICK_CLAUDE_API[_KEY] → NEONSIDEKICK_ANTHROPIC_API[_KEY]); ClaudeCliServer kept its name. No migration: the
     // old keys are skipped on load and take their defaults, so the Anthropic key is entered again, and a saved claude_advisor
     // in ToolsDisabled no longer matches a tool.
+    // The clock's days_between became date_difference on 2026-10-05 (the user's pick, as it began answering in years and
+    // months too): no migration either, so a profile that had switched days_between off is offered date_difference again.
 
     /// <summary>
     /// The most patch lines one <c>gitlib_diff</c> shows (2026-09-20; <c>Git native diff max lines</c> from 2026-09-21, <c>GitLib diff max lines</c> since 2026-09-30): <see cref="MinGitLibDiffMaxLines"/> to

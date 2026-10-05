@@ -329,8 +329,15 @@ public sealed class MenuPane : INoticeSink
         return rows;
     }
 
-    /// <summary>The rows a page's <see cref="MenuPage.Footer"/> takes, kept whether or not the row under the cursor has a text (2026-10-04). Pinned.</summary>
+    /// <summary>The rows a page's <see cref="MenuPage.Footer"/> text takes, kept whether or not the row under the cursor has a text (2026-10-04). Pinned.</summary>
     public const int FooterRows = 3;
+
+    /// <summary>
+    /// The rule over a page's <see cref="MenuPage.Footer"/> (2026-10-05, the user's ask: with a short list the description read as
+    /// more of its rows): one row of <see cref="ScreenPane.RuleGlyph"/> in <see cref="Theme.PaneRule"/>, the text's rows on the
+    /// <see cref="Theme.MenuFooter"/> slab under it. Pinned.
+    /// </summary>
+    public const int FooterRuleRows = 1;
 
     /// <summary>What the cursor's row starts with; every other row gets the same width of spaces. Pinned.</summary>
     public const string Pointer = "▸ ";
@@ -977,7 +984,7 @@ public sealed class MenuPane : INoticeSink
         var top = TopRows(page, Width);
         _stripRows = top.Count;
         int header = Header;
-        int footer = page.Footer is null ? 0 : FooterRows;
+        int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
         int capacity = _pane.MenuContentRows(Height, _inputRows) - header - footer;
         if (page.LeadRow(_cursor) is int lead && lead < _first && _cursor - lead < capacity - 1)
         {
@@ -1038,12 +1045,14 @@ public sealed class MenuPane : INoticeSink
         if (footer > 0)
         {
             // The cursor's row described under the list (2026-10-04), its rows kept, right under the rows (the padding to the
-            // tallest tab goes below it); a click there lands on no row.
+            // tallest tab goes below it); a click there lands on no row. Since 2026-10-05 a rule over it and the text on a slab
+            // to the list's edge, a row with nothing to say too, so the shape holds as the cursor moves.
             var text = page.Rows.Count > 0 ? page.Footer!(page.Tab, _cursor) : null;
             var rows = text is null ? [] : FooterLines(text, _listWidth - TextCells.Width(NoPointer));
-            for (int i = 0; i < footer; i++)
+            lines.Add(new Markup(Theme.StyleMarkup(Theme.PaneRule, new string(ScreenPane.RuleGlyph, Math.Max(1, _listWidth)))).Overflow(Overflow.Crop));
+            for (int i = 0; i < FooterRows; i++)
             {
-                lines.Add(i < rows.Count ? new Markup(Theme.DimMarkup(NoPointer + rows[i])).Overflow(Overflow.Ellipsis) : new Text(" "));
+                lines.Add(new Markup(FooterSlabMarkup(i < rows.Count ? rows[i] : "", _listWidth)).Overflow(Overflow.Ellipsis));
             }
         }
 
@@ -1066,6 +1075,17 @@ public sealed class MenuPane : INoticeSink
         }
 
         _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true);
+    }
+
+    /// <summary>
+    /// One footer row on its slab (2026-10-05): <see cref="NoPointer"/> and <paramref name="text"/> (already cut to the width by
+    /// <see cref="FooterLines"/>) padded with blanks to <paramref name="width"/> cells, all in <see cref="Theme.MenuFooter"/>. Pure.
+    /// </summary>
+    public static string FooterSlabMarkup(string text, int width)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string row = NoPointer + text;
+        return Theme.StyleMarkup(Theme.MenuFooter, row + new string(' ', Math.Max(0, width - TextCells.Width(row))));
     }
 
     /// <summary>

@@ -124,9 +124,9 @@ public class SkillsMenuTests : IDisposable
         return new SkillRevert(SkillRevertOutcome.Reverted, revision, null);
     }
 
-    /// <summary><paramref name="before"/>, then the blank rows that hold a tab at its pane's tallest tab's height (2026-10-01), then <paramref name="after"/>.</summary>
+    /// <summary><paramref name="before"/>, then the blank rows that hold a tab at its pane's tallest tab's height (2026-10-01) and the footer (its rule since 2026-10-05), then <paramref name="after"/>.</summary>
     private void AssertPadded(string before, string after) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(after)), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?:(?: |  [^\n]*|" + Rule(100) + ")\n)*" + System.Text.RegularExpressions.Regex.Escape(after)), _console.Output);
 
     /// <summary>A title row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     private static string Titled(string row, int width = 100) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;

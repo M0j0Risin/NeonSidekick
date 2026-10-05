@@ -4783,7 +4783,7 @@ internal sealed partial class ChatScreen
     {
         new GetCurrentTimeTool(time),
         new ShiftDateTool(time),
-        new DaysBetweenTool(time),
+        new DateDifferenceTool(time),
     };
 
     /// <summary>
@@ -5393,7 +5393,7 @@ internal sealed partial class ChatScreen
         SessionManagerTool.ToolName,
         GetCurrentTimeTool.ToolName,
         ShiftDateTool.ToolName,
-        DaysBetweenTool.ToolName,
+        DateDifferenceTool.ToolName,
         StartTimerTool.ToolName,
         StopTimerTool.ToolName,
         ListTimersTool.ToolName,

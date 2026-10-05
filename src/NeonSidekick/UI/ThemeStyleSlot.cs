@@ -92,6 +92,7 @@ public enum ThemeStyleSlot
     DiffRemoved,
     HelpForm,
     HelpSlot,
+    MenuFooter,
 }
 
 /// <summary>
@@ -138,7 +139,7 @@ public static class ThemeKeys
         "markdownCodeBlock", "markdownCodeLabel", "thinking", "markdownHeading1", "markdownHeading", "markdownHeading3", "markdownBullet", "markdownQuoteBar",
         "markdownQuote", "markdownLinkUrl", "markdownRule", "codeKeyword", "codeType", "codeString", "codeNumber", "codeComment",
         "codePunctuation", "codeFunction", "codeVariable", "codeAttribute", "codeTag", "codeHeading", "codeInserted", "codeDeleted",
-        "diffAdded", "diffRemoved", "helpForm", "helpSlot",
+        "diffAdded", "diffRemoved", "helpForm", "helpSlot", "menuFooter",
     ];
 
     /// <summary>The word of <paramref name="slot"/>.</summary>

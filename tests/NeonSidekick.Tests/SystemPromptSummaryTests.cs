@@ -335,7 +335,7 @@ public class SystemPromptSummaryTests : IDisposable
     {
         // /sys' Tools tab (2026-09-26): only what the next turn sends — a disabled tool, a noted one, a group off by its switch, a group emptied by /tools.
         var (clock, timers, files, memory) = Tools();
-        var disabled = ToolsText.DisabledSet(["read_file", "zip", "get_current_time", "shift_date", "days_between"]);
+        var disabled = ToolsText.DisabledSet(["read_file", "zip", "get_current_time", "shift_date", "date_difference"]);
 
         var groups = SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false, disabled: disabled));
 
@@ -508,7 +508,7 @@ public class SystemPromptSummaryTests : IDisposable
         // An offered group's title is its name alone: no note for the pane's description column.
         Assert.Equal(on.Select(g => g.Name), on.Select(g => g.Title));
         Assert.All(on, g => Assert.Equal("", g.Note));
-        Assert.Equal(["get_current_time", "shift_date", "days_between"], on[0].Tools.Select(t => t.Name));
+        Assert.Equal(["get_current_time", "shift_date", "date_difference"], on[0].Tools.Select(t => t.Name));
         Assert.Equal(["start_timer", "stop_timer", "list_timers"], on[3].Tools.Select(t => t.Name));
         Assert.Equal(FileToolNames.WithoutPdf, on[1].Tools.Select(t => t.Name));
         Assert.Equal([SaveMemoryTool.ToolName, RecallMemoryTool.ToolName], on[2].Tools.Select(t => t.Name));

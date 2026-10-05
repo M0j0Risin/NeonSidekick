@@ -1735,7 +1735,8 @@ public class MenuPaneTests : IDisposable
 
     /// <summary>
     /// A page's footer (2026-10-04, the UI review: no settings row said what it does): the cursor's row described right under the list,
-    /// its last line kept whole, the footer's rows kept blank for a row that says nothing, so the pane holds its height.
+    /// its last line kept whole, the footer's rows kept blank for a row that says nothing, so the pane holds its height. Since
+    /// 2026-10-05 a rule over it and its rows padded to the list's edge on the slab.
     /// </summary>
     [Fact]
     public async Task AFooter_DescribesTheCursorsRow_UnderTheList_AndKeepsItsRows()
@@ -1748,10 +1749,45 @@ public class MenuPaneTests : IDisposable
 
         Assert.Null(await menu.PickAsync(page, 0, CancellationToken.None));
 
-        Assert.Contains("\n▸ a\n  b\n  All about a.\n  Default: x\n \n" + Rule(40), Output);
-        Assert.Contains("\n  a\n▸ b\n \n \n \n" + Rule(40), Output);
+        string Slab(string text) => (MenuPane.NoPointer + text).PadRight(40);
+        Assert.Contains("\n▸ a\n  b\n" + Rule(40) + "\n" + Slab("All about a.") + "\n" + Slab("Default: x") + "\n" + Slab("") + "\n" + Rule(40), Output);
+        Assert.Contains("\n  a\n▸ b\n" + Rule(40) + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
         // A long text wraps to the rows its last line leaves; the last line keeps its own row.
         Assert.Equal(["one two", "three …", "Defaul…"], MenuPane.FooterLines(new MenuFooter("one two three four five", "Default: x"), 7));
         Assert.Equal(MenuPane.FooterRows, MenuPane.FooterLines(new MenuFooter("one two three four five six"), 7).Count);
+    }
+
+    /// <summary>
+    /// The footer's slab (2026-10-05, the user's ask): each row in <see cref="Theme.MenuFooter"/> — the dim text on the panel fill —
+    /// padded to the width, an empty row too, its text escaped.
+    /// </summary>
+    [Fact]
+    public void AFooterRow_IsOnTheSlab_ToTheListsEdge()
+    {
+        Assert.Equal(new Style(Theme.Dim, Theme.PanelBg), Theme.MenuFooter);
+        string slab = "[" + Theme.MenuFooter.ToMarkup() + "]";
+        Assert.Equal(slab + "  All [[a]].   [/]", MenuPane.FooterSlabMarkup("All [a].", 13));
+        Assert.Equal(slab + "     [/]", MenuPane.FooterSlabMarkup("", 5));
+        Assert.Equal(slab + "  too long[/]", MenuPane.FooterSlabMarkup("too long", 4));   // FooterLines cuts it first; never negative
+    }
+
+    /// <summary>The footer takes its rule's row and its text's from the list (2026-10-05): a long list shows that many rows fewer.</summary>
+    [Fact]
+    public async Task AFooter_TakesItsRuleAndRows_FromTheList()
+    {
+        _console.Profile.Height = 40;
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var rows = Enumerable.Range(0, 60).Select(i => "row" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        Push(Keys.Escape, Keys.Escape);
+
+        Assert.Null(await menu.PickAsync(Page(rows), 0, CancellationToken.None));
+        Assert.Null(await menu.PickAsync(Page(rows) with { Footer = (_, _) => null }, 0, CancellationToken.None));
+
+        var shown = System.Text.RegularExpressions.Regex.Matches(Output, "▼ 1–(\\d+) of 60")
+            .Select(m => int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)).Distinct().ToList();
+        Assert.Equal(2, shown.Count);
+        Assert.Equal(shown[0] - MenuPane.FooterRuleRows - MenuPane.FooterRows, shown[1]);
     }
 }

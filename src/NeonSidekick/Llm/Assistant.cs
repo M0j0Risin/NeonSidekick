@@ -96,7 +96,7 @@ public sealed class Assistant
     public const string ToolRulesWithoutTimers =
         "Use a tool when it helps; otherwise answer directly. " +
         "You do not know the current date or time; call " + NeonSidekick.Llm.Tools.GetCurrentTimeTool.ToolName + " when a question depends on it, " +
-        "and use " + NeonSidekick.Llm.Tools.ShiftDateTool.ToolName + " or " + NeonSidekick.Llm.Tools.DaysBetweenTool.ToolName + " for calendar arithmetic instead of counting yourself.";
+        "and use " + NeonSidekick.Llm.Tools.ShiftDateTool.ToolName + " or " + NeonSidekick.Llm.Tools.DateDifferenceTool.ToolName + " for calendar arithmetic instead of counting yourself.";
 
     /// <summary>
     /// The timer sentence of <see cref="ToolRules"/>: in the default rules while any timer tool is offered,
