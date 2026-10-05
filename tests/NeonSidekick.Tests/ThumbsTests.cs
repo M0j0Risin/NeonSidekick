@@ -273,10 +273,53 @@ public sealed class ThumbsTests
     [InlineData(0x7A, false, false, false, ThumbsAction.ToggleFullScreen)]
     [InlineData(0x1B, false, false, false, ThumbsAction.Close)]
     [InlineData(0x1B, false, false, true, ThumbsAction.LeaveFullScreen)]
+    [InlineData(0x2E, false, false, false, ThumbsAction.Delete)]   // 2026-10-05, the viewer's double-Del
+    [InlineData(0x2E, true, false, false, ThumbsAction.None)]
     [InlineData(0x25, true, false, false, ThumbsAction.None)]   // a Ctrl chord is the terminal's
     [InlineData(0x41, false, false, false, ThumbsAction.None)]
     public void ActionFor_MapsTheKeys(int key, bool control, bool shift, bool fullScreen, ThumbsAction expected) =>
         Assert.Equal(expected, ThumbsState.ActionFor(key, control, shift, fullScreen));
+
+    [Fact]
+    public void PressDelete_ArmsTheSelected_ThenDeletesIt_OnASecondWithinTheWindow()
+    {
+        var state = Grid(3);
+        Assert.Null(state.PressDelete(1_000));   // nothing selected: nothing armed
+        Assert.False(state.DeleteArmed);
+
+        state.SelectIndex(1);
+        Assert.Null(state.PressDelete(1_000));
+        Assert.True(state.DeleteArmed);
+        Assert.Equal("001.png — 2/3 · " + ViewerText.DeleteArmedHint, state.Title());
+
+        Assert.Equal(@"D:\pics\001.png", state.PressDelete(1_000 + ViewerState.DeleteArmMilliseconds));
+        Assert.False(state.DeleteArmed);
+        Assert.Equal("001.png — 2/3 · NeonSidekick thumbnails", state.Title());
+    }
+
+    [Fact]
+    public void PressDelete_TooLate_ArmsAgain_AndTheSelectionMoving_OrDisarm_OrReset_DropsIt()
+    {
+        var state = Grid(3);
+        state.SelectIndex(0);
+        state.PressDelete(0);
+        Assert.Null(state.PressDelete(ViewerState.DeleteArmMilliseconds + 1));   // late: armed afresh from now
+        Assert.True(state.DeleteArmed);
+
+        state.SelectIndex(2);
+        Assert.False(state.DeleteArmed);
+        Assert.Null(state.PressDelete(ViewerState.DeleteArmMilliseconds + 2));   // the new picture is only armed, not deleted
+        Assert.True(state.DeleteArmed);
+
+        Assert.True(state.Disarm());
+        Assert.False(state.Disarm());
+        Assert.False(state.DeleteArmed);
+
+        state.PressDelete(10_000);
+        state.Reset(@"D:\pics", state.Entries.ToList());
+        state.SelectIndex(2);
+        Assert.False(state.DeleteArmed);
+    }
 
     [Fact]
     public void Bucket_TheSmallestThatCovers()
@@ -457,11 +500,14 @@ public sealed class ThumbsTests
         Assert.Equal(@"D:\p — 12 pictures · NeonSidekick thumbnails", ThumbsText.Title(@"D:\p", 12, null, 0));
         Assert.Equal(@"D:\p — 1 picture · NeonSidekick thumbnails", ThumbsText.Title(@"D:\p", 1, null, 0));
         Assert.Equal("0001.png — 3/12 · NeonSidekick thumbnails", ThumbsText.Title(@"D:\p", 12, "0001.png", 3));
+        Assert.Equal("0001.png — 3/12 · Del again to delete", ThumbsText.Title(@"D:\p", 12, "0001.png", 3, deleteArmed: true));
+        Assert.Equal(@"D:\p — 12 pictures · NeonSidekick thumbnails", ThumbsText.Title(@"D:\p", 12, null, 0, deleteArmed: true));
         Assert.Equal("(\U0001F5BC\uFE0F thumbnails of D:\\p)", ThumbsText.Opened(@"D:\p"));
         Assert.Equal("(🖼️ thumbnails closed)", ThumbsText.Closed);
         Assert.Equal("thumbs", ThumbsText.ThumbsWord);
         Assert.Contains("Ctrl+wheel", ThumbsText.Keys);
         Assert.Contains("TAB terminal", ThumbsText.Keys);
+        Assert.Contains("Del twice deletes", ThumbsText.Keys);
         Assert.Equal(@"No pictures in D:\p yet", ThumbsText.Empty(@"D:\p"));
         Assert.Equal("Under 500 KB", PictureMenuText.Under(500));
         Assert.Equal("Under 1 MB", PictureMenuText.Under(1024));

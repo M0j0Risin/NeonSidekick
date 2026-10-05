@@ -97,7 +97,7 @@ public sealed class ToolbarItemsTests
         Assert.Equal("[[ ]] 🎨  ComfyUI                 " + Theme.DimMarkup("/tools comfy"), ToolbarItems.Label("comfy", false));
         Assert.Equal("[[ ]] 📄  Log                     " + Theme.DimMarkup("/log"), ToolbarItems.Label("log", false));
         Assert.Equal("[[ ]] ⚡  Process                 " + Theme.DimMarkup("/process"), ToolbarItems.Label("process", false));   // 2026-10-05, the user's ask
-        Assert.Equal("[[ ]] 📺  Live viewer             " + Theme.DimMarkup("/camera live"), ToolbarItems.Label("liveview", false));
+        Assert.Equal("[[ ]] 📺  Camera live viewer      " + Theme.DimMarkup("/camera live"), ToolbarItems.Label("liveview", false));
         Assert.Equal("[[ ]] 🎞️  Comfy viewer            " + Theme.DimMarkup("/comfy view"), ToolbarItems.Label("comfyview", false));
     }
 }

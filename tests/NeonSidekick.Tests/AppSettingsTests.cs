@@ -1372,7 +1372,7 @@ public class AppSettingsTests : IDisposable
     {
         Assert.Equal("http://old:1234/v1", s.LlmUrl);
         Assert.Equal("af_heart", s.TtsVoice);
-        Assert.Equal("http://localhost:8880/v1", s.TtsHttpUrl);
+        Assert.Equal("", s.TtsHttpUrl);   // the default, empty since 2026-10-05
         Assert.False(s.TtsOutput);
         Assert.False(s.SttInput);
         Assert.False(s.SttWake);

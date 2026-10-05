@@ -104,6 +104,16 @@ internal sealed class SpeechSession : IDisposable
     public static string NoServerLine(string url, string detail) =>
         $"{ChatScreen.TtsGlyph} TTS: no server at {url} ({detail}); speech off until /tts";
 
+    /// <summary>
+    /// The <c>http</c> source with no <see cref="AppSettingsData.TtsHttpUrl"/> (2026-10-05: empty is its default since, as ComfyUI URL's),
+    /// in <see cref="NoServerLine"/>'s place, which would read "no server at  (…)". Pinned.
+    /// </summary>
+    public static readonly string NoUrlLine =
+        $"{ChatScreen.TtsGlyph} TTS: http has no HTTP URL (/settings › TTS › HTTP URL); speech off until /tts";
+
+    /// <summary>The detail an <c>http</c> connect without a URL leaves (<see cref="NoUrlLine"/>).</summary>
+    public const string NoUrlDetail = "no HTTP URL is set";
+
     /// <summary>The in-process engine's bad news: the model missing or not downloadable, the runtime or the voices missing beside the exe.</summary>
     public static string NotReadyLine(string detail) =>
         $"{ChatScreen.TtsGlyph} TTS: {TtsSource.InProcessSource} is not ready ({detail}); speech off until /tts";
@@ -113,6 +123,7 @@ internal sealed class SpeechSession : IDisposable
         !Enabled ? OffLine
         : Available ? ReadyLine(Source, VoiceSpec, Speed)
         : Engine == TtsEngine.InProcess ? NotReadyLine(Detail)
+        : string.IsNullOrWhiteSpace(Source) ? NoUrlLine
         : NoServerLine(Source, Detail);
 
     /// <summary>
@@ -207,6 +218,13 @@ internal sealed class SpeechSession : IDisposable
         }
         else
         {
+            if (string.IsNullOrWhiteSpace(Source))
+            {
+                Detail = NoUrlDetail;
+                DiagnosticLog.Warn(Category, "The TTS source is http but no TTS HTTP URL is set.");
+                return;
+            }
+
             Uri v1;
             try
             {

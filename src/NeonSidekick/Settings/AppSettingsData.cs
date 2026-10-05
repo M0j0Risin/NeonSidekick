@@ -644,8 +644,13 @@ public sealed class AppSettingsData
 
     // ─── TTS ────────────────────────────────────────────────────────────────────
 
-    /// <summary>Base URL of the Kokoro-FastAPI server (OpenAI-compatible <c>/v1/audio/speech</c>).</summary>
-    public string TtsHttpUrl { get; set; } = "http://localhost:8880/v1";
+    /// <summary>
+    /// Base URL of the Kokoro-FastAPI server (OpenAI-compatible <c>/v1/audio/speech</c>), read while <see cref="TtsSource"/> is
+    /// <c>http</c>. Empty by default since 2026-10-05 (the user's call, as <see cref="ComfyUrl"/>; it was
+    /// <c>http://localhost:8880/v1</c>): the menu shows <c>(not set)</c> and an <c>http</c> connect without one says so
+    /// (<c>SpeechSession.NoUrlLine</c>). A profile that saved the old default keeps it.
+    /// </summary>
+    public string TtsHttpUrl { get; set; } = "";
 
     /// <summary>
     /// Whether replies are spoken. Independent of <see cref="SttInput"/>: all four

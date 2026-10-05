@@ -1589,7 +1589,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Interactive_SpeechOn_NoServer_PrintsTheWarning()
     {
         InteractiveServerOn1234("llama");
-        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; });
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = "http://localhost:8880/v1"; });
         PushLine("/exit");
 
         string output = await InteractiveAsync();
@@ -1598,10 +1598,32 @@ public partial class SidekickAppTests : IDisposable
     }
 
     [Fact]
+    public async Task Interactive_SpeechOverHttp_WithNoUrl_SaysSo_AndBuildsNoClient()
+    {
+        // The URL is empty by default since 2026-10-05: no "no server at  (…)", and no client made for nothing.
+        InteractiveServerOn1234("llama");
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; });
+        PushLine("/exit");
+        _console.Interactive();
+        _console.Profile.Width = 240;
+        int made = 0;
+
+        int code = await App(synth: _ =>
+        {
+            made++;
+            return new FakeSynthesizer();
+        }).RunAsync(SidekickOptions.None, CancellationToken.None);
+
+        Assert.Equal(0, code);
+        Assert.Contains("  ! " + SpeechSession.NoUrlLine, _console.Output);
+        Assert.Equal(0, made);
+    }
+
+    [Fact]
     public async Task Interactive_SpeechServerFound_ProbesOnce_AndPrintsNothingUnderThePanel()
     {
         InteractiveServerOn1234("llama");
-        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; });
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = "http://localhost:8880/v1"; });
         PushLine("/exit");
         _console.Interactive();
         _console.Profile.Width = 240;

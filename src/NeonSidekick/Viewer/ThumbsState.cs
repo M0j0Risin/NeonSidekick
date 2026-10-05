@@ -55,6 +55,9 @@ public enum ThumbsAction
 
     /// <summary>Esc in a window: the window closed.</summary>
     Close,
+
+    /// <summary>Del: the first arms the selected picture (<see cref="ThumbsState.PressDelete"/>), a second within <see cref="ViewerState.DeleteArmMilliseconds"/> on the same picture deletes it.</summary>
+    Delete,
 }
 
 /// <summary>What a folder change did to the grid (<see cref="ThumbsState.Add"/>, <see cref="ThumbsState.Rename"/>).</summary>
@@ -90,6 +93,11 @@ public enum ThumbChange
 /// <para>A view scrolled to the bottom of a grid already taller than the window stays at the bottom as pictures arrive, so a
 /// user watching the newest keeps seeing it; a grid that fitted is never scrolled by an arrival. Everything
 /// <see cref="ThumbsWindow"/> decides is decided here, tested without a window. Pure; one thread (the window's).</para>
+///
+/// <para>Since 2026-10-05 (the user's ask) Del twice deletes the selected picture as the viewer's double-Del does
+/// (<see cref="ViewerState.PressDelete"/>): permanently, not to the Recycle Bin, the first Del arming it for
+/// <see cref="ViewerState.DeleteArmMilliseconds"/> with the viewer's hint in the title, and any other key, a click, the selection
+/// moving or the time running out disarming it.</para>
 /// </summary>
 public sealed class ThumbsState
 {
@@ -112,6 +120,13 @@ public sealed class ThumbsState
     public static readonly int[] Buckets = [128, 192, 256, 384, 512, 768];
 
     private readonly List<ThumbEntry> _entries = [];
+
+    // The picture the first Del armed, and when (milliseconds on the caller's clock); null = not armed.
+    private string? _armedPath;
+    private long _armedAt;
+
+    /// <summary>Whether a Del armed the selected picture (the title shows the hint). The selection moving off it drops it.</summary>
+    public bool DeleteArmed => _armedPath is not null && string.Equals(_armedPath, SelectedPath, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The folder the pictures are in.</summary>
     public string Folder { get; private set; } = "";
@@ -188,7 +203,41 @@ public sealed class ThumbsState
         Selected = null;
         ScrollTop = 0;
         Zoomed = false;
+        _armedPath = null;
         Fit();
+    }
+
+    /// <summary>
+    /// A Del pressed at <paramref name="nowMilliseconds"/>: the selected picture's path when a Del armed that same picture no
+    /// more than <see cref="ViewerState.DeleteArmMilliseconds"/> before (disarmed; the caller deletes it), else null with the
+    /// selected picture armed from now. Null with nothing selected.
+    /// </summary>
+    public string? PressDelete(long nowMilliseconds)
+    {
+        string? selected = SelectedPath;
+        if (selected is null)
+        {
+            _armedPath = null;
+            return null;
+        }
+
+        if (DeleteArmed && nowMilliseconds - _armedAt <= ViewerState.DeleteArmMilliseconds)
+        {
+            _armedPath = null;
+            return selected;
+        }
+
+        _armedPath = selected;
+        _armedAt = nowMilliseconds;
+        return null;
+    }
+
+    /// <summary>Any arming dropped; true when the selected picture was armed (the title changes).</summary>
+    public bool Disarm()
+    {
+        bool was = DeleteArmed;
+        _armedPath = null;
+        return was;
     }
 
     /// <summary>The index of <paramref name="path"/>, or -1.</summary>
@@ -528,10 +577,11 @@ public sealed class ThumbsState
 
     /// <summary>The window's title as things stand (<see cref="ThumbsText.Title"/>).</summary>
     public string Title() =>
-        ThumbsText.Title(Folder, _entries.Count, Selected is int index ? System.IO.Path.GetFileName(_entries[index].Path) : null, (Selected ?? -1) + 1);
+        ThumbsText.Title(Folder, _entries.Count, Selected is int index ? System.IO.Path.GetFileName(_entries[index].Path) : null, (Selected ?? -1) + 1, DeleteArmed);
 
     // Virtual-key codes (winuser.h), the keys the window answers.
     public const int VkReturn = 0x0D;
+    public const int VkDelete = 0x2E;
     public const int VkEscape = 0x1B;
     public const int VkPageUp = 0x21;
     public const int VkPageDown = 0x22;
@@ -553,7 +603,7 @@ public sealed class ThumbsState
     /// <summary>
     /// What a key does: the arrows, PgUp/PgDn, Home/End move the selection, Enter opens it in the viewer, F5 lists and fits again,
     /// + and − (either row's) zoom, the Apps key or Shift+F10 open the picture menu, F11 is full screen, Esc leaves full screen and then
-    /// closes. A key with Ctrl held is never the window's (a chord goes to the terminal). Pure.
+    /// closes, Del arms and deletes. A key with Ctrl held is never the window's (a chord goes to the terminal). Pure.
     /// </summary>
     public static ThumbsAction ActionFor(int virtualKey, bool control, bool shift, bool fullScreen)
     {
@@ -579,6 +629,7 @@ public sealed class ThumbsState
             VkAdd or VkOemPlus => ThumbsAction.ZoomIn,
             VkSubtract or VkOemMinus => ThumbsAction.ZoomOut,
             VkF11 => ThumbsAction.ToggleFullScreen,
+            VkDelete => ThumbsAction.Delete,
             VkEscape => fullScreen ? ThumbsAction.LeaveFullScreen : ThumbsAction.Close,
             _ => ThumbsAction.None,
         };

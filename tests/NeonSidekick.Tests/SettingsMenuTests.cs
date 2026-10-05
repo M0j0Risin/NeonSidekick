@@ -34,7 +34,8 @@ public partial class SettingsMenuTests : IDisposable
         _settings = new AppSettings(_dir);
         // Speech output is off by default; the toggle test walks it on -> off, so the fixture opts in — over the server
         // (the fake is HTTP-shaped; in-process is the default since 2026-09-16, and the picker tests set it when they want it).
-        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; });
+        // The URL was the default until 2026-10-05 (empty since, the user's call), so the fixture names the one the scripts expect.
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = "http://localhost:8880/v1"; });
         // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
         // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
         _settings.Update(PreFlipDefaults.Apply);
@@ -1532,6 +1533,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsLlmField(SettingsField.TtsSource) || SettingsMenu.IsVoiceField(SettingsField.TtsSource));
         Assert.Equal("TTS source", SettingsMenu.FieldName(SettingsField.TtsSource));
         Assert.Equal("TTS HTTP URL", SettingsMenu.FieldName(SettingsField.TtsHttpUrl));
+        // Empty by default since 2026-10-05 (the user's call, as ComfyUI URL's): the row says so.
+        Assert.Equal("", new AppSettingsData().TtsHttpUrl);
+        Assert.Equal("(not set)", SettingsMenu.NoTtsUrlLabel);
+        Assert.Equal(SettingsMenu.NoTtsUrlLabel, SettingsMenu.FieldValue(SettingsField.TtsHttpUrl, new AppSettingsData(), _settings.ProfileDirectory));
         Assert.Equal("in-process", SettingsMenu.FieldValue(SettingsField.TtsSource, data, _settings.ProfileDirectory));   // the default since 2026-09-16 (http for the first hours)
         Assert.Equal("http", SettingsMenu.FieldValue(SettingsField.TtsSource, new AppSettingsData { TtsSource = "http" }, _settings.ProfileDirectory));
         Assert.Equal("http       [#9A8BB8]a Kokoro-FastAPI server at TTS HTTP URL[/]", SettingsMenu.TtsSourceLabel("http"));
@@ -3830,6 +3835,27 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(_settings.Current.TtsVoicePreview);
         Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice preview: off\n", _console.Output);
         Assert.Contains("\n  HTTP URL       http://localhost:8880/v1\n▸ Voice preview  off\n  Voice preset   neon\n  Voice          af_heart\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_TheHttpUrl_CanBeCleared_AndReadsNotSet()
+    {
+        // Empty is allowed since 2026-10-05 (the default since); "cannot be empty" until then.
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Tts); Push(Keys.Down, Keys.Down, Keys.Enter);   // the TTS tab's third row
+        for (int i = 0; i < 30; i++)
+        {
+            Push(Keys.Backspace);
+        }
+
+        Push(Keys.Enter, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.Tts, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal("", _settings.Current.TtsHttpUrl);
+        Assert.Contains("HTTP URL       " + SettingsMenu.NoTtsUrlLabel + "\n", _console.Output);
+        Assert.DoesNotContain("cannot be empty", _console.Output);
         pane.Dispose();
     }
 

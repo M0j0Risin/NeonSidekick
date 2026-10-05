@@ -524,7 +524,7 @@ Speech output sets up in the background (🔈 on the hint row); replies are text
 |---|---|---|
 | TTS output | Reads replies aloud (`/tts`). Code blocks and tables are never read, not even by `/speak`. | off |
 | TTS source | `in-process` runs Kokoro inside the app (downloaded on first use); `http` uses a Kokoro-FastAPI server. | `in-process` |
-| TTS HTTP URL | The Kokoro-FastAPI base URL, for `http`. | `http://localhost:8880/v1` |
+| TTS HTTP URL | The Kokoro-FastAPI base URL (`http://localhost:8880/v1`), needed for `http`. | (not set) |
 | TTS voice preview | The voice and preset pickers speak the highlighted voice. | on |
 | TTS voice preset | Sets the voice, second voice, mix and speed in one go; the row shows the matching preset or `(custom)`. Built in: `amanda`, `neon`, `richard`, `hunter`, `larry`, `jack`, `willow`. See [Voice presets](#voice-presets). | `neon` |
 | TTS voice | The Kokoro voice. | `af_heart` |
@@ -1268,6 +1268,7 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 | The wheel, the scroll bar | Scroll |
 | + / − or Ctrl+wheel | Bigger / smaller thumbnails |
 | F5 | List the folder again and fit the thumbnails to the window |
+| Del, Del (within 2 s) | Permanently delete the selected picture (the title says "Del again to delete" after the first) |
 | F11 or double-click between thumbnails | Toggle full screen |
 | Esc | Close the menu, then leave full screen, then close |
 | Tab | Bring the terminal to the front |

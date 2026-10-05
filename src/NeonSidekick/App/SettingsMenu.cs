@@ -2094,7 +2094,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmRequestTimeoutSeconds => Seconds(data.LlmRequestTimeoutSeconds),
             SettingsField.LlmTurnTimeoutSeconds => Seconds(data.LlmTurnTimeoutSeconds),
             SettingsField.LlmContextLength => data.LlmContextLength > 0 ? Tokens(data.LlmContextLength) : DetectedContextLengthLabel,
-            SettingsField.TtsHttpUrl => data.TtsHttpUrl,
+            SettingsField.TtsHttpUrl => string.IsNullOrWhiteSpace(data.TtsHttpUrl) ? NoTtsUrlLabel : data.TtsHttpUrl,
             SettingsField.TtsVoice => data.TtsVoice,
             SettingsField.TtsVoicePreset => PresetValue(data, profileDirectory),
             SettingsField.TtsOutput => OnOff(data.TtsOutput),
@@ -2691,6 +2691,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyUrl"/> (2026-09-24): no server, so no image tool. Pinned.</summary>
     public const string NoComfyUrlLabel = "(not set)";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.TtsHttpUrl"/> (2026-10-05, the default since then, as ComfyUI URL's). Pinned.</summary>
+    public const string NoTtsUrlLabel = "(not set)";
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyOutputFolder"/> (2026-09-24): the pictures land in the working directory itself. Pinned.</summary>
     public const string ComfyOutputHereLabel = "(the working directory)";
@@ -4587,7 +4590,7 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCliExecutable or SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCliExecutable or SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
             or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
@@ -5465,7 +5468,6 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.LlmApiKey = protectedLlmKey);
                 return true;
 
-            case SettingsField.TtsHttpUrl:
             case SettingsField.TtsVoice:
                 if (text.Length == 0)
                 {
@@ -5477,6 +5479,7 @@ internal sealed partial class SettingsMenu
 
             case SettingsField.LlmUrl:
             case SettingsField.LlmModel:
+            case SettingsField.TtsHttpUrl:   // empty allowed since 2026-10-05 (the default): the http source then says it has no URL
                 Apply(field, d =>
                 {
                     switch (field)

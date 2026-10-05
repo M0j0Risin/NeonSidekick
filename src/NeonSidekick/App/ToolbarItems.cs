@@ -164,7 +164,7 @@ public static class ToolbarItems
         Print => "Print",
         Log => "Log",
         Process => "Process",
-        LiveView => "Live viewer",
+        LiveView => "Camera live viewer",   // "Live viewer" until 2026-10-05 (the user's ask)
         ComfyView => "Comfy viewer",
         ComfyThumbs => "Comfy thumb viewer",
         Path => "Working directory path",

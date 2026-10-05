@@ -20,9 +20,10 @@ public static class ThumbsText
     /// <summary>
     /// The window's title: the selected picture, where it stands (the oldest 1, the grid's order) and the count —
     /// <c>0001.png — 3/12 · NeonSidekick thumbnails</c>; with none selected the folder and the count; with no picture the app's
-    /// title and the folder. Pinned.
+    /// title and the folder. While a Del has armed the selected picture (<paramref name="deleteArmed"/>, 2026-10-05), the viewer's
+    /// <see cref="ViewerText.DeleteArmedHint"/> takes the app title's place, as in the viewer's title. Pinned.
     /// </summary>
-    public static string Title(string folder, int count, string? name, int position)
+    public static string Title(string folder, int count, string? name, int position, bool deleteArmed = false)
     {
         ArgumentNullException.ThrowIfNull(folder);
         if (count == 0)
@@ -32,7 +33,7 @@ public static class ThumbsText
 
         return name is null
             ? $"{folder} — {Pictures(count)} · {AppTitle}"
-            : $"{name} — {position.ToString(CultureInfo.InvariantCulture)}/{count.ToString(CultureInfo.InvariantCulture)} · {AppTitle}";
+            : $"{name} — {position.ToString(CultureInfo.InvariantCulture)}/{count.ToString(CultureInfo.InvariantCulture)} · {(deleteArmed ? ViewerText.DeleteArmedHint : AppTitle)}";
     }
 
     /// <summary>What the window says in its middle while the folder has no picture. Pinned.</summary>
@@ -45,7 +46,7 @@ public static class ThumbsText
     public static string Opened(string folder) => $"(🖼️ thumbnails of {folder})";
 
     /// <summary>The window's keys and mouse, the line under <see cref="Opened"/>. Pinned.</summary>
-    public const string Keys = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − or Ctrl+wheel size · F5 refresh · F11 full screen · TAB terminal · ESC close)";
+    public const string Keys = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − or Ctrl+wheel size · Del twice deletes · F5 refresh · F11 full screen · TAB terminal · ESC close)";
 
     /// <summary>The transcript's line after the toolbar's 🪟 closed the window (2026-10-04), <see cref="ViewerText.Closed"/>'s twin. Pinned.</summary>
     public const string Closed = "(🖼️ thumbnails closed)";

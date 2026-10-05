@@ -392,6 +392,21 @@ public class SpeechSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task Connect_Http_WithNoUrl_MakesNoClient_AndItsLineSaysSo()
+    {
+        // The URL is empty by default since 2026-10-05: "no server at  (not a valid URL)" said nothing useful.
+        await _speech.ConnectAsync(new AppSettingsData { TtsOutput = true, TtsSource = "http" }, null, CancellationToken.None);
+
+        Assert.False(_speech.IsReady);
+        Assert.Empty(_requests);
+        Assert.Equal(SpeechSession.NoUrlDetail, _speech.Detail);
+        Assert.Equal(SpeechSession.NoUrlLine, _speech.StatusLine());
+        Assert.True(_speech.StatusIsWarning);
+        Assert.Equal("🔊 TTS: http has no HTTP URL (/settings › TTS › HTTP URL); speech off until /tts", SpeechSession.NoUrlLine);
+        Assert.Null(Http(""));   // the voice picker falls back to typing
+    }
+
+    [Fact]
     public async Task Connect_Http_IsUnchanged_AndAFlipToHttpIsANewRequest()
     {
         await ConnectAsync();

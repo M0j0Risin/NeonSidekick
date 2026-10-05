@@ -113,6 +113,7 @@ internal sealed unsafe class ThumbsWindowThread
     private const uint ProbeMessage = WmApp + 9;
     private static readonly IntPtr ProbeAnswer = new(0x7B5);
     private static readonly IntPtr DebounceTimer = new(1);
+    private static readonly IntPtr DeleteArmTimer = new(2);
 
     /// <summary>The wait after a picture is written before its tile is read again: a burst of writes is one read.</summary>
     public const uint DebounceMilliseconds = 250;
@@ -533,6 +534,13 @@ internal sealed unsafe class ThumbsWindowThread
                 }
 
                 var action = alt ? ThumbsAction.None : ThumbsState.ActionFor(key, GetKeyState(VkControl) < 0, GetKeyState(VkShift) < 0, _chrome.FullScreen);
+
+                // Any key but Del disarms a first Del (2026-10-05, the viewer's way), mapped or not.
+                if (action != ThumbsAction.Delete)
+                {
+                    DisarmDelete();
+                }
+
                 if (action == ThumbsAction.None)
                 {
                     // F10 alone: no menu bar to enter (the default's menu mode would swallow the next key).
@@ -585,6 +593,7 @@ internal sealed unsafe class ThumbsWindowThread
             case WmLeftButtonDown:
             {
                 _menu?.Close();
+                DisarmDelete();
                 var (x, y) = PointOf(lParam);
                 if (x >= BarLeft())
                 {
@@ -604,6 +613,7 @@ internal sealed unsafe class ThumbsWindowThread
 
             case WmLeftButtonDoubleClick:
             {
+                DisarmDelete();
                 var (x, y) = PointOf(lParam);
                 if (x >= BarLeft())
                 {
@@ -626,6 +636,7 @@ internal sealed unsafe class ThumbsWindowThread
 
             case WmRightButtonUp:
             {
+                DisarmDelete();
                 var (x, y) = PointOf(lParam);
                 if (x < BarLeft() && _state.HitTest(x, y) is int index)
                 {
@@ -717,6 +728,9 @@ internal sealed unsafe class ThumbsWindowThread
                 KillTimer(hwnd, DebounceTimer);
                 ReadTouchedAgain();
                 return IntPtr.Zero;
+            case WmTimer when wParam == DeleteArmTimer:
+                DisarmDelete();
+                return IntPtr.Zero;
             case WmClose:
                 _menu?.Close();
                 _chrome.RememberPosition(ThumbsWindow.Placed);
@@ -746,6 +760,9 @@ internal sealed unsafe class ThumbsWindowThread
                 break;
             case ThumbsAction.Open:
                 OpenInViewer();
+                break;
+            case ThumbsAction.Delete:
+                DeleteSelected();
                 break;
             case ThumbsAction.Refresh:
             {
@@ -829,10 +846,7 @@ internal sealed unsafe class ThumbsWindowThread
             case PictureCommand.Delete:
                 if (PictureMenu.Delete(path))
                 {
-                    _cache.Remove(path);
-                    _state.Remove(path);
-                    Refresh();
-                    NotifyPicked();
+                    Removed(path);
                 }
 
                 break;
@@ -876,6 +890,59 @@ internal sealed unsafe class ThumbsWindowThread
             Refresh();
             NotifyPicked();
         }
+    }
+
+    // Del (2026-10-05, the user's ask: the viewer's double-Del here too): the first arms the selected picture, the title says so
+    // and a timer disarms it; a second on the same picture in time deletes it for good, the tile closing up at once (the
+    // watcher's Deleted then finds nothing to remove) and the picture now in its place selected, the viewer following. As the
+    // viewer's, it only logs; the picture menu's Delete keeps its chat line.
+    private void DeleteSelected()
+    {
+        string? path = _state.PressDelete(Environment.TickCount64);
+        if (path is null)
+        {
+            SetWindowTextW(_hwnd, _state.Title());
+            if (_state.DeleteArmed)
+            {
+                SetTimer(_hwnd, DeleteArmTimer, ViewerState.DeleteArmMilliseconds, IntPtr.Zero);
+            }
+
+            return;
+        }
+
+        KillTimer(_hwnd, DeleteArmTimer);
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn("Viewer", ViewerText.DeleteFailed(Path.GetFileName(path), ex.Message));
+            SetWindowTextW(_hwnd, _state.Title());
+            return;
+        }
+
+        DiagnosticLog.Info("Viewer", $"Deleted {path} from the thumbnail browser.");
+        Removed(path);
+    }
+
+    // A first Del dropped (another key, a click, the time out): the timer stopped and the title back.
+    private void DisarmDelete()
+    {
+        KillTimer(_hwnd, DeleteArmTimer);
+        if (_state.Disarm())
+        {
+            SetWindowTextW(_hwnd, _state.Title());
+        }
+    }
+
+    // A picture this window deleted: its tile gone and the selection, now on the picture in its place, told to the viewer.
+    private void Removed(string path)
+    {
+        _cache.Remove(path);
+        _state.Remove(path);
+        Refresh();
+        NotifyPicked();
     }
 
     private void OpenInViewer()

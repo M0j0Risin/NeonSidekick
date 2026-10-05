@@ -25,7 +25,7 @@ public class McpMenuTests : IAsyncDisposable
     {
         _console.Profile.Width = 100;
         _settings = new AppSettings(_dir);
-        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.ToolsDisabled = []; d.McpServers = true; });
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = "http://localhost:8880/v1"; d.ToolsDisabled = []; d.McpServers = true; });
         _speech = new SpeechSession(_ => _synth, _ => new FakeAudioPlayback(), new ModelStore(Path.Combine(_dir, "models"), new HttpClient(new StubHttpMessageHandler())));
         _servers.Tools("chrome", ("navigate", "Opens a page."));
         _session = new McpSession(_settings, _servers.Transport, _time);

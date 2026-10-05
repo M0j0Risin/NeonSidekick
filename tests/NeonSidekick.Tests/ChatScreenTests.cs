@@ -121,7 +121,7 @@ public partial class ChatScreenTests : IDisposable
         _settings = new AppSettings(_dir);
         // Speech output is off by default; these scripts were written with it on (the TTS: ready line, spoken turns), so the fixture opts in —
         // over the server (the fake is HTTP-shaped and the lines pinned here are the server's; in-process is the default since 2026-09-16).
-        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; });
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = TtsHttpUrl; });   // the URL is empty by default since 2026-10-05
         // Reflection (auto-learn) is on by default (2026-09-17); a script of five tool calls would then dequeue a reflection it never
         // enqueued, so the fixture opts out and the learning tests opt in.
         _settings.Update(d => d.ReflectionAutoLearn = false);
@@ -12194,7 +12194,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task MidTurn_TtsOff_IsANoticeInTheReply_TheReconnectFollowsTheTurn()
     {
-        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; });
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = TtsHttpUrl; });
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("One ", "two ", "three.");

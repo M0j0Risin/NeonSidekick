@@ -37,7 +37,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         _console.Profile.Width = 220;   // 190 until 2026-10-04, when "ClaudeCLI", "Screen" and "SQLite" took the strip to 196 cells (220 leaves room for Postgres); 180 until 2026-10-02, when "Docker" took the strip past it; 170 until later on 2026-09-30, when "MySQL" took the strip to 170 cells; 160 until 2026-09-30, when "Oracle" took the strip to 161 cells; 150 until later on 2026-09-28, when "Print" took the strip to 151 cells; 130 until 2026-09-28, when "Home Assistant" took the strip to 142 cells; 120 until later on 2026-09-27, when "Claude (CLI)" took the strip to 124 cells (the user's call: it takes a second strip row, lined up under Offered, below 128 columns since the tab strip's own layout on the same day); 100 until 2026-09-24, when the Images tab took the ten-tab strip to 107 cells
         _settings = new AppSettings(_dir);
-        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.ToolsDisabled = []; d.GitLibTools = true; });   // delete off by default (2026-09-20), GitLib tools off by default (2026-09-21): the Offered-tab scripts start from every tool on
+        _settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = "http://localhost:8880/v1"; d.ToolsDisabled = []; d.GitLibTools = true; });   // delete off by default (2026-09-20), GitLib tools off by default (2026-09-21): the Offered-tab scripts start from every tool on
         // Eight settings went off by default on 2026-09-29 (the user's call): the scripts here were written with every tool group
         // offered, the shell under ask and the local scan, so the fixture puts them back; the fresh-profile tests start from new ones.
         _settings.Update(PreFlipDefaults.Apply);
