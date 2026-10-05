@@ -4234,8 +4234,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(" " + Assistant.SessionRule + " " + Assistant.McpRule + "\n\n", _chat.Requests[0][0].Text);
         Assert.Equal(SkilledPrompt(false, [], web: true, mcp: true), _chat.Requests[0][0].Text);   // memory on: the directive, the list on the opening call
         // Not a quiet tool: the call line with its arguments, then the result line.
-        Assert.Contains("  🛠️ pipe__echo {\"text\":\"ping\"}\n", output);
-        Assert.Contains("  🛠️ pipe__echo → echo: ping\n", output);
+        Assert.Contains("  🛠️ pipe__echo ping\n", output);   // the call's values (2026-10-04)
+        Assert.Contains("     → echo: ping\n", output);       // the result under it
         Assert.Contains("It said ping.", output);
         var result = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
         Assert.Equal("echo: ping", result.Result);

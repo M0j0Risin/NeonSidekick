@@ -1793,6 +1793,23 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     public void WriteToolLine(IRenderable renderable) => WriteFlow(renderable, member: true);
 
     /// <summary>
+    /// <see cref="WriteToolLine(IRenderable)"/>, joining the run's last unit when <paramref name="sameUnit"/> (2026-10-04: a call's result
+    /// with its call, so <c>Tool collapse count</c> counts calls).
+    /// </summary>
+    public void WriteToolLine(IRenderable renderable, bool sameUnit)
+    {
+        _sameUnit = sameUnit;
+        try
+        {
+            WriteFlow(renderable, member: true);
+        }
+        finally
+        {
+            _sameUnit = false;
+        }
+    }
+
+    /// <summary>
     /// A flow write of pictures (later on 2026-09-24): stored with where each landed — <paramref name="renderable"/>'s
     /// <see cref="IPictureLayout.Spans"/> after the pane rendered it, one list per line — so <see cref="PictureAt"/>
     /// can say which picture a click hit. Disabled, the plain write.
@@ -2114,10 +2131,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // Set around EmitAs: the segments being stored are the open tool run's line.
     private bool _member;
 
+    // The tool write joins the run's last unit (WriteToolLine's sameUnit, 2026-10-04).
+    private bool _sameUnit;
+
     /// <summary>The segments into the store; a scrolled anchor follows the rows the cap dropped.</summary>
     private void Store(List<Segment> segments)
     {
+        _store.ContinueUnit = _member && _sameUnit;
         int dropped = _store.Append(segments, Width, _member, _pictureSpans, _foldSpec);
+        _store.ContinueUnit = false;
         if (_top >= 0 && dropped > 0)
         {
             _top = Math.Max(0, _top - dropped);

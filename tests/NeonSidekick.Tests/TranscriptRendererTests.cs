@@ -179,7 +179,7 @@ public class TranscriptRendererTests : IDisposable
 
         _t.ToolResult("echo", "line1\nline2");
         _t.Tool("echo", "{\"x\":1}");
-        Assert.Equal(new[] { "  🛠️ echo → line1 line2", "  🛠️ echo {\"x\":1}" }, _console.Lines);
+        Assert.Equal(new[] { "     → line1 line2", "  🛠️ echo 1" }, _console.Lines);   // the result under its call, the call's values (2026-10-04)
     }
 
     [Fact]
@@ -286,8 +286,9 @@ public class TranscriptRendererTests : IDisposable
         Assert.Equal("[#FFC832]  ! w[/]", TranscriptRenderer.WarningMarkup("w"));
         Assert.Equal("[bold #FF4D6D]  ✗ e[/]", TranscriptRenderer.ErrorMarkup("e"));   // Theme.ErrorText, bold, since 2026-10-04 (the slot had been unused)
         // Two spaces after the gear: the terminal advances one cell for U+2699 and the font overdraws the next.
-        Assert.Equal("[#9A8BB8]  🛠️ t {}[/]", TranscriptRenderer.ToolMarkup("t", "{}"));
-        Assert.Equal("[#9A8BB8]  🛠️ t → r[/]", TranscriptRenderer.ToolResultMarkup("t", "r"));
+        Assert.Equal("[#9A8BB8]  🛠️ t[/]", TranscriptRenderer.ToolMarkup("t", "{}"));   // the values, not the JSON (2026-10-04)
+        Assert.Equal("[#9A8BB8]  🛠️ read_file notes.md · 2[/]", TranscriptRenderer.ToolMarkup("read_file", "{\"path\":\"notes.md\",\"tail\":2,\"opts\":{\"a\":1}}"));
+        Assert.Equal("[#9A8BB8]     → r[/]", TranscriptRenderer.ToolResultMarkup("t", "r"));
         Assert.Equal("[#9A8BB8]  🛠️ remembered: [[x]][/]", TranscriptRenderer.ToolNoteMarkup("remembered: [x]"));
         Assert.Equal("[#9A8BB8]  🎓 loaded skill '[[x]]'[/]", TranscriptRenderer.SkillNoteMarkup("loaded skill '[x]'"));   // later on 2026-09-21
         Assert.Equal("[#9A8BB8]  👮 Error: outside the working directory: '[[x]]' — a command or a script may only name paths under it[/]", TranscriptRenderer.PoliceNoteMarkup("Error: outside the working directory: '[x]' — a command or a script may only name paths under it"));   // 2026-09-22
@@ -705,7 +706,7 @@ public class TranscriptRendererTests : IDisposable
         s.T.AppendDelta("It is **noon**.");
         s.T.EndAssistant();
 
-        InOrder(s.Output, "● Looking.\n", TranscriptRenderer.ToolGlyph + "get_time {}\n", "It is noon.\n\n" + s.PaneAfter(4));
+        InOrder(s.Output, "● Looking.\n", TranscriptRenderer.ToolGlyph + "get_time\n", "It is noon.\n\n" + s.PaneAfter(4));
         Assert.Equal(4, s.Pane.FlowRow);
     }
 
@@ -800,8 +801,8 @@ public class TranscriptRendererTests : IDisposable
         Assert.True(TranscriptRenderer.IsToolFailure("Error: no such file"));
         Assert.True(TranscriptRenderer.IsToolFailure("  Error: x"));
         Assert.False(TranscriptRenderer.IsToolFailure("4 lines"));
-        Assert.Equal("[#FFC832]  ✗  read_file → Error: gone[/]", TranscriptRenderer.ToolResultMarkup("read_file", "Error: gone"));
-        Assert.Equal("[#9A8BB8]  🛠️ read_file → 4 lines[/]", TranscriptRenderer.ToolResultMarkup("read_file", "4 lines"));
+        Assert.Equal("[#FFC832]  ✗  → Error: gone[/]", TranscriptRenderer.ToolResultMarkup("read_file", "Error: gone"));
+        Assert.Equal("[#9A8BB8]     → 4 lines[/]", TranscriptRenderer.ToolResultMarkup("read_file", "4 lines"));
         Assert.Equal("[#FFC832]  ✗  Error: refused[/]", TranscriptRenderer.ToolNoteMarkup("Error: refused"));
         Assert.Equal(5, TextCells.Width(TranscriptRenderer.ToolFailedGlyph));
         Assert.Equal("  ▸ 🛠️ 3 tool calls · 1 failed — grep ×2, read_file", ToolGroupText.Summary([("grep", 2), ("read_file", 1)], expanded: false, failed: 1));
@@ -841,5 +842,75 @@ public class TranscriptRendererTests : IDisposable
         Assert.IsType<Markup>(TranscriptRenderer.Hanging("[red]a [bold]b[/][/]"));
         Assert.IsType<Markup>(TranscriptRenderer.Hanging("plain"));
         Assert.IsType<Markup>(TranscriptRenderer.Hanging("[red]  ·[/]"));
+    }
+
+    /// <summary>A call's values (2026-10-04, the UI review): plain values in order, at most three; arrays, objects and nulls left out; no JSON, no brief.</summary>
+    [Fact]
+    public void ToolCallBrief_IsTheCallsValues()
+    {
+        Assert.Equal("notes.md", ToolCallText.Brief("{\"path\":\"notes.md\"}"));
+        Assert.Equal("dir /b · 30 · true", ToolCallText.Brief("{\"command\":\"dir /b\",\"timeout\":30,\"wait\":true,\"extra\":\"x\"}"));
+        Assert.Equal("a b", ToolCallText.Brief("{\"text\":\"a\\nb\",\"list\":[1],\"none\":null}"));
+        Assert.Equal("", ToolCallText.Brief("{}"));
+        Assert.Equal("", ToolCallText.Brief("not json"));
+        Assert.Equal("", ToolCallText.Brief("[1,2]"));
+        Assert.Equal("(+1 line)", ToolCallText.MoreLines(1));
+    }
+
+    /// <summary>A result under its call (2026-10-04): its first line, then the next ones, folding with the run; the call and its result one unit.</summary>
+    [Fact]
+    public void AToolResult_KeepsItsLines_AndFoldsWithItsRun()
+    {
+        var view = new ToolResultView("first\nsecond\nthird");
+        Assert.Equal(2, view.MoreLines);
+        Assert.NotNull(view.Fold);
+        Assert.Null(new ToolResultView("only").Fold);
+        var console = new TestConsole();
+        console.Profile.Width = 40;
+        console.Write(view);
+        Assert.Equal(["     → first", "       second", "       third"], console.Output.TrimEnd().Split('\n').Select(l => l.TrimEnd()));
+        var many = new ToolResultView(string.Join("\n", Enumerable.Range(1, 20).Select(i => "line" + i)));
+        Assert.Equal(19, many.MoreLines);
+        console = new TestConsole();
+        console.Profile.Width = 40;
+        console.Write(many);
+        Assert.Contains("… 7 more lines", console.Output);
+    }
+
+    /// <summary>Tool collapse count counts calls (2026-10-04): a call and its result are one; two calls under a count of two stay, a third folds the run.</summary>
+    [Fact]
+    public void ToolCollapseCount_CountsCalls_NotLines()
+    {
+        using (var s = new Styled())
+        {
+            s.T.ToolCollapseCount = () => 2;
+            s.T.BeginAssistant(markdown: true);
+            for (int i = 0; i < 2; i++)
+            {
+                s.T.CountToolCall("read_file");
+                s.T.Tool("read_file", "{}");
+                s.T.ToolResult("read_file", "4 lines");
+            }
+
+            s.T.AppendDelta("Done.");
+            s.T.EndAssistant();
+            Assert.DoesNotContain(ToolGroupText.CollapsedGlyph + " ", s.Output);
+        }
+
+        using (var s = new Styled())
+        {
+            s.T.ToolCollapseCount = () => 2;
+            s.T.BeginAssistant(markdown: true);
+            for (int i = 0; i < 3; i++)
+            {
+                s.T.CountToolCall("read_file");
+                s.T.Tool("read_file", "{}");
+                s.T.ToolResult("read_file", "4 lines");
+            }
+
+            s.T.AppendDelta("Done.");
+            s.T.EndAssistant();
+            Assert.Contains(ToolGroupText.Summary([("read_file", 3)], expanded: false), s.Output);
+        }
     }
 }

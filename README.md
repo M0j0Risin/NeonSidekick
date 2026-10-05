@@ -156,6 +156,7 @@ The `--*-check` modes keep nothing (`--sql-check` makes one temporary table insi
 * Drag a picture from the ComfyUI picture strip or the transcript onto the input row to attach it, as if dropped from the desktop. The hint row reads **🖼️ drop on line** while you drag; letting go elsewhere attaches nothing.
 * Enter during a reply queues the message. A draft left on the row survives the reply.
 * ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does, and keeps it in the history: ↑ brings it back). While a reply runs the hint row ends with **esc to stop**, and a running tool shows its own time beside the reply's.
+* A tool call reads as its values (`🛠️ read_file notes.md`), its result under it (`→ 4 lines`); a result of several lines shows them while the run goes and folds to its first line and `(+N lines)` after (Ctrl+O or `/expand` shows them again).
 * A tool result that failed is marked ✗ in the warning colour, and a folded tool run counts them (`· 1 failed`).
 * A reply keeps one left edge: the ● sits on its first text (never on a tool line) and every stretch after a tool keeps its indent; a notice or tool line that wraps continues under its text. Headings: level 1 in the accent, level 2 in the tertiary colour, level 3 and below bold in the body colour.
 * ESC twice on an empty line opens `/rewind` (the hint row prompts for the second press).

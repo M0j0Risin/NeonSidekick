@@ -172,13 +172,18 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>A process's exit: the warning colour behind <see cref="ProcessGlyph"/>.</summary>
     public static string ProcessAlertMarkup(string text) => Theme.ColorMarkup(Theme.Warn, ProcessGlyph + text);
 
+    /// <summary>A tool call's line: the glyph, the name and the call's values (2026-10-04, <see cref="ToolCallText.Brief"/>; the raw JSON until then).</summary>
     public static string ToolMarkup(string name, string argumentsJson) =>
-        Theme.ColorMarkup(Theme.Dim, $"{ToolGlyph}{name} {Truncate(argumentsJson, ToolTextLimit)}");
+        Theme.ColorMarkup(Theme.Dim, (ToolGlyph + name + " " + Truncate(ToolCallText.Brief(argumentsJson), ToolTextLimit)).TrimEnd());
 
+    /// <summary>
+    /// A tool result's one line where no run holds it (the plain path): under its call's line, the arrow and the result flattened
+    /// (2026-10-04: the name is the call's line's; it was repeated here until then). On the pane the result is a <see cref="ToolResultView"/>.
+    /// </summary>
     public static string ToolResultMarkup(string name, string text) =>
         IsToolFailure(text)
-            ? Theme.ColorMarkup(Theme.Warn, $"{ToolFailedGlyph}{name} → {Truncate(text, ToolTextLimit)}")
-            : Theme.ColorMarkup(Theme.Dim, $"{ToolGlyph}{name} → {Truncate(text, ToolTextLimit)}");
+            ? Theme.ColorMarkup(Theme.Warn, $"{ToolFailedGlyph}{ToolResultView.Arrow}{Truncate(text, ToolTextLimit)}")
+            : Theme.ColorMarkup(Theme.Dim, $"{ToolAnswerIndent}{ToolResultView.Arrow}{Truncate(text, ToolTextLimit)}");
 
     /// <summary>A tool's outcome on one line without its name or arguments (<c>🛠️ remembered: …</c>), for a tool whose result says it all.</summary>
     public static string ToolNoteMarkup(string text) =>
@@ -331,19 +336,33 @@ public sealed class TranscriptRenderer : INoticeSink
 
     public void ProcessAlert(string text) => Line(ProcessAlertMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
 
-    public void Tool(string name, string argumentsJson) => ToolLine(ToolMarkup(name, argumentsJson), ToolMarkup(name, argumentsJson).TrimStart());
+    public void Tool(string name, string argumentsJson)
+    {
+        ToolLine(ToolMarkup(name, argumentsJson), ToolMarkup(name, argumentsJson).TrimStart());
+        _callOpen = true;   // its result joins this call's unit (2026-10-04)
+    }
 
     public void ToolResult(string name, string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        ToolLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart());
+        // On the pane: the result under its call, its first line and the next ones that fold with the run (2026-10-04).
+        bool sameUnit = TakeCall();
+        ToolWrite(new ToolResultView(text), () => WriteLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart()), sameUnit);
         CountFailure(text);
+    }
+
+    /// <summary>Whether the write that follows completes a call just written (its result or note): it joins the call's unit, so a run's keep count counts calls.</summary>
+    private bool TakeCall()
+    {
+        bool open = _callOpen;
+        _callOpen = false;
+        return open;
     }
 
     public void ToolNote(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        ToolLine(ToolNoteMarkup(text), IsToolFailure(text)
+        ToolLine(ToolNoteMarkup(text), sameUnit: TakeCall(), inlineMarkup: IsToolFailure(text)
             ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph.TrimStart() + Truncate(text, ToolTextLimit))
             : Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
         CountFailure(text);
@@ -806,8 +825,8 @@ public sealed class TranscriptRenderer : INoticeSink
     /// (dropped from the slot, or taken back out of the flow on the plain path) — and past the count
     /// the pane folds the run under its summary. Otherwise the plain line it always was.
     /// </summary>
-    private void ToolLine(string fullMarkup, string inlineMarkup) =>
-        ToolWrite(new EndedLine(Hanging(fullMarkup)), () => WriteLine(fullMarkup, inlineMarkup));
+    private void ToolLine(string fullMarkup, string inlineMarkup, bool sameUnit = false) =>
+        ToolWrite(new EndedLine(Hanging(fullMarkup)), () => WriteLine(fullMarkup, inlineMarkup), sameUnit);
 
     /// <summary>
     /// A one-line markup (<c>[style]  · text[/]</c>, every line builder's shape) as a renderable whose wrapped rows start under its
@@ -888,7 +907,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <see cref="ToolLine"/> for any write (2026-10-03, an edit's diff of many rows): <paramref name="member"/> joins the run —
     /// it must end with a line break — or, with no run to join, <paramref name="alone"/> writes it the way it always was.
     /// </summary>
-    private void ToolWrite(IRenderable member, Action alone)
+    private void ToolWrite(IRenderable member, Action alone, bool sameUnit = false)
     {
         EndThinking();
         bool open = _run && _pane!.ToolGroupOpen;
@@ -934,7 +953,7 @@ public sealed class TranscriptRenderer : INoticeSink
                 BreakIfMidText();
             }
 
-            _pane.WriteToolLine(member);
+            _pane.WriteToolLine(member, sameUnit);
         }
 
         _state = LineState.AtLineStart;
@@ -982,6 +1001,7 @@ public sealed class TranscriptRenderer : INoticeSink
     {
         _tally.Clear();
         _failed = 0;
+        _callOpen = false;
         if (_run)
         {
             _run = false;
@@ -991,6 +1011,9 @@ public sealed class TranscriptRenderer : INoticeSink
 
     // The open tool run (the pane holds it) and the calls counted for its summary.
     private bool _run;
+
+    // A call's line was the last tool write (2026-10-04): its result or note joins its unit.
+    private bool _callOpen;
     private readonly List<(string Name, int Count)> _tally = new();
 
     // The run's failed results (2026-10-04): the summary's "· N failed".

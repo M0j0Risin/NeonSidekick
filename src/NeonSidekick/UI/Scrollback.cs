@@ -264,7 +264,8 @@ public sealed class Scrollback
         }
 
         _tagging = member ? _open : null;
-        _unitTaken = false;
+        // A call's result joins its call's unit (2026-10-04, ContinueUnit): a run's keep count counts calls.
+        _unitTaken = ContinueUnit && _open is { Units: > 0 };
 
         foreach (var segment in segments)
         {
@@ -659,6 +660,9 @@ public sealed class Scrollback
 
     // Whether the append's first new member has counted its write among the run's units (2026-10-03).
     private bool _unitTaken;
+
+    /// <summary>The next member append joins the open run's last unit rather than starting one (2026-10-04: a tool's result with its call).</summary>
+    public bool ContinueUnit { get; set; }
 
     // The picture spans for the lines an append opens, in order, and how many were given out (later on 2026-09-24).
     private IReadOnlyList<IReadOnlyList<PictureSpan>>? _picturing;
