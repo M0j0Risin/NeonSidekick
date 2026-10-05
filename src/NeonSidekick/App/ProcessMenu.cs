@@ -22,8 +22,12 @@ internal sealed class ProcessMenu
     public const string Title = ChatScreen.ProcessToolGlyph + " Process";
     public const string Keys = "Enter = open window · k = kill · ESC = close";
 
-    /// <summary>The title row's button: the highlighted process stopped, after a yes/no.</summary>
-    public const string KillButton = "✖ kill";
+    /// <summary>
+    /// The title row's button: the highlighted process stopped, after a yes/no. Two spaces after the glyph (2026-10-05, the user's
+    /// ask: it read as "✖kill" — Windows Terminal draws ✖ from the colour emoji font two cells wide over the one space after it,
+    /// though it and <see cref="UI.TextCells"/> count one, as <c>SettingsMenu.PolicyYoloButton</c>'s ⚠).
+    /// </summary>
+    public const string KillButton = "✖  kill";
 
     /// <summary>The key that is the button.</summary>
     public const char KillKey = 'k';

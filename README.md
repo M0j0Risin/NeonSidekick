@@ -243,7 +243,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 / 🥷 | *Shell police outside paths* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
-| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (O) showing how many are offered (`☑ offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (W, `/camera watch` on or off), **live** (L, the camera's window), **snap** (S, `/camera snap`) and **screen** (C, `/screen`); snap and screen close the pane first |
+| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (O) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (W, `/camera watch` on or off), **live** (L, the camera's window), **snap** (S, `/camera snap`) and **screen** (C, `/screen`); snap and screen close the pane first |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |

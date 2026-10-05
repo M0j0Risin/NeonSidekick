@@ -13,12 +13,12 @@ public partial class ToolsMenuTests
     [Fact]
     public void OfferedButtons_CarryTheRowsValue_LitUnlessNone()
     {
-        Assert.Equal("☑ offered (2 of 5)", SettingsMenu.OfferedTitle("2 of 5"));   // a real space after the glyph (the user's ask)
-        Assert.Equal("☑ offered (none of 3)", SettingsMenu.OfferedTitle("none of 3"));
-        Assert.Equal([new MenuButton("☑ offered (2 of 5)", 'o', true)], SettingsMenu.OfferedButtons("2 of 5"));
-        Assert.Equal([new MenuButton("☑ offered (none of 3)", 'o', false)], SettingsMenu.OfferedButtons("none of 3"));
+        Assert.Equal("☑  offered (2 of 5)", SettingsMenu.OfferedTitle("2 of 5"));   // two spaces: WT draws ☑ two cells wide (the user's ask)
+        Assert.Equal("☑  offered (none of 3)", SettingsMenu.OfferedTitle("none of 3"));
+        Assert.Equal([new MenuButton("☑  offered (2 of 5)", 'o', true)], SettingsMenu.OfferedButtons("2 of 5"));
+        Assert.Equal([new MenuButton("☑  offered (none of 3)", 'o', false)], SettingsMenu.OfferedButtons("none of 3"));
         Assert.Equal(1, TextCells.Width(SettingsMenu.OfferedButton[..1]));
-        Assert.Equal(' ', SettingsMenu.OfferedButton[1]);
+        Assert.Equal("  o", SettingsMenu.OfferedButton[1..4]);
         Assert.Equal("Enter = choose · O = offered · ESC = back", SettingsMenu.OfferedToggleKeys);
     }
 
@@ -64,9 +64,9 @@ public partial class ToolsMenuTests
         await menu.ShowSwitchAsync(SettingsField.SqlTools, CancellationToken.None);
 
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);
-        string before = "\n" + Titled(ToolsText.Label + " › SQL tools   ☑ offered (none of 2) ") + "\n";
+        string before = "\n" + Titled(ToolsText.Label + " › SQL tools   ☑  offered (none of 2) ") + "\n";
         string list = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.SqlConnectionsOffered) + "   ";   // the checklist, its own buttons after
-        string after = "\n" + Titled(ToolsText.Label + " › SQL tools   ☑ offered (1 of 2) ") + "\n";
+        string after = "\n" + Titled(ToolsText.Label + " › SQL tools   ☑  offered (1 of 2) ") + "\n";
         Assert.True(_console.Output.IndexOf(before, StringComparison.Ordinal) < _console.Output.IndexOf(list, StringComparison.Ordinal), _console.Output);
         Assert.True(_console.Output.IndexOf(list, StringComparison.Ordinal) < _console.Output.LastIndexOf(after, StringComparison.Ordinal), _console.Output);
         Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);

@@ -61,7 +61,7 @@ public sealed class ProcessMenuTests : IDisposable
     {
         Assert.Equal("⚡ Process", ProcessMenu.Title);
         Assert.Equal("Enter = open window · k = kill · ESC = close", ProcessMenu.Keys);
-        Assert.Equal("✖ kill", ProcessMenu.KillButton);
+        Assert.Equal("✖  kill", ProcessMenu.KillButton);
         Assert.Equal('k', ProcessMenu.KillKey);
         Assert.Equal(ChatScreen.KeptNotice, ProcessMenu.KeptNotice);
         Assert.Equal("(⚡ stopping proc_3f2a1b)", ProcessMenu.StoppingNotice("proc_3f2a1b"));

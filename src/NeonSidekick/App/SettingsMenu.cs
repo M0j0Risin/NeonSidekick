@@ -2952,14 +2952,16 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The offered button of the ComfyUI, SQL, Oracle, MySQL, SQLite, PostgreSQL and UNC tool pages (2026-10-05, the user's ask:
     /// the police page's strings button for the "… offered" checklists): the checklist, opened from wherever that page opens —
-    /// the toolbar's 🎨 🛢️ 🔮 🐬 🪶 🐘 and UNC item, <c>/tools &lt;group&gt;</c>, the tab's switch row. A real space after the
-    /// glyph, so the two never look smooshed together (the user's ask). Pinned.
+    /// the toolbar's 🎨 🛢️ 🔮 🐬 🪶 🐘 and UNC item, <c>/tools &lt;group&gt;</c>, the tab's switch row. Two spaces after the glyph
+    /// (later that day, the user's ask: the one real space still read as "☑offered" — Windows Terminal gives ☑ one cell, as
+    /// <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, as
+    /// <see cref="PolicyYoloButton"/>'s ⚠, so the second space is the one that shows). Pinned.
     /// </summary>
-    public const string OfferedButton = "☑ offered";
+    public const string OfferedButton = "☑  offered";
 
     /// <summary>
-    /// The offered button's title: <see cref="OfferedButton"/> with the offered row's own value, <c>☑ offered (2 of 5)</c> or
-    /// <c>☑ offered (none of 3)</c>. Pinned.
+    /// The offered button's title: <see cref="OfferedButton"/> with the offered row's own value, <c>☑  offered (2 of 5)</c> or
+    /// <c>☑  offered (none of 3)</c>. Pinned.
     /// </summary>
     public static string OfferedTitle(string value) => OfferedButton + " (" + value + ")";
 
