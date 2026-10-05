@@ -24,6 +24,9 @@ public static class PictureMenuText
     public const string Quarter = "25%";
     public const string Convert = "Convert to";
     public const string Shrink = "Shrink the file";
+
+    /// <summary>The lossless strip's row (2026-10-05): greyed for a picture that is not a JPEG, PNG, WebP or GIF.</summary>
+    public const string StripMetadata = "Strip metadata (lossless)";
     public const string CopyPath = "Copy the path";
     public const string ShowInExplorer = "Show in Explorer";
     public const string Attach = "Attach to the chat";

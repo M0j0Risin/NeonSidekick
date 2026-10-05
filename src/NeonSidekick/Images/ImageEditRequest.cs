@@ -126,6 +126,12 @@ public sealed record ImageEditRequest
     public DitherMode Dither { get; init; } = DitherMode.Auto;
     public bool Interlace { get; init; }
 
+    /// <summary>
+    /// The call asked for nothing but <c>metadata: none</c> (2026-10-05): <c>image_edit</c> then strips a JPEG, PNG, WebP or GIF
+    /// losslessly (<see cref="MetadataStripper"/>) instead of re-encoding it. Given, never inferred from the setting's default.
+    /// </summary>
+    public bool StripOnly { get; init; }
+
     /// <summary>Whether anything at all is asked of the pixels (a size, a crop, a turn, a colour step, a border); a bare format change is not.</summary>
     public bool ChangesPixels =>
         Width is not null || Height is not null || Scale is not null || Crop is not null || Rotate != 0 || Flip != ImageFlip.None

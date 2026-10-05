@@ -144,6 +144,44 @@ public sealed class PictureActionsTests : IDisposable
     }
 
     [Fact]
+    public void StripMetadata_Beside_WritesALosslessCopy_TheSourceUntouched()
+    {
+        string source = Path.Combine(_dir, "geo.jpeg");
+        byte[] before = ImageFixtures.ExifJpeg();
+        File.WriteAllBytes(source, before);
+
+        var outcome = PictureActions.Edit(source, PictureCommand.StripMetadata, Beside with { Metadata = ImageMetadataPolicy.All });
+
+        Assert.False(outcome.Failed, outcome.Line);
+        Assert.Equal(Path.Combine(_dir, "geo-edited.jpeg"), outcome.Written);
+        Assert.StartsWith("wrote geo-edited.jpeg (JPEG, lossless: removed EXIF with GPS; ", outcome.Line, StringComparison.Ordinal);
+        byte[] after = File.ReadAllBytes(outcome.Written!);
+        Assert.False(ImageFixtures.HasGps(after));   // the metadata setting does not apply: the row takes it all
+        Assert.Equal(StripFixtures.Scan(before), StripFixtures.Scan(after));
+        Assert.Equal(before, File.ReadAllBytes(source));
+        Assert.True(PictureActions.IsEdit(PictureCommand.StripMetadata));
+        Assert.Null(PictureActions.RequestFor(PictureCommand.StripMetadata));
+    }
+
+    [Fact]
+    public void StripMetadata_Overwrite_ReplacesTheSource_AndTheRefusals()
+    {
+        string source = Path.Combine(_dir, "geo.jpg");
+        File.WriteAllBytes(source, ImageFixtures.ExifJpeg());
+
+        var outcome = PictureActions.Edit(source, PictureCommand.StripMetadata, Overwrite);
+        var again = PictureActions.Edit(source, PictureCommand.StripMetadata, Overwrite);
+        var bmp = PictureActions.Edit(Put("cat.bmp"), PictureCommand.StripMetadata, Beside);
+
+        Assert.True(outcome.Replaced);
+        Assert.StartsWith("replaced geo.jpg (JPEG, lossless", outcome.Line, StringComparison.Ordinal);
+        Assert.False(ImageFixtures.HasGps(File.ReadAllBytes(source)));
+        Assert.Equal(ImageText.NoMetadata("geo.jpg"), again.Line);
+        Assert.Equal(ImageText.CannotStripLosslessly("BMP"), bmp.Line);
+        Assert.Equal(["cat.bmp", "geo.jpg"], Directory.GetFiles(_dir).Select(Path.GetFileName).Order());
+    }
+
+    [Fact]
     public void Settings_FromTheEffectiveSettings()
     {
         var settings = PictureEditSettings.From(new AppSettingsData { ImageEditQuality = 500, ImageEditMetadata = "all", ImageEditMode = "overwrite-original" });

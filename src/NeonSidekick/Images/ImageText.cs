@@ -120,8 +120,92 @@ public static class ImageText
         return sb.ToString();
     }
 
-    /// <summary>One <c>image_info</c> line: <c>cat.jpg: JPEG, 4032×3024, 3.2 MB, EXIF rotate 90 (applied when edited)</c>.</summary>
-    public static string Info(string relative, ImageInfo info)
+    /// <summary>
+    /// A lossless strip written (2026-10-05): <c>wrote geo-edited.jpg (JPEG, lossless: removed EXIF with GPS, XMP, 1.4 MB after the
+    /// picture; 4.1 MB → 2.7 MB)</c>, and <c>; the orientation kept</c> when a bare one was written back.
+    /// </summary>
+    public static string Stripped(string relative, StripResult result, long sourceBytes, string verb = "wrote")
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return verb + " " + relative + " (" + MetadataStripper.Label(result.Container) + ", lossless: removed " + Kinds(result.Removed, result.TrailerBytes)
+            + "; " + FileText.Size(sourceBytes) + " → " + FileText.Size(result.Bytes.LongLength) + ")" + (result.OrientationKept ? "; the orientation kept" : "");
+    }
+
+    /// <summary>A lossless strip of a picture with nothing to take out: nothing written.</summary>
+    public static string NoMetadata(string relative) => "Error: " + relative + " carries no metadata to strip; nothing was written";
+
+    /// <summary>A lossless strip of a format it cannot walk (TIFF, HEIF, BMP…): nothing written.</summary>
+    public static string CannotStripLosslessly(string label) =>
+        "Error: a lossless strip reads JPEG, PNG, WebP and GIF, not " + label + "; give image_edit a format too, and it re-encodes without metadata";
+
+    /// <summary>A lossless strip refused because the file's structure is damaged: nothing written.</summary>
+    public static string StripBroken(string label, string detail) => "Error: the " + label + " file is damaged (" + detail + "); nothing was written";
+
+    /// <summary>
+    /// The metadata kinds as a phrase, <c>EXIF with GPS and a thumbnail, XMP, comments, 1.4 MB after the picture</c>: shared by
+    /// <see cref="Stripped"/> and <see cref="Info"/>. Empty for none.
+    /// </summary>
+    public static string Kinds(MetadataKinds kinds, long trailerBytes)
+    {
+        var parts = new List<string>();
+        if (kinds.HasFlag(MetadataKinds.Exif))
+        {
+            var with = new List<string>();
+            if (kinds.HasFlag(MetadataKinds.Gps))
+            {
+                with.Add("GPS");
+            }
+
+            if (kinds.HasFlag(MetadataKinds.Thumbnail))
+            {
+                with.Add("a thumbnail");
+            }
+
+            parts.Add("EXIF" + (with.Count == 0 ? "" : " with " + string.Join(" and ", with)));
+        }
+        else if (kinds.HasFlag(MetadataKinds.Thumbnail))
+        {
+            parts.Add("a thumbnail");
+        }
+
+        if (kinds.HasFlag(MetadataKinds.Xmp))
+        {
+            parts.Add("XMP");
+        }
+
+        if (kinds.HasFlag(MetadataKinds.Iptc))
+        {
+            parts.Add("IPTC");
+        }
+
+        if (kinds.HasFlag(MetadataKinds.Comment))
+        {
+            parts.Add("comments");
+        }
+
+        if (kinds.HasFlag(MetadataKinds.Time))
+        {
+            parts.Add("a timestamp");
+        }
+
+        if (kinds.HasFlag(MetadataKinds.Vendor))
+        {
+            parts.Add("app data");
+        }
+
+        if (kinds.HasFlag(MetadataKinds.Trailer))
+        {
+            parts.Add(FileText.Size(trailerBytes) + " after the picture");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// One <c>image_info</c> line: <c>cat.jpg: JPEG, 4032×3024, 3.2 MB, EXIF rotate 90 (applied when edited)</c>, then
+    /// <c>, metadata: EXIF with GPS, XMP</c> when <paramref name="survey"/> found any (2026-10-05).
+    /// </summary>
+    public static string Info(string relative, ImageInfo info, MetadataSurvey? survey = null)
     {
         ArgumentNullException.ThrowIfNull(info);
         var parts = new List<string> { info.Label, Size(info.Width, info.Height), FileText.Size(info.Bytes) };
@@ -138,6 +222,11 @@ public static class ImageText
         if (info.Orientation != Orientation.Normal)
         {
             parts.Add("EXIF orientation " + OrientationName(info.Orientation) + " (the size shown is upright; an edit bakes it in)");
+        }
+
+        if (survey is { Found: not MetadataKinds.None })
+        {
+            parts.Add("metadata: " + Kinds(survey.Found, survey.TrailerBytes));
         }
 
         return relative + ": " + string.Join(", ", parts);

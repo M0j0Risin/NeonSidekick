@@ -19,7 +19,9 @@ namespace NeonSidekick.Llm.Tools;
 /// sandbox write, as <c>write_file</c>'s), not in plan mode. <c>view: true</c> attaches the result as <c>view_image</c> would.
 /// Under <c>Image edit mode</c> <c>overwrite-original</c> (later on 2026-10-04, the user's call: the setting rules the picture
 /// windows' menu and this tool alike) a call with no <c>to</c> replaces the source instead, a format change writing
-/// <c>photo.jpg</c> beside it and deleting <c>photo.png</c>; the description says so while the mode is on.
+/// <c>photo.jpg</c> beside it and deleting <c>photo.png</c>; the description says so while the mode is on. A call that asks for
+/// nothing but <c>metadata: none</c> on a JPEG, PNG, WebP or GIF (2026-10-05, the user's ask) is a lossless strip through
+/// <see cref="MetadataStripper"/>: the container edited, the pixels copied, the source's format and extension kept.
 /// </summary>
 public sealed class ImageEditTool : FileTool
 {
@@ -100,7 +102,7 @@ public sealed class ImageEditTool : FileTool
             "sharpen": { "type": "boolean", "description": "true: sharpen firmly; false: no sharpening at all. Default: a light sharpen after a resize." },
             "pad": { "type": "integer", "minimum": 0, "maximum": 4096, "description": "A border of this many pixels on every side, in background." },
             "background": { "type": "string", "description": "The colour for pad, fit pad, and transparency in jpeg/bmp: #rrggbb, #aarrggbb, or a name (white, black, transparent…). Default white." },
-            "metadata": { "type": "string", "enum": ["none", "basic", "all"], "description": "What metadata the result keeps: none (default unless the user set otherwise), basic (author, copyright, date taken, camera), all (basic and the GPS location: where it was taken)." },
+            "metadata": { "type": "string", "enum": ["none", "basic", "all"], "description": "What metadata the result keeps: none (default unless the user set otherwise), basic (author, copyright, date taken, camera), all (basic and the GPS location: where it was taken). none with nothing else strips jpeg, png, webp and gif losslessly." },
             "dpi": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "The DPI written into the file, for printing. Default: the source's." },
             "chroma": { "type": "string", "enum": ["auto", "420", "422", "444"], "description": "jpeg only: chroma subsampling. 444 keeps text and sharp colour edges crisp." },
             "colors": { "type": "integer", "minimum": 2, "maximum": 256, "description": "png or gif: a palette of at most this many colours, for a much smaller file." },
@@ -136,6 +138,8 @@ public sealed class ImageEditTool : FileTool
         "colour (filter, brightness, contrast, saturation, hue, tint), blur, sharpen, a border, and conversion between png, jpeg, gif, bmp and tiff (jxl and heif where Windows has them; webp and avif read only). " +
         "Every step runs in one pass, in this order: crop, resize, rotate, flip, colour, blur, border; then one encode. " +
         "Metadata is dropped unless asked for, the EXIF orientation is baked in, and enlarging is interpolation, not AI. " +
+        "metadata: none on its own strips the metadata losslessly from jpeg, png, webp and gif (the pixels are copied, not re-encoded; the orientation is kept; " +
+        "data after the picture, such as a motion photo's video, goes too). " +
         "This is the way to resize, convert or touch up pictures: never write a script for it.";
 
     public override JsonElement JsonSchema => Schema;
@@ -366,7 +370,9 @@ public sealed class ImageEditTool : FileTool
             Interlace = interlace ?? false,
         };
         bool reencodes = quality is not null || maxKb is not null || colors is not null || dpi is not null || chroma is not null || interlace == true || metadata is not null;
-        return (request, reencodes, null);
+        bool stripOnly = metadata == ImageMetadataPolicy.None && !request.ChangesPixels && format is null && quality is null && maxKb is null
+            && dpi is null && chroma is null && colors is null && dither is null && interlace != true;
+        return (request with { StripOnly = stripOnly }, reencodes, null);
     }
 
     private delegate bool TryParser<T>(string text, out T value);
@@ -417,6 +423,12 @@ public sealed class ImageEditTool : FileTool
         }
 
         bool toIsFolder = to.Length > 0 && Files.IsExistingDirectory(to);
+        if (request.StripOnly && MetadataStripper.ContainerOf(read.Bytes) is { } container
+            && (ImageOutput.IntoFolder(to, toIsFolder) || Path.GetExtension(to).Length == 0 || MetadataStripper.Extensions(container).Contains(Path.GetExtension(to), StringComparer.OrdinalIgnoreCase)))
+        {
+            return Strip(read.Bytes, read.Relative, info, container, to, toIsFolder, overwrite, view, effective, cancellationToken);
+        }
+
         var format = ImageOutput.FormatFor(request.Format, to, toIsFolder, info.MimeType, ImageFormats.CanWrite);
         bool sameFormat = ImageFormats.ByMimeType(info.MimeType) == format;
         if (!request.ChangesPixels && sameFormat && !reencodes && to.Length == 0)
@@ -448,26 +460,7 @@ public sealed class ImageEditTool : FileTool
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        WriteResult written;
-        if (replace && sameFormat)
-        {
-            written = Files.WriteBytes(target, result.Bytes, overwrite: true);
-        }
-        else if (named || overwrite)
-        {
-            written = Files.WriteBytes(target, result.Bytes, overwrite);
-        }
-        else
-        {
-            // A made-up name never replaces anything: the next free -2, -3… instead (the camera's loop).
-            int n = 1;
-            do
-            {
-                written = Files.WriteBytes(ImageOutput.Numbered(target, n), result.Bytes, overwrite: false);
-            }
-            while (written.Outcome == FileOutcome.Exists && ++n < 100);
-        }
-
+        var written = Write(target, result.Bytes, replace && sameFormat, named, overwrite);
         if (written.Outcome != FileOutcome.Ok)
         {
             return FileText.Error(written.Outcome, written.Relative, "write", written.Detail);
@@ -490,12 +483,77 @@ public sealed class ImageEditTool : FileTool
         {
             text = ImageText.Written(written.Relative, result, request.MaxKb);
         }
+
+        return Shown(text, view, written.Relative);
+    }
+
+    // The lossless strip (2026-10-05): the container walked, the pixels copied, written where an edit would go — in place under
+    // overwrite-original with no to, else photo-edited.jpg (the source's own extension) — with nothing written when there was nothing to take.
+    private object? Strip(byte[] source, string relative, ImageInfo info, StripContainer container, string to, bool toIsFolder, bool overwrite, bool view, AppSettingsData effective, CancellationToken cancellationToken)
+    {
+        var (stripped, error) = MetadataStripper.Strip(source, (int)info.Orientation);
+        if (stripped is null)
+        {
+            return error;
+        }
+
+        if (stripped.Removed == MetadataKinds.None)
+        {
+            return ImageText.NoMetadata(relative);
+        }
+
+        bool inPlace = to.Length == 0 && ImageWords.EditModeOf(effective.ImageEditMode) == ImageEditMode.OverwriteOriginal;
+        string target = inPlace
+            ? relative
+            : ImageOutput.LosslessOutputFor(to, toIsFolder, relative, MetadataStripper.ExtensionFor(container, relative), effective.ImageEditOutputFolder);
+        if (!overwrite && !inPlace && ImageOutput.SamePath(target, relative))
+        {
+            return ImageText.OverwriteSource;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var written = Write(target, stripped.Bytes, inPlace, named: to.Length > 0 && !ImageOutput.IntoFolder(to, toIsFolder), overwrite);
+        if (written.Outcome != FileOutcome.Ok)
+        {
+            return FileText.Error(written.Outcome, written.Relative, "write", written.Detail);
+        }
+
+        return Shown(ImageText.Stripped(written.Relative, stripped, source.LongLength, inPlace ? ImageText.ReplacedVerb : "wrote"), view, written.Relative);
+    }
+
+    // The bytes written: over the source in place, at a named path (over a file only with overwrite), or under the first free
+    // made-up name, -2, -3… (the camera's loop), which never replaces anything.
+    private WriteResult Write(string target, byte[] bytes, bool inPlace, bool named, bool overwrite)
+    {
+        if (inPlace)
+        {
+            return Files.WriteBytes(target, bytes, overwrite: true);
+        }
+
+        if (named || overwrite)
+        {
+            return Files.WriteBytes(target, bytes, overwrite);
+        }
+
+        WriteResult written;
+        int n = 1;
+        do
+        {
+            written = Files.WriteBytes(ImageOutput.Numbered(target, n), bytes, overwrite: false);
+        }
+        while (written.Outcome == FileOutcome.Exists && ++n < 100);
+        return written;
+    }
+
+    // The result line, and the written picture attached after it when view asked.
+    private object? Shown(string text, bool view, string relative)
+    {
         if (!view)
         {
             return text;
         }
 
-        var shown = Files.ReadImage(written.Relative);
+        var shown = Files.ReadImage(relative);
         return shown.Outcome == FileOutcome.Ok && shown.Image is { } image
             ? new ToolImageResult(text + "\n" + FileText.Image(shown), [image])
             : text + "\n" + FileText.Image(shown);

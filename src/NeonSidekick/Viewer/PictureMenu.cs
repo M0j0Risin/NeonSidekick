@@ -30,7 +30,8 @@ public static class PictureMenu
 
     /// <summary>
     /// The rows for the picture at <paramref name="path"/>: Open in the viewer first in the thumbnail browser; Rotate and flip, Colour,
-    /// Resize, Convert to (the picture's own format greyed) and Shrink the file as submenus; the file's actions; Delete apart; and the
+    /// Resize, Convert to (the picture's own format greyed) and Shrink the file as submenus; Strip metadata (lossless; greyed but for
+    /// a JPEG, PNG, WebP or GIF, 2026-10-05); the file's actions; Delete apart; and the
     /// edit mode as a last row that cannot be chosen. Pure.
     /// </summary>
     public static IReadOnlyList<ContextMenuItem> Build(bool thumbs, string path, string mode)
@@ -80,6 +81,7 @@ public static class PictureMenu
             .. new[] { PictureCommand.Under2Mb, PictureCommand.Under1Mb, PictureCommand.Under500Kb, PictureCommand.Under200Kb }
                 .Select(c => Row(PictureMenuText.Under(PictureActions.MaxKb(c)!.Value), c)),
         ]));
+        rows.Add(new ContextMenuItem(PictureMenuText.StripMetadata, (int)PictureCommand.StripMetadata, Enabled: MetadataStripper.ContainerOfPath(path) is not null));
         rows.Add(ContextMenuItem.Separator);
         rows.Add(Row(PictureMenuText.CopyPath, PictureCommand.CopyPath));
         rows.Add(Row(PictureMenuText.ShowInExplorer, PictureCommand.ShowInExplorer));

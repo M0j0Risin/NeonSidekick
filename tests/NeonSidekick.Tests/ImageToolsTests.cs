@@ -194,6 +194,42 @@ public sealed class ImageToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task Edit_MetadataNoneAlone_IsALosslessStrip_AnythingMoreReencodes()
+    {
+        byte[] geo = ImageFixtures.ExifJpeg();
+        Put("geo.jpg", geo);
+        _settings.ImageEditMetadata = "all";   // the setting is not the ask: only metadata none given is
+
+        Starts("wrote geo-edited.jpg (JPEG, lossless: removed EXIF with GPS; ", await Text(Edit, ("path", "geo.jpg"), ("metadata", "none")));
+        Assert.False(ImageFixtures.HasGps(Get("geo-edited.jpg")));
+        Assert.Equal(StripFixtures.Scan(geo), StripFixtures.Scan(Get("geo-edited.jpg")));
+        Starts("wrote geo-edited-2.jpg (JPEG, lossless", await Text(Edit, ("path", "geo.jpg"), ("metadata", "none")));
+        Starts(Rel("wrote out/clean.jpeg (JPEG, lossless"), await Text(Edit, ("path", "geo.jpg"), ("metadata", "none"), ("to", "out/clean.jpeg")));
+
+        string reencoded = await Text(Edit, ("path", "geo.jpg"), ("metadata", "none"), ("quality", 80));
+        Starts("wrote geo-edited-3.jpg (JPEG, 16×16", reencoded);
+        Starts("wrote geo.png (PNG", await Text(Edit, ("path", "geo.jpg"), ("metadata", "none"), ("to", "geo.png")));
+
+        Assert.Equal(ImageText.NoMetadata("geo-edited.jpg"), await Text(Edit, ("path", "geo-edited.jpg"), ("metadata", "none")));
+        Assert.Equal(ImageText.NothingToDo, await Text(Edit, ("path", "geo.jpg")));
+
+        _settings.ImageEditMode = "overwrite-original";
+        Starts("replaced geo.jpg (JPEG, lossless", await Text(Edit, ("path", "geo.jpg"), ("metadata", "none")));
+        Assert.False(ImageFixtures.HasGps(Get("geo.jpg")));
+        Assert.Contains("lossless", ImageEditTool.DescriptionText);
+    }
+
+    [Fact]
+    public async Task Info_NamesTheMetadataAPictureCarries()
+    {
+        Put("geo.jpg", ImageFixtures.ExifJpeg());
+
+        string text = await Text(Info, ("path", "geo.jpg"));
+
+        Assert.Matches(@"^geo\.jpg: JPEG, 16×16, [\d.]+ [KB ]+, metadata: EXIF with GPS\n", text);
+    }
+
+    [Fact]
     public async Task Info_DescribesEachPicture_ThenTheFormatsAndDefaults()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(30, 20));

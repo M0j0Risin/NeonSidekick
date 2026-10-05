@@ -8,7 +8,8 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// <c>image_info(path | paths)</c> (2026-10-04, with <c>image_edit</c>): each picture's format, upright size, file size, frames,
-/// transparency and EXIF orientation, read from its header (nothing is downscaled or sent to the model), then one line naming the
+/// transparency and EXIF orientation, read from its header (nothing is downscaled or sent to the model), the metadata a JPEG, PNG,
+/// WebP or GIF carries (<see cref="MetadataStripper.Survey"/>, 2026-10-05), then one line naming the
 /// formats this Windows can write and <c>image_edit</c>'s defaults in force. One of the file tools, so <c>File tools</c> rules it;
 /// read-only, so plan mode keeps it.
 /// </summary>
@@ -43,7 +44,7 @@ public sealed class ImageInfoTool : FileTool
     /// <summary>The description. Pinned.</summary>
     public const string DescriptionText =
         "Reads facts about pictures in the working directory without loading them for you to see: format, size (upright), file size, frames, transparency and EXIF orientation, " +
-        "and which formats image_edit can write here. Use it before image_edit to plan a resize or crop; use view_image to look at a picture.";
+        "which metadata it carries (EXIF, GPS, XMP, data after the picture…), and which formats image_edit can write here. Use it before image_edit to plan a resize or crop; use view_image to look at a picture.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -88,7 +89,7 @@ public sealed class ImageInfoTool : FileTool
                 continue;
             }
 
-            lines.Add(ImageEditor.Info(read.Bytes) is { } info ? ImageText.Info(read.Relative, info) : FileText.NotAnImage(read.Relative));
+            lines.Add(ImageEditor.Info(read.Bytes) is { } info ? ImageText.Info(read.Relative, info, MetadataStripper.Survey(read.Bytes)) : FileText.NotAnImage(read.Relative));
         }
 
         lines.Add(ImageText.Formats(ImageFormats.WritableFormats(), ImageEditTool.QualityOf(effective), ImageWords.MetadataName(effective.ImageEditMetadata), effective.ImageEditOutputFolder));

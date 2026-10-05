@@ -45,8 +45,7 @@ public static class ImageOutput
         ArgumentNullException.ThrowIfNull(sourceRelative);
         ArgumentNullException.ThrowIfNull(format);
         string target = (to ?? "").Trim();
-        bool intoFolder = target.Length == 0 || target is "." || target.EndsWith('/') || target.EndsWith('\\') || toIsFolder;
-        if (!intoFolder)
+        if (!IntoFolder(target, toIsFolder))
         {
             string extension = Path.GetExtension(target);
             if (extension.Length == 0)
@@ -62,6 +61,37 @@ public static class ImageOutput
             return named == format ? (target, null) : (null, ImageText.FormatExtensionClash(target, format));
         }
 
+        return (InFolder(target, sourceRelative, (onlyFormatChanged ? "" : EditedSuffix) + format.Extension, defaultFolder), null);
+    }
+
+    /// <summary>
+    /// A lossless strip's output (2026-10-05): <paramref name="to"/> naming a file is kept (<paramref name="extension"/> added when it
+    /// has none; the caller has checked any other is the container's), else <c>photo-edited.jpg</c> in the folder <see cref="OutputFor"/>
+    /// would pick — the source's own extension kept, so a WebP stays a WebP. Pure.
+    /// </summary>
+    public static string LosslessOutputFor(string? to, bool toIsFolder, string sourceRelative, string extension, string? defaultFolder)
+    {
+        ArgumentNullException.ThrowIfNull(sourceRelative);
+        ArgumentNullException.ThrowIfNull(extension);
+        string target = (to ?? "").Trim();
+        if (!IntoFolder(target, toIsFolder))
+        {
+            return Path.GetExtension(target).Length == 0 ? target + extension : target;
+        }
+
+        return InFolder(target, sourceRelative, EditedSuffix + extension, defaultFolder);
+    }
+
+    /// <summary>Whether <paramref name="to"/> means a folder (none, <c>.</c>, a trailing slash, or one that exists) rather than a file. Pure.</summary>
+    public static bool IntoFolder(string? to, bool toIsFolder)
+    {
+        string target = (to ?? "").Trim();
+        return target.Length == 0 || target is "." || target.EndsWith('/') || target.EndsWith('\\') || toIsFolder;
+    }
+
+    // The source's stem and tail in the folder named by target, else defaultFolder, else beside the source.
+    private static string InFolder(string target, string sourceRelative, string tail, string? defaultFolder)
+    {
         string folder = target.Length > 0
             ? target
             : !string.IsNullOrWhiteSpace(defaultFolder)
@@ -69,8 +99,7 @@ public static class ImageOutput
                 : Path.GetDirectoryName(sourceRelative)?.Replace('\\', '/') ?? "";
         folder = folder is "." ? "" : folder.Replace('\\', '/').TrimEnd('/');
         string stem = Path.GetFileNameWithoutExtension(sourceRelative);
-        string name = stem + (onlyFormatChanged ? "" : EditedSuffix) + format.Extension;
-        return ((folder.Length == 0 ? "" : folder + "/") + name, null);
+        return (folder.Length == 0 ? "" : folder + "/") + stem + tail;
     }
 
     /// <summary>The <paramref name="n"/>th name to try for <paramref name="path"/> on a clash: the path itself first, then <c>photo-edited-2.png</c>, <c>-3</c>… Pure.</summary>

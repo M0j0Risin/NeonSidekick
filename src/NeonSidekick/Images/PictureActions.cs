@@ -33,6 +33,9 @@ public enum PictureCommand
     Under1Mb,
     Under500Kb,
     Under200Kb,
+
+    /// <summary>The metadata taken out losslessly (2026-10-05, <see cref="MetadataStripper"/>): last of the edits, so <see cref="PictureActions.IsEdit"/>'s range holds it.</summary>
+    StripMetadata,
     OpenInViewer,
     CopyPath,
     ShowInExplorer,
@@ -84,7 +87,7 @@ public sealed record PictureEditOutcome(string? Written, string? Removed, bool R
 public static class PictureActions
 {
     /// <summary>Whether <paramref name="command"/> edits the picture (rather than being a file action the window carries out).</summary>
-    public static bool IsEdit(PictureCommand command) => command is >= PictureCommand.RotateRight and <= PictureCommand.Under200Kb;
+    public static bool IsEdit(PictureCommand command) => command is >= PictureCommand.RotateRight and <= PictureCommand.StripMetadata;
 
     /// <summary>The side a Fit preset shrinks to, or null.</summary>
     public static int? FitSide(PictureCommand command) => command switch
@@ -149,7 +152,8 @@ public static class PictureActions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(full);
         ArgumentNullException.ThrowIfNull(settings);
-        if (RequestFor(command, settings.Metadata) is not { } request)
+        var request = RequestFor(command, settings.Metadata);
+        if (request is null && command != PictureCommand.StripMetadata)
         {
             return PictureEditOutcome.Failure(ImageText.NothingToDo);
         }
@@ -180,6 +184,11 @@ public static class PictureActions
         if (ImageEditor.Info(bytes) is not { } info)
         {
             return PictureEditOutcome.Failure(ImageText.NotAnImage);
+        }
+
+        if (request is null)
+        {
+            return Strip(full, bytes, info, settings.Mode);
         }
 
         var source = ImageFormats.ByMimeType(info.MimeType);
@@ -239,6 +248,45 @@ public static class PictureActions
             {
                 return new PictureEditOutcome(written, null, false, line + ImageText.SourceKept(Path.GetFileName(full), ex.Message), false);
             }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return PictureEditOutcome.Failure(ImageText.Failed(ex.Message));
+        }
+    }
+
+    // Strip metadata (2026-10-05): the lossless strip, whatever Image edit metadata says (taking it all out is the row's point),
+    // written as Image edit mode says — in place, or photo-edited.jpg beside it with the source's own extension.
+    private static PictureEditOutcome Strip(string full, byte[] bytes, ImageInfo info, ImageEditMode mode)
+    {
+        string name = Path.GetFileName(full);
+        if (MetadataStripper.ContainerOf(bytes) is not { } container)
+        {
+            return PictureEditOutcome.Failure(ImageText.CannotStripLosslessly(info.Label));
+        }
+
+        var (result, error) = MetadataStripper.Strip(bytes, (int)info.Orientation);
+        if (result is null)
+        {
+            return PictureEditOutcome.Failure(error ?? ImageText.NotAnImage);
+        }
+
+        if (result.Removed == MetadataKinds.None)
+        {
+            return PictureEditOutcome.Failure(ImageText.NoMetadata(name));
+        }
+
+        try
+        {
+            if (mode == ImageEditMode.OverwriteOriginal)
+            {
+                Files.WorkingDirectory.WriteAtomically(full, result.Bytes, preserve: true);
+                return new PictureEditOutcome(full, null, true, ImageText.Stripped(name, result, bytes.LongLength, ImageText.ReplacedVerb), false);
+            }
+
+            string target = ImageOutput.LosslessOutputFor(null, false, full, MetadataStripper.ExtensionFor(container, full), null);
+            string written = WriteNew(Path.GetFullPath(target), full, result.Bytes);
+            return new PictureEditOutcome(written, null, false, ImageText.Stripped(Path.GetFileName(written), result, bytes.LongLength), false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

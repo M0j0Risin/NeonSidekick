@@ -484,11 +484,15 @@ public sealed class ThumbsTests
         var rows = PictureMenu.Build(thumbs: true, @"D:\pics\cat.png", "beside-original");
 
         Assert.Equal(
-            [PictureMenuText.OpenInViewer, "", PictureMenuText.Rotate, PictureMenuText.Colour, PictureMenuText.Resize, PictureMenuText.Convert, PictureMenuText.Shrink, "",
-             PictureMenuText.CopyPath, PictureMenuText.ShowInExplorer, PictureMenuText.Attach, PictureMenuText.Print, "", PictureMenuText.Delete, "", "Edits: beside-original"],
+            [PictureMenuText.OpenInViewer, "", PictureMenuText.Rotate, PictureMenuText.Colour, PictureMenuText.Resize, PictureMenuText.Convert, PictureMenuText.Shrink,
+             PictureMenuText.StripMetadata, "", PictureMenuText.CopyPath, PictureMenuText.ShowInExplorer, PictureMenuText.Attach, PictureMenuText.Print, "", PictureMenuText.Delete, "",
+             "Edits: beside-original"],
             rows.Select(r => r.Label));
         Assert.False(rows[^1].Selectable);
-        Assert.Equal((int)PictureCommand.Delete, rows[13].Command);
+        Assert.Equal((int)PictureCommand.Delete, rows[14].Command);
+        Assert.Equal((int)PictureCommand.StripMetadata, rows[7].Command);
+        Assert.True(rows[7].Enabled);   // a PNG: the strip reads it
+        Assert.False(PictureMenu.Build(thumbs: true, @"D:\pics\cat.bmp", "beside-original")[7].Enabled);
         var convert = rows[5].Children!;
         Assert.Equal(["PNG", "JPEG", "GIF", "BMP"], convert.Select(r => r.Label));
         Assert.False(convert[0].Enabled);   // already a PNG
