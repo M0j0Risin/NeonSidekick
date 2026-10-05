@@ -205,7 +205,7 @@ public class NeonHelpTests
         Assert.StartsWith(HelpText.KeysHeading + "\n- Enter: ", keys, StringComparison.Ordinal);
         Assert.EndsWith(HelpText.KeysTail, keys, StringComparison.Ordinal);
         Assert.Equal(keys, Invoke(kind: "keys"));
-        Assert.Equal("Key Ctrl+H: open help (/help)", Invoke("ctrl+h"));
+        Assert.Equal("Key Ctrl+H: open the help (/help)", Invoke("ctrl+h"));   // the command back in brackets on one line (its own column on the tab since 2026-10-05)
     }
 
     [Fact]

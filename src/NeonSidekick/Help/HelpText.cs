@@ -154,7 +154,7 @@ public static class HelpText
         return sb.ToString();
     }
 
-    /// <summary>The keys, one per line: <c>- Ctrl+H: open help (/help)</c>.</summary>
+    /// <summary>The keys, one per line: <c>- Ctrl+H: open the help (/help)</c>.</summary>
     public static string Keys(IEnumerable<(string Key, string Meaning)> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
@@ -167,7 +167,7 @@ public static class HelpText
         return sb.Append('\n').Append(KeysTail).ToString();
     }
 
-    /// <summary>One key on its own: <c>Key Ctrl+H: open help (/help)</c>.</summary>
+    /// <summary>One key on its own: <c>Key Ctrl+H: open the help (/help)</c>.</summary>
     public static string Key(string key, string meaning) => $"Key {key}: {meaning}";
 
     /// <summary>What a tab without settings rows lists (<c>/tools</c>' and <c>/skills</c>' Offered, <c>/mcp</c>' Servers and Tools).</summary>

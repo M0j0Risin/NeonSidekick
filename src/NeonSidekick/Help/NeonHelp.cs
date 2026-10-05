@@ -96,7 +96,7 @@ internal static class NeonHelp
         HelpText.Setting(HelpLocation.Of(field), HelpLocation.Default(field), HelpSettings.Describe(field));
 
     /// <summary>The keys as <c>/help</c> lists them, without the voice rows (they hang on this profile's settings; <see cref="HelpText.KeysTail"/> names them).</summary>
-    public static IReadOnlyList<(string Key, string Meaning)> KeyRows() => ChatScreen.KeyRows(voiceOn: false, ConsoleKey.F4, wakeReady: false, "");
+    public static IReadOnlyList<(string Key, string Meaning)> KeyRows() => [.. ChatScreen.KeyRows(voiceOn: false, ConsoleKey.F4, wakeReady: false, "").Select(r => r.Pair)];
 
     /// <summary>The command <paramref name="q"/> names: its word with or without the slash (<c>/camera watch</c> is <c>/camera</c>), or an alias (<c>//</c>).</summary>
     public static CommandHelp? CommandOf(string q)

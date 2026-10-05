@@ -27,7 +27,7 @@ internal sealed partial class ChatScreen
         }
 
         var rows = KeyRows(_voice.Enabled, _voice.PushToTalk, _voice.WakeReady, _voice.WakePhrase);
-        var report = KeyCheck.Run(rows, _voice.Enabled ? _voice.PushToTalk : null, probe);
+        var report = KeyCheck.Run(rows.Select(r => r.Pair), _voice.Enabled ? _voice.PushToTalk : null, probe);
         if (_pane.Enabled)
         {
             await _info.ShowAsync(KeyCheckText.Label, [new InfoTab(KeyCheckText.TabTitle, () => KeyCheckTab(report))], 0, cancellationToken).ConfigureAwait(false);

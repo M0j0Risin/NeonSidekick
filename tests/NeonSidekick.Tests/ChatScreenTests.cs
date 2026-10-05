@@ -9536,9 +9536,15 @@ public partial class ChatScreenTests : IDisposable
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04) + the gap of 2.
-        Assert.Contains("Ctrl+Home                scroll to top of the chat pane", output);
-        Assert.Contains("Ctrl+End                 scroll to bottom of the chat pane", output);
-        Assert.Contains("Ctrl+C                   copy the selected text · stop the speech · cancel the reply · twice to exit", output);
+        Assert.Contains("Ctrl+Home                scroll to the top of the transcript", output);
+        Assert.Contains("Ctrl+End                 scroll to the bottom of the transcript", output);
+        Assert.Contains("Ctrl+C                   copy the selection · stop the speech · cancel the reply · press twice to exit", output);
+        // The command in a column of its own (2026-10-05, the user's pick), after the widest meaning and the gap; none for Ctrl+L.
+        var keys = output[output.LastIndexOf("\n \nEnter", StringComparison.Ordinal)..];
+        int column = keys.Split('\n').Single(l => l.StartsWith("Ctrl+H ", StringComparison.Ordinal)).IndexOf("/help", StringComparison.Ordinal);
+        Assert.Matches(@"\nCtrl\+H {19}open the help {2,}/help\s*\n", keys);
+        Assert.Equal(column, keys.Split('\n').Single(l => l.StartsWith("Ctrl+Alt+Q ", StringComparison.Ordinal)).IndexOf("/queue clear", StringComparison.Ordinal));
+        Assert.Matches(@"\nCtrl\+L {19}cancel a background learning turn\s*\n", keys);
         Assert.DoesNotContain("F4", output[output.IndexOf("Help   Basic    Advanced    Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
@@ -10540,94 +10546,134 @@ public partial class ChatScreenTests : IDisposable
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
 
-        // The user's rows (2026-09-16), the PgUp/PgDn row after Home/End (the transcript scroll, 2026-09-17); the Mouse, Drag, Drop, @, # and $ rows went and Ctrl+Home / Ctrl+End came above Alt+V later on 2026-09-20 (the user's list); the push-to-talk key and the wake phrase between PgUp/PgDn and Alt+V (Ctrl+Home until 2026-09-27) while they apply.
+        // The editing keys, then the transcript's scroll (2026-10-05, the user's picks: Ctrl+A, C and X and Alt+V moved up beside
+        // the editing keys, Ctrl+Home and End beside PgUp / PgDn, the commands out of the meanings, every meaning verb first).
         Assert.Equal(count, rows.Length);
-        Assert.Equal(("Enter", "send the line · change/update a setting"), rows[0]);
-        Assert.Equal(("Ctrl+Enter", "new line in the message"), rows[1]);   // 2026-09-22
-        Assert.Equal(("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"), rows[2]);
-        Assert.Equal(("ESC ESC", "on an empty line, rewind the conversation to an earlier message (/rewind)"), rows[3]);   // 2026-09-30
-        Assert.Equal(("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"), rows[4]);   // the row moves 2026-09-21
-        Assert.Equal(("Left / Right", "change tabs in menus · hold Shift to select text"), rows[5]);
-        Assert.Equal(("Home / End", "the start or end of the line, pressed again of the whole message · hold Shift to select text"), rows[6]);   // 2026-10-04: the keys go to the line's ends now
-        Assert.Equal(("Ctrl+Left / Right", "a word back or on · hold Shift to select words"), rows[7]);   // 2026-10-04, the UI review
-        Assert.Equal(("Ctrl+Backspace / Delete", "delete the word before or after the cursor"), rows[8]);
-        Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[9]);
+        Assert.Equal(
+        [
+            new("Enter", "send the message · change a setting in a menu"),
+            new("Ctrl+Enter", "start a new line in the message"),   // 2026-09-22
+            new("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"),
+            new("ESC ESC", "on an empty line, rewind to an earlier message", "/rewind"),   // 2026-09-30
+            new("Up / Down", "recall earlier messages · move through a wrapped draft · move in menus"),
+            new("Left / Right", "switch tabs in menus · hold Shift to select text"),
+            new("Home / End", "go to the start or end of the line, again for the whole message · hold Shift to select"),   // 2026-10-04: the line's ends
+            new("Ctrl+Left / Right", "move a word back or forward · hold Shift to select words"),   // 2026-10-04, the UI review
+            new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
+            new("Ctrl+A", "select all the text on the line"),
+            new("Ctrl+C", "copy the selection · stop the speech · cancel the reply · press twice to exit"),
+            new("Ctrl+X", "cut the selection"),   // 2026-09-25
+            new("Alt+V", "paste text or pictures"),
+            new("PgUp / PgDn", "scroll the transcript a page at a time"),
+            new("Ctrl+Home", "scroll to the top of the transcript"),
+            new("Ctrl+End", "scroll to the bottom of the transcript"),
+        ], rows[..16]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        // The bare F-key chords after the talk keys (2026-10-05, the user's pick), each naming its command.
-        Assert.Equal(("F9", "take a photo with the camera and attach it (/camera snap)"), rows[^41]);
-        Assert.Equal(("F10", "capture the screen and attach it (/screen)"), rows[^40]);
-        Assert.Equal("/camera snap", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.F9, false, false, false)));
-        Assert.Equal("/screen", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.F10, false, false, false)));
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^39]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^38]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^37]);
-        // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask), Ctrl+. and Ctrl+/ ahead of them.
-        Assert.Equal(
-        [
-            ("Ctrl+.", "open a terminal in the working directory (/terminal)"),   // 2026-10-03, the user's ask
-            ("Ctrl+/", "open settings (/settings)"),   // later still on 2026-10-01, the user's wording
-            ("Ctrl+A", "select all text on the line"),
-            ("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"),
-            ("Ctrl+E", "open the working directory in your file browser (/explore)"),   // later on 2026-10-01, the user's place and wording
-            ("Ctrl+F", "show or hide the performance bar (/perfbar)"),   // from Ctrl+Alt+E, later still on 2026-10-01
-            ("Ctrl+H", "open help (/help)"),   // from Ctrl+Alt+H, later still on 2026-10-01
-            ("Ctrl+L", "cancel a running background learning turn"),   // 2026-10-04, the user's ask and wording
-            ("Ctrl+M", "open the model picker (/model)"),   // later still on 2026-10-01, the user's wording
-            ("Ctrl+O", "expand or collapse the tool calls, code blocks, diffs and thinking (or click a summary line)"),   // 2026-09-22; diffs 2026-10-04
-            ("Ctrl+P", "open the profile pane (/profile)"),   // from Ctrl+Alt+P
-            ("Ctrl+Q", "open the queue pane (/queue)"),   // 2026-10-05, the user's ask and wording
-            ("Ctrl+R", "open the reasoning picker (/reasoning)"),
-            ("Ctrl+S", "open the server picker (/server)"),
-            ("Ctrl+T", "show or hide the toolbar (/toolbar)"),   // from Ctrl+Alt+B
-            ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
-            ("Ctrl+X", "cut the selected text"),   // 2026-09-25
-            ("Ctrl+Y", "open the system prompt pane (/sys)"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
-            ("Ctrl+Z", "open the theme picker (/theme)"),   // 2026-10-04, the user's ask and wording
-        ], rows[^36..^17]);
-        // Each plain-Ctrl chord's row names its command; Ctrl+L (the learning's cancel, 2026-10-04) has none.
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
-        foreach (var (row, key) in new[] { (rows[^36], Keys.CtrlPeriod), (rows[^35], Keys.CtrlSlash), (rows[^32], Keys.CtrlE), (rows[^31], Keys.CtrlF), (rows[^30], Keys.CtrlH), (rows[^28], Keys.CtrlM), (rows[^26], Keys.CtrlP), (rows[^25], Keys.Ctrl(ConsoleKey.Q)), (rows[^24], Keys.CtrlR), (rows[^23], Keys.CtrlS), (rows[^22], Keys.CtrlT), (rows[^21], Keys.CtrlU), (rows[^19], Keys.Ctrl(ConsoleKey.Y)), (rows[^18], Keys.Ctrl(ConsoleKey.Z)) })
-        {
-            Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
-        }
 
-        // The command chords after it (2026-09-30, the user's wording), one block A to Z by the letter since the pane chords
-        // joined later that day (the user's ask).
-        Assert.Equal(
-        [
-            ("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"),
-            ("Ctrl+Alt+D", "open the MCP pane (/mcp)"),
-            ("Ctrl+Alt+E", "open the sessions pane (/sessions)"),   // later on 2026-10-03, the user's ask
-            ("Ctrl+Alt+G", "open or close the log viewer (/log)"),   // 2026-10-02, the user's ask
-            ("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"),   // later still on 2026-10-01, the user's ask
-            ("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"),
-            ("Ctrl+Alt+M", "open the memory pane (/memory)"),
-            ("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"),
-            ("Ctrl+Alt+O", "open the shell police setting (/police)"),
-            ("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"),   // from Ctrl+Alt+S, later still on 2026-10-01
-            ("Ctrl+Alt+Q", "clear the message queue (/queue clear)"),   // 2026-10-05, the user's ask and wording
-            ("Ctrl+Alt+R", "rename the current session (/rename)"),   // 2026-10-05, the user's ask and wording
-            ("Ctrl+Alt+S", "open the skills pane (/skills)"),   // from Ctrl+Alt+K
-            ("Ctrl+Alt+T", "open the tools pane (/tools)"),
-            ("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"),   // 2026-10-02, the user's ask
-            ("Ctrl+Alt+V", "open or close the camera live view (/camera live)"),      // 2026-10-02, the user's ask
-            ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
-        ], rows[^17..]);
-        // Each row names its chord's command; the kill switch has none (2026-10-01).
-        Assert.All(rows[^17..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
+        // The talk keys while they apply, then the bare F-key chords (2026-10-05, the user's pick), Ctrl+. and Ctrl+/, and the
+        // Ctrl letters A to Z by the letter (since 2026-10-01, the user's ask) without the editing three.
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
         {
-            Assert.Equal(("F8", "talk (push-to-talk key)"), rows[10]);   // after the two word rows (2026-10-04)
+            Assert.Equal(new KeyRow("F8", "talk (the push-to-talk key)"), rows[16]);
         }
 
         Assert.Equal(wakeReady, rows.Any(r => r.Key == "say \"hey neon\""));
         if (wakeReady)
         {
-            Assert.Equal(("say \"hey neon\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"), rows[11]);
+            Assert.Equal(new KeyRow("say \"hey neon\"", "talk without a key · during a spoken reply, cut it short", "/interrupt"), rows[17]);
         }
+
+        Assert.Equal(
+        [
+            new("F9", "take a photo with the camera and attach it", "/camera snap"),
+            new("F10", "capture the screen and attach it", "/screen"),
+            new("Ctrl+.", "open a terminal in the working directory", "/terminal"),   // 2026-10-03, the user's ask
+            new("Ctrl+/", "open the settings", "/settings"),   // later still on 2026-10-01
+            new("Ctrl+E", "open the working directory in the file browser", "/explore"),   // later on 2026-10-01
+            new("Ctrl+F", "show or hide the performance bar", "/perfbar"),   // from Ctrl+Alt+E, later still on 2026-10-01
+            new("Ctrl+H", "open the help", "/help"),   // from Ctrl+Alt+H, later still on 2026-10-01
+            new("Ctrl+L", "cancel a background learning turn"),   // 2026-10-04, the user's ask
+            new("Ctrl+M", "open the model picker", "/model"),   // later still on 2026-10-01
+            new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking · or click one"),   // 2026-09-22; diffs 2026-10-04
+            new("Ctrl+P", "open the profile pane", "/profile"),   // from Ctrl+Alt+P
+            new("Ctrl+Q", "open the queue pane", "/queue"),   // 2026-10-05, the user's ask
+            new("Ctrl+R", "open the reasoning picker", "/reasoning"),
+            new("Ctrl+S", "open the server picker", "/server"),
+            new("Ctrl+T", "show or hide the toolbar", "/toolbar"),   // from Ctrl+Alt+B
+            new("Ctrl+U", "open the usage pane", "/usage"),   // from Ctrl+Alt+G
+            new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
+            new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
+        ], rows[^35..^17]);
+
+        // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
+        Assert.Equal(
+        [
+            new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"),
+            new("Ctrl+Alt+D", "open the MCP pane", "/mcp"),
+            new("Ctrl+Alt+E", "open the sessions pane", "/sessions"),   // later on 2026-10-03, the user's ask
+            new("Ctrl+Alt+G", "show or hide the log window", "/log"),   // 2026-10-02, the user's ask
+            new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"),   // later still on 2026-10-01, the user's ask
+            new("Ctrl+Alt+L", "open the allowed commands list", "/cmdlist"),
+            new("Ctrl+Alt+M", "open the memory pane", "/memory"),
+            new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"),
+            new("Ctrl+Alt+O", "open the shell police setting", "/police"),
+            new("Ctrl+Alt+P", "start a new conversation with the splash", "/splash"),   // from Ctrl+Alt+S, later still on 2026-10-01
+            new("Ctrl+Alt+Q", "clear the message queue", "/queue clear"),   // 2026-10-05, the user's ask
+            new("Ctrl+Alt+R", "rename this session", "/rename"),   // 2026-10-05, the user's ask
+            new("Ctrl+Alt+S", "open the skills pane", "/skills"),   // from Ctrl+Alt+K
+            new("Ctrl+Alt+T", "open the tools pane", "/tools"),
+            new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"),   // 2026-10-02, the user's ask
+            new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
+            new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
+        ], rows[^17..]);
+
+        // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
+        // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.
+        var chords = new Dictionary<string, ConsoleKeyInfo>
+        {
+            ["F9"] = new('\0', ConsoleKey.F9, false, false, false),
+            ["F10"] = new('\0', ConsoleKey.F10, false, false, false),
+            ["Ctrl+."] = Keys.CtrlPeriod,
+            ["Ctrl+/"] = Keys.CtrlSlash,
+            ["Ctrl+E"] = Keys.CtrlE,
+            ["Ctrl+F"] = Keys.CtrlF,
+            ["Ctrl+H"] = Keys.CtrlH,
+            ["Ctrl+L"] = Keys.CtrlL,
+            ["Ctrl+M"] = Keys.CtrlM,
+            ["Ctrl+P"] = Keys.CtrlP,
+            ["Ctrl+Q"] = Keys.Ctrl(ConsoleKey.Q),
+            ["Ctrl+R"] = Keys.CtrlR,
+            ["Ctrl+S"] = Keys.CtrlS,
+            ["Ctrl+T"] = Keys.CtrlT,
+            ["Ctrl+U"] = Keys.CtrlU,
+            ["Ctrl+Y"] = Keys.Ctrl(ConsoleKey.Y),
+            ["Ctrl+Z"] = Keys.Ctrl(ConsoleKey.Z),
+        };
+        foreach (var row in rows.Where(r => r.Key.StartsWith("Ctrl+Alt+", StringComparison.Ordinal)))
+        {
+            chords[row.Key] = Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]));
+        }
+
+        foreach (var (label, key) in chords)
+        {
+            Assert.Equal(Keys.ShortcutLine(key), rows.Single(r => r.Key == label).Command);
+        }
+
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
+        Assert.All(rows.Where(r => r.Command is not null && !chords.ContainsKey(r.Key)), r => Assert.Contains(r.Key, new[] { "ESC ESC", "say \"hey neon\"" }));
+        Assert.All(rows, r => Assert.DoesNotContain("(/", r.Meaning, StringComparison.Ordinal));   // the command in its own column
         Assert.DoesNotContain(rows, r => r.Meaning.Contains("quit", StringComparison.OrdinalIgnoreCase));   // Ctrl+Q quit once; /queue's since 2026-10-05
+    }
+
+    /// <summary>A row's one-line form (2026-10-05): the meaning, then its command in brackets when it has one — what /keycheck and neon_help show.</summary>
+    [Fact]
+    public void AKeyRowsText_PutsItsCommandInBrackets()
+    {
+        Assert.Equal("open the help (/help)", new KeyRow("Ctrl+H", "open the help", "/help").Text);
+        Assert.Equal("cut the selection", new KeyRow("Ctrl+X", "cut the selection").Text);
+        Assert.Equal(("Ctrl+H", "open the help (/help)"), new KeyRow("Ctrl+H", "open the help", "/help").Pair);
     }
 
     [Fact]

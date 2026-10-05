@@ -42,7 +42,7 @@ public static class RewindText
     public const string HelpSummary = "go back to an earlier message";
 
     /// <summary>The Keys tab's row for the double ESC. Pinned.</summary>
-    public const string KeyMeaning = "on an empty line, rewind the conversation to an earlier message (/rewind)";
+    public const string KeyMeaning = "on an empty line, rewind to an earlier message";   // its command, /rewind, in the tab's own column since 2026-10-05
 
     /// <summary>The Keys tab's key column for the double ESC. Pinned.</summary>
     public const string KeyLabel = "ESC ESC";

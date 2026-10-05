@@ -25,7 +25,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        int total = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, ""), null).Count;
+        int total = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Select(r => r.Pair), null).Count;
         string header = KeyCheckText.Header(1, total);
         Assert.Contains(KeyCheckText.Label, output);
         Assert.Contains(header, output);
@@ -47,7 +47,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        int total = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, ""), null).Count;
+        int total = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Select(r => r.Pair), null).Count;
         Assert.Contains("· " + KeyCheckText.Header(0, total), output);
         Assert.Contains("free  Ctrl+Alt+M", output);
     }

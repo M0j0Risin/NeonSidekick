@@ -2080,74 +2080,81 @@ internal sealed partial class ChatScreen
     /// letter's place; a chord with no command, as the kill switch's, so its row names none.
     /// Ctrl+Q (<c>/queue</c>), Ctrl+Alt+Q (<c>/queue clear</c>) and Ctrl+Alt+R (<c>/rename</c>) on 2026-10-05, the user's ask and
     /// wording, each in its letter's place.
+    /// Later on 2026-10-05 (the user's picks: the tab was hard to read) the strays moved and the words were made one: Ctrl+A, C
+    /// and X and Alt+V beside the editing keys, Ctrl+Home and End beside PgUp / PgDn, so the Ctrl letters after Ctrl+. and Ctrl+/
+    /// run E to Z; each row's command left its meaning for <see cref="KeyRow.Command"/>, a column of its own on the tab; and every
+    /// meaning starts with its verb ("open the … pane" or "… picker" for a pane, "show or hide …" for anything toggled, "the
+    /// transcript" for the chat area). The labels are unchanged: <c>/keycheck</c> parses them and <c>neon_help</c> finds a key by one.
     /// </summary>
-    public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
+    public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
-        var rows = new List<(string, string)>
+        var rows = new List<KeyRow>
         {
-            ("Enter", "send the line · change/update a setting"),
-            ("Ctrl+Enter", "new line in the message"),
-            ("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"),
-            (RewindText.KeyLabel, RewindText.KeyMeaning),
-            ("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"),
-            ("Left / Right", "change tabs in menus · hold Shift to select text"),
-            ("Home / End", "the start or end of the line, pressed again of the whole message · hold Shift to select text"),
-            ("Ctrl+Left / Right", "a word back or on · hold Shift to select words"),   // 2026-10-04, the UI review
-            ("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
-            ("PgUp / PgDn", "scroll the transcript a page at a time"),
+            new("Enter", "send the message · change a setting in a menu"),
+            new("Ctrl+Enter", "start a new line in the message"),
+            new("ESC", "stop the speech · clear the line · cancel the reply · back out of a menu"),
+            new(RewindText.KeyLabel, RewindText.KeyMeaning, "/rewind"),
+            new("Up / Down", "recall earlier messages · move through a wrapped draft · move in menus"),
+            new("Left / Right", "switch tabs in menus · hold Shift to select text"),
+            new("Home / End", "go to the start or end of the line, again for the whole message · hold Shift to select"),
+            new("Ctrl+Left / Right", "move a word back or forward · hold Shift to select words"),   // 2026-10-04, the UI review
+            new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
+            // The editing chords beside the editing keys (2026-10-05, the user's pick), out of the Ctrl letters.
+            new("Ctrl+A", "select all the text on the line"),
+            new("Ctrl+C", "copy the selection · stop the speech · cancel the reply · press twice to exit"),
+            new("Ctrl+X", "cut the selection"),
+            new("Alt+V", "paste text or pictures"),
+            // The transcript's scroll together (2026-10-05).
+            new("PgUp / PgDn", "scroll the transcript a page at a time"),
+            new("Ctrl+Home", "scroll to the top of the transcript"),
+            new("Ctrl+End", "scroll to the bottom of the transcript"),
         };
         if (voiceOn)
         {
-            rows.Add((pushToTalk.ToString(), "talk (push-to-talk key)"));
+            rows.Add(new(pushToTalk.ToString(), "talk (the push-to-talk key)"));
         }
 
         if (wakeReady)
         {
-            rows.Add(($"say \"{wakePhrase}\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"));
+            rows.Add(new($"say \"{wakePhrase}\"", "talk without a key · during a spoken reply, cut it short", "/interrupt"));
         }
 
         // The first bare F-key chords (2026-10-05, the user's pick: the Ctrl+Alt letters were running low), after the talk keys.
-        rows.Add(("F9", "take a photo with the camera and attach it (/camera snap)"));
-        rows.Add(("F10", "capture the screen and attach it (/screen)"));
-        rows.Add(("Alt+V", "paste content (text or images)"));
-        rows.Add(("Ctrl+Home", "scroll to top of the chat pane"));
-        rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));
-        rows.Add(("Ctrl+.", "open a terminal in the working directory (/terminal)"));
-        rows.Add(("Ctrl+/", "open settings (/settings)"));
-        rows.Add(("Ctrl+A", "select all text on the line"));
-        rows.Add(("Ctrl+C", "copy the selected text · stop the speech · cancel the reply · twice to exit"));
-        rows.Add(("Ctrl+E", "open the working directory in your file browser (/explore)"));
-        rows.Add(("Ctrl+F", "show or hide the performance bar (/perfbar)"));
-        rows.Add(("Ctrl+H", "open help (/help)"));
-        rows.Add(("Ctrl+L", "cancel a running background learning turn"));
-        rows.Add(("Ctrl+M", "open the model picker (/model)"));
-        rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks, diffs and thinking (or click a summary line)"));
-        rows.Add(("Ctrl+P", "open the profile pane (/profile)"));
-        rows.Add(("Ctrl+Q", "open the queue pane (/queue)"));
-        rows.Add(("Ctrl+R", "open the reasoning picker (/reasoning)"));
-        rows.Add(("Ctrl+S", "open the server picker (/server)"));
-        rows.Add(("Ctrl+T", "show or hide the toolbar (/toolbar)"));
-        rows.Add(("Ctrl+U", "open the usage pane (/usage)"));
-        rows.Add(("Ctrl+X", "cut the selected text"));
-        rows.Add(("Ctrl+Y", "open the system prompt pane (/sys)"));
-        rows.Add(("Ctrl+Z", "open the theme picker (/theme)"));
-        rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
-        rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
-        rows.Add(("Ctrl+Alt+E", "open the sessions pane (/sessions)"));
-        rows.Add(("Ctrl+Alt+G", "open or close the log viewer (/log)"));
-        rows.Add(("Ctrl+Alt+H", "show or hide the header at the next clear (/header)"));
-        rows.Add(("Ctrl+Alt+L", "open the allowed commands list (/cmdlist)"));
-        rows.Add(("Ctrl+Alt+M", "open the memory pane (/memory)"));
-        rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));
-        rows.Add(("Ctrl+Alt+O", "open the shell police setting (/police)"));
-        rows.Add(("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"));
-        rows.Add(("Ctrl+Alt+Q", "clear the message queue (/queue clear)"));
-        rows.Add(("Ctrl+Alt+R", "rename the current session (/rename)"));
-        rows.Add(("Ctrl+Alt+S", "open the skills pane (/skills)"));
-        rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
-        rows.Add(("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"));
-        rows.Add(("Ctrl+Alt+V", "open or close the camera live view (/camera live)"));
-        rows.Add(("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"));
+        rows.Add(new("F9", "take a photo with the camera and attach it", "/camera snap"));
+        rows.Add(new("F10", "capture the screen and attach it", "/screen"));
+        rows.Add(new("Ctrl+.", "open a terminal in the working directory", "/terminal"));
+        rows.Add(new("Ctrl+/", "open the settings", "/settings"));
+        rows.Add(new("Ctrl+E", "open the working directory in the file browser", "/explore"));
+        rows.Add(new("Ctrl+F", "show or hide the performance bar", "/perfbar"));
+        rows.Add(new("Ctrl+H", "open the help", "/help"));
+        rows.Add(new("Ctrl+L", "cancel a background learning turn"));
+        rows.Add(new("Ctrl+M", "open the model picker", "/model"));
+        rows.Add(new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking · or click one"));
+        rows.Add(new("Ctrl+P", "open the profile pane", "/profile"));
+        rows.Add(new("Ctrl+Q", "open the queue pane", "/queue"));
+        rows.Add(new("Ctrl+R", "open the reasoning picker", "/reasoning"));
+        rows.Add(new("Ctrl+S", "open the server picker", "/server"));
+        rows.Add(new("Ctrl+T", "show or hide the toolbar", "/toolbar"));
+        rows.Add(new("Ctrl+U", "open the usage pane", "/usage"));
+        rows.Add(new("Ctrl+Y", "open the system prompt pane", "/sys"));
+        rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
+        rows.Add(new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"));
+        rows.Add(new("Ctrl+Alt+D", "open the MCP pane", "/mcp"));
+        rows.Add(new("Ctrl+Alt+E", "open the sessions pane", "/sessions"));
+        rows.Add(new("Ctrl+Alt+G", "show or hide the log window", "/log"));
+        rows.Add(new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"));
+        rows.Add(new("Ctrl+Alt+L", "open the allowed commands list", "/cmdlist"));
+        rows.Add(new("Ctrl+Alt+M", "open the memory pane", "/memory"));
+        rows.Add(new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"));
+        rows.Add(new("Ctrl+Alt+O", "open the shell police setting", "/police"));
+        rows.Add(new("Ctrl+Alt+P", "start a new conversation with the splash", "/splash"));
+        rows.Add(new("Ctrl+Alt+Q", "clear the message queue", "/queue clear"));
+        rows.Add(new("Ctrl+Alt+R", "rename this session", "/rename"));
+        rows.Add(new("Ctrl+Alt+S", "open the skills pane", "/skills"));
+        rows.Add(new("Ctrl+Alt+T", "open the tools pane", "/tools"));
+        rows.Add(new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"));
+        rows.Add(new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"));
+        rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
         return rows.ToArray();
     }
 
@@ -2204,12 +2211,22 @@ internal sealed partial class ChatScreen
         return cell;
     }
 
-    private IRenderable KeysTab()
+    private IRenderable KeysTab() => KeysTab(KeyRows(_voice.Enabled, _voice.PushToTalk, _voice.WakeReady, _voice.WakePhrase));
+
+    /// <summary>
+    /// The Keys tab over <paramref name="rows"/>: the key, what it does, and since 2026-10-05 (the user's pick) the command it runs
+    /// in a column of its own, in <see cref="Theme.HelpForm"/> as the Commands tabs' forms, blank for a key that runs none. The
+    /// meanings wrap inside their column on a narrow console; the key and the command never do.
+    /// </summary>
+    internal static IRenderable KeysTab(IReadOnlyList<KeyRow> rows)
     {
-        var grid = TwoColumns();
-        foreach (var (key, meaning) in KeyRows(_voice.Enabled, _voice.PushToTalk, _voice.WakeReady, _voice.WakePhrase))
+        var grid = new Grid()
+            .AddColumn(new GridColumn().NoWrap().PadRight(SlashCommands.HelpColumnGap))
+            .AddColumn(new GridColumn().PadRight(SlashCommands.HelpColumnGap))
+            .AddColumn(new GridColumn().NoWrap().PadRight(0));
+        foreach (var row in rows)
         {
-            grid.AddRow(new Text(key, Theme.AccentSecondary), new Text(meaning, Theme.Body));
+            grid.AddRow(new Text(row.Key, Theme.AccentSecondary), new Text(row.Meaning, Theme.Body), new Text(row.Command ?? "", Theme.HelpForm));
         }
 
         return grid;
