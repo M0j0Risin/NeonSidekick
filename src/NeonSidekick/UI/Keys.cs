@@ -137,10 +137,24 @@ public static class Keys
     /// Ctrl+Alt are no chord.
     /// On 2026-10-04 (the user's ask) Ctrl+Z is <c>/theme</c>, the theme picker: its SUB counts as no character. Nothing in the
     /// app used Ctrl+Z (the line has no undo), and the app's windows hand it back to the terminal as every Ctrl chord.
+    /// On 2026-10-05 (the user's pick, the Ctrl+Alt letters running low) the bare F-keys became a chord space of their own: F9
+    /// <c>/camera snap</c> and F10 <c>/screen</c>, no modifier held and no character (an F-key types none). Both came off the
+    /// push-to-talk key's list that day (<c>SettingsMenu.PushToTalkKeys</c>), so a key means one thing everywhere. Neither runs
+    /// in place: in a pane the pane closes and the screen runs it, and under a reply both wait for the idle line, as typed.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
         var held = key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift);
+        if (held == 0)
+        {
+            return (key.Key, key.KeyChar) switch
+            {
+                (ConsoleKey.F9, '\0') => "/camera snap",
+                (ConsoleKey.F10, '\0') => "/screen",
+                _ => null,
+            };
+        }
+
         if (held == ConsoleModifiers.Control)
         {
             return (key.Key, key.KeyChar) switch

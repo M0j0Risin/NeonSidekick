@@ -745,7 +745,8 @@ public class VoiceSessionTests : IDisposable
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Equal(ConsoleKey.F9, VoiceSession.ParsePushToTalk("f9"));
+            Assert.Equal(ConsoleKey.F8, VoiceSession.ParsePushToTalk("f8"));
+            Assert.Equal(ConsoleKey.F4, VoiceSession.ParsePushToTalk("F9"));   // a chord since 2026-10-05
             Assert.Equal(ConsoleKey.F4, VoiceSession.ParsePushToTalk("nope"));
             Assert.Equal(ConsoleKey.F4, VoiceSession.ParsePushToTalk("A"));
             Assert.Equal(ConsoleKey.F4, VoiceSession.ParsePushToTalk("F12"));   // a key from before the fixed list
@@ -756,7 +757,7 @@ public class VoiceSessionTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal(4, warnings.Count);
+        Assert.Equal(5, warnings.Count);
         Assert.Contains("using F4", warnings[0]);
     }
 

@@ -249,6 +249,64 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
     }
 
+    /// <summary>F9 is <c>/camera snap</c> (2026-10-05, the user's pick): the photo taken and put on the line, as typed.</summary>
+    [Fact]
+    public async Task F9_SnapsAPhoto_ToTheLine()
+    {
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => d.TtsOutput = false);
+        StepsWhenIdle(
+            Key(new ConsoleKeyInfo('\0', ConsoleKey.F9, shift: false, alt: false, control: false)),
+            input => input.Push(Keys.Escape),   // the photo's draft cleared
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string file = Assert.Single(CameraFiles());
+        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
+    }
+
+    /// <summary>
+    /// The Camera tool page's live and snap buttons (2026-10-05, the user's ask), from the toolbar's 📸: L opens the live window
+    /// with the page kept, L again closes it, S closes the page and the photo lands on the line.
+    /// </summary>
+    [Fact]
+    public async Task TheCameraToolPage_LiveTogglesTheWindow_SnapClosesThePane_AndSnaps()
+    {
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["camera"]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 200;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the toolbar at 103: 📸 at 0
+        var views = new List<FakeLiveView>();
+        _liveView = (_, _) =>
+        {
+            var view = new FakeLiveView();
+            lock (views)
+            {
+                views.Add(view);
+            }
+
+            return view;
+        };
+        StepsWhenIdle(
+            input => { input.PushClick(0, 103); input.PushClick(0, 103); },   // 📸: the Camera tool page
+            input => input.Push(Keys.Char('l'), Keys.Char('l'), Keys.Char('s')),   // live on, off, then snap
+            input => input.Push(Keys.Escape),                                      // the photo's draft cleared
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        var view = Assert.Single(views);
+        Assert.True(view.Disposed);
+        Assert.Contains(CameraText.LiveOff, output);
+        string strip = "   " + SettingsMenu.CameraWatchButtonTitle + "    " + SettingsMenu.CameraLiveButtonTitle + "    " + SettingsMenu.CameraSnapButtonTitle + " ";
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + strip) + "\n", output);
+        string file = Assert.Single(CameraFiles());
+        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
+        Assert.Empty(_chat.Requests);
+    }
+
     [Fact]
     public async Task Camera_WithoutALayer_SaysSo()
     {
@@ -686,7 +744,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         var saved = _settings.Current;
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + "   " + SettingsMenu.CameraWatchButtonTitle + " ") + "\n", output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + "   " + SettingsMenu.CameraWatchButtonTitle + "    " + SettingsMenu.CameraSnapButtonTitle + " ") + "\n", output);
         Assert.Contains(CameraText.WatchOn(saved.CameraWatchSeconds, saved.CameraWatchThreshold, saved.CameraWatchUnprompted), output);
         Assert.Contains(CameraText.WatchOff, output);
         Assert.DoesNotContain(CameraText.WatchNotOn, output);

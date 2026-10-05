@@ -1246,6 +1246,11 @@ internal sealed partial class ChatScreen
         // The Camera tool page's watch button (2026-10-04, the user's ask), only where there is a camera layer to watch with.
         _menu.CameraWatching = _camera.Available ? () => _cameraWatch.Running : null;
         _menu.SetCameraWatch = _camera.Available ? SetWatchFromPane : null;
+        // Its live, snap and screen buttons (2026-10-05, the user's ask): each line run as its chord is in a pane — /camera live
+        // toggled in place, /camera snap and /screen with the pane closed first, so the picture attaches at the idle line.
+        _menu.CameraLive = _camera.Available && _liveView is not null ? () => _liveLease is not null : null;
+        _menu.CameraChord = _camera.Available ? _pane.Chord : null;
+        _menu.ScreenOffered = _screenSystem is not null;
         _menu.Effective = _effective;
         _menu.BeforeEmbeddedRemove = StopEmbeddedDownloadOfAsync;
         BindProfile();
@@ -2094,6 +2099,9 @@ internal sealed partial class ChatScreen
             rows.Add(($"say \"{wakePhrase}\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"));
         }
 
+        // The first bare F-key chords (2026-10-05, the user's pick: the Ctrl+Alt letters were running low), after the talk keys.
+        rows.Add(("F9", "take a photo with the camera and attach it (/camera snap)"));
+        rows.Add(("F10", "capture the screen and attach it (/screen)"));
         rows.Add(("Alt+V", "paste content (text or images)"));
         rows.Add(("Ctrl+Home", "scroll to top of the chat pane"));
         rows.Add(("Ctrl+End", "scroll to bottom of the chat pane"));

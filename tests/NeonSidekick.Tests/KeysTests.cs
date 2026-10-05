@@ -130,6 +130,37 @@ public class KeysTests
         Assert.False(Keys.IsToolToggle(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
     }
 
+    /// <summary>
+    /// The first bare F-key chords (2026-10-05, the user's pick): F9 <c>/camera snap</c>, F10 <c>/screen</c>, no modifier held;
+    /// Shift, Ctrl, Alt and Ctrl+Alt with them are no chord, nor the other F-keys (F4 is push-to-talk's default).
+    /// </summary>
+    [Theory]
+    [InlineData(ConsoleKey.F9, "/camera snap")]
+    [InlineData(ConsoleKey.F10, "/screen")]
+    public void ShortcutLine_F9AndF10_AreSnapAndScreen_WithNoModifier(ConsoleKey key, string line)
+    {
+        Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: false, control: false)));
+        Assert.Contains(line.Split(' ')[0], NeonSidekick.App.SlashCommands.Words);
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: false, control: false)));   // Shift+F10 is the viewers' menu key
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: true)));
+        Assert.False(NeonSidekick.App.SettingsMenu.IsPushToTalkCandidate(key));   // off push-to-talk's list the same day
+    }
+
+    [Theory]
+    [InlineData(ConsoleKey.F1)]
+    [InlineData(ConsoleKey.F4)]
+    [InlineData(ConsoleKey.F8)]
+    [InlineData(ConsoleKey.F11)]
+    [InlineData(ConsoleKey.F12)]
+    public void ShortcutLine_TheOtherFKeys_AreNoChord(ConsoleKey key) =>
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: false, control: false)));
+
+    [Fact]
+    public void ShortcutLine_ATypedCharacter_IsNoChord() =>
+        Assert.Null(Keys.ShortcutLine(Keys.Char('a')));
+
     [Fact]
     public void ThePickerChords_Factories_AreTheConsoleShapes_AndTheCtrlAltLettersKeepTheirCommands()
     {

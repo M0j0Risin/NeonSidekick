@@ -203,4 +203,78 @@ public partial class ToolsMenuTests
         Assert.Equal(1, TextCells.Width(off.Title[..1]));
         Assert.Equal("Enter = choose · W = watch · ESC = back", SettingsMenu.CameraToggleKeys);
     }
+
+    /// <summary>
+    /// The Camera tool page's live, snap and screen buttons (2026-10-05, the user's ask): L runs <c>/camera live</c> through the
+    /// chord hook with the page kept (the button lit when it comes back), S runs <c>/camera snap</c> and leaves at once when the
+    /// hook closed the pane; no "unchanged" over them.
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_Camera_LiveTogglesInPlace_SnapClosesThePage()
+    {
+        var (menu, pane, settings) = PaneMenu();
+        bool live = false;
+        var ran = new List<string>();
+        settings.CameraWatching = () => false;
+        settings.SetCameraWatch = _ => (true, "");
+        settings.CameraLive = () => live;
+        settings.ScreenOffered = true;
+        settings.CameraChord = line =>
+        {
+            ran.Add(line);
+            if (line == SettingsMenu.CameraLiveLine)
+            {
+                live = !live;
+                return true;    // in place
+            }
+
+            return false;       // the pane closed for the screen to run it
+        };
+        Push(Keys.Char('l'), Keys.Char('s'));
+
+        await menu.ShowSwitchAsync(SettingsField.CameraTools, CancellationToken.None);
+
+        Assert.Equal(["/camera live", "/camera snap"], ran);
+        Assert.True(live);
+        string strip = "   " + SettingsMenu.CameraWatchButtonTitle + "    " + SettingsMenu.CameraLiveButtonTitle + "    " + SettingsMenu.CameraSnapButtonTitle + "    " + SettingsMenu.CameraScreenButtonTitle + " ";
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + strip) + "\n", _console.Output);
+        Assert.Contains("Enter = choose · W = watch · L = live · S = snap · C = screen · ESC = back", _console.Output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowSwitch_Camera_TheScreenButton_RunsScreen()
+    {
+        var (menu, pane, settings) = PaneMenu();
+        var ran = new List<string>();
+        settings.CameraWatching = () => false;
+        settings.SetCameraWatch = _ => (true, "");
+        settings.ScreenOffered = true;
+        settings.CameraChord = line => { ran.Add(line); return false; };
+        Push(Keys.Char('c'));
+
+        await menu.ShowSwitchAsync(SettingsField.CameraTools, CancellationToken.None);
+
+        Assert.Equal(["/screen"], ran);
+        Assert.DoesNotContain(SettingsMenu.CameraLiveButtonTitle, _console.Output);   // no live viewer: no live button
+        pane.Dispose();
+    }
+
+    [Fact]
+    public void CameraButtons_LiveAndScreenOnlyWhereThereIsALayer_LiveLitWhileOpen()
+    {
+        Assert.Equal(
+            [new MenuButton("◉ watch", 'w', false), new MenuButton("▶ live", 'l', true), new MenuButton("◎ snap", 's'), new MenuButton("▣ screen", 'c')],
+            SettingsMenu.CameraButtons(false, live: true, snap: true, screen: true));
+        Assert.Equal(
+            [new MenuButton("◉ watch", 'w', true), new MenuButton("◎ snap", 's')],
+            SettingsMenu.CameraButtons(true, live: null, snap: true, screen: false));
+        Assert.Equal(SettingsMenu.CameraToggleKeys, SettingsMenu.CameraButtonKeys(SettingsMenu.CameraWatchButtons(false)));
+        foreach (var button in SettingsMenu.CameraButtons(false, live: false, snap: true, screen: true))
+        {
+            Assert.Equal(1, TextCells.Width(button.Title[..1]));   // one cell, then a real space
+            Assert.Equal(' ', button.Title[1]);
+        }
+    }
 }

@@ -195,6 +195,8 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+Alt+U | `/comfy view`: opens or closes the picture viewer | at once |
 | Ctrl+Alt+V | `/camera live`: opens or closes the camera's window | at once |
 | Ctrl+Alt+X ×2 | unloads the embedded model (see below) | at once |
+| F9 | `/camera snap`: a photo, attached to the line | waits for the reply |
+| F10 | `/screen`: a capture of the app's monitor, attached to the line | waits for the reply |
 
 * **Inside a pane** (a menu, `/help`, the folder picker, a value being typed), a shortcut closes every level of the pane and runs, so Ctrl+Alt+S in `/tools` opens `/skills`. A pane's own shortcut just closes it. Ctrl+E, Ctrl+., Ctrl+F, Ctrl+L, Ctrl+T, the three window chords and Ctrl+Alt+X act and leave the pane open.
 * **Panes that ask you something** (a command's approval, `ask_user`, the plan's approval, a confirmation, *Did you mean /clear?*) ignore the shortcuts, so none can answer them by accident.
@@ -202,6 +204,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 * **Ctrl+Alt+X**, pressed twice within two seconds, unloads the embedded model at once and frees its memory, cancelling any reply, load or botchat using it. No server is connected until you pick one with `/server`; the saved *LLM URL* is kept, so the next start loads the model again. The first press only shows a reminder. With any other server it does nothing.
 * **Ctrl+L** cancels a running skill-learning reflection (the 🧠 on the hint row), as a double-click on the 🧠 does; *(🧠 learning cancelled)* prints once the reply, if any, ends. With none running it does nothing.
 * An AltGr key that types a character on your layout still types it.
+* **F9 and F10** are chords only with no modifier held, so they can't be the push-to-talk key. Inside the picture viewer and the thumbnail browser they keep their own meanings (the slide show and the shuffle).
 * **A chord that does nothing** may be held by another program as a global hotkey (a graphics card's overlay, say), so it never reaches the app. `/keycheck` lists every chord here and whether another program holds it; free it in that program.
 
 ### Commands typed during a reply
@@ -240,7 +243,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 / 🥷 | *Shell police outside paths* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
-| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page (📸's has a **watch** button (W) that turns `/camera watch` on or off) |
+| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (O) showing how many are offered (`☑ offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (W, `/camera watch` on or off), **live** (L, the camera's window), **snap** (S, `/camera snap`) and **screen** (C, `/screen`); snap and screen close the pane first |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
@@ -545,7 +548,7 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 | STT interrupt | Saying the wake phrase while a reply is spoken cuts it short and listens (`/interrupt`). | off |
 | STT interrupt echo guard | Ignores the assistant's own voice: speech this close to the wake phrase that it just spoke is an echo (50–100 %; 100 = the exact phrase only). | 100 |
 | STT interrupt confirm | How long the phrase must hold in the recogniser's interim results before it counts (0–2000 ms). | 200 |
-| STT push-to-talk key | `F1`–`F10`, `Insert`, `Home`, `End`, `PageUp` or `PageDown`. | `F4` |
+| STT push-to-talk key | `F1`–`F8`, `Insert`, `Home`, `End`, `PageUp` or `PageDown`. | `F4` |
 | STT whisper model | `ggml-tiny.en.bin`, `ggml-base.en.bin` or `ggml-small.en.bin` (downloaded on first use). | `ggml-base.en.bin` |
 | STT vosk model | The wake-word model: `vosk-model-small-en-us-0.15`, `vosk-model-en-us-0.22-lgraph` or `vosk-model-small-en-in-0.4`. | `vosk-model-small-en-us-0.15` |
 
@@ -753,7 +756,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. Its on/off page (the toolbar's 📸) has a **watch** button (W) that starts or stops `/camera watch`. | off |
+| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. Its on/off page (the toolbar's 📸) has a **watch** button (W) that starts or stops `/camera watch`, **live** (L) that opens or closes the camera's window, and **snap** (S) and **screen** (C), which close the pane and run `/camera snap` or `/screen`. | off |
 | Camera shutter | `user`: the camera pane shows the request; Space takes the photo, R retakes, Enter sends, ESC declines. `model`: a pane asks Deny / Allow once / Allow for this session, and on a yes the app takes it. | `user` |
 | Camera preview | `live`: a camera window of its own shows the camera mirrored while you frame, then the photo. `post`: the picture viewer opens on the photo. `disabled`: no window. Neither takes the keyboard. | `live` |
 | Camera device | The camera, by its Windows name. `(first camera)`, or a camera that isn't connected, uses the first. | (first camera) |

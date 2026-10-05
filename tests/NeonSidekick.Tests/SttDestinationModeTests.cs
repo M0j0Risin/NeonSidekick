@@ -27,7 +27,7 @@ public class SttDestinationModeTests
 
     [Theory]
     [InlineData(ConsoleKey.F4, true)]
-    [InlineData(ConsoleKey.F10, true)]
+    [InlineData(ConsoleKey.F8, true)]
     [InlineData(ConsoleKey.Insert, true)]
     [InlineData(ConsoleKey.Home, false)]
     [InlineData(ConsoleKey.End, false)]

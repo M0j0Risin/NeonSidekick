@@ -424,14 +424,14 @@ public partial class SettingsMenuTests : IDisposable
     {
         Down(21);
         Push(Keys.Enter);                                                   // Push-to-talk key "F4" (row 22): the picker opens on F4
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // F9
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // F8 (F9 and F10 are chords since 2026-10-05)
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal("F9", _settings.Current.SttPushToTalkKey);
+        Assert.Equal("F8", _settings.Current.SttPushToTalkKey);
         Assert.Contains(Breadcrumb("STT push-to-talk key"), _console.Output);
-        Assert.Contains("  · STT push-to-talk key: F9", _console.Output);
+        Assert.Contains("  · STT push-to-talk key: F8", _console.Output);
         Assert.Contains("F4  the default", _console.Output);
         Assert.DoesNotContain("F11", _console.Output);   // only the listed keys are offered
     }
@@ -465,7 +465,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(
             new[]
             {
-                ConsoleKey.F1, ConsoleKey.F2, ConsoleKey.F3, ConsoleKey.F4, ConsoleKey.F5, ConsoleKey.F6, ConsoleKey.F7, ConsoleKey.F8, ConsoleKey.F9, ConsoleKey.F10,
+                ConsoleKey.F1, ConsoleKey.F2, ConsoleKey.F3, ConsoleKey.F4, ConsoleKey.F5, ConsoleKey.F6, ConsoleKey.F7, ConsoleKey.F8,
                 ConsoleKey.Insert, ConsoleKey.Home, ConsoleKey.End, ConsoleKey.PageUp, ConsoleKey.PageDown,
             },
             SettingsMenu.PushToTalkKeys);
@@ -578,7 +578,9 @@ public partial class SettingsMenuTests : IDisposable
     [Theory]
     [InlineData(ConsoleKey.F1, true)]
     [InlineData(ConsoleKey.F4, true)]
-    [InlineData(ConsoleKey.F10, true)]
+    [InlineData(ConsoleKey.F8, true)]
+    [InlineData(ConsoleKey.F9, false)]       // /camera snap's chord since 2026-10-05
+    [InlineData(ConsoleKey.F10, false)]      // /screen's
     [InlineData(ConsoleKey.Insert, true)]
     [InlineData(ConsoleKey.Home, true)]
     [InlineData(ConsoleKey.End, true)]

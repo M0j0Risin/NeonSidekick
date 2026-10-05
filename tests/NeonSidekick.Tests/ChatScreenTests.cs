@@ -10445,9 +10445,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 46)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04
-    [InlineData(true, false, 47)]
-    [InlineData(true, true, 48)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 48)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05
+    [InlineData(true, false, 49)]
+    [InlineData(true, true, 50)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -10465,6 +10465,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Ctrl+Backspace / Delete", "delete the word before or after the cursor"), rows[8]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[9]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
+        // The bare F-key chords after the talk keys (2026-10-05, the user's pick), each naming its command.
+        Assert.Equal(("F9", "take a photo with the camera and attach it (/camera snap)"), rows[^38]);
+        Assert.Equal(("F10", "capture the screen and attach it (/screen)"), rows[^37]);
+        Assert.Equal("/camera snap", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.F9, false, false, false)));
+        Assert.Equal("/screen", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.F10, false, false, false)));
         Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^36]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
         Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^35]);
         Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^34]);

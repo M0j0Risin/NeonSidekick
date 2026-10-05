@@ -1106,7 +1106,7 @@ internal sealed partial class SettingsMenu
     public const string SttInterruptEchoGuardRangeError = "must be a whole number from 50 to 100 (100 = only the exact phrase counts as an echo)";
     public const string SttInterruptConfirmRangeError = "must be a whole number of milliseconds from 0 to 2000";
     public const string ContextLengthRangeError = "must be 0 (the server's figure) or a whole number of tokens";
-    public const string PushToTalkKeyError = "must be one of F1–F10, Insert, Home, End, PageUp or PageDown";
+    public const string PushToTalkKeyError = "must be one of F1–F8, Insert, Home, End, PageUp or PageDown";
 
     /// <summary>How the menu shows <see cref="AppSettingsData.LlmContextLength"/> at 0: the server's figure is used.</summary>
     public const string DetectedContextLengthLabel = "(from the server)";
@@ -1607,11 +1607,13 @@ internal sealed partial class SettingsMenu
     /// The keys the push-to-talk picker offers, in row order: the function keys a terminal
     /// actually passes through (F11 is fullscreen, F12 is taken by most of them) and the
     /// navigation cluster the input line does nothing with while it is empty. F4 is the default.
+    /// F9 and F10 went on 2026-10-05 (the user's pick): they are the <c>/camera snap</c> and <c>/screen</c> chords
+    /// (<see cref="Keys.ShortcutLine"/>), and a profile that saved either falls back to F4 with the warning.
     /// </summary>
     public static readonly ConsoleKey[] PushToTalkKeys =
     {
         ConsoleKey.F1, ConsoleKey.F2, ConsoleKey.F3, ConsoleKey.F4, ConsoleKey.F5,
-        ConsoleKey.F6, ConsoleKey.F7, ConsoleKey.F8, ConsoleKey.F9, ConsoleKey.F10,
+        ConsoleKey.F6, ConsoleKey.F7, ConsoleKey.F8,
         ConsoleKey.Insert, ConsoleKey.Home, ConsoleKey.End, ConsoleKey.PageUp, ConsoleKey.PageDown,
     };
 
@@ -2946,6 +2948,52 @@ internal sealed partial class SettingsMenu
     /// lit while the list holds any and dim while it is empty (2026-10-04, the user's call; it still opens the list, never switches). Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> PoliceButtons(int count) => [new(PoliceStringsTitle(count), PoliceStringsKey, count > 0)];
+
+    /// <summary>
+    /// The offered button of the ComfyUI, SQL, Oracle, MySQL, SQLite, PostgreSQL and UNC tool pages (2026-10-05, the user's ask:
+    /// the police page's strings button for the "… offered" checklists): the checklist, opened from wherever that page opens —
+    /// the toolbar's 🎨 🛢️ 🔮 🐬 🪶 🐘 and UNC item, <c>/tools &lt;group&gt;</c>, the tab's switch row. A real space after the
+    /// glyph, so the two never look smooshed together (the user's ask). Pinned.
+    /// </summary>
+    public const string OfferedButton = "☑ offered";
+
+    /// <summary>
+    /// The offered button's title: <see cref="OfferedButton"/> with the offered row's own value, <c>☑ offered (2 of 5)</c> or
+    /// <c>☑ offered (none of 3)</c>. Pinned.
+    /// </summary>
+    public static string OfferedTitle(string value) => OfferedButton + " (" + value + ")";
+
+    /// <summary>The key that is <see cref="OfferedButton"/>.</summary>
+    public const char OfferedKey = 'o';
+
+    /// <summary>The offered tool pages' hint: <see cref="PickKeys"/> with the offered button's key (2026-10-05). Pinned.</summary>
+    public const string OfferedToggleKeys = "Enter = choose · O = offered · ESC = back";
+
+    /// <summary>
+    /// The offered tool pages' one button (2026-10-05): <see cref="OfferedTitle"/> for the offered row's <paramref name="value"/>,
+    /// lit while anything is offered and dim at <c>none of N</c>, as the police's is while its list is empty. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> OfferedButtons(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return [new(OfferedTitle(value), OfferedKey, !value.StartsWith("none", StringComparison.Ordinal))];
+    }
+
+    /// <summary>
+    /// The "… offered" checklist a tool switch's page carries a button for (2026-10-05), and its editor — the row's own, unchanged.
+    /// Null for every other switch.
+    /// </summary>
+    private (SettingsField Offered, Func<CancellationToken, Task<bool>> Edit)? OfferedFor(SettingsField toolSwitch) => toolSwitch switch
+    {
+        SettingsField.ComfyTools => (SettingsField.ComfyWorkflowsOffered, EditComfyOfferedAsync),
+        SettingsField.SqlTools => (SettingsField.SqlConnectionsOffered, EditSqlOfferedAsync),
+        SettingsField.OracleTools => (SettingsField.OracleConnectionsOffered, EditOracleOfferedAsync),
+        SettingsField.MySqlTools => (SettingsField.MySqlConnectionsOffered, EditMySqlOfferedAsync),
+        SettingsField.SqliteTools => (SettingsField.SqliteDatabasesOffered, EditSqliteOfferedAsync),
+        SettingsField.PostgresTools => (SettingsField.PostgresConnectionsOffered, EditPostgresOfferedAsync),
+        SettingsField.UncTools => (SettingsField.UncSharesOffered, EditUncOfferedAsync),
+        _ => null,
+    };
 
     /// <summary>
     /// One of the Web tools page's title-row buttons (2026-10-04, the user's ask: "actions at the top", as Memory's and
@@ -6260,15 +6308,37 @@ internal sealed partial class SettingsMenu
         {
             // The Camera tool page carries the watch button (2026-10-04, the user's ask): a press starts or stops /camera watch at
             // once, its line on the status line, and the page comes back with the button lit or not. Where there is no camera
-            // layer there is no button (the screen leaves both callbacks null).
-            var camera = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], _pane.Enabled ? CameraToggleKeys : PickKeys);
+            // layer there is no button (the screen leaves both callbacks null). Live, snap and screen came on 2026-10-05 (the user's
+            // ask), each run as its chord would be in a pane (CameraChord): live toggles its window with the page open, snap and
+            // screen close the pane for the screen to run them, so the picture attaches at the idle line.
+            var title = Crumb(FieldName(field));
             int cursor = was ? 0 : 1;
             while (true)
             {
-                var pressed = await PickChecklistAsync(camera, cursor, cancellationToken, CameraWatchButtons(watching())).ConfigureAwait(false);
+                var chord = CameraChord;
+                var buttons = CameraButtons(watching(), chord is null ? null : CameraLive?.Invoke(), snap: chord is not null, screen: chord is not null && ScreenOffered);
+                var camera = new MenuPage(title, [ToggleLabel(field, true), ToggleLabel(field, false)], _pane.Enabled ? CameraButtonKeys(buttons) : PickKeys);
+                var pressed = await PickChecklistAsync(camera, cursor, cancellationToken, buttons).ConfigureAwait(false);
                 if (pressed is { Button: >= 0 } button)
                 {
                     cursor = button.Row;
+                    string? line = buttons[button.Button].Key switch
+                    {
+                        CameraLiveKey => CameraLiveLine,
+                        CameraSnapKey => CameraSnapLine,
+                        CameraScreenKey => ScreenLine,
+                        _ => null,
+                    };
+                    if (line is not null && chord is not null)
+                    {
+                        if (!chord(line))
+                        {
+                            return true;   // the pane is closed; the screen runs the line
+                        }
+
+                        continue;
+                    }
+
                     var (ok, text) = setWatch(!watching());
                     if (ok)
                     {
@@ -6287,6 +6357,27 @@ internal sealed partial class SettingsMenu
                 break;
             }
         }
+        else if (OfferedFor(field) is { } offered && _pane.Enabled)
+        {
+            // The ComfyUI, SQL, Oracle, MySQL, SQLite, PostgreSQL and UNC pages carry the offered button (2026-10-05, the user's ask,
+            // the police's shape): the row's own checklist, then the page again with the count read afresh.
+            var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], OfferedToggleKeys);
+            int cursor = was ? 0 : 1;
+            while (true)
+            {
+                string value = FieldValue(offered.Offered, _settings.Current, _settings.ProfileDirectory);
+                var pressed = await PickChecklistAsync(page, cursor, cancellationToken, OfferedButtons(value)).ConfigureAwait(false);
+                if (pressed is { Button: >= 0 } button)
+                {
+                    cursor = button.Row;
+                    modeChanged |= await offered.Edit(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                picked = pressed?.Row;
+                break;
+            }
+        }
         else
         {
             var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], PickKeys);
@@ -6295,8 +6386,8 @@ internal sealed partial class SettingsMenu
 
         if (picked is not { } index || (index == 0) == was)
         {
-            // A browser mode switched on the Web page is a change of its own, and so is watch mode on the Camera tool page: no
-            // "unchanged" over its notice.
+            // A browser mode switched on the Web page is a change of its own, and so is watch mode on the Camera tool page and a
+            // checklist changed from an offered button: no "unchanged" over its notice.
             return modeChanged || Unchanged();
         }
 

@@ -37,11 +37,92 @@ internal sealed partial class SettingsMenu
     /// <summary>The key that is <see cref="CameraWatchButtonTitle"/>.</summary>
     public const char CameraWatchKey = 'w';
 
-    /// <summary>The Camera tool page's hint: <see cref="PickKeys"/> with the watch button's key (2026-10-04). Pinned.</summary>
+    /// <summary>
+    /// Whether <c>/camera live</c> holds its window, for the Camera tool page's live button (2026-10-05, the user's ask); null where
+    /// there is no live viewer (the page then has no live button).
+    /// </summary>
+    public Func<bool>? CameraLive { get; set; }
+
+    /// <summary>
+    /// The Camera tool page's live, snap and screen buttons run their lines as the chord would in a pane (2026-10-05):
+    /// <c>ScreenPane.Chord</c> — true when it was done with the pane open (<c>/camera live</c> toggles its window in place), false
+    /// when the pane stack was dismissed for the screen to run the line (<c>/camera snap</c>, <c>/screen</c>, which attach at the
+    /// idle line). Null: the page has no such buttons.
+    /// </summary>
+    public Func<string, bool>? CameraChord { get; set; }
+
+    /// <summary>Whether there is a screen capture layer, for the Camera tool page's screen button (2026-10-05).</summary>
+    public bool ScreenOffered { get; set; }
+
+    /// <summary>The Camera tool page's live button (2026-10-05, the user's ask): <c>/camera live</c>'s window on or off. Pinned.</summary>
+    public const string CameraLiveButtonTitle = "▶ live";
+
+    /// <summary>The key that is <see cref="CameraLiveButtonTitle"/>.</summary>
+    public const char CameraLiveKey = 'l';
+
+    /// <summary>The Camera tool page's snap button (2026-10-05, the user's ask): <c>/camera snap</c>, the pane closed first. Pinned.</summary>
+    public const string CameraSnapButtonTitle = "◎ snap";
+
+    /// <summary>The key that is <see cref="CameraSnapButtonTitle"/>.</summary>
+    public const char CameraSnapKey = 's';
+
+    /// <summary>The Camera tool page's screen button (2026-10-05, the user's ask): <c>/screen</c>, the pane closed first. Pinned.</summary>
+    public const string CameraScreenButtonTitle = "▣ screen";
+
+    /// <summary>The key that is <see cref="CameraScreenButtonTitle"/>.</summary>
+    public const char CameraScreenKey = 'c';
+
+    /// <summary>The line the live button runs.</summary>
+    public const string CameraLiveLine = "/camera live";
+
+    /// <summary>The line the snap button (and F9) runs.</summary>
+    public const string CameraSnapLine = "/camera snap";
+
+    /// <summary>The line the screen button (and F10) runs.</summary>
+    public const string ScreenLine = "/screen";
+
+    /// <summary>The Camera tool page's hint with the watch button alone (2026-10-04). Pinned.</summary>
     public const string CameraToggleKeys = "Enter = choose · W = watch · ESC = back";
 
-    /// <summary>The Camera tool page's one button (2026-10-04): <see cref="CameraWatchButtonTitle"/>, lit while watch mode runs, a press switching it. Pinned.</summary>
-    public static IReadOnlyList<MenuButton> CameraWatchButtons(bool watching) => [new(CameraWatchButtonTitle, CameraWatchKey, watching)];
+    /// <summary>
+    /// The Camera tool page's hint (2026-10-05): <see cref="PickKeys"/> with the keys of the buttons <see cref="CameraButtons"/> gives,
+    /// in their order. Pinned.
+    /// </summary>
+    public static string CameraButtonKeys(IReadOnlyList<MenuButton> buttons)
+    {
+        ArgumentNullException.ThrowIfNull(buttons);
+        var keys = buttons.Select(b => char.ToUpperInvariant(b.Key ?? ' ') + " = " + b.Title[(b.Title.IndexOf(' ', StringComparison.Ordinal) + 1)..]);
+        return "Enter = choose · " + string.Join(" · ", keys) + " · ESC = back";
+    }
+
+    /// <summary>The Camera tool page's watch button alone (2026-10-04): <see cref="CameraWatchButtonTitle"/>, lit while watch mode runs. Pinned.</summary>
+    public static IReadOnlyList<MenuButton> CameraWatchButtons(bool watching) => CameraButtons(watching, null, snap: false, screen: false);
+
+    /// <summary>
+    /// The Camera tool page's buttons (2026-10-05, the user's ask): <see cref="CameraWatchButtonTitle"/> lit while watch mode runs,
+    /// <see cref="CameraLiveButtonTitle"/> lit while <c>/camera live</c> holds its window (none where <paramref name="live"/> is
+    /// null: no live viewer), <see cref="CameraSnapButtonTitle"/> and, with a screen layer, <see cref="CameraScreenButtonTitle"/>. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> CameraButtons(bool watching, bool? live, bool snap, bool screen)
+    {
+        var buttons = new List<MenuButton> { new(CameraWatchButtonTitle, CameraWatchKey, watching) };
+        if (live is { } on)
+        {
+            buttons.Add(new(CameraLiveButtonTitle, CameraLiveKey, on));
+        }
+
+        if (snap)
+        {
+            buttons.Add(new(CameraSnapButtonTitle, CameraSnapKey));
+        }
+
+        if (screen)
+        {
+            buttons.Add(new(CameraScreenButtonTitle, CameraScreenKey));
+        }
+
+        return buttons;
+    }
 
     /// <summary>How the menu shows an empty <c>Camera output folder</c> (2026-10-02): the photos land in the working directory itself. Pinned.</summary>
     public const string CameraOutputHereLabel = "(the working directory)";

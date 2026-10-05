@@ -126,7 +126,7 @@ public class AppSettingsTests : IDisposable
         SttInterrupt = true,
         SttInterruptConfirmMs = 600,
         SttInterruptEchoGuard = 80,
-        SttPushToTalkKey = "F9",
+        SttPushToTalkKey = "F8",
         SttVoskModel = "vosk-model-en-us-0.22-lgraph",
         SttWake = true,
         SttWakePhrase = "computer",

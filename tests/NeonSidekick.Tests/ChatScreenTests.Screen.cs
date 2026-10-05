@@ -147,6 +147,24 @@ public partial class ChatScreenTests
         Assert.Equal([shot], _shotsShown);
     }
 
+    /// <summary>F10 is <c>/screen</c> (2026-10-05, the user's pick): the app's monitor captured and put on the line, as typed.</summary>
+    [Fact]
+    public async Task F10_CapturesTheScreen_ToTheLine()
+    {
+        _screenSystem = new FakeScreenSystem();
+        _settings.Update(d => d.TtsOutput = false);
+        StepsWhenIdle(
+            Key(new ConsoleKeyInfo('\0', ConsoleKey.F10, shift: false, alt: false, control: false)),
+            input => input.Push(Keys.Escape),   // the capture's draft cleared
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string shot = Assert.Single(ScreenFiles());
+        Assert.Contains(ScreenText.Attached(Path.Combine("screen_images", Path.GetFileName(shot))), output);
+        Assert.Single(_screenSystem.Captures);
+    }
+
     [Fact]
     public async Task ScreenCommand_WithoutAScreen_SaysSo()
     {
