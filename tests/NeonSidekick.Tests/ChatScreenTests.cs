@@ -4459,8 +4459,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude CLI executable                   (looked up)\n  Claude CLI slash command permissions    read-only\n  Claude CLI slash command model          (Claude Code's default)\n  Claude CLI slash command effort         (Claude Code's default)\n  Claude CLI advisor tool                 off\n  Claude CLI advisor tool context         brief\n  Claude CLI advisor tool calls per turn  2 calls\n  Claude CLI advisor tool model           (as Claude CLI slash command model)\n  Claude CLI advisor tool effort          (as Claude CLI slash command effort)\n  Claude CLI advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
-        Assert.Contains("\n" + HeadingRow("── Camera · 1 ── " + ToolsText.Bare(ToolsText.CameraOffSuffix)) + "\n▸ camera_capture        on   ", output);
-        Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── " + ToolsText.Bare(ToolsText.CameraOffSuffix)) + "\n▸ camera_capture        off  ", output);
+        Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
+        Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        off  ", output);
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n  get_current_time      on   ", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.Contains("\n" + ToolsText.OfferedKeys, output);
@@ -9478,7 +9478,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
         const string strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
-        Assert.Contains(rule + "\n" + Titled(strip) + "\n \n▸ Profile", output);
+        Assert.Contains(rule + "\n" + Titled(strip) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);
         Assert.Contains(rule + "\n" + Row(SettingsMenu.TabKeys) + "\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · Memory mode: read-only\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · 🖥️ LLM model: qwen3\n", output);
@@ -9571,7 +9571,7 @@ public partial class ChatScreenTests : IDisposable
         int bottom = output.IndexOf("\n" + rule + "\n" + Row(InfoPane.HintText) + "\n", top, StringComparison.Ordinal);
         Assert.True(bottom > top, output);
         Assert.Equal(15, output[(top + rule.Length + 1)..bottom].Split('\n').Length);
-        Assert.Contains("\n" + MenuPane.MoreHint + "\n" + rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + Row(InfoPane.HintText) + "\n"), output);
     }
 
     [Fact]
@@ -9600,8 +9600,8 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // 12 rows: 8 overlay rows, 6 of content, one of them the more row: the first page is five lines.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
-        Assert.Contains("\n" + MenuPane.MoreHint + "\n" + rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph) + "\n", output);   // speech on here: the strip stays under the pane's hint
-        Assert.DoesNotContain("── Memory ── read-write", output[..output.IndexOf(MenuPane.MoreHint, StringComparison.Ordinal)]);
+        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph) + "\n"), output);   // speech on here: the strip stays under the pane's hint
+        Assert.DoesNotContain("── Memory ── read-write", output[..output.IndexOf("\n ▼ 1–", StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
         Assert.Contains("── Memory ── read-write, directive (the list rides the opening recall_memory call) ─", output);
         Assert.Contains("── Voice directive ── vocalia.md (20 chars), included (speech output on, TTS ready), always last ─", output);
@@ -9796,7 +9796,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         const string strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
-        Assert.Contains("\n" + Titled(strip) + "\n \n▸ Profile", output);
+        Assert.Contains("\n" + Titled(strip) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);
         Assert.DoesNotContain("› /settings", output);
         Assert.Contains("› hi!", output);
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);

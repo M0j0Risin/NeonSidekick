@@ -287,7 +287,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        Assert.Contains("\nline1\nline2\nline3\nline4\nline5\n" + MenuPane.MoreHint + "\n" + Rule(40) + "\n" + InfoPane.SingleTabHintText + "\n", Output);   // one tab: nothing to switch (2026-10-04)
+        Assert.Contains("\nline1\nline2\nline3\nline4\nline5\n" + MenuPane.MoreHint(0, 5, 20) + "\n" + Rule(40) + "\n" + InfoPane.SingleTabHintText + "\n", Output);   // one tab: nothing to switch (2026-10-04)
         Assert.DoesNotContain("line6", Output);
     }
 
@@ -316,8 +316,8 @@ public class InfoPaneTests : IDisposable
         int d = Output.IndexOf("\nline11\nline12\nline13\nline14\nline15\n", StringComparison.Ordinal);
         int e = Output.LastIndexOf("\nline1\nline2\nline3\nline4\nline5\n", StringComparison.Ordinal);
         Assert.True(0 < a && a < b && b < c && c < d && d < e, Output);
-        // The more row stays on every page, the last one included: it points both ways.
-        Assert.Contains("\nline20\n" + MenuPane.MoreHint + "\n", Output);
+        // The more row stays on every page, the last one included: there it points up alone, at the last five (2026-10-04).
+        Assert.Contains("\nline20\n" + MenuPane.MoreHint(15, 5, 20) + "\n", Output);
     }
 
     [Fact]
@@ -376,7 +376,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        Assert.Contains("\n \nline1\nline2\nline3\nline4\nline5\nline6\n" + MenuPane.MoreHint + "\n" + Rule(40), Output);
+        Assert.Contains("\n \nline1\nline2\nline3\nline4\nline5\nline6\n" + MenuPane.MoreHint(0, 6, 20) + "\n" + Rule(40), Output);
         Assert.DoesNotContain("line7", Output);
     }
 

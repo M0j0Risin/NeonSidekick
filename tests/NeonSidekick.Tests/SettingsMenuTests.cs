@@ -2420,7 +2420,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM server scan mode: remote\n▸ LLM server scan mode            remote\n  LLM URL                         (scan the local network)\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM server scan mode: remote\n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            remote\n  URL                         (scan the local network)\n", _console.Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3150,7 +3150,7 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
     private void AssertTabEnds(string rows, int width) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
 
     /// <summary>A title or strip row as the pane prints it since 2026-09-18: the text, then the × close glyph in column width − 2 (the console's width as the test set it).</summary>
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
@@ -3172,7 +3172,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 32\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 32\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3191,15 +3191,15 @@ public partial class SettingsMenuTests : IDisposable
 
         // Each tab under the strip, padded to its own column (28, 32, 19, 26), the whole tab in view, nothing of another tab on it.
         AssertTabEnds("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 120);
-        Assert.Contains("\n \n▸ LLM server scan mode            local\n  LLM URL                         (probe local ports)\n  LLM model                       (first listed)\n  LLM API key                     ", _console.Output);
-        AssertTabEnds("\n  LLM reasoning                   none\n  LLM show thinking               on\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n  LLM offer tools                 on\n  LLM max tool iterations         10000 round trips\n  LLM request timeout (s)         3600\n  LLM turn timeout (s)            21600\n  LLM context length              (from the server)\n  LLM mid-turn usage              last-known\n  LLM max turns                   auto\n  LLM auto compact (%)            85 %\n  LLM compact type                summary\n  LLM compact keep recent         2 turns\n  LLM compact show summary        off\n  LLM tool compact type           compact\n  LLM picture keep                20 pictures\n  LLM picture megabytes           24 MB\n  LLM use fun verbs               off\n", 120);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
-        AssertTabEnds("\n \n▸ TTS output         on\n  TTS source         http\n  TTS HTTP URL       http://localhost:8880/v1\n  TTS voice preview  on\n  TTS voice preset   neon\n  TTS voice          af_heart\n  TTS voice 2        am_eric\n  TTS voice mix      80 % / 20 %\n  TTS speed          1.2\n", 120);
-        AssertTabEnds("\n \n▸ STT input                 off\n  STT destination           chat\n  STT wake                  off\n  STT wake phrase           hey neon\n  STT interrupt             off\n  STT interrupt echo guard  100 %\n  STT interrupt confirm     200 ms\n  STT push-to-talk key      F4\n  STT whisper model         ggml-base.en.bin\n  STT vosk model            vosk-model-small-en-us-0.15\n", 120);
+        Assert.Contains("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n  URL                         (probe local ports)\n  Model                       (first listed)\n  API key                     ", _console.Output);   // the tab's name off every row, the sections as headings (2026-10-04)
+        AssertTabEnds("\n" + MenuLayout.Heading("How it answers", 120) + "\n  Reasoning                   none\n  Show thinking               on\n  Preserve thinking           off\n  Reasoning estimate          chars\n  Sampling                    (server defaults)\n  Sampling from Hugging Face  off\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  Offer tools                 on\n  Max tool iterations         10000 round trips\n  Request timeout (s)         3600\n  Turn timeout (s)            21600\n" + MenuLayout.Heading("Context", 120) + "\n  Context length              (from the server)\n  Mid-turn usage              last-known\n  Max turns                   auto\n  Auto compact (%)            85 %\n  Compact type                summary\n  Compact keep recent         2 turns\n  Compact show summary        off\n  Tool compact type           compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  Picture keep                20 pictures\n  Picture megabytes           24 MB\n  Use fun verbs               off\n", 120);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
+        AssertTabEnds("\n \n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix      80 % / 20 %\n  Speed          1.2\n", 120);
+        AssertTabEnds("\n \n▸ Input                 off\n  Destination           chat\n  Wake                  off\n  Wake phrase           hey neon\n  Interrupt             off\n  Interrupt echo guard  100 %\n  Interrupt confirm     200 ms\n  Push-to-talk key      F4\n  Whisper model         ggml-base.en.bin\n  Vosk model            vosk-model-small-en-us-0.15\n", 120);
         Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19
         Assert.DoesNotContain("File tools", _console.Output);
         Assert.DoesNotContain("Web tools", _console.Output);
         Assert.DoesNotContain("Agent skills", _console.Output);   // /skills' Options tab since 2026-09-19
-        Assert.DoesNotContain(MenuPane.MoreHint, _console.Output);
+        Assert.DoesNotMatch(@"[ ▲]▼ \d+–\d+ of \d+", _console.Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3218,7 +3218,7 @@ public partial class SettingsMenuTests : IDisposable
         // The on/off page under the breadcrumb: the saved value on the cursor, each row with its sentence.
         Assert.Contains("\n" + Titled(Breadcrumb("TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", _console.Output);
         // The status under the strip: the saved notice and the override warning, the tab's list under them with the cursor kept.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ TTS output         off  (overridden by X)\n  TTS source", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ Output         off  (overridden by X)\n  Source", _console.Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3229,8 +3229,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        input.PushClick(4, 105);                 // Memory mode (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18)
-        input.PushClick(4, 105);
+        input.PushClick(4, 106);                 // Memory mode (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18; the section heading over Profile since 2026-10-04)
+        input.PushClick(4, 106);
         input.PushClick(238, 100);               // the × on the mode page: back to the list
         input.PushClick(239, 100);               // the × on the list: closed
         input.Push(Keys.Escape);                 // never read
@@ -3252,8 +3252,8 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         Assert.Equal("read-write", _settings.Current.MemoryMode);
-        input.PushClick(4, 105);                 // Memory mode: strip 100, spacer 101, Profile 102, New profile mode 103, Working directory 104 (under it since 2026-10-01, the queue's two rows before)
-        input.PushClick(4, 105);
+        input.PushClick(4, 106);                 // Memory mode: strip 100, spacer 101, the Who and where heading 102 (2026-10-04), Profile 103, New profile mode 104, Working directory 105 (under it since 2026-10-01, the queue's two rows before)
+        input.PushClick(4, 106);
         input.PushClick(4, 103);                 // read-only: breadcrumb 100, spacer 101, read-write 102
         input.PushClick(6, 103);
         input.Push(Keys.Escape);
@@ -3262,7 +3262,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("read-only", _settings.Current.MemoryMode);
         Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  " + MemoryMode.Describe("read-write") + "\n  read-only   " + MemoryMode.Describe("read-only") + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory mode: read-only\n  Profile                      default (", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory mode: read-only\n" + MenuLayout.Heading("Who and where", 240) + "\n  Profile                      default (", _console.Output);
         Assert.Contains("\n▸ Memory mode                  read-only\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -3275,8 +3275,8 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         Assert.Equal("read-write", _settings.Current.MemoryMode);
-        input.PushClick(4, 105);                 // Memory mode (see the double-click test for the rows)
-        input.PushClick(4, 105);
+        input.PushClick(4, 106);                 // Memory mode (see the double-click test for the rows)
+        input.PushClick(4, 106);
         input.PushClick(4, 50);                  // the transcript under the mode page: a first
         input.Push(Keys.Down);                   // a key ends the pair: read-only under the cursor, nothing picked
         input.PushClick(4, 50);                  // a first again
@@ -3316,9 +3316,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(_settings.Current.TtsOutput);
         Assert.False(_settings.Current.SttInput);
         // The refusal on the status line under the strip (a redraw repeats it, so no count), the toggle's own line too.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Profile", _console.Output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ TTS output", _console.Output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ STT input", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n" + MenuLayout.Heading("Who and where", 120) + "\n▸ Profile", _console.Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Output", _console.Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Input", _console.Output);
         Assert.Contains("  · Memory mode: read-only", _console.Output);
         Assert.DoesNotContain(SettingsMenu.ProfileTitle + "\n", _console.Output);
         Assert.Equal(0, pane.FlowRow);
@@ -3427,7 +3427,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("qwen3", _settings.Current.LlmModel);
         // The edit: the tab's list under its strip with the row marked, the slot under it, the edit keys in the hint row.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n  LLM server scan mode            local\n  LLM URL                         (probe local ports)\n▸ LLM model                       (first listed)\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n  Server scan mode            local\n  URL                         (probe local ports)\n▸ Model                       (first listed)\n", _console.Output);
         Assert.Contains("\n› \n" + Rule(120) + "\n" + SettingsMenu.EditKeys, _console.Output);
         Assert.Contains("qwen3-typo", _console.Output);
         // The results on the status line, never as a › line or a notice in the flow.
@@ -3526,7 +3526,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(1.2, _settings.Current.TtsSpeed);
         Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", _console.Output);
         string afterError = _console.Output[_console.Output.IndexOf("✗ TTS speed", StringComparison.Ordinal)..];
-        Assert.Contains("\n  TTS voice mix      80 % / 20 %\n▸ TTS speed          1.2\n", afterError.Split(Rule(120))[0]);
+        Assert.Contains("\n  Voice mix      80 % / 20 %\n▸ Speed          1.2\n", afterError.Split(Rule(120))[0]);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3545,7 +3545,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
         Assert.Contains(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n▸ default\n  work\n" + Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n▸ Profile                      default (", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -3661,7 +3661,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.All(_synth.Spoken, s => { Assert.Contains(s.Text, PreviewSentences); Assert.Equal(1.2, s.Speed); });
         Assert.Equal("bm_george", _synth.Spoken[^1].Voice);
         Assert.DoesNotContain(_synth.Spoken, s => s.Voice == "af_heart");   // the opening row is not a move
-        Assert.Contains("\n▸ TTS voice          bm_george\n", _console.Output);
+        Assert.Contains("\n▸ Voice          bm_george\n", _console.Output);
         pane.Dispose();
     }
 
@@ -3742,7 +3742,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("bm_george", _settings.Current.TtsVoice);
         Assert.Equal(Preview(VoiceMix.Spec("bm_george", "am_fenrir", 50), 1.2), _synth.Spoken);
-        Assert.Contains("\n▸ TTS voice preset   richard\n  TTS voice          bm_george\n", _console.Output);
+        Assert.Contains("\n▸ Voice preset   richard\n  Voice          bm_george\n", _console.Output);
         pane.Dispose();
     }
 
@@ -3828,7 +3828,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(_settings.Current.TtsVoicePreview);
         Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice preview: off\n", _console.Output);
-        Assert.Contains("\n  TTS HTTP URL       http://localhost:8880/v1\n▸ TTS voice preview  off\n  TTS voice preset   neon\n  TTS voice          af_heart\n", _console.Output);
+        Assert.Contains("\n  HTTP URL       http://localhost:8880/v1\n▸ Voice preview  off\n  Voice preset   neon\n  Voice          af_heart\n", _console.Output);
         pane.Dispose();
     }
 
@@ -4302,8 +4302,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ LLM server scan mode            local\n", _console.Output);
-        Assert.Contains("\n▸ Embedded servers enabled", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n", _console.Output);
+        Assert.Contains("\n▸ Servers enabled", _console.Output);   // the Embedded tab's rows wear no "Embedded" since 2026-10-04
         Assert.DoesNotContain("Agent skills", _console.Output);
         pane.Dispose();
     }
@@ -5018,7 +5018,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.True(_settings.Current.SttInput);
         Assert.Contains("\n" + Titled(Breadcrumb("STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · STT input: on\n▸ STT input                 on\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · STT input: on\n▸ Input                 on\n", _console.Output);
         pane.Dispose();
     }
 
@@ -5036,5 +5036,73 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("chat  " + SttDestinationMode.Describe("chat"), _console.Output);
         Assert.Contains("draft " + SttDestinationMode.Describe("draft"), _console.Output);
         pane.Dispose();
+    }
+
+    /// <summary>Space on a settings row (2026-10-04, the UI review: a flip took Enter, an arrow and Enter): a switch flips and saves at once, no page; any other row does nothing.</summary>
+    [Fact]
+    public async Task OnThePane_SpaceFlipsASwitch_AndIsNothingOnAnotherRow()
+    {
+        var (menu, pane) = PaneMenu();
+        Down(Array.IndexOf(SettingsMenu.TabFields[(int)SettingsTab.General].ToArray(), SettingsField.CopyUserPrompt));
+        Push(Keys.Char(' '));                    // Copy user prompt: off at once
+        Push(Keys.Up, Keys.Char(' '));           // Image thumbnail size: a picker, nothing
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.False(_settings.Current.CopyUserPrompt);
+        Assert.Equal("small", _settings.Current.ImageThumbnailSize);
+        Assert.Contains("  · Copy user prompt: off\n", _console.Output);
+        Assert.DoesNotContain(Breadcrumb("Copy user prompt"), _console.Output);   // no page
+        Assert.DoesNotContain(Breadcrumb("Image thumbnail size"), _console.Output);
+        pane.Dispose();
+    }
+
+    /// <summary>Space keeps a toggle page's rules: the interrupt needs the wake word (refused with its notice), the wake word going off takes the interrupt with it.</summary>
+    [Fact]
+    public async Task OnThePane_SpaceKeepsTheTogglesRules()
+    {
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Stt);
+        Down(Array.IndexOf(SettingsMenu.TabFields[(int)SettingsTab.Stt].ToArray(), SettingsField.SttInterrupt));
+        Push(Keys.Char(' '));                    // the interrupt without the wake word: refused
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.False(_settings.Current.SttInterrupt);
+        Assert.Contains("  · " + ChatScreen.InterruptNeedsWakeNotice, _console.Output);
+        pane.Dispose();
+    }
+
+    /// <summary>The long tabs' sections and the rows' names on a /settings tab (2026-10-04, the UI review), pinned.</summary>
+    [Fact]
+    public void Sections_RowNames_AndTheFooter_ArePinned()
+    {
+        Assert.Equal(["Who and where", "Input line", "Transcript", "Screen", "Outside apps"], SettingsMenu.TabSections[SettingsTab.General].Select(s => s.Title));
+        Assert.Equal(["Connection", "How it answers", "Tools and limits", "Context", "Pictures and verbs"], SettingsMenu.TabSections[SettingsTab.Llm].Select(s => s.Title));
+        Assert.Equal(["Models", "Pictures", "Pace", "Tools and skills", "Memory", "Seeing"], SettingsMenu.TabSections[SettingsTab.BotChat].Select(s => s.Title));
+        Assert.All(SettingsMenu.TabSections, tab => Assert.All(tab.Value, s => Assert.Contains(s.First, SettingsMenu.TabFields[(int)tab.Key])));
+        // The rows: a heading is null, every field once and in the tab's order.
+        var general = SettingsMenu.TabRows((int)SettingsTab.General);
+        Assert.Null(general[0]);
+        Assert.Equal(SettingsField.Profile, general[1]);
+        Assert.Equal(SettingsMenu.TabFields[(int)SettingsTab.General], general.OfType<SettingsField>());
+        Assert.Equal(5, general.Count(r => r is null));
+        Assert.Equal(SettingsMenu.TabRows((int)SettingsTab.Tts).Count, SettingsMenu.TabFields[(int)SettingsTab.Tts].Count);   // no sections there
+        Assert.Equal(1, SettingsMenu.RowOf((int)SettingsTab.General, SettingsField.Profile));
+        Assert.Equal(-1, SettingsMenu.RowOf((int)SettingsTab.General, SettingsField.LlmUrl));
+        // The names: the tab's title off the front, the first letter raised; anything else whole.
+        Assert.Equal("LLM mode", SettingsMenu.RowName(SettingsField.BotChatLlmMode, "Botchat"));
+        Assert.Equal("Output", SettingsMenu.RowName(SettingsField.TtsOutput, "TTS"));
+        Assert.Equal("Server scan mode", SettingsMenu.RowName(SettingsField.LlmScanMode, "LLM"));
+        Assert.Equal("Session logging", SettingsMenu.RowName(SettingsField.SessionLogging, "Sessions"));
+        Assert.Equal("Theme", SettingsMenu.RowName(SettingsField.Theme, "General"));
+        // The footer: the help's text without its Markdown, the default on its own line.
+        var footer = SettingsMenu.FieldFooter(SettingsField.MemoryMode);
+        Assert.DoesNotContain("`", footer.Text);
+        Assert.StartsWith("What the model may do with long-term memory", footer.Text);
+        Assert.Equal("Default: read-write", footer.Last);
+        Assert.Equal("a b c", SettingsMenu.PlainHelp("`a` *b* c"));
     }
 }

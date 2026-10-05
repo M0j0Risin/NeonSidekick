@@ -240,6 +240,13 @@ public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunctio
     /// <summary>The settings row that switches the whole group (<c>File tools</c> for Files …); null for the standing clock and timer groups.</summary>
     public SettingsField? Switch { get; init; }
 
+    /// <summary>
+    /// The one reason an off group is off, as the screen reads it (2026-10-04, the UI review: <c>/tools</c>' heading listed every reason
+    /// a group can be off — "the switch is off, there is no camera support, or the model reads no pictures"); null for an offered group
+    /// or one with a single reason, whose heading says the switch.
+    /// </summary>
+    public string? OffReason { get; init; }
+
     /// <summary>The group's bare name, without the count (<c>Files</c>, <c>MCP chrome</c>): what <see cref="SystemPromptSummary.OfferedOnly"/> recounts from (2026-09-26).</summary>
     public string Label { get; init; } = Name;
 

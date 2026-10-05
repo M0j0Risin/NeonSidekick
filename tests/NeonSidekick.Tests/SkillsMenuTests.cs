@@ -126,7 +126,7 @@ public class SkillsMenuTests : IDisposable
 
     /// <summary><paramref name="before"/>, then the blank rows that hold a tab at its pane's tallest tab's height (2026-10-01), then <paramref name="after"/>.</summary>
     private void AssertPadded(string before, string after) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(after)), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(after)), _console.Output);
 
     /// <summary>A title row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     private static string Titled(string row, int width = 100) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
@@ -243,14 +243,13 @@ public class SkillsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
         Push(Keys.Down, Keys.Enter, Keys.Char(' '));     // the Shadowed heading: nothing, Enter or Space
-        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Char(' '));   // Options (the strip wrapped), Project file: Space is nothing
-        Push(Keys.Enter, Keys.Down, Keys.Enter);                 // its page, off picked
+        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Char(' '));   // Options (the strip wrapped), Project file: Space flips it off (2026-10-04; nothing until then)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         AssertPadded("\n" + Titled(Strip) + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
-        Assert.Contains("\n" + Titled(SkillsText.Label + " › Project file") + "\n", _console.Output);
+        Assert.DoesNotContain("\n" + Titled(SkillsText.Label + " › Project file") + "\n", _console.Output);   // no page: Space saved at once
         Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n  Agent skills                          on\n  Use external skills (.agents\\skills)  off\n▸ Project file                          off\n", _console.Output);   // the flip on the status line, the row re-read, the cursor kept
         Assert.False(_settings.Current.ProjectFile);
         Assert.DoesNotContain("Project    ", _console.Output);   // no Project tab in the strip

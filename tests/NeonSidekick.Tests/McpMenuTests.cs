@@ -85,7 +85,7 @@ public class McpMenuTests : IAsyncDisposable
 
     /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
     private void AssertTabEnds(string rows, int width) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
 
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
@@ -101,7 +101,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n \n" + Rule(100), _console.Output);   // a blank row to the Tools tab's height (its gap row, 2026-10-03)
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n \n" + MenuLayout.BlankFooter + Rule(100), _console.Output);   // a blank row to the Tools tab's height, then the footer's rows (2026-10-04) (its gap row, 2026-10-03)
         Assert.Contains(McpText.ServersKeys, _console.Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
         Assert.False(pane.OverlayOpen);
@@ -200,7 +200,7 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["docker"], _settings.Current.McpServersDisabled);
-        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n▸ docker      off  off  stdio: docker mcp gateway run\n  chrome      on   off  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n" + Rule(100), _console.Output);
+        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n▸ docker      off  off  stdio: docker mcp gateway run\n  chrome      on   off  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n" + MenuLayout.BlankFooter + Rule(100), _console.Output);
         Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n  docker      off  off  stdio: docker mcp gateway run\n", _console.Output);   // Space's answer, then the cursor moved on under it
         Assert.DoesNotContain("docker: on", _console.Output);
         Assert.DoesNotContain("connecting docker", _console.Output);
@@ -261,7 +261,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(["docker__fail"], _settings.Current.ToolsDisabled);
         // The servers' headings are rules with a gap between them (2026-10-03), the /tools look.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + Rule(100), _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + MenuLayout.BlankFooter + Rule(100), _console.Output);
         Assert.Contains("  · 🔌 docker__fail: on\n" + Heading("── docker · 2") + "\n", _console.Output);
         Assert.Contains(ToolsText.OfferedKeys, _console.Output);
         pane.Dispose();

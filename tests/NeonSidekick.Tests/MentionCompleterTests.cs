@@ -216,7 +216,7 @@ public class MentionCompleterTests
         console = new TestConsole { EmitAnsiSequences = false };
         console.Profile.Width = 30;
         console.Write(new Rows(rows));
-        Assert.Equal([MenuPane.Pointer + "/skill  load", MenuPane.NoPointer + MenuPane.MoreHint], console.Output.TrimEnd().Split('\n').Select(l => l.TrimEnd()));
+        Assert.Equal([MenuPane.Pointer + "/skill  load", (MenuPane.NoPointer + MenuPane.MoreHint(2, 1, 3)).TrimEnd()], console.Output.TrimEnd().Split('\n').Select(l => l.TrimEnd()));
 
         Assert.Throws<ArgumentException>(() => MentionCompleter.WordRows(new MentionList(0, 2, "t", ["a"], false, 0, 0), 8));
     }
@@ -250,7 +250,7 @@ public class MentionCompleterTests
         // Two rows of room for three matches: one match row and the more row; the viewport follows the cursor.
         (rows, first) = MentionCompleter.Rows(list with { Cursor = 2 }, capacity: 2);
         Assert.Equal(2, first);
-        Assert.Equal(new[] { MenuPane.RowMarkup("test/thing.txt", active: true), Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint) }, rows);
+        Assert.Equal(new[] { MenuPane.RowMarkup("test/thing.txt", active: true), Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint(2, 1, 3)) }, rows);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class MentionCompleterTests
         Assert.Equal(new[]
         {
             MenuPane.RowMarkup(Markup.Escape("a[1].txt"), active: true),
-            Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint),
+            Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint(0, 1, 3)),
             Theme.DimMarkup(MenuPane.NoPointer + MentionCompleter.TruncatedRow),
         }, rows);
     }

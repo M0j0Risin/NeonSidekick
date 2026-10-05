@@ -31,7 +31,19 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
 
     /// <summary>The tab's <see cref="MenuPage.Filter"/>; null for a tab that does not filter.</summary>
     public string? Filter { get; init; }
+
+    /// <summary>
+    /// Space flips on this tab (2026-10-04: every settings tab, <see cref="App.SettingsMenu.FieldsTab"/>), whatever the page's
+    /// <see cref="MenuPage.SpaceToggles"/> says (<see cref="MenuPage.SpaceFlips"/>); false leaves it to the page.
+    /// </summary>
+    public bool SpaceToggles { get; init; }
 }
+
+/// <summary>
+/// What a page's <see cref="MenuPage.Footer"/> says under the list for the cursor's row (2026-10-04): <paramref name="Text"/>
+/// word-wrapped, then <paramref name="Last"/> (null for none) on the last row of its own, so a long text never cuts it.
+/// </summary>
+public sealed record MenuFooter(string Text, string? Last = null);
 
 /// <summary>
 /// A button on a one-list page's title row (2026-09-21, the queue pane's <c>clear all</c>): drawn
@@ -76,6 +88,9 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     /// Space is swallowed.
     /// </summary>
     public bool SpaceToggles { get; init; }
+
+    /// <summary>Whether Space flips here: the page's <see cref="SpaceToggles"/>, or the shown tab's own (<see cref="MenuTab.SpaceToggles"/>, 2026-10-04).</summary>
+    public bool SpaceFlips => SpaceToggles || (Tabs is { } tabs && Tab >= 0 && Tab < tabs.Count && tabs[Tab].SpaceToggles);
 
     /// <summary>
     /// The row the cursor lands on after a switch to each tab, by tab index (clamped to the tab's
@@ -123,6 +138,14 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     /// an empty one too, as every page was before.
     /// </summary>
     public IReadOnlySet<int>? Headings { get; init; }
+
+    /// <summary>
+    /// The text under the list for the cursor's row, as (tab, row) → text (2026-10-04, the UI review: <c>/settings</c> said nothing
+    /// about a row, while <c>neon_help</c> had every one's description): drawn dim, word-wrapped to <see cref="MenuPane.FooterRows"/>
+    /// rows, and those rows kept whatever the row returns (null for nothing), so the pane holds its height as the cursor moves.
+    /// Null for none: no rows kept.
+    /// </summary>
+    public Func<int, int, MenuFooter?>? Footer { get; init; }
 
     /// <summary>
     /// The text typed to filter the rows (2026-10-03, the user's ask: <c>/tools</c>' and <c>/skills</c>' Offered tabs and
@@ -279,8 +302,35 @@ public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, in
 /// </summary>
 public sealed class MenuPane : INoticeSink
 {
-    /// <summary>The dim last row when the list is cut by the window. Pinned.</summary>
-    public const string MoreHint = "↑/↓ for more";
+    /// <summary>
+    /// The dim last row when the list is cut by the window: where the view is and how much there is, <c>▲▼ 13–25 of 58</c>, each
+    /// arrow only while there is more that way, a space in its place otherwise (2026-10-04, the UI review: <c>↑/↓ for more</c>
+    /// until then said neither). <paramref name="first"/> is the first row shown (from 0), <paramref name="shown"/> how many. Pinned.
+    /// </summary>
+    public static string MoreHint(int first, int shown, int count) =>
+        string.Concat(first > 0 ? "▲" : " ", first + shown < count ? "▼" : " ", " ",
+            (first + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), "–",
+            (first + shown).ToString(System.Globalization.CultureInfo.InvariantCulture), " of ",
+            count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// A <see cref="MenuFooter"/> laid out for <paramref name="width"/> cells: its text wrapped (<see cref="CaptionRows"/>) to the
+    /// <see cref="FooterRows"/> its last line leaves, then that line cut to the width. Pure.
+    /// </summary>
+    public static IReadOnlyList<string> FooterLines(MenuFooter footer, int width)
+    {
+        ArgumentNullException.ThrowIfNull(footer);
+        var rows = new List<string>(CaptionRows(footer.Text, width, footer.Last is null ? FooterRows : FooterRows - 1));
+        if (footer.Last is { } last && width > 0)
+        {
+            rows.AddRange(CaptionRows(last, width, 1));
+        }
+
+        return rows;
+    }
+
+    /// <summary>The rows a page's <see cref="MenuPage.Footer"/> takes, kept whether or not the row under the cursor has a text (2026-10-04). Pinned.</summary>
+    public const int FooterRows = 3;
 
     /// <summary>What the cursor's row starts with; every other row gets the same width of spaces. Pinned.</summary>
     public const string Pointer = "▸ ";
@@ -652,7 +702,7 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor);
                 }
 
-                if (page.SpaceToggles && k.KeyChar == ' ')
+                if (page.SpaceFlips && k.KeyChar == ' ')
                 {
                     // The character, not ConsoleKey.Spacebar: a scripted key carries the one without the other.
                     if (count == 0)
@@ -670,12 +720,12 @@ public sealed class MenuPane : INoticeSink
                     continue;
                 }
 
-                if (page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceToggles) is { } typed)
+                if (page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceFlips) is { } typed)
                 {
                     // Typed into the filter (2026-10-03): the keys already waiting go on it too, so a fast typist's word is one rebuild.
-                    while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && !Keys.IsCancel(q) && MenuFilter.Edit(typed, q, page.SpaceToggles) is not null) is InputEvent.Key { Info: var more })
+                    while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && !Keys.IsCancel(q) && MenuFilter.Edit(typed, q, page.SpaceFlips) is not null) is InputEvent.Key { Info: var more })
                     {
-                        typed = MenuFilter.Edit(typed, more, page.SpaceToggles)!;
+                        typed = MenuFilter.Edit(typed, more, page.SpaceFlips)!;
                     }
 
                     _status.Clear();
@@ -927,7 +977,8 @@ public sealed class MenuPane : INoticeSink
         var top = TopRows(page, Width);
         _stripRows = top.Count;
         int header = Header;
-        int capacity = _pane.MenuContentRows(Height, _inputRows) - header;
+        int footer = page.Footer is null ? 0 : FooterRows;
+        int capacity = _pane.MenuContentRows(Height, _inputRows) - header - footer;
         if (page.LeadRow(_cursor) is int lead && lead < _first && _cursor - lead < capacity - 1)
         {
             // The cursor at the top of a section (2026-10-03): its heading and gap come into view with it.
@@ -981,7 +1032,19 @@ public sealed class MenuPane : INoticeSink
 
         if (more)
         {
-            lines.Add(new Markup(Theme.DimMarkup(NoPointer + MoreHint)));
+            lines.Add(new Markup(Theme.DimMarkup(NoPointer + MoreHint(_first, _shown, page.Rows.Count))));
+        }
+
+        if (footer > 0)
+        {
+            // The cursor's row described under the list (2026-10-04), its rows kept, right under the rows (the padding to the
+            // tallest tab goes below it); a click there lands on no row.
+            var text = page.Rows.Count > 0 ? page.Footer!(page.Tab, _cursor) : null;
+            var rows = text is null ? [] : FooterLines(text, _listWidth - TextCells.Width(NoPointer));
+            for (int i = 0; i < footer; i++)
+            {
+                lines.Add(i < rows.Count ? new Markup(Theme.DimMarkup(NoPointer + rows[i])).Overflow(Overflow.Ellipsis) : new Text(" "));
+            }
         }
 
         for (int i = 0; i < pad; i++)

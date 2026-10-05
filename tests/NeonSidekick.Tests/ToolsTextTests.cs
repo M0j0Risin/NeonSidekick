@@ -101,7 +101,7 @@ public class ToolsTextTests : IDisposable
     private static string OnRow(AIFunction tool, bool on) => Cyan(tool.Name.PadRight(22)) + Ink((on ? "on" : "off").PadRight(5)) + Theme.DimMarkup(tool.Description);
 
     /// <summary>A tool row the turn does not offer: the whole row dim, the note after the description.</summary>
-    private static string DimRow(AIFunction tool, bool on, string note = "") => Theme.DimMarkup(tool.Name.PadRight(22) + (on ? "on" : "off").PadRight(5) + tool.Description + (note.Length > 0 ? "  " + note : ""));
+    private static string DimRow(AIFunction tool, bool on, string note = "", bool groupOff = false) => Theme.DimMarkup(tool.Name.PadRight(22) + (on ? groupOff ? "(on)" : "on" : "off").PadRight(5) + tool.Description + (note.Length > 0 ? "  " + note : ""));   // "(on)" under an off group since 2026-10-04
 
     private static AIFunction ToolNamed(ToolsFacts facts, string name) => facts.Groups.SelectMany(g => g.Tools).Single(t => t.Name == name);
 
@@ -178,7 +178,7 @@ public class ToolsTextTests : IDisposable
 
         // The heading keeps the section colour with the group off (later on 2026-09-20, the user's call); the suffix (on the rule, bare, 2026-10-03) and the rows are dim.
         Assert.Equal(Heading("Files", "15 of 16", "off: File tools is off"), rows.First(r => r.Heading && r.Markup.Contains("Files", StringComparison.Ordinal)).Markup);
-        Assert.Equal(DimRow(ToolNamed(facts, ReadFileTool.ToolName), true), rows.Single(r => r.Tool == ReadFileTool.ToolName).Markup);        // still on, dim
+        Assert.Equal(DimRow(ToolNamed(facts, ReadFileTool.ToolName), true, groupOff: true), rows.Single(r => r.Tool == ReadFileTool.ToolName).Markup);        // still on, dim, "(on)": its group is off (2026-10-04)
         Assert.Equal(DimRow(ToolNamed(facts, CopyTool.ToolName), false, "not offered: switched off in /tools"), rows.Single(r => r.Tool == CopyTool.ToolName).Markup);   // off, its own note first
         // Questions off by its switch: the same shape; download_file under File tools off carries the file-tools reason, its group's count untouched.
         Assert.Equal(Heading("Questions", "1", "off: Ask user is off"), rows.First(r => r.Heading && r.Markup.Contains("Questions", StringComparison.Ordinal)).Markup);

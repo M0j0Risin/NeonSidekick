@@ -197,6 +197,29 @@ public static class ToolsText
     /// <summary>The saved word for a tool's state.</summary>
     public static string State(bool on) => on ? "on" : "off";
 
+    /// <summary>
+    /// The state column of a tool under an off group (2026-10-04, the UI review: such a row read <c>on</c> while nothing of the group was
+    /// offered): <c>(on)</c> for a tool that is on here but waits on its group, <c>off</c> as ever. Pinned.
+    /// </summary>
+    public static string GroupOffState(bool on) => on ? "(on)" : "off";
+
+    /// <summary>A group's switch off: <c>Camera tool is off</c> (2026-10-04, <see cref="ToolGroup.OffReason"/>). Pinned.</summary>
+    public static string SwitchOffReason(SettingsField field) => SettingsMenu.FieldName(field) + " is off";
+
+    /// <summary>The other single reasons an off group gives on its heading (2026-10-04, <see cref="ToolGroup.OffReason"/>). Pinned.</summary>
+    public const string NoCameraReason = "there is no camera support";
+    public const string NoScreenReason = "there is no screen capture support";
+    public const string NoPaneReason = "no pane";
+    public const string BlindReason = "the model reads no pictures";
+    public const string NoVaultReason = "no Obsidian vault is set";
+    public const string NoComfyUrlReason = "no ComfyUI URL is set";
+    public const string NoWorkflowReason = "no workflow is offered";
+    public const string NoHomeAssistantReason = "no Home Assistant URL or API key is set";
+    public const string NoSqliteDatabaseReason = "no database of sqlite.json is offered and SQLite sandbox files is off";
+
+    /// <summary>A connections file that offers nothing: <c>no connection of sql.json is offered</c>. Pinned.</summary>
+    public static string NoneOfferedReason(string what, string file) => $"no {what} of {file} is offered";
+
     /// <summary>The saved list as a set, ordinal: what <c>PrepareTurn</c> and the summaries test against.</summary>
     public static IReadOnlySet<string> DisabledSet(IReadOnlyList<string> saved)
     {
@@ -248,6 +271,12 @@ public static class ToolsText
         if (group.Note == SystemPromptSummary.NotOffered(SystemPromptSummary.NoPaneSuffix))
         {
             return NoPaneSuffix;
+        }
+
+        if (group.OffReason is { } reason)
+        {
+            // The one reason that holds (2026-10-04), when the screen could tell which.
+            return "(off: " + reason + ")";
         }
 
         if (group.Switch == SettingsField.ObsidianTools)
@@ -371,7 +400,7 @@ public static class ToolsText
                 bool offered = facts.ToolsEnabled && group.Offers(tool.Name);
                 string row = offered
                     ? Styled(Theme.AccentSecondary, tool.Name.PadRight(NameWidth)) + Theme.ColorMarkup(Theme.Ink, State(on).PadRight(StateWidth)) + Theme.DimMarkup(tool.Description)
-                    : Theme.DimMarkup(tool.Name.PadRight(NameWidth) + State(on).PadRight(StateWidth) + tool.Description + note);
+                    : Theme.DimMarkup(tool.Name.PadRight(NameWidth) + (group.Offered || !facts.ToolsEnabled ? State(on) : GroupOffState(on)).PadRight(StateWidth) + tool.Description + note);
                 rows.Add((row, tool.Name, false));
             }
         }
@@ -445,7 +474,7 @@ public static class ToolsText
             foreach (var tool in group.Tools)
             {
                 string note = group.ToolNotes.TryGetValue(tool.Name, out var why) ? " — " + why : "";
-                yield return "  " + tool.Name.PadRight(NameWidth) + State(IsOn(facts, tool.Name)).PadRight(StateWidth) + tool.Description + note;
+                yield return "  " + tool.Name.PadRight(NameWidth) + (group.Offered || !facts.ToolsEnabled ? State(IsOn(facts, tool.Name)) : GroupOffState(IsOn(facts, tool.Name))).PadRight(StateWidth) + tool.Description + note;
             }
         }
     }

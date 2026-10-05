@@ -562,7 +562,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Matches("\n[ ▸] " + CameraCaptureTool.ToolName + " ", output);
-        Assert.Contains("── Camera · 1 ── " + ToolsText.Bare(ToolsText.CameraOffSuffix) + " ─", output);
+        Assert.Contains("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools) + " ─", output);   // the one reason, not the list of them (2026-10-04)
     }
 
     [Fact]

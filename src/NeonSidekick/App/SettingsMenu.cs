@@ -1041,7 +1041,7 @@ internal sealed partial class SettingsMenu
     public const string TitleKeys = "Enter = edit · ESC = close";
 
     /// <summary>The settings list's hint on the pane, where the rows sit under tabs.</summary>
-    public const string TabKeys = "Enter = edit · ←/→ tabs · ESC = close";
+    public const string TabKeys = "Enter = edit · Space = flip · ←/→ tabs · ESC = close";   // Space since 2026-10-04
     public const string EditKeys = "Enter = save · ESC = back";
     public const string PickKeys = "Enter = choose · ESC = back";
 
@@ -1625,10 +1625,10 @@ internal sealed partial class SettingsMenu
     public static int TabLabelWidth(SettingsTab tab) => LabelWidthOf(TabFields[(int)tab]);
 
     /// <summary>The label column of any list of rows (a <see cref="TabFields"/> or <see cref="ToolsTabFields"/> tab): the longest <see cref="FieldName"/> plus <see cref="LabelGap"/>.</summary>
-    public static int LabelWidthOf(IReadOnlyList<SettingsField> fields)
+    public static int LabelWidthOf(IReadOnlyList<SettingsField> fields, string? tabTitle = null)
     {
         ArgumentNullException.ThrowIfNull(fields);
-        return fields.Max(f => FieldName(f).Length) + LabelGap;
+        return fields.Max(f => (tabTitle is null ? FieldName(f) : RowName(f, tabTitle)).Length) + LabelGap;
     }
 
     /// <summary>The first row's label: the loaded profile's name, padded like every other row, its directory dim in parentheses after it. Pinned.</summary>
@@ -3266,9 +3266,9 @@ internal sealed partial class SettingsMenu
         FieldLabel(field, data, profileDirectory, overriddenBy, LabelWidth);
 
     /// <summary>A row padded to <paramref name="width"/> (a tab's column on the pane).</summary>
-    public static string FieldLabel(SettingsField field, AppSettingsData data, string profileDirectory, string? overriddenBy, int width, string? locatedBrowser = null)
+    public static string FieldLabel(SettingsField field, AppSettingsData data, string profileDirectory, string? overriddenBy, int width, string? locatedBrowser = null, string? name = null)
     {
-        string row = Markup.Escape(FieldName(field).PadRight(width)) + Theme.ColorMarkup(Theme.Ink, FieldValue(field, data, profileDirectory, locatedBrowser));
+        string row = Markup.Escape((name ?? FieldName(field)).PadRight(width)) + Theme.ColorMarkup(Theme.Ink, FieldValue(field, data, profileDirectory, locatedBrowser));
         return overriddenBy is null ? row : row + Theme.DimMarkup($"  (overridden by {overriddenBy})");
     }
 
@@ -3327,7 +3327,7 @@ internal sealed partial class SettingsMenu
                     ? located
                     : await PickSettingAsync(saved, tab, cursor, cancellationToken).ConfigureAwait(false);
                 open = null;
-                if (picked is not var (field, page, row))
+                if (picked is not var (field, page, row, flip))
                 {
                     return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
                 }
@@ -3350,7 +3350,14 @@ internal sealed partial class SettingsMenu
                     continue;
                 }
 
-                bool edited = await EditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false);
+                if (flip && !IsToggle(field))
+                {
+                    continue;   // Space on a row that is no switch: nothing (2026-10-04); Enter opens its page
+                }
+
+                bool edited = flip
+                    ? await FlipAsync(field, cancellationToken).ConfigureAwait(false)
+                    : await EditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false);
                 if (_embeddedLlmCleared)
                 {
                     // The model in use removed from the catalog (2026-09-29): its URL and model cleared, so the LLM reconnects — to none.
@@ -3428,19 +3435,27 @@ internal sealed partial class SettingsMenu
     /// prompt. The field picked, the page it was picked from (its <see cref="MenuPage.Tab"/> is the
     /// tab shown at Enter) and the row within that page; null for ESC.
     /// </summary>
-    private async Task<(SettingsField Field, MenuPage Page, int Row)?> PickSettingAsync(AppSettingsData saved, int tab, int cursor, CancellationToken cancellationToken)
+    private async Task<(SettingsField Field, MenuPage Page, int Row, bool Flip)?> PickSettingAsync(AppSettingsData saved, int tab, int cursor, CancellationToken cancellationToken)
     {
         if (_pane.Enabled)
         {
-            var tabbed = SettingsTabs(saved, _settings.ProfileName, tab);
-            if (await _pane.PickAsync(tabbed, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+            while (true)
             {
-                return null;
-            }
+                var tabbed = SettingsTabs(saved, _settings.ProfileName, tab);
+                if (await _pane.PickAsync(tabbed, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                {
+                    return null;
+                }
 
-            // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows.
-            var shown = pick.Tab == tabbed.Tab ? tabbed : MenuPage.Tabbed(Title, tabbed.Tabs!, pick.Tab, TabKeys);
-            return (TabFields[pick.Tab][pick.Row], shown, pick.Row);
+                // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows.
+                var shown = pick.Tab == tabbed.Tab ? tabbed : MenuPage.Tabbed(Title, tabbed.Tabs!, pick.Tab, TabKeys) with { Footer = tabbed.Footer };
+                if (TabRows(pick.Tab)[pick.Row] is { } field)
+                {
+                    return (field, shown, pick.Row, pick.Toggle);
+                }
+
+                (tab, cursor) = (pick.Tab, pick.Row);   // a heading is never a stop; nothing to do there
+            }
         }
 
         var page = SettingsPage(saved, _settings.ProfileName);
@@ -3449,25 +3464,23 @@ internal sealed partial class SettingsMenu
             return null;
         }
 
-        return (Fields[row], page, row);
+        return (Fields[row], page, row, false);
     }
 
     /// <summary>
     /// Where <paramref name="field"/> sits as <see cref="PickSettingAsync"/> would hand it back — the pane's tab page and the row in it,
     /// or the prompt host's list and the row there — or null for a field neither shows (2026-09-30, <see cref="ShowAsync(CancellationToken, bool, SettingsField?)"/>'s open).
     /// </summary>
-    private (SettingsField Field, MenuPage Page, int Row)? Locate(SettingsField field, AppSettingsData saved)
+    private (SettingsField Field, MenuPage Page, int Row, bool Flip)? Locate(SettingsField field, AppSettingsData saved)
     {
         if (_pane.Enabled)
         {
             for (int tab = 0; tab < TabFields.Count; tab++)
             {
-                for (int row = 0; row < TabFields[tab].Count; row++)
+                int row = RowOf(tab, field);
+                if (row >= 0)
                 {
-                    if (TabFields[tab][row] == field)
-                    {
-                        return (field, SettingsTabs(saved, _settings.ProfileName, tab), row);
-                    }
+                    return (field, SettingsTabs(saved, _settings.ProfileName, tab), row, false);
                 }
             }
 
@@ -3475,7 +3488,7 @@ internal sealed partial class SettingsMenu
         }
 
         int index = Array.IndexOf(Fields, field);
-        return index < 0 ? null : (field, SettingsPage(saved, _settings.ProfileName), index);
+        return index < 0 ? null : (field, SettingsPage(saved, _settings.ProfileName), index, false);
     }
 
     /// <summary>The settings list as the prompt host shows it: one row per field from <paramref name="saved"/>, the profile row from the loaded name.</summary>
@@ -3498,10 +3511,10 @@ internal sealed partial class SettingsMenu
         var tabs = new MenuTab[TabTitles.Count];
         for (int t = 0; t < tabs.Length; t++)
         {
-            tabs[t] = FieldsTab(TabTitles[t], TabFields[t], saved, profile);
+            tabs[t] = FieldsTab(TabTitles[t], TabFields[t], saved, profile, TabSections.GetValueOrDefault((SettingsTab)t), shortNames: true);
         }
 
-        return MenuPage.Tabbed(Title, tabs, tab, TabKeys);
+        return MenuPage.Tabbed(Title, tabs, tab, TabKeys) with { Footer = (t, row) => TabRows(t)[row] is { } field ? FieldFooter(field) : null };
     }
 
     /// <summary>
@@ -3509,18 +3522,27 @@ internal sealed partial class SettingsMenu
     /// <see cref="LabelWidthOf"/>, the profile row from <paramref name="profile"/> (the loaded name; null reads it
     /// from the store). The seam <see cref="ToolsMenu"/> builds its Ask / Files / Web tabs through (2026-09-19).
     /// </summary>
-    internal MenuTab FieldsTab(string title, IReadOnlyList<SettingsField> fields, AppSettingsData saved, string? profile = null)
+    internal MenuTab FieldsTab(string title, IReadOnlyList<SettingsField> fields, AppSettingsData saved, string? profile = null, IReadOnlyList<(SettingsField First, string Title)>? sections = null, bool shortNames = false)
     {
         string? located = _locateBrowser("");
-        int width = LabelWidthOf(fields);
-        var rows = new string[fields.Count];
-        for (int i = 0; i < rows.Length; i++)
+        // Short names (2026-10-04) only where every row carries the tab's title: a tab of /settings' own, never a /tools one,
+        // whose "Web tools" or "Ask user" would be left a bare "Tools" or "User".
+        string? shortTab = shortNames && fields.All(f => RowName(f, title) != FieldName(f)) ? title : null;
+        int width = LabelWidthOf(fields, shortTab);
+        var rows = new List<string>(fields.Count + (sections?.Count ?? 0));
+        HashSet<int>? headings = null;
+        foreach (var f in fields)
         {
-            var f = fields[i];
-            rows[i] = f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located);
+            if (sections?.FirstOrDefault(s => s.First == f).Title is { } heading)
+            {
+                (headings ??= []).Add(rows.Count);
+                rows.Add(SectionRule.Markup(heading));
+            }
+
+            rows.Add(f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located, shortTab is null ? null : RowName(f, shortTab)));
         }
 
-        return new MenuTab(title, rows);
+        return new MenuTab(title, rows) { Headings = headings, SpaceToggles = true };
     }
 
     /// <summary>A row as a plain line, for a console without the pane: <c>Web browser mode: chromium</c> (the <see cref="SavedNotice"/> shape). The seam <see cref="ToolsMenu"/> prints its settings tabs through.</summary>
@@ -3532,14 +3554,14 @@ internal sealed partial class SettingsMenu
     /// embedded model's two rows that read the disk and the machine (2026-09-29, <see cref="EmbeddedValue"/>) when an embedded
     /// model is offered.
     /// </summary>
-    private string LiveLabel(SettingsField field, AppSettingsData saved, int width, string? located)
+    private string LiveLabel(SettingsField field, AppSettingsData saved, int width, string? located, string? name = null)
     {
         if (EmbeddedValue(field, saved) is not { } embedded)
         {
-            return FieldLabel(field, saved, _settings.ProfileDirectory, _overriddenBy(field), width, located);
+            return FieldLabel(field, saved, _settings.ProfileDirectory, _overriddenBy(field), width, located, name);
         }
 
-        string row = Markup.Escape(FieldName(field).PadRight(width)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(embedded));
+        string row = Markup.Escape((name ?? FieldName(field)).PadRight(width)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(embedded));
         return _overriddenBy(field) is { } by ? row + Theme.DimMarkup($"  (overridden by {by})") : row;
     }
 
@@ -6189,7 +6211,34 @@ internal sealed partial class SettingsMenu
             return modeChanged || Unchanged();
         }
 
-        bool on = index == 0;
+        return await SetToggleAsync(field, saved, index == 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A toggle flipped by Space on its row (2026-10-04, the UI review: a flip took Enter, an arrow and Enter): saved at once with its
+    /// page's notice, under the page's rules — the interrupt needs the wake word, the police going off asks first, the wake word going
+    /// off takes the interrupt with it. False for a field that is no toggle, or a flip refused.
+    /// </summary>
+    internal async Task<bool> FlipAsync(SettingsField field, CancellationToken cancellationToken)
+    {
+        if (!IsToggle(field))
+        {
+            return false;
+        }
+
+        var saved = _settings.Current;
+        if (field == SettingsField.SttInterrupt && !saved.SttInterrupt && !saved.SttWake)
+        {
+            Sink.Notice(ChatScreen.InterruptNeedsWakeNotice);
+            return false;
+        }
+
+        return await SetToggleAsync(field, saved, !IsOn(field, saved), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>A toggle set to <paramref name="on"/> (its page's pick, or <see cref="FlipAsync"/>): the police's question first, then the save and its notice.</summary>
+    private async Task<bool> SetToggleAsync(SettingsField field, AppSettingsData saved, bool on, CancellationToken cancellationToken)
+    {
         if (field == SettingsField.ShellPoliceOutsidePaths && !on)
         {
             // Police off asks first (2026-10-02, the user's ask), on the same pane as the yolo button's question.

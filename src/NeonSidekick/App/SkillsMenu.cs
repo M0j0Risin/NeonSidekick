@@ -261,7 +261,11 @@ internal sealed class SkillsMenu
             menu.FieldsTab(SkillsText.ReflectionTabTitle, SettingsFields(ReflectionTab), saved) with { Hint = SettingsMenu.TabKeys },
             menu.FieldsTab(SkillsText.OptionsTabTitle, SettingsFields(OptionsTab), saved) with { Hint = SettingsMenu.TabKeys },
         };
-        return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with { TabCursors = [0, 0, 0] };
+        return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with
+        {
+            TabCursors = [0, 0, 0],
+            Footer = (t, row) => t is OptionsTab or ReflectionTab && row < SettingsFields(t).Count ? SettingsMenu.FieldFooter(SettingsFields(t)[row]) : null,
+        };
     }
 
     /// <summary>The three tabs as plain lines, for a console without the pane, in the strip's order: <see cref="SkillsText.Lines"/>, then the Reflection rows and the Options rows (<see cref="SettingsMenu.PlainRow"/>), each headed and indented.</summary>
@@ -340,9 +344,10 @@ internal sealed class SkillsMenu
                         continue;
                     }
 
-                    // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows (ToolsMenu's shape).
-                    var shown = pick.Tab == page.Tab ? page : MenuPage.Tabbed(SkillsText.Label, page.Tabs!, pick.Tab, OtherKeys);
-                    if (await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false))
+                    // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows (ToolsMenu's shape);
+                    // Space flips a switch there (2026-10-04, as on /settings), and does nothing on any other row.
+                    var shown = pick.Tab == page.Tab ? page : MenuPage.Tabbed(SkillsText.Label, page.Tabs!, pick.Tab, OtherKeys) with { Footer = page.Footer };
+                    if (pick.Toggle ? await _menu.FlipAsync(field, cancellationToken).ConfigureAwait(false) : await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false))
                     {
                         facts = _facts();   // the skills switch empties the Offered tab
                     }

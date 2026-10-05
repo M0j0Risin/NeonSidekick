@@ -277,9 +277,9 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(new MenuPick(0, 9), await menu.PickAsync(Page(rows), 0, CancellationToken.None));
 
         // Opened: the first five rows and the more row, the eighth content row of a 12-row window.
-        Assert.Contains("\n▸ row 1\n  row 2\n  row 3\n  row 4\n  row 5\n  " + MenuPane.MoreHint + "\n" + Rule(40), Output);
+        Assert.Contains("\n▸ row 1\n  row 2\n  row 3\n  row 4\n  row 5\n  " + MenuPane.MoreHint(0, 5, 10) + "\n" + Rule(40), Output);
         // On the last row: the viewport moved just far enough, the more row still there.
-        Assert.Contains("\n  row 6\n  row 7\n  row 8\n  row 9\n▸ row 10\n  " + MenuPane.MoreHint + "\n", Output);
+        Assert.Contains("\n  row 6\n  row 7\n  row 8\n  row 9\n▸ row 10\n  " + MenuPane.MoreHint(5, 5, 10) + "\n", Output);
         Assert.Equal(8, pane.OverlayRows);
         menu.Close();
     }
@@ -472,7 +472,7 @@ public class MenuPaneTests : IDisposable
         Assert.Null(await menu.PickAsync(Page(Numbered(30)), 0, CancellationToken.None));
 
         string rows = string.Concat(Numbered(shown).Select((r, i) => (i == 0 ? "▸ " : "  ") + r + "\n"));
-        Assert.Contains("\n" + Titled("Settings") + "\n \n" + rows + "  " + MenuPane.MoreHint + "\n" + Rule(40), Output);
+        Assert.Contains("\n" + Titled("Settings") + "\n \n" + rows + "  " + MenuPane.MoreHint(0, shown, 30) + "\n" + Rule(40), Output);
         menu.Close();
     }
 
@@ -491,7 +491,7 @@ public class MenuPaneTests : IDisposable
 
         // Half of 24 less the rules and hint: 9 content rows, the strip and the spacer two of them, so seven under them.
         string strip = Titled("Settings   Long    Short ");
-        Assert.Contains("\n" + strip + "\n \n▸ r0\n  r1\n  r2\n  r3\n  r4\n  r5\n  " + MenuPane.MoreHint + "\n" + Rule(40), Output);
+        Assert.Contains("\n" + strip + "\n \n▸ r0\n  r1\n  r2\n  r3\n  r4\n  r5\n  " + MenuPane.MoreHint(0, 6, 30) + "\n" + Rule(40), Output);
         Assert.Contains("\n" + strip + "\n \n▸ c\n \n \n \n \n \n \n" + Rule(40), Output);
         menu.Close();
     }
@@ -1722,5 +1722,36 @@ public class MenuPaneTests : IDisposable
         Assert.Null(MenuPage.Tabbed("Settings", tabs, 0, "keys").Headings);
         Assert.Equal(tabs[1].Headings, MenuPage.Tabbed("Settings", tabs, 1, "keys").Headings);
         menu.Close();
+    }
+
+    /// <summary>The more row says where the view is (2026-10-04, the UI review: "↑/↓ for more" said neither): an arrow each way there is more, the rows shown, the count.</summary>
+    [Fact]
+    public void MoreHint_IsThePosition_WithAnArrowEachWayThereIsMore()
+    {
+        Assert.Equal(" ▼ 1–5 of 10", MenuPane.MoreHint(0, 5, 10));
+        Assert.Equal("▲▼ 4–8 of 10", MenuPane.MoreHint(3, 5, 10));
+        Assert.Equal("▲  6–10 of 10", MenuPane.MoreHint(5, 5, 10));
+    }
+
+    /// <summary>
+    /// A page's footer (2026-10-04, the UI review: no settings row said what it does): the cursor's row described right under the list,
+    /// its last line kept whole, the footer's rows kept blank for a row that says nothing, so the pane holds its height.
+    /// </summary>
+    [Fact]
+    public async Task AFooter_DescribesTheCursorsRow_UnderTheList_AndKeepsItsRows()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Down, Keys.Escape);
+        var page = Page("a", "b") with { Footer = (_, row) => row == 0 ? new MenuFooter("All about a.", "Default: x") : null };
+
+        Assert.Null(await menu.PickAsync(page, 0, CancellationToken.None));
+
+        Assert.Contains("\n▸ a\n  b\n  All about a.\n  Default: x\n \n" + Rule(40), Output);
+        Assert.Contains("\n  a\n▸ b\n \n \n \n" + Rule(40), Output);
+        // A long text wraps to the rows its last line leaves; the last line keeps its own row.
+        Assert.Equal(["one two", "three …", "Defaul…"], MenuPane.FooterLines(new MenuFooter("one two three four five", "Default: x"), 7));
+        Assert.Equal(MenuPane.FooterRows, MenuPane.FooterLines(new MenuFooter("one two three four five six"), 7).Count);
     }
 }

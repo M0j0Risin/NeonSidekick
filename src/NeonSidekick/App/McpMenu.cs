@@ -84,6 +84,7 @@ internal sealed class McpMenu
         {
             SpaceToggles = true,
             TabCursors = [McpRows.FirstServerRow(servers), ToolsText.FirstToolRow(tools), 0],
+            Footer = (t, row) => t == 2 && row < SettingsMenu.McpTabFields[0].Count ? SettingsMenu.FieldFooter(SettingsMenu.McpTabFields[0][row]) : null,
         };
     }
 
@@ -184,11 +185,6 @@ internal sealed class McpMenu
                     continue;
                 }
 
-                if (pick.Toggle)
-                {
-                    continue;   // Space on a settings row: nothing, as on /settings
-                }
-
                 var fields = SettingsMenu.McpTabFields[0];
                 if (cursor >= fields.Count)
                 {
@@ -199,6 +195,17 @@ internal sealed class McpMenu
                 if (midTurn && SettingsMenu.RefusedMidTurn(field))
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+                    continue;
+                }
+
+                if (pick.Toggle)
+                {
+                    // Space on an Options row (2026-10-04, as on /settings): a switch flips and saves, any other row does nothing.
+                    if (await _menu.FlipAsync(field, cancellationToken).ConfigureAwait(false) && SettingsMenu.IsMcpField(field))
+                    {
+                        changes |= SettingsChanges.Mcp;
+                    }
+
                     continue;
                 }
 

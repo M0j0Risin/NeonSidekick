@@ -334,7 +334,7 @@ public sealed class FolderPane
 
         if (_shown < count)
         {
-            lines.Add(new Markup(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint)));
+            lines.Add(new Markup(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint(_first, _shown, count))));
         }
 
         _pane.ShowOverlay(new Rows(lines), FolderText.Hint, close: true);

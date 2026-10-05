@@ -4370,8 +4370,39 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
+        return new ToolsFacts(ToolsGroups(effective, disabled).Select(g => g.Offered || g.Switch is not { } field ? g : g with { OffReason = GroupOffReason(field, effective) }).ToList(), effective.LlmOfferTools, disabled);
+    }
+
+    /// <summary>
+    /// The one reason group <paramref name="field"/> switches is off as the screen stands (2026-10-04, the UI review: <c>/tools</c>' heading
+    /// listed every reason it could be): its switch, else what it waits on — a camera, a pane, a model that reads pictures, a vault, a
+    /// connection offered. Null for a group whose switch is its one reason (the heading says the switch, as before).
+    /// </summary>
+    private string? GroupOffReason(SettingsField field, AppSettingsData effective)
+    {
+        bool blind = _session.EmbeddedServer is { Vision: false };
+        return field switch
+        {
+            SettingsField.CameraTools => !effective.CameraTools ? ToolsText.SwitchOffReason(field) : !_camera.Available ? ToolsText.NoCameraReason : !_pane.Enabled ? ToolsText.NoPaneReason : blind ? ToolsText.BlindReason : null,
+            SettingsField.ScreenTools => !effective.ScreenTools ? ToolsText.SwitchOffReason(field) : _screenSystem is null ? ToolsText.NoScreenReason : !_pane.Enabled ? ToolsText.NoPaneReason : blind ? ToolsText.BlindReason : null,
+            SettingsField.ObsidianTools => !effective.ObsidianTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoVaultReason,
+            SettingsField.SqlTools => !effective.SqlTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "sql.json"),
+            SettingsField.OracleTools => !effective.OracleTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "oracle.json"),
+            SettingsField.MySqlTools => !effective.MySqlTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "mysql.json"),
+            SettingsField.PostgresTools => !effective.PostgresTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "postgres.json"),
+            SettingsField.UncTools => !effective.UncTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("share", "unc.json"),
+            SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
+            SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,
+            SettingsField.HomeAssistantTools => !effective.HomeAssistantTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoHomeAssistantReason,
+            _ => null,
+        };
+    }
+
+    /// <summary>Every tool group as <c>/tools</c> lists it, offered or not.</summary>
+    private IReadOnlyList<ToolGroup> ToolsGroups(AppSettingsData effective, IReadOnlySet<string> disabled)
+    {
         var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: _sqliteTools, sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: _postgresTools, postgresEnabled: PostgresOffered(effective, _postgres));
-        return new ToolsFacts(groups, effective.LlmOfferTools, disabled);
+        return groups;
     }
 
     /// <summary>

@@ -119,7 +119,7 @@ public partial class ToolsMenuTests : IDisposable
 
     /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
     private void AssertTabEnds(string rows, int width) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?: \n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
 
     /// <summary>A title or strip row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     // The pane's own rule (ScreenPane.Draw): a first row with no room for the gap and the glyph goes without. The nine-tab
@@ -217,7 +217,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DaysBetweenTool.ToolName, true) + "\n  \n" + Heading("── Files · 16") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
         Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", _console.Output);
         Assert.Contains("\n" + Heading("── Files · 16") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
-        Assert.Contains(MenuPane.MoreHint, _console.Output);   // 39 rows over 30: the list scrolls
+        Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", _console.Output);   // 39 rows over 30: the list scrolls
         Assert.False(pane.OverlayOpen);
         Assert.Equal(0, pane.FlowRow);
         Assert.Empty(_settings.Current.ToolsDisabled);
@@ -1628,19 +1628,22 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>Space on a settings row (2026-10-04, the UI review; nothing until then): a switch flips and saves at once, no page; any other row does nothing.</summary>
     [Fact]
-    public async Task OnThePane_SpaceOnASettingsRow_IsNothing()
+    public async Task OnThePane_SpaceOnASettingsRow_FlipsASwitch_AndIsNothingOnAnotherRow()
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.AskTabTitle));   // Ask
-        Push(Keys.Char(' '));
+        Push(Keys.Char(' '));                 // Ask user: off
+        Push(Keys.Down, Keys.Char(' '));      // Ask max questions: no switch, nothing
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.True(_settings.Current.AskUser);
+        Assert.False(_settings.Current.AskUser);
+        Assert.Equal(10, _settings.Current.AskMaxQuestions);
         Assert.Empty(_settings.Current.ToolsDisabled);
-        Assert.DoesNotContain("  · ", _console.Output);
+        Assert.Contains("  · Ask user: off\n", _console.Output);
         Assert.DoesNotContain(SettingsMenu.PickKeys, _console.Output);
         pane.Dispose();
     }

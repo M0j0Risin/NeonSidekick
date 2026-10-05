@@ -265,7 +265,7 @@ public static class MentionCompleter
 
         if (shown < list.Matches.Count)
         {
-            rows.Add(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint));
+            rows.Add(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint(first, shown, list.Matches.Count)));
         }
 
         if (list.Truncated)
@@ -315,7 +315,7 @@ public static class MentionCompleter
 
         if (shown < list.Matches.Count)
         {
-            rows.Add(new Markup(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint)));
+            rows.Add(new Markup(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint(first, shown, list.Matches.Count))));
         }
 
         return (rows, first);

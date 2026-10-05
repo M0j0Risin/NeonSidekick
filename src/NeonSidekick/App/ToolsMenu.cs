@@ -82,7 +82,12 @@ internal sealed class ToolsMenu
             tabs[t] = menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[t - 1], saved);
         }
 
-        return MenuPage.Tabbed(ToolsText.Label, tabs, tab, SettingsMenu.TabKeys) with { SpaceToggles = true, TabCursors = [ToolsText.FirstToolRow(offered), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
+        return MenuPage.Tabbed(ToolsText.Label, tabs, tab, SettingsMenu.TabKeys) with
+        {
+            SpaceToggles = true,
+            TabCursors = [ToolsText.FirstToolRow(offered), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            Footer = (t, row) => t > 0 && row < SettingsMenu.ToolsTabFields[t - 1].Count ? SettingsMenu.FieldFooter(SettingsMenu.ToolsTabFields[t - 1][row]) : null,
+        };
     }
 
     /// <summary>The nine tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented.</summary>
@@ -167,11 +172,6 @@ internal sealed class ToolsMenu
                     continue;
                 }
 
-                if (pick.Toggle)
-                {
-                    continue;   // Space on a settings row: nothing, as on /settings
-                }
-
                 var fields = SettingsMenu.ToolsTabFields[tab - 1];
                 if (cursor >= fields.Count)
                 {
@@ -182,6 +182,17 @@ internal sealed class ToolsMenu
                 if (midTurn && SettingsMenu.RefusedMidTurn(field))
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+                    continue;
+                }
+
+                if (pick.Toggle)
+                {
+                    // Space on a settings row (2026-10-04, as on /settings): a switch flips and saves, any other row does nothing.
+                    if (await _menu.FlipAsync(field, cancellationToken).ConfigureAwait(false) && SettingsMenu.IsLlmField(field))
+                    {
+                        changes |= SettingsChanges.Llm;
+                    }
+
                     continue;
                 }
 

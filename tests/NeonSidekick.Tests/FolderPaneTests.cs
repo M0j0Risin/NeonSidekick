@@ -187,8 +187,8 @@ public class FolderPaneTests : IDisposable
         {
             Assert.Equal(D, picked);
             // Six slots: five rows and the more row (the menu's viewport); End brings the last row in with the first two cut. System32 was never read: not a leaf yet.
-            Assert.Contains("\n" + C + "\n" + Open(true, 0, C) + "\n" + Open(false, 1, "Users") + "\n" + Closed(false, 2, "alice") + "\n" + Closed(false, 2, "bob") + "\n" + Open(false, 1, "Windows") + "\n" + MenuPane.NoPointer + MenuPane.MoreHint + "\n" + Rule(40), Output);
-            Assert.Contains("\n" + D + "\n" + Closed(false, 2, "alice") + "\n" + Closed(false, 2, "bob") + "\n" + Open(false, 1, "Windows") + "\n" + Closed(false, 2, "System32") + "\n" + Closed(true, 0, D) + "\n" + MenuPane.NoPointer + MenuPane.MoreHint + "\n" + Rule(40), Output);
+            Assert.Contains("\n" + C + "\n" + Open(true, 0, C) + "\n" + Open(false, 1, "Users") + "\n" + Closed(false, 2, "alice") + "\n" + Closed(false, 2, "bob") + "\n" + Open(false, 1, "Windows") + "\n" + MenuPane.NoPointer + MenuPane.MoreHint(0, 5, 7) + "\n" + Rule(40), Output);
+            Assert.Contains("\n" + D + "\n" + Closed(false, 2, "alice") + "\n" + Closed(false, 2, "bob") + "\n" + Open(false, 1, "Windows") + "\n" + Closed(false, 2, "System32") + "\n" + Closed(true, 0, D) + "\n" + MenuPane.NoPointer + MenuPane.MoreHint(2, 5, 7) + "\n" + Rule(40), Output);
         }
         else
         {

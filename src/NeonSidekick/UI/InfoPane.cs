@@ -485,7 +485,7 @@ public sealed class InfoPane
 
         if (more)
         {
-            lines.Add(new Markup(Theme.DimMarkup(MenuPane.MoreHint)));
+            lines.Add(new Markup(Theme.DimMarkup(MenuPane.MoreHint(_first, _shown, content.Count))));
         }
 
         for (int i = 0; i < pad; i++)
