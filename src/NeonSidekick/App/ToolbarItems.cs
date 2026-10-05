@@ -17,7 +17,8 @@ namespace NeonSidekick.App;
 /// window or closing it as its chord does; the user's order with them, the chart moved behind the log, and later that day
 /// behind the two viewers, the last glyph on the row and the checklist. Two more on 2026-10-04 (the user's ask): 🧮 Themes after
 /// the profile (<c>/theme</c>'s picker) and 🪟 the Comfy thumb viewer after the Comfy viewer (<c>/comfy thumbs</c>, opening or
-/// closing the thumbnail browser) — 🪟 was SQL's until then, which took 🛢️.
+/// closing the thumbnail browser) — 🪟 was SQL's until then, which took 🛢️. One more on 2026-10-05 (the user's ask): ⏳ Process
+/// after the log, <c>/process</c>'s list of the model's background processes (a pane, not a window).
 /// </summary>
 public static class ToolbarItems
 {
@@ -57,6 +58,7 @@ public static class ToolbarItems
 
     // The windows (2026-10-03, the user's ask): each opens or closes its window as its Ctrl+Alt chord does.
     public const string Log = "log";
+    public const string Process = "process";         // 2026-10-05, the user's ask: ⏳, /process's list (a pane)
     public const string LiveView = "liveview";
     public const string ComfyView = "comfyview";
     public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs
@@ -65,13 +67,14 @@ public static class ToolbarItems
     /// <summary>
     /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,
     /// the disk, the lock and the officer, the tool switches, the log, the two viewers, the chart (the last glyph, later on
-    /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04). Pinned.
+    /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04); Process
+    /// after the log (2026-10-05). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
         Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, LiveView, ComfyView, ComfyThumbs, Perf, Path,
+        Log, Process, LiveView, ComfyView, ComfyThumbs, Perf, Path,
     ];
 
     /// <summary>
@@ -119,6 +122,7 @@ public static class ToolbarItems
         Camera => ChatScreen.CameraToolGlyph,
         Print => ChatScreen.PrintToolGlyph,
         Log => ChatScreen.LogToolGlyph,
+        Process => ChatScreen.ProcessToolGlyph,
         LiveView => ChatScreen.LiveViewToolGlyph,
         ComfyView => ChatScreen.ComfyViewToolGlyph,
         ComfyThumbs => ChatScreen.ComfyThumbsToolGlyph,
@@ -159,6 +163,7 @@ public static class ToolbarItems
         Camera => "Camera",
         Print => "Print",
         Log => "Log",
+        Process => "Process",
         LiveView => "Live viewer",
         ComfyView => "Comfy viewer",
         ComfyThumbs => "Comfy thumb viewer",
@@ -186,6 +191,7 @@ public static class ToolbarItems
         CmdList => "/cmdlist",
         Police => "/police",
         Log => ChatScreen.LogToolLine,
+        Process => Viewer.ProcessWindowText.Word,
         LiveView => ChatScreen.LiveViewToolLine,
         ComfyView => ChatScreen.ComfyViewToolLine,
         ComfyThumbs => ChatScreen.ComfyThumbsToolLine,

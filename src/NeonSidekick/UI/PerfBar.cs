@@ -27,7 +27,9 @@ public sealed record PerfRow(IReadOnlyList<PerfSegment> Segments)
 /// cannot read is left out. Too narrow a window shrinks the meters, then falls back to the text look, then cuts the row.
 /// Later on 2026-09-29 (the user's asks) every look is centred on its row (<see cref="Centered"/>; at the row's right for a
 /// few hours before), and the text look's values keep four cells as the drawn looks' do (<c>  8%</c>, <c>100%</c>), so
-/// nothing shifts as a value gains a digit; a cut row stays at the left. Pure: the tests drive it.
+/// nothing shifts as a value gains a digit; a cut row stays at the left. PROC (2026-10-05, the user's ask and pick) is a count, the
+/// model's background processes running, passed in: every look writes its label and number alone (no gauge, sparkline or LEDs —
+/// a count has no share to fill), dim at none and <see cref="Theme.Good"/> while any run. Pure: the tests drive it.
 /// </summary>
 public static class PerfBar
 {
@@ -46,8 +48,9 @@ public static class PerfBar
     /// The row of the meters <paramref name="items"/> checks (<see cref="PerfBarItems"/>, 2026-09-30) in <paramref name="style"/>
     /// in <paramref name="cells"/> cells; null — no row — with none checked. A checked meter the machine cannot read is left
     /// out, so a row may be empty (GPU alone on a machine without one): the row stays, and the pane's layout with it.
+    /// <paramref name="processes"/> is PROC's count, the background processes running.
     /// </summary>
-    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, IReadOnlyList<PerfSnapshot> history, int cells)
+    public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, IReadOnlyList<PerfSnapshot> history, int cells, int processes = 0)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(history);
@@ -56,7 +59,7 @@ public static class PerfBar
             return null;
         }
 
-        var meters = Meters(items, latest);
+        var meters = Meters(items, latest, processes);
         if (style != PerfBarStyle.Text)
         {
             foreach (int width in MeterWidths)
@@ -97,11 +100,14 @@ public static class PerfBar
     /// <summary>
     /// One meter as the row draws it: its label, the share that fills its gauge, colours it and picks its sparkline and LEDs
     /// (<see cref="Read"/> for each reading of the history), and the value written after it — the share, or a network
-    /// direction's rate (2026-09-30).
+    /// direction's rate (2026-09-30). A count (2026-10-05, PROC) is written alone, in <see cref="Color"/>, with nothing drawn.
     /// </summary>
-    private readonly record struct Meter(string Label, double Value, string ValueText, Func<PerfSnapshot, double?> Read);
+    private readonly record struct Meter(string Label, double Value, string ValueText, Func<PerfSnapshot, double?> Read, Color? Count = null);
 
-    private static List<Meter> Meters(IReadOnlySet<string> items, PerfSnapshot latest)
+    /// <summary>The colour a meter's value takes: a count's own, else the load's.</summary>
+    private static Style ValueStyle(Meter meter) => new(meter.Count ?? LoadColor(meter.Value));
+
+    private static List<Meter> Meters(IReadOnlySet<string> items, PerfSnapshot latest, int processes)
     {
         var meters = new List<Meter>(PerfBarItems.Names.Length);
         foreach (string id in PerfBarItems.Names.Where(items.Contains))
@@ -115,6 +121,9 @@ public static class PerfBar
                 case PerfBarItems.Net: Share(PerfText.NetLabel, s => PerfMath.NetPercent(s.NetDown, s.NetUp, s.NetLink)); break;
                 case PerfBarItems.NetDown: Rate(PerfText.NetDownLabel, s => s.NetDown); break;
                 case PerfBarItems.NetUp: Rate(PerfText.NetUpLabel, s => s.NetUp); break;
+                case PerfBarItems.Proc:
+                    meters.Add(new Meter(PerfText.ProcLabel, 0, PerfText.Count(processes), _ => null, processes > 0 ? Theme.Good : Theme.Dim));
+                    break;
             }
         }
 
@@ -149,7 +158,7 @@ public static class PerfBar
             }
 
             row.Add(new PerfSegment(meter.Label + " ", Theme.DimText));
-            row.Add(new PerfSegment(meter.ValueText, new Style(LoadColor(meter.Value))));
+            row.Add(new PerfSegment(meter.ValueText, ValueStyle(meter)));
         }
 
         return row;
@@ -166,6 +175,12 @@ public static class PerfBar
             }
 
             row.Add(new PerfSegment(meter.Label + " ", Theme.DimText));
+            if (meter.Count is not null)
+            {
+                row.Add(new PerfSegment(meter.ValueText, ValueStyle(meter)));   // four cells, as a share's: nothing shifts
+                continue;
+            }
+
             switch (style)
             {
                 case PerfBarStyle.Gauge:

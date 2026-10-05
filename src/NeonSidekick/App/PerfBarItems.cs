@@ -10,7 +10,9 @@ namespace NeonSidekick.App;
 /// the bar's order, saved in <see cref="Settings.AppSettingsData.PerformanceBarItems"/>. Null there is <see cref="Defaults"/>
 /// (2026-10-02, the user's ask: the bar shown by default, the toolbar's shape; none until then) and an empty list is none:
 /// no row, nothing sampled. The network's three (NET, NET↓, NET↑) came with it, each a choice of its own (the user's
-/// pick). The look is <see cref="Settings.AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row.
+/// pick). PROC (2026-10-05, the user's ask) is the last: the model's background processes still running, the app's own count
+/// rather than the machine's, so no reader samples it and every look writes it as a number alone (the user's pick); off by default.
+/// The look is <see cref="Settings.AppSettingsData.PerformanceBarLook"/>, picked on the same page's title row.
 /// <see cref="Resolve"/> is the one place the saved list becomes the set: a display setting, so an unknown word is dropped
 /// without a warning.
 /// </summary>
@@ -23,9 +25,10 @@ public static class PerfBarItems
     public const string Net = "net";
     public const string NetDown = "netdown";
     public const string NetUp = "netup";
+    public const string Proc = "proc";   // 2026-10-05, the user's ask
 
     /// <summary>Every meter in the bar's order. Pinned.</summary>
-    public static readonly string[] Names = [Cpu, Ram, Gpu, Vram, Net, NetDown, NetUp];
+    public static readonly string[] Names = [Cpu, Ram, Gpu, Vram, Net, NetDown, NetUp, Proc];
 
     /// <summary>
     /// The default meters: what a bare <c>/perfbar</c> (or the toolbar's 📈) shows when nothing was ever picked — the bar as it
@@ -45,6 +48,7 @@ public static class PerfBarItems
         Net => PerfText.NetLabel,
         NetDown => PerfText.NetDownLabel,
         NetUp => PerfText.NetUpLabel,
+        Proc => PerfText.ProcLabel,
         _ => id,
     };
 
@@ -58,12 +62,13 @@ public static class PerfBarItems
         Net => PerfText.NetNote,
         NetDown => PerfText.NetDownNote,
         NetUp => PerfText.NetUpNote,
+        Proc => PerfText.ProcNote,
         _ => "",
     };
 
     /// <summary>
     /// The readers <paramref name="on"/>'s meters need (later on 2026-09-30): the sampler runs those alone, and none at all
-    /// with nothing checked. GPU and VRAM are one reader, the network's three another.
+    /// with nothing checked. GPU and VRAM are one reader, the network's three another; PROC none (the screen counts it).
     /// </summary>
     public static PerfReads Reads(IReadOnlySet<string> on)
     {

@@ -213,7 +213,7 @@ public static class HelpCommands
         ]),
         new("/process",
         [
-            new("/process", "List the background processes the model started with `run_command`'s `background` option on a pane: the id, running or how it ended, how long it has run, the shell and the command."),
+            new("/process", "List the background processes the model started with `run_command`'s `background` option on a pane: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click on a row opens it in the process window; the *kill* button (or **K**) stops the highlighted one after a yes/no. The toolbar's ⏳ opens it too."),
             new("/process <id>", "Open the process window on one (any unique start of its id; Tab completes it): its output live, following the newest line while at the bottom, stderr in the warning colour, the title its state. Scroll, select and copy as in the log window (`/log`); TAB brings the terminal forward. `/process` with another id switches the window to that process in the same place. Ctrl+K twice within 3 seconds stops the process: the chat says it was stopped by you, and the model hears of it on its next turn."),
         ]),
         new("/profile",

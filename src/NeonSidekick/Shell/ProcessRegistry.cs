@@ -185,6 +185,18 @@ public sealed class ProcessRegistry : IDisposable
         }
     }
 
+    /// <summary>How many sessions are still running (2026-10-05, the performance bar's PROC): read on the pane's tick, so no list is copied.</summary>
+    public int RunningCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _sessions.Count(s => !s.HasExited);
+            }
+        }
+    }
+
     /// <summary>Forgets a finished session (its output with it); false while it runs.</summary>
     public bool Close(ProcessSession session)
     {

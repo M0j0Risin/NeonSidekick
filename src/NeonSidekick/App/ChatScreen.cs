@@ -1418,6 +1418,13 @@ internal sealed partial class ChatScreen
     public const string ComfyViewToolGlyph = ViewerText.StripButton;
     public const string ComfyThumbsToolGlyph = "🪟";
 
+    /// <summary>
+    /// The process item (2026-10-05, the user's ask): <c>/process</c>'s list of the model's background processes, after the log on
+    /// the strip — a pane, not a window, so a second double-click off the open pane closes it as any pane's does. The hourglass is
+    /// the queue's notice glyph too; no other toolbar item wears it. Pinned.
+    /// </summary>
+    public const string ProcessToolGlyph = "⏳";
+
     /// <summary>The lines the window items run (2026-10-03): the typed commands their chords run. Pinned.</summary>
     public const string LogToolLine = "/log";
     public const string LiveViewToolLine = "/camera live";
@@ -1588,7 +1595,8 @@ internal sealed partial class ChatScreen
     /// The performance bar's row for the settings in force (2026-09-29, the user's ask) in <paramref name="cells"/> cells:
     /// null — no row, the sampler stopped — while no meter is checked (<see cref="PerfBarItems"/>, 2026-09-30), else the
     /// latest reading of the checked ones in the look (<see cref="PerfBar.Render"/>), the sampler reading what they need
-    /// alone (<see cref="PerfBarItems.Reads"/>).
+    /// alone (<see cref="PerfBarItems.Reads"/>). PROC (2026-10-05) is the registry's running count, read here at each tick, so a
+    /// start or an exit shows without the sampler.
     /// </summary>
     private PerfRow? PerfBarRow(int cells)
     {
@@ -1601,7 +1609,8 @@ internal sealed partial class ChatScreen
         }
 
         var (latest, history, _) = _perf.Read();
-        return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, history, cells);
+        int processes = items.Contains(PerfBarItems.Proc) ? _processes.RunningCount : 0;
+        return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, history, cells, processes);
     }
 
     /// <summary>
@@ -1860,6 +1869,7 @@ internal sealed partial class ChatScreen
         CameraToolGlyph => ToolsText.SwitchLine(ToolbarItems.Camera),
         PrintToolGlyph => ToolsText.SwitchLine(ToolbarItems.Print),
         LogToolGlyph => LogToolLine,
+        ProcessToolGlyph => ProcessWindowText.Word,
         LiveViewToolGlyph => LiveViewToolLine,
         ComfyViewToolGlyph => ComfyViewToolLine,
         ComfyThumbsToolGlyph => ComfyThumbsToolLine,

@@ -242,6 +242,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
 | 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page (📸's has a **watch** button (W) that turns `/camera watch` on or off) |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
+| ⏳ | always | `/process`, the background processes' list |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
@@ -288,8 +289,8 @@ Settings that an environment variable or flag can override for one launch are li
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it, shown at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). **A** / **N** / **D** pick all, none or the default seven; none hides the row. | Tools, Shell allowed commands, Shell police, Shell, Files, Web, path (7 of 34) |
-| Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates). **A** / **N** / **D** pick all, none or the default four; none hides the bar. The title row picks the look: **text** (T), **gauge** (G), **spark** (S, the last ten seconds) or **led** (L). See Performance bar below. | CPU, RAM, GPU, VRAM, `led` |
+| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). **A** / **N** / **D** pick all, none or the default seven; none hides the row. | Tools, Shell allowed commands, Shell police, Shell, Files, Web, path (7 of 35) |
+| Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates), **PROC** (background processes running). **A** / **N** / **D** pick all, none or the default four; none hides the bar. The title row picks the look: **text** (T), **gauge** (G), **spark** (S, the last ten seconds) or **led** (L). See Performance bar below. | CPU, RAM, GPU, VRAM, `led` |
 | Menus max height | How much of the window a menu or info pane may take: `half-screen`, `three-quarters` or `full-screen` (all but one row). Longer lists scroll; every tab keeps the tallest tab's height. | `full-screen` |
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…). Empty uses Windows' `.txt` editor. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens: empty for the built-in viewer, `system` for Windows' app for the file type, or a command the path is appended to (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
@@ -306,6 +307,7 @@ Settings that an environment variable or flag can override for one launch are li
 * Values turn amber from 60 % and red from 85 %. A meter the machine can't read (no GPU, no network) is left out.
 * An NVIDIA GPU is read through its driver (NVML); any other through Windows' GPU counters, for the card with the most memory.
 * The network meters follow the busiest adapter that is up and has a gateway, so a VPN over Wi-Fi isn't counted twice. NET↓ and NET↑ show bits per second (`850K`, `12.4M`, `1.2G`); their gauges show the share of the link.
+* PROC counts the model's background processes still running (`/process` lists them). It is a number in every look, with no gauge, sparkline or LEDs, dim at none.
 * `/perfbar` or the toolbar's 📈 hides the bar, or brings it back with the meters it last had.
 
 #### LLM
@@ -1074,7 +1076,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/pdf <file> [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see Making PDFs). |
 | `/pdf https://… [to=<out.pdf>] [overwrite]` | Makes a PDF of a web page as the browser shows it; *Web browser network mode* still applies. |
 | `/pdf reply [options]` | Makes a PDF of the last reply as formatted Markdown. |
-| `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. |
+| `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or **K**) stops the highlighted one after a yes/no. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). Another id switches the window. |
 | `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switches, creates, deletes, renames or resets a profile, or copies its settings to (`push`) or from (`pull`) another. `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. See Profiles. |
 | `/queue [clear]` | Lists and prunes the queued messages (`⊠ clear all` or `c` drops them); `/queue clear` drops them without the pane. |
@@ -1295,10 +1297,10 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 
 #### Process window
 
-`/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone lists the processes.
+`/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⏳) lists the processes, and Enter or a double-click on one there opens it here.
 
 * **One window:** `/process` with another id switches it to that process, in the same place on screen.
-* **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. A process that has ended ignores Ctrl+K.
+* **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. A process that has ended ignores Ctrl+K. The `/process` list's **✖ kill** button (or **K**) stops the highlighted one the same way, after a yes/no.
 
 Otherwise it is read-only: scroll, follow, select and copy as in the log window, Tab back to the terminal. It reopens where it was closed and closes with the app.
 

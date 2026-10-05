@@ -55,8 +55,8 @@ public class PerfBarTests
     [Fact]
     public void TheMeters_ArePinned_TheFourByDefault()
     {
-        Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup"], PerfBarItems.Names);
-        Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET", "NET↓", "NET↑"], PerfBarItems.Names.Select(PerfBarItems.Title));
+        Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup", "proc"], PerfBarItems.Names);   // PROC last, 2026-10-05
+        Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET", "NET↓", "NET↑", "PROC"], PerfBarItems.Names.Select(PerfBarItems.Title));
         Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Defaults);
         Assert.Null(new AppSettingsData().PerformanceBarItems);
         Assert.Equal(PerfBarItems.Defaults, PerfBarItems.Names.Where(PerfBarItems.Resolve(null).Contains));   // null: the four (2026-10-02; none before)
@@ -73,6 +73,7 @@ public class PerfBarTests
         Assert.Equal("all · led", PerfBarItems.Value([.. PerfBarItems.Names], "bars"));   // an unknown look reads as the default, led since 2026-10-02
         Assert.Equal("[[x]] CPU     " + Theme.DimMarkup("processor load"), PerfBarItems.Label("cpu", true));   // markup: the brackets escaped
         Assert.StartsWith("[[ ]] NET↑    ", PerfBarItems.Label("netup", false), StringComparison.Ordinal);
+        Assert.Equal("[[ ]] PROC    " + Theme.DimMarkup("background processes"), PerfBarItems.Label("proc", false));
         Assert.All(PerfBarItems.Names, id => Assert.NotEqual("", PerfBarItems.Describe(id)));
         var copy = AppSettings.Copy(new AppSettingsData { PerformanceBarItems = ["cpu"], PerformanceBarLastItems = ["gpu"], PerformanceBarLook = "spark" });
         Assert.Equal(["cpu"], copy.PerformanceBarItems);
@@ -250,6 +251,35 @@ public class PerfBarTests
         Assert.Equal("", PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown"), new PerfSnapshot(34, null, null, null), [], 120)!.Text);
         var unknownLink = reading with { NetLink = null };
         Assert.Equal(Centered("NET↓ 12.4M", 120), PerfBar.Render(PerfBarStyle.Text, Only("net", "netdown"), unknownLink, [], 120)!.Text);
+    }
+
+    /// <summary>
+    /// PROC (2026-10-05, the user's ask and pick): the background processes running, a count no reader samples, written as a
+    /// number in every look — no gauge, sparkline or LEDs — four cells wide, dim at none and green while any run.
+    /// </summary>
+    [Fact]
+    public void Proc_IsACount_WrittenAloneInEveryLook_DimAtNone()
+    {
+        Assert.Equal(PerfReads.None, PerfBarItems.Reads(Only("proc")));
+        Assert.Equal(PerfReads.Cpu, PerfBarItems.Reads(Only("cpu", "proc")));
+        Assert.Equal("   0", PerfText.Count(0));
+        Assert.Equal("  12", PerfText.Count(12));
+
+        var text = PerfBar.Render(PerfBarStyle.Text, Only("cpu", "proc"), Reading, [], 120, processes: 2)!;
+        Assert.Equal(Centered("CPU  34% · PROC    2", 120), text.Text);
+        Assert.Equal(new Style(Theme.Good), text.Segments.Single(s => s.Text == "   2").Style);
+
+        foreach (var style in new[] { PerfBarStyle.Gauge, PerfBarStyle.Spark, PerfBarStyle.Led })
+        {
+            var drawn = PerfBar.Render(style, Only("proc"), PerfSnapshot.None, [Reading, Reading], 120, processes: 0)!;
+            Assert.Equal(Centered("PROC    0", 120), drawn.Text);   // the label and the number alone, nothing drawn
+            Assert.Equal(new Style(Theme.Dim), drawn.Segments.Single(s => s.Text == "   0").Style);
+        }
+
+        // Beside a drawn meter: the gauge's, then the count; the others' widths as without it.
+        var gauge = PerfBar.Render(PerfBarStyle.Gauge, Only("cpu", "proc"), Reading, [], 200, processes: 1)!;
+        Assert.EndsWith(" 34%" + PerfText.MeterSeparator + "PROC    1", gauge.Text.TrimEnd(), StringComparison.Ordinal);
+        Assert.Equal(PerfBar.Render(PerfBarStyle.Gauge, Only("cpu"), Reading, [], 200)!.Text.Trim(), gauge.Text.Trim()[..^(PerfText.MeterSeparator.Length + 9)]);
     }
 
     [Fact]

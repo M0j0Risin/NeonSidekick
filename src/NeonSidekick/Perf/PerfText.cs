@@ -38,6 +38,9 @@ public static class PerfText
     /// <summary>The upload rate (2026-09-30). Pinned.</summary>
     public const string NetUpLabel = "NET↑";
 
+    /// <summary>The model's background processes still running (2026-10-05, the user's ask): a count, not a share. Pinned.</summary>
+    public const string ProcLabel = "PROC";
+
     // The checklist's notes beside each meter (2026-09-30, App.PerfBarItems.Describe).
     public const string CpuNote = "processor load";
     public const string RamNote = "memory in use";
@@ -46,6 +49,7 @@ public static class PerfText
     public const string NetNote = "network use, % of the link";
     public const string NetDownNote = "download rate (bits/s)";
     public const string NetUpNote = "upload rate (bits/s)";
+    public const string ProcNote = "background processes";
 
     /// <summary>The <c>Show performance bar</c> row's value with no meter checked (App.PerfBarItems.Value).</summary>
     public const string NoMeters = "off";
@@ -94,6 +98,9 @@ public static class PerfText
     public const string LedOn = "▰";
 
     public const string LedOff = "▱";
+
+    /// <summary>A count's value (2026-10-05, PROC), four cells wide as a share's: <c>   0</c>, <c>  12</c>. Pinned.</summary>
+    public static string Count(int value) => value.ToString(CultureInfo.InvariantCulture).PadLeft(4);
 
     /// <summary>A meter's value, four cells wide: <c>  7%</c>, <c> 34%</c>, <c>100%</c>.</summary>
     public static string Percent(double value) =>

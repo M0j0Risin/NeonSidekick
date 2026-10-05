@@ -173,7 +173,8 @@ public enum SlashCommand
 
     /// <summary>
     /// <c>/process</c> (2026-10-05, the user's pick from the external windows brainstorm): the background processes the model
-    /// started (<c>run_command</c>'s <c>background</c>) listed on the info pane; <c>/process &lt;id&gt;</c> (any unique prefix) shows
+    /// started (<c>run_command</c>'s <c>background</c>) listed on a pane (<see cref="ProcessMenu"/> since later that day: a row opens,
+    /// the kill button stops; the info pane until then; the toolbar's ⏳ too); <c>/process &lt;id&gt;</c> (any unique prefix) shows
     /// one's output live in the process window (<see cref="Viewer.ProcessWindow"/>), switching the open window to it. A pane
     /// under a reply bare, quick with an id.
     /// </summary>

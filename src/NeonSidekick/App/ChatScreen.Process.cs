@@ -9,8 +9,10 @@ namespace NeonSidekick.App;
 internal sealed partial class ChatScreen
 {
     /// <summary>
-    /// <c>/process</c> bare: every session of the registry on the info pane (<see cref="ProcessWindowText.Row"/>, oldest first) and
-    /// how to open one; none yet is its line through <paramref name="sink"/>. Read-only, so a pane under a reply too.
+    /// <c>/process</c> bare: every session of the registry on <see cref="ProcessMenu"/>'s pane (since later on 2026-10-05, the
+    /// user's ask: the info pane's read-only list until then), where Enter or a double-click opens one in the window and the kill
+    /// button stops one; none yet is its line through <paramref name="sink"/>. A pane under a reply too. Without the pane (a
+    /// redirected console) the lines and how to open one, as notices.
     /// </summary>
     private Task ListProcessesAsync(INoticeSink sink, CancellationToken cancellationToken)
     {
@@ -19,6 +21,11 @@ internal sealed partial class ChatScreen
         {
             sink.Notice(ProcessWindowText.NoneYet);
             return Task.CompletedTask;
+        }
+
+        if (_pane.Enabled)
+        {
+            return new ProcessMenu(_processes, sink, _menuPane, OpenProcessWindow).ShowAsync(cancellationToken);
         }
 
         var lines = new List<string> { ShellText.ListHeader(sessions.Count, sessions.Count(s => !s.HasExited)), "" };
@@ -53,21 +60,32 @@ internal sealed partial class ChatScreen
                 return;
         }
 
+        OpenProcessWindow(session!, _transcript);
+    }
+
+    /// <summary>
+    /// <paramref name="session"/> in the process window (the typed id's, or <see cref="ProcessMenu"/>'s pick, 2026-10-05), how it
+    /// went through <paramref name="sink"/> — the transcript, or the list pane's status line; false where no window was made.
+    /// </summary>
+    private bool OpenProcessWindow(ProcessSession session, INoticeSink sink)
+    {
         if (_openProcessWindow is null)
         {
-            _transcript.Error(ProcessWindowText.Unavailable);
-            return;
+            sink.Error(ProcessWindowText.Unavailable);
+            return false;
         }
 
         try
         {
             var registry = _processes;
-            _openProcessWindow(session!, stopped => registry.StopByUser(stopped));
-            _transcript.Notice(ProcessWindowText.OpenedNotice(session!.Id));
+            _openProcessWindow(session, stopped => registry.StopByUser(stopped));
+            sink.Notice(ProcessWindowText.OpenedNotice(session.Id));
+            return true;
         }
         catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException)
         {
-            _transcript.Error(ProcessWindowText.WindowFailedError(ex.Message));
+            sink.Error(ProcessWindowText.WindowFailedError(ex.Message));
+            return false;
         }
     }
 

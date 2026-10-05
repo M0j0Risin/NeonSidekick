@@ -94,6 +94,65 @@ public partial class ChatScreenTests
         Assert.True(shown.StoppedByUser);
     }
 
+    /// <summary>
+    /// With the pane (later on 2026-10-05, the user's ask) the bare <c>/process</c> is <see cref="ProcessMenu"/>: Enter opens the
+    /// highlighted one through the window's seam, the kill key asks, Yes stops it, and the exit is the chat's "stopped by you" line.
+    /// </summary>
+    [Fact]
+    public async Task Process_WithThePane_EnterOpens_TheKillKeyAsks_YesStops()
+    {
+        var shown = new List<ProcessSession>();
+        _openProcessWindow = (session, _) => shown.Add(session);
+        _settings.Update(d => { d.TtsOutput = false; d.ShellCommandPolicy = "yolo"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(FakeChatClient.Call("c1", RunCommandTool.ToolName, new Dictionary<string, object?> { ["command"] = "ping -n 30 127.0.0.1 >nul", ["shell"] = "cmd", ["background"] = true }));
+        _chat.EnqueueText("Started.");
+        var steps = new (Func<bool> Ready, Action<ScriptedInput> Act)[]
+        {
+            (() => true, Line("start it")),
+            (() => true, Line("/process")),
+            (() => Output.Contains(ProcessMenu.Title, StringComparison.Ordinal), Key(Keys.Enter)),
+            (() => true, Key(Keys.Char('k'))),
+            (() => true, Key(Keys.Char('y'))),
+            (() => true, Key(Keys.Enter)),
+            (() => true, Key(Keys.Escape)),
+            (() => Output.Contains("was stopped by you", StringComparison.Ordinal), Line("/exit")),
+        };
+        var input = Scripted();
+        int next = 0;
+        input.OnWait = () =>
+        {
+            if (next < steps.Length && steps[next].Ready())
+            {
+                steps[next++].Act(input);
+            }
+        };
+
+        string output = await RunAsync();
+
+        var session = Assert.Single(shown);
+        Assert.Contains("1 process (1 running)", output);
+        Assert.Contains(ProcessMenu.KillPrompt(session), output);
+        Assert.Contains(ProcessMenu.StoppingNotice(session.Id), output);
+        Assert.Contains("  ⚡ " + session.Id + " was stopped by you after ", output);
+        Assert.True(session.StoppedByUser);
+        Assert.DoesNotContain(ProcessWindowText.ListHint, output);   // the pane's keys say it now
+    }
+
+    /// <summary>The toolbar's ⏳ (2026-10-05, the user's ask): a double-click runs the bare <c>/process</c>, none yet its line.</summary>
+    [Fact]
+    public async Task Process_TheToolbarsHourglass_RunsTheBareCommand()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Process]; });
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the toolbar at 103, ⏳ at 0
+        StepsWhenIdle(input => input.PushClick(0, 103), input => input.PushClick(1, 103), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ProcessWindowText.NoneYet, output);
+    }
+
     [Fact]
     public async Task Process_WithNoWindowHere_SaysSo()
     {
