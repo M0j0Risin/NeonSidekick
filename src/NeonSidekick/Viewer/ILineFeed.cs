@@ -25,9 +25,10 @@ internal interface ILineFeed : IDisposable
 
     /// <summary>
     /// A key the window has no use for, on its thread, before it goes to the terminal (<see cref="TerminalHandoff"/>). True when
-    /// the feed took it; the window then reads the title again.
+    /// the feed took it; the window then reads the title again. <paramref name="repeat"/> is the keyboard's auto-repeat
+    /// (<see cref="ViewerState.IsAutoRepeat"/>): a feed's two-press key counts only fresh presses, though it still takes the repeat.
     /// </summary>
-    bool Key(int virtualKey, bool control);
+    bool Key(int virtualKey, bool control, bool repeat);
 }
 
 /// <summary><c>/log</c>'s feed: the run's <see cref="DiagnosticBuffer"/>, exactly as the log window read it before the feed came (2026-10-05).</summary>
@@ -45,7 +46,7 @@ internal sealed class DiagnosticFeed(DiagnosticBuffer buffer) : ILineFeed
 
     public string Empty => LogViewText.Empty;
 
-    public bool Key(int virtualKey, bool control) => false;
+    public bool Key(int virtualKey, bool control, bool repeat) => false;
 
     public void Dispose()
     {
@@ -71,6 +72,7 @@ internal sealed class ProcessFeed : ILineFeed
     private readonly ProcessKillArm _arm = new();
     private readonly List<OutputLine> _scratch = [];
     private readonly Lock _gate = new();
+    private readonly CancellationTokenSource _closed = new();
     private ITimer? _lapse;
     private volatile bool _disposed;
 
@@ -80,7 +82,9 @@ internal sealed class ProcessFeed : ILineFeed
         _stop = stop ?? throw new ArgumentNullException(nameof(stop));
         _time = time ?? throw new ArgumentNullException(nameof(time));
         _session.Output.Appended += Raise;
-        _ = _session.Exited.ContinueWith(_ => Raise(), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        // Cancelled as the window closes (2026-10-05, the code review): a pending continuation held the feed for the life of the
+        // process, one more per reopen of a long-running one.
+        _ = _session.Exited.ContinueWith(_ => Raise(), _closed.Token, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     public event Action? Appended;
@@ -118,11 +122,16 @@ internal sealed class ProcessFeed : ILineFeed
 
     public string Empty => ProcessWindowText.Empty;
 
-    public bool Key(int virtualKey, bool control)
+    public bool Key(int virtualKey, bool control, bool repeat)
     {
         if (virtualKey != VkK || !control)
         {
             return false;
+        }
+
+        if (repeat)
+        {
+            return true;   // a held Ctrl+K is one press (2026-10-05, the code review): taken, so it never reaches the chat, but no second
         }
 
         switch (_arm.Press(_time.GetUtcNow(), _session.HasExited))
@@ -161,8 +170,15 @@ internal sealed class ProcessFeed : ILineFeed
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         _session.Output.Appended -= Raise;
+        _closed.Cancel();
+        _closed.Dispose();
         _lapse?.Dispose();
     }
 }

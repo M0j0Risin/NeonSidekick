@@ -168,6 +168,9 @@ public sealed partial class InputLine
     public const char MaskGlyph = '•';
     private readonly DoubleClick _hintClicks;
     private readonly List<string> _history = new();
+
+    /// <summary>The history's last line is a draft ESC cleared (<see cref="RememberDraft"/>), held here and never stored.</summary>
+    private bool _lastIsDraft;
     private readonly PasteBlocks _pastes = new();
 
     /// <summary>A line drawn where the cursor is (a pass-through pane over <paramref name="console"/>); <paramref name="copyToClipboard"/> as the pane ctor's.</summary>
@@ -262,12 +265,39 @@ public sealed partial class InputLine
     public PasteBlocks Pastes => _pastes;
 
     /// <summary>Adds a line the user did not type (a spoken one) to the history, with the same de-duplication as Enter.</summary>
-    public void Remember(string text)
+    public void Remember(string text) => Add(text, keep: true);
+
+    /// <summary>
+    /// A draft ESC cleared, to the history in memory alone (2026-10-05, the code review and the user's call): Up brings it back this
+    /// session, but <see cref="Remembered"/> is not told, so <c>Keep command history</c> never writes a line the user threw away (a
+    /// pasted token, a password in the wrong box). Sent after all (Up, Enter), it is told then.
+    /// </summary>
+    internal void RememberDraft(string text) => Add(text, keep: false);
+
+    private void Add(string text, bool keep)
     {
         ArgumentNullException.ThrowIfNull(text);
-        if (text.Length > 0 && (_history.Count == 0 || !string.Equals(_history[^1], text, StringComparison.Ordinal)))
+        if (text.Length == 0)
         {
-            _history.Add(text);
+            return;
+        }
+
+        if (_history.Count > 0 && string.Equals(_history[^1], text, StringComparison.Ordinal))
+        {
+            // The same line again: a held draft now sent is stored now, the de-duplication having kept it from being added twice.
+            if (keep && _lastIsDraft)
+            {
+                _lastIsDraft = false;
+                Remembered?.Invoke(text);
+            }
+
+            return;
+        }
+
+        _history.Add(text);
+        _lastIsDraft = !keep;
+        if (keep)
+        {
             Remembered?.Invoke(text);
         }
     }
@@ -287,6 +317,7 @@ public sealed partial class InputLine
     {
         ArgumentNullException.ThrowIfNull(lines);
         _history.Clear();
+        _lastIsDraft = false;
         foreach (string line in lines)
         {
             if (line.Length > 0 && (_history.Count == 0 || !string.Equals(_history[^1], line, StringComparison.Ordinal)))

@@ -538,6 +538,14 @@ public sealed class ViewerTests : IDisposable
 
     /// <summary>Del twice (later on 2026-09-27, the user's call): the first arms with the title's hint, the second in time gives the path to delete.</summary>
     [Fact]
+    public void IsAutoRepeat_ReadsBit30_SoAHeldDelIsOnePress()
+    {
+        Assert.False(ViewerState.IsAutoRepeat(0x00530001));                         // a fresh Del: repeat count 1, scan code
+        Assert.True(ViewerState.IsAutoRepeat(0x40530001));                          // held: the key was down already
+        Assert.True(ViewerState.IsAutoRepeat(unchecked((long)0xFFFFFFFFC0530001)));  // as a sign-extended IntPtr carries it
+    }
+
+    [Fact]
     public void PressDelete_FirstArms_TheSecondInTimeGivesThePath()
     {
         var state = ThreePictures();

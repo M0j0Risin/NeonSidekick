@@ -89,7 +89,7 @@ public static class ProcessWindowText
     }
 
     /// <summary><c>/process &lt;id&gt;</c>'s notice once the window shows it. Pinned.</summary>
-    public static string OpenedNotice(string id) => $"({App.ChatScreen.ShellToolGlyph} {id} in the process window; Ctrl+K twice there stops it)";
+    public static string OpenedNotice(string id) => $"({App.ChatScreen.ProcessToolGlyph} {id} in the process window; Ctrl+K twice there stops it)";
 
     /// <summary><c>/process &lt;id&gt;</c> where no window can be made (not Windows, or headless). Pinned.</summary>
     public const string Unavailable = "The process window needs Windows; the model's process tool can still read a process's output.";

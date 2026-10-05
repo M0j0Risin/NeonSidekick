@@ -101,6 +101,13 @@ public sealed class ViewerState
     /// 2026-09-28 (the user's call).</summary>
     public const uint DeleteArmMilliseconds = 2000;
 
+    /// <summary>
+    /// Whether a <c>WM_KEYDOWN</c>'s <paramref name="lParam"/> is the keyboard's auto-repeat (bit 30, the key was down already).
+    /// A two-press confirm takes only fresh presses (2026-10-05, the code review: a held Del's first repeat, ~500 ms in, came inside
+    /// the arm's window and deleted picture after picture; a held Ctrl+K killed the process the same way).
+    /// </summary>
+    public static bool IsAutoRepeat(long lParam) => (lParam & 0x40000000) != 0;
+
     /// <summary>Whether a Del armed the shown picture (the title shows the hint). Moving off the picture drops it.</summary>
     public bool DeleteArmed => _armedPath is not null && string.Equals(_armedPath, Current, StringComparison.OrdinalIgnoreCase);
 

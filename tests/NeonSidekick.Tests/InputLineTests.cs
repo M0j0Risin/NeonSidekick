@@ -3843,4 +3843,28 @@ public class InputLineTests : IDisposable
         Assert.Equal("copied 1 character", InputLine.CopiedFlash(1));
         Assert.Equal("copied 142 characters", InputLine.CopiedFlash(142));
     }
+
+    /// <summary>
+    /// The cleared draft is held in memory alone (2026-10-05, the code review): Keep command history is never told of it, so a
+    /// line thrown away is never stored; sent after all, it is told then, once.
+    /// </summary>
+    [Fact]
+    public async Task Escape_OnADraft_IsNeverStored_UntilItIsSent()
+    {
+        var stored = new List<string>();
+        _line.Remembered = stored.Add;
+        Push([.. Chars("sk-secret"), Keys.Escape, .. Chars("hello"), Keys.Enter]);
+
+        Assert.Equal("hello", await SubmitAsync());
+        Assert.Equal(new[] { "sk-secret", "hello" }, _line.History);   // Up still finds it this session
+        Assert.Equal(new[] { "hello" }, stored);
+
+        Push([.. Chars("maybe"), Keys.Escape, Keys.Up, Keys.Enter]);
+        Assert.Equal("maybe", await SubmitAsync());
+        Assert.Equal(new[] { "sk-secret", "hello", "maybe" }, _line.History);
+        Assert.Equal(new[] { "hello", "maybe" }, stored);                // sent after all: stored once, then
+
+        _line.Remember("maybe");
+        Assert.Equal(new[] { "hello", "maybe" }, stored);                // and never again
+    }
 }

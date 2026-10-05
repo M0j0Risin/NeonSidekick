@@ -482,7 +482,7 @@ internal sealed unsafe class LogWindowThread
                 if (action == LogViewAction.None)
                 {
                     // The feed's own key first (2026-10-05: the process window's Ctrl+K), its title read again.
-                    if (!TerminalHandoff.AltHeld() && _feed.Key((int)wParam, GetKeyState(VkControl) < 0))
+                    if (!TerminalHandoff.AltHeld() && _feed.Key((int)wParam, GetKeyState(VkControl) < 0, ViewerState.IsAutoRepeat((long)lParam)))
                     {
                         UpdateTitle();
                         return IntPtr.Zero;

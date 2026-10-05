@@ -850,6 +850,11 @@ internal sealed unsafe class PictureWindowThread
                     UpdateTitle();
                 }
 
+                if (action == ViewerAction.Delete && ViewerState.IsAutoRepeat((long)lParam))
+                {
+                    return IntPtr.Zero;   // a held Del is one press (2026-10-05): the second must be a key of its own
+                }
+
                 if (action == ViewerAction.None)
                 {
                     // TAB to the terminal, a Ctrl or Alt chord to the chat (2026-10-03); Alt+F4 and the rest to the default.

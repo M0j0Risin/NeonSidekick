@@ -56,7 +56,7 @@ public sealed class ProcessRegistry : IDisposable
 
     public bool HasAlerts => !_alerts.IsEmpty;
 
-    /// <summary>How many are still running.</summary>
+    /// <summary>How many are still running; the performance bar's PROC reads it at the pane's tick (2026-10-05).</summary>
     public int Running
     {
         get
@@ -182,18 +182,6 @@ public sealed class ProcessRegistry : IDisposable
         lock (_lock)
         {
             return _sessions.ToList();
-        }
-    }
-
-    /// <summary>How many sessions are still running (2026-10-05, the performance bar's PROC): read on the pane's tick, so no list is copied.</summary>
-    public int RunningCount
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _sessions.Count(s => !s.HasExited);
-            }
         }
     }
 

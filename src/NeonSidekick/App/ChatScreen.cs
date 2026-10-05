@@ -1423,7 +1423,7 @@ internal sealed partial class ChatScreen
     /// the strip — a pane, not a window, so a second double-click off the open pane closes it as any pane's does. The bolt is the
     /// process alert's glyph too (<see cref="TranscriptRenderer.ProcessGlyph"/>); ⏳ for a few hours, the queue's glyph, until the user's call. Pinned.
     /// </summary>
-    public const string ProcessToolGlyph = "⚡";
+    public const string ProcessToolGlyph = TranscriptRenderer.ProcessMark;
 
     /// <summary>The lines the window items run (2026-10-03): the typed commands their chords run. Pinned.</summary>
     public const string LogToolLine = "/log";
@@ -1609,7 +1609,7 @@ internal sealed partial class ChatScreen
         }
 
         var (latest, history, _) = _perf.Read();
-        int processes = items.Contains(PerfBarItems.Proc) ? _processes.RunningCount : 0;
+        int processes = items.Contains(PerfBarItems.Proc) ? _processes.Running : 0;
         return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, history, cells, processes);
     }
 

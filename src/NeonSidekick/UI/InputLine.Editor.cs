@@ -587,10 +587,11 @@ public sealed partial class InputLine
                         return new EditOutcome.End(new InputResult.Cancelled());
                     }
 
-                    // The cleared draft goes to the history first (2026-10-04, the UI review): Up brings back what ESC took.
+                    // The cleared draft goes to the history first (2026-10-04, the UI review): Up brings back what ESC took. In
+                    // memory alone (2026-10-05): never stored by Keep command history.
                     if (_o.Remember && !_o.Mask)
                     {
-                        _line.Remember(_text.ToString());
+                        _line.RememberDraft(_text.ToString());
                         _historyIndex = _line._history.Count;   // the walk starts past it, so the next Up is the line just cleared
                         _walking = false;
                     }

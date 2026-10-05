@@ -541,6 +541,11 @@ internal sealed unsafe class ThumbsWindowThread
                     DisarmDelete();
                 }
 
+                if (action == ThumbsAction.Delete && ViewerState.IsAutoRepeat((long)lParam))
+                {
+                    return IntPtr.Zero;   // a held Del is one press (2026-10-05, the viewer's): the second must be a key of its own
+                }
+
                 if (action == ThumbsAction.None)
                 {
                     // F10 alone: no menu bar to enter (the default's menu mode would swallow the next key).

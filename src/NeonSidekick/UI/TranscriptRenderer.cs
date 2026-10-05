@@ -87,7 +87,13 @@ public sealed class TranscriptRenderer : INoticeSink
     public const string AlertGlyph = "  ⏰ ";
 
     /// <summary>A background process's exit (2026-09-21): its own glyph, so it never reads as a timer.</summary>
-    public const string ProcessGlyph = "  ⚡ ";
+    public const string ProcessGlyph = "  " + ProcessMark + " ";
+
+    /// <summary>
+    /// The bolt alone (2026-10-05, the code review): the toolbar's Process item, its pane and the process window's notice
+    /// (<c>ChatScreen.ProcessToolGlyph</c>) take it from here, so a change to the alert's glyph reaches them all.
+    /// </summary>
+    public const string ProcessMark = "⚡";
     public const string NoReplyText = "(no reply)";
 
     /// <summary>Tool arguments and results are cut to this many characters on the transcript.</summary>

@@ -172,10 +172,10 @@ public sealed class ProcessWindowTests : IDisposable
         int raised = 0;
         feed.Appended += () => raised++;
 
-        Assert.False(feed.Key(ProcessFeed.VkK, control: false));   // a plain K is not the feed's
-        Assert.False(feed.Key(0x4C, control: true));               // nor Ctrl+L
+        Assert.False(feed.Key(ProcessFeed.VkK, control: false, repeat: false));   // a plain K is not the feed's
+        Assert.False(feed.Key(0x4C, control: true, repeat: false));               // nor Ctrl+L
 
-        Assert.True(feed.Key(ProcessFeed.VkK, control: true));
+        Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));
         Assert.Equal("Press Ctrl+K again to stop " + session.Id, feed.Title(following: true));
         Assert.Empty(stops);
 
@@ -183,16 +183,50 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.True(raised >= 1);
         Assert.Equal(session.Id + " · ping -n 30 127.0.0.1 >nul — running", feed.Title(following: true));
 
-        Assert.True(feed.Key(ProcessFeed.VkK, control: true));     // armed again
+        Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));     // armed again
         _time.Advance(TimeSpan.FromSeconds(1));
-        Assert.True(feed.Key(ProcessFeed.VkK, control: true));     // and fired
+        Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));     // and fired
         Assert.Equal([session], stops);
 
         session.Kill();
         await Exit(session);
-        Assert.True(feed.Key(ProcessFeed.VkK, control: true));     // taken, but an exited process is never stopped
-        Assert.True(feed.Key(ProcessFeed.VkK, control: true));
+        Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));     // taken, but an exited process is never stopped
+        Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));
         Assert.Single(stops);
+    }
+
+    [Fact]
+    public void Feed_HeldCtrlK_IsOnePress_TheRepeatTakenButNeverFiring()
+    {
+        var session = Start("ping -n 30 127.0.0.1 >nul");
+        var stops = new List<ProcessSession>();
+        using var feed = new ProcessFeed(session, stops.Add, _time);
+        try
+        {
+            Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));    // armed
+            _time.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: true));     // the keyboard's repeat: taken, never the second
+            Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: true));
+            Assert.Empty(stops);
+            Assert.Equal("Press Ctrl+K again to stop " + session.Id, feed.Title(following: true));   // still armed
+
+            Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));    // a fresh press fires
+            Assert.Equal([session], stops);
+        }
+        finally
+        {
+            session.Kill();
+        }
+    }
+
+    [Fact]
+    public void Feed_DisposedTwice_IsHarmless()
+    {
+        var session = Start("ping -n 30 127.0.0.1 >nul");
+        var feed = new ProcessFeed(session, _ => { }, _time);
+        feed.Dispose();
+        feed.Dispose();
+        session.Kill();
     }
 
     [Fact]
@@ -212,7 +246,7 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal(LogViewText.Title, feed.Title(following: true));
         Assert.Equal(LogViewText.PausedTitle, feed.Title(following: false));
         Assert.Equal(LogViewText.Empty, feed.Empty);
-        Assert.False(feed.Key(ProcessFeed.VkK, control: true));
+        Assert.False(feed.Key(ProcessFeed.VkK, control: true, repeat: false));
     }
 
     // ── ProcessKillArm ──────────────────────────────────────────────────────
@@ -297,7 +331,7 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal("No process matches 'proc_9'; /process lists them.", ProcessWindowText.NoMatchError("proc_9"));
         Assert.Equal("'proc_' matches proc_1, proc_2; type more of the id.", ProcessWindowText.AmbiguousError("proc_", ["proc_1", "proc_2"]));
         Assert.Equal("/process takes nothing or a process id, not 'a b'.", ProcessWindowText.UsageError("a b"));
-        Assert.Equal("(🐚 proc_1 in the process window; Ctrl+K twice there stops it)", ProcessWindowText.OpenedNotice("proc_1"));
+        Assert.Equal("(⚡ proc_1 in the process window; Ctrl+K twice there stops it)", ProcessWindowText.OpenedNotice("proc_1"));
         Assert.Equal("Could not open the process window: no thread", ProcessWindowText.WindowFailedError("no thread"));
     }
 }
