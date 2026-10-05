@@ -18,7 +18,7 @@ public partial class ChatScreenTests
     /// </summary>
     private void SqliteExecuteFixture(ConsoleKeyInfo[] answer, string reply, params Dictionary<string, object?>[] calls)
     {
-        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteProtectionMode = "read-write"; d.SqliteStatementsAllowed = ["data", "create"]; });
+        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = "read-write"; d.SqliteStatementsAllowed = ["data", "create"]; });
         Directory.CreateDirectory(WorkingDirectory.Resolve("", _settings.ProfileDirectory));
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);   // the pane: nothing can ask without it
@@ -86,7 +86,7 @@ public partial class ChatScreenTests
     public async Task SqliteExecute_IsOffered_OnlyUnderReadWrite(string mode, bool offered)
     {
         _chat.EnqueueText("one");
-        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteProtectionMode = mode; });
+        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = mode; });
         _geometry = new ScreenGeometry(() => null);
         PushLine("hi");
         PushLine("/exit");

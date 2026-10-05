@@ -64,19 +64,19 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>One row of the <c>SQLite protection mode</c> pick: the name padded past <c>read-write</c>, then its hint, dim. Pinned.</summary>
-    public static string SqliteProtectionLabel(string name) => Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(Markup.Escape(SqliteProtectionMode.Describe(name)));
+    /// <summary>One row of the <c>SQLite mode</c> pick: the name padded past <c>read-write</c>, then its hint, dim. Pinned.</summary>
+    public static string SqliteModeLabel(string name) => Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(Markup.Escape(SqliteModes.Describe(name)));
 
     /// <summary>
-    /// The <c>SQLite protection mode</c> pick (2026-10-05, the <c>Screen capture ask</c> picker's shape): each mode with its hint, the
+    /// The <c>SQLite mode</c> pick (2026-10-05, the <c>Screen capture ask</c> picker's shape): each mode with its hint, the
     /// saved one under the cursor; true when a pick changed it. Read at every call, so the next one goes by it.
     /// </summary>
-    private async Task<bool> PickSqliteProtectionAsync(Settings.AppSettingsData saved, CancellationToken cancellationToken)
+    private async Task<bool> PickSqliteModeAsync(Settings.AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var values = SqliteProtectionMode.Names;
-        var rows = values.Select(SqliteProtectionLabel).ToList();
-        var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteProtectionMode)), rows, PickKeys);
-        int at = Math.Max(0, Array.FindIndex(values, v => string.Equals(v, saved.SqliteProtectionMode?.Trim(), StringComparison.OrdinalIgnoreCase)));
+        var values = SqliteModes.Names;
+        var rows = values.Select(SqliteModeLabel).ToList();
+        var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteMode)), rows, PickKeys);
+        int at = Math.Max(0, Array.FindIndex(values, v => string.Equals(v, saved.SqliteMode?.Trim(), StringComparison.OrdinalIgnoreCase)));
         int? picked = await PickAsync(page, at, cancellationToken).ConfigureAwait(false);
         if (picked is not { } index || index >= values.Length)
         {
@@ -84,21 +84,21 @@ internal sealed partial class SettingsMenu
         }
 
         string value = values[index];
-        Apply(SettingsField.SqliteProtectionMode, d => d.SqliteProtectionMode = value);
+        Apply(SettingsField.SqliteMode, d => d.SqliteMode = value);
         return true;
     }
 
     /// <summary>
-    /// The value of <c>SQLite statements allowed</c> (later on 2026-10-05): the ticked kinds by name while two or fewer, else how many,
+    /// The value of <c>SQLite statements allowed</c> (later on 2026-10-05): the ticked kinds by name while three or fewer (the default's three), else how many,
     /// <c>none</c> with none; while the mode is not read-write it says the list is unused till then. Pinned.
     /// </summary>
     public static string SqliteStatementsValue(IReadOnlyList<string>? saved, string? mode)
     {
         var kinds = SqliteStatementKinds.Resolve(saved);
         string list = kinds.Count == 0 ? "none"
-            : kinds.Count <= 2 ? string.Join(", ", kinds.Select(SqliteStatementKinds.Title))
+            : kinds.Count <= 3 ? string.Join(", ", kinds.Select(SqliteStatementKinds.Title))
             : kinds.Count.ToString(CultureInfo.InvariantCulture) + " of " + SqliteStatementKinds.Names.Length.ToString(CultureInfo.InvariantCulture);
-        return SqliteProtectionMode.TryParse(mode, out var protection) && protection == SqliteProtection.ReadWrite ? list : list + " (used under read-write)";
+        return SqliteModes.TryParse(mode, out var parsed) && parsed == SqliteMode.ReadWrite ? list : list + " (used under read-write)";
     }
 
     /// <summary>One row of the <c>SQLite statements allowed</c> checklist: the mark, the kind, its statements dim. Pinned.</summary>

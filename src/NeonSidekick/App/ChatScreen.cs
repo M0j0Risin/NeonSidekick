@@ -5065,7 +5065,7 @@ internal sealed partial class ChatScreen
         SqliteExecuteTool.ToolName,
     };
 
-    /// <summary>The SQLite tool that changes a file (2026-10-05): offered only under <c>SQLite protection mode</c> <c>read-write</c> with a pane (<see cref="SqliteToolsFor"/>).</summary>
+    /// <summary>The SQLite tool that changes a file (2026-10-05): offered only under <c>SQLite mode</c> <c>read-write</c> with a pane (<see cref="SqliteToolsFor"/>).</summary>
     public static readonly IReadOnlySet<string> SqliteWriteToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
         SqliteExecuteTool.ToolName,
@@ -5073,7 +5073,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What a turn may offer of the SQLite tools (2026-10-05, <see cref="DockerToolsFor"/>'s shape): the reads always;
-    /// <c>sqlite_execute</c> only while <c>SQLite protection mode</c> is <c>read-write</c>, <paramref name="pane"/> can ask and
+    /// <c>sqlite_execute</c> only while <c>SQLite mode</c> is <c>read-write</c>, <paramref name="pane"/> can ask and
     /// <c>SQLite statements allowed</c> ticks at least one kind —
     /// checked again at every call, and each change still asks. Pure.
     /// </summary>
@@ -5081,7 +5081,7 @@ internal sealed partial class ChatScreen
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(effective);
-        bool writes = pane && Sqlite.SqliteProtectionMode.Resolve(effective) == Sqlite.SqliteProtection.ReadWrite && Sqlite.SqliteStatementKinds.Resolve(effective).Count > 0;
+        bool writes = pane && Sqlite.SqliteModes.Resolve(effective) == Sqlite.SqliteMode.ReadWrite && Sqlite.SqliteStatementKinds.Resolve(effective).Count > 0;
         return writes ? tools : tools.Where(t => !SqliteWriteToolNames.Contains(t.Name)).ToList();
     }
 

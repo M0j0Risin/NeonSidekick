@@ -107,8 +107,8 @@ public sealed class SqliteWriteGateTests
     [Fact]
     public void TheKinds_ChangingDataByDefault_ReadCaseBlind()
     {
-        Assert.Equal(["data"], new AppSettingsData().SqliteStatementsAllowed);
-        Assert.Equal([SqliteStatementKind.Data], SqliteStatementKinds.Resolve((IReadOnlyList<string>?)null));
+        Assert.Equal(["data", "create", "read"], new AppSettingsData().SqliteStatementsAllowed);
+        Assert.Equal([SqliteStatementKind.Data, SqliteStatementKind.Create, SqliteStatementKind.Read], SqliteStatementKinds.Resolve((IReadOnlyList<string>?)null));
         Assert.Equal([SqliteStatementKind.Create, SqliteStatementKind.Read], SqliteStatementKinds.Resolve([" READ ", "create", "nonsense"]));
         Assert.Empty(SqliteStatementKinds.Resolve([]));
         Assert.Equal(Enum.GetValues<SqliteStatementKind>().Length, SqliteStatementKinds.Names.Length);
@@ -118,17 +118,19 @@ public sealed class SqliteWriteGateTests
         Assert.Contains("only these kinds: changing data (INSERT, UPDATE, DELETE, REPLACE).", data);
         Assert.DoesNotContain("With create", data);
         Assert.Contains("With create it makes a new database file", SqliteExecuteTool.DescribeFor([SqliteStatementKind.Data, SqliteStatementKind.Create]));
+        Assert.DoesNotContain("A read runs without asking", data);
+        Assert.Contains("A read runs without asking, on the file opened read-only.", SqliteExecuteTool.DescribeFor([SqliteStatementKind.Data, SqliteStatementKind.Read]));
     }
 
     [Fact]
     public void TheMode_ParsesBothWords_AndFallsBackToReadOnly()
     {
-        Assert.Equal("read-only", SqliteProtectionMode.Default);
-        Assert.Equal("read-only", new AppSettingsData().SqliteProtectionMode);
-        Assert.Equal(SqliteProtection.ReadWrite, SqliteProtectionMode.Resolve(new AppSettingsData { SqliteProtectionMode = " Read-Write " }));
-        Assert.Equal(SqliteProtection.ReadOnly, SqliteProtectionMode.Resolve(new AppSettingsData { SqliteProtectionMode = "read-only" }));
-        Assert.Equal(SqliteProtection.ReadOnly, SqliteProtectionMode.Resolve(new AppSettingsData { SqliteProtectionMode = "yolo" }));
-        Assert.All(SqliteProtectionMode.Names, n => Assert.NotEmpty(SqliteProtectionMode.Describe(n)));
+        Assert.Equal("read-only", SqliteModes.Default);
+        Assert.Equal("read-only", new AppSettingsData().SqliteMode);
+        Assert.Equal(SqliteMode.ReadWrite, SqliteModes.Resolve(new AppSettingsData { SqliteMode = " Read-Write " }));
+        Assert.Equal(SqliteMode.ReadOnly, SqliteModes.Resolve(new AppSettingsData { SqliteMode = "read-only" }));
+        Assert.Equal(SqliteMode.ReadOnly, SqliteModes.Resolve(new AppSettingsData { SqliteMode = "yolo" }));
+        Assert.All(SqliteModes.Names, n => Assert.NotEmpty(SqliteModes.Describe(n)));
     }
 
     [Fact]
@@ -148,7 +150,7 @@ public sealed class SqliteExecuteTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("neon-sqlite-write-").FullName;
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { SqliteTools = true, SqliteProtectionMode = "read-write", SqliteDatabasesOffered = ["shop"], SqliteStatementsAllowed = [.. SqliteStatementKinds.Names] };
+    private readonly AppSettingsData _settings = new() { SqliteTools = true, SqliteMode = "read-write", SqliteDatabasesOffered = ["shop"], SqliteStatementsAllowed = [.. SqliteStatementKinds.Names] };
     private readonly string _profile;
     private readonly string _work;
     private readonly string _shop;
@@ -340,7 +342,7 @@ public sealed class SqliteExecuteTests : IDisposable
 
             // Read at every call: back to read-only, nothing is asked or changed.
             asked.Clear();
-            _settings.SqliteProtectionMode = "read-only";
+            _settings.SqliteMode = "read-only";
             Assert.Equal(SqliteText.ReadOnlyMode, await tool.RunAsync("DELETE FROM customers", null, [], null, false, CancellationToken.None));
             Assert.Empty(asked);
         }
@@ -349,7 +351,7 @@ public sealed class SqliteExecuteTests : IDisposable
             DiagnosticLog.Emitted -= Collect;
         }
 
-        _settings.SqliteProtectionMode = "read-write";
+        _settings.SqliteMode = "read-write";
         Assert.Equal(SqliteText.NoPane, await new SqliteExecuteTool(Access(), () => _settings, allow: null).RunAsync("DELETE FROM customers", null, [], null, false, CancellationToken.None));
     }
 
@@ -377,6 +379,30 @@ public sealed class SqliteExecuteTests : IDisposable
     }
 
     [Fact]
+    public async Task TheTool_ARead_AsksNothing_AndRunsReadOnly()
+    {
+        int asked = 0;
+        var tool = new SqliteExecuteTool(Access(), () => _settings, (_, _, _, _) =>
+        {
+            asked++;
+            return Task.FromResult<bool?>(false);
+        });
+
+        string rows = await tool.RunAsync("WITH c AS (SELECT name FROM customers) SELECT * FROM c ORDER BY name", null, [], null, false, CancellationToken.None);
+        Assert.StartsWith("2 rows × 1 column from shop (", rows);
+        Assert.Contains("| Ada |", rows);
+        Assert.StartsWith("1 row", await tool.RunAsync("EXPLAIN QUERY PLAN SELECT * FROM customers WHERE id = @id", null, [new("id", 1L)], null, false, CancellationToken.None));
+        Assert.Equal(0, asked);
+
+        // Not ticked, a read is refused like any kind; and a change still asks (and is declined here).
+        Assert.Equal(SqliteText.Declined, await tool.RunAsync("DELETE FROM customers", null, [], null, false, CancellationToken.None));
+        Assert.Equal(1, asked);
+        _settings.SqliteStatementsAllowed = ["data"];
+        Assert.StartsWith("Error: the SQL is reading", await tool.RunAsync("SELECT 1", null, [], null, false, CancellationToken.None));
+        Assert.Equal("2", Read(_shop, "SELECT count(*) FROM customers"));
+    }
+
+    [Fact]
     public void TheTurn_OffersExecute_OnlyUnderReadWrite_WithAPane()
     {
         var all = ChatScreen.SqliteTools(Access(), () => _settings, allow: null);
@@ -385,7 +411,7 @@ public sealed class SqliteExecuteTests : IDisposable
         _settings.SqliteStatementsAllowed = [];
         Assert.DoesNotContain(SqliteExecuteTool.ToolName, ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));   // no kind ticked
         _settings.SqliteStatementsAllowed = ["data"];
-        _settings.SqliteProtectionMode = "read-only";
+        _settings.SqliteMode = "read-only";
         Assert.Equal([SqliteDatabasesTool.ToolName, SqliteTablesTool.ToolName, SqliteDescribeTool.ToolName, SqliteQueryTool.ToolName], ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));
     }
 

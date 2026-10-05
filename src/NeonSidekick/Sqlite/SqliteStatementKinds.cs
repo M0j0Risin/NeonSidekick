@@ -29,7 +29,8 @@ public enum SqliteStatementKind
 
 /// <summary>
 /// The setting <c>SQLite statements allowed</c> (2026-10-05, the user's ask): which kinds of statement <c>sqlite_execute</c> may
-/// run under <c>SQLite protection mode</c> <c>read-write</c>, a checklist of seven, changing data alone by default. Saved by the
+/// run under <c>SQLite mode</c> <c>read-write</c>, a checklist of seven, changing data, creating and reading by default (reading and creating
+/// added to the default the same day, the user's call: neither can lose data, and <c>create</c> needs creating). Saved by the
 /// words of <see cref="Names"/>; <see cref="Resolve"/> is the one place they become kinds (a null list is the default, a word it
 /// does not know is passed over). <see cref="SqliteWriteGate"/> tells a statement's kind (<see cref="SqliteWriteGate.Classify"/>).
 /// </summary>
@@ -38,8 +39,8 @@ public static class SqliteStatementKinds
     /// <summary>The kinds' saved words, in menu order (the order of <see cref="SqliteStatementKind"/>).</summary>
     public static readonly string[] Names = ["data", "create", "alter", "drop", "upkeep", "pragma", "read"];
 
-    /// <summary>A fresh profile's list: changing data only.</summary>
-    public static List<string> Default() => ["data"];
+    /// <summary>A fresh profile's list: changing data, creating, reading.</summary>
+    public static List<string> Default() => ["data", "create", "read"];
 
     public static string NameOf(SqliteStatementKind kind) => Names[(int)kind];
 

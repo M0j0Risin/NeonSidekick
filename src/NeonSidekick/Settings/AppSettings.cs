@@ -842,7 +842,7 @@ public sealed class AppSettings : IDisposable
         MySqlQueryMaxRows = source.MySqlQueryMaxRows,
         MySqlQueryTimeoutSeconds = source.MySqlQueryTimeoutSeconds,
         SqliteTools = source.SqliteTools,
-        SqliteProtectionMode = source.SqliteProtectionMode,
+        SqliteMode = source.SqliteMode,
         SqliteStatementsAllowed = source.SqliteStatementsAllowed is null ? null : [.. source.SqliteStatementsAllowed],
         SqliteDefaultDatabase = source.SqliteDefaultDatabase,
         SqliteDatabasesOffered = source.SqliteDatabasesOffered is null ? null : [.. source.SqliteDatabasesOffered],

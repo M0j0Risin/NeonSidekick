@@ -1,7 +1,7 @@
 namespace NeonSidekick.Sqlite;
 
 /// <summary>
-/// Whether <c>sqlite_execute</c> may run a text (2026-10-05, <c>SQLite protection mode</c> <c>read-write</c>): the read gate's
+/// Whether <c>sqlite_execute</c> may run a text (2026-10-05, <c>SQLite mode</c> <c>read-write</c>): the read gate's
 /// lexer (<see cref="SqliteReadOnlyGate.Tokenize"/>), a wider door. Allowed: one statement of any kind — DML (RETURNING too), DDL,
 /// PRAGMA, VACUUM, REINDEX, ANALYZE, a SELECT — the user's pick of DML + DDL + PRAGMA. One statement means one <c>;</c>-free text
 /// (a trailing one dropped), but a <c>CREATE TRIGGER</c>'s body between BEGIN and END holds its own <c>;</c>s, so there the gate

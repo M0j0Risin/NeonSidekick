@@ -74,7 +74,7 @@ public static class PlanTools
         "print_file",
         "unc_fetch", "unc_write", "unc_patch", "unc_create_directory", "unc_move", "unc_copy", "unc_delete", "unc_put",
         "docker_lifecycle", "docker_pull", "docker_remove", "docker_prune",
-        // SQLite's changes (2026-10-05, SQLite protection mode read-write): a database changed or made
+        // SQLite's changes (2026-10-05, SQLite mode read-write): a database changed or made
         "sqlite_execute",
     };
 

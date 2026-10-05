@@ -20,7 +20,7 @@ public sealed record SqliteTarget(string Name, string FullPath);
 /// query_only = ON</c>, so even a statement that got past the gate cannot write; and a deferred transaction always rolled back.
 /// Microsoft.Data.Sqlite cannot cancel a running statement, so the call runs on a pool thread and a timer — or the turn's ESC —
 /// calls <c>sqlite3_interrupt</c> on the connection (thread-safe), which ends it with <c>SQLITE_INTERRUPT</c>. Since 2026-10-05
-/// (<c>SQLite protection mode</c> <c>read-write</c>) <see cref="Execute"/> is the one way to change a file: the same machinery
+/// (<c>SQLite mode</c> <c>read-write</c>) <see cref="Execute"/> is the one way to change a file: the same machinery
 /// with the file opened read-write and no layer of the four, behind <see cref="SqliteWriteGate"/> and the user's allow.
 /// </summary>
 public sealed class SqliteAccess
@@ -161,7 +161,7 @@ public sealed class SqliteAccess
         Task.Run(() => Execute(target, create, sql, parameters, maxRows, timeoutSeconds, cancellationToken), cancellationToken);
 
     /// <summary>
-    /// <c>sqlite_execute</c>'s run (2026-10-05, <c>SQLite protection mode</c> <c>read-write</c>): <paramref name="sql"/>, already
+    /// <c>sqlite_execute</c>'s run (2026-10-05, <c>SQLite mode</c> <c>read-write</c>): <paramref name="sql"/>, already
     /// passed by <see cref="SqliteWriteGate"/> and allowed by the user, on the file opened read-write (<paramref name="create"/>:
     /// made when missing) with no <c>query_only</c> and no transaction of the app's — one statement commits on its own, atomically,
     /// and SQLite refuses VACUUM and some PRAGMAs inside a transaction. Its rows (a RETURNING, a PRAGMA's answer) are read as a

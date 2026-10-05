@@ -32,7 +32,7 @@ public partial class ToolsMenuTests
     {
         Assert.Equal(TabIndex(ToolsText.MySqlTabTitle) + 1, TabIndex(ToolsText.SqliteTabTitle));
         Assert.Equal(
-            [SettingsField.SqliteTools, SettingsField.SqliteProtectionMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
+            [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
             TabFields(ToolsText.SqliteTabTitle));
         Assert.Equal("Enter to start database wizard", SettingsMenu.SqliteAddDatabaseLabel);
         Assert.Equal("Opened 'shop' read-only: 3 tables and views.", SettingsMenu.SqliteWizardTestOk("shop", 3));
@@ -68,12 +68,12 @@ public partial class ToolsMenuTests
         Assert.Equal(["shop"], _settings.Current.SqliteDatabasesOffered);
     }
 
-    /// <summary><c>SQLite protection mode</c> (2026-10-05): read-only by default, the pick lists both with their hints, read-write saved.</summary>
+    /// <summary><c>SQLite mode</c> (2026-10-05): read-only by default, the pick lists both with their hints, read-write saved.</summary>
     [Fact]
     public async Task OnThePane_TheProtectionMode_PicksReadWrite()
     {
-        Assert.Equal("read-only", _settings.Current.SqliteProtectionMode);
-        Assert.StartsWith("read-write  ", SettingsMenu.SqliteProtectionLabel("read-write"), StringComparison.Ordinal);   // a gap past the longest name
+        Assert.Equal("read-only", _settings.Current.SqliteMode);
+        Assert.StartsWith("read-write  ", SettingsMenu.SqliteModeLabel("read-write"), StringComparison.Ordinal);   // a gap past the longest name
         var (menu, _, _) = PaneMenu();
         OpenSqliteRow(1);
         Push(Keys.Down, Keys.Enter);              // read-write
@@ -81,15 +81,15 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("read-write", _settings.Current.SqliteProtectionMode);
-        Assert.Contains(SqliteProtectionMode.Describe("read-only"), _console.Output);
+        Assert.Equal("read-write", _settings.Current.SqliteMode);
+        Assert.Contains(SqliteModes.Describe("read-only"), _console.Output);
     }
 
-    /// <summary><c>SQLite statements allowed</c> (later on 2026-10-05): changing data by default; Enter ticks dropping beside it.</summary>
+    /// <summary><c>SQLite statements allowed</c> (later on 2026-10-05): changing data, creating and reading by default; Enter ticks dropping beside them.</summary>
     [Fact]
     public async Task OnThePane_TheStatementsAllowed_TicksAKind()
     {
-        Assert.Equal(["data"], _settings.Current.SqliteStatementsAllowed);
+        Assert.Equal(["data", "create", "read"], _settings.Current.SqliteStatementsAllowed);
         var (menu, _, _) = PaneMenu();
         OpenSqliteRow(2);
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // dropping
@@ -98,7 +98,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["data", "drop"], _settings.Current.SqliteStatementsAllowed);
+        Assert.Equal(["data", "create", "drop", "read"], _settings.Current.SqliteStatementsAllowed);
         Assert.Contains("DROP TABLE, INDEX, VIEW, TRIGGER", _console.Output);
     }
 
@@ -123,9 +123,10 @@ public partial class ToolsMenuTests
     {
         Assert.Equal("changing data", SettingsMenu.SqliteStatementsValue(["data"], "read-write"));
         Assert.Equal("changing data, dropping", SettingsMenu.SqliteStatementsValue(["DROP", "data", "nonsense"], "read-write"));
-        Assert.Equal("3 of 7", SettingsMenu.SqliteStatementsValue(["data", "create", "read"], "read-write"));
+        Assert.Equal("changing data, creating, reading", SettingsMenu.SqliteStatementsValue(["data", "create", "read"], "read-write"));
+        Assert.Equal("4 of 7", SettingsMenu.SqliteStatementsValue(["data", "create", "drop", "read"], "read-write"));
         Assert.Equal("none (used under read-write)", SettingsMenu.SqliteStatementsValue([], "read-only"));
-        Assert.Equal("changing data (used under read-write)", SettingsMenu.SqliteStatementsValue(null, null));
+        Assert.Equal("changing data, creating, reading (used under read-write)", SettingsMenu.SqliteStatementsValue(null, null));
     }
 
     /// <summary>The checklist ticks a named database, the default pick lists the offered ones, ESC out of the wizard's first page writes nothing.</summary>

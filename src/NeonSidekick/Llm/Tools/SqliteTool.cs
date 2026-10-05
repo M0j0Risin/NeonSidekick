@@ -287,9 +287,10 @@ public sealed class SqliteQueryTool : SqliteTool
 
 /// <summary>
 /// <c>sqlite_execute(sql, database?, params?, max_rows?, create?)</c> (2026-10-05, the user's ask): one statement that may change
-/// the database — DML, DDL, PRAGMA — offered only while <c>SQLite protection mode</c> is <c>read-write</c>, a pane can ask and
+/// the database — DML, DDL, PRAGMA — offered only while <c>SQLite mode</c> is <c>read-write</c>, a pane can ask and
 /// <c>SQLite statements allowed</c> ticks a kind (all checked again at every call; the statement's kind must be ticked, and
-/// <c>create</c> needs creating). <see cref="SqliteWriteGate"/> first, then the database (with <c>create</c>, a new file in the
+/// <c>create</c> needs creating). A read (reading ticked) asks nothing and runs on the read-only path, <see cref="SqliteAccess.Run"/>
+/// (later on 2026-10-05, the user's ask). <see cref="SqliteWriteGate"/> first, then the database (with <c>create</c>, a new file in the
 /// working directory), then the user's allow — Deny / Allow once / Allow for this session, per file — then
 /// <see cref="SqliteAccess.Execute"/>, committed as it runs. Every change is written to the log (the audit line). The answer is
 /// the rows changed and any rows a RETURNING or PRAGMA gave back. Plan mode drops it.
@@ -333,7 +334,9 @@ public sealed class SqliteExecuteTool : SqliteTool
         ArgumentNullException.ThrowIfNull(kinds);
         return "Runs one statement that changes a SQLite database. The user allows only these kinds: " + SqliteStatementKinds.Describe(kinds) + ". " +
             (kinds.Contains(SqliteStatementKind.Create) ? "With create it makes a new database file in the working directory. " : "") +
-            "The user allows each change first; a change is permanent once it runs. Bind values as @name through params. For reading, use sqlite_query.";
+            "The user allows each change first; a change is permanent once it runs. " +
+            (kinds.Contains(SqliteStatementKind.Read) ? "A read runs without asking, on the file opened read-only. " : "") +
+            "Bind values as @name through params. For reading, use sqlite_query.";
     }
 
     public override JsonElement JsonSchema => Schema;
@@ -343,7 +346,7 @@ public sealed class SqliteExecuteTool : SqliteTool
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
         var effective = Effective;
-        if (SqliteProtectionMode.Resolve(effective) != SqliteProtection.ReadWrite)
+        if (SqliteModes.Resolve(effective) != SqliteMode.ReadWrite)
         {
             return SqliteText.ReadOnlyMode;
         }
@@ -370,17 +373,27 @@ public sealed class SqliteExecuteTool : SqliteTool
             return refused;
         }
 
-        if (_allow is null)
-        {
-            return SqliteText.NoPane;
-        }
-
         if (Files.Resolve(database, effective.SqliteDefaultDatabase, create, out var unresolved, out bool creating) is not { } target)
         {
             return SqliteText.Error(unresolved!);
         }
 
         string body = SqliteReadOnlyGate.Body(sql);
+
+        // A read asks nothing (later on 2026-10-05, the user's ask): it runs as sqlite_query's do — the file opened read-only,
+        // query_only on, the transaction rolled back — so it cannot change the file whatever it is, and is no change to audit.
+        // A read that would make a new file is not one: it asks and runs as a create.
+        if (!creating && SqliteWriteGate.Classify(body) == SqliteStatementKind.Read)
+        {
+            var read = await Task.Run(() => SqliteAccess.Run(target, [body], parameters, rows, TimeoutSeconds(effective), cancellationToken), cancellationToken).ConfigureAwait(false);
+            return read.Outcome == SqlOutcome.Ok ? SqliteText.Query(read, rows, SqlTool.ResultChars(effective)) : SqliteText.Error(read);
+        }
+
+        if (_allow is null)
+        {
+            return SqliteText.NoPane;
+        }
+
         switch (await _allow(target, body, creating, cancellationToken).ConfigureAwait(false))
         {
             case null:

@@ -179,7 +179,7 @@ public sealed record SystemPromptFacts(
     /// <summary>Whether the rules carry <see cref="Assistant.SqliteRule"/>: tools on, something to open with the switch on, and at least one SQLite tool offered (2026-10-04).</summary>
     public bool Sqlite => ToolsEnabled && SqliteEnabled && SqliteTools > 0;
 
-    /// <summary>Whether that rule is followed by <see cref="Assistant.SqliteWriteRule"/>: <c>sqlite_execute</c> offered (2026-10-05, <c>SQLite protection mode</c> read-write, a pane, not switched off).</summary>
+    /// <summary>Whether that rule is followed by <see cref="Assistant.SqliteWriteRule"/>: <c>sqlite_execute</c> offered (2026-10-05, <c>SQLite mode</c> read-write, a pane, not switched off).</summary>
     public bool SqliteWriting => Sqlite && SqliteWrite;
 
     /// <summary>Whether the rules carry <see cref="Assistant.PostgresRule"/>: tools on, a connection defined with the switch on, and at least one PostgreSQL tool offered (2026-10-04).</summary>

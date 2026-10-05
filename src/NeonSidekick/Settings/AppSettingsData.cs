@@ -1771,14 +1771,15 @@ public sealed class AppSettingsData
     /// What the SQLite tools may do (2026-10-05, the user's ask): <c>read-only</c> (the default, the tools as they were) or
     /// <c>read-write</c>, which adds <c>sqlite_execute</c> — one change per call (DML, DDL, PRAGMA), each allowed on the pane, and a
     /// new database file in the working directory with <c>create</c>. <c>sqlite_query</c> stays read-only either way; read at each
-    /// call. One of <see cref="Sqlite.SqliteProtectionMode.Names"/>. No variable.
+    /// call. One of <see cref="Sqlite.SqliteModes.Names"/>. No variable. <c>SqliteProtectionMode</c> ("SQLite protection mode") until later
+    /// that day, renamed at the user's call; no migration, as for the Claude tabs' keys.
     /// </summary>
-    public string SqliteProtectionMode { get; set; } = Sqlite.SqliteProtectionMode.Default;
+    public string SqliteMode { get; set; } = Sqlite.SqliteModes.Default;
 
     /// <summary>
     /// The kinds of statement <c>sqlite_execute</c> may run under <c>read-write</c> (2026-10-05, the user's ask): words of
     /// <see cref="Sqlite.SqliteStatementKinds.Names"/> — <c>data</c>, <c>create</c>, <c>alter</c>, <c>drop</c>, <c>upkeep</c>,
-    /// <c>pragma</c>, <c>read</c>. Changing data alone by default; null is the default too, an empty list allows none (and
+    /// <c>pragma</c>, <c>read</c>. Changing data, creating and reading by default; null is the default too, an empty list allows none (and
     /// <c>sqlite_execute</c> is then not offered). <c>create: true</c> needs <c>create</c>. Unused while read-only. No variable.
     /// </summary>
     public List<string>? SqliteStatementsAllowed { get; set; } = Sqlite.SqliteStatementKinds.Default();

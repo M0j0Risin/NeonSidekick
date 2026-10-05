@@ -110,7 +110,7 @@ public static class SqliteText
 
     // ─── sqlite_execute (2026-10-05) ────────────────────────────────────────────
 
-    public const string ReadOnlyMode = "Error: SQLite protection mode is read-only, so nothing may change a SQLite database; the user switches it to read-write on the SQLite tab of /tools";
+    public const string ReadOnlyMode = "Error: SQLite mode is read-only, so nothing may change a SQLite database; the user switches it to read-write on the SQLite tab of /tools";
     public const string NoPane = "Error: sqlite_execute needs the user to allow each change on a pane, and there is none here";
     public const string Declined = "The user declined the change; nothing was run. Do not run it again unless the user asks for it.";
     public const string CreateNeedsSandbox = "Error: a new database file can only be made in the working directory, and SQLite sandbox files is off";

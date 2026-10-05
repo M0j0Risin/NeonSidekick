@@ -266,7 +266,7 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.SqliteQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params.";
 
     /// <summary>
-    /// The sentence after <see cref="SqliteRule"/> while <c>sqlite_execute</c> is offered (2026-10-05, <c>SQLite protection mode</c>
+    /// The sentence after <see cref="SqliteRule"/> while <c>sqlite_execute</c> is offered (2026-10-05, <c>SQLite mode</c>
     /// <c>read-write</c>), <see cref="DockerWriteRule"/>'s twin: the one way to change a file or make one, each change waiting for
     /// the user's allow, so change only what was asked, one statement at a time after a look, and never retry a declined one. Pinned.
     /// </summary>
