@@ -186,6 +186,18 @@ public class OperataFileTests : IDisposable
     }
 
     [Fact]
+    public void EnsureExists_WithASeed_WritesTheSeed_AndLeavesAnExistingFileAlone()
+    {
+        // /operata's seed (2026-10-04): the rules in use now, in the default's place; LF lines get the platform's breaks.
+        var operata = new OperataFile(_dir);
+        Assert.True(operata.EnsureExists("Reply briefly.\nUse a tool when it helps."));
+        Assert.Equal("Reply briefly." + Environment.NewLine + "Use a tool when it helps." + Environment.NewLine, File.ReadAllText(FilePath));
+
+        Assert.False(operata.EnsureExists("Something else."));
+        Assert.Equal("Reply briefly.\nUse a tool when it helps.", operata.Read());
+    }
+
+    [Fact]
     public void Normalize_IsPinned()
     {
         Assert.Equal("a\nb\n\nc", OperataFile.Normalize("  a\r\nb\r\r\nc \n"));

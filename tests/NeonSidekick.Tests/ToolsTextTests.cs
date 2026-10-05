@@ -114,13 +114,13 @@ public class ToolsTextTests : IDisposable
         // Eight headings, a gap before each but the first (2026-10-03) and 30 tools (31 until restore went, 2026-10-01) (the screen's count: the timers and ask_user included), every tool row on, the name beside it.
         Assert.Equal(8, rows.Count(r => r.Heading));
         Assert.Equal(7, rows.Count(r => r.Markup.Length == 0 && r.Tool is null && !r.Heading));
-        Assert.Equal(30, rows.Count(r => r.Tool is not null));
+        Assert.Equal(32, rows.Count(r => r.Tool is not null));   // 30 until the image tools, 2026-10-04
         // Alphabetical since 2026-10-04 (the user's ask).
-        Assert.Equal(["── Clock · 3", "── Files · 14", "── Memory · 2", "── Questions · 1", "── Sessions · 1", "── Skills · 2", "── Timers · 3", "── Web · 4"], rows.Where(r => r.Heading).Select(r => Markup.Remove(r.Markup)));
+        Assert.Equal(["── Clock · 3", "── Files · 16", "── Memory · 2", "── Questions · 1", "── Sessions · 1", "── Skills · 2", "── Timers · 3", "── Web · 4"], rows.Where(r => r.Heading).Select(r => Markup.Remove(r.Markup)));
         Assert.Equal((Heading("Clock", "3"), (string?)null, true), rows[0]);
         Assert.Equal((OnRow(ToolNamed(facts, GetCurrentTimeTool.ToolName), true), GetCurrentTimeTool.ToolName, false), rows[1]);
         Assert.Equal(("", (string?)null, false), rows[4]);   // the gap before Files
-        Assert.Equal((Heading("Files", "14"), (string?)null, true), rows[5]);
+        Assert.Equal((Heading("Files", "16"), (string?)null, true), rows[5]);
         Assert.Equal((OnRow(ToolNamed(facts, ReadFileTool.ToolName), true), ReadFileTool.ToolName, false), rows.Single(r => r.Tool == ReadFileTool.ToolName));
         Assert.Equal((OnRow(ToolNamed(facts, AskUserTool.ToolName), true), AskUserTool.ToolName, false), rows.Single(r => r.Tool == AskUserTool.ToolName));
         Assert.Equal(DownloadFileTool.ToolName, rows[^1].Tool);   // Web last
@@ -141,7 +141,7 @@ public class ToolsTextTests : IDisposable
         Assert.All(rows.Where(r => r.Tool is not null), r => Assert.True(MenuFilter.Matches("read_file", r.Tool!, ToolNamed(facts, r.Tool!).Description)));
         Assert.True(rows[0].Heading);
         Assert.Equal(rows.Count(r => r.Heading) - 1, rows.Count(r => r.Markup.Length == 0 && !r.Heading));
-        Assert.Contains((Heading("Files", "14"), (string?)null, true), rows);
+        Assert.Contains((Heading("Files", "16"), (string?)null, true), rows);
         Assert.Equal(ToolsText.ToolCount(rows), rows.Count(r => r.Tool is not null));
         Assert.Equal(ToolsText.FirstToolRow(rows), rows.ToList().FindIndex(r => r.Tool is not null));
 
@@ -163,7 +163,7 @@ public class ToolsTextTests : IDisposable
         var facts = Facts(["read_file", "web_search"]);
         var rows = ToolsText.OfferedRows(facts);
 
-        Assert.Equal(Heading("Files", "13 of 14"), rows.First(r => r.Heading && r.Markup.Contains("Files", StringComparison.Ordinal)).Markup);
+        Assert.Equal(Heading("Files", "15 of 16"), rows.First(r => r.Heading && r.Markup.Contains("Files", StringComparison.Ordinal)).Markup);
         Assert.Equal(Heading("Web", "3 of 4"), rows.First(r => r.Heading && r.Markup.Contains("Web", StringComparison.Ordinal)).Markup);
         Assert.Equal(DimRow(ToolNamed(facts, ReadFileTool.ToolName), false, "not offered: switched off in /tools"), rows.Single(r => r.Tool == ReadFileTool.ToolName).Markup);
         Assert.Equal(DimRow(ToolNamed(facts, WebSearchTool.ToolName), false, "not offered: switched off in /tools"), rows.Single(r => r.Tool == WebSearchTool.ToolName).Markup);
@@ -177,7 +177,7 @@ public class ToolsTextTests : IDisposable
         var rows = ToolsText.OfferedRows(facts);
 
         // The heading keeps the section colour with the group off (later on 2026-09-20, the user's call); the suffix (on the rule, bare, 2026-10-03) and the rows are dim.
-        Assert.Equal(Heading("Files", "13 of 14", "off: File tools is off"), rows.First(r => r.Heading && r.Markup.Contains("Files", StringComparison.Ordinal)).Markup);
+        Assert.Equal(Heading("Files", "15 of 16", "off: File tools is off"), rows.First(r => r.Heading && r.Markup.Contains("Files", StringComparison.Ordinal)).Markup);
         Assert.Equal(DimRow(ToolNamed(facts, ReadFileTool.ToolName), true), rows.Single(r => r.Tool == ReadFileTool.ToolName).Markup);        // still on, dim
         Assert.Equal(DimRow(ToolNamed(facts, CopyTool.ToolName), false, "not offered: switched off in /tools"), rows.Single(r => r.Tool == CopyTool.ToolName).Markup);   // off, its own note first
         // Questions off by its switch: the same shape; download_file under File tools off carries the file-tools reason, its group's count untouched.
@@ -198,7 +198,7 @@ public class ToolsTextTests : IDisposable
         var rows = ToolsText.OfferedRows(facts);
 
         Assert.Equal((Theme.DimMarkup(ToolsText.OffLine), (string?)null, false), rows[0]);
-        Assert.Equal(1 + 8 + 7 + 30, rows.Count);
+        Assert.Equal(1 + 8 + 7 + 32, rows.Count);
         Assert.Equal(Heading("Clock", "3"), rows[1].Markup);   // a heading never dims (later on 2026-09-20)
         Assert.Equal(DimRow(ToolNamed(facts, GetCurrentTimeTool.ToolName), true), rows[2].Markup);
         Assert.Equal(DimRow(ToolNamed(facts, ZipTool.ToolName), false, "not offered: switched off in /tools"), rows.Single(r => r.Tool == ZipTool.ToolName).Markup);
@@ -224,10 +224,10 @@ public class ToolsTextTests : IDisposable
 
         Assert.Equal("Clock (3)", lines[0]);
         Assert.Equal("  get_current_time      on   " + ToolNamed(facts, GetCurrentTimeTool.ToolName).Description, lines[1]);
-        Assert.Contains("Files (13 of 14)", lines);
+        Assert.Contains("Files (15 of 16)", lines);
         Assert.Contains("  read_file             off  " + ToolNamed(facts, ReadFileTool.ToolName).Description + " — not offered: switched off in /tools", lines);
         Assert.Contains("Questions (1) (off: Ask user is off)", lines);
-        Assert.Equal(8 + 30, lines.Count);
+        Assert.Equal(8 + 32, lines.Count);
         Assert.Equal(ToolsText.OffLine, ToolsText.OfferedLines(Facts(toolsEnabled: false)).First());
     }
 }

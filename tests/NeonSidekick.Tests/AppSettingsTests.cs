@@ -141,6 +141,9 @@ public class AppSettingsTests : IDisposable
         FileTreeMaxLength = 750,
         FileTreeShowSizes = false,
         FileViewImageMaxPerCall = 25,
+        ImageEditQuality = 42,
+        ImageEditMetadata = "basic",
+        ImageEditOutputFolder = "thumbs",
         WebSearxngUrl = "http://localhost:8080",
         WebBrowserMode = "chromium",
         WebBrowserNetworkMode = "both",
@@ -270,6 +273,9 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.FileTreeMaxLength, actual.FileTreeMaxLength);
         Assert.Equal(expected.FileTreeShowSizes, actual.FileTreeShowSizes);
         Assert.Equal(expected.FileViewImageMaxPerCall, actual.FileViewImageMaxPerCall);
+        Assert.Equal(expected.ImageEditQuality, actual.ImageEditQuality);
+        Assert.Equal(expected.ImageEditMetadata, actual.ImageEditMetadata);
+        Assert.Equal(expected.ImageEditOutputFolder, actual.ImageEditOutputFolder);
         Assert.Equal(expected.WebSearxngUrl, actual.WebSearxngUrl);
         Assert.Equal(expected.WebBrowserMode, actual.WebBrowserMode);
         Assert.Equal(expected.WebBrowserNetworkMode, actual.WebBrowserNetworkMode);
@@ -421,6 +427,9 @@ public class AppSettingsTests : IDisposable
             d.FileTreeMaxLength = full.FileTreeMaxLength;
             d.FileTreeShowSizes = full.FileTreeShowSizes;
             d.FileViewImageMaxPerCall = full.FileViewImageMaxPerCall;
+            d.ImageEditQuality = full.ImageEditQuality;
+            d.ImageEditMetadata = full.ImageEditMetadata;
+            d.ImageEditOutputFolder = full.ImageEditOutputFolder;
             d.WebSearxngUrl = full.WebSearxngUrl;
             d.WebBrowserMode = full.WebBrowserMode;
             d.WebBrowserNetworkMode = full.WebBrowserNetworkMode;
@@ -561,6 +570,9 @@ public class AppSettingsTests : IDisposable
                 d.FileTreeMaxLength = full.FileTreeMaxLength;
                 d.FileTreeShowSizes = full.FileTreeShowSizes;
                 d.FileViewImageMaxPerCall = full.FileViewImageMaxPerCall;
+                d.ImageEditQuality = full.ImageEditQuality;
+                d.ImageEditMetadata = full.ImageEditMetadata;
+                d.ImageEditOutputFolder = full.ImageEditOutputFolder;
                 d.WebSearxngUrl = full.WebSearxngUrl;
                 d.WebBrowserMode = full.WebBrowserMode;
                 d.WebBrowserNetworkMode = full.WebBrowserNetworkMode;

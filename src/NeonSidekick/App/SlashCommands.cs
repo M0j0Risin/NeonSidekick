@@ -73,7 +73,7 @@ public enum SlashCommand
     /// <summary><c>/persona</c>: open <c>persona.md</c> in the editor Windows associates with it, <c>/persona reset</c> to remove it (2026-09-16), or <c>/persona copy &lt;profile&gt; [force]</c> to copy it into another profile (2026-09-21).</summary>
     Persona,
 
-    /// <summary><c>/operata</c>: open <c>operata.md</c> (the operating rules) in the editor Windows associates with it, <c>/operata reset</c> to remove it (2026-09-16), or <c>/operata copy &lt;profile&gt; [force]</c> to copy it into another profile (2026-09-21).</summary>
+    /// <summary><c>/operata</c>: open <c>operata.md</c> (the operating rules) in the editor Windows associates with it (created, when missing, with the rules the next reply would send, its tool sentences included, 2026-10-04), <c>/operata reset</c> to remove it (2026-09-16), or <c>/operata copy &lt;profile&gt; [force]</c> to copy it into another profile (2026-09-21).</summary>
     Operata,
 
     /// <summary><c>/vocalia</c>: open <c>vocalia.md</c> (the spoken-reply directive) in the editor Windows associates with it, <c>/vocalia reset</c> to remove it (2026-09-16), or <c>/vocalia copy &lt;profile&gt; [force]</c> to copy it into another profile (2026-09-21).</summary>

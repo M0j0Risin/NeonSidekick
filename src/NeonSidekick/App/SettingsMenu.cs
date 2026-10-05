@@ -136,7 +136,7 @@ public enum SettingsField
     /// <summary>Whether the voice pickers speak <see cref="SettingsMenu.VoicePreviewText"/> in the highlighted voice, and the mix and speed rows the blend at the value they just saved (<see cref="Settings.AppSettingsData.TtsVoicePreview"/>). On the TTS tab, last; a toggle on by default, no reconnect (read at the next pick or save).</summary>
     TtsVoicePreview,
 
-    /// <summary>Whether a turn offers the twenty-one file tools (<see cref="Settings.AppSettingsData.FileTools"/>). The Files tab's first row (2026-09-15); a toggle, no reconnect (read at each turn).</summary>
+    /// <summary>Whether a turn offers the file tools (seventeen with convert_to_pdf since the image tools, 2026-10-04; <see cref="Settings.AppSettingsData.FileTools"/>). The Files tab's first row (2026-09-15); a toggle, no reconnect (read at each turn).</summary>
     FileTools,
 
     /// <summary>A picker over <see cref="Web.SearchMethod.Names"/>: which engine <c>web_search</c> asks (<see cref="Settings.AppSettingsData.WebSearchMethod"/>). On the Web tab above <see cref="WebSearxngUrl"/> (2026-09-15); no reconnect (read at each search).</summary>
@@ -925,6 +925,15 @@ public enum SettingsField
 
     /// <summary>Typed: how many rows an edit's diff may have before it folds once its tool run is over, 0 (off) to 500 (<see cref="Settings.AppSettingsData.DiffCollapseCount"/>). The Options tab of <c>/tools</c>, under <see cref="DiffMaxLines"/> (2026-10-04, the user's ask and place); no reconnect (read at each result). Last in the enum, as every newcomer.</summary>
     DiffCollapseCount,
+
+    /// <summary>Typed: the quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none, 1 to 100 (<see cref="Settings.AppSettingsData.ImageEditQuality"/>). The Files tab of <c>/tools</c>, after File search max results (2026-10-04, the user's pick, with the image tools); no reconnect (read at each call).</summary>
+    ImageEditQuality,
+
+    /// <summary>A picker over none, basic and all: the metadata <c>image_edit</c> keeps when the call does not say (<see cref="Settings.AppSettingsData.ImageEditMetadata"/>). The Files tab, under Image edit quality (2026-10-04); no reconnect.</summary>
+    ImageEditMetadata,
+
+    /// <summary>Typed: the folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c>, empty = beside the source (<see cref="Settings.AppSettingsData.ImageEditOutputFolder"/>). The Files tab's last row (2026-10-04), the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
+    ImageEditOutputFolder,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1337,7 +1346,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
-        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
+        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
@@ -1789,6 +1798,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageEditor => "Image viewer",   // "Image editor" until later still on 2026-09-24 (the user's call); the field and the setting keep the old name
         SettingsField.FileViewImageMaxPerCall => "File view image max (per call)",
         SettingsField.FileSearchMaxResults => "File search max results",
+        SettingsField.ImageEditQuality => "Image edit quality",
+        SettingsField.ImageEditMetadata => "Image edit metadata",
+        SettingsField.ImageEditOutputFolder => "Image edit output folder",
         SettingsField.McpServers => "MCP servers",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
         SettingsField.ShowImageThumbnails => "Show image thumbnails",
@@ -2297,6 +2309,9 @@ internal sealed partial class SettingsMenu
             SettingsField.ImageEditor => string.IsNullOrWhiteSpace(data.ImageEditor) ? DefaultImageEditorLabel : data.ImageEditor,
             SettingsField.FileViewImageMaxPerCall => Pictures(data.FileViewImageMaxPerCall),
             SettingsField.FileSearchMaxResults => Results(data.FileSearchMaxResults),
+            SettingsField.ImageEditQuality => data.ImageEditQuality.ToString(CultureInfo.InvariantCulture),
+            SettingsField.ImageEditMetadata => Images.ImageWords.MetadataName(data.ImageEditMetadata),
+            SettingsField.ImageEditOutputFolder => string.IsNullOrWhiteSpace(data.ImageEditOutputFolder) ? ImageEditBesideLabel : data.ImageEditOutputFolder,
             SettingsField.McpServers => OnOff(data.McpServers),
             SettingsField.McpConnectTimeoutSeconds => Seconds(data.McpConnectTimeoutSeconds),
             SettingsField.WebBrowserNetworkMode => data.WebBrowserNetworkMode,
@@ -2692,6 +2707,17 @@ internal sealed partial class SettingsMenu
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileViewImageMaxPerCall"/>. Pinned.</summary>
     public static readonly string ViewImageMaxPerCallRangeError =
         "must be " + AppSettingsData.MinViewImageMaxPerCall.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxViewImageMaxPerCall.ToString(CultureInfo.InvariantCulture) + " pictures";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ImageEditQuality"/> (2026-10-04). Pinned.</summary>
+    public static readonly string ImageEditQualityRangeError =
+        "must be " + AppSettingsData.MinImageEditQuality.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxImageEditQuality.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditOutputFolder"/> (2026-10-04): the result lands beside its source. Pinned.</summary>
+    public const string ImageEditBesideLabel = "(beside the source)";
+
+    /// <summary>A row of the image-edit metadata picker: the name padded, what it keeps dim (2026-10-04).</summary>
+    public static string ImageEditMetadataLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Images.ImageWords.DescribeMetadata(name));
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileSearchMaxResults"/> (2026-10-01). Pinned.</summary>
     public static readonly string FileSearchMaxResultsRangeError =
@@ -3165,6 +3191,8 @@ internal sealed partial class SettingsMenu
         SettingsField.Theme => data.Theme,
         SettingsField.FileViewImageMaxPerCall => data.FileViewImageMaxPerCall.ToString(CultureInfo.InvariantCulture),
         SettingsField.FileSearchMaxResults => data.FileSearchMaxResults.ToString(CultureInfo.InvariantCulture),
+        SettingsField.ImageEditQuality => data.ImageEditQuality.ToString(CultureInfo.InvariantCulture),
+        SettingsField.ImageEditOutputFolder => data.ImageEditOutputFolder,
         SettingsField.McpConnectTimeoutSeconds => data.McpConnectTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebSearchMaxResults => data.WebSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebDownloadMaxMegabytes => data.WebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture),
@@ -4011,6 +4039,11 @@ internal sealed partial class SettingsMenu
             return await PickPdfEngineAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.ImageEditMetadata)
+        {
+            return await PickImageEditMetadataAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.HomeAssistantTest)
         {
             return await TestHomeAssistantAsync(cancellationToken).ConfigureAwait(false);
@@ -4444,7 +4477,7 @@ internal sealed partial class SettingsMenu
 
         bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCliExecutable or SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
-            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder;
+            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -4889,6 +4922,16 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.FileSearchMaxResults = searchRows);
                 return true;
 
+            case SettingsField.ImageEditQuality:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int imageQuality) || imageQuality < AppSettingsData.MinImageEditQuality || imageQuality > AppSettingsData.MaxImageEditQuality)
+                {
+                    Sink.Error($"{FieldName(field)} {ImageEditQualityRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ImageEditQuality = imageQuality);
+                return true;
+
             case SettingsField.McpConnectTimeoutSeconds:
                 if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int mcpSeconds) || mcpSeconds < AppSettingsData.MinMcpConnectTimeout || mcpSeconds > AppSettingsData.MaxMcpConnectTimeout)
                 {
@@ -5189,6 +5232,17 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.ScreenOutputFolder = text);
+                return true;
+
+            case SettingsField.ImageEditOutputFolder:
+                // The Camera output folder's rule (2026-10-04): under the sandbox only; empty is beside the source.
+                if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
+                {
+                    Sink.Error($"{FieldName(field)} {CameraOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.ImageEditOutputFolder = text);
                 return true;
 
             case SettingsField.ImageEditor:
@@ -5704,6 +5758,22 @@ internal sealed partial class SettingsMenu
 
         string name = names[index];
         Apply(SettingsField.PdfEngine, d => d.PdfEngine = name);
+        return true;
+    }
+
+    /// <summary>The image-edit metadata picker (2026-10-04): one <see cref="ImageEditMetadataLabel"/> row per <see cref="Images.ImageWords.MetadataNames"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickImageEditMetadataAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Images.ImageWords.MetadataNames;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ImageEditMetadata)), names.Select(ImageEditMetadataLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, Images.ImageWords.MetadataName(saved.ImageEditMetadata))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.ImageEditMetadata, d => d.ImageEditMetadata = name);
         return true;
     }
 

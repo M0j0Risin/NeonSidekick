@@ -254,6 +254,29 @@ public sealed class PostgresToolsTests : IDisposable
         Assert.Equal("postgres_query", Shell.NativeRedirect.Table["psql"]);
         Assert.Contains(Assistant.PostgresRule, new TurnRules(Postgres: true).DefaultRules(false));
     }
+
+    [Fact]
+    public void PrepareTurn_TheMainChatsPrompt_CarriesTheRule_WhileOffered()
+    {
+        // 2026-10-04: PrepareTurn never passed the PostgreSQL flag to SystemPrompt, so the main chat's rules lacked the sentence the bots had.
+        var catalog = new PostgresCatalog([new PostgresNamedConnection("shop", Config(), "x.json")], []);
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => catalog.Offered(_settings.PostgresConnectionsOffered)), () => _settings);
+        var assistant = new Assistant(new Fakes.FakeChatClient(), new ConversationHistory(""), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5)));
+        string dir = Directory.CreateTempSubdirectory("neon-postgres-").FullName;
+        try
+        {
+            var memory = new NeonSidekick.Memory.MemoryStore(dir);
+            ChatScreen.PrepareTurn(assistant, memory, [], [], new PersonaFile(dir), new OperataFile(dir), new VocaliaFile(dir), memoryEnabled: false, speechOutput: false, postgresTools: tools, postgresEnabled: true);
+            Assert.Contains(Assistant.PostgresRule, assistant.History.SystemPrompt);
+
+            ChatScreen.PrepareTurn(assistant, memory, [], [], new PersonaFile(dir), new OperataFile(dir), new VocaliaFile(dir), memoryEnabled: false, speechOutput: false, postgresTools: tools, postgresEnabled: false);
+            Assert.DoesNotContain(Assistant.PostgresRule, assistant.History.SystemPrompt);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
 }
 
 /// <summary>

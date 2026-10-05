@@ -194,11 +194,13 @@ public abstract class PromptFile
     /// <summary>
     /// Creates the file with the default text when it is missing, so an editor opens on what is
     /// being replaced rather than on nothing (empty, for a file with no default: <see cref="VocaliaFile"/>
-    /// since 2026-10-03); an existing file is left alone. Returns true when it
+    /// since 2026-10-03); an existing file is left alone. <paramref name="seed"/>, when given, is written in the default's
+    /// place: the caller's live text (2026-10-04, the user's ask: <c>/operata</c> seeds the operating rules the next reply would
+    /// send, its tool sentences included, not the bare <see cref="Assistant.OperatingRules"/>). Returns true when it
     /// was created. Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>
     /// like any write; the slash command reports those.
     /// </summary>
-    public bool EnsureExists()
+    public bool EnsureExists(string? seed = null)
     {
         string path = FilePath;
         if (File.Exists(path))
@@ -207,8 +209,9 @@ public abstract class PromptFile
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        string text = seed ?? _defaultText;
         // ReplaceLineEndings: the default persona is lines since 2026-10-03, held LF; the file gets the platform's breaks throughout.
-        File.WriteAllText(path, _defaultText.Length == 0 ? "" : _defaultText.ReplaceLineEndings() + Environment.NewLine);
+        File.WriteAllText(path, text.Length == 0 ? "" : text.ReplaceLineEndings() + Environment.NewLine);
         return true;
     }
 

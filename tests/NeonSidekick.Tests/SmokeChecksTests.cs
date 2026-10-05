@@ -35,6 +35,18 @@ public class SmokeChecksTests
         Assert.EndsWith("thumbnail 48x1 #FF40C8", check.Detail);
     }
 
+    /// <summary><c>image:edit</c> (2026-10-04): crop, a quarter turn, grey, hue and a border into five encodes, each the right size and type.</summary>
+    [Fact]
+    public void ProbeImageEdit_EditsIntoEveryEncoder()
+    {
+        var check = SmokeChecks.ProbeImageEdit();
+
+        Assert.Equal("image:edit", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.StartsWith("png, png/16, jpeg/444, gif, tiff at 8x10; middle #", check.Detail);
+        Assert.Contains("; writes png, jpeg, gif, bmp, tiff", check.Detail);
+    }
+
     [Fact]
     public void ProbeSplash_DecodesEveryEmbeddedPicture()
     {

@@ -8,7 +8,7 @@ using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The fourteen file tools (2026-09-19: 19 less <c>list_directory</c>, <c>recent_files</c>, <c>append_file</c>, <c>edit_file</c> and <c>edit_lines</c>, folded into <c>search_files</c>, <c>write_file</c> and <c>patch_file</c>; <c>restore</c> went with File safe edits on 2026-10-01) over a real temp folder: schemas pinned, every <c>Describe</c> exercised once, the argument shapes a model sends.</summary>
+/// <summary>The file tools (sixteen without convert_to_pdf since 2026-10-04, the image tools tested in ImageToolsTests; 2026-09-19: 19 less <c>list_directory</c>, <c>recent_files</c>, <c>append_file</c>, <c>edit_file</c> and <c>edit_lines</c>, folded into <c>search_files</c>, <c>write_file</c> and <c>patch_file</c>; <c>restore</c> went with File safe edits on 2026-10-01) over a real temp folder: schemas pinned, every <c>Describe</c> exercised once, the argument shapes a model sends.</summary>
 public sealed class FileToolsTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
@@ -62,10 +62,10 @@ public sealed class FileToolsTests : IDisposable
     }
 
     [Fact]
-    public void FileTools_AreTheFourteen_InOrder_AllQuiet()
+    public void FileTools_AreTheSixteen_InOrder_AllQuiet()
     {
         Assert.Equal(FileToolNames.WithoutPdf, _tools.Select(t => t.Name));
-        Assert.Equal(14, _tools.Count);   // fifteen until 2026-10-01, when restore went with File safe edits
+        Assert.Equal(16, _tools.Count);   // image_info and image_edit since 2026-10-04; fifteen until 2026-10-01, when restore went with File safe edits
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));
         Assert.All(_tools, t => Assert.Equal("object", t.JsonSchema.GetProperty("type").GetString()));

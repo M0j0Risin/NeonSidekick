@@ -4,8 +4,10 @@ namespace NeonSidekick.Llm;
 /// The editable operating rules: <c>operata.md</c> in the profile directory. When the file exists
 /// and has text, that text replaces <see cref="Assistant.OperatingRules"/> — the whole rules block
 /// that follows the persona, so the operator can rewrite how the sidekick answers and uses its
-/// tools. Absent or blank, the default rules apply. <c>/operata</c> seeds the file with the default
-/// so the edit starts from the sentences being replaced. The mechanics are <see cref="PromptFile"/>'s.
+/// tools. Absent or blank, the default rules apply. <c>/operata</c> seeds the file with the rules the next reply would
+/// send (since 2026-10-04, the user's ask: the reply-format sentence and every tool sentence the turn's offer calls for, not
+/// the bare <see cref="Assistant.OperatingRules"/>), so the edit starts from the sentences being replaced; from then on the
+/// file stands verbatim and a tool switched on or off no longer changes it. The mechanics are <see cref="PromptFile"/>'s.
 /// </summary>
 public sealed class OperataFile : PromptFile
 {

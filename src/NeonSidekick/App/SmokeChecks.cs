@@ -107,6 +107,7 @@ public static partial class SmokeChecks
         results.Add(ProbeWinMmIn());
         results.Add(ProbeConsoleInput());
         results.Add(ProbeImageResize());
+        results.Add(ProbeImageEdit());
         results.Add(ProbeViewerWindow());
         results.Add(ProbeViewerDrag());
         results.Add(ProbeLogWindow());
@@ -462,6 +463,66 @@ public static partial class SmokeChecks
             }
 
             return new SmokeCheck(name, true, string.Join("; ", sizes));
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <c>image:edit</c> (2026-10-04, <c>image_edit</c>): a bitmap through <see cref="Images.ImageEditor.Apply"/> — a crop, a quarter
+    /// turn, the grey and hue matrices, a border — into PNG, a palette PNG, JPEG with 4:4:4 chroma, GIF and TIFF, each read back for
+    /// its size and type. The transforms (orientation, colour matrix, pad), the palette quantiser and four encoders are reached from
+    /// nowhere else in the exe, so this is what pulls them through ILC; the detail ends with the formats this Windows writes.
+    /// </summary>
+    public static SmokeCheck ProbeImageEdit()
+    {
+        const string name = "image:edit";
+        try
+        {
+            var request = new Images.ImageEditRequest
+            {
+                Crop = new System.Drawing.Rectangle(0, 0, 6, 4),
+                Rotate = 90,
+                Filter = Images.ImageFilter.Grey,
+                Hue = 30,
+                Pad = 2,
+            };
+            var source = SolidBmp(8, 4);
+            var done = new List<string>();
+            foreach (var (label, format, edit) in new (string, Images.ImageFormat, Images.ImageEditRequest)[]
+            {
+                ("png", Images.ImageFormats.Png, request),
+                ("png/16", Images.ImageFormats.Png, request with { Colors = 16 }),
+                ("jpeg/444", Images.ImageFormats.Jpeg, request with { Chroma = Images.ImageChroma.Subsample444 }),
+                ("gif", Images.ImageFormats.Gif, request),
+                ("tiff", Images.ImageFormats.Tiff, request),
+            })
+            {
+                var (result, error) = Images.ImageEditor.Apply(source, edit, format);
+                if (result is null)
+                {
+                    return new SmokeCheck(name, false, $"{label}: {error}");
+                }
+
+                var info = PhotoSauce.MagicScaler.ImageFileInfo.Load(result.Bytes);
+                if (result.Width != 8 || result.Height != 10 || !string.Equals(info.MimeType, format.MimeType, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new SmokeCheck(name, false, $"{label}: {result.Width}x{result.Height} {info.MimeType}, expected 8x10 {format.MimeType}");
+                }
+
+                done.Add(label);
+            }
+
+            // The middle of the PNG: the pink source, grey now (the hue turn keeps a grey grey).
+            var (png, _) = Images.ImageEditor.Apply(source, request, Images.ImageFormats.Png);
+            var pixels = Viewer.ViewerImage.Decode(png!.Bytes, "smoke.png");
+            int at = (5 * 8 + 4) * 4;
+            byte b = pixels!.Bgrx[at], g = pixels.Bgrx[at + 1], r = pixels.Bgrx[at + 2];
+            bool grey = Math.Abs(r - g) <= 3 && Math.Abs(g - b) <= 3;
+            string writes = string.Join(", ", Images.ImageFormats.WritableFormats().Select(f => f.Name));
+            return new SmokeCheck(name, grey, $"{string.Join(", ", done)} at 8x10; middle #{r:X2}{g:X2}{b:X2}; writes {writes}");
         }
         catch (Exception ex)
         {

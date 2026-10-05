@@ -173,7 +173,7 @@ public static class HelpCommands
         ]),
         new("/operata",
         [
-            new("/operata [reset | copy <profile> [force]]", "Edit `operata.md` (the operating rules) in your editor, reset it to the default, or copy it to another profile (`force` replaces theirs)."),
+            new("/operata [reset | copy <profile> [force]]", "Edit `operata.md` (the operating rules) in your editor — created, when missing, with the rules in use now, the sentences for the tools that are on included — reset it to the default, or copy it to another profile (`force` replaces theirs)."),
         ]),
         new("/pdf",
         [

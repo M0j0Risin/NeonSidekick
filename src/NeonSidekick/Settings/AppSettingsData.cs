@@ -1453,6 +1453,32 @@ public sealed class AppSettingsData
     public const int MaxFileSearchMaxResults = 5000;
     public const int DefaultFileSearchMaxResults = 200;
 
+    /// <summary>
+    /// The quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none (2026-10-04, the user's pick, with the
+    /// image tools): <see cref="MinImageEditQuality"/> to <see cref="MaxImageEditQuality"/>; also where <c>max_kb</c> starts its search
+    /// down. The tool clamps a hand-edited value. Read at each call, no reconnect. No variable.
+    /// </summary>
+    public int ImageEditQuality { get; set; } = DefaultImageEditQuality;
+
+    public const int MinImageEditQuality = 1;
+    public const int MaxImageEditQuality = 100;
+    public const int DefaultImageEditQuality = Images.ImageEditor.DefaultQuality;
+
+    /// <summary>
+    /// The metadata <c>image_edit</c> keeps when the call does not say (2026-10-04): <c>none</c> (the default: no camera, date or place
+    /// in a written picture), <c>basic</c> (author, copyright, title, comment, date taken, camera, exposure) or <c>all</c> (basic and the
+    /// GPS position). An unknown value reads as <c>none</c>. Read at each call. No variable.
+    /// </summary>
+    public string ImageEditMetadata { get; set; } = DefaultImageEditMetadata;
+
+    public const string DefaultImageEditMetadata = "none";
+
+    /// <summary>
+    /// The folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c> (2026-10-04, the Camera
+    /// and Screen output folders' shape): empty (the default) = beside the source picture. Made on first write. Read at each call. No variable.
+    /// </summary>
+    public string ImageEditOutputFolder { get; set; } = "";
+
     // ─── GitLib ─────────────────────────────────────────────────────────────────
     // Renamed Git native … on 2026-09-21 (the user's call): the in-process LibGit2Sharp tools as
     // against git through the shell. The five keys followed their labels (no migration: the old

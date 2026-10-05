@@ -159,6 +159,9 @@ public sealed record ReadResult(FileOutcome Outcome, string Relative, string Tex
 /// <param name="Image">The picture as the model gets it, its <see cref="ImageAttachment.Path"/> the relative one; null unless <paramref name="Outcome"/> is <see cref="FileOutcome.Ok"/>.</param>
 public sealed record ImageResult(FileOutcome Outcome, string Relative, ImageAttachment? Image, string Detail = "");
 
+/// <param name="Bytes">The file's bytes, unchanged; null unless <paramref name="Outcome"/> is <see cref="FileOutcome.Ok"/>.</param>
+public sealed record BytesResult(FileOutcome Outcome, string Relative, byte[]? Bytes, string Detail = "");
+
 /// <param name="Replaced">A write replaced an existing file; an append created a new one when false.</param>
 /// <param name="Lines">The file's line count after the write (2026-09-18, so the model needs no <c>file_info</c> to count); null for bytes or a file too big to count.</param>
 /// <param name="Words">The file's whitespace-separated word count after the write, the same way.</param>
@@ -1384,6 +1387,46 @@ public sealed class WorkingDirectory
         catch (Exception ex) when (IsFileFailure(ex))
         {
             return new ImageResult(FileOutcome.Failed, display, null, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// A file's bytes as they are (2026-10-04, <c>image_edit</c>: <see cref="ReadImage"/> downscales for the model, an edit needs the
+    /// original): the same guards as <see cref="ReadText"/> — the sandbox, a folder, nothing there — and over
+    /// <paramref name="maxBytes"/> <see cref="FileOutcome.TooBig"/>, unread. No content check: the caller's decoder decides.
+    /// </summary>
+    public BytesResult ReadBytes(string relative, long maxBytes)
+    {
+        var outcome = Resolve(relative, forWrite: false, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            return new BytesResult(outcome, relative, null);
+        }
+
+        string display = Relative(full);
+        try
+        {
+            EnsureExists();
+            if (Directory.Exists(full))
+            {
+                return new BytesResult(FileOutcome.IsDirectory, Relative(full, isDirectory: true), null);
+            }
+
+            if (!File.Exists(full))
+            {
+                return new BytesResult(FileOutcome.Missing, display, null);
+            }
+
+            if (new FileInfo(full).Length > maxBytes)
+            {
+                return new BytesResult(FileOutcome.TooBig, display, null);
+            }
+
+            return new BytesResult(FileOutcome.Ok, display, File.ReadAllBytes(full));
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new BytesResult(FileOutcome.Failed, display, null, ex.Message);
         }
     }
 

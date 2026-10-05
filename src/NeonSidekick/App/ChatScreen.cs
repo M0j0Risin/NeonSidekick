@@ -3228,6 +3228,9 @@ internal sealed partial class ChatScreen
         bool filesOffered = effective.FileTools && Without(_fileTools, disabled).Count > 0;
         var unc = Without(UncToolsFor(_uncTools, effective, _unc.Catalog(), filesOffered), disabled);
         var docker = Without(DockerToolsFor(_dockerTools, effective), disabled);
+        // The web, ask and session sentences (2026-10-04: /sys had left them out of its rules), read as ComposeTurnTools reads them.
+        var web = Without(WebToolsFor(_webTools, filesOffered), disabled);
+        IReadOnlyList<AIFunction> ask = _pane.Enabled && effective.AskUser ? Without(_askTools, disabled) : [];
         return new SystemPromptFacts(
             _persona.Read(),
             _operata.Read(),
@@ -3279,7 +3282,30 @@ internal sealed partial class ChatScreen
             SqliteOffered(effective, _sqlite),
             Without(_sqliteTools, disabled).Count,
             PostgresOffered(effective, _postgres),
-            Without(_postgresTools, disabled).Count);
+            Without(_postgresTools, disabled).Count,
+            effective.WebTools,
+            web.Count,
+            web.Any(t => t is DownloadFileTool),
+            ask.Count > 0 ? ask.OfType<AskUserTool>().FirstOrDefault()?.Limits ?? AskLimits.Default : null,
+            effective.SessionTool,
+            Without(_sessionTools, disabled).Count);
+    }
+
+    /// <summary>
+    /// The operating rules the next reply would send without <c>operata.md</c> (2026-10-04, the user's ask: <c>/operata</c> seeded
+    /// the bare <see cref="Assistant.OperatingRules"/>, losing every tool sentence the turn's offer adds): the reply-format sentence
+    /// as the turn picks it (<see cref="MarkdownTurn"/>, spoken while speech output is on and ready, as <c>/sys</c> reads it), then,
+    /// with tools on, the sentences of the groups <see cref="ComposeTurnTools"/> offers from <see cref="TurnInputs"/>. Plan mode is
+    /// left out: its read-only narrowing is one turn's, and its directive lives outside the rules, so a file written while planning
+    /// keeps the write tools' sentences. A read only.
+    /// </summary>
+    private string CurrentOperatingRules()
+    {
+        var effective = _effective();
+        bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, effective.TtsOutput && _speech.IsReady);
+        return effective.LlmOfferTools
+            ? ComposeTurnTools(TurnInputs(effective) with { Plan = null }).Rules.DefaultRules(markdown)
+            : Assistant.TextRule(markdown);
     }
 
     /// <summary>
@@ -4560,11 +4586,13 @@ internal sealed partial class ChatScreen
     /// <paramref name="effective"/> is where <c>view_image</c> reads its cap (<c>File view image max (per call)</c>) at every
     /// call. Fourteen since 2026-10-01: <c>restore</c> went with File safe edits (the user's call). <paramref name="unc"/> (later
     /// on 2026-10-01) lets <c>open</c> open on an offered UNC share; null = the working directory alone. <paramref name="pdf"/>
-    /// (2026-10-03) adds <c>convert_to_pdf</c> last, fifteen then; null = without it (the tests that count the fourteen).
+    /// (2026-10-03) adds <c>convert_to_pdf</c> last; null = without it (the tests that count the rest). Sixteen without it since
+    /// 2026-10-04: <c>image_info</c> and <c>image_edit</c> after <c>open</c>, so the PDF tool stays last; they read
+    /// <c>Image edit quality</c>, <c>metadata</c> and <c>output folder</c> from <paramref name="effective"/> at every call.
     /// </summary>
     public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null)
     {
-        var tools = new List<AIFunction>(15)
+        var tools = new List<AIFunction>(17)
         {
             new GetWorkingDirectoryTool(files, isDefault),
             new SearchFilesTool(files, effective),
@@ -4580,6 +4608,8 @@ internal sealed partial class ChatScreen
             new ZipTool(files),
             new UnzipTool(files),
             new OpenTool(files, openFile, unc, effective),
+            new ImageInfoTool(files, effective),
+            new ImageEditTool(files, effective),
         };
         if (pdf is not null)
         {
@@ -5059,6 +5089,8 @@ internal sealed partial class ChatScreen
         ZipTool.ToolName,
         UnzipTool.ToolName,
         OpenTool.ToolName,
+        ImageInfoTool.ToolName,
+        ImageEditTool.ToolName,
         LoadSkillTool.ToolName,
         SkillEditorTool.ToolName,
         PresentPlanTool.ToolName,
@@ -5282,7 +5314,7 @@ internal sealed partial class ChatScreen
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
         var r = set.Rules;
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, bridge: r.Bridge, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.Directive, advisor: r.Advisor, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, bridge: r.Bridge, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.Directive, advisor: r.Advisor, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres);
     }
 
     /// <summary>
@@ -5437,8 +5469,11 @@ internal sealed partial class ChatScreen
     /// <summary>After <c>/operata</c> opened an existing file. Pinned.</summary>
     public const string OperataOpenedNotice = "(" + NoticeGlyphs.Operata + "opened operata.md in your editor; save it and the next reply uses it)";
 
-    /// <summary>After <c>/operata</c> created the file with the default operating rules and opened it. Pinned.</summary>
-    public const string OperataCreatedNotice = "(" + NoticeGlyphs.Operata + "created operata.md with the default operating rules and opened it in your editor; edit it, save, and the next reply uses it; /operata reset goes back to the default)";
+    /// <summary>
+    /// After <c>/operata</c> created the file with the operating rules in use now (<see cref="CurrentOperatingRules"/>, 2026-10-04) and
+    /// opened it; it says the file stands as written from here, since a tool switched later no longer changes its sentences. Pinned.
+    /// </summary>
+    public const string OperataCreatedNotice = "(" + NoticeGlyphs.Operata + "created operata.md with the rules in use now, tool sentences included, and opened it in your editor; it stands as written from here: edit it, save, and the next reply uses it; /operata reset goes back to the default)";
 
     public static string OperataOpenFailedError(string detail) => $"Could not open operata.md: {detail}";
 
@@ -5494,14 +5529,15 @@ internal sealed partial class ChatScreen
     /// file (<see cref="OpenPromptFile"/>); <see cref="ResetWord"/> removes it after a confirmation
     /// (the user's call, 2026-09-16: the file may hold a hand-written text and the profile folder
     /// has no trash) so the default is back at the next turn; <c>copy &lt;profile&gt; [force]</c>
-    /// (2026-09-21, the user's ask) is <see cref="CopyPromptFileAsync"/>; any other words are the usage line.
+    /// (2026-09-21, the user's ask) is <see cref="CopyPromptFileAsync"/>; any other words are the usage line. <paramref name="seed"/>
+    /// gives a missing file its text in place of the default (<c>/operata</c>'s <see cref="CurrentOperatingRules"/>, 2026-10-04).
     /// </summary>
-    private async Task HandlePromptFileAsync(PromptFile file, string command, string args, string createdNotice, string openedNotice, Func<string, string> openFailedError, bool spoken, CancellationToken cancellationToken)
+    private async Task HandlePromptFileAsync(PromptFile file, string command, string args, string createdNotice, string openedNotice, Func<string, string> openFailedError, bool spoken, CancellationToken cancellationToken, Func<string>? seed = null)
     {
         string[] words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (words.Length == 0)
         {
-            OpenPromptFile(file, createdNotice, openedNotice, openFailedError);
+            OpenPromptFile(file, createdNotice, openedNotice, openFailedError, seed);
             return;
         }
 
@@ -5602,13 +5638,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c>: make sure the file exists (seeded with its default, if it has one), then
-    /// hand it to the editor. Nothing waits; the next turn reads whatever was saved.
+    /// hand it to the editor. Nothing waits; the next turn reads whatever was saved. <paramref name="seed"/> is read only when the file is missing.
     /// </summary>
-    private void OpenPromptFile(PromptFile file, string createdNotice, string openedNotice, Func<string, string> openFailedError)
+    private void OpenPromptFile(PromptFile file, string createdNotice, string openedNotice, Func<string, string> openFailedError, Func<string>? seed = null)
     {
         try
         {
-            bool created = file.EnsureExists();
+            bool created = file.EnsureExists(seed is not null && !File.Exists(file.FilePath) ? seed() : null);
             _openFile(file.FilePath);
             _flow.Notice(created ? createdNotice : openedNotice);
         }
@@ -10302,7 +10338,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Operata:
-                await HandlePromptFileAsync(_operata, "/operata", args, OperataCreatedNotice, OperataOpenedNotice, OperataOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);
+                await HandlePromptFileAsync(_operata, "/operata", args, OperataCreatedNotice, OperataOpenedNotice, OperataOpenFailedError, spoken: false, cancellationToken, CurrentOperatingRules).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Vocalia:

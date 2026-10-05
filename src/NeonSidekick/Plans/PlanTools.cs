@@ -22,6 +22,8 @@ public static class PlanTools
         "neon_help",
         // files
         "get_working_directory", "search_files", "file_info", "read_file", "view_image",
+        // pictures' headers (2026-10-04): image_info reads, image_edit writes a new file so it is not here
+        "image_info",
         // git
         "gitlib_status", "gitlib_log", "gitlib_show", "gitlib_diff", "gitlib_blame",
         // web
@@ -61,7 +63,7 @@ public static class PlanTools
     public static readonly IReadOnlySet<string> Mutating = new HashSet<string>(StringComparer.Ordinal)
     {
         "start_timer", "stop_timer",
-        "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf",
+        "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf", "image_edit",
         "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_discard", "gitlib_delete", "gitlib_branch",
         "run_command", "process", "execute_code",
         "download_file", "open_url",

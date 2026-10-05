@@ -313,4 +313,20 @@ public sealed class SqliteToolsTests : IDisposable
         Assert.Equal("sqlite_query", Shell.NativeRedirect.Table["sqlite3"]);
         Assert.Contains(Assistant.SqliteRule, new TurnRules(Sqlite: true).DefaultRules(false));
     }
+
+    [Fact]
+    public void PrepareTurn_TheMainChatsPrompt_CarriesTheRule_WhileOffered()
+    {
+        // 2026-10-04: PrepareTurn never passed the SQLite flag to SystemPrompt, so the main chat's rules lacked the sentence the bots had.
+        var assistant = new Assistant(new FakeChatClient(), new ConversationHistory(""), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5)));
+        var memory = new NeonSidekick.Memory.MemoryStore(_dir);
+        string home = Path.Combine(_dir, "profile");
+        var tools = ChatScreen.SqliteTools(Access(), () => _settings);
+
+        ChatScreen.PrepareTurn(assistant, memory, [], [], new PersonaFile(home), new OperataFile(home), new VocaliaFile(home), memoryEnabled: false, speechOutput: false, sqliteTools: tools, sqliteEnabled: true);
+        Assert.Contains(Assistant.SqliteRule, assistant.History.SystemPrompt);
+
+        ChatScreen.PrepareTurn(assistant, memory, [], [], new PersonaFile(home), new OperataFile(home), new VocaliaFile(home), memoryEnabled: false, speechOutput: false, sqliteTools: tools, sqliteEnabled: false);
+        Assert.DoesNotContain(Assistant.SqliteRule, assistant.History.SystemPrompt);
+    }
 }
