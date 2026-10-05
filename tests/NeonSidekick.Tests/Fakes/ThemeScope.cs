@@ -10,7 +10,7 @@ namespace NeonSidekick.Tests.Fakes;
 public sealed class ThemeScope : IDisposable
 {
     /// <summary>Starts from synthwave, whatever an earlier test left.</summary>
-    public ThemeScope() => Theme.Use(ThemePalette.Synthwave);
+    public ThemeScope() => Theme.Use(ShippedThemes.Synthwave);
 
-    public void Dispose() => Theme.Use(ThemePalette.Synthwave);
+    public void Dispose() => Theme.Use(ShippedThemes.Synthwave);
 }

@@ -61,8 +61,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// How the transcript draws your sent line (2026-10-04, the UI review): one of <see cref="UI.UserLineStyle.Names"/> —
-    /// <c>quiet</c> (the default: the <c>›</c> in the user colour, the words in the body's), <c>slab</c> (the line on a faint fill)
-    /// or <c>bold</c> (the bold line it was until then). Anything else reads as the default. No variable.
+    /// <c>quiet</c> (the <c>›</c> in the user colour, the words in the body's), <c>slab</c> (the line on a faint fill) or <c>bold</c>
+    /// (the whole line bold in the user colour; the default, the user's call on 2026-10-05). Anything else reads as the default. No variable.
     /// </summary>
     public string UserLineStyle { get; set; } = UI.UserLineStyle.Default;
 
@@ -296,10 +296,9 @@ public sealed class AppSettingsData
     public string PerformanceBarLook { get; set; } = App.PerfBarMode.Default;
 
     /// <summary>
-    /// The look (2026-09-23, the user's ask): <c>synthwave</c> (the default), <c>netrunner</c>,
-    /// <c>nostromo</c>, <c>noir</c>, <c>cyberpunk</c>, <c>vaporwave</c>, <c>mainframe</c>, <c>grid</c>,
-    /// <c>replicant</c> or <c>abyssal</c> (the last four 2026-09-27) — one of
-    /// <see cref="UI.ThemeName.Names"/>; anything else reads as <see cref="UI.ThemeName.Default"/>.
+    /// The look (2026-09-23, the user's ask): a theme's name — a built-in (<see cref="UI.ThemeName.Names"/>, every
+    /// <c>assets/themes</c> file since 2026-10-05) or one of the home's <c>themes</c> folder; anything else reads as
+    /// <see cref="UI.ThemeName.Default"/> (<c>collider</c> since 2026-10-05, the user's call; <c>synthwave</c> until then).
     /// Put in force at startup; a change on the row or with <c>/theme</c> starts over the way
     /// <c>/splash</c> does (the user's call: a fresh session and the splash in the new colours,
     /// <c>/sessions</c> brings the old one back). No variable.

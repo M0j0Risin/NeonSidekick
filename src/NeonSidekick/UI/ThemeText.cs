@@ -3,8 +3,9 @@ using System.Globalization;
 namespace NeonSidekick.UI;
 
 /// <summary>
-/// The user-visible wording of the user themes (2026-10-01, the user's ask: themes of their own in
-/// <c>&lt;home&gt;/themes</c>): what a file that fails to load says, and <c>/theme export</c>'s lines.
+/// The user-visible wording of the theme files (2026-10-01, the user's ask: themes of their own in
+/// <c>&lt;home&gt;/themes</c>; the built-ins are files too since 2026-10-05): what a file that fails to load says, and
+/// <c>/theme export</c>'s lines.
 /// </summary>
 public static class ThemeText
 {
@@ -28,9 +29,18 @@ public static class ThemeText
     public static string NotJson(string message) => $"skipped: not a theme file ({message})";
     public static string BadName(string name) => $"skipped: \"{name}\" is not a theme name (lower-case letters, digits, - and _, up to 32, and not \"{ExportWord}\")";
     public static string Duplicate(string name, string otherShown) => $"skipped: {otherShown} already names a theme \"{name}\"";
-    public static string NoBase(string baseName) => $"skipped: its base \"{baseName}\" is no theme";
-    public static string BaseCycle(string baseName) => $"skipped: its base \"{baseName}\" leads back to itself";
-    public static string BaseFailed(string baseName) => $"skipped: its base \"{baseName}\" did not load";
+    /// <summary>A file that leaves colour roles unset or unusable (2026-10-05: a theme stands alone, every role its own).</summary>
+    public static string MissingColors(IReadOnlyList<string> roles) =>
+        string.Create(CultureInfo.InvariantCulture, $"skipped: it does not set {string.Join(", ", roles)} (a theme sets all {ThemeKeys.Colors.Count} colours; /theme export writes a full file)");
+
+    /// <summary>An embedded theme file not in exactly one category folder of <c>assets/themes</c> (<see cref="ThemeLibrary"/>).</summary>
+    public const string NotInCategory = "skipped: a built-in theme sits in one category folder of assets/themes";
+
+    /// <summary>The built-in default did not load (a build that skipped the tests); <see cref="ThemePalette.Emergency"/> stands in.</summary>
+    public static string NoDefault(string name) => $"The default theme \"{name}\" did not load; a plain stand-in is in force.";
+
+    /// <summary>A file that still names a base (read until 2026-10-05).</summary>
+    public static string BaseIgnored(string baseName) => $"\"base\": \"{baseName}\" is no longer read, ignored (a theme sets every colour itself)";
     public static string UnknownColor(string key) => $"\"{key}\" is no colour role, ignored (roles: {string.Join(", ", ThemeKeys.Colors)})";
     public static string UnknownStyle(string key) => $"\"{key}\" is no style, ignored";
     public static string BadColor(string where, string? value) => $"{where}: \"{value}\" is not a colour (#RRGGBB, #RGB or a role), ignored";
@@ -67,7 +77,7 @@ public static class ThemeText
     public const string PreviewDiffNew = "\"inkwash\"";
     public const string PreviewThinking ="thinking: the seal should be the only red.";
     public const string PreviewGood = "✓ 40 user themes loaded";
-    public const string PreviewWarn = "! orphan.json: skipped, its base is no theme";
+    public const string PreviewWarn = "! orphan.json: skipped, it does not set bg";
     public const string PreviewError = "✗ No theme named \"matrix\".";
     public const string PreviewPaste = "[Pasted text #1 +12 lines]";
     public const string PreviewHint = "esc to cancel · 1.2k tokens · ";

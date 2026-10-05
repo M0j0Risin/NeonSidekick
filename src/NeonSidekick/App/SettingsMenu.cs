@@ -3165,7 +3165,7 @@ internal sealed partial class SettingsMenu
         Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(ThumbnailSize.Describe(name));
 
     /// <summary>One row of the theme picker: the name and its note (padded to ten: the longest names are nine). Pinned.</summary>
-    public static string ThemeLabel(string name) => ThemeLabel(name, ThemePalette.All);
+    public static string ThemeLabel(string name) => ThemeLabel(name, ThemeLibrary.All);
 
     /// <summary>As <see cref="ThemeLabel(string)"/> among <paramref name="themes"/> (2026-10-01): padded to ten, or past the longest name when a user theme's is longer.</summary>
     public static string ThemeLabel(string name, IReadOnlyList<ThemePalette> themes)

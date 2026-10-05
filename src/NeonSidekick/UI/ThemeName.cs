@@ -13,16 +13,20 @@ namespace NeonSidekick.UI;
 /// </summary>
 public static class ThemeName
 {
-    /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "synthwave";
+    /// <summary>
+    /// The default theme, pinned by <c>AppSettingsTests</c>: a fresh profile's and what an unknown name reads as. Collider since
+    /// 2026-10-05 (the user's call; synthwave until then); the name of an <c>assets/themes</c> file, which the tests hold to
+    /// being shipped.
+    /// </summary>
+    public const string Default = "collider";
 
-    /// <summary>The built-ins' names in menu order, A to Z since 2026-10-03 (<see cref="ThemePalette.All"/>'s until then); a scan's own are <see cref="ThemeScan.Names"/>.</summary>
-    public static readonly string[] Names = ThemePalette.All.Select(p => p.Name).Order(StringComparer.Ordinal).ToArray();
+    /// <summary>The built-ins' names A to Z (since 2026-10-03; <see cref="ThemeLibrary"/>'s since 2026-10-05); a scan's own are <see cref="ThemeScan.Names"/>.</summary>
+    public static readonly string[] Names = [.. ThemeLibrary.All.Select(p => p.Name)];
 
     private const string Category = "Theme";
 
-    /// <summary>Trims and ignores case; false (and synthwave) for anything that is not one of <see cref="Names"/>.</summary>
-    public static bool TryParse(string? text, out ThemePalette palette) => TryParse(text, ThemePalette.All, out palette);
+    /// <summary>Trims and ignores case; false (and the default) for anything that is not one of <see cref="Names"/>.</summary>
+    public static bool TryParse(string? text, out ThemePalette palette) => TryParse(text, ThemeLibrary.All, out palette);
 
     /// <summary>As <see cref="TryParse(string?, out ThemePalette)"/> among <paramref name="themes"/> (a <see cref="ThemeCatalog"/> scan's, 2026-10-01).</summary>
     public static bool TryParse(string? text, IReadOnlyList<ThemePalette> themes, out ThemePalette palette)
@@ -38,12 +42,12 @@ public static class ThemeName
             }
         }
 
-        palette = ThemePalette.Synthwave;
+        palette = ThemeLibrary.Default;
         return false;
     }
 
     /// <summary>The note beside a name in the picker and <c>/theme</c>'s argument list; empty for an unknown one. Pinned.</summary>
-    public static string Describe(string name) => Describe(name, ThemePalette.All);
+    public static string Describe(string name) => Describe(name, ThemeLibrary.All);
 
     /// <summary>As <see cref="Describe(string)"/> among <paramref name="themes"/>.</summary>
     public static string Describe(string name, IReadOnlyList<ThemePalette> themes) => TryParse(name, themes, out var palette) ? palette.Description : "";
@@ -72,7 +76,7 @@ public static class ThemeName
 
         DiagnosticLog.Warn(Category,
             $"{nameof(AppSettingsData.Theme)}='{effective.Theme}' is not one of {string.Join(", ", scan.Names)}. Using {Default}.");
-        TryParse(Default, scan.Themes, out var fallback);   // the scan's synthwave: a file's when one overrides it
+        TryParse(Default, scan.Themes, out var fallback);   // the scan's default: a file's when one overrides it
         return fallback;
     }
 

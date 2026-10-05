@@ -219,6 +219,11 @@
          built-in since 2026-10-02 (the user's call); a <home>\voices\<name>.json of the user's overrides the built-in of
          that name or adds a preset, as the themes folder does. -->
     <EmbeddedResource Include="..\..\assets\voices\built-in\*.json" LogicalName="voices/built-in/%(Filename)%(Extension)" Visible="false" />
+    <!-- The themes (2026-10-05, the user's ask: themes entirely JSON): every assets\themes\<category>\<name>.json is a
+         built-in theme (UI/ThemeLibrary), embedded as themes/<category>/<name>.json; add, change or remove a file and the next
+         build has it. RecursiveDir keeps the category (with a backslash, which ThemeLibrary turns into a slash); a file loose
+         at the root or deeper than one folder is embedded but left out, and ThemeLibraryTests says so. -->
+    <EmbeddedResource Include="..\..\assets\themes\**\*.json" LogicalName="themes/%(RecursiveDir)%(Filename)%(Extension)" Visible="false" />
     <!-- The default persona (2026-10-03, the user's ask): assets\prompts\persona.md is Assistant.DefaultPersona, what the
          prompt carries without a persona.md and what /persona seeds the file with. Edit the asset; the next build has it. -->
     <EmbeddedResource Include="..\..\assets\prompts\persona.md" LogicalName="prompts/persona.md" Visible="false" />

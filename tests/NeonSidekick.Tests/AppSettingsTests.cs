@@ -1401,7 +1401,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(0, s.LlmMaxTurns);
         Assert.Equal(10000, s.LlmMaxToolIterations);
         Assert.Equal("small", s.ImageThumbnailSize);
-        Assert.Equal("synthwave", s.Theme);
+        Assert.Equal("collider", s.Theme);   // the default since 2026-10-05
         Assert.Equal(500, s.FileTreeMaxLength);
         Assert.True(s.FileTreeShowSizes);
         Assert.Equal(10, s.FileViewImageMaxPerCall);   // 2026-09-19 (a constant 4 in the tool until then)

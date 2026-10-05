@@ -25,7 +25,7 @@ public class ThemePreviewTests
     [InlineData(12, 5)]
     public void EveryRow_IsTheWidth_AndEveryCellIsOnABackground(int width, int rows)
     {
-        foreach (var palette in ThemePalette.All)
+        foreach (var palette in ShippedThemes.All)
         {
             var lines = ThemePreview.Lines(palette, width, rows, Banner, "1.2.3");
 
@@ -45,7 +45,7 @@ public class ThemePreviewTests
     [Fact]
     public void TheCard_WithoutThemedBackground_LeavesTheTerminalsOwn()
     {
-        var palette = ThemePalette.Synthwave;
+        var palette = ShippedThemes.Synthwave;
         var rows = ThemePreview.Lines(palette, 72, 60, Banner, "1.2.3", themedBackground: false).Select(line => Row(line, 72)).ToList();
 
         foreach (var row in rows)
@@ -62,7 +62,7 @@ public class ThemePreviewTests
     [Fact]
     public void ARoomyCard_IsTheWholeScreen_NamingTheTheme_ThenBlankRows()
     {
-        var palette = ThemePalette.All[1];
+        var palette = ShippedThemes.All[1];
         var lines = ThemePreview.Lines(palette, 72, 60, Banner, "1.2.3").Select(line => Text(Row(line, 72))).ToList();
 
         Assert.StartsWith(" " + Banner + "  v1.2.3", lines[0]);
@@ -74,7 +74,7 @@ public class ThemePreviewTests
     [Fact]
     public void AShortCard_KeepsTheBannerAndTheRuleFirst_InScreenOrder()
     {
-        var palette = ThemePalette.Synthwave;
+        var palette = ShippedThemes.Synthwave;
         var lines = ThemePreview.Lines(palette, 40, 4, Banner, "1.2.3").Select(line => Text(Row(line, 40))).ToList();
 
         Assert.Equal(4, lines.Count);
@@ -88,12 +88,12 @@ public class ThemePreviewTests
     public void TheCard_UsesThePalettesStyles_NotTheOneInForce()
     {
         using var scope = new ThemeScope();
-        var other = ThemePalette.All.First(p => p.Secondary != ThemePalette.Synthwave.Secondary);
+        var other = ShippedThemes.All.First(p => p.Secondary != ShippedThemes.Synthwave.Secondary);
         var lines = ThemePreview.Lines(other, 72, 60, Banner, "1.2.3");
 
         var user = lines.Select(line => Row(line, 72)).First(row => Text(row).Contains(ThemeText.PreviewUser, StringComparison.Ordinal));
         Assert.Equal(Theme.StylesOf(other)(ThemeStyleSlot.User).Foreground, user.First(s => s.Text == ThemeText.PreviewUser).Style.Foreground);
-        Assert.Same(ThemePalette.Synthwave, Theme.Current);
+        Assert.Same(ShippedThemes.Synthwave, Theme.Current);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class ThemePreviewTests
     {
         // 2026-10-03, the user's ask: a removed and an added line, as the transcript draws an edit.
         using var scope = new ThemeScope();
-        var other = ThemePalette.All.First(p => p.Good != ThemePalette.Synthwave.Good && p.Bad != ThemePalette.Synthwave.Bad);
+        var other = ShippedThemes.All.First(p => p.Good != ShippedThemes.Synthwave.Good && p.Bad != ShippedThemes.Synthwave.Bad);
         var styles = Theme.StylesOf(other);
         var rows = ThemePreview.Lines(other, 72, 60, Banner, "1.2.3").Select(line => Row(line, 72)).ToList();
         var texts = rows.Select(Text).ToList();
@@ -115,7 +115,7 @@ public class ThemePreviewTests
         foreach (var (row, slot) in new[] { (rows[note + 2], ThemeStyleSlot.DiffRemoved), (rows[note + 3], ThemeStyleSlot.DiffAdded) })
         {
             var slab = styles(slot).Background;
-            Assert.NotEqual(Theme.StylesOf(ThemePalette.Synthwave)(slot).Background, slab);
+            Assert.NotEqual(Theme.StylesOf(ShippedThemes.Synthwave)(slot).Background, slab);
             // The margin and the indent on the card's own background, then the slab from the number to the right margin.
             var onSlab = row.Skip(2).Take(row.Count - 3).ToList();
             Assert.All(onSlab, s => Assert.Equal(slab, s.Style.Background));
@@ -127,7 +127,7 @@ public class ThemePreviewTests
     [Fact]
     public void NoRows_IsNoLines()
     {
-        Assert.Empty(ThemePreview.Lines(ThemePalette.Synthwave, 40, 0, Banner, "1.2.3"));
+        Assert.Empty(ThemePreview.Lines(ShippedThemes.Synthwave, 40, 0, Banner, "1.2.3"));
     }
 
     /// <summary>Diff collapse count (2026-10-04, the user's ask): past it the sample diff's summary is the fold's row, unfolded, its rows still drawn.</summary>
@@ -137,7 +137,7 @@ public class ThemePreviewTests
     [InlineData(1, true)]
     public void TheCardsDiff_FollowsDiffCollapseCount_InItsUnfoldedLook(int count, bool folds)
     {
-        var texts = ThemePreview.Lines(ThemePalette.Synthwave, 72, 60, Banner, "1.2.3", diffCollapseCount: count).Select(line => Text(Row(line, 72))).ToList();
+        var texts = ThemePreview.Lines(ShippedThemes.Synthwave, 72, 60, Banner, "1.2.3", diffCollapseCount: count).Select(line => Text(Row(line, 72))).ToList();
         int note = texts.FindIndex(t => t.Contains(ThemeText.PreviewDiffNote, StringComparison.Ordinal));
 
         string expected = folds

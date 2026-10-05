@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.Viewer;
 
 namespace NeonSidekick.Tests;
@@ -505,7 +506,7 @@ public sealed class ViewerTests : IDisposable
     [Fact]
     public void ViewerStyle_Synthwave_IsTheThemesColours()
     {
-        var style = ViewerStyle.For(NeonSidekick.UI.ThemePalette.Synthwave);
+        var style = ViewerStyle.For(ShippedThemes.Synthwave);
 
         Assert.Equal(0x0016040Bu, style.Caption);
         Assert.Equal(0x00FFE6EFu, style.CaptionText);
@@ -519,17 +520,17 @@ public sealed class ViewerTests : IDisposable
     [Fact]
     public void ViewerStyle_Unthemed_IsBlack()
     {
-        var black = ViewerStyle.For(NeonSidekick.UI.ThemePalette.Synthwave, themed: false);
+        var black = ViewerStyle.For(ShippedThemes.Synthwave, themed: false);
 
         Assert.Equal(ViewerStyle.Black, black);
         Assert.Equal((0u, 0x00FFFFFFu, 0u, 0u), (black.Caption, black.CaptionText, black.Border, black.Background));
-        Assert.NotEqual(ViewerStyle.Black, ViewerStyle.For(NeonSidekick.UI.ThemePalette.Synthwave));
+        Assert.NotEqual(ViewerStyle.Black, ViewerStyle.For(ShippedThemes.Synthwave));
     }
 
     [Fact]
     public void ViewerStyle_EveryTheme_HasReadableCaptionText()
     {
-        foreach (var palette in NeonSidekick.UI.ThemePalette.All)
+        foreach (var palette in ShippedThemes.All)
         {
             var style = ViewerStyle.For(palette);
             Assert.NotEqual(style.Caption, style.CaptionText);

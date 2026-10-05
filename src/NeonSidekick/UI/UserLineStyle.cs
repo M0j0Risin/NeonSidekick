@@ -2,9 +2,10 @@ namespace NeonSidekick.UI;
 
 /// <summary>
 /// The setting <c>User line style</c> (2026-10-04, the UI review: the sent line was a full-width bold purple block, the loudest thing on
-/// the screen and in the reply headings' own colour): how the transcript draws the user's sent line — <c>quiet</c> (the default:
-/// the <c>›</c> in the user colour, the words in the body ink), <c>slab</c> (the line on the panel's faint fill) or <c>bold</c> (the
-/// look until then, in the theme's <c>user</c> style). The screen hands the setting to the pane (<see cref="ScreenPane.UserLineStyle"/>);
+/// the screen and in the reply headings' own colour): how the transcript draws the user's sent line — <c>quiet</c> (the <c>›</c> in
+/// the user colour, the words in the body ink), <c>slab</c> (the line on the panel's faint fill) or <c>bold</c> (in the theme's
+/// <c>user</c> style; the default again since 2026-10-05, the user's call, <c>quiet</c> from 2026-10-04). The screen hands the setting
+/// to the pane (<see cref="ScreenPane.UserLineStyle"/>);
 /// <see cref="Resolve"/> reads an unknown value as <see cref="Default"/>.
 /// </summary>
 public static class UserLineStyle
@@ -13,8 +14,8 @@ public static class UserLineStyle
     public const string Slab = "slab";
     public const string Bold = "bold";
 
-    /// <summary>The compiled default (the user's call). Pinned.</summary>
-    public const string Default = Quiet;
+    /// <summary>The compiled default (the user's call: <c>bold</c> since 2026-10-05, <c>quiet</c> the day before). Pinned.</summary>
+    public const string Default = Bold;
 
     /// <summary>The styles in menu order.</summary>
     public static readonly string[] Names = { Quiet, Slab, Bold };

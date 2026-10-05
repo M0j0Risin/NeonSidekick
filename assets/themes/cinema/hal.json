@@ -1,12 +1,20 @@
 {
   "name": "hal",
   "description": "I'm sorry, Dave",
-  "base": "noir",
   "colors": {
     "primary": "#FF2A1A",
+    "secondary": "#C8C8C8",
+    "tertiary": "#A0A0A0",
     "deep": "#5C0F0A",
+    "highlight": "#E0E0E0",
     "warm": "#FF7A4D",
     "tint": "#FF8C80",
+    "ink": "#E6E6E6",
+    "dim": "#8C8C8C",
+    "dimmer": "#3A3A3A",
+    "bg": "#0A0A0A",
+    "panelBg": "#171717",
+    "good": "#F5F5F5",
     "bad": "#FF5CAA",
     "warn": "#FFB000"
   },

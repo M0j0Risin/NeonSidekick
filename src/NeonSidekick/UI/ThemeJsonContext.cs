@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace NeonSidekick.UI;
 
 /// <summary>
-/// The source-generated context for a user theme, <c>&lt;home&gt;/themes/*.json</c> (2026-10-01); a sibling of
+/// The source-generated context for a theme file, <c>&lt;home&gt;/themes/*.json</c> (2026-10-01) and the embedded built-ins (2026-10-05); a sibling of
 /// <c>McpJsonContext</c> with its options: camelCase keys, comments and a trailing comma tolerated on the way in (a
 /// hand-edited file), indented on the way out (<c>/theme export</c>). Reflection serialisation is off.
 /// </summary>
@@ -18,7 +18,7 @@ namespace NeonSidekick.UI;
 [JsonSerializable(typeof(ThemeStyleData))]
 public sealed partial class ThemeJsonContext : JsonSerializerContext;
 
-/// <summary>One theme file as written (2026-10-01): every part optional; <see cref="ThemeFile.Build"/> fills what it leaves out from its base.</summary>
+/// <summary>One theme file as written (2026-10-01): every colour role required since 2026-10-05 (<see cref="ThemeFile.Build"/>), the rest optional.</summary>
 public sealed class ThemeFileData
 {
     /// <summary>The name <c>/theme</c> takes; the file's stem when absent.</summary>
@@ -27,10 +27,13 @@ public sealed class ThemeFileData
     /// <summary>The note beside the name in the picker; <see cref="ThemeText.CustomDescription"/> when absent.</summary>
     public string? Description { get; set; }
 
-    /// <summary>The theme the left-out parts come from, built-in or user; synthwave when absent.</summary>
+    /// <summary>
+    /// The theme the left-out parts came from until 2026-10-05, when every theme came to stand alone (the user's call). Read only so
+    /// a file that still names one hears that it is ignored (<see cref="ThemeText.BaseIgnored"/>); never written.
+    /// </summary>
     public string? Base { get; set; }
 
-    /// <summary>Colour role (<see cref="ThemeKeys.Colors"/>) to <c>#RRGGBB</c> or <c>#RGB</c>.</summary>
+    /// <summary>Colour role (<see cref="ThemeKeys.Colors"/>) to <c>#RRGGBB</c> or <c>#RGB</c>; all fifteen required.</summary>
     public Dictionary<string, string>? Colors { get; set; }
 
     /// <summary>The banner's stops, left to right, 2 to 16.</summary>

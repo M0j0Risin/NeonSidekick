@@ -50,6 +50,8 @@ public partial class SidekickAppTests : IDisposable
 
     public void Dispose()
     {
+        // A run puts the profile's theme in force, collider for a fresh one since 2026-10-05: synthwave back for the tests after.
+        Theme.Use(ShippedThemes.Synthwave);
         _mcpServers.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _settings.Dispose();
         _console.Dispose();

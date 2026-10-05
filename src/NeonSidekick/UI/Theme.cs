@@ -6,10 +6,10 @@ using Spectre.Console;
 namespace NeonSidekick.UI;
 
 /// <summary>
-/// The visual identity: the palette in force (<see cref="ThemePalette"/>, synthwave by default),
-/// a gradient title and styled panels shared by every screen. No file but
-/// <see cref="ThemePalette"/> names a colour; every other file composes markup through the helpers
-/// here so the whole look can be tuned in one place.
+/// The visual identity: the palette in force (<see cref="ThemePalette"/>, <see cref="ThemeName.Default"/> at start),
+/// a gradient title and styled panels shared by every screen. No code names a colour (the themes are
+/// <c>assets/themes</c>' files since 2026-10-05, <see cref="ThemeLibrary"/>); every file composes markup
+/// through the helpers here so the whole look can be tuned in one place.
 /// <para>
 /// Themes (2026-09-23, the user's ask): every colour and style is a property over the current
 /// palette's style set, swapped whole by <see cref="Use"/> — one reference assignment, so a
@@ -20,7 +20,7 @@ namespace NeonSidekick.UI;
 /// </summary>
 public static class Theme
 {
-    private static volatile ThemeStyles s_current = new(ThemePalette.Synthwave);
+    private static volatile ThemeStyles s_current = new(ThemeLibrary.Default);
 
     /// <summary>The last set <see cref="StylesOf"/> built for a palette not in force.</summary>
     private static volatile ThemeStyles? s_other;

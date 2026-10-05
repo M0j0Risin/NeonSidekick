@@ -8,14 +8,15 @@ namespace NeonSidekick.Tests;
 public class ThemeNameTests
 {
     [Fact]
-    public void Names_ArePinned_AToZ_SynthwaveTheDefault()
+    public void Names_AreTheBuiltIns_AToZ_ColliderTheDefault()
     {
-        // A to Z since 2026-10-03 (the user's ask); All keeps the compiled order, synthwave first.
-        Assert.Equal(new[] { "abyssal", "cyberpunk", "grid", "mainframe", "netrunner", "noir", "nostromo", "replicant", "synthwave", "vaporwave" }, ThemeName.Names);
-        Assert.Equal("synthwave", ThemeName.Default);
+        // A to Z since 2026-10-03 (the user's ask); the built-ins are assets/themes' files since 2026-10-05, collider the default.
+        Assert.Equal(ShippedThemes.All.Select(p => p.Name), ThemeName.Names);
+        Assert.Equal(ThemeName.Names.Order(StringComparer.Ordinal), ThemeName.Names);
+        Assert.Equal("collider", ThemeName.Default);
         Assert.Equal(ThemeName.Default, new AppSettingsData().Theme);
-        Assert.Equal(ThemePalette.All.Select(p => p.Name).Order(StringComparer.Ordinal), ThemeName.Names);
-        Assert.Same(ThemePalette.Synthwave, ThemePalette.All[0]);
+        Assert.Contains("synthwave", ThemeName.Names);
+        Assert.Same(ThemeLibrary.Default, ThemeLibrary.Get("collider"));
     }
 
     [Theory]
@@ -32,16 +33,17 @@ public class ThemeNameTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("matrix")]
-    public void TryParse_AnythingElse_IsFalseAndSynthwave(string? text)
+    public void TryParse_AnythingElse_IsFalseAndTheDefault(string? text)
     {
         Assert.False(ThemeName.TryParse(text, out var palette));
-        Assert.Same(ThemePalette.Synthwave, palette);
+        Assert.Same(ThemeLibrary.Default, palette);
     }
 
     [Fact]
     public void Describe_IsThePalettesNote_Pinned()
     {
-        Assert.Equal("default theme", ThemeName.Describe("synthwave"));
+        Assert.Equal("neon sunset", ThemeName.Describe("synthwave"));
+        Assert.Equal("particle collision", ThemeName.Describe("collider"));
         Assert.Equal("green phosphor", ThemeName.Describe("netrunner"));
         Assert.Equal("amber phosphor", ThemeName.Describe("nostromo"));
         Assert.Equal("greyscale", ThemeName.Describe("noir"));
@@ -57,8 +59,8 @@ public class ThemeNameTests
     [Fact]
     public void Resolve_MapsTheSavedName()
     {
-        Assert.Same(ThemePalette.Cyberpunk, ThemeName.Resolve(new AppSettingsData { Theme = "cyberpunk" }));
-        Assert.Same(ThemePalette.Synthwave, ThemeName.Resolve(new AppSettingsData()));
+        Assert.Same(ShippedThemes.Cyberpunk, ThemeName.Resolve(new AppSettingsData { Theme = "cyberpunk" }));
+        Assert.Same(ThemeLibrary.Default, ThemeName.Resolve(new AppSettingsData()));
     }
 
     [Fact]
@@ -69,7 +71,7 @@ public class ThemeNameTests
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Same(ThemePalette.Synthwave, ThemeName.Resolve(new AppSettingsData { Theme = "matrix" }));
+            Assert.Same(ThemeLibrary.Default, ThemeName.Resolve(new AppSettingsData { Theme = "matrix" }));
         }
         finally
         {
@@ -77,7 +79,7 @@ public class ThemeNameTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("Theme='matrix' is not one of abyssal, cyberpunk, grid, mainframe, netrunner, noir, nostromo, replicant, synthwave, vaporwave. Using synthwave.", warning.Message);
+        Assert.Contains($"Theme='matrix' is not one of {string.Join(", ", ThemeName.Names)}. Using collider.", warning.Message);
     }
 
     [Fact]
@@ -85,8 +87,8 @@ public class ThemeNameTests
     {
         using var scope = new ThemeScope();
         ThemeName.Apply(new AppSettingsData { Theme = "vaporwave" });
-        Assert.Same(ThemePalette.Vaporwave, Theme.Current);
+        Assert.Same(ShippedThemes.Vaporwave, Theme.Current);
         ThemeName.Apply(new AppSettingsData());
-        Assert.Same(ThemePalette.Synthwave, Theme.Current);
+        Assert.Same(ThemeLibrary.Default, Theme.Current);
     }
 }

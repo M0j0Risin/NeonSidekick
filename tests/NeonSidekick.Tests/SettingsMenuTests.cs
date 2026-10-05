@@ -1856,18 +1856,21 @@ public partial class SettingsMenuTests : IDisposable
         var data = new AppSettingsData();
         Assert.False(SettingsMenu.IsToggle(SettingsField.Theme));
         Assert.Equal("Theme", SettingsMenu.FieldName(SettingsField.Theme));
-        Assert.Equal("synthwave", SettingsMenu.FieldValue(SettingsField.Theme, data, _settings.ProfileDirectory));
+        Assert.Equal("collider", SettingsMenu.FieldValue(SettingsField.Theme, data, _settings.ProfileDirectory));   // the default since 2026-10-05
         Assert.Equal("noir", SettingsMenu.FieldValue(SettingsField.Theme, new AppSettingsData { Theme = "noir" }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.Theme) || SettingsMenu.IsTtsField(SettingsField.Theme) || SettingsMenu.IsVoiceField(SettingsField.Theme) || SettingsMenu.IsMcpField(SettingsField.Theme));
         Assert.True(SettingsMenu.RefusedMidTurn(SettingsField.Theme));   // a change starts the screen over
-        Assert.Equal("synthwave [#9A8BB8]default theme[/]", SettingsMenu.ThemeLabel("synthwave"));
-        Assert.Equal("noir      [#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir"));
-        Assert.Equal("nostromo  [#9A8BB8]amber phosphor[/]", SettingsMenu.ThemeLabel("nostromo"));
-        Assert.Equal("No theme named \"matrix\". /theme takes abyssal, cyberpunk, grid, mainframe, netrunner, noir, nostromo, replicant, synthwave or vaporwave, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix"));
+        // The column is the longest built-in's name and a space (ten at least); sixty built-ins since 2026-10-05.
+        int width = Math.Max(10, ThemeName.Names.Max(n => n.Length) + 1);
+        Assert.Equal("synthwave".PadRight(width) + "[#9A8BB8]neon sunset[/]", SettingsMenu.ThemeLabel("synthwave"));
+        Assert.Equal("noir".PadRight(width) + "[#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir"));
+        Assert.StartsWith("No theme named \"matrix\". /theme takes abyssal, akira, ", SettingsMenu.ThemeNameError("matrix"));
+        Assert.EndsWith($" or {ThemeName.Names[^1]}, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix"));
+        Assert.Equal("No theme named \"matrix\". /theme takes noir, nostromo or synthwave, or nothing to pick from a list.", SettingsMenu.ThemeNameError("matrix", ["noir", "nostromo", "synthwave"]));
         Assert.Equal("Theme: noir (already in force)", SettingsMenu.ThemeAlreadyNotice("noir"));
         // A user theme's longer name widens the column (2026-10-01).
-        var mine = ThemePalette.Synthwave with { Name = "a-much-longer-name", Description = "mine", SourcePath = "x.json" };
-        IReadOnlyList<ThemePalette> themes = [.. ThemePalette.All, mine];
+        var mine = ShippedThemes.Synthwave with { Name = "a-much-longer-name", Description = "mine", SourcePath = "x.json" };
+        IReadOnlyList<ThemePalette> themes = [.. ShippedThemes.All, mine];
         Assert.Equal("noir" + new string(' ', 15) + "[#9A8BB8]greyscale[/]", SettingsMenu.ThemeLabel("noir", themes));
         Assert.Equal("a-much-longer-name [#9A8BB8]mine[/]", SettingsMenu.ThemeLabel("a-much-longer-name", themes));
         Assert.Equal("Theme: netrunner", SettingsMenu.SavedNotice(SettingsField.Theme, new AppSettingsData { Theme = "netrunner" }, _settings.ProfileDirectory));
@@ -1878,16 +1881,17 @@ public partial class SettingsMenuTests : IDisposable
     {
         using var scope = new ThemeScope();
         Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme));   // the last row until the ComfyUI rows came after it (2026-09-24)
-        Push(Keys.Enter);                           // Theme: the picker opens on synthwave
-        Push(Keys.Down, Keys.Enter);                // vaporwave, after it A to Z (2026-10-03)
+        Push(Keys.Enter);                           // Theme: the picker opens on the default, collider (2026-10-05)
+        Push(Keys.Down, Keys.Enter);                // the theme after it A to Z (2026-10-03)
         Push(Keys.Escape);
+        string next = ThemeName.Names[Array.IndexOf(ThemeName.Names, ThemeName.Default) + 1];
 
         Assert.Equal(SettingsChanges.Theme, await _menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal("vaporwave", _settings.Current.Theme);
-        Assert.Same(ThemePalette.Vaporwave, Theme.Current);
+        Assert.Equal(next, _settings.Current.Theme);
+        Assert.Same(ThemeLibrary.Get(next), Theme.Current);
         Assert.Contains(Breadcrumb("Theme"), _console.Output);
-        Assert.Contains("  · Theme: vaporwave", _console.Output);
+        Assert.Contains("  · Theme: " + next, _console.Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -1904,22 +1908,23 @@ public partial class SettingsMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("synthwave", _settings.Current.Theme);
+        Assert.Equal(ThemeName.Default, _settings.Current.Theme);
     }
 
     [Fact]
     public async Task Theme_PickedAndPickedBack_IsNoChangeForTheScreen()
     {
         using var scope = new ThemeScope();
+        _settings.Update(d => d.Theme = "synthwave");   // the theme in force, as the screen would have put it
         Down(Array.IndexOf(Enum.GetValues<SettingsField>(), SettingsField.Theme));   // the last row until the ComfyUI rows came after it (2026-09-24)
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Enter);   // nostromo
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Enter);   // two themes past synthwave
         Push(Keys.Enter, Keys.Up, Keys.Up, Keys.Enter);       // synthwave again
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("synthwave", _settings.Current.Theme);
-        Assert.Same(ThemePalette.Synthwave, Theme.Current);
+        Assert.Same(ShippedThemes.Synthwave, Theme.Current);
     }
 
     [Fact]
@@ -1931,7 +1936,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal("synthwave", _settings.Current.Theme);
+        Assert.Equal(ThemeName.Default, _settings.Current.Theme);
         Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
     }
 
@@ -3180,7 +3185,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              quiet\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);

@@ -16,20 +16,18 @@ public sealed record ThemeScan(IReadOnlyList<ThemePalette> Themes, IReadOnlyList
 }
 
 /// <summary>
-/// Every theme the operator can pick (2026-10-01, the user's ask): the built-ins and the user's themes — every <c>*.json</c> in
-/// <c>&lt;home&gt;/themes</c> (<see cref="DirectoryName"/>) and in its first-level subfolders (2026-10-02, the user's ask: a
-/// category folder of <c>assets/themes</c> dropped in whole; a dot-folder is skipped, a deeper one never read) — as one list in
-/// name order (2026-10-03, the user's ask; the built-ins in <see cref="ThemePalette.All"/>'s order, then the user's, until then),
-/// so the pickers, <c>/theme</c>'s completion and its error all read A to Z. Files are taken in <see cref="JsonFiles"/>' order, the folder's own first, so a
-/// loose file keeps a name a subfolder's file also gives (that one is skipped as a duplicate, named by its path under the folder). Read afresh at every <see cref="Scan"/>, so a file dropped in or edited shows the next time a list opens
-/// with no restart (the <c>comfy</c> folder's habit; the files are small, so there is no cache). A file named like a
-/// built-in overrides it (later on 2026-10-01, the user's call; the file was skipped and the built-in won until then):
-/// it is listed in the built-in's stead, and every theme whose base names it, the default base included, builds on
-/// the file. Only the override itself, when its base is its own name or left out, builds on the compiled built-in; an
-/// override that fails to load leaves the built-in in its place. A file is skipped, with a
-/// problem, when it cannot be read or parsed, when its name is no theme name or a name an earlier file took, and when its
-/// <c>base</c> is no theme, leads back to itself or did not load; a base may be a built-in or another file. A missing
-/// folder is no user theme.
+/// Every theme the operator can pick (2026-10-01, the user's ask): the built-ins (<see cref="ThemeLibrary"/>, <c>assets/themes</c>
+/// embedded since 2026-10-05) and the user's themes — every <c>*.json</c> in <c>&lt;home&gt;/themes</c> (<see cref="DirectoryName"/>)
+/// and in its first-level subfolders (2026-10-02, the user's ask: a category folder dropped in whole; a dot-folder is skipped, a
+/// deeper one never read) — as one list in name order (2026-10-03, the user's ask), so the pickers, <c>/theme</c>'s completion and
+/// its error all read A to Z. Files are taken in <see cref="JsonFiles"/>' order, the folder's own first, so a loose file keeps a name
+/// a subfolder's file also gives (that one is skipped as a duplicate, named by its path under the folder). Read afresh at every
+/// <see cref="Scan"/>, so a file dropped in or edited shows the next time a list opens with no restart (the <c>comfy</c> folder's
+/// habit; the files are small, so there is no cache). A file named like a built-in replaces it (2026-10-01, the user's call); one
+/// that fails to load leaves the built-in in its place. Every file stands alone (2026-10-05, the user's call: <see cref="ThemeFile"/>
+/// reads no <c>base</c>; a file built on a base, a built-in or another file, until then). A file is skipped, with a problem, when
+/// it cannot be read or parsed, when its name is no theme name or a name an earlier file took, and when it leaves a colour role
+/// unset. A missing folder is no user theme.
 /// </summary>
 public static class ThemeCatalog
 {
@@ -39,10 +37,10 @@ public static class ThemeCatalog
     private const string Category = "Theme";
 
     /// <summary>The built-ins in name order (2026-10-03).</summary>
-    public static readonly IReadOnlyList<ThemePalette> SortedBuiltIns = [.. ThemePalette.All.OrderBy(p => p.Name, StringComparer.Ordinal)];
+    public static IReadOnlyList<ThemePalette> SortedBuiltIns => ThemeLibrary.All;
 
     /// <summary>The built-ins alone: what a scan of no folder finds.</summary>
-    public static readonly ThemeScan BuiltIn = new(SortedBuiltIns, []);
+    public static readonly ThemeScan BuiltIn = new(ThemeLibrary.All, []);
 
     /// <summary>The themes of <paramref name="directory"/> (null or missing: the built-ins alone).</summary>
     public static ThemeScan Scan(string? directory)
@@ -66,8 +64,9 @@ public static class ThemeCatalog
 
         string Shown(string file) => Path.GetRelativePath(directory, file);
 
-        var builtIns = ThemePalette.All.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
-        var pending = new Dictionary<string, (string Path, ThemeFileData Data)>(StringComparer.OrdinalIgnoreCase);
+        // A file claims its name before it is built, so a later file of that name is a duplicate even when the first fails.
+        var claimed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var mine = new Dictionary<string, ThemePalette>(StringComparer.OrdinalIgnoreCase);
         foreach (string file in files)
         {
             var data = ThemeFile.Read(file, out string? problem);
@@ -81,81 +80,35 @@ public static class ThemeCatalog
             if (!ThemeFile.IsValidName(name))
             {
                 problems.Add(new ThemeProblem(file, ThemeText.BadName(name), Shown(file)));
+                continue;
             }
-            else if (pending.TryGetValue(name, out var first))
+
+            if (claimed.TryGetValue(name, out string? first))
             {
-                problems.Add(new ThemeProblem(file, ThemeText.Duplicate(name, Shown(first.Path)), Shown(file)));
+                problems.Add(new ThemeProblem(file, ThemeText.Duplicate(name, Shown(first)), Shown(file)));
+                continue;
             }
-            else
+
+            claimed[name] = file;
+            var notes = new List<string>();
+            var palette = ThemeFile.Build(name, data, file, notes, out problem);
+            problems.AddRange(notes.Select(note => new ThemeProblem(file, note, Shown(file))));
+            if (palette is null)
             {
-                pending[name] = (file, data);
+                problems.Add(new ThemeProblem(file, problem!, Shown(file)));
+                continue;
             }
+
+            mine[name] = palette;
         }
 
-        var built = new Dictionary<string, ThemePalette?>(StringComparer.OrdinalIgnoreCase);
-        var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string name in pending.Keys)
-        {
-            Resolve(name);
-        }
-
-        // An override that built stands in for its built-in; one that failed leaves the built-in. All of them A to Z.
-        var themes = ThemePalette.All.Select(p => built.GetValueOrDefault(p.Name) ?? p)
-            .Concat(built.Values.OfType<ThemePalette>().Where(p => !builtIns.ContainsKey(p.Name)))
+        // A file that built stands in for its built-in; one that failed leaves the built-in. All of them A to Z.
+        var builtIns = ThemeLibrary.All.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var themes = ThemeLibrary.All.Select(p => mine.GetValueOrDefault(p.Name) ?? p)
+            .Concat(mine.Values.Where(p => !builtIns.Contains(p.Name)))
             .OrderBy(p => p.Name, StringComparer.Ordinal)
             .ToList();
         return new ThemeScan(themes, problems);
-
-        // A user theme over its base, built once; null (with its problem said) when it cannot be.
-        ThemePalette? Resolve(string name)
-        {
-            if (built.TryGetValue(name, out var done))
-            {
-                return done;
-            }
-
-            var (path, data) = pending[name];
-            // An override's base is its own built-in when left out, so a file that changes one colour of noir is noir with that colour.
-            string baseName = string.IsNullOrWhiteSpace(data.Base)
-                ? (builtIns.ContainsKey(name) ? name : ThemeName.Default)
-                : data.Base.Trim().ToLowerInvariant();
-            ThemePalette? basePalette = null;
-            string? failure = null;
-            bool own = string.Equals(baseName, name, StringComparison.OrdinalIgnoreCase);
-            if (own && builtIns.TryGetValue(baseName, out var original))
-            {
-                basePalette = original;   // an override over its own built-in
-            }
-            else if (!pending.ContainsKey(baseName))
-            {
-                basePalette = builtIns.GetValueOrDefault(baseName);
-                failure = basePalette is null ? ThemeText.NoBase(baseName) : null;
-            }
-            else if (visiting.Contains(baseName) || own)
-            {
-                failure = ThemeText.BaseCycle(baseName);
-            }
-            else
-            {
-                visiting.Add(name);
-                basePalette = Resolve(baseName);
-                visiting.Remove(name);
-                failure = basePalette is null ? ThemeText.BaseFailed(baseName) : null;
-            }
-
-            if (basePalette is null)
-            {
-                problems.Add(new ThemeProblem(path, failure!, Shown(path)));
-                built[name] = null;
-                return null;
-            }
-
-            var notes = new List<string>();
-            var palette = ThemeFile.Build(name, data, basePalette, path, notes);
-            problems.AddRange(notes.Select(note => new ThemeProblem(path, note, Shown(path))));
-            built[name] = palette;
-            return palette;
-        }
     }
 
     /// <summary>

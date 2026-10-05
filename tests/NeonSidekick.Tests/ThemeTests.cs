@@ -9,27 +9,23 @@ public class ThemeTests
     [Fact]
     public void ToHex_RendersUppercaseSixDigitHex()
     {
-        Assert.Equal("#FF2E97", Theme.ToHex(Theme.Primary));
-        Assert.Equal("#0B0416", Theme.ToHex(Theme.Bg));
+        Assert.Equal("#FF2E97", Theme.ToHex(new Color(0xFF, 0x2E, 0x97)));
+        Assert.Equal("#0B0416", Theme.ToHex(new Color(0x0B, 0x04, 0x16)));
     }
 
+    /// <summary>
+    /// The colour properties read the palette in force, role by role. Synthwave's hex values were pinned here until the themes became
+    /// <c>assets/themes</c>' files (2026-10-05, the user's ask): the file is the source now, and editing it is the point.
+    /// </summary>
     [Fact]
-    public void Palette_IsPinned()
+    public void Palette_TheRolesReadThePaletteInForce()
     {
-        Assert.Equal("#33E0FF", Theme.ToHex(Theme.Secondary));
-        Assert.Equal("#B15BFF", Theme.ToHex(Theme.Tertiary));
-        Assert.Equal("#7B2FF7", Theme.ToHex(Theme.Deep));
-        Assert.Equal("#FFC832", Theme.ToHex(Theme.Highlight));
-        Assert.Equal("#FF8A3D", Theme.ToHex(Theme.Warm));
-        Assert.Equal("#F45B9B", Theme.ToHex(Theme.Tint));
-        Assert.Equal("#EFE6FF", Theme.ToHex(Theme.Ink));
-        Assert.Equal("#9A8BB8", Theme.ToHex(Theme.Dim));
-        Assert.Equal("#443C56", Theme.ToHex(Theme.Dimmer));
+        using var scope = new ThemeScope();
+        var p = ShippedThemes.Synthwave;
+        Assert.Equal(
+            [p.Primary, p.Secondary, p.Tertiary, p.Deep, p.Highlight, p.Warm, p.Tint, p.Ink, p.Dim, p.Dimmer, p.Bg, p.PanelBg, p.Good, p.Bad, p.Warn],
+            [Theme.Primary, Theme.Secondary, Theme.Tertiary, Theme.Deep, Theme.Highlight, Theme.Warm, Theme.Tint, Theme.Ink, Theme.Dim, Theme.Dimmer, Theme.Bg, Theme.PanelBg, Theme.Good, Theme.Bad, Theme.Warn]);
         Assert.Equal(Theme.Dimmer, Theme.Placeholder.Foreground);
-        Assert.Equal("#160A28", Theme.ToHex(Theme.PanelBg));
-        Assert.Equal("#3DF27A", Theme.ToHex(Theme.Good));
-        Assert.Equal("#FF4D6D", Theme.ToHex(Theme.Bad));
-        Assert.Equal(Theme.Highlight, Theme.Warn);
     }
 
     [Fact]
@@ -81,53 +77,53 @@ public class ThemeTests
     // ── Themes (2026-09-23) ─────────────────────────────────────────────────
 
     [Fact]
-    public void Synthwave_IsInForceByDefault_WithItsGradient()
+    public void TheSuiteWearsSynthwave_TheAppStartsOnTheDefault()
     {
         using var scope = new ThemeScope();
-        Assert.Same(ThemePalette.Synthwave, Theme.Current);
-        Assert.Equal(new[] { "#33E0FF", "#B15BFF", "#FF2E97", "#FF8A3D", "#FFC832" }, ThemePalette.Synthwave.GradientStops.Select(Theme.ToHex));
-        Assert.Equal("synthwave", ThemePalette.All[0].Name);
+        Assert.Same(ShippedThemes.Synthwave, Theme.Current);   // ModuleInit and ThemeScope: the renders the tests pin
+        Assert.Equal("collider", ThemeLibrary.Default.Name);  // what Theme starts on in the app (2026-10-05)
+        Assert.Equal(ShippedThemes.Synthwave.GradientStops, Theme.GradientStops);
     }
 
     [Fact]
     public void Use_SwapsEveryColourAndStyle_AndSynthwaveComesBack()
     {
         using var scope = new ThemeScope();
-        Theme.Use(ThemePalette.Netrunner);
+        Theme.Use(ShippedThemes.Netrunner);
 
-        Assert.Same(ThemePalette.Netrunner, Theme.Current);
+        Assert.Same(ShippedThemes.Netrunner, Theme.Current);
         Assert.Equal("#00FF41", Theme.ToHex(Theme.Primary));
-        Assert.Equal(ThemePalette.Netrunner.Secondary, Theme.User.Foreground);
-        Assert.Equal(ThemePalette.Netrunner.Deep, Theme.PaneRule.Foreground);
-        Assert.Equal(ThemePalette.Netrunner.PanelBg, Theme.CodeString.Background);
-        Assert.Equal(ThemePalette.Netrunner.Highlight, Theme.CodeString.Foreground);
+        Assert.Equal(ShippedThemes.Netrunner.Secondary, Theme.User.Foreground);
+        Assert.Equal(ShippedThemes.Netrunner.Deep, Theme.PaneRule.Foreground);
+        Assert.Equal(ShippedThemes.Netrunner.PanelBg, Theme.CodeString.Background);
+        Assert.Equal(ShippedThemes.Netrunner.Highlight, Theme.CodeString.Foreground);
         Assert.Equal("[#00FF41 bold]x[/]", Theme.AccentMarkup("x"));
         Assert.StartsWith("[#0F6B2E]a[/]", Theme.GradientMarkup("ab"));
 
-        Theme.Use(ThemePalette.Synthwave);
+        Theme.Use(ShippedThemes.Synthwave);
         Assert.Equal("#FF2E97", Theme.ToHex(Theme.Primary));
-        Assert.Equal(ThemePalette.Synthwave.Secondary, Theme.User.Foreground);
+        Assert.Equal(ShippedThemes.Synthwave.Secondary, Theme.User.Foreground);
     }
 
     [Fact]
     public void Noir_IsGreyscale_ButForTheRedOfFailures()
     {
-        var noir = ThemePalette.Noir;
+        var noir = ShippedThemes.Noir;
         Color[] rest = [noir.Primary, noir.Secondary, noir.Tertiary, noir.Deep, noir.Highlight, noir.Warm, noir.Tint, noir.Ink, noir.Dim, noir.Dimmer, noir.Bg, noir.PanelBg, noir.Good, noir.Warn, .. noir.GradientStops];
         Assert.All(rest, c => Assert.True(c.R == c.G && c.G == c.B, $"{Theme.ToHex(c)} is not a grey"));
         Assert.True(noir.Bad.R > noir.Bad.G && noir.Bad.R > noir.Bad.B);   // the user's call: grey plus a muted red for errors
     }
 
-    public static TheoryData<string> Palettes() => new(ThemePalette.All.Select(p => p.Name));
+    public static TheoryData<string> Palettes() => new(ShippedThemes.All.Select(p => p.Name));
 
     [Theory]
     [MemberData(nameof(Palettes))]
     public void EveryPalette_IsReadable_AndKeepsItsRolesApart(string name)
     {
-        var p = ThemePalette.All.Single(t => t.Name == name);
+        var p = ShippedThemes.All.Single(t => t.Name == name);
         Assert.Equal(name, name.ToLowerInvariant());
         Assert.NotEmpty(p.Description);
-        Assert.Equal(5, p.GradientStops.Length);
+        Assert.InRange(p.GradientStops.Length, 2, ThemeFile.MaxGradientStops);   // five on the ten compiled ones until 2026-10-05; a file gives 2 to 16
         // WCAG contrast over the page and the lifted fill: body text comfortably, dim text legibly.
         Assert.True(Contrast(p.Ink, p.Bg) >= 7, $"{name}: ink on bg {Contrast(p.Ink, p.Bg):0.0}");
         Assert.True(Contrast(p.Ink, p.PanelBg) >= 7, $"{name}: ink on panel {Contrast(p.Ink, p.PanelBg):0.0}");
@@ -160,7 +156,7 @@ public class ThemeTests
         using var scope = new ThemeScope();
         var green = new Color(0, 0xFF, 0);
         var red = new Color(0xFF, 0, 0);
-        Theme.Use(ThemePalette.Synthwave with
+        Theme.Use(ShippedThemes.Synthwave with
         {
             Name = "custom",
             Styles = new Dictionary<ThemeStyleSlot, StyleOverride>
@@ -174,22 +170,22 @@ public class ThemeTests
         Assert.Equal(green, Theme.AccentSecondary.Foreground);
         Assert.Equal(Decoration.None, Theme.AccentSecondary.Decoration);
         Assert.Equal(green, Theme.User.Foreground);              // the alias follows its source
-        Assert.Equal(ThemePalette.Synthwave.Tertiary, Theme.MarkdownHeading.Foreground);   // H2 off the secondary since 2026-10-04 (the tertiary's)
+        Assert.Equal(ShippedThemes.Synthwave.Tertiary, Theme.MarkdownHeading.Foreground);   // H2 off the secondary since 2026-10-04 (the tertiary's)
         Assert.Equal(Theme.MarkdownBold, Theme.MarkdownHeading3);                         // H3 and below: the body ink, bold
         Assert.Equal(red, Theme.SpinnerStyle.Foreground);        // changed itself
         Assert.Equal(Decoration.None, Theme.SpinnerStyle.Decoration);   // over its source's final style
-        Assert.Equal(ThemePalette.Synthwave.Dim, Theme.CodeComment.Foreground);
+        Assert.Equal(ShippedThemes.Synthwave.Dim, Theme.CodeComment.Foreground);
         Assert.Equal(red, Theme.CodeComment.Background);
         Assert.Equal(Decoration.Underline, Theme.CodeComment.Decoration);
-        Assert.Equal(ThemePalette.Synthwave.Secondary, Theme.TableHeader.Foreground);   // no alias: untouched
-        Assert.Equal(ThemePalette.Synthwave.Secondary, Theme.Secondary);                // the palette colour stays
+        Assert.Equal(ShippedThemes.Synthwave.Secondary, Theme.TableHeader.Foreground);   // no alias: untouched
+        Assert.Equal(ShippedThemes.Synthwave.Secondary, Theme.Secondary);                // the palette colour stays
     }
 
     [Fact]
     public void Synthwave_StylesAreTheOriginalCompositions()
     {
         using var scope = new ThemeScope();
-        var p = ThemePalette.Synthwave;
+        var p = ShippedThemes.Synthwave;
         Assert.Equal(new Style(p.Primary, decoration: Decoration.Bold), Theme.Accent);
         Assert.Equal(new Style(p.Ink, p.PanelBg), Theme.MenuHighlight);
         Assert.Equal(new Style(p.Bg, p.Secondary), Theme.SelectedText);
@@ -221,10 +217,10 @@ public class ThemeTests
     public void StylesOf_IsWhatUseWouldGive_AndPutsNothingInForce()
     {
         using var scope = new ThemeScope();
-        foreach (var palette in ThemePalette.All)
+        foreach (var palette in ShippedThemes.All)
         {
             var styles = Theme.StylesOf(palette);
-            Assert.Same(ThemePalette.Synthwave, Theme.Current);
+            Assert.Same(ShippedThemes.Synthwave, Theme.Current);
 
             Theme.Use(palette);
             foreach (var slot in Enum.GetValues<ThemeStyleSlot>())
@@ -232,7 +228,7 @@ public class ThemeTests
                 Assert.Equal(Theme.Of(slot), styles(slot));
             }
 
-            Theme.Use(ThemePalette.Synthwave);
+            Theme.Use(ShippedThemes.Synthwave);
         }
     }
 
@@ -240,7 +236,7 @@ public class ThemeTests
     public void GradientAndRule_OverAPalettesStops_AreTheFormsInForce()
     {
         using var scope = new ThemeScope();
-        var other = ThemePalette.All[1];
+        var other = ShippedThemes.All[1];
         string gradient = Theme.GradientMarkup("NEON", other.GradientStops);
         string rule = Theme.Rule(17, other.GradientStops);
 

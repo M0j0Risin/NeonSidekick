@@ -6,7 +6,11 @@ using Spectre.Console;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The user's themes, <c>&lt;home&gt;/themes/*.json</c> (2026-10-01): the file, the catalog, the export.</summary>
+/// <summary>
+/// The theme files (2026-10-01): the user's, <c>&lt;home&gt;/themes/*.json</c>, and since 2026-10-05 the built-ins, <c>assets/themes</c>
+/// embedded (<see cref="ThemeLibrary"/>, more in <c>ThemeLibraryTests</c>): the file, the catalog, the export, and the bar every
+/// shipped theme is held to. A file stands alone since 2026-10-05 (no <c>base</c>), so a test's file is <see cref="ThemeJson.File"/>.
+/// </summary>
 public sealed class ThemeFileTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"), ThemeCatalog.DirectoryName);
@@ -33,6 +37,9 @@ public sealed class ThemeFileTests : IDisposable
     private IEnumerable<string> ProblemsOf(string file) =>
         Scan().Problems.Where(p => Path.GetFileName(p.FilePath) == file).Select(p => p.Problem);
 
+    /// <summary>Every colour role but <paramref name="set"/>, in role order: what a file setting only those leaves out.</summary>
+    private static List<string> AllBut(params string[] set) => [.. ThemeKeys.Colors.Where(role => !set.Contains(role))];
+
     // ── Subfolders (2026-10-02) ─────────────────────────────────────────────
 
     private void WriteIn(string folder, string file, string json)
@@ -44,31 +51,31 @@ public sealed class ThemeFileTests : IDisposable
     [Fact]
     public void AFirstLevelSubfolder_IsRead_ADeeperOne_AndADotFolder_AreNot()
     {
-        WriteIn("cosmos", "aurora.json", """{ "colors": { "primary": "#112233" } }""");
-        WriteIn(Path.Combine("cosmos", "deeper"), "hidden.json", "{}");
-        WriteIn(".parked", "parked.json", "{}");
-        Write("loose.json", "{}");
+        WriteIn("cosmos", "dawn.json", ThemeJson.File(null, ("primary", "#112233")));
+        WriteIn(Path.Combine("cosmos", "deeper"), "hidden.json", ThemeJson.File());
+        WriteIn(".parked", "parked.json", ThemeJson.File());
+        Write("loose.json", ThemeJson.File());
 
         var scan = Scan();
 
-        Assert.Equal(AToZ("aurora", "loose"), scan.Names);   // the user's themes in name order, wherever they sit
+        Assert.Equal(AToZ("dawn", "loose"), scan.Names);   // the user's themes in name order, wherever they sit
         Assert.Empty(scan.Problems);
     }
 
     [Fact]
     public void ALooseFile_KeepsItsName_OverASubfoldersFile_WhichIsSkipped_NamedByItsPath()
     {
-        Write("blueprint.json", """{ "colors": { "primary": "#112233" } }""");
-        WriteIn("solid", "blueprint.json", """{ "colors": { "primary": "#445566" } }""");
-        WriteIn("a-first", "blueprint.json", "{}");   // a subfolder sorting before the loose file's name changes nothing: the folder's own come first
+        Write("mine.json", ThemeJson.File(null, ("primary", "#112233")));
+        WriteIn("solid", "mine.json", ThemeJson.File(null, ("primary", "#445566")));
+        WriteIn("a-first", "mine.json", ThemeJson.File());   // a subfolder sorting before the loose file's name changes nothing: the folder's own come first
 
         var scan = Scan();
 
-        Assert.Equal(new Color(0x11, 0x22, 0x33), User("blueprint").Primary);
+        Assert.Equal(new Color(0x11, 0x22, 0x33), User("mine").Primary);
         Assert.Equal(
-            [("a-first\\blueprint.json", ThemeText.Duplicate("blueprint", "blueprint.json")), ("solid\\blueprint.json", ThemeText.Duplicate("blueprint", "blueprint.json"))],
+            [("a-first\\mine.json", ThemeText.Duplicate("mine", "mine.json")), ("solid\\mine.json", ThemeText.Duplicate("mine", "mine.json"))],
             scan.Problems.Select(p => (p.Shown!, p.Problem)));
-        Assert.Equal("solid\\blueprint.json: skipped: blueprint.json already names a theme \"blueprint\"", ThemeText.Problem(scan.Problems[1].Shown!, scan.Problems[1].Problem));
+        Assert.Equal("solid\\mine.json: skipped: mine.json already names a theme \"mine\"", ThemeText.Problem(scan.Problems[1].Shown!, scan.Problems[1].Problem));
     }
 
     // ── The words ──────────────────────────────────────────────────────────
@@ -138,87 +145,70 @@ public sealed class ThemeFileTests : IDisposable
     [Fact]
     public void Scan_TheBuiltInsAndTheUsers_AToZ()
     {
-        Write("zeta.json", """{ "colors": { "primary": "#010203" } }""");
-        Write("Alpha.json", """{ "name": "alpha", "description": "first of mine" }""");
+        Write("zeta.json", ThemeJson.File(null, ("primary", "#010203")));
+        Write("Alpha.json", ThemeJson.File("\"name\": \"alpha\", \"description\": \"first of mine\""));
         Write("notes.txt", "not a theme");
 
         var scan = Scan();
 
-        Assert.Equal(AToZ("alpha", "zeta"), scan.Names);   // one list by name since 2026-10-03: alpha after abyssal, zeta last
-        Assert.Equal(["abyssal", "alpha", "cyberpunk"], scan.Names.Take(3));
+        Assert.Equal(AToZ("alpha", "zeta"), scan.Names);   // one list by name since 2026-10-03
         Assert.Empty(scan.Problems);
         Assert.Equal("first of mine", User("alpha").Description);
         Assert.Equal(ThemeText.CustomDescription, User("zeta").Description);   // none given
         Assert.False(User("zeta").IsBuiltIn);
         Assert.Equal(Path.Combine(_dir, "zeta.json"), User("zeta").SourcePath);
-        Assert.All(ThemePalette.All, p => Assert.True(p.IsBuiltIn));
+        Assert.All(ShippedThemes.All, p => Assert.True(p.IsBuiltIn));
     }
 
     [Fact]
-    public void AFileWithNoBase_IsSynthwave_ButForWhatItSays()
+    public void AFile_StandsAlone_ItsGradientDerivedFromItsOwnColours()
     {
-        Write("dracula.json", """
+        string colors = ThemeJson.Colors(("primary", "#FF79C6")).Replace("\"bg\"", "\"BG\"").Replace(" }", ", }");
+        Write("dracula.json", $$"""
             {
-              // comments and a trailing comma are fine
+              // comments, any case in a role and a trailing comma are fine
               "name": "Dracula",
-              "colors": { "primary": "#FF79C6", "BG": "#282A36", },
+              "colors": {{colors}},
             }
             """);
 
         var dracula = User("dracula");
 
         Assert.Equal(new Color(0xFF, 0x79, 0xC6), dracula.Primary);
-        Assert.Equal(new Color(0x28, 0x2A, 0x36), dracula.Bg);
-        Assert.Equal(ThemePalette.Synthwave.Secondary, dracula.Secondary);
-        Assert.Equal(ThemePalette.Synthwave.Ink, dracula.Ink);
-        // Synthwave's gradient is derived, so it is derived again from the new primary.
+        Assert.Equal(ShippedThemes.Synthwave.Bg, dracula.Bg);
         Assert.Equal(ThemePalette.DerivedGradient(dracula.Primary, dracula.Secondary, dracula.Tertiary, dracula.Warm, dracula.Highlight), dracula.GradientStops);
         Assert.Null(dracula.Styles);
+        Assert.Empty(ProblemsOf("dracula.json"));
     }
 
     [Fact]
-    public void ABase_GivesTheRest_ItsOwnGradientAndWarnKept_ADerivedWarnFollowingTheHighlight()
+    public void AFileLeavingColoursOut_IsSkipped_NamingThem_AndABase_IsIgnoredWithANote()
     {
         Write("greener.json", """{ "base": "netrunner", "colors": { "ink": "#FFFFFF", "primary": "#00FF00" } }""");
-        Write("amber.json", """{ "colors": { "highlight": "#FFAA00" } }""");
-        Write("softnoir.json", """{ "base": "NOIR", "colors": { "highlight": "#FFAA00" } }""");
+        Write("based.json", ThemeJson.File("\"base\": \"noir\""));
+        Write("empty.json", "{}");
 
-        var greener = User("greener");
-        Assert.Equal(new Color(0xFF, 0xFF, 0xFF), greener.Ink);
-        Assert.Equal(ThemePalette.Netrunner.Bg, greener.Bg);
-        Assert.Equal(ThemePalette.Netrunner.GradientStops, greener.GradientStops);   // netrunner sets its own: passed on
-        Assert.Equal(new Color(0xFF, 0xAA, 0x00), User("amber").Warn);              // synthwave's warn is its highlight
-        Assert.Equal(ThemePalette.Noir.Warn, User("softnoir").Warn);                  // noir sets its own
-    }
+        var scan = Scan();
 
-    [Fact]
-    public void ABase_MayBeAnotherFile_AndItsStyleChangesComeToo()
-    {
-        Write("a.json", """{ "colors": { "primary": "#111111" }, "styles": { "codeKeyword": { "fg": "#222222", "bold": true } } }""");
-        Write("b.json", """{ "base": "a", "colors": { "ink": "#333333" }, "styles": { "codeKeyword": { "italic": true } } }""");
-
-        var b = User("b");
-
-        Assert.Equal(new Color(0x11, 0x11, 0x11), b.Primary);
-        Assert.Equal(new Color(0x33, 0x33, 0x33), b.Ink);
-        var change = b.Styles![ThemeStyleSlot.CodeKeyword];
-        Assert.Equal(new Color(0x22, 0x22, 0x22), change.Foreground);
-        Assert.Equal(Decoration.Bold | Decoration.Italic, change.Set);
-        Assert.Empty(Scan().Problems);
+        Assert.Equal(AToZ("based"), scan.Names);
+        Assert.Equal([ThemeText.BaseIgnored("netrunner"), ThemeText.MissingColors(AllBut("primary", "ink"))], ProblemsOf("greener.json"));
+        Assert.Equal([ThemeText.MissingColors(ThemeKeys.Colors)], ProblemsOf("empty.json"));
+        Assert.Equal([ThemeText.BaseIgnored("noir")], ProblemsOf("based.json"));   // loads, its own colours: synthwave's here, not noir's
+        Assert.Equal(ShippedThemes.Synthwave.Colors(), User("based").Colors());
+        Assert.Equal(
+            "skipped: it does not set secondary, tertiary (a theme sets all 15 colours; /theme export writes a full file)",
+            ThemeText.MissingColors(["secondary", "tertiary"]));
     }
 
     [Fact]
     public void Styles_TakeHexOrARole_AndFlagsOnOrOff()
     {
-        Write("s.json", """
-            {
-              "colors": { "dim": "#555555" },
-              "styles": {
-                "codeComment": { "fg": "dim", "italic": false, "underline": true },
-                "menuHighlight": { "bg": "#44475A" },
-              }
+        Write("s.json", ThemeJson.File("""
+            "styles": {
+              "codeComment": { "fg": "dim", "italic": false, "underline": true },
+              "menuHighlight": { "bg": "#44475A" },
             }
-            """);
+            """, ("dim", "#555555")));
 
         var styles = User("s").Styles!;
 
@@ -229,23 +219,18 @@ public sealed class ThemeFileTests : IDisposable
     [Fact]
     public void BadKeysAndValues_AreSkippedWithANote_AndTheThemeStillLoads()
     {
-        Write("typos.json", """
-            {
-              "colors": { "primay": "#FFFFFF", "ink": "white", "bg": "#000000" },
-              "gradient": ["#000000"],
-              "styles": { "codeKeywrd": { "bold": true }, "codeString": { "fg": "#XYZ", "bold": true } }
-            }
-            """);
+        Write("typos.json", ThemeJson.File("""
+            "gradient": ["#000000"],
+            "styles": { "codeKeywrd": { "bold": true }, "codeString": { "fg": "#XYZ", "bold": true } }
+            """).Replace("\"colors\": { ", "\"colors\": { \"primay\": \"#FFFFFF\", "));
 
         var typos = User("typos");
 
-        Assert.Equal(new Color(0, 0, 0), typos.Bg);
-        Assert.Equal(ThemePalette.Synthwave.Ink, typos.Ink);
+        Assert.Equal(ShippedThemes.Synthwave.Colors(), typos.Colors());
         Assert.Equal(new StyleOverride(Set: Decoration.Bold), typos.Styles![ThemeStyleSlot.CodeString]);
         Assert.Equal(
             [
                 ThemeText.UnknownColor("primay"),
-                ThemeText.BadColor("ink", "white"),
                 ThemeText.BadGradient(1),
                 ThemeText.UnknownStyle("codeKeywrd"),
                 ThemeText.BadColor("codeString.fg", "#XYZ"),
@@ -254,30 +239,36 @@ public sealed class ThemeFileTests : IDisposable
     }
 
     [Fact]
+    public void ABadColourValue_LeavesItsRoleUnset_SoTheFileIsSkipped()
+    {
+        Write("white.json", ThemeJson.File(null, ("ink", "white")));
+
+        Assert.Equal(AToZ(), Scan().Names);
+        Assert.Equal([ThemeText.BadColor("ink", "white"), ThemeText.MissingColors(["ink"])], ProblemsOf("white.json"));
+    }
+
+    [Fact]
     public void AGradient_TakesTwoToSixteenStops()
     {
-        Write("two.json", """{ "gradient": ["#000000", "#FFFFFF"] }""");
-        Write("many.json", "{ \"gradient\": [" + string.Join(", ", Enumerable.Repeat("\"#123456\"", 17)) + "] }");
-        Write("badstop.json", """{ "gradient": ["#000000", "nope"] }""");
+        Write("two.json", ThemeJson.File("""  "gradient": ["#000000", "#FFFFFF"]  """));
+        Write("many.json", ThemeJson.File("\"gradient\": [" + string.Join(", ", Enumerable.Repeat("\"#123456\"", 17)) + "]"));
+        Write("badstop.json", ThemeJson.File("""  "gradient": ["#000000", "nope"]  """));
 
+        var many = User("many");
         Assert.Equal([new Color(0, 0, 0), new Color(0xFF, 0xFF, 0xFF)], User("two").GradientStops);
-        Assert.Equal(ThemePalette.Synthwave.GradientStops, User("many").GradientStops);
+        Assert.Equal(ThemePalette.DerivedGradient(many.Primary, many.Secondary, many.Tertiary, many.Warm, many.Highlight), many.GradientStops);
         Assert.Equal([ThemeText.BadGradient(17)], ProblemsOf("many.json"));
         Assert.Equal([ThemeText.BadColor("gradient[1]", "nope")], ProblemsOf("badstop.json"));
     }
 
     [Fact]
-    public void WholeFilesAreSkipped_ForTheirName_TheirJson_OrTheirBase()
+    public void WholeFilesAreSkipped_ForTheirName_TheirJson_OrTheirColours()
     {
-        Write("x.json", """{ "name": "dup" }""");
-        Write("y.json", """{ "name": "dup" }""");
+        Write("x.json", ThemeJson.File("\"name\": \"dup\""));
+        Write("y.json", ThemeJson.File("\"name\": \"dup\""));
         Write("broken.json", "{ \"name\": ");
-        Write("bad name.json", "{}");
-        Write("orphan.json", """{ "base": "nothing" }""");
-        Write("c1.json", """{ "base": "c2" }""");
-        Write("c2.json", """{ "base": "c1" }""");
-        Write("self.json", """{ "base": "self" }""");
-        Write("child.json", """{ "base": "orphan" }""");
+        Write("bad name.json", ThemeJson.File());
+        Write("partial.json", """{ "colors": { "primary": "#123456" } }""");
 
         var scan = Scan();
 
@@ -285,12 +276,17 @@ public sealed class ThemeFileTests : IDisposable
         Assert.Equal([ThemeText.Duplicate("dup", "x.json")], ProblemsOf("y.json"));
         Assert.StartsWith("skipped: not a theme file", Assert.Single(ProblemsOf("broken.json")));
         Assert.Equal([ThemeText.BadName("bad name")], ProblemsOf("bad name.json"));
-        Assert.Equal([ThemeText.NoBase("nothing")], ProblemsOf("orphan.json"));
-        Assert.Equal([ThemeText.BaseFailed("orphan")], ProblemsOf("child.json"));
-        Assert.Equal([ThemeText.BaseCycle("self")], ProblemsOf("self.json"));
-        // c1 is resolved first: c2's base leads back to it, and c1's base then did not load.
-        Assert.Equal([ThemeText.BaseCycle("c1")], ProblemsOf("c2.json"));
-        Assert.Equal([ThemeText.BaseFailed("c2")], ProblemsOf("c1.json"));
+        Assert.Equal([ThemeText.MissingColors(AllBut("primary"))], ProblemsOf("partial.json"));
+    }
+
+    [Fact]
+    public void AFileThatFails_StillClaimsItsName()
+    {
+        Write("a.json", """{ "name": "dup", "colors": {} }""");
+        Write("b.json", ThemeJson.File("\"name\": \"dup\""));
+
+        Assert.Equal(AToZ(), Scan().Names);
+        Assert.Equal([ThemeText.Duplicate("dup", "a.json")], ProblemsOf("b.json"));
     }
 
     // ── Overrides (later on 2026-10-01, the user's call: a file named like a built-in wins) ──
@@ -301,65 +297,49 @@ public sealed class ThemeFileTests : IDisposable
     private static List<string> AToZ(params string[] mine) => [.. ThemeName.Names.Concat(mine).Order(StringComparer.Ordinal)];
 
     [Fact]
-    public void AFileNamedLikeABuiltIn_TakesItsPlace_AndIsTheBaseTheOthersGet()
+    public void AFileNamedLikeABuiltIn_TakesItsPlace_StandingAlone()
     {
-        Write("noir.json", """{ "colors": { "primary": "#123456" } }""");
-        Write("synthwave.json", """{ "description": "my synthwave", "colors": { "secondary": "#654321" } }""");
-        Write("mine.json", """{ "base": "noir" }""");
-        Write("plain.json", "{}");
+        Write("noir.json", ThemeJson.File(null, ("primary", "#123456")));
+        Write("synthwave.json", ThemeJson.File("\"description\": \"my synthwave\"", ("secondary", "#654321")));
 
         var scan = Scan();
         var noir = scan.Themes.Single(t => t.Name == "noir");
         var synthwave = scan.Themes.Single(t => t.Name == "synthwave");
 
         Assert.Empty(scan.Problems);
-        Assert.Equal(AToZ("mine", "plain"), scan.Names);   // listed once, in the built-in's stead, by name like the rest
+        Assert.Equal(ThemeName.Names, scan.Names);   // listed once, in the built-in's stead
         Assert.Equal(Path.Combine(_dir, "noir.json"), noir.SourcePath);
         Assert.False(noir.IsBuiltIn);
-        // With no base an override builds on its own built-in: noir with that primary, not synthwave with it.
+        // Nothing comes from the built-in it replaces: noir's name, the file's colours (synthwave's but the primary).
         Assert.Equal(new Color(0x12, 0x34, 0x56), noir.Primary);
-        Assert.Equal(ThemePalette.Noir.Ink, noir.Ink);
+        Assert.Equal(ShippedThemes.Synthwave.Ink, noir.Ink);
         Assert.Equal("my synthwave", synthwave.Description);
-        Assert.Equal(ThemePalette.Synthwave.Primary, synthwave.Primary);
         Assert.Equal(new Color(0x65, 0x43, 0x21), synthwave.Secondary);
-        // Another file's base, and the default base, are the overrides.
-        Assert.Equal(new Color(0x12, 0x34, 0x56), User("mine").Primary);
-        Assert.Equal(new Color(0x65, 0x43, 0x21), User("plain").Secondary);
     }
 
     [Fact]
-    public void AnOverrideNamingItself_BuildsOnTheOriginal_AndOneThatFails_LeavesTheBuiltIn()
+    public void AnOverrideThatFails_LeavesTheBuiltIn()
     {
-        Write("netrunner.json", """{ "base": "netrunner", "colors": { "ink": "#EEEEEE" } }""");
-        Write("noir.json", """{ "base": "nothing" }""");
-        Write("grid.json", """{ "base": "vaporwave" }""");
-        Write("vaporwave.json", """{ "base": "grid" }""");
+        Write("noir.json", """{ "colors": { "ink": "#EEEEEE" } }""");
+        Write("grid.json", "not json");
 
         var scan = Scan();
 
-        var netrunner = scan.Themes[BuiltInIndex("netrunner")];
-        Assert.Equal(ThemePalette.Netrunner.Primary, netrunner.Primary);
-        Assert.Equal(new Color(0xEE, 0xEE, 0xEE), netrunner.Ink);
-        Assert.Empty(ProblemsOf("netrunner.json"));
-        Assert.Same(ThemePalette.Noir, scan.Themes[BuiltInIndex("noir")]);
-        Assert.Equal([ThemeText.NoBase("nothing")], ProblemsOf("noir.json"));
-        // Two overrides that build on each other loop like any two files: grid is resolved first.
-        Assert.Same(ThemePalette.Grid, scan.Themes[BuiltInIndex("grid")]);
-        Assert.Same(ThemePalette.Vaporwave, scan.Themes[BuiltInIndex("vaporwave")]);
-        Assert.Equal([ThemeText.BaseCycle("grid")], ProblemsOf("vaporwave.json"));
-        Assert.Equal([ThemeText.BaseFailed("vaporwave")], ProblemsOf("grid.json"));
+        Assert.Same(ShippedThemes.Noir, scan.Themes[BuiltInIndex("noir")]);
+        Assert.Same(ShippedThemes.Grid, scan.Themes[BuiltInIndex("grid")]);
+        Assert.Equal([ThemeText.MissingColors(AllBut("ink"))], ProblemsOf("noir.json"));
         Assert.Equal(ThemeName.Names, scan.Names);
     }
 
     [Fact]
-    public void Resolve_ABuiltInsName_FindsItsOverride_AndTheFallbackIsTheOverriddenSynthwave()
+    public void Resolve_ABuiltInsName_FindsItsOverride_AndTheFallbackIsTheOverriddenDefault()
     {
-        Write("noir.json", """{ "colors": { "primary": "#123456" } }""");
-        Write("synthwave.json", """{ "colors": { "primary": "#654321" } }""");
+        Write("noir.json", ThemeJson.File(null, ("primary", "#123456")));
+        Write(ThemeName.Default + ".json", ThemeJson.File(null, ("primary", "#654321")));
 
         var noir = ThemeName.Resolve(new AppSettingsData { Theme = "noir" }, _dir);
         Assert.Equal(new Color(0x12, 0x34, 0x56), noir.Primary);
-        Assert.Same(ThemePalette.Noir, ThemeName.Resolve(new AppSettingsData { Theme = "noir" }));   // the built-ins alone
+        Assert.Same(ShippedThemes.Noir, ThemeName.Resolve(new AppSettingsData { Theme = "noir" }));   // the built-ins alone
         Assert.Equal(new Color(0x65, 0x43, 0x21), ThemeName.Resolve(new AppSettingsData(), _dir).Primary);
         Assert.Equal(new Color(0x65, 0x43, 0x21), ThemeName.Resolve(new AppSettingsData { Theme = "gone" }, _dir).Primary);
     }
@@ -367,7 +347,7 @@ public sealed class ThemeFileTests : IDisposable
     [Fact]
     public void Report_SaysEachProblemAsAWarning_NamingTheFile()
     {
-        Write("orphan.json", """{ "base": "nothing" }""");
+        Write("orphan.json", """{ "colors": { "primary": "#123456" } }""");
         var warnings = new List<DiagnosticEvent>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == "Theme" && e.Level == DiagnosticLevel.Warning) warnings.Add(e); };
         DiagnosticLog.Emitted += capture;
@@ -380,7 +360,7 @@ public sealed class ThemeFileTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Contains("orphan.json: " + ThemeText.NoBase("nothing"), Assert.Single(warnings).Message);
+        Assert.Contains("orphan.json: " + ThemeText.MissingColors(AllBut("primary")), Assert.Single(warnings).Message);
     }
 
     // ── Equality, Use and Resolve ──────────────────────────────────────────
@@ -388,7 +368,7 @@ public sealed class ThemeFileTests : IDisposable
     [Fact]
     public void ARescan_IsANewInstance_WithTheSameLook_AndAnEditIsNot()
     {
-        Write("mine.json", """{ "colors": { "primary": "#123456" }, "styles": { "hint": { "italic": true } } }""");
+        Write("mine.json", ThemeJson.File("""  "styles": { "hint": { "italic": true } }  """, ("primary", "#123456")));
         var first = User("mine");
         var second = User("mine");
 
@@ -396,16 +376,16 @@ public sealed class ThemeFileTests : IDisposable
         Assert.Equal(first, second);
         Assert.Equal(first.GetHashCode(), second.GetHashCode());
 
-        Write("mine.json", """{ "colors": { "primary": "#123456" }, "styles": { "hint": { "italic": false } } }""");
+        Write("mine.json", ThemeJson.File("""  "styles": { "hint": { "italic": false } }  """, ("primary", "#123456")));
         Assert.NotEqual(first, User("mine"));
-        Assert.NotEqual(ThemePalette.Synthwave, ThemePalette.Netrunner);
+        Assert.NotEqual(ShippedThemes.Synthwave, ShippedThemes.Netrunner);
     }
 
     [Fact]
     public void Use_KeepsTheInstanceInForce_ForTheSameLook()
     {
         using var scope = new ThemeScope();
-        Write("mine.json", """{ "colors": { "primary": "#123456" } }""");
+        Write("mine.json", ThemeJson.File(null, ("primary", "#123456")));
         var first = User("mine");
         Theme.Use(first);
         Theme.Use(User("mine"));
@@ -418,33 +398,33 @@ public sealed class ThemeFileTests : IDisposable
     public void Resolve_FindsAUserTheme_AndApplyPutsItInForce()
     {
         using var scope = new ThemeScope();
-        Write("mine.json", """{ "colors": { "primary": "#123456" } }""");
+        Write("mine.json", ThemeJson.File(null, ("primary", "#123456")));
         var settings = new AppSettingsData { Theme = "Mine" };
 
         Assert.Equal("mine", ThemeName.Resolve(settings, _dir).Name);
-        Assert.Same(ThemePalette.Synthwave, ThemeName.Resolve(settings));   // the built-ins alone do not know it
+        Assert.Same(ThemeLibrary.Default, ThemeName.Resolve(settings));   // the built-ins alone do not know it
         ThemeName.Apply(settings, _dir);
         Assert.Equal("mine", Theme.Current.Name);
-        Assert.Same(ThemePalette.Noir, ThemeName.Resolve(new AppSettingsData { Theme = "noir" }, Path.Combine(_dir, "missing")));
+        Assert.Same(ShippedThemes.Noir, ThemeName.Resolve(new AppSettingsData { Theme = "noir" }, Path.Combine(_dir, "missing")));
     }
 
     [Fact]
     public void Resolve_AFileThatNoLongerLoads_WarnsListingTheUsersToo()
     {
-        Write("other.json", "{}");
+        Write("other.json", ThemeJson.File());
         var warnings = new List<DiagnosticEvent>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == "Theme" && e.Level == DiagnosticLevel.Warning) warnings.Add(e); };
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Same(ThemePalette.Synthwave, ThemeName.Resolve(new AppSettingsData { Theme = "gone" }, _dir));
+            Assert.Same(ThemeLibrary.Default, ThemeName.Resolve(new AppSettingsData { Theme = "gone" }, _dir));
         }
         finally
         {
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Contains("Theme='gone' is not one of abyssal, cyberpunk, grid, mainframe, netrunner, noir, nostromo, other, replicant, synthwave, vaporwave. Using synthwave.", Assert.Single(warnings).Message);
+        Assert.Contains($"Theme='gone' is not one of {string.Join(", ", AToZ("other"))}. Using collider.", Assert.Single(warnings).Message);
     }
 
     // ── Export ─────────────────────────────────────────────────────────────
@@ -452,17 +432,17 @@ public sealed class ThemeFileTests : IDisposable
     [Fact]
     public void Export_IsAFullFile_ThatReadsBackToTheSameLook()
     {
-        string json = ThemeFile.Export(ThemePalette.Nostromo, "my-nostromo");
+        string json = ThemeFile.Export(ShippedThemes.Nostromo, "my-nostromo");
         Write("my-nostromo.json", json);
 
         var copy = User("my-nostromo");
 
         Assert.Contains("\"name\": \"my-nostromo\"", json);
-        Assert.Contains("\"panelBg\": \"#1A1004\"", json);
+        Assert.Contains("\"panelBg\": \"" + Theme.ToHex(ShippedThemes.Nostromo.PanelBg) + "\"", json);
         Assert.DoesNotContain("\"base\"", json);
-        Assert.Equal(ThemePalette.Nostromo.Colors(), copy.Colors());
-        Assert.Equal(ThemePalette.Nostromo.GradientStops, copy.GradientStops);
-        Assert.Equal(ThemePalette.Nostromo.Description, copy.Description);
+        Assert.Equal(ShippedThemes.Nostromo.Colors(), copy.Colors());
+        Assert.Equal(ShippedThemes.Nostromo.GradientStops, copy.GradientStops);
+        Assert.Equal(ShippedThemes.Nostromo.Description, copy.Description);
         Assert.Null(copy.Styles);
         Assert.Empty(Scan().Problems);
     }
@@ -470,7 +450,7 @@ public sealed class ThemeFileTests : IDisposable
     [Fact]
     public void Export_KeepsTheStyleChanges()
     {
-        Write("a.json", """{ "styles": { "codeKeyword": { "fg": "#222222", "bold": true, "italic": false } } }""");
+        Write("a.json", ThemeJson.File("""  "styles": { "codeKeyword": { "fg": "#222222", "bold": true, "italic": false } }  """));
         var a = User("a");
 
         Write("b.json", ThemeFile.Export(a, "b"));
@@ -479,78 +459,49 @@ public sealed class ThemeFileTests : IDisposable
         Assert.Equal(a.Colors(), User("b").Colors());
     }
 
-    // ── The shipped examples (assets/themes) ───────────────────────────────
-
-    /// <summary>The repository's example themes: one folder per category, the built-ins' exports under <see cref="BuiltInFolder"/>.</summary>
-    private static string ExamplesDirectory()
+    /// <summary>
+    /// Every built-in written out by <c>/theme export</c> under its own name and dropped into the themes folder replaces it with the
+    /// very same look and no problem (2026-10-05; the repo's <c>built-in</c> folder of exports was held to this until then).
+    /// </summary>
+    [Fact]
+    public void EveryBuiltIn_ExportedUnderItsOwnName_ReplacesItWithTheSameLook()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "NeonSidekick.slnx")))
+        foreach (var builtIn in ShippedThemes.All)
         {
-            dir = dir.Parent;
+            Write(builtIn.Name + ".json", ThemeFile.Export(builtIn, builtIn.Name));
         }
 
-        Assert.NotNull(dir);
-        return Path.Combine(dir.FullName, "assets", "themes");
+        var scan = Scan();
+
+        Assert.Empty(scan.Problems);
+        Assert.Equal(ThemeName.Names, scan.Names);
+        foreach (var builtIn in ShippedThemes.All)
+        {
+            var file = scan.Themes.Single(t => t.Name == builtIn.Name);
+            Assert.False(file.IsBuiltIn, file.Name);
+            Assert.Equal(builtIn with { SourcePath = file.SourcePath }, file);
+        }
     }
 
-    private const string BuiltInFolder = "built-in";
+    // ── The shipped themes (assets/themes, the built-ins since 2026-10-05) ──
 
     /// <summary>The styles that are strokes or a hint rather than text to read: they need only be seen, not read.</summary>
     private static readonly ThemeStyleSlot[] Strokes =
         [ThemeStyleSlot.Border, ThemeStyleSlot.PaneRule, ThemeStyleSlot.MarkdownRule, ThemeStyleSlot.Placeholder];
 
     /// <summary>
-    /// Every category folder dropped into the themes folder whole, the way the README says to try one (subfolders read since
-    /// 2026-10-02), and scanned: none skipped and none with a note (a misspelt key or a bad colour), and no two named alike across
-    /// the categories.
-    /// </summary>
-    private ThemeScan ScanTheExamples(out int files)
-    {
-        files = 0;
-        foreach (string folder in Directory.EnumerateDirectories(ExamplesDirectory()))
-        {
-            if (Path.GetFileName(folder) == BuiltInFolder)
-            {
-                continue;
-            }
-
-            string into = Path.Combine(_dir, Path.GetFileName(folder));
-            Directory.CreateDirectory(into);
-            foreach (string file in Directory.EnumerateFiles(folder, "*.json"))
-            {
-                File.Copy(file, Path.Combine(into, Path.GetFileName(file)));
-                files++;
-            }
-        }
-
-        return Scan();
-    }
-
-    [Fact]
-    public void Examples_AllLoad_WithNoProblem()
-    {
-        var scan = ScanTheExamples(out int files);
-
-        Assert.Empty(scan.Problems.Select(p => $"{Path.GetFileName(p.FilePath)}: {p.Problem}"));
-        Assert.True(files >= 50, $"only {files} example files found");
-        Assert.Equal(ThemePalette.All.Count + files, scan.Themes.Count);
-    }
-
-    /// <summary>
-    /// Each example theme is held to the bar the built-ins are (<c>ThemeTests.EveryPalette_IsReadable_AndKeepsItsRolesApart</c>)
-    /// and then style by style, since a file may restyle any of them: every text style at least 3:1 on its own background
-    /// (the page's when it has none), the strokes at least visible; the accent and the first heading are never the very
-    /// style of body or bold text, which would make them vanish (glacier, chalkboard and hal had); and a style change must
-    /// change something, since the atlas and a reader copying the file count it as one.
+    /// Each built-in is held to the bar of <c>ThemeTests.EveryPalette_IsReadable_AndKeepsItsRolesApart</c> and then style by style,
+    /// since a file may restyle any of them: every text style at least 3:1 on its own background (the page's when it has none), the
+    /// strokes at least visible; the accent and the first heading are never the very style of body or bold text, which would make them
+    /// vanish (glacier, chalkboard and hal had); and a style change must change something, since the atlas and a reader copying the
+    /// file count it as one. The original ten were held only to the first bar until they became files beside the rest (2026-10-05).
     /// </summary>
     [Fact]
-    public void Examples_AreReadable_StyleByStyle()
+    public void BuiltIns_AreReadable_StyleByStyle()
     {
         using var scope = new ThemeScope();
-        var users = ScanTheExamples(out _).Themes.Where(t => !t.IsBuiltIn).ToList();
         var failures = new List<string>();
-        foreach (var p in users)
+        foreach (var p in ShippedThemes.All)
         {
             Check(p.Name, ThemeTests.Contrast(p.Ink, p.Bg) >= 7, "ink on bg");
             Check(p.Name, ThemeTests.Contrast(p.Ink, p.PanelBg) >= 7, "ink on panel");
@@ -581,7 +532,6 @@ public sealed class ThemeFileTests : IDisposable
             }
         }
 
-        Assert.True(users.Count >= 50);
         Assert.Empty(failures);
 
         void Check(string name, bool ok, string what)
@@ -595,62 +545,15 @@ public sealed class ThemeFileTests : IDisposable
 
     /// <summary>A solid theme's banner is one colour throughout, and that colour is the whole title, so it is held to 4.5:1.</summary>
     [Fact]
-    public void Examples_SolidBanners_AreOneReadableColour()
+    public void SolidBanners_AreOneReadableColour()
     {
-        var solid = Directory.EnumerateFiles(Path.Combine(ExamplesDirectory(), "solid"), "*.json")
-            .Select(Path.GetFileNameWithoutExtension)
-            .ToHashSet();
-        var themes = ScanTheExamples(out _).Themes.Where(t => solid.Contains(t.Name)).ToList();
+        var themes = ShippedThemes.All.Where(t => ThemeLibrary.CategoryOf(t.Name) == "solid").ToList();
 
-        Assert.Equal(solid.Count, themes.Count);
+        Assert.NotEmpty(themes);
         Assert.All(themes, t =>
         {
             Assert.Single(t.GradientStops.Distinct());
             Assert.True(ThemeTests.Contrast(t.GradientStops[0], t.Bg) >= 4.5, $"{t.Name}: banner {ThemeTests.Contrast(t.GradientStops[0], t.Bg):0.00}:1");
         });
-    }
-
-    /// <summary>The built-in folder's files copied in as they are replace the built-ins with the very same look, and load with no problem.</summary>
-    [Fact]
-    public void Examples_BuiltInFiles_CopiedIn_OverrideWithTheSameLook()
-    {
-        foreach (string file in Directory.EnumerateFiles(Path.Combine(ExamplesDirectory(), BuiltInFolder), "*.json"))
-        {
-            File.Copy(file, Path.Combine(_dir, Path.GetFileName(file)));
-        }
-
-        var scan = Scan();
-
-        Assert.Empty(scan.Problems);
-        Assert.Equal(ThemeName.Names, scan.Names);
-        foreach (var builtIn in ThemePalette.All)
-        {
-            var file = scan.Themes.Single(t => t.Name == builtIn.Name);
-            Assert.False(file.IsBuiltIn, file.Name);
-            Assert.Equal(builtIn.Colors(), file.Colors());
-            Assert.Equal(builtIn.GradientStops, file.GradientStops);
-        }
-    }
-
-    /// <summary>The built-ins' exports are what <c>/theme export</c> writes today: a built-in changed in code must be exported again.</summary>
-    [Fact]
-    public void Examples_BuiltInExports_MatchTheBuiltIns()
-    {
-        var files = Directory.EnumerateFiles(Path.Combine(ExamplesDirectory(), BuiltInFolder), "*.json").ToList();
-
-        Assert.Equal(ThemePalette.All.Count, files.Count);
-        foreach (string file in files)
-        {
-            var data = ThemeFile.Read(file, out string? problem);
-            Assert.True(data is not null, problem);
-            var builtIn = ThemePalette.All.Single(p => p.Name == ThemeFile.NameOf(data, file));
-            var notes = new List<string>();
-            var read = ThemeFile.Build(builtIn.Name, data, ThemePalette.Synthwave, file, notes);
-
-            Assert.Empty(notes);
-            Assert.Equal(builtIn.Description, read.Description);
-            Assert.Equal(builtIn.Colors(), read.Colors());
-            Assert.Equal(builtIn.GradientStops, read.GradientStops);
-        }
     }
 }

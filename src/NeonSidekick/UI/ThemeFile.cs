@@ -5,15 +5,15 @@ using Spectre.Console;
 namespace NeonSidekick.UI;
 
 /// <summary>
-/// One user theme file (2026-10-01, the user's ask: themes of their own beside the built-ins, as JSON in
-/// <c>&lt;home&gt;/themes</c>): reading it (<see cref="Read"/>), turning it into a <see cref="ThemePalette"/> over its
-/// base (<see cref="Build"/>) and writing a theme out as one (<see cref="Export"/>). A file says only what it changes:
-/// the colours, the gradient and the style changes it leaves out are its base's. Two of a base's slots are derived
-/// rather than set — <c>warn</c> is the highlight and the gradient runs secondary → tertiary → primary → warm →
-/// highlight on synthwave and most built-ins — and a derived slot the file does not set is derived again from the
-/// file's colours, so a file that recolours the accents gets a banner in them; a base that sets the slot itself
-/// (netrunner's gradient, noir's warn) passes its value on. A bad key or value is skipped with a note and the theme
-/// still loads; <see cref="ThemeCatalog"/> decides what skips the whole file. Pure but for <see cref="Read"/>.
+/// One theme file (2026-10-01, the user's ask: themes of their own beside the built-ins, as JSON in <c>&lt;home&gt;/themes</c>;
+/// since 2026-10-05 the built-ins are such files too, <c>assets/themes</c> embedded, <see cref="ThemeLibrary"/>): reading it
+/// (<see cref="Read"/>, <see cref="Parse"/>), turning it into a <see cref="ThemePalette"/> (<see cref="Build"/>) and writing a
+/// theme out as one (<see cref="Export"/>). A file stands alone (2026-10-05, the user's call: no <c>base</c>, nothing inherited;
+/// a base's colours, gradient and style changes filled what a file left out until then): it sets every one of the fifteen colour
+/// roles, or it is skipped naming the ones it leaves out. Its gradient may be left out and is then derived from its own colours
+/// (<see cref="ThemePalette.DerivedGradient"/>); its style changes are its own. A bad key or value is skipped with a note and the
+/// theme still loads, unless that leaves a colour role unset; <see cref="ThemeCatalog"/> decides what else skips the whole file.
+/// Pure but for <see cref="Read"/>.
 /// </summary>
 public static class ThemeFile
 {
@@ -38,6 +38,13 @@ public static class ThemeFile
             return null;
         }
 
+        return Parse(text, out problem);
+    }
+
+    /// <summary>Parses a theme file's <paramref name="text"/> (a file's or an embedded built-in's); the problem when it is not one.</summary>
+    public static ThemeFileData? Parse(string text, out string? problem)
+    {
+        ArgumentNullException.ThrowIfNull(text);
         try
         {
             var data = JsonSerializer.Deserialize(text, ThemeJsonContext.Default.ThemeFileData);
@@ -83,16 +90,22 @@ public static class ThemeFile
     }
 
     /// <summary>
-    /// The palette <paramref name="data"/> makes over <paramref name="basePalette"/>; a key or value it cannot use is
-    /// skipped and said in <paramref name="notes"/>.
+    /// The palette <paramref name="data"/> makes, or null when it leaves a colour role unset (or sets one to no colour), with
+    /// <paramref name="problem"/> naming them. A key or value it cannot use otherwise is skipped and said in
+    /// <paramref name="notes"/>, and so is a <c>base</c>, no longer read. <paramref name="sourcePath"/> is the file's, null for a
+    /// built-in (<see cref="ThemePalette.IsBuiltIn"/>).
     /// </summary>
-    public static ThemePalette Build(string name, ThemeFileData data, ThemePalette basePalette, string sourcePath, ICollection<string> notes)
+    public static ThemePalette? Build(string name, ThemeFileData data, string? sourcePath, ICollection<string> notes, out string? problem)
     {
         ArgumentNullException.ThrowIfNull(data);
-        ArgumentNullException.ThrowIfNull(basePalette);
         ArgumentNullException.ThrowIfNull(notes);
 
-        Color[] colors = basePalette.Colors();
+        if (!string.IsNullOrWhiteSpace(data.Base))
+        {
+            notes.Add(ThemeText.BaseIgnored(data.Base.Trim()));
+        }
+
+        var colors = new Color[ThemeKeys.Colors.Count];
         var set = new bool[colors.Length];
         foreach (var (key, value) in data.Colors ?? [])
         {
@@ -111,21 +124,25 @@ public static class ThemeFile
             }
         }
 
-        int warn = (int)ThemeColorSlot.Warn, highlight = (int)ThemeColorSlot.Highlight;
-        if (!set[warn] && basePalette.Warn == basePalette.Highlight)
+        var missing = Enumerable.Range(0, colors.Length).Where(i => !set[i]).Select(i => ThemeKeys.Colors[i]).ToList();
+        if (missing.Count > 0)
         {
-            colors[warn] = colors[highlight];
+            problem = ThemeText.MissingColors(missing);
+            return null;
         }
 
-        Color[] gradient = Gradient(data.Gradient, notes) ?? GradientOver(basePalette, colors);
-        var styles = Styles(data.Styles, basePalette.Styles, colors, notes);
+        Color[] gradient = Gradient(data.Gradient, notes) ?? ThemePalette.DerivedGradient(
+            colors[(int)ThemeColorSlot.Primary], colors[(int)ThemeColorSlot.Secondary], colors[(int)ThemeColorSlot.Tertiary],
+            colors[(int)ThemeColorSlot.Warm], colors[(int)ThemeColorSlot.Highlight]);
+        var styles = Styles(data.Styles, colors, notes);
         string description = string.IsNullOrWhiteSpace(data.Description) ? ThemeText.CustomDescription : data.Description.Trim();
+        problem = null;
         return ThemePalette.FromColors(name, description, colors, gradient, styles, sourcePath);
     }
 
     /// <summary>
     /// <paramref name="palette"/> as a full file named <paramref name="name"/> (<c>/theme export</c>): every colour role,
-    /// the gradient and the style changes it has, so the copy stands alone with no base. Its description is kept.
+    /// the gradient and the style changes it has, so the copy loads as it is. Its description is kept.
     /// </summary>
     public static string Export(ThemePalette palette, string name)
     {
@@ -196,22 +213,10 @@ public static class ThemeFile
         return colors;
     }
 
-    /// <summary>The base's gradient, derived again from <paramref name="colors"/> when the base's own was derived.</summary>
-    private static Color[] GradientOver(ThemePalette basePalette, Color[] colors)
+    /// <summary>The file's style changes; null when it has none.</summary>
+    private static Dictionary<ThemeStyleSlot, StyleOverride>? Styles(Dictionary<string, ThemeStyleData>? written, Color[] colors, ICollection<string> notes)
     {
-        Color[] derivedFromBase = ThemePalette.DerivedGradient(basePalette.Primary, basePalette.Secondary, basePalette.Tertiary, basePalette.Warm, basePalette.Highlight);
-        return basePalette.GradientStops.SequenceEqual(derivedFromBase)
-            ? ThemePalette.DerivedGradient(
-                colors[(int)ThemeColorSlot.Primary], colors[(int)ThemeColorSlot.Secondary], colors[(int)ThemeColorSlot.Tertiary],
-                colors[(int)ThemeColorSlot.Warm], colors[(int)ThemeColorSlot.Highlight])
-            : (Color[])basePalette.GradientStops.Clone();
-    }
-
-    /// <summary>The base's style changes with the file's over them; null when neither has any.</summary>
-    private static Dictionary<ThemeStyleSlot, StyleOverride>? Styles(
-        Dictionary<string, ThemeStyleData>? written, IReadOnlyDictionary<ThemeStyleSlot, StyleOverride>? inherited, Color[] colors, ICollection<string> notes)
-    {
-        var styles = inherited is null ? [] : new Dictionary<ThemeStyleSlot, StyleOverride>(inherited);
+        var styles = new Dictionary<ThemeStyleSlot, StyleOverride>();
         foreach (var (key, value) in written ?? [])
         {
             if (!ThemeKeys.TryParseStyle(key, out var slot))

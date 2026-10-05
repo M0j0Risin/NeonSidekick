@@ -285,8 +285,8 @@ Settings that an environment variable or flag can override for one launch are li
 | Show image thumbnails | Draws a small thumbnail of each picture you send, each one a tool fetches or makes, and each `/botchat` picture. `/view` and `/imagine` always draw theirs. | on |
 | Image thumbnail size | `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20), `xlarge` (96×24) columns × rows, or `fullsize` (as large as the transcript allows). | `small` |
 | Copy user prompt | `/copy` includes your prompt above the reply. | on |
-| User line style | How your sent line looks in the transcript: `quiet` (the › in the user colour, your words in the body colour), `slab` (your line on a faint fill) or `bold` (the whole line bold in the user colour, the look before 2026-10-04). | quiet |
-| Theme | `abyssal`, `cyberpunk`, `grid`, `mainframe`, `netrunner`, `noir`, `nostromo`, `replicant`, `synthwave`, `vaporwave`, and your own (see [Custom themes](#custom-themes)), sorted by name. A wide enough window previews the highlighted theme (on the terminal's own background when *Themed background* is off); a typed letter jumps to the next theme starting with it. | `synthwave` |
+| User line style | How your sent line looks in the transcript: `quiet` (the › in the user colour, your words in the body colour), `slab` (your line on a faint fill) or `bold` (the whole line bold in the user colour). | bold |
+| Theme | One of the sixty built-in themes (see [Themes](#custom-themes)) or your own, sorted by name. A wide enough window previews the highlighted theme (on the terminal's own background when *Themed background* is off); a typed letter jumps to the next theme starting with it. | `collider` |
 | Themed background | Gives the terminal the theme's background while the app runs. Off, the terminal profile's own background (colour, acrylic or picture) stays. | on |
 | Themed external windows | The picture viewer, the camera's window and the log window wear the theme (dark title bar and theme colours). Off, they stay black. | on |
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
@@ -1340,19 +1340,19 @@ A monitor, every monitor or one window, through Windows' own GDI; nothing to ins
 
 #### Custom themes
 
-Your themes are JSON files in the home's `themes` folder, shared by every profile, and subfolders one level deep (not ones starting with `.`). They are listed among the built-ins, sorted by name, and re-read whenever a theme list opens (pick the theme again to see an edit). On a name clash, a file loose in the folder beats one in a subfolder, then the first subfolder by name wins; the loser gets a warning. A file named like a built-in replaces it, including as the base other themes build on.
-
-Fifty ready-made themes come with the repo in [`assets/themes`](assets/themes), one folder per category: copy a file (or a whole category folder, `themes\cosmos`) into your `themes` folder and pick it. [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) previews them all with the ten built-ins, which are in the `built-in` folder as files to copy, edit or rename (the file and its `"name"`).
+The built-in themes are the sixty JSON files in the repo's [`assets/themes`](assets/themes), one folder per category, compiled into the app; adding, changing or removing a file there changes the built-ins at the next build. The default is `collider`. [`Theme Atlas.html`](assets/themes/Theme%20Atlas.html) previews them all; `dotnet run tools/ThemeAtlas.cs` writes it again after a change (a test fails until it does).
 
 | Folder | Themes |
 |--------|--------|
-| `art` | bauhaus, deco, inkwash, kaleidoscope, lapis, stainedglass, ukiyoe |
-| `cinema` | akira, arrakis, ghostshell, hal, starbase, twinsuns |
+| `art` | bauhaus, deco, inkwash, kaleidoscope, lapis, stainedglass, ukiyoe, vaporwave |
+| `cinema` | akira, arrakis, ghostshell, grid, hal, noir, replicant, starbase, twinsuns |
 | `cosmos` | aurora, blackhole, bloodmoon, nebula, orbit, solaris, supernova |
-| `elements` | magma, opal, oxide, prism, radium, temper |
-| `machines` | circuit, collider, commodore, glitch, heartbeat, infrared, nixie, vhs, vinyl |
-| `nights` | kowloon, lighthouse, miami, sakura, witchhour |
+| `elements` | abyssal, magma, opal, oxide, prism, radium, temper |
+| `machines` | circuit, collider, commodore, glitch, heartbeat, infrared, mainframe, netrunner, nixie, nostromo, vhs, vinyl |
+| `nights` | cyberpunk, kowloon, lighthouse, miami, sakura, synthwave, witchhour |
 | `solid` | blueprint, carbon, chalkboard, espresso, fieldradio, glacier, matcha, signal, ultraviolet, velvet (one-colour banner and rule, no gradient) |
+
+Your own themes are JSON files in the home's `themes` folder, shared by every profile, and subfolders one level deep (not ones starting with `.`). They are listed among the built-ins, sorted by name, and re-read whenever a theme list opens (pick the theme again to see an edit). On a name clash, a file loose in the folder beats one in a subfolder, then the first subfolder by name wins; the loser gets a warning. A file named like a built-in replaces it.
 
 The easiest start is `/theme export <name> [new-name]`, which writes any theme to `themes\<new-name>.json` with every colour filled in (default name `<name>-custom`; it never overwrites). Export a built-in under its own name (`/theme export noir noir`) to replace it.
 
@@ -1360,8 +1360,11 @@ The easiest start is `/theme export <name> [new-name]`, which writes any theme t
 {
   "name": "dracula",                 // optional: the file name when left out
   "description": "vampire purple",   // optional: the note beside the name ("custom theme" when left out)
-  "base": "synthwave",               // optional: a built-in or another of your themes (synthwave when left out, or the built-in a file replaces)
-  "colors": { "primary": "#FF79C6", "secondary": "#8BE9FD", "ink": "#F8F8F2", "bg": "#282A36", "panelBg": "#44475A" },
+  "colors": {                        // all fifteen roles, every one
+    "primary": "#FF79C6", "secondary": "#8BE9FD", "tertiary": "#BD93F9", "deep": "#6272A4", "highlight": "#F1FA8C",
+    "warm": "#FFB86C", "tint": "#FF92DF", "ink": "#F8F8F2", "dim": "#A0A4C0", "dimmer": "#44475A", "bg": "#282A36",
+    "panelBg": "#343746", "good": "#50FA7B", "bad": "#FF5555", "warn": "#F1FA8C"
+  },
   "gradient": ["#8BE9FD", "#BD93F9", "#FF79C6", "#FFB86C", "#F1FA8C"],
   "styles": {
     "codeComment": { "fg": "#6272A4", "italic": true },
@@ -1371,11 +1374,11 @@ The easiest start is `/theme export <name> [new-name]`, which writes any theme t
 }
 ```
 
-* **A file only says what it changes;** the rest comes from `base`, which can itself be a file (as long as the chain doesn't loop). A file replacing a built-in builds on the original, so `noir.json` with only a `primary` is noir with that primary.
+* **A theme stands alone:** it sets all fifteen colours itself; nothing comes from another theme (a `base` was read until 2026-10-05; it is ignored now, with a warning, and a file that leaned on one is skipped naming the colours it leaves out). A file replacing a built-in replaces it whole.
 * **Names** are 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`.
 * **Colours** are `#RRGGBB` or `#RGB`. Comments and trailing commas are allowed.
-* **Derived colours:** on bases that derive `warn` and the gradient from the accents (synthwave and most built-ins), a file setting neither gets them worked out from its own colours.
-* **Problems:** an unreadable file, bad JSON, a bad name or a missing or looping base skips the file; a misspelled key or bad colour is ignored. Each shows as a warning when a theme list opens.
+* **Gradient:** optional; left out, it runs secondary → tertiary → primary → warm → highlight from the file's own colours.
+* **Problems:** an unreadable file, bad JSON, a bad name or a colour it leaves out (or one that is not a colour) skips the file; a misspelled key or a bad gradient or style is ignored. Each shows as a warning when a theme list opens.
 
 **Colour roles** (`colors`). Every style below is made from these.
 

@@ -1,4 +1,5 @@
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 using NeonSidekick.Viewer;
 
@@ -336,7 +337,7 @@ public class LogViewStateTests
     [Fact]
     public void Style_TakesTheTheme_ColoursByLevel_AndIsBlackUnthemed()
     {
-        var palette = ThemePalette.Synthwave;
+        var palette = ShippedThemes.Synthwave;
         var style = LogViewStyle.For(palette);
 
         Assert.Equal(ViewerStyle.ColorRef(palette.Bg), style.Background);
