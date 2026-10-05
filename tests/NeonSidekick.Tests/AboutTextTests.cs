@@ -141,7 +141,7 @@ public class AboutTextTests
     public void TitleAndCopyright()
     {
         Assert.Equal("NeonSidekick 0.2.0", AboutText.TitleLine(Facts));
-        Assert.Equal("© 2026 Christopher Nelson · GNU GPL v3 (the License tab)", AboutText.CopyrightLine);
+        Assert.Equal("© 2026 Christopher Nelson · GNU GPL v3 (the Licence tab)", AboutText.CopyrightLine);
         Assert.Equal("NeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick", AboutText.RepositoryLine);   // 2026-10-04
     }
 
@@ -190,7 +190,7 @@ public class AboutTextTests
         Assert.Equal("  Speech       " + AboutText.SpeechLine, lines[12]);
         Assert.Equal("Components", lines[13]);
         Assert.Equal("  Spectre.Console 0.57.2 · MIT · the terminal UI: the transcript, the panes, the thumbnails", lines[14]);
-        int license = Array.IndexOf(lines, "License");
+        int license = Array.IndexOf(lines, "Licence");
         Assert.Equal(14 + AboutText.Components.Count, license);
         Assert.Equal("                      GNU GENERAL PUBLIC LICENSE", lines[license + 1]);   // the FSF's own centring, verbatim
         Assert.Equal("  <https://www.gnu.org/licenses/why-not-lgpl.html>.", lines[^1]);
@@ -205,7 +205,7 @@ public class AboutTextTests
         console.Write(AboutText.AboutTab(Facts));
 
         string output = string.Join("\n", console.Output.Split('\n').Select(l => l.TrimEnd()));
-        Assert.StartsWith("NeonSidekick 0.2.0\n© 2026 Christopher Nelson · GNU GPL v3 (the License tab)\nNeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick\n\nRuntime      .NET 10.0.0 · native AOT · x64\nOS           Microsoft Windows 10.0.26200\nExecutable   D:\\Apps\\NeonSidekick\\NeonSidekick.exe\n\nHome         C:\\Users\\chris\\.neonsidekick\nProfile      C:\\Users\\chris\\.neonsidekick\\profiles\\default\nModels       C:\\Users\\chris\\.neonsidekick\\models\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
+        Assert.StartsWith("NeonSidekick 0.2.0\n© 2026 Christopher Nelson · GNU GPL v3 (the Licence tab)\nNeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick\n\nRuntime      .NET 10.0.0 · native AOT · x64\nOS           Microsoft Windows 10.0.26200\nExecutable   D:\\Apps\\NeonSidekick\\NeonSidekick.exe\n\nHome         C:\\Users\\chris\\.neonsidekick\nProfile      C:\\Users\\chris\\.neonsidekick\\profiles\\default\nModels       C:\\Users\\chris\\.neonsidekick\\models\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
         Assert.Contains("\nSpeech       " + AboutText.SpeechLine + "\n", output);
     }
 

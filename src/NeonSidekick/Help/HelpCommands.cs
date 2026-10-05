@@ -69,9 +69,9 @@ public static class HelpCommands
         ]),
         new("/comfy",
         [
-            new("/comfy", "Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), skipped files and where workflows go, in a pane. A server that doesn't answer is an error line in the chat."),
+            new("/comfy", "Show the ComfyUI server's status, the workflows found (family, input, size, placeholders), skipped files and where workflows go, in a pane. A server that does not answer is an error line in the chat."),
             new("/comfy offered", "List the workflows currently offered to the model in a pane, one bullet each (name, family, input, size, description), without asking the server."),
-            new("/comfy edit json|markdown|md <workflow>", "Open a workflow's graph, or its `.md`, in your editor (the `.md` is created with the family filled in if it doesn't exist)."),
+            new("/comfy edit json|markdown|md <workflow>", "Open a workflow's graph, or its `.md`, in your editor (the `.md` is created with the family filled in if it does not exist)."),
             new("/comfy view", "Open the picture viewer on the output folder. Works while a reply runs."),
             new("/comfy thumbs", "Open the thumbnail browser on the output folder. Works while a reply runs."),
             new("/comfy purge", "Permanently delete everything in the output folder, `.pasted` inputs included, after a yes/no. Refused when the output folder is the working directory."),
@@ -86,7 +86,7 @@ public static class HelpCommands
         ]),
         new("/cwd",
         [
-            new("/cwd [<path>|~|browse]", "Show or change the working directory. A path is a full one, unquoted, and a folder that doesn't exist is created. `~` returns to the profile's `files\\` folder; `browse` opens the folder picker."),
+            new("/cwd [<path>|~|browse]", "Show or change the working directory. A path is a full one, unquoted, and a folder that does not exist is created. `~` returns to the profile's `files\\` folder; `browse` opens the folder picker."),
         ]),
         new("/docker",
         [
@@ -156,7 +156,7 @@ public static class HelpCommands
         ]),
         new("/keycopy",
         [
-            new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that isn't set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not copied."),
+            new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that is not set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not copied."),
         ]),
         new("/learn",
         [
@@ -229,8 +229,8 @@ public static class HelpCommands
         ]),
         new("/print",
         [
-            new("/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]", "Print a file from the working directory. Text and code print as a listing, markdown prints formatted, and a picture is fitted to one page; each page is headed with the file's name, the time and *page N of M*. Anything else (a PDF, a Word or Excel file) goes to the program Windows has for it, on the default printer, without the options. The printer is matched by its name or part of it (`printer=color`); put a name with spaces in quotes. Copies are 1 to 10; pages are `3`, `1-3`, `4-` or a list such as `1,3-5`. Options go anywhere. *Print action policy* never applies to this command. See Printing."),
-            new("/print reply [<options>]", "Print the last reply, formatted as markdown."),
+            new("/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]", "Print a file from the working directory. Text and code print as a listing, Markdown prints formatted, and a picture is fitted to one page; each page is headed with the file's name, the time and *page N of M*. Anything else (a PDF, a Word or Excel file) goes to the program Windows has for it, on the default printer, without the options. The printer is matched by its name or part of it (`printer=color`); put a name with spaces in quotes. Copies are 1 to 10; pages are `3`, `1-3`, `4-` or a list such as `1,3-5`. Options go anywhere. *Print action policy* never applies to this command. See Printing."),
+            new("/print reply [<options>]", "Print the last reply, formatted as Markdown."),
             new("/print printers", "List the installed printers in a pane, marking the Windows default and *Print default printer*. On its own, `/print` shows how to use it and lists them too."),
         ]),
         new("/process",
@@ -265,7 +265,7 @@ public static class HelpCommands
         ]),
         new("/rewind",
         [
-            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back), and after a yes the picked message and everything after it leave the conversation and its text returns to the input row, pictures and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary can't be picked. Double ESC on an empty input line opens it too."),
+            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back), and after a yes the picked message and everything after it leave the conversation and its text returns to the input row, pictures and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary cannot be picked. Double ESC on an empty input line opens it too."),
         ]),
         new("/sampling",
         [
@@ -285,7 +285,7 @@ public static class HelpCommands
         ]),
         new("/server",
         [
-            new("/server [<url>|embedded|claude-cli|docker|docker:<container>]", "Pick an LLM server found on the usual ports, or set one by URL (with its `http://` or `https://`). The list also offers the Anthropic API and the OpenAI API (each when it's on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found), the installed embedded models and the chosen Docker containers (when *Docker servers enabled* is on). The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see `/settings` › Anthropic). `docker` lists only the chosen containers, and `docker:<container>` switches to one (see Docker servers); a container's model is the one it serves, so no model picker follows. Ctrl+S runs it too."),
+            new("/server [<url>|embedded|claude-cli|docker|docker:<container>]", "Pick an LLM server found on the usual ports, or set one by URL (with its `http://` or `https://`). The list also offers the Anthropic API and the OpenAI API (each when it is on and has a key), the Claude CLI (when *Claude CLI server* is on and Claude Code is found), the installed embedded models and the chosen Docker containers (when *Docker servers enabled* is on). The model and reasoning pickers follow, and one reconnect applies all three. To add an embedded model, install it from `/settings` › Embedded. `embedded` lists only the installed embedded models (see Embedded); `claude-cli` picks the Claude CLI (see `/settings` › Anthropic). `docker` lists only the chosen containers, and `docker:<container>` switches to one (see Docker servers); a container's model is the one it serves, so no model picker follows. Ctrl+S runs it too."),
         ]),
         new("/sessions",
         [
@@ -316,7 +316,7 @@ public static class HelpCommands
         ]),
         new("/stt",
         [
-            new("/stt [on|off]", "Toggle speech input."),
+            new("/stt [on|off]", "Toggle voice input."),
         ]),
         new("/sys",
         [
@@ -346,7 +346,7 @@ public static class HelpCommands
         ]),
         new("/tools",
         [
-            new("/tools", "Switch the model's tools on or off and edit their settings (Web, Files, Shell, Ask, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Git). On the Offered tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
+            new("/tools", "Switch the model's tools on or off, and edit each tool group's settings on its own tab. On the Offered tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
             new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude CLI advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page; `web`'s carries default, httpclient and chromium buttons (D, H, C) that switch *Web browser mode*). The toolbar's tool items run it."),
         ]),
         new("/tree",
@@ -363,7 +363,7 @@ public static class HelpCommands
         ]),
         new("/vault",
         [
-            new("/vault [<path>]", "Show a tree of the *Obsidian vault* (or a folder in it) in a pane, like `/tree`. Dot-folders are left out, the length is capped by *File /tree max length*, and sizes follow *File /tree show sizes*. Fails if *Obsidian tools* is off, no vault is set, or the folder can't be reached or has no `.obsidian`."),
+            new("/vault [<path>]", "Show a tree of the *Obsidian vault* (or a folder in it) in a pane, like `/tree`. Dot-folders are left out, the length is capped by *File /tree max length*, and sizes follow *File /tree show sizes*. Fails if *Obsidian tools* is off, no vault is set, or the folder cannot be reached or has no `.obsidian`."),
         ]),
         new("/view",
         [

@@ -81,7 +81,7 @@ public readonly record struct LlmTimeouts(TimeSpan Request, TimeSpan Turn)
         if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds <= 0 || seconds > max)
         {
             DiagnosticLog.Warn(Category,
-                $"{name}={seconds.ToString(CultureInfo.InvariantCulture)} is outside (0, {max.ToString(CultureInfo.InvariantCulture)}] seconds. Using {Format(fallback)}.");
+                $"{name}={seconds.ToString(CultureInfo.InvariantCulture)} is out of range (more than 0, at most {max.ToString(CultureInfo.InvariantCulture)} seconds). Using {Format(fallback)}.");
             return fallback;
         }
 

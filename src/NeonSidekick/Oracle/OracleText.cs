@@ -17,7 +17,7 @@ public static class OracleText
     public const string NoDataSource = "no \"dataSource\" is given (host:port/service, or a (DESCRIPTION=…))";
     public const string NoUser = "no \"user\" is given";
     public static string SysRefused(string user) => $"\"user\" is '{user}'; SYS (or any AS SYSDBA-style sign-in) is not held to a read-only transaction, so the Oracle tools refuse it — use a read-only account";
-    public static string BadSchemaKey(string schema) => $"\"schema\" is '{schema}', which is no Oracle name";
+    public static string BadSchemaKey(string schema) => $"\"schema\" is '{schema}', which is not a valid Oracle name";
     public static string NoPassword(string name) => $"'{name}' has no password; set it on the Oracle tab of /tools (Oracle set password)";
     public static string NoCredential(string target) => $"no password in Windows Credential Manager for {target}; set it on the Oracle tab of /tools, or: cmdkey /generic:{target} /user:<user> /pass";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's oracle.json was checked for plain passwords: {detail}";
@@ -97,9 +97,9 @@ public static class OracleText
     public static string BadTable(string table) => $"Error: '{table}' is not a table name (NAME or SCHEMA.NAME; \"quoted\" keeps the case)";
     public static string BadSchema(string schema) => $"Error: '{schema}' is not a schema name (oracle_schemas lists them)";
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5, \"name\": \"x\"}} for :id and :name (got {Clip(raw, 200)})";
-    public static string BadParamName(string name) => $"Error: '{name}' is no parameter name; use letters, digits and _ (bound as :name)";
+    public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; use letters, digits and _ (bound as :name)";
     public static string TableNotFound(string table, string connection, string schema) => $"Error: no table or view '{table}' visible in {connection}/{schema}; oracle_tables lists them";
-    public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' names more than one; give the schema: {string.Join(", ", candidates)}";
+    public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' matches more than one table or view; give the schema: {string.Join(", ", candidates)}";
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ public static class OracleText
     public static string UnknownConnection(string name, string names) => $"Error: no Oracle connection is named '{name}'; the connections are {names}";
     public static string ConnectFailed(string connection, string detail) => $"Error: could not connect to {connection}: {detail}";
     public static string Timeout(string connection, string seconds) => $"Error: the query on {connection} ran past {seconds} s and was stopped; narrow it (WHERE, FETCH FIRST n ROWS ONLY, fewer joins)";
-    public static string Failed(string connection, string detail) => $"Error: the server refused it ({connection}): {detail}";
+    public static string Failed(string connection, string detail) => $"Error: the server refused the SQL ({connection}): {detail}";
     public static string ConnectFailedLogLine(string connection, int number, string detail) => $"{connection} did not connect (ORA-{number.ToString("D5", CultureInfo.InvariantCulture)}): {detail}";
     public static string SessionReadOnlySkippedLogLine(string connection, string version) => $"{connection} is Oracle {version}: no session READ_ONLY before 23ai, so a read-only transaction and the gate stand alone";
 

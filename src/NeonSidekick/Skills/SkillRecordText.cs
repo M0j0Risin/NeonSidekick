@@ -304,7 +304,7 @@ public static class SkillRecordText
             return "(" + RevertGlyph + name + ": " + revision.Path + " is back to your edit of " + at + ")";
         }
 
-        string what = revision.Content is null ? revision.Path + " is removed, as" : revision.Path + " is back as it was";
+        string what = revision.Content is null ? revision.Path + " is removed: it did not exist" : revision.Path + " is back as it was";
         string before = revision.Actor == SkillActors.Revert ? "before a revert at " : "before " + ActorPhrase(revision.Actor) + " change at ";
         return "(" + RevertGlyph + name + ": " + what + " " + before + at + ")";
     }
@@ -314,7 +314,7 @@ public static class SkillRecordText
     /// <see cref="SkillRecordStore.MaxRevisionChars"/>, or not read), so the restore would lose it. Pinned.
     /// </summary>
     public static string NotKeptError(string name, string path) =>
-        "Not reverted: " + name + "'s " + path + " is too long to keep (over 256 KB) or could not be read, so a revert would lose it; change it by hand instead.";
+        "Not reverted: " + name + "'s " + path + " is too long to keep (over " + SkillRecordStore.MaxRevisionChars.ToString("N0", CultureInfo.InvariantCulture) + " characters) or could not be read, so a revert would lose it; change it by hand instead.";
 
     /// <summary>The revert that could not write: <c>Could not revert haiku: …</c>. Pinned.</summary>
     public static string RevertFailedError(string name, string detail) => "Could not revert " + name + (string.IsNullOrWhiteSpace(detail) ? "." : ": " + detail);

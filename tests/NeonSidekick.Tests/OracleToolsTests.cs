@@ -118,7 +118,7 @@ public sealed class OracleToolsTests
         Assert.Contains("1 to 100000", Tool<OracleQueryTool>().JsonSchema.GetProperty("properties").GetProperty("max_rows").GetProperty("description").GetString(), StringComparison.Ordinal);
         Assert.Equal(ClockText.BadInteger("max_rows", "lots"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("max_rows", "lots")));
         Assert.Equal(OracleText.BadParams("[1,2]"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("params", Json("[1,2]"))));
-        Assert.Equal("Error: '1x' is no parameter name; use letters, digits and _ (bound as :name)", await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("params", Json("""{"1x": 1}"""))));
+        Assert.Equal("Error: '1x' is not a valid parameter name; use letters, digits and _ (bound as :name)", await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("params", Json("""{"1x": 1}"""))));
         Assert.Equal(OracleText.BadSchema("not a name"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("schema", "not a name")));
         Assert.Equal(OracleText.BadSchema("x;y"), await Invoke<OracleTablesTool>(("schema", "x;y")));
         Assert.Equal(OracleText.NoTable, await Invoke<OracleDescribeTool>(("table", "  ")));

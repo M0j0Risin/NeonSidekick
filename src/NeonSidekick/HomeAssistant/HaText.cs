@@ -58,7 +58,7 @@ public static class HaText
     {
         ArgumentNullException.ThrowIfNull(target);
         string among = domains.Count == 0 ? "" : " among " + string.Join(", ", domains);
-        string tail = near.Count == 0 ? "" : "; some there are: " + string.Join(", ", near.Select(Label));
+        string tail = near.Count == 0 ? "" : "; some that exist: " + string.Join(", ", near.Select(Label));
         return $"Error: nothing named '{target.Trim()}'{among}" + tail;
     }
 
@@ -512,7 +512,7 @@ public static class HaText
 
     /// <summary><c>/ha</c>'s usage line. Pinned.</summary>
     public const string Usage =
-        "usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence>";
+        "Usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence>";
 
     /// <summary>The <c>/ha</c> verbs, in the completion's order.</summary>
     public static readonly string[] Verbs = ["on", "off", "toggle", "scene", "tv", "states", "say"];

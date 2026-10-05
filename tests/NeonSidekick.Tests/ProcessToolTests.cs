@@ -117,7 +117,7 @@ public sealed class ProcessToolTests : IDisposable
         string poll = await Invoke(("action", "poll"), ("session_id", session.Id));
         Assert.StartsWith(session.Id + " exited 0 after 0.0 s (cmd): for /l %i in (1,1,400) do @echo line %i — 400 new lines — output cut\nline 1\n", poll);
         Assert.Contains("\n… (", poll);
-        Assert.Contains(" chars cut) …\n", poll);
+        Assert.Contains(" characters cut) …\n", poll);
         Assert.EndsWith("\nline 400", poll);
         Assert.False(Directory.Exists(Path.Combine(_dir, ".shell")));
     }
@@ -129,7 +129,7 @@ public sealed class ProcessToolTests : IDisposable
         // whatever one ReadFile returns, and on the runner it was already blocked when "wor" was flushed and echoed "hello wor".
         const string ReadLine = "powershell -NoProfile -Command \"'hello ' + [Console]::In.ReadLine()\"";
         var session = Start(ReadLine);
-        Assert.Equal("sent 3 chars to " + session.Id, await Invoke(("action", "write"), ("session_id", session.Id), ("data", "wor")));
+        Assert.Equal("sent 3 characters to " + session.Id, await Invoke(("action", "write"), ("session_id", session.Id), ("data", "wor")));
         Assert.Equal("sent a line to " + session.Id, await Invoke(("action", "submit"), ("session_id", session.Id), ("data", "ld")));
         string waited = await Invoke(("action", "wait"), ("session_id", session.Id), ("timeout", 30));
         Assert.Equal(session.Id + " exited 0 after 0.0 s (cmd): " + ReadLine + " — 1 new line\nhello world", waited);

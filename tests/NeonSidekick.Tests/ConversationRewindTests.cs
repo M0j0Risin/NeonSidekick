@@ -193,8 +193,8 @@ public class ConversationRewindTests : IDisposable
         var cut = new RewindCut(2, ["write_file", "run_command"], false, false, null, false);
 
         Assert.Equal("↩️ Rewind", RewindText.Title);
-        Assert.Equal("↩️ Rewind to before #3? 2 messages go.", RewindText.ConfirmPrompt(turn, cut));
-        Assert.Equal("↩️ Rewind to before #3? 1 message goes.", RewindText.ConfirmPrompt(turn, cut with { Turns = 1 }));
+        Assert.Equal("↩️ Rewind to before #3? 2 messages will be removed.", RewindText.ConfirmPrompt(turn, cut));
+        Assert.Equal("↩️ Rewind to before #3? 1 message will be removed.", RewindText.ConfirmPrompt(turn, cut with { Turns = 1 }));
         Assert.Equal("Not undone: what write_file, run_command changed stays as it is.", RewindText.ConfirmCaption(cut));
         Assert.Null(RewindText.ConfirmCaption(cut with { ChangingTools = [] }));
         Assert.Equal("(↩️ rewound 2 messages: \"fix the build …\")", RewindText.RewoundNotice(2, turn.Text));

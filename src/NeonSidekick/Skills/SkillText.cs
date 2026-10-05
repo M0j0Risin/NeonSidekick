@@ -157,7 +157,7 @@ public static class SkillText
 
     /// <summary>A create for a name that is a skill in another writable root (2026-09-16): a copy would shadow it — update it there instead.</summary>
     public static string ExistsElsewhere(string name, SkillScope scope) =>
-        $"Error: skill '{name}' already exists in the {SkillScopes.Name(scope)} skills; a second copy would hide it — call again with action {SkillEditorTool.UpdateAction} to change it (the scope you pass is corrected to where it lives)";
+        $"Error: skill '{name}' already exists in the {SkillScopes.Name(scope)} skills; a second copy would hide it — call again with action {SkillEditorTool.UpdateAction} to change it (whatever scope you pass, the update goes to the {SkillScopes.Name(scope)} copy)";
 
     /// <summary>The name is a skill in the external folder, which the app never writes (2026-09-16).</summary>
     public static string ExternalReadOnly(string name) =>

@@ -154,8 +154,8 @@ public sealed class LiveMySqlTests
         Assert.StartsWith("2 rows+ × 1 column", await Invoke<MySqlQueryTool>(("sql", "SELECT id FROM ns_orders ORDER BY id"), ("max_rows", 2)));
         string types = await Invoke<MySqlQueryTool>(("sql", "SELECT CAST('12345678901234567890123456789012345.5' AS DECIMAL(65,30)) AS big, o.notes, o.total FROM ns_orders o WHERE o.id = 10"));
         Assert.Contains("| 12345678901234567890123456789012345.500000000000000000000000000000 | first | 42.50 |", types);
-        Assert.StartsWith("Error: the server refused it (live): Error 1146:", await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM ns_no_such_table")));
-        Assert.StartsWith("Error: the server refused it (live): ", await Invoke<MySqlQueryTool>(("sql", "SELECT @undefined")));   // no user variables: an unbound @name is an error
+        Assert.StartsWith("Error: the server refused the SQL (live): MySQL 1146:", await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM ns_no_such_table")));
+        Assert.StartsWith("Error: the server refused the SQL (live): ", await Invoke<MySqlQueryTool>(("sql", "SELECT @undefined")));   // no user variables: an unbound @name is an error
     }
 
     /// <summary>Under the gate, the server's read-only transaction, called straight through <see cref="MySqlAccess"/> as a bypass would reach it: every write refused (ERROR 1792), nothing changed.</summary>

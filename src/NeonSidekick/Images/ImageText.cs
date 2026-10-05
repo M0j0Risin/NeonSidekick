@@ -13,11 +13,11 @@ public static class ImageText
 {
     public const string SourceTooBig = "Error: the picture is over 200 MB or 100 megapixels; too large to edit";
     public const string NotAnImage = "Error: the file could not be read as a picture";
-    public const string ScaleAndSize = "Error: give scale, or width and/or height, not both";
+    public const string ScaleAndSize = "Error: give \"scale\" or \"width\"/\"height\", not both";
     public const string NothingToDo = "Error: nothing to do: give a size, crop, rotate, flip, a colour step, pad, or a format to convert to";
-    public const string NoPathError = "Error: give path (one picture) or paths (several)";
+    public const string NoPathError = "Error: give \"path\" (one picture) or \"paths\" (several)";
     public const string CropIncomplete = "Error: a crop needs all four of crop_x, crop_y, crop_width and crop_height";
-    public const string OverwriteSource = "Error: that would write over the source picture; pass overwrite: true to replace it, or give another to";
+    public const string OverwriteSource = "Error: that would write over the source picture; pass \"overwrite\": true to replace it, or give another \"to\"";
 
     /// <summary>
     /// <c>image_edit</c>'s description's last sentence while <c>Image edit mode</c> is <c>overwrite-original</c> (later on 2026-10-04,
@@ -65,15 +65,15 @@ public static class ImageText
         "Error: " + option + " does not apply to " + format.Label + "; it is for " + formats;
 
     public static string CannotFit(long maxKb, long smallest, ImageFormat format) =>
-        "Error: could not get under " + N(maxKb) + " KB; the smallest tried was " + FileText.Size(smallest) + (format.Lossy ? "" : ". Try colors (fewer colours) or a lossy format such as jpeg") + "; nothing was written";
+        "Error: could not get under " + N(maxKb) + " KB, so nothing was written; the smallest tried was " + FileText.Size(smallest) + (format.Lossy ? "" : ". Try \"colors\" (fewer colours) or a lossy format such as jpeg");
 
     public static string Failed(string detail) => "Error: the picture could not be edited: " + detail;
 
     public static string FormatExtensionClash(string to, ImageFormat format) =>
-        "Error: to '" + to + "' has another extension than " + format.Label + " (" + format.Extension + "); give a matching name or leave format out";
+        "Error: \"to\" '" + to + "' has another extension than " + format.Label + " (" + format.Extension + "); give a matching name or leave \"format\" out";
 
     public static string UnknownFormat(string to) =>
-        "Error: to '" + to + "' has an extension no picture format here writes; give format or use one of " + string.Join(", ", ImageFormats.All.Select(f => f.Extension));
+        "Error: \"to\" '" + to + "' has an extension no picture format here writes; give \"format\" or use one of " + string.Join(", ", ImageFormats.All.Select(f => f.Extension));
 
     public static string OutOfRange(string argument, string given, double min, double max) =>
         "Error: '" + given.Trim() + "' is not between " + N(min) + " and " + N(max) + " for '" + argument + "'";

@@ -294,7 +294,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Contains(Assistant.UncWriteRule, SystemPromptSummary.SystemPrompt(facts with { UncWrite = true }));
         var group = Assert.Single(SystemPromptSummary.ToolGroups([], [], [], [], false, unc: _tools, uncEnabled: false), g => g.Label == ToolsText.UncTabTitle);
         Assert.Contains(SystemPromptSummary.UncOffSuffix, group.Note);
-        Assert.Equal("UNC tools is off or no share of unc.json is offered", SystemPromptSummary.UncOffSuffix);
+        Assert.Equal("UNC tools is off or no share in unc.json is offered", SystemPromptSummary.UncOffSuffix);
     }
 
     [Fact]

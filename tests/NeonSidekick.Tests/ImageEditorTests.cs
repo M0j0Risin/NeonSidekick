@@ -552,8 +552,8 @@ public sealed class ImageEditorTests
         Assert.Null(result.Quality);
         Assert.True(result.Width < 128);
         Assert.Null(none);
-        Assert.StartsWith("Error: could not get under 1 KB; the smallest tried was ", error);
-        Assert.EndsWith(". Try colors (fewer colours) or a lossy format such as jpeg; nothing was written", error);
+        Assert.StartsWith("Error: could not get under 1 KB, so nothing was written; the smallest tried was ", error);
+        Assert.EndsWith(". Try \"colors\" (fewer colours) or a lossy format such as jpeg", error);
     }
 
     // ---- the rest ----

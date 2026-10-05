@@ -186,7 +186,7 @@ public sealed class ShellTests
         answers.Enqueue(null);   // never asked (no watcher)
         var unasked = await gate.JudgeAsync(Request("rm -rf x"), CancellationToken.None);
         Assert.False(unasked.Allowed);
-        Assert.Equal("Error: the command was not approved: no screen to ask on (Shell command policy is ask; --yolo, NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: dotnet build, git push; do not retry it or work around the refusal: tell the user what could not run", unasked.Error);
+        Assert.Equal("Error: the command was not run: there was no screen to ask the user on (Shell command policy is ask; --yolo, NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it run). Allowed prefixes: dotnet build, git push. Do not retry it or work around the refusal; tell the user what could not run", unasked.Error);
 
         // The record (2026-09-26): the denial and the never-asked, not the approvals.
         Assert.Equal(["git push origin", "rm -rf x"], gate.Refusals);
@@ -229,9 +229,9 @@ public sealed class ShellTests
         Assert.True((await gate.JudgeAsync(Request("dir /b", "cmd"), CancellationToken.None)).Allowed);
         var refused = await gate.JudgeAsync(Request("del x", "cmd"), CancellationToken.None);
         Assert.False(refused.Allowed);
-        Assert.StartsWith("Error: the command was not approved: no screen to ask on", refused.Error);
-        Assert.Contains("allowed prefixes: dir; ", refused.Error);
-        Assert.Contains("allowed prefixes: none; ", (await new CommandGate(() => new AppSettingsData { ShellCommandPolicy = "ask" }, new CommandAllowList(() => [], _ => { }), null).JudgeAsync(Request(), CancellationToken.None)).Error);
+        Assert.StartsWith("Error: the command was not run: there was no screen to ask the user on", refused.Error);
+        Assert.Contains("Allowed prefixes: dir. ", refused.Error);
+        Assert.Contains("Allowed prefixes: none. ", (await new CommandGate(() => new AppSettingsData { ShellCommandPolicy = "ask" }, new CommandAllowList(() => [], _ => { }), null).JudgeAsync(Request(), CancellationToken.None)).Error);
     }
 
     // ── The probe ────────────────────────────────────────────────────────────
@@ -417,9 +417,9 @@ public sealed class ShellTests
         Assert.StartsWith("line 1\nline 2\n", cut);
         Assert.EndsWith("\nline 39\nline 40", cut);
         Assert.Contains("\n… (", cut);
-        Assert.Contains(" chars cut; the whole output is in .shell\\run_1.log) …\n", cut);
-        Assert.Equal("… (5 chars cut) …", ShellText.CutLine(5, null));
-        Assert.Equal("… (412,345 chars cut; the whole output is in x.log) …", ShellText.CutLine(412345, "x.log"));
+        Assert.Contains(" characters cut; the whole output is in .shell\\run_1.log) …\n", cut);
+        Assert.Equal("… (5 characters cut) …", ShellText.CutLine(5, null));
+        Assert.Equal("… (412,345 characters cut; the whole output is in x.log) …", ShellText.CutLine(412345, "x.log"));
         string result = ShellText.Result("h", Enumerable.Range(1, 40).Select(i => new OutputLine("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture), false)).ToList(), 100, null);
         Assert.StartsWith("h — output cut\nline 1\n", result);
         Assert.Equal(0.6, ShellText.HeadShare);
@@ -433,7 +433,7 @@ public sealed class ShellTests
         Assert.Equal("Error: workdir '../x' is outside the working directory", ShellText.WorkdirOutside("../x"));
         Assert.Equal("Error: workdir 'x' is not a folder", ShellText.WorkdirNotFolder("x"));
         Assert.Equal("Error: timeout must be 1 to 600", ShellText.BadTimeout(1, 600));
-        Assert.Equal("Error: the command is longer than 8,000 chars; put it in a script file and run that", ShellText.CommandTooLong(8000));
+        Assert.Equal("Error: the command is longer than 8,000 characters; put it in a script file and run that", ShellText.CommandTooLong(8000));
         Assert.Equal("Error: could not start bash.exe (boom)", ShellText.CouldNotStart("bash.exe", "boom"));
         Assert.Equal("approval: allowed once — cmd \"dir a\"", ShellText.ApprovedLogLine(new CommandRequest("cmd", "dir\na", ["dir"]), "allowed once"));
         Assert.Equal("approval: refused (denied by the user) — cmd \"dir\"", ShellText.RefusedLogLine(new CommandRequest("cmd", "dir", ["dir"]), "denied by the user"));

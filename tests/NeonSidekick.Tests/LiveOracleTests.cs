@@ -179,7 +179,7 @@ public sealed class LiveOracleTests
         string types = await Invoke<OracleQueryTool>(("sql", "SELECT 12345678901234567890123456789012345678 AS big, o.notes, o.total FROM ns_orders o WHERE o.id = 10"));
         Assert.Contains("| 12345678901234567890123456789012345678 | first | 42.5 |", types);
 
-        Assert.StartsWith("Error: the server refused it (free): ORA-00942", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM ns_no_such_table")));
+        Assert.StartsWith("Error: the server refused the SQL (free): ORA-00942", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM ns_no_such_table")));
     }
 
     /// <summary>

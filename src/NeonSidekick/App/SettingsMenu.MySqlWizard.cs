@@ -20,11 +20,11 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> MySqlWizardLabels =
         ["File", "Name", "Host", "Port", "Database", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Access", "Description"];
 
-    public const string MySqlWizardFileQuestion = "Scope for mysql.json?";
+    public const string MySqlWizardFileQuestion = "Which mysql.json: this profile's or the global one?";
     public const string MySqlWizardHostQuestion = "The server's host name or address (localhost, db01.example.com).";
     public const string MySqlWizardPortQuestion = "The TCP port; empty for 3306.";
     public const string MySqlWizardDatabaseQuestion = "The database a call works in when it names none; empty to work across every database the user can see.";
-    public const string MySqlWizardUserQuestion = "The database user (an account with SELECT grants alone is the real guard).";
+    public const string MySqlWizardUserQuestion = "The database user (the real guard is an account with only SELECT grants).";
     public const string MySqlWizardTlsQuestion = "Encryption of the connection.";
     public const string MySqlWizardHostRequired = "A host is required.";
     public const string MySqlWizardSaveHiddenRow = "Save, hidden from the model until ticked in MySQL connections offered";

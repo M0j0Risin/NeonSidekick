@@ -94,7 +94,7 @@ public static class PostgresText
     public static string BadTable(string table) => $"Error: '{table}' is not a table name (name or schema.name; \"double quotes\" around a name with dots or capitals)";
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5}} for @id (got {Clip(raw, 200)})";
     public static string TableNotFound(string table, string where) => $"Error: no table or view '{table}' visible in {where}; postgres_tables lists them";
-    public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' names more than one; give the schema: {string.Join(", ", candidates)}";
+    public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' matches more than one table or view; give the schema: {string.Join(", ", candidates)}";
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ public static class PostgresText
     public static string UnknownConnection(string name, string names) => $"Error: no PostgreSQL connection is named '{name}'; the connections are {names}";
     public static string ConnectFailed(string connection, string detail) => $"Error: could not connect to {connection}: {detail}";
     public static string Timeout(string connection, string seconds) => $"Error: the query on {connection} ran past {seconds} s and was stopped; narrow it (WHERE, LIMIT, fewer joins)";
-    public static string Failed(string connection, string detail) => $"Error: the server refused it ({connection}): {detail}";
+    public static string Failed(string connection, string detail) => $"Error: the server refused the SQL ({connection}): {detail}";
     public static string ServerError(string sqlState, string message) => $"{sqlState}: {message}";
     public const string ReadOnlyRefused = "the read-only transaction refused a change";
 

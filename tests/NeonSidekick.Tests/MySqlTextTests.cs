@@ -58,7 +58,7 @@ public sealed class MySqlTextTests
         Assert.StartsWith("2 rows+ × 1 column from shop/shop (7 ms) — the first 2 shown, more exist (narrow it with WHERE or LIMIT, or raise max_rows)", MySqlText.Query(Ok(new SqlGrid(["x"], [["1"], ["2"]], true)), 2, 10_000));
         Assert.Equal("No tables and views in shop", MySqlText.Listing("table or view", "tables and views", Ok(new SqlGrid(["x"], [], false)) with { Database = "" }, 10_000));
         Assert.Equal("Error: the query on shop ran past 30 s and was stopped; narrow it (WHERE, LIMIT, fewer joins)", MySqlText.Error(new SqlRun(SqlOutcome.Timeout, "30", "shop", "", [], TimeSpan.Zero)));
-        Assert.Equal("Error: the server refused it (shop): Error 1146: Table 'shop.x' doesn't exist", MySqlText.Error(new SqlRun(SqlOutcome.Failed, MySqlText.ServerError(1146, "Table 'shop.x' doesn't exist"), "shop", "", [], TimeSpan.Zero)));
+        Assert.Equal("Error: the server refused the SQL (shop): MySQL 1146: Table 'shop.x' doesn't exist", MySqlText.Error(new SqlRun(SqlOutcome.Failed, MySqlText.ServerError(1146, "Table 'shop.x' doesn't exist"), "shop", "", [], TimeSpan.Zero)));
         Assert.Equal("Connected to 'shop' as shop_reader@%, 8.4.11.", MySqlText.TestOk("shop", "shop_reader@%", "8.4.11"));
         Assert.StartsWith("This account can change data (ALL PRIVILEGES ON `neon`.*);", MySqlText.CanWrite(["ALL PRIVILEGES ON `neon`.*"]));
     }

@@ -45,9 +45,9 @@ public sealed class ImageOutputTests
         Assert.Equal(("out/small.png", (string?)null), ImageOutput.OutputFor("out/small.png", false, "cat.jpg", ImageFormats.Png, false, null));
         Assert.Equal(("out/small.jpg", (string?)null), ImageOutput.OutputFor("out/small", false, "cat.jpg", ImageFormats.Jpeg, false, null));
         Assert.Equal(("small.JPEG", (string?)null), ImageOutput.OutputFor("small.JPEG", false, "cat.png", ImageFormats.Jpeg, false, null));
-        Assert.Equal((null, "Error: to 'small.png' has another extension than JPEG (.jpg); give a matching name or leave format out"),
+        Assert.Equal((null, "Error: \"to\" 'small.png' has another extension than JPEG (.jpg); give a matching name or leave \"format\" out"),
             ImageOutput.OutputFor("small.png", false, "cat.png", ImageFormats.Jpeg, false, null));
-        Assert.Equal((null, "Error: to 'small.webp' has an extension no picture format here writes; give format or use one of .png, .jpg, .gif, .bmp, .tif, .jxl, .heic"),
+        Assert.Equal((null, "Error: \"to\" 'small.webp' has an extension no picture format here writes; give \"format\" or use one of .png, .jpg, .gif, .bmp, .tif, .jxl, .heic"),
             ImageOutput.OutputFor("small.webp", false, "cat.png", ImageFormats.Png, false, null));
         // A trailing slash is a folder even before it exists.
         Assert.Equal(("new/cat-edited.png", (string?)null), ImageOutput.OutputFor("new/", false, "cat.png", ImageFormats.Png, false, null));

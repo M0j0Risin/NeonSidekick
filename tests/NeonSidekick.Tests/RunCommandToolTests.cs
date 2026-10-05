@@ -287,7 +287,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal("Error: timeout must be 1 to 3600", await Invoke(("command", "dir"), ("timeout", "soon")));
         Assert.Equal("Error: 'maybe' is not one of true, false for 'background'", await Invoke(("command", "dir"), ("background", "maybe")));
         Assert.Equal("Error: '2' is not one of true, false for 'notify'", await Invoke(("command", "dir"), ("notify", 2)));
-        Assert.Equal("Error: the command is longer than 8,000 chars; put it in a script file and run that", await Invoke(("command", new string('x', 8001)), ("shell", "powershell")));
+        Assert.Equal("Error: the command is longer than 8,000 characters; put it in a script file and run that", await Invoke(("command", new string('x', 8001)), ("shell", "powershell")));
         _settings.ShellCommandPolicy = "off";
         Assert.Equal("Error: Shell command policy is off: no command runs", await Invoke(("command", "dir")));
     }
@@ -311,7 +311,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(2, _asked.Count);   // the second echo was on the list
 
         _answer = null;   // never asked
-        Assert.StartsWith("Error: the command was not approved: no screen to ask on", await Invoke(("command", "dir")));
+        Assert.StartsWith("Error: the command was not run: there was no screen to ask the user on", await Invoke(("command", "dir")));
     }
 
     [Fact]
@@ -358,7 +358,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.StartsWith("exit 0 in 0.0 s (cmd): for /l %i in (1,1,400) do @echo line %i — output cut\nline 1\nline 2\n", result);
         Assert.EndsWith("\nline 399\nline 400", result);
         Assert.Contains("\n… (", result);
-        Assert.Contains(@" chars cut; the whole output is in .shell\run_", result);
+        Assert.Contains(@" characters cut; the whole output is in .shell\run_", result);
         Assert.True(result.Length < 2400);
         string spill = Assert.Single(Directory.GetFiles(Path.Combine(_root, ".shell"), "run_*.log"));
         string whole = File.ReadAllText(spill);

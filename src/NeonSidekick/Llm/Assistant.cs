@@ -66,7 +66,7 @@ public sealed class Assistant
     /// setting <c>LLM offer tools</c> is off (<see cref="PlainTextRule"/>), the first
     /// sentence of <see cref="OperatingRules"/> otherwise. Pinned.
     /// </summary>
-    public const string PlainTextRule = "Reply in plain text: no markdown headings, tables or code fences unless the user asks for code.";
+    public const string PlainTextRule = "Reply in plain text: no Markdown headings or tables, and no code fences unless the user asks for code.";
 
     /// <summary>
     /// The sentence that takes <see cref="PlainTextRule"/>'s place while the transcript renders
@@ -133,7 +133,7 @@ public sealed class Assistant
     /// </summary>
     public const string FileRule =
         "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
-        "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and nothing outside it is reachable; " +
+        "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and the file tools reach nothing outside it; " +
         NeonSidekick.Llm.Tools.DeleteTool.ToolName + " removes a file or a folder for good, with everything in it. " +
         "To look at a picture (png, jpg, gif, webp, bmp) in the working directory call " + NeonSidekick.Llm.Tools.ViewImageTool.ToolName + " (several at once with " + NeonSidekick.Llm.Tools.ViewImageTool.PathsArgument + "); " + NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " cannot read one.";
 
@@ -145,7 +145,7 @@ public sealed class Assistant
     /// </summary>
     public const string FileRuleWithoutDelete =
         "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
-        "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and nothing outside it is reachable. " +
+        "(" + NeonSidekick.Llm.Tools.GetWorkingDirectoryTool.ToolName + " gives its path); every path you pass is relative to it and the file tools reach nothing outside it. " +
         "To look at a picture (png, jpg, gif, webp, bmp) in the working directory call " + NeonSidekick.Llm.Tools.ViewImageTool.ToolName + " (several at once with " + NeonSidekick.Llm.Tools.ViewImageTool.PathsArgument + "); " + NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " cannot read one.";
 
     /// <summary>
@@ -202,7 +202,7 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.VaultReadTool.ToolName + " reads one, " + NeonSidekick.Llm.Tools.VaultLinksTool.ToolName + " shows its links and backlinks, " +
         NeonSidekick.Llm.Tools.VaultDailyTool.ToolName + " opens a day's daily note; " +
         NeonSidekick.Llm.Tools.VaultWriteTool.ToolName + " and " + NeonSidekick.Llm.Tools.VaultPropertiesTool.ToolName + " change notes — write Obsidian Markdown ([[links]], #tags) — and " +
-        NeonSidekick.Llm.Tools.VaultMoveTool.ToolName + " renames or moves one with its links kept; the vault's .obsidian folder is the app's own.";
+        NeonSidekick.Llm.Tools.VaultMoveTool.ToolName + " renames or moves one with its links kept; the vault's .obsidian folder belongs to Obsidian, so leave it alone.";
 
     /// <summary>
     /// The sentence <see cref="ObsidianRule"/> gains while <c>vault_delete</c> is offered (later on 2026-09-22: the setting
@@ -510,7 +510,7 @@ public sealed class Assistant
     /// </summary>
     public const string HomeAssistantRule =
         "The ha_ tools reach the user's home through Home Assistant: look before you act — " + NeonSidekick.Llm.Tools.HaOverviewTool.ToolName + " for the house, " +
-        NeonSidekick.Llm.Tools.HaStatesTool.ToolName + " for names, ids and a device's options, " + NeonSidekick.Llm.Tools.HaHistoryTool.ToolName + " for what happened — and never guess an entity id; a room name goes to the room's group light. " +
+        NeonSidekick.Llm.Tools.HaStatesTool.ToolName + " for names, ids and a device's options, " + NeonSidekick.Llm.Tools.HaHistoryTool.ToolName + " for what happened — and never guess an entity id; when the user names a room, act on that room's group light. " +
         "Use " + NeonSidekick.Llm.Tools.HaLightsTool.ToolName + ", " + NeonSidekick.Llm.Tools.HaSceneTool.ToolName + ", " + NeonSidekick.Llm.Tools.HaMediaTool.ToolName + " and " + NeonSidekick.Llm.Tools.HaTodoTool.ToolName + " first, " +
         NeonSidekick.Llm.Tools.HaCallServiceTool.ToolName + " for any other service and " + NeonSidekick.Llm.Tools.HaAssistTool.ToolName + " as a last resort, and say in a few words what you changed. " +
         "Some calls wait for the user's approval; one they decline is not retried.";
@@ -1998,10 +1998,10 @@ public sealed class Assistant
         "Round trip " + iteration.ToString(CultureInfo.InvariantCulture) + " is the turn's last: asked without the tools, for an answer.";
 
     /// <summary>The <c>--log</c> line when the model wrote a tool call as text in the round that asked for words (2026-09-30).</summary>
-    internal const string LastRoundTextCallsNote = "The model wrote a tool call out as text in the round asked for an answer; it was dropped from the reply and not run.";
+    internal const string LastRoundTextCallsNote = "The model wrote a tool call out as text in the round that asked for an answer; it was dropped from the reply and not run.";
 
     /// <summary>The <c>--log</c> line when the model wrote out a call to a tool only taken out (<see cref="WrittenCallsTakenOut"/>, 2026-09-30).</summary>
-    internal const string TakenOutTextCallsNote = "The model wrote a call to a tool it is not offered out as text; it was dropped from the reply and not run.";
+    internal const string TakenOutTextCallsNote = "The model wrote out, as text, a call to a tool it is not offered; it was dropped from the reply and not run.";
 
     /// <summary>The <c>--log</c> line when calls written as text came beside native ones (2026-09-30, code review): taken out, not run.</summary>
     internal const string WrittenBesideNativeNote = "The model wrote tool calls out as text beside native ones; they were dropped from the reply and not run.";

@@ -594,7 +594,7 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("download 4.3 GB", EmbeddedLlmText.InstallCost(e2b, 0));
         Assert.Equal("Gemma 4 E2B's MTP drafter could not be downloaded, so it starts without MTP: timed out", EmbeddedLlmText.DrafterFailed(e2b, "timed out"));
         Assert.Equal("Muse Glimmer 30B's DFlash drafter could not be downloaded, so it starts without DFlash: timed out", EmbeddedLlmText.DrafterFailed(EmbeddedModelCatalog.Find("muse-glimmer-30b")!, "timed out"));
-        Assert.Equal("the embedded LLM is off; turn Embedded servers enabled on in /settings › Embedded to use it", EmbeddedLlmText.SwitchedOffError);
+        Assert.Equal("the embedded LLM is off; set Embedded servers enabled to on in /settings › Embedded to use it", EmbeddedLlmText.SwitchedOffError);
         Assert.Equal("2 of 4 installed (9.4 GB)", EmbeddedLlmText.ModelsRowValue(2, 4, 9_400_000_000));
         Assert.Equal("none of 4 installed", EmbeddedLlmText.ModelsRowValue(0, 4, 0));
         Assert.Equal("auto (cuda: NVIDIA driver 610.88)", EmbeddedLlmText.BackendRowValue("auto", new BackendChoice(LlamaBackend.Cuda, "NVIDIA driver 610.88")));

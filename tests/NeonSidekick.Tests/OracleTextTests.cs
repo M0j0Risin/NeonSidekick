@@ -92,7 +92,7 @@ public sealed class OracleTextTests
         Assert.Equal("Error: no Oracle connection is named 'x'; the connections are a, b", OracleText.Error(SqlRun.Refused(SqlOutcome.UnknownConnection, "a, b", "x")));
         Assert.Equal("Error: could not connect to free: ORA-01017: invalid credential", OracleText.Error(SqlRun.Refused(SqlOutcome.ConnectFailed, "ORA-01017: invalid credential", "free")));
         Assert.Equal("Error: the query on free ran past 30 s and was stopped; narrow it (WHERE, FETCH FIRST n ROWS ONLY, fewer joins)", OracleText.Error(new SqlRun(SqlOutcome.Timeout, "30", "free", "HR", [], TimeSpan.Zero)));
-        Assert.Equal("Error: the server refused it (free): ORA-00942", OracleText.Error(new SqlRun(SqlOutcome.Failed, "ORA-00942", "free", "HR", [], TimeSpan.Zero)));
+        Assert.Equal("Error: the server refused the SQL (free): ORA-00942", OracleText.Error(new SqlRun(SqlOutcome.Failed, "ORA-00942", "free", "HR", [], TimeSpan.Zero)));
         Assert.All(new[] { OracleText.NoSql, OracleText.NoTable, OracleText.NoPattern, OracleText.SelectInto, OracleText.NoConnections }, s => Assert.StartsWith("Error: ", s));
     }
 

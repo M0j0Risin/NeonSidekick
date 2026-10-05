@@ -115,7 +115,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal("Error: code is required", await Invoke(("language", "powershell")));
         Assert.Equal("Error: 'ruby' is not one of powershell, python, node for 'language'", await Invoke(("language", "ruby"), ("code", "x")));
         _settings.ShellCodeLanguages = ["python"];
-        Assert.Equal("Error: powershell is not enabled (the Shell tab of /tools, Shell code languages)", await Invoke(("language", "powershell"), ("code", "x")));
+        Assert.Equal("Error: powershell is not enabled; the user can tick it in Shell code languages on the Shell tab of /tools", await Invoke(("language", "powershell"), ("code", "x")));
         _settings.ShellCodeLanguages = ["powershell", "python", "node"];
         Assert.Equal("Error: timeout must be 1 to 3600", await Invoke(("language", "powershell"), ("code", "x"), ("timeout", 0)));
         _settings.ShellCommandPolicy = "ask";

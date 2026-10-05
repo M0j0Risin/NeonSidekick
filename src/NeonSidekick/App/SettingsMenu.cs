@@ -1128,7 +1128,7 @@ internal sealed partial class SettingsMenu
     /// <summary>What <c>/reasoning &lt;level&gt;</c> answers to a word that is not one of <see cref="Llm.ReasoningLevel.Levels"/>. Pinned.</summary>
     public static readonly string ReasoningLevelError = "/reasoning takes " + string.Join(", ", Llm.ReasoningLevel.Levels[..^1]) + " or " + Llm.ReasoningLevel.Levels[^1] + ", or nothing to pick from a list.";
     public const string MenusNeedTerminalError = "Menus need an interactive ANSI terminal; edit profile.json instead.";
-    public const string NoUrlError = "No LLM endpoint. Set the URL in /settings first.";
+    public const string NoUrlError = "No LLM server. Set the LLM URL in /settings first.";
     public const string NoModelsListedError = "The server lists no models; use /model <id>.";
     public const string UnchangedNotice = "unchanged";
     public const string TtsSpeedRangeError = "must be a speed multiplier between 0.5 and 2";
@@ -1187,7 +1187,7 @@ internal sealed partial class SettingsMenu
     public static readonly string LlmTurnTimeoutRangeError = TimeoutRangeError(Llm.LlmTimeouts.MaxTurnSeconds);
 
     private static string TimeoutRangeError(double max) =>
-        "must be a number of seconds in (0, " + max.ToString(CultureInfo.InvariantCulture) + "]";
+        "must be more than 0 and at most " + max.ToString(CultureInfo.InvariantCulture) + " seconds";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.LlmMaxToolIterations"/>. Pinned.</summary>
     public static readonly string MaxToolIterationsRangeError =
@@ -6736,7 +6736,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowImageThumbnails => on ? "image thumbnails are shown in the chat transcript" : "no image thumbnails in the chat transcript",
         SettingsField.TranscriptMarkdown => on ? "replies are styled as Markdown in the pane" : "replies stream as plain text",
         SettingsField.LlmOfferTools => on ? "the model gets the tools; a change starts a new conversation" : "no tools at all; a change starts a new conversation",
-        SettingsField.LlmUseFunVerbs => on ? "the thinking spinner reads a random verb" : "the spinner reads thinking",
+        SettingsField.LlmUseFunVerbs => on ? "the thinking spinner reads a random verb" : "the spinner says “thinking”",
         SettingsField.LlmShowThinking => on ? "thinking shown in chat" : "thinking not shown in chat",
         SettingsField.LlmPreserveThinking => on ? "every turn's thinking goes back to the server" : "only the current turn's thinking goes back to the server",
         SettingsField.LlmSamplingFromHuggingFace => on ? "the model card's defaults when the server names none (huggingface.co)" : "only the server's own defaults, nothing fetched",
@@ -6748,7 +6748,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SttInterrupt => on ? "the wake phrase during a spoken reply stops it" : "a spoken reply plays to its end",
         SettingsField.AskUser => on ? "ask user enabled" : "ask user disabled",
         SettingsField.FileTools => on ? "file tools enabled" : "file tools disabled",
-        SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree names alone",
+        SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree lists names only",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
         SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",
         SettingsField.ObsidianTools => on ? "Obsidian tools enabled" : "Obsidian tools disabled",
@@ -6768,10 +6768,10 @@ internal sealed partial class SettingsMenu
         SettingsField.UncStarMention => on ? "* and part of a name lists the UNC shares on the line" : "* is ordinary text",
         SettingsField.DockerTools => on ? "docker tools enabled" : "docker tools disabled",   // the user's wording, 2026-10-03
         SettingsField.CameraTools => on ? "camera tool enabled" : "camera tool disabled",   // the user's wording, 2026-10-03
-        SettingsField.CameraKeepInSessions => on ? "stored sessions keep the camera's pictures" : "stored sessions name the camera's pictures, the files stay in camera/",
+        SettingsField.CameraKeepInSessions => on ? "stored sessions keep the camera's pictures" : "stored sessions name the photos; files stay in the output folder",
         SettingsField.ScreenTools => on ? "screen capture tool enabled" : "screen capture tool disabled",
         SettingsField.ScreenPreview => on ? "the viewer shows each screenshot sent" : "screenshots are sent without a preview",
-        SettingsField.ScreenKeepInSessions => on ? "stored sessions keep the screenshots" : "stored sessions name the screenshots, the files stay in screen_images/",
+        SettingsField.ScreenKeepInSessions => on ? "stored sessions keep the screenshots" : "stored sessions name the screenshots; files stay in the output folder",
         SettingsField.CameraWatchUnprompted => on ? "watch mode shows the model a change by itself, now and then" : "watch mode's changes ride your next message",
         SettingsField.BotChatCamera => on ? "each bot sees a fresh picture from your camera (vision models)" : "the bots do not see your camera",
         SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",
@@ -6822,7 +6822,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ThemedExternalWindows => on ? "theme the external windows" : "keep the external windows black",
         SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
         SettingsField.QueueMessages => on ? "a message sent while a reply runs is queued and sent when the reply ends" : "a message sent during a reply goes when it ends, unlisted; no /queue",
-        SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; what is stored still lists, restores and purges",
+        SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellToolBridge => on ? "a script may call this app's other tools through its neon_tools module" : "a script does everything itself: no neon_tools module, no tool calls",
         SettingsField.ShellPolice => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03
@@ -7007,7 +7007,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The notice when the removed model was the saved LLM (2026-09-29): URL and model cleared. Pinned.</summary>
-    public const string EmbeddedLlmClearedNotice = "The LLM URL and model named it, so both are cleared; pick another in /server.";
+    public const string EmbeddedLlmClearedNotice = "It was the saved LLM, so LLM URL and LLM model are cleared; pick another in /server.";
 
     /// <summary>A partly downloaded model's removal row (2026-09-29, the user's ask). Pinned.</summary>
     public const string RemovePartialRow = "Remove (the partial download)";

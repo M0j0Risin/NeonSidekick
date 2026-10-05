@@ -152,9 +152,9 @@ public static class CameraText
 
     public static string NoSuchCamera(string what) => $"No camera '{what}' is connected (/camera list).";
 
-    public static string Off(int released) => released == 0 ? "The camera was not held by /camera live or watch." : "The camera is let go (it closes in a few seconds).";
+    public static string Off(int released) => released == 0 ? "The camera was not held by /camera live or watch." : "The camera is released (it closes in a few seconds).";
 
-    public const string NeedsScreen = "/camera needs the app's screen for that; headless has /camera list.";
+    public const string NeedsScreen = "/camera needs the app's screen for that; in headless mode only /camera list works.";
 
     public const string LiveOn = "The camera is live in its own window (close it, or /camera off, to stop).";
 

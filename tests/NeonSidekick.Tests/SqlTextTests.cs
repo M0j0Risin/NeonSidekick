@@ -251,7 +251,7 @@ public sealed class SqlTextTests
         Assert.Equal("Error: no SQL connection is named 'x'; the connections are aw, corp", SqlText.Error(SqlRun.Refused(SqlOutcome.UnknownConnection, "aw, corp", "x")));
         Assert.Equal("Error: could not connect to aw: Login failed", SqlText.Error(SqlRun.Refused(SqlOutcome.ConnectFailed, "Login failed", "aw")));
         Assert.Equal("Error: the query on aw ran past 30 s and was stopped; narrow it (WHERE, TOP, fewer joins)", SqlText.Error(new SqlRun(SqlOutcome.Timeout, "30", "aw", "db", [], TimeSpan.Zero)));
-        Assert.Equal("Error: the server refused it (aw): Msg 208, line 1: Invalid object name 'x'.", SqlText.Error(new SqlRun(SqlOutcome.Failed, SqlText.ServerError(208, 1, "Invalid object name 'x'."), "aw", "db", [], TimeSpan.Zero)));
+        Assert.Equal("Error: the server refused the SQL (aw): Msg 208, line 1: Invalid object name 'x'.", SqlText.Error(new SqlRun(SqlOutcome.Failed, SqlText.ServerError(208, 1, "Invalid object name 'x'."), "aw", "db", [], TimeSpan.Zero)));
         Assert.Equal("the first line", SqlText.Note("the first line\nthe rest"));
     }
 }

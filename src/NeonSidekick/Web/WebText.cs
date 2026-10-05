@@ -65,7 +65,7 @@ public static class WebText
     public const string SearxngName = "SearXNG";
 
     public static readonly string NoBrowser =
-        "Error: no headless browser (Edge, Chrome or Brave) was found; set Web browser path in /tools";
+        "Error: no headless browser (Edge, Chrome or Brave) was found; the user can set Web browser path on the Web tab of /tools";
 
     public static readonly string TooManyLinks =
         "Error: " + Llm.Tools.OpenUrlTool.ToolName + " takes at most " + Llm.Tools.OpenUrlTool.MaxUrls.ToString(CultureInfo.InvariantCulture) + " links at a time";

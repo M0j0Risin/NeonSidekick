@@ -3821,7 +3821,7 @@ internal sealed partial class ChatScreen
     public static string SwitchSubject(SlashCommand command) => command switch
     {
         SlashCommand.Tts => "speech output",
-        SlashCommand.Voice => "speech input",
+        SlashCommand.Voice => "voice input",
         SlashCommand.Wake => "the wake word",
         SlashCommand.Interrupt => "the wake word interrupt",
         _ => "",
@@ -5816,7 +5816,7 @@ internal sealed partial class ChatScreen
     /// After <c>/operata</c> created the file with the operating rules in use now (<see cref="CurrentOperatingRules"/>, 2026-10-04) and
     /// opened it; it says the file stands as written from here, since a tool switched later no longer changes its sentences. Pinned.
     /// </summary>
-    public const string OperataCreatedNotice = "(" + NoticeGlyphs.Operata + "created operata.md with the rules in use now, tool sentences included, and opened it in your editor; it stands as written from here: edit it, save, and the next reply uses it; /operata reset goes back to the default)";
+    public const string OperataCreatedNotice = "(" + NoticeGlyphs.Operata + "created operata.md with the rules in use now, tool sentences included, and opened it in your editor. From now on it is used as written: edit and save it, and the next reply uses it; /operata reset goes back to the default)";
 
     public static string OperataOpenFailedError(string detail) => $"Could not open operata.md: {detail}";
 

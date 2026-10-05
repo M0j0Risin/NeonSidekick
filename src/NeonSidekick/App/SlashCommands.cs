@@ -367,7 +367,7 @@ public static class SlashCommands
             new("/skills", "manage and install skills"),
             new("/speak", "read a text file aloud"),
             new("/splash", "start over with the splash screen"),
-            new("/stt", "toggle speech input"),
+            new("/stt", "toggle voice input"),
             new("/sys", "show the system prompt and tools"),
             new("/terminal", "open a terminal in a folder"),
             new("/test", "benchmark the connected model"),
@@ -441,7 +441,7 @@ public static class SlashCommands
     public static readonly int DescriptionWidth = HelpEntries.Max(entry => entry.Summary.Length);
 
     /// <summary>The key line of <see cref="HelpText"/>. Pinned by tests.</summary>
-    public const string KeysLine = "Keys: Enter = send   ESC = stop the speech / clear the line / cancel the reply   Up/Down = history, or the draft's rows when it wraps   F4 = talk (push-to-talk key)";
+    public const string KeysLine = "Keys: Enter = send   ESC = stop the speech / clear the line / cancel the reply   Up/Down = history, or the draft's rows when it wraps   push-to-talk key (F4 unless changed) = talk";
 
     /// <summary>
     /// Printed by <c>/help</c> when there is no pane to open (a redirected console): the Commands tabs' three columns in plain

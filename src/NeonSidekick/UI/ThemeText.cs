@@ -41,8 +41,8 @@ public static class ThemeText
 
     /// <summary>A file that still names a base (read until 2026-10-05).</summary>
     public static string BaseIgnored(string baseName) => $"\"base\": \"{baseName}\" is no longer read, ignored (a theme sets every colour itself)";
-    public static string UnknownColor(string key) => $"\"{key}\" is no colour role, ignored (roles: {string.Join(", ", ThemeKeys.Colors)})";
-    public static string UnknownStyle(string key) => $"\"{key}\" is no style, ignored";
+    public static string UnknownColor(string key) => $"\"{key}\" is not a colour role, ignored (roles: {string.Join(", ", ThemeKeys.Colors)})";
+    public static string UnknownStyle(string key) => $"\"{key}\" is not a style, ignored";
     public static string BadColor(string where, string? value) => $"{where}: \"{value}\" is not a colour (#RRGGBB, #RGB or a role), ignored";
     public static string BadGradient(int count) =>
         string.Create(CultureInfo.InvariantCulture, $"the gradient has {count} stops; it takes 2 to {ThemeFile.MaxGradientStops}, ignored");

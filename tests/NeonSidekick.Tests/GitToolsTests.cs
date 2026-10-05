@@ -223,8 +223,8 @@ public sealed class GitToolsTests : IDisposable
         string cut = await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD"), ("max_lines", 20));
         Assert.DoesNotContain("[… cut", cut);   // seven lines fit
         Assert.Equal("Error: max_lines must be 20 to 5000", await Invoke(Tool<GitDiffTool>(), ("max_lines", 5)));
-        Assert.Equal("Error: give ref alone, from with to, or staged — not a mix", await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD"), ("staged", true)));
-        Assert.Equal("Error: give ref alone, from with to, or staged — not a mix", await Invoke(Tool<GitDiffTool>(), ("from", "HEAD")));
+        Assert.Equal("Error: give \"ref\" alone, \"from\" with \"to\", or \"staged\" — not a mix", await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD"), ("staged", true)));
+        Assert.Equal("Error: give \"ref\" alone, \"from\" with \"to\", or \"staged\" — not a mix", await Invoke(Tool<GitDiffTool>(), ("from", "HEAD")));
         Assert.Equal("Error: 'maybe' is not true or false for 'staged'", await Invoke(Tool<GitDiffTool>(), ("staged", "maybe")));
         Assert.Equal(20, GitDiffTool.DefaultLines(new AppSettingsData { GitLibDiffMaxLines = 1 }));
         Assert.Null(GitDiffTool.Request("", "HEAD", "a", "b", false));
@@ -304,7 +304,7 @@ public sealed class GitToolsTests : IDisposable
     public async Task Stage_Commit_AndTheirRefusals()
     {
         Repo();
-        Assert.Equal("Error: give the paths to act on (\".\" for everything changed under path)", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", Array.Empty<string>())));
+        Assert.Equal("Error: give the paths to act on (\".\" for everything changed under \"path\")", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", Array.Empty<string>())));
         Assert.Equal("Error: '42' is not a list of paths for 'paths'", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", 42)));
         Assert.Equal("Error: 'add' is not an action here", await Invoke(Tool<GitStageTool>(), ("action", "add"), ("paths", new[] { "a.txt" })));
         Assert.Equal("Error: give the commit message", await Invoke(Tool<GitCommitTool>(), ("message", " ")));
@@ -399,7 +399,7 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal("Error: 'x' is not inside the repository", GitText.Error(GitOutcome.NotInRepository, "x"));
         Assert.Equal("Error: 'ab' is ambiguous; give a longer sha or the full name", GitText.Error(GitOutcome.RefAmbiguous, "ab"));
         Assert.Equal("Error: there is no commit to amend yet", GitText.Error(GitOutcome.NothingToAmend, ""));
-        Assert.Equal("Error: the index has unmerged conflicts; the user resolves them first", GitText.Error(GitOutcome.Conflicts, ""));
+        Assert.Equal("Error: the index has unmerged conflicts; ask the user to resolve them first", GitText.Error(GitOutcome.Conflicts, ""));
         Assert.Equal(GitText.NoIdentity, GitText.Error(GitOutcome.NoIdentity, ""));
         Assert.Equal("Error: 'x.png' is binary", GitText.Error(GitOutcome.Binary, "x.png"));
         Assert.Equal("Error: 'big' is too big to read as text", GitText.Error(GitOutcome.TooBig, "big"));

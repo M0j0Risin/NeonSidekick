@@ -22,7 +22,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> UncWizardLabels =
         ["File", "Name", "Path", "Sign-in", "User", "Password store", "Password", "Access", "Description"];
 
-    public const string UncWizardFileQuestion = "Scope for unc.json?";
+    public const string UncWizardFileQuestion = "Which unc.json: this profile's or the global one?";
     public const string UncWizardNameQuestion = "Its name: what the model passes as \"share\" and *name picks on the input line.";
     public const string UncWizardPathQuestion = "The path: \\\\server\\share, a folder under it, or a local folder such as D:\\Data.";
     public const string UncWizardAuthQuestion = "Who the share is reached as.";

@@ -13,7 +13,7 @@ namespace NeonSidekick.Git;
 public static class GitText
 {
     public const string Legend = "A added · M modified · D deleted · R renamed · T type changed · ? untracked · U conflict";
-    public const string NoPaths = "Error: give the paths to act on (\".\" for everything changed under path)";
+    public const string NoPaths = "Error: give the paths to act on (\".\" for everything changed under \"path\")";
     public const string NoMessage = "Error: give the commit message";
     public const string NoName = "Error: give the branch's name";
     public const string NoNewName = "Error: give the branch's new name";
@@ -25,8 +25,8 @@ public static class GitText
     public const string NoCommits = "Error: the repository has no commits yet";
     public const string NoIdentity = "Error: git has no user.name / user.email for commits; ask the user to run git config --global user.name \"…\" and git config --global user.email \"…\", then try again";
     public const string CheckoutConflict = "Error: that would overwrite local changes; commit or stash them first";
-    public const string Conflicts = "Error: the index has unmerged conflicts; the user resolves them first";
-    public const string BadDiffArguments = "Error: give ref alone, from with to, or staged — not a mix";
+    public const string Conflicts = "Error: the index has unmerged conflicts; ask the user to resolve them first";
+    public const string BadDiffArguments = "Error: give \"ref\" alone, \"from\" with \"to\", or \"staged\" — not a mix";
 
     public static string NoRepository(string root) => $"Error: '{root}' is not inside a git repository; /cwd into one, or ask the user to git init it";
     public static string AboveSandbox(string workTree) => $"Error: the repository's root '{workTree}' is above the working directory, so the git tools cannot reach it; the user can /cwd to the repository's root";
@@ -40,7 +40,7 @@ public static class GitText
     public static string NoStash(string index) => $"Error: there is no stash@{{{index}}}";
     public static string NameConflict(string name) => $"Error: '{name}' exists already";
     public static string CannotDeleteCurrentBranch(string name) => $"Error: '{name}' is the branch checked out; switch to another first";
-    public static string CannotStageRoot(string path) => $"Error: '{path}' is the repository itself; give \".\" to stage everything under path";
+    public static string CannotStageRoot(string path) => $"Error: '{path}' is the repository itself; give \".\" to stage everything under \"path\"";
     public static string Binary(string path) => $"Error: '{path}' is binary";
     public static string TooBig(string path) => $"Error: '{path}' is too big to read as text";
     public static string TooManyPaths(int max) => $"Error: at most {N(max)} paths in one call";

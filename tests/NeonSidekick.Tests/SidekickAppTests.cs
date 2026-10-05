@@ -1055,7 +1055,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_NoServerLine_NamesThePortsAndTheVariable()
     {
         Assert.Equal("LLM: no server found on this machine (ports 1234, 8000, 30000, 8080, 11434, 8888). Pass --url or set NEONSIDEKICK_LLM_URL.", SidekickApp.HeadlessNoServerLine(ScanScope.Local));
-        Assert.Equal("[error] No LLM endpoint. Set NEONSIDEKICK_LLM_URL and restart.", SidekickApp.HeadlessNoAssistantReply);
+        Assert.Equal("[error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.", SidekickApp.HeadlessNoAssistantReply);
         await Task.CompletedTask;
     }
 

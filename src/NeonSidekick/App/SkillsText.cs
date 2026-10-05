@@ -45,7 +45,7 @@ public static class SkillsText
     /// <summary>The first line of every tab while the setting is off. Pinned.</summary>
     public const string OffLine = "Agent skills is off (the Options tab of /skills): no skill is listed, no skill tool offered, and the project notes are not read.";
 
-    public const string NoneLine = "(no skill installed: a folder with a SKILL.md under one of the roots, or ask the model to write one)";
+    public const string NoneLine = "(no skills installed: add a folder with a SKILL.md under one of the roots, or ask the model to write one)";
     public const string ShadowedHeading = "Shadowed (a higher root holds the name):";
     public const string ProblemsHeading = "Skipped:";
 

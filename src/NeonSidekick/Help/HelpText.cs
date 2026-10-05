@@ -174,7 +174,7 @@ public static class HelpText
     public static string ListTab(string pane, string tab) => (pane, tab) switch
     {
         ("/tools", ToolsText.OfferedTabTitle) => "every tool the model can be offered, by group, each on or off; Enter or Space flips the tool under the cursor (a tool switched off is never offered)",
-        ("/skills", SkillsText.OfferedTabTitle) => "the installed skills; Enter opens one, and the pane's keys add, edit or delete them",
+        ("/skills", SkillsText.OfferedTabTitle) => "the installed skills; Enter on one moves, renames, edits, reverts or deletes it, and /skills add installs more",
         ("/mcp", McpText.ServersTabTitle) => "the MCP servers from mcp.json (global and this profile's); add, edit, switch on or off and reconnect them here",
         ("/mcp", McpText.ToolsTabTitle) => "the tools each connected MCP server offers, switched on or off one by one",
         _ => "no settings rows",

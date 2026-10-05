@@ -38,7 +38,7 @@ public sealed class SidekickApp
 
     /// <summary>The reply to every message when there is no assistant. Pinned by tests.</summary>
     public static readonly string HeadlessNoAssistantReply =
-        $"[error] No LLM endpoint. Set {EnvironmentOverrides.LlmUrlVariable} and restart.";
+        $"[error] No LLM server. Set {EnvironmentOverrides.LlmUrlVariable} and restart.";
 
     /// <summary>The last reply in <paramref name="messages"/> (headless <c>/print reply</c>, 2026-09-28): the newest assistant message with text, or null.</summary>
     public static string? LastReplyText(IEnumerable<ChatMessage>? messages) =>

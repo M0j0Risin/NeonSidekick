@@ -162,7 +162,7 @@ public sealed class PostgresWriteGateTests
     [InlineData("INSERT INTO t VALUES (pg_read_file('/etc/passwd'))", "uses pg_read_file()")]
     [InlineData("UPDATE t SET a = \"pg_sleep\"(10)", "uses pg_sleep()")]
     [InlineData("INSERT INTO t VALUES (1); DELETE FROM t", "the SQL is 2 statements")]
-    [InlineData("CREATE FOO bar", "starts with CREATE FOO, which is no statement")]
+    [InlineData("CREATE FOO bar", "starts with CREATE FOO, which is not a statement")]
     [InlineData("SHOW work_mem", "starts with SHOW")]
     [InlineData("DELETE FROM t WHERE id = $1", "$1 placeholder")]
     [InlineData("  ", "give the statement")]

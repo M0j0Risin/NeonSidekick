@@ -33,7 +33,7 @@ public static class ObsidianText
     /// <summary>The note argument's schema description, shared by every tool that takes one; spliced into a JSON literal, so no double quote or backslash.</summary>
     public const string NoteArgument = "The note: its name (Plan), a [[wikilink]], or its path in the vault (Projects/Plan.md); resolved the way Obsidian resolves a link.";
 
-    public const string NoVault = "Error: no Obsidian vault is set (the Obsidian tab of /tools, Obsidian vault).";
+    public const string NoVault = "Error: no Obsidian vault is set; the user sets one in Obsidian vault on the Obsidian tab of /tools.";
 
     public static string NotAVault(string root) => $"Error: {root} is not an Obsidian vault (it has no .obsidian folder).";
 
@@ -136,7 +136,7 @@ public static class ObsidianText
     public static string IsAFolder(string path) => $"Error: {path} is a folder; vault_delete takes one note or attachment at a time.";
 
     /// <summary><c>vault_delete</c> called while the setting <c>Obsidian allow delete (.trash)</c> is off (2026-09-22; the row's name since 2026-09-23): the guard behind the offer. Pinned.</summary>
-    public const string DeleteOff = "Error: deleting is off (Obsidian allow delete (.trash), on the Obsidian tab of /tools).";
+    public const string DeleteOff = "Error: deleting is off; the user can turn on Obsidian allow delete (.trash) on the Obsidian tab of /tools.";
 
     /// <summary>
     /// <c>vault_delete</c>'s result (2026-09-22): where the file went, then the notes whose links still point at it —

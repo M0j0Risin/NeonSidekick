@@ -581,7 +581,7 @@ public class SlashCommandsTests
         Assert.Contains(Row("/timer", Summary("/timer"), "/timer [<duration> [<name>]]", "/timer stop <name>|all"), SlashCommands.HelpText);
         Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(Row(e), SlashCommands.HelpText));
         Assert.DoesNotContain("M5", SlashCommands.HelpText);
-        Assert.EndsWith("F4 = talk (push-to-talk key)", SlashCommands.HelpText);
+        Assert.EndsWith("push-to-talk key (F4 unless changed) = talk", SlashCommands.HelpText);
 
         // No blank lines anywhere: one list since 2026-09-27 (a blank line ahead of every group but the first until then).
         Assert.DoesNotContain("\n\n", SlashCommands.HelpText);

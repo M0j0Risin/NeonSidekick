@@ -56,7 +56,7 @@ public sealed record Component(string Name, string Version, string License, stri
 /// <summary>
 /// The words for <c>/about</c>: an info pane with an About tab (the app, the runtime, the folders,
 /// the servers it talks to), a Components tab (every third-party package and model with its
-/// version and licence — a pinned list a test checks against the project file) and a License tab
+/// version and licence — a pinned list a test checks against the project file) and a Licence tab
 /// (the repository's <c>LICENSE</c> — GPL-3.0 since 2026-09-20, MIT before — embedded in the exe), the same as
 /// plain lines for a console without the pane. Pure statics, every string pinned. <c>Text</c> cells, never <c>Markup</c>: a path may hold brackets.
 /// </summary>
@@ -68,12 +68,12 @@ public static class AboutText
     /// <summary>The tab titles.</summary>
     public const string AboutTabTitle = "General";
     public const string ComponentsTabTitle = "Components";
-    public const string LicenseTabTitle = "License";
+    public const string LicenseTabTitle = "Licence";
 
     /// <summary>The second line of the About tab.</summary>
     public const string Copyright = "© 2026 Christopher Nelson";
     public const string LicenseName = "GNU GPL v3";
-    public const string LicenseNote = "(the License tab)";
+    public const string LicenseNote = "(the Licence tab)";
 
     /// <summary>
     /// The third line of the About tab (2026-10-04, the user's ask: the repository's name and link on the General tab): plain
@@ -184,7 +184,7 @@ public static class AboutText
         return SidekickApp.Name + " " + facts.Version;
     }
 
-    /// <summary><c>© 2026 Christopher Nelson · GNU GPL v3 (the License tab)</c>.</summary>
+    /// <summary><c>© 2026 Christopher Nelson · GNU GPL v3 (the Licence tab)</c>.</summary>
     public static string CopyrightLine => Copyright + Sep + LicenseName + " " + LicenseNote;
 
     /// <summary><c>NeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick</c> (2026-10-04).</summary>
@@ -293,7 +293,7 @@ public static class AboutText
         return grid;
     }
 
-    /// <summary>The License tab: the text, verbatim.</summary>
+    /// <summary>The Licence tab: the text, verbatim.</summary>
     public static IRenderable LicenseTab() => new Text(LicenseText.TrimEnd('\n'), Theme.Body);
 
     // ── Plain lines ─────────────────────────────────────────────────────────

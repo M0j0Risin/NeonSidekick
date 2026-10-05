@@ -30,7 +30,7 @@ public static class SkillInstallText
     public static string UnreadableZipError(string detail) => "The archive could not be read: " + detail;
 
     public static string TooManyEntriesError(int count, int max) =>
-        $"The archive holds {Count(count)} entries, more than the {Count(max)} read";
+        $"The archive holds {Count(count)} entries, more than the {Count(max)} allowed";
 
     public static string SearchUnreadableError(string detail) => "skills.sh's answer could not be read: " + detail;
 
@@ -176,7 +176,7 @@ public static class SkillInstallText
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(source);
-        return $"{Clean(candidate.Name)} from {Clean(source.Label)}: {Count(candidate.Files.Count)} {(candidate.Files.Count == 1 ? "file" : "files")}, {FileText.Size(candidate.Bytes)}. Its scripts run only through run_command's approval.";
+        return $"{Clean(candidate.Name)} from {Clean(source.Label)}: {Count(candidate.Files.Count)} {(candidate.Files.Count == 1 ? "file" : "files")}, {FileText.Size(candidate.Bytes)}. Nothing runs on install; its scripts run only through run_command, under your Shell command policy.";
     }
 
     /// <summary>The typed-answer path's question, where no pane opens.</summary>
@@ -202,7 +202,7 @@ public static class SkillInstallText
 
     public const string CancelledNotice = "(nothing installed)";
 
-    public const string SkillsOffWarning = "Agent skills is off: the model is offered no skill until it is switched on (/skills, Options)";
+    public const string SkillsOffWarning = "Agent skills is off: the model is offered no skill until it is switched on (the Options tab of /skills)";
 
     private const string ChatScreenGlyph = "🎓";
 
@@ -272,7 +272,7 @@ public static class SkillInstallText
         if (scripts.Count > 0)
         {
             sb.Append("- Contains scripts: ").Append(Clean(string.Join(", ", scripts.Take(10)))).Append(scripts.Count > 10 ? ", …" : "")
-                .Append(" — they run only through run_command's approval\n");
+                .Append(" — they run only through run_command, under your Shell command policy\n");
         }
 
         if (candidate.Body.Length > 0)

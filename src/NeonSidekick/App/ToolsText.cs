@@ -141,7 +141,7 @@ public static class ToolsText
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
 
     /// <summary>The first row of the Offered tab while the setting <c>LLM offer tools</c> is off; every row under it dim. Pinned.</summary>
-    public const string OffLine = "LLM offer tools is off (the LLM tab of /settings): nothing is offered; a switch here saves for when it is on again.";
+    public const string OffLine = "LLM offer tools is off (the LLM tab of /settings): nothing is offered; switches here are saved and apply once it is on again.";
 
     /// <summary>After the Questions heading while the bottom pane is off (<c>ask_user</c> has nowhere to draw). Pinned.</summary>
     public const string NoPaneSuffix = "(off: no pane)";
@@ -150,22 +150,22 @@ public static class ToolsText
     public const string ObsidianOffSuffix = "(off: Obsidian tools is off or no Obsidian vault is set)";
 
     /// <summary>After the SQL heading while the group is not offered: the switch is off or no connection of <c>sql.json</c> is offered (2026-09-23; "offered" since 2026-10-01, when nothing is until ticked). Pinned.</summary>
-    public const string SqlOffSuffix = "(off: SQL tools is off or no connection of sql.json is offered)";
+    public const string SqlOffSuffix = "(off: SQL tools is off or no connection in sql.json is offered)";
 
     /// <summary>After the Oracle heading while the group is not offered: the switch is off or no connection of <c>oracle.json</c> is offered (2026-09-30). Pinned.</summary>
-    public const string OracleOffSuffix = "(off: Oracle tools is off or no connection of oracle.json is offered)";
+    public const string OracleOffSuffix = "(off: Oracle tools is off or no connection in oracle.json is offered)";
 
     /// <summary>After the MySQL heading while the group is not offered: the switch is off or no connection of <c>mysql.json</c> is offered (2026-09-30). Pinned.</summary>
-    public const string MySqlOffSuffix = "(off: MySQL tools is off or no connection of mysql.json is offered)";
+    public const string MySqlOffSuffix = "(off: MySQL tools is off or no connection in mysql.json is offered)";
 
     /// <summary>After the SQLite heading while the group is not offered: the switch is off, or no database of <c>sqlite.json</c> is offered and the sandbox's files are not allowed (2026-10-04). Pinned.</summary>
-    public const string SqliteOffSuffix = "(off: SQLite tools is off, or no database of sqlite.json is offered and SQLite sandbox files is off)";
+    public const string SqliteOffSuffix = "(off: SQLite tools is off, or no database in sqlite.json is offered and SQLite sandbox files is off)";
 
     /// <summary>After the Postgres heading while the group is not offered: the switch is off or no connection of <c>postgres.json</c> is offered (2026-10-04). Pinned.</summary>
-    public const string PostgresOffSuffix = "(off: PostgreSQL tools is off or no connection of postgres.json is offered)";
+    public const string PostgresOffSuffix = "(off: PostgreSQL tools is off or no connection in postgres.json is offered)";
 
     /// <summary>After the UNC heading while the group is not offered: the switch is off or no share of <c>unc.json</c> is offered (2026-09-30). Pinned.</summary>
-    public const string UncOffSuffix = "(off: UNC tools is off or no share of unc.json is offered)";
+    public const string UncOffSuffix = "(off: UNC tools is off or no share in unc.json is offered)";
 
     /// <summary>After the Camera heading while <c>camera_capture</c> is not offered: the switch is off, there is no camera support, or the model reads no pictures (2026-10-02). Pinned.</summary>
     public const string CameraOffSuffix = "(off: Camera tool is off, there is no camera support, or the model reads no pictures)";
@@ -215,10 +215,10 @@ public static class ToolsText
     public const string NoComfyUrlReason = "no ComfyUI URL is set";
     public const string NoWorkflowReason = "no workflow is offered";
     public const string NoHomeAssistantReason = "no Home Assistant URL or API key is set";
-    public const string NoSqliteDatabaseReason = "no database of sqlite.json is offered and SQLite sandbox files is off";
+    public const string NoSqliteDatabaseReason = "no database in sqlite.json is offered and SQLite sandbox files is off";
 
-    /// <summary>A connections file that offers nothing: <c>no connection of sql.json is offered</c>. Pinned.</summary>
-    public static string NoneOfferedReason(string what, string file) => $"no {what} of {file} is offered";
+    /// <summary>A connections file that offers nothing: <c>no connection in sql.json is offered</c>. Pinned.</summary>
+    public static string NoneOfferedReason(string what, string file) => $"no {what} in {file} is offered";
 
     /// <summary>The saved list as a set, ordinal: what <c>PrepareTurn</c> and the summaries test against.</summary>
     public static IReadOnlySet<string> DisabledSet(IReadOnlyList<string> saved)

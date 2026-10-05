@@ -93,7 +93,7 @@ public class SkillEditorToolTests : IDisposable
 
         Assert.Equal("Error: skill 'haiku' already exists in the profile skills; call again with action update to change it", await Invoke(("action", "create"), ("scope", "profile"), ("name", "haiku"), ("description", "x"), ("instructions", "y")));
         // The other scope is no way round it (2026-09-16): a global copy would sit under the profile's, and the reverse would shadow it.
-        Assert.Equal("Error: skill 'haiku' already exists in the profile skills; a second copy would hide it — call again with action update to change it (the scope you pass is corrected to where it lives)", await Invoke(("action", "CREATE"), ("scope", " Global "), ("name", "haiku"), ("description", "x"), ("instructions", "y")));
+        Assert.Equal("Error: skill 'haiku' already exists in the profile skills; a second copy would hide it — call again with action update to change it (whatever scope you pass, the update goes to the profile copy)", await Invoke(("action", "CREATE"), ("scope", " Global "), ("name", "haiku"), ("description", "x"), ("instructions", "y")));
         Assert.False(Directory.Exists(Path.Combine(_roots.Global, "haiku")));
         Assert.Equal("created skill 'tanka' (global, 38 bytes); it is in the list from the next reply on", await Invoke(("action", "CREATE"), ("scope", " Global "), ("name", "tanka"), ("description", "x"), ("instructions", "y")));
     }

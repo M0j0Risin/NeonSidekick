@@ -32,7 +32,7 @@ public static class ConversationCompactor
         "You are compacting a conversation between a user and Neon, a terminal sidekick with tools. " +
         "Write a summary Neon can continue the conversation from as if it remembered everything: the user's goals and requests, " +
         "what was decided or answered, every concrete fact learned from tool results (file names, paths, values, names, dates — even ones the user has not asked about yet), " +
-        "anything still open or promised, and the user's preferences and tone. Be specific and concise, in plain text without markdown. " +
+        "anything still open or promised, and the user's preferences and tone. Be specific and concise, in plain text without Markdown. " +
         "Do not answer the user, do not add commentary, and do not mention that this is a summary.";
 
     /// <summary>The line that asks for the summary, closing the summariser's request. Pinned.</summary>
@@ -90,7 +90,7 @@ public static class ConversationCompactor
         "You are compacting the work in progress of Neon, a terminal sidekick with tools, in the middle of answering the user's latest request. " +
         "Write a progress note Neon can continue the request from as if it remembered every step: what the user asked for, " +
         "each tool call made so far and what it found (file names, paths, values, names, dates, errors — every concrete fact), " +
-        "what has been done or changed, and what is still left to do. Be specific and concise, in plain text without markdown. " +
+        "what has been done or changed, and what is still left to do. Be specific and concise, in plain text without Markdown. " +
         "Do not answer the user, do not add commentary, and do not mention that this is a summary.";
 
     /// <summary>The line that asks for the progress note, closing the second stage's request. Pinned.</summary>

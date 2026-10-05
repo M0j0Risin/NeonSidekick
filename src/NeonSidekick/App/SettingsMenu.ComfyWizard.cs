@@ -346,7 +346,7 @@ internal sealed partial class SettingsMenu
                     string path = text.Trim().Trim('"');
                     if (path.Length == 0 || !File.Exists(path))
                     {
-                        return ComfyWizardFileError(path, "is no file");
+                        return ComfyWizardFileError(path, "is not a file");
                     }
 
                     string json;

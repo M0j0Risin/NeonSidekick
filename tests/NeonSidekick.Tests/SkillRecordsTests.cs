@@ -326,7 +326,7 @@ public class SkillRecordsTests : IDisposable
         var removed = _records.Restore(skill, list[1]);
         Assert.Equal(SkillRevertOutcome.Reverted, removed.Outcome);
         Assert.False(File.Exists(notes));
-        Assert.StartsWith("(↩️ haiku: notes.md is removed, as before the model's change at ", SkillRecordText.RevertText("haiku", removed, _time.LocalTimeZone).Text, StringComparison.Ordinal);
+        Assert.StartsWith("(↩️ haiku: notes.md is removed: it did not exist before the model's change at ", SkillRecordText.RevertText("haiku", removed, _time.LocalTimeZone).Text, StringComparison.Ordinal);
         Assert.Contains(_records.Revisions(skill), r => r.Path == "notes.md" && r.Content == "new" && r.Actor == SkillActors.Revert);
 
         Assert.Equal(default, Reconcile());   // the restores are the app's own writes, never a hand edit

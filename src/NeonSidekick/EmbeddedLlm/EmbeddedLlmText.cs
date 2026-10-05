@@ -26,10 +26,10 @@ public static class EmbeddedLlmText
     public const string PausedNotice = "download paused; pick the model again to resume where it stopped";
 
     /// <summary>The refusal when the embedded model is asked for while <c>Embedded servers enabled</c> is off (2026-09-29).</summary>
-    public const string SwitchedOffError = "the embedded LLM is off; turn Embedded servers enabled on in /settings › Embedded to use it";
+    public const string SwitchedOffError = "the embedded LLM is off; set Embedded servers enabled to on in /settings › Embedded to use it";
 
     /// <summary>The log line when the saved LLM URL names the embedded model but its switch is off: the URL is read as blank.</summary>
-    public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded servers enabled); looking for a server as with no URL.";
+    public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded servers enabled); looking for a server instead.";
 
     /// <summary>The refusal when an image is sent to an embedded model running without its vision projector.</summary>
     public const string NoVisionError = "the embedded model is running without its vision projector; turn Embedded vision on in /settings › Embedded to send images";
@@ -146,7 +146,7 @@ public static class EmbeddedLlmText
     public static string BackendRowValue(string setting, BackendChoice choice) =>
         $"{setting} ({LlamaRelease.Name(choice.Backend)}: {choice.Reason})";
 
-    public static string NotInstalled(EmbeddedModel model) => $"{model.Display} is not installed; pick it in /server to download it";
+    public static string NotInstalled(EmbeddedModel model) => $"{model.Display} is not installed; install it in /settings › Embedded › Embedded models";
 
     public static string UnknownModel(string id) => $"'{id}' is not an embedded model; /model lists the installed ones";
 

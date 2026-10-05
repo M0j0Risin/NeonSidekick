@@ -73,7 +73,7 @@ public static class ScreenText
         return text.Append('.').ToString();
     }
 
-    public const string NothingBehind = "There is no window behind this app's.";
+    public const string NothingBehind = "There is no window behind this app's window.";
 
     public const string NoMonitors = "Windows lists no monitor.";
 
@@ -182,7 +182,7 @@ public static class ScreenText
 
     public const string Capturing = "Capturing the screen…";
 
-    public const string NeedsScreen = "/screen needs the app's screen for that; headless has /screen list.";
+    public const string NeedsScreen = "/screen needs the app's screen for that; in headless mode only /screen list works.";
 
     private static string Size(ScreenRect r) => $"{N(r.Width)}x{N(r.Height)}";
 

@@ -185,7 +185,7 @@ public sealed class SqliteToolsTests : IDisposable
         Assert.Null(access.Resolve("../shop.db", null, out var outside));
         Assert.Equal(SqlOutcome.ConnectFailed, outside!.Outcome);
         Assert.Null(access.Resolve("missing.db", null, out var unknown));
-        Assert.Equal("Error: no SQLite database is named 'missing.db'; the databases are shop, notes, and no file by that path is in the working directory", SqliteText.Error(unknown!));
+        Assert.Equal("Error: no SQLite database is named 'missing.db' and no file by that path is in the working directory; the databases are shop, notes", SqliteText.Error(unknown!));
 
         _settings.SqliteSandboxFiles = false;
         Assert.Null(Access().Resolve("data/local.db", null, out _));

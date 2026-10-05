@@ -64,8 +64,8 @@ public class LlmTimeoutsTests
         {
             var resolved = LlmTimeouts.Resolve(new AppSettingsData { LlmRequestTimeoutSeconds = seconds, LlmTurnTimeoutSeconds = seconds });
             Assert.Equal(LlmTimeouts.Default, resolved);
-            Assert.Single(warnings, w => w.Message.Contains("outside (0, 3600]", StringComparison.Ordinal));
-            Assert.Single(warnings, w => w.Message.Contains("outside (0, 21600]", StringComparison.Ordinal));
+            Assert.Single(warnings, w => w.Message.Contains("out of range (more than 0, at most 3600 seconds)", StringComparison.Ordinal));
+            Assert.Single(warnings, w => w.Message.Contains("out of range (more than 0, at most 21600 seconds)", StringComparison.Ordinal));
         }
         finally
         {
@@ -84,7 +84,7 @@ public class LlmTimeoutsTests
             Assert.Equal(LlmTimeouts.DefaultRequest, resolved.Request);
             Assert.Equal(TimeSpan.FromSeconds(3601), resolved.Turn);
             var warning = Assert.Single(warnings);
-            Assert.Contains("LlmRequestTimeoutSeconds=3601 is outside (0, 3600]", warning.Message);
+            Assert.Contains("LlmRequestTimeoutSeconds=3601 is out of range (more than 0, at most 3600 seconds)", warning.Message);
         }
         finally
         {

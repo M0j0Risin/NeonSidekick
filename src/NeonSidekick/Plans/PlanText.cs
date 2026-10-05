@@ -59,7 +59,7 @@ public static class PlanText
 
     /// <summary>The plan in progress left as it stands when <c>/plan open</c> picks up another.</summary>
     public static string SwitchedNotice(string? path) => path is null
-        ? $"{Glyph} The plan in progress was not presented; it is left."
+        ? $"{Glyph} The plan in progress was never presented, so there is no draft to keep."
         : $"{Glyph} {path} is left as a draft.";
 
     /// <summary>What <c>/plan open</c> says before its turn (2026-09-26): the file, what it was, and how far it got.</summary>
@@ -138,7 +138,7 @@ public static class PlanText
             : $"The plan so far is in {path} (revision {N(revision)}); present_plan overwrites it with the next revision.";
         return
             "PLAN MODE is on. The user asked for a plan before anything is done. Their requirement: \"" + Flatten(requirement) + "\"\n" +
-            "- Do not change anything: no file, repository, command, message or setting. Only read-only tools are offered; use them to research what the plan needs.\n" +
+            "- Do not change anything: write no file, change no repository, run no command that changes state, send no message and change no setting. Only read-only tools are offered; use them to research what the plan needs.\n" +
             "- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n" +
             "- Never claim anything was done: nothing is carried out until the user approves.\n" +
             "- When no open question is left, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.\n" +

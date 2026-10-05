@@ -99,7 +99,7 @@ public partial class ChatScreenTests
         Assert.Equal("hi", first.Text);                                  // sent while the picture was still being made
         Assert.Empty(first.Contents.OfType<DataContent>());
         var second = _chat.Requests[1].Last(m => m.Role == ChatRole.User);
-        Assert.StartsWith("(the user generated a picture with /imagine", second.Text);
+        Assert.StartsWith("(the user made a picture with /imagine", second.Text);
         Assert.EndsWith("what did you make?", second.Text);
         Assert.Single(second.Contents.OfType<DataContent>());
         Assert.True(File.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", "pony-5.png")));

@@ -326,22 +326,22 @@ public static class SystemPromptSummary
     public const string ObsidianOffSuffix = "Obsidian tools is off or no vault is set";
 
     /// <summary>The tail of the SQL group while the SQL tools cannot be offered: the switch off, or no connection of <c>sql.json</c> offered (2026-09-23). Pinned.</summary>
-    public const string SqlOffSuffix = "SQL tools is off or no connection of sql.json is offered";
+    public const string SqlOffSuffix = "SQL tools is off or no connection in sql.json is offered";
 
     /// <summary>The tail of the Oracle group while the Oracle tools cannot be offered: the switch off, or no connection of <c>oracle.json</c> offered (2026-09-30). Pinned.</summary>
-    public const string OracleOffSuffix = "Oracle tools is off or no connection of oracle.json is offered";
+    public const string OracleOffSuffix = "Oracle tools is off or no connection in oracle.json is offered";
 
     /// <summary>The tail of the MySQL group while the MySQL tools cannot be offered (2026-09-30). Pinned.</summary>
-    public const string MySqlOffSuffix = "MySQL tools is off or no connection of mysql.json is offered";
+    public const string MySqlOffSuffix = "MySQL tools is off or no connection in mysql.json is offered";
 
     /// <summary>After the SQLite heading while the group is not offered (2026-10-04). Pinned.</summary>
-    public const string SqliteOffSuffix = "SQLite tools is off, or no database of sqlite.json is offered and SQLite sandbox files is off";
+    public const string SqliteOffSuffix = "SQLite tools is off, or no database in sqlite.json is offered and SQLite sandbox files is off";
 
     /// <summary>After the Postgres heading while the group is not offered (2026-10-04). Pinned.</summary>
-    public const string PostgresOffSuffix = "PostgreSQL tools is off or no connection of postgres.json is offered";
+    public const string PostgresOffSuffix = "PostgreSQL tools is off or no connection in postgres.json is offered";
 
     /// <summary>The tail of the UNC group while the UNC tools cannot be offered: the switch off, or no share of <c>unc.json</c> offered (2026-09-30). Pinned.</summary>
-    public const string UncOffSuffix = "UNC tools is off or no share of unc.json is offered";
+    public const string UncOffSuffix = "UNC tools is off or no share in unc.json is offered";
 
     /// <summary>The tail of the Docker group while its tools cannot be offered: the switch off (2026-10-02). Pinned.</summary>
     public const string DockerOffSuffix = "Docker tools is off";

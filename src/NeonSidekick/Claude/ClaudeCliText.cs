@@ -107,17 +107,17 @@ public static class ClaudeCliText
     public const string NoOwnExecutable = "the app's own executable path is unknown, so the Claude CLI server has no way to reach its tools";
 
     /// <summary><c>/server claude-cli</c> while the Claude CLI server is off or the CLI is missing. Pinned.</summary>
-    public const string NotOfferedError = "The Claude CLI server is not offered: turn on Claude CLI server on the Anthropic tab of /settings, and install Claude Code (or set Claude CLI executable).";
+    public const string NotOfferedError = "The Claude CLI server is not offered: turn on Claude CLI server on the Anthropic tab of /settings, and install Claude Code (or set Claude CLI executable on the ClaudeCLI tab of /tools).";
 
     /// <summary>A saved Claude CLI URL the switch or a missing CLI turns off: logged at connect, a blank URL's discovery follows. Pinned.</summary>
-    public const string NotOfferedWarning = "The LLM URL names the Claude CLI server, which is not offered (Claude CLI server off, or Claude Code not found); finding a server instead.";
+    public const string NotOfferedWarning = "The LLM URL names the Claude CLI server, which is not offered (Claude CLI server off, or Claude Code not found); looking for a server instead.";
 
     /// <summary>The <c>/server</c> row's detail: the model words it takes. Pinned.</summary>
     public const string RowDetail = "Claude Code, the app's tools over MCP";
 
     // ── the relay's (stderr, which the CLI logs) ─────────────────────────────
 
-    public static string RelayBadAddress(string address) => $"neonsidekick relay: '{address}' is no host:port";
+    public static string RelayBadAddress(string address) => $"neonsidekick relay: '{address}' is not a host:port address";
 
     public static string RelayCouldNotConnect(string address, string why) => $"neonsidekick relay: could not connect to {address}: {why}";
 

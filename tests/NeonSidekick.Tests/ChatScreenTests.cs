@@ -4489,7 +4489,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
-        Assert.Contains("\n▸ SQL tools                   on\n  SQL mode                    read-only\n  SQL statements allowed      changing data, creating, reading (used under read-write)\n  SQL connections offered     none of 0\n  SQL default connection      (the first connection)\n  SQL set password            Enter to set password for a connection\n  SQL add/edit connection     Enter to start connection wizard\n  SQL %-mention enabled       on\n  SQL max rows                100 rows\n  SQL query timeout (s)       30\n  SQL query result max chars  32,000 chars\n  SQL connections (profile)   (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
+        Assert.Contains("\n▸ SQL tools                   on\n  SQL mode                    read-only\n  SQL statements allowed      changing data, creating, reading (used under read-write)\n  SQL connections offered     none of 0\n  SQL default connection      (the first connection)\n  SQL set password            Enter to set password for a connection\n  SQL add/edit connection     Enter to start the connection wizard\n  SQL %-mention enabled       on\n  SQL max rows                100 rows\n  SQL query timeout (s)       30\n  SQL query result max chars  32,000 chars\n  SQL connections (profile)   (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Empty(_chat.Requests);
     }
@@ -5541,7 +5541,7 @@ public partial class ChatScreenTests : IDisposable
     public void OperataStrings_ArePinned()
     {
         Assert.Equal("(📋 opened operata.md in your editor; save it and the next reply uses it)", ChatScreen.OperataOpenedNotice);
-        Assert.Equal("(📋 created operata.md with the rules in use now, tool sentences included, and opened it in your editor; it stands as written from here: edit it, save, and the next reply uses it; /operata reset goes back to the default)", ChatScreen.OperataCreatedNotice);
+        Assert.Equal("(📋 created operata.md with the rules in use now, tool sentences included, and opened it in your editor. From now on it is used as written: edit and save it, and the next reply uses it; /operata reset goes back to the default)", ChatScreen.OperataCreatedNotice);
         Assert.Equal("Could not open operata.md: why", ChatScreen.OperataOpenFailedError("why"));
     }
 
@@ -7485,7 +7485,7 @@ public partial class ChatScreenTests : IDisposable
 
         var user = _chat.Requests.Single().Last(m => m.Role == ChatRole.User);
         Assert.Equal(2, user.Contents.OfType<DataContent>().Count());   // the one before the loop, the loop's last
-        Assert.Equal(2, CountOf(user.Text, "(the user generated a picture with /imagine"));
+        Assert.Equal(2, CountOf(user.Text, "(the user made a picture with /imagine"));
     }
 
     [Fact]
@@ -9765,14 +9765,14 @@ public partial class ChatScreenTests : IDisposable
         string raw = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled("About   General    Components    License ") + "\n \n";
+        string strip = rule + "\n" + Titled("About   General    Components    Licence ") + "\n \n";
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         string output = string.Join("\n", raw.Split('\n').Select(l => l.TrimEnd()));
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
         Assert.Contains(strip.TrimEnd() + "\n\nNeonSidekick " + SidekickApp.Version + "\n" + AboutText.CopyrightLine + "\n" + AboutText.RepositoryLine + "\n\nRuntime      " + RuntimeInformation.FrameworkDescription + " · JIT · ", output);
         Assert.Contains("\nHome         " + _settings.StorageDirectory + "\nProfile      " + _settings.ProfileDirectory + "\nModels       " + _settings.ModelsDirectory + "\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
-        // → the Components tab, → the License tab.
+        // → the Components tab, → the Licence tab.
         Assert.Contains(strip.TrimEnd() + "\n\nComponent", output);
         Assert.Contains("\nSpectre.Console", output);
         Assert.Contains(strip.TrimEnd() + "\n\n                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n", output);
@@ -9795,7 +9795,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·   Profile      " + _settings.ProfileDirectory, output);
         Assert.Contains("  · Components\n", output);
         Assert.Contains("  ·   Vosk 0.3.38 · Apache-2.0 · ", output);
-        Assert.Contains("  · License\n  ·                       GNU GENERAL PUBLIC LICENSE\n", output);
+        Assert.Contains("  · Licence\n  ·                       GNU GENERAL PUBLIC LICENSE\n", output);
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 
@@ -14452,7 +14452,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", "pony-5.png")));
         Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);   // drawn as /view draws, centred
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
-        Assert.StartsWith("(the user generated a picture with /imagine", user.Text);
+        Assert.StartsWith("(the user made a picture with /imagine", user.Text);
         Assert.EndsWith("what did you make?", user.Text);
         Assert.Single(user.Contents.OfType<DataContent>());   // the picture rides with the message
     }
@@ -21326,7 +21326,7 @@ public partial class ChatScreenTests : IDisposable
 
     [Theory]
     [InlineData("/tts", "speech output")]
-    [InlineData("/stt", "speech input")]
+    [InlineData("/stt", "voice input")]
     [InlineData("/wake", "the wake word")]
     [InlineData("/interrupt", "the wake word interrupt")]
     public void ArgumentItems_ASwitch_OffersOnAndOff_WithItsSubject(string command, string subject)

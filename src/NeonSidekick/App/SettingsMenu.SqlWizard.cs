@@ -21,7 +21,7 @@ internal sealed partial class SettingsMenu
     // ── Pinned statics ──────────────────────────────────────────────────────
 
     /// <summary>The value column of the <c>SQL add/edit connection</c> action row. Pinned.</summary>
-    public const string SqlAddConnectionLabel = "Enter to start connection wizard";
+    public const string SqlAddConnectionLabel = "Enter to start the connection wizard";
 
     /// <summary>The query the summary's test runs: one row, any login may read it.</summary>
     public const string SqlTestQuery = "SELECT @@VERSION";
@@ -30,7 +30,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> SqlWizardLabels =
         ["File", "Name", "Server", "Database", "Sign-in", "User", "Password store", "Password", "Encryption", "Trust server certificate", "Connect timeout (s)", "Access", "Description"];
 
-    public const string SqlWizardFileQuestion = "Scope for sql.json?";
+    public const string SqlWizardFileQuestion = "Which sql.json: this profile's or the global one?";
     public const string SqlWizardNameQuestion = "Its name: what the model passes as \"connection\" and %name picks on the input line.";
     public const string SqlWizardServerQuestion = "The server: host, host,port or host\\instance.";
     public const string SqlWizardDatabaseQuestion = "The database a call opens when it names none; empty for the login's default database.";
@@ -80,9 +80,9 @@ internal sealed partial class SettingsMenu
 
     public static string SqlWizardNameTaken(string name, string path) => $"'{name}' is already in {path}; pick another name.";
 
-    public static string SqlWizardShadowsWarning(string name, string path) => $"'{name}' is also in {path}; this profile's entry wins it.";
+    public static string SqlWizardShadowsWarning(string name, string path) => $"'{name}' is also in {path}; this profile's entry takes precedence.";
 
-    public static string SqlWizardShadowedWarning(string name, string path) => $"'{name}' is also in {path}, which wins it for this profile.";
+    public static string SqlWizardShadowedWarning(string name, string path) => $"'{name}' is also in {path}, which takes precedence for this profile.";
 
     public static string SqlWizardFileRow(bool global, string path) => (global ? "global  " : "profile ") + path;
 

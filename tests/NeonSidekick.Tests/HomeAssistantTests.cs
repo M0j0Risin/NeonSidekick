@@ -157,7 +157,7 @@ public sealed class HomeAssistantTests : IDisposable
         var snapshot = Snapshot();
 
         var miss = snapshot.Resolve("garage", ["light"]);
-        Assert.StartsWith("Error: nothing named 'garage' among light; some there are: ", miss.Error);
+        Assert.StartsWith("Error: nothing named 'garage' among light; some that exist: ", miss.Error);
 
         var prep = snapshot.Resolve("prep", ["light"]);
         Assert.StartsWith("Error: 'prep' could be 2 things", prep.Error);

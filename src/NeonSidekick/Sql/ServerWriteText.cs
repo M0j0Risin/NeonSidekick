@@ -50,7 +50,7 @@ public static class ServerWriteText
 
     public static string Forbidden(ServerWriteFamily family, string what, string why) => $"Error: the SQL uses {what}, which {family.ToolName} refuses: {why}";
 
-    public static string UnknownStatement(ServerWriteFamily family, string word) => $"Error: the SQL starts with {word}, which is no statement {family.ToolName} runs";
+    public static string UnknownStatement(ServerWriteFamily family, string word) => $"Error: the SQL starts with {word}, which is not a statement {family.ToolName} runs";
 
     /// <summary>A routine's body the gate cannot read for sure (the review, 2026-10-05: a name spelled BEGIN or END could hide a second statement). Pinned.</summary>
     public static string UnclearBody(ServerWriteFamily family) =>

@@ -82,7 +82,7 @@ public sealed record ComfyWorkflow(
     /// <summary>The problems a file can have, pinned: the catalog shows them beside the name.</summary>
     public const string NotJsonProblem = "is not JSON";
     public const string UiFormatProblem = "is a UI-format save (it has \"nodes\" and \"links\"); in ComfyUI use Workflow → Export (API), or enable dev mode and Save (API)";
-    public const string NotApiFormatProblem = "is no API-format workflow: expected an object of nodes, each with a class_type";
+    public const string NotApiFormatProblem = "is not an API-format workflow: expected an object of nodes, each with a class_type";
     public const string NoPromptProblem = "has no {{prompt}} placeholder, so nothing the call says would reach the picture";
     public const string GapInImagesProblem = "has a gap in its image placeholders: {{image2}} needs {{image}}, and {{image3}} needs {{image2}}";
 

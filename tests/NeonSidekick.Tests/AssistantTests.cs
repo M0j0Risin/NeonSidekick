@@ -173,7 +173,7 @@ public class AssistantTests
     [Fact]
     public void WithoutTools_TheDefaultsLoseEveryToolSentence_AndAreBuiltFromTheSameParts()
     {
-        Assert.Equal("Reply in plain text: no markdown headings, tables or code fences unless the user asks for code.", Assistant.PlainTextRule);
+        Assert.Equal("Reply in plain text: no Markdown headings or tables, and no code fences unless the user asks for code.", Assistant.PlainTextRule);
         Assert.StartsWith(Assistant.PlainTextRule + " ", Assistant.OperatingRules, StringComparison.Ordinal);
         Assert.DoesNotContain("_", Assistant.PlainTextRule);   // no tool name
 
@@ -281,7 +281,7 @@ public class AssistantTests
             "The user's Obsidian vault holds their notes: name a note as Obsidian does (its name, a [[wikilink]] or its path in the vault); " +
             "vault_search and vault_list find notes, vault_read reads one, vault_links shows its links and backlinks, vault_daily opens a day's daily note; " +
             "vault_write and vault_properties change notes — write Obsidian Markdown ([[links]], #tags) — and vault_move renames or moves one with its links kept; " +
-            "the vault's .obsidian folder is the app's own.",
+            "the vault's .obsidian folder belongs to Obsidian, so leave it alone.",
             Assistant.ObsidianRule);
         Assert.All(Fakes.ObsidianToolNames.WithoutDelete, name => Assert.Contains(name, Assistant.ObsidianRule, StringComparison.Ordinal));
         Assert.DoesNotContain("vault_delete", Assistant.ObsidianRule, StringComparison.Ordinal);   // its own sentence, only while it is offered (later on 2026-09-22)
@@ -1211,13 +1211,13 @@ public class AssistantTests
     {
         Assert.Equal(
             Assistant.DefaultPersona + "\n\n" +   // the persona is the repo's asset since 2026-10-03, pinned against the file on its own
-            "Reply in plain text: no markdown headings, tables or code fences unless the user asks for code. " +
+            "Reply in plain text: no Markdown headings or tables, and no code fences unless the user asks for code. " +
             "Use a tool when it helps; otherwise answer directly. " +
             "You do not know the current date or time; call get_current_time when a question depends on it, " +
             "and use shift_date or date_difference for calendar arithmetic instead of counting yourself. " +
             "For a countdown, use start_timer, stop_timer and list_timers; never guess what is left on a timer. " +
             "The user's working directory — also called the cwd, the current directory or the current working directory — is a folder on this computer where you may read, search, write and organise files with the file tools " +
-            "(get_working_directory gives its path); every path you pass is relative to it and nothing outside it is reachable; delete removes a file or a folder for good, with everything in it. " +
+            "(get_working_directory gives its path); every path you pass is relative to it and the file tools reach nothing outside it; delete removes a file or a folder for good, with everything in it. " +
             "To look at a picture (png, jpg, gif, webp, bmp) in the working directory call view_image (several at once with paths); read_file cannot read one.",
             Assistant.DefaultSystemPrompt);
         Assert.Equal(10000, Assistant.DefaultMaxToolIterations);

@@ -81,9 +81,9 @@ public static class DockerServerText
         $"{name} did not answer /v1/models within {seconds.ToString(CultureInfo.InvariantCulture)} s; it is left running (raise Docker server ready timeout if its model needs longer).";
 
     public const string SwitchedOffWarning =
-        "The LLM URL names a Docker container that is not a Docker server (Docker servers is off, or the container is unticked); finding a server as for a blank URL.";
+        "The LLM URL names a Docker container that is not a Docker server (Docker servers is off, or the container is unticked); looking for a server instead.";
 
-    public const string SwitchedOffError = "Docker servers is off; turn it on on the Docker tab of /settings.";
+    public const string SwitchedOffError = "Docker servers is off; switch it on from the Docker tab of /settings.";
 
     public const string NoneChosenError = "No Docker server containers are chosen; tick some on the Docker tab of /settings.";
 

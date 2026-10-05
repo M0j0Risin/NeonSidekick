@@ -90,7 +90,7 @@ public static class SqliteText
     public const string NoStatement = "Error: give the statement to run in \"sql\"";
     public static string WriteNotOneStatement(int count) => $"Error: the SQL is {Invariant(count)} statements; sqlite_execute runs exactly one per call — send the next one in the next call";
     public static string WriteForbidden(string what, string why) => $"Error: the SQL uses {what}, which sqlite_execute refuses: {why}";
-    public static string UnknownStatement(string word) => $"Error: the SQL starts with {word}, which is no statement sqlite_execute runs";
+    public static string UnknownStatement(string word) => $"Error: the SQL starts with {word}, which is not a statement sqlite_execute runs";
 
     /// <summary>A statement of a kind the user has not ticked: its kind, then what is allowed. Pinned.</summary>
     public static string KindNotAllowed(SqliteStatementKind kind, IReadOnlyList<SqliteStatementKind> allowed)
@@ -115,7 +115,7 @@ public static class SqliteText
     public const string Declined = "The user declined the change; nothing was run. Do not run it again unless the user asks for it.";
     public const string CreateNeedsSandbox = "Error: a new database file can only be made in the working directory, and SQLite sandbox files is off";
     public const string CreateNeedsPath = "Error: \"create\" needs the new file's path in the working directory as \"database\", e.g. \"data/app.db\"";
-    public static string BadExtension(string path) => $"Error: '{path}' is no database file name; a new database's file ends .db, .sqlite, .sqlite3 or .db3";
+    public static string BadExtension(string path) => $"Error: '{path}' is not a valid database file name; a new database's file ends .db, .sqlite, .sqlite3 or .db3";
     public static string NoFolder(string path) => $"Error: the folder for '{path}' does not exist; make it first (create_directory)";
 
     /// <summary>The allow pane's title. Pinned.</summary>
@@ -166,7 +166,7 @@ public static class SqliteText
     // ─── arguments ──────────────────────────────────────────────────────────────
 
     public const string NoTable = "Error: give the table or view in \"table\"";
-    public static string BadParamName(string name) => $"Error: '{name}' is no parameter name; give the name as the SQL writes it after its @, :, $ or #, e.g. \"id\" for :id";
+    public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; give the name as the SQL writes it after its @, :, $ or #, e.g. \"id\" for :id";
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5}} for @id (got {Clip(raw, 200)})";
     public static string TableNotFound(string table, string database) => $"Error: no table or view '{table}' in {database}; sqlite_tables lists them";
 
@@ -174,7 +174,7 @@ public static class SqliteText
 
     public const string NoDatabases = "Error: no SQLite database is defined; the user adds one to sqlite.json (the SQLite tab of /tools)";
     public static string UnknownDatabase(string name, string names, bool sandbox) =>
-        $"Error: no SQLite database is named '{name}'" + (names.Length > 0 ? $"; the databases are {names}" : "") + (sandbox ? ", and no file by that path is in the working directory" : "");
+        $"Error: no SQLite database is named '{name}'" + (sandbox ? " and no file by that path is in the working directory" : "") + (names.Length > 0 ? $"; the databases are {names}" : "");
     public static string NoFile(string path) => $"no database file at {path}";
     public static string OutsideSandbox(string path) => $"'{path}' is outside the working directory";
     public static string ConnectFailed(string database, string detail) => $"Error: could not open {database}: {detail}";

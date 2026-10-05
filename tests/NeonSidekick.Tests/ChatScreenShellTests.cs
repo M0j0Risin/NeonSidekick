@@ -450,7 +450,7 @@ public partial class ChatScreenTests
         Assert.StartsWith("exit 0 in 0.0 s (cmd): ver\n", ToolResult(_chat.Requests[2], "c2"));
         Assert.Contains(events, e => e.Message == "approval: refused (never asked) — cmd \"echo hi\"");
         Assert.Contains(events, e => e.Message == "approval: on the allow list — cmd \"ver\"");
-        Assert.Contains("✗  Error: the command was not approved", output);
+        Assert.Contains("✗  Error: the command was not run: there was no screen", output);
     }
 
 }

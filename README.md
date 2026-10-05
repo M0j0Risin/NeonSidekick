@@ -1160,7 +1160,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/timer [<duration> [<name>]]` | Lists timers, or starts one (`10m`, `90s`, `1h30m`). |
 | `/timer stop <name>\|all` | Stops one timer, or every one. |
 | `/toolbar [on\|off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
-| `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
+| `/tools` | Switches the model's tools on or off, and edits each tool group's settings on its own tab. On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
 | `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (D, H, C) for *Web browser mode*; `camera`'s has a **watch** button (W) that turns `/camera watch` on or off. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |

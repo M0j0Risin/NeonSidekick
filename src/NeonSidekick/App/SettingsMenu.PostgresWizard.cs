@@ -20,11 +20,11 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> PostgresWizardLabels =
         ["File", "Name", "Host", "Port", "Database", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Access", "Description"];
 
-    public const string PostgresWizardFileQuestion = "Scope for postgres.json?";
+    public const string PostgresWizardFileQuestion = "Which postgres.json: this profile's or the global one?";
     public const string PostgresWizardHostQuestion = "The server's host name or address (localhost, db01.example.com).";
     public const string PostgresWizardPortQuestion = "The TCP port; empty for 5432.";
     public const string PostgresWizardDatabaseQuestion = "The database a call works in when it names none; empty for postgres.";
-    public const string PostgresWizardUserQuestion = "The database user (an account with SELECT grants alone is the real guard).";
+    public const string PostgresWizardUserQuestion = "The database user (the real guard is an account with only SELECT grants).";
     public const string PostgresWizardTlsQuestion = "Encryption of the connection.";
     public const string PostgresWizardHostRequired = "A host is required.";
     public const string PostgresWizardSaveHiddenRow = "Save, hidden from the model until ticked in PostgreSQL connections offered";

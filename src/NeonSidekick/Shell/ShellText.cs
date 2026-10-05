@@ -111,8 +111,8 @@ public static class ShellText
     /// <summary><c>… (412,345 chars cut; the whole output is in .shell\run_9c04e1.log) …</c>, or without the file when none could be written. Pinned.</summary>
     public static string CutLine(int chars, string? spill) =>
         spill is null
-            ? $"… ({Count(chars)} chars cut) …"
-            : $"… ({Count(chars)} chars cut; the whole output is in {spill}) …";
+            ? $"… ({Count(chars)} characters cut) …"
+            : $"… ({Count(chars)} characters cut; the whole output is in {spill}) …";
 
     // ── Background processes (phase B, 2026-09-21) ───────────────────────────
 
@@ -206,7 +206,7 @@ public static class ShellText
     }
 
     /// <summary><c>sent 12 chars to proc_…</c> / <c>sent a line to proc_…</c>. Pinned.</summary>
-    public static string Sent(string id, int chars, bool line) => line ? $"sent a line to {id}" : $"sent {Count(chars)} chars to {id}";
+    public static string Sent(string id, int chars, bool line) => line ? $"sent a line to {id}" : $"sent {Count(chars)} characters to {id}";
 
     /// <summary><c>closed proc_3c9d00 (exit 0, 1,400 lines forgotten)</c>. Pinned.</summary>
     public static string Closed(ProcessSession session)
@@ -294,7 +294,7 @@ public static class ShellText
 
     public const string CodeRequired = "Error: code is required";
     public static string LanguageNotInstalled(CodeLanguage language) => $"Error: {CodeLanguages.Name(language)} is not installed (no {CodeLanguages.FileName(language)} found)";
-    public static string LanguageNotEnabled(string language) => $"Error: {language} is not enabled (the Shell tab of /tools, Shell code languages)";
+    public static string LanguageNotEnabled(string language) => $"Error: {language} is not enabled; the user can tick it in Shell code languages on the Shell tab of /tools";
     public static string UnknownTool(string tool) => $"Error: unknown tool {tool}";
     public static string ToolCallLimit(int max) => $"Error: this run's tool call limit ({N(max)}) is reached";
     public const string BadToken = "Error: the bridge token did not match";
@@ -333,7 +333,7 @@ public static class ShellText
     {
         ArgumentNullException.ThrowIfNull(allowed);
         string list = allowed.Count == 0 ? "none" : string.Join(", ", allowed);
-        return $"Error: the command was not approved: no screen to ask on (Shell command policy is ask; {App.SidekickOptions.YoloFlag}, {Settings.EnvironmentOverrides.CommandPolicyVariable}=yolo or the profile's Shell allowed commands would let it run); allowed prefixes: {list}; do not retry it or work around the refusal: tell the user what could not run";
+        return $"Error: the command was not run: there was no screen to ask the user on (Shell command policy is ask; {App.SidekickOptions.YoloFlag}, {Settings.EnvironmentOverrides.CommandPolicyVariable}=yolo or the profile's Shell allowed commands would let it run). Allowed prefixes: {list}. Do not retry it or work around the refusal; tell the user what could not run";
     }
 
     /// <summary>
@@ -446,7 +446,7 @@ public static class ShellText
     public static string WorkdirOutside(string path) => $"Error: workdir '{path}' is outside the working directory";
     public static string WorkdirNotFolder(string path) => $"Error: workdir '{path}' is not a folder";
     public static string BadTimeout(int min, int max) => $"Error: timeout must be {N(min)} to {N(max)}";
-    public static string CommandTooLong(int max) => $"Error: the command is longer than {Count(max)} chars; put it in a script file and run that";
+    public static string CommandTooLong(int max) => $"Error: the command is longer than {Count(max)} characters; put it in a script file and run that";
     public static string CouldNotStart(string executable, string detail) => $"Error: could not start {executable} ({detail})";
 
     // ── Log lines ────────────────────────────────────────────────────────────

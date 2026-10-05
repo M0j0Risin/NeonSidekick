@@ -190,7 +190,7 @@ public sealed class LiveSqlTests
     [LiveSqlFact]
     public async Task ServerErrors_Timeouts_AndCancels_AreOutcomes_NotCrashes()
     {
-        Assert.Equal("Error: the server refused it (aw): Msg 208, line 1: Invalid object name 'dbo.NoSuchTable'.", await Invoke<SqlQueryTool>(("sql", "SELECT * FROM dbo.NoSuchTable")));
+        Assert.Equal("Error: the server refused the SQL (aw): Msg 208, line 1: Invalid object name 'dbo.NoSuchTable'.", await Invoke<SqlQueryTool>(("sql", "SELECT * FROM dbo.NoSuchTable")));
         Assert.StartsWith("1 row × 1 column from aw/master (", await Invoke<SqlQueryTool>(("sql", "SELECT DB_NAME() AS db"), ("database", "master")));
 
         _settings.SqlQueryTimeoutSeconds = 1;

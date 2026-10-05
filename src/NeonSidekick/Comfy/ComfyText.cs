@@ -45,7 +45,7 @@ public static class ComfyText
     public static string TakesNoImage(string name) => $"Error: workflow '{name}' takes no input image (it has no {{{{image}}}} placeholder)";
 
     /// <summary>A workflow with <c>{{image}}</c> called without one. Pinned.</summary>
-    public static string NeedsImage(string name) => $"Error: workflow '{name}' needs an input image: give image (a picture under the working directory, or a pasted one's [Image #N] label)";
+    public static string NeedsImage(string name) => $"Error: workflow '{name}' needs an input image: give \"image\" (a picture under the working directory, or a pasted one's [Image #N] label)";
 
     /// <summary>A multi-image workflow (later still on 2026-09-24, the face swap) given another number of pictures than it takes. Pinned.</summary>
     public static string WrongImageCount(ComfyWorkflow workflow, int given)
@@ -103,7 +103,7 @@ public static class ComfyText
     }
 
     /// <summary>A blank prompt. Pinned.</summary>
-    public const string NoPrompt = "Error: give prompt (what to draw)";
+    public const string NoPrompt = "Error: give \"prompt\" (what to draw)";
 
     /// <summary>A number argument out of its range. Pinned.</summary>
     public static string OutOfRange(string argument, string raw, string range) => $"Error: {argument} must be {range}, not '{raw}'";
@@ -288,7 +288,7 @@ public static class ComfyText
     }
 
     /// <summary>The note the conversation gets after <c>/imagine</c> (2026-09-24), so the model knows the picture exists and what made it. Pinned.</summary>
-    public static string ImagineNote(string result) => "(the user generated a picture with /imagine, not typed by the user: " + result.Replace("\n", "; ", StringComparison.Ordinal) + ")";
+    public static string ImagineNote(string result) => "(the user made a picture with /imagine; this note is from the app, not typed by the user: " + result.Replace("\n", "; ", StringComparison.Ordinal) + ")";
 
     /// <summary>The spinner's label while a generation runs (<c>⠹ 🎨 00:12</c>; 2026-09-25, the user's wording — it read <c>Generating with &lt;workflow&gt;…</c>, then <c>ComfyUI:</c>, until later that day: the palette, <see cref="Glyph"/>'s, U+1F3A8, two cells, no variation selector). Since 2026-09-26 the image-to-image one; <see cref="TextToImageLabel"/> is the other. Pinned.</summary>
     public const string GeneratingLabel = "🎨";

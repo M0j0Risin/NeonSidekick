@@ -67,12 +67,12 @@ public static class RewindText
         return Theme.DimMarkup("#" + turn.Number.ToString(CultureInfo.InvariantCulture)) + "  " + Markup.Escape(FirstLine(turn.Text)) + calls;
     }
 
-    /// <summary>The confirmation's question: <c>↩️ Rewind to before #3? 2 messages go.</c> Pinned.</summary>
+    /// <summary>The confirmation's question: <c>↩️ Rewind to before #3? 2 messages will be removed.</c> Pinned.</summary>
     public static string ConfirmPrompt(RewindTurn turn, RewindCut cut)
     {
         ArgumentNullException.ThrowIfNull(turn);
         ArgumentNullException.ThrowIfNull(cut);
-        return string.Create(CultureInfo.InvariantCulture, $"{NoticeGlyphs.Rewind}Rewind to before #{turn.Number}? {Messages(cut.Turns)} {(cut.Turns == 1 ? "goes" : "go")}.");
+        return string.Create(CultureInfo.InvariantCulture, $"{NoticeGlyphs.Rewind}Rewind to before #{turn.Number}? {Messages(cut.Turns)} will be removed.");
     }
 
     /// <summary>

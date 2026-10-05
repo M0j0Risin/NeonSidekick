@@ -33,7 +33,7 @@ public class SkillInstallTextTests
 
         Assert.True(preview.StartsWith("**pdf** — Reads [2JPDFs.\n\n- Source: anthropics/skills@main @ 3337550\n- Folder: skills/pdf\n- allowed-tools: Bash(python:*)\n- license: MIT\n- Files: 2, ", StringComparison.Ordinal), preview);
         Assert.Contains("  - scripts/fill.py (1 B)\n", preview);
-        Assert.Contains("- Contains scripts: scripts/fill.py — they run only through run_command's approval\n", preview);
+        Assert.Contains("- Contains scripts: scripts/fill.py — they run only through run_command, under your Shell command policy\n", preview);
         Assert.EndsWith("\n````markdown\nUse ``` fences\nline 2\n````", preview, StringComparison.Ordinal);
         Assert.DoesNotContain('\u001b', preview);
     }

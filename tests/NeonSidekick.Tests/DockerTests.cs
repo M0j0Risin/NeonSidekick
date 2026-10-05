@@ -185,7 +185,7 @@ public sealed class DockerTests : IDisposable
         using (var client = new DockerClient("docker_engine", new HttpClient(denied)))
         {
             var reply = await client.GetAsync("/info", TimeSpan.FromSeconds(5), CancellationToken.None);
-            Assert.Equal(@"Error: Windows refused access to \\.\pipe\docker_engine; the account may need to be in the docker-users group", reply.Error);
+            Assert.Equal(@"Error: Windows refused access to \\.\pipe\docker_engine; the user may need to add the account to the docker-users group, then sign out and back in", reply.Error);
         }
 
         using (var client = new DockerClient("docker_engine", new HttpClient(new StubHttpMessageHandler())))
@@ -252,7 +252,7 @@ public sealed class DockerTests : IDisposable
         Assert.Equal("Let the model stop container mysql_dev (mysql:8.4, Up 40 hours)?", DockerText.ConfirmQuestion(DockerText.LifecycleAct("stop", [Named("mysql_dev")], null)));
         Assert.Equal("stopped mysql_dev", DockerText.Done("stop", Named("mysql_dev"), already: false));
         Assert.Equal("3 days ago", DockerText.Age(1790700000, DateTimeOffset.FromUnixTimeSeconds(1790700000 + 3 * 86400 + 60)));
-        Assert.Equal("Error: Docker writes is off, so the model may only look; the user can act with /docker, or switch Docker writes on in /tools", DockerText.WritesOff);
+        Assert.Equal("Error: Docker writes is off, so the model may only look; the user can act with /docker, or turn on Docker writes on the Docker tab of /tools", DockerText.WritesOff);
         Assert.Equal("Error: the user declined this Docker action; do not retry it unless they ask", DockerText.Declined);
         Assert.Equal("Error: this Docker action needs the user's yes and nobody could be asked; the user can run it with /docker", DockerText.NotAsked);
         Assert.Equal("<redacted>", DockerText.Redacted);

@@ -22,7 +22,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<string> OracleWizardLabels =
         ["File", "Name", "Data source", "Default schema", "User", "Password store", "Password", "Connect timeout (s)", "Access", "Description"];
 
-    public const string OracleWizardFileQuestion = "Scope for oracle.json?";
+    public const string OracleWizardFileQuestion = "Which oracle.json: this profile's or the global one?";
     public const string OracleWizardDataSourceQuestion = "The database: host:port/service (EZConnect, e.g. localhost:1521/FREEPDB1) or a whole (DESCRIPTION=…).";
     public const string OracleWizardSchemaQuestion = "The schema a call works in when it names none; empty for the user's own.";
     public const string OracleWizardUserQuestion = "The database user (a read-only account is the real guard; SYS is refused).";

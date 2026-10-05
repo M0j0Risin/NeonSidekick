@@ -227,7 +227,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The wizard's rows, one per <see cref="SqliteWizardStep"/> before the summary. Pinned.</summary>
     public static readonly IReadOnlyList<string> SqliteWizardLabels = ["File", "Name", "Database file", "Description"];
 
-    public const string SqliteWizardFileQuestion = "Scope for sqlite.json?";
+    public const string SqliteWizardFileQuestion = "Which sqlite.json: this profile's or the global one?";
     public const string SqliteWizardNameQuestion = "Its name: what the model passes as \"database\" and %name picks on the input line.";
     public const string SqliteWizardPathQuestion = "The database file: a full path (D:\\data\\app.db), or one relative to sqlite.json's folder.";
     public const string SqliteWizardDescriptionQuestion = "What the database holds, in your words (optional): the model reads it to pick one.";

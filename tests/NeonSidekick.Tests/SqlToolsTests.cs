@@ -187,7 +187,7 @@ public sealed class SqlToolsTests
         var items = ChatScreen.SqlChoices(catalog);
 
         Assert.Equal(["aw", "corp"], items.Select(i => i.Text));
-        Assert.Equal(["127.0.0.1,1433 / AdventureWorks2022 — the sample", "corp\\inst"], items.Select(i => i.Note));
+        Assert.Equal(["SQL Server · 127.0.0.1,1433 / AdventureWorks2022 — the sample", "SQL Server · corp\\inst"], items.Select(i => i.Note));
         Assert.Empty(ChatScreen.SqlChoices(SqlCatalog.Empty));
         Assert.True(new AppSettingsData().SqlPercentMention);
     }

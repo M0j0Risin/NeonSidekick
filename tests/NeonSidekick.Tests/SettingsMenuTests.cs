@@ -295,7 +295,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(3600, _settings.Current.LlmRequestTimeoutSeconds);
-        Assert.Contains("LLM request timeout (s) must be a number of seconds in (0, 3600]; keeping 3600.", _console.Output);
+        Assert.Contains("LLM request timeout (s) must be more than 0 and at most 3600 seconds; keeping 3600.", _console.Output);
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(expected, _settings.Current.LlmTurnTimeoutSeconds);
         if (changes == SettingsChanges.None)
         {
-            Assert.Contains("LLM turn timeout (s) must be a number of seconds in (0, 21600]; keeping 21600.", _console.Output);
+            Assert.Contains("LLM turn timeout (s) must be more than 0 and at most 21600 seconds; keeping 21600.", _console.Output);
         }
     }
 
@@ -989,8 +989,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("1 round trip", SettingsMenu.FieldValue(SettingsField.LlmMaxToolIterations, new AppSettingsData { LlmMaxToolIterations = 1 }, _settings.ProfileDirectory));
         Assert.Equal("10000", SettingsMenu.EditableValue(SettingsField.LlmMaxToolIterations, data));
         Assert.Equal("must be 1 to 10000 round trips", SettingsMenu.MaxToolIterationsRangeError);
-        Assert.Equal("must be a number of seconds in (0, 3600]", SettingsMenu.LlmRequestTimeoutRangeError);
-        Assert.Equal("must be a number of seconds in (0, 21600]", SettingsMenu.LlmTurnTimeoutRangeError);
+        Assert.Equal("must be more than 0 and at most 3600 seconds", SettingsMenu.LlmRequestTimeoutRangeError);
+        Assert.Equal("must be more than 0 and at most 21600 seconds", SettingsMenu.LlmTurnTimeoutRangeError);
         Assert.Equal("21600", SettingsMenu.FieldValue(SettingsField.LlmTurnTimeoutSeconds, data, _settings.ProfileDirectory));
         Assert.Equal("LLM compact type", SettingsMenu.FieldName(SettingsField.LlmCompactType));
         Assert.Equal("LLM compact keep recent", SettingsMenu.FieldName(SettingsField.LlmCompactKeepRecent));
@@ -4386,7 +4386,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("forever", SettingsMenu.Days(0));
         Assert.Equal("1 day", SettingsMenu.Days(1));
         Assert.Equal("every completed turn is written to this profile's session store", SettingsMenu.ToggleDescribe(SettingsField.SessionLogging, true));
-        Assert.Equal("nothing is written; what is stored still lists, restores and purges", SettingsMenu.ToggleDescribe(SettingsField.SessionLogging, false));
+        Assert.Equal("nothing is written; stored sessions can still be restored or purged", SettingsMenu.ToggleDescribe(SettingsField.SessionLogging, false));
         Assert.Equal("the model can search, list and read this profile's earlier sessions", SettingsMenu.ToggleDescribe(SettingsField.SessionTool, true));
         Assert.Equal("the model never sees an earlier session", SettingsMenu.ToggleDescribe(SettingsField.SessionTool, false));
         pane.Dispose();

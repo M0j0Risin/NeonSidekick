@@ -83,7 +83,7 @@ public static class SqlText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string where = config.Server?.Trim() + (string.IsNullOrWhiteSpace(config.Database) ? "" : " / " + config.Database.Trim());
+        string where = "SQL Server · " + config.Server?.Trim() + (string.IsNullOrWhiteSpace(config.Database) ? "" : " / " + config.Database.Trim());
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 
@@ -134,10 +134,10 @@ public static class SqlText
     public static string BadMissing(string raw) => $"Error: '{raw.Trim()}' is not true or false for 'missing'";
     public static string BadMaxRows(int min, int max) => $"Error: max_rows must be {Invariant(min)} to {Invariant(max)}";
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5, \"name\": \"x\"}} for @id and @name (got {Clip(raw, 200)})";
-    public static string BadParamName(string name) => $"Error: '{name}' is no parameter name; use letters, digits and _ (bound as @name)";
+    public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; use letters, digits and _ (bound as @name)";
     public static string BadParamValue(string name) => $"Error: the value of '{name}' must be a string, a number, true, false or null";
     public static string TableNotFound(string table, string connection, string database) => $"Error: no table or view '{table}' in {connection}/{database}; sql_tables lists them";
-    public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' names more than one; give the schema: {string.Join(", ", candidates)}";
+    public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' matches more than one table or view; give the schema: {string.Join(", ", candidates)}";
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
@@ -145,7 +145,7 @@ public static class SqlText
     public static string UnknownConnection(string name, string names) => $"Error: no SQL connection is named '{name}'; the connections are {names}";
     public static string ConnectFailed(string connection, string detail) => $"Error: could not connect to {connection}: {detail}";
     public static string Timeout(string connection, string seconds) => $"Error: the query on {connection} ran past {seconds} s and was stopped; narrow it (WHERE, TOP, fewer joins)";
-    public static string Failed(string connection, string detail) => $"Error: the server refused it ({connection}): {detail}";
+    public static string Failed(string connection, string detail) => $"Error: the server refused the SQL ({connection}): {detail}";
     public static string ServerError(int number, int line, string message) => $"Msg {Invariant(number)}, line {Invariant(line)}: {message}";
     public static string ConnectFailedLogLine(string connection, string database, int number, string detail) => $"{connection}{(database.Length > 0 ? "/" + database : "")} did not connect (error {Invariant(number)}): {detail}";
 

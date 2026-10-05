@@ -134,12 +134,12 @@ public static class SamplingText
     public static string ExtraError(string problem, string keeping) => $"The {ExtraRowName} {problem}; keeping {keeping}.";
 
     /// <summary>What <c>/sampling</c> with arguments answers when nothing is connected to set them for. Pinned.</summary>
-    public const string NoModelError = "No model connected: /sampling with a value sets the connected model's. Use /sampling to edit any model (*) instead.";
+    public const string NoModelError = "No model is connected, so there is nothing to set; use /sampling alone to edit any model (*).";
 
     /// <summary>What <c>/sampling</c> answers to arguments it cannot read. Pinned.</summary>
     public static readonly string UsageError =
-        "/sampling takes nothing (the pane), <field> <value>, <field> clear or clear, the field one of "
-        + string.Join(", ", SamplingField.All.Select(f => f.Wire)) + " or extra (a JSON object).";
+        "/sampling takes nothing (the pane), <field> <value>, <field> clear, extra <json> or clear; <field> is one of "
+        + string.Join(", ", SamplingField.All.Select(f => f.Wire)) + ".";
 
     /// <summary>The word that clears a field, or the whole entry alone. Pinned.</summary>
     public const string ClearWord = "clear";

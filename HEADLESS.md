@@ -58,8 +58,8 @@ You:
 | `/claude <message>` | Sends the message to Claude Code, as in the TUI (see the README's `/claude`). The reply streams after `Claude: `; each tool Claude uses is a `[tool] Claude › Read …` line; a `[notice]` says which tools *Claude CLI slash command permissions* denied, and a last `[notice]` gives the cost and tokens. The exchange joins the conversation, so the next message to the local model can build on it, and the next `/claude` resumes the same Claude conversation. `/claude new` starts another (so do `/new` and `/clear`). Nothing is ever asked: whatever the level does not allow is denied (`NEONSIDEKICK_CLAUDE_CLI_PERMISSIONS=edit` for a run that may edit files). A missing CLI or a failed run prints `[error] …`. Works with no LLM server. |
 | `/ha [on\|off\|toggle <name> [n%] \| scene <name> \| tv … \| states [filter] \| say <sentence>]` | Drives Home Assistant directly, as in the TUI (see the README's `/ha`): each line of the answer is printed as it is (`light.turn_on → Den · 40%`, the overview's lines), a failure as `[error] …`. It is your own command, so *Home Assistant action policy* never applies. Works with no LLM server; needs *Home Assistant URL* and *Home Assistant API key* (or the two variables below). |
 | `/docker [ps \| status \| logs <container> [lines] \| stats [container] \| start\|stop\|restart\|pause\|unpause <container>]` | Drives Docker Desktop directly, as in the TUI (see the README's *Docker*): the bare word lists the containers (there is no pane), and each line of the answer is printed as it is (`Docker: 8 containers (6 running, 2 exited)`, `stopped mysql_dev`), a failure as `[error] …` (`[error] Error: Docker Desktop is not running …`). It is your own command, so *Docker writes* never applies, and every change is logged. Works with no LLM server; reaches the engine on *Docker engine pipe* (or the variable below). The model's Docker changes are always refused headless: each waits for a yes on a pane, and there is none. |
-| `/camera list` | Lists the cameras Windows sees, numbered, the chosen one (*Camera device*) marked, a failure as `[error] …`. It opens no camera. Every other `/camera` word (the bare word, `snap`, `use`, `live`, `watch`, `off`) answers `[error] /camera needs the app's screen for that; headless has /camera list.`: a photo needs the panes. The model's `camera_capture` is never offered headless, and *Botchat camera* and watch mode don't apply. |
-| `/screen list` | Lists the monitors and the windows, front to back, with the target that names each (`monitor:2`, `window:1234`), a failure as `[error] …`. Every other `/screen` form answers `[error] /screen needs the app's screen for that; headless has /screen list.`: a screenshot goes on the input line. The model's `screen_capture` and `screen_list` are never offered headless. |
+| `/camera list` | Lists the cameras Windows sees, numbered, the chosen one (*Camera device*) marked, a failure as `[error] …`. It opens no camera. Every other `/camera` word (the bare word, `snap`, `use`, `live`, `watch`, `off`) answers `[error] /camera needs the app's screen for that; in headless mode only /camera list works.`: a photo needs the panes. The model's `camera_capture` is never offered headless, and *Botchat camera* and watch mode don't apply. |
+| `/screen list` | Lists the monitors and the windows, front to back, with the target that names each (`monitor:2`, `window:1234`), a failure as `[error] …`. Every other `/screen` form answers `[error] /screen needs the app's screen for that; in headless mode only /screen list works.`: a screenshot goes on the input line. The model's `screen_capture` and `screen_list` are never offered headless. |
 | `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape] \| reply \| printers` | Prints a file of the working directory, the last reply, or lists the printers, as in the TUI (see the README's *Printing*): the answer's lines are printed as they are (`Printed notes.md: 2 pages to Office Laser`), a failure as `[error] …`. It is your own command, so *Print action policy* never applies (the model's `print_file` is refused headless under `ask`). Works with no LLM server. |
 | `/pdf <file> \| https://… \| reply [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory, as in the TUI (see the README's *Making PDFs*): the answer is printed as it is (`Made notes.pdf (182 KB) from notes.md with msedge`), a failure as `[error] …`. It is your own command, so *File tools* and *Web tools* need not be on; *Web browser network mode* still judges a web page. Works with no LLM server. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs the benchmark tests against the connected model, as in the TUI (see the README's *Benchmark tests*). A run first forgets the conversation, as `/clear` does: a `[notice]` line per test as it finishes (a failure's answer on a second `[notice]` line), then the results table as markdown after `Neon: `. The run is saved in the profile's `tests.json`. Alone it prints the tests with their last verdicts for the connected model; `history` prints the saved runs. An unknown name prints `[error] …`. The listing and `history` work with no LLM server; a run needs one. |
@@ -595,10 +595,10 @@ Under `ask`, a command that isn't on the allow list is not run. Nothing waits an
 The model gets this as the tool's result:
 
 ```
-Error: the command was not approved: no screen to ask on (Shell command policy is ask; --yolo,
-NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it run);
-allowed prefixes: dotnet build, git status; do not retry it or work around the refusal: tell the
-user what could not run
+Error: the command was not run: there was no screen to ask the user on (Shell command policy is
+ask; --yolo, NEONSIDEKICK_COMMAND_POLICY=yolo or the profile's Shell allowed commands would let it
+run). Allowed prefixes: dotnet build, git status. Do not retry it or work around the refusal; tell
+the user what could not run
 ```
 
 The model is told not to try another way. It still sees the allowed prefixes, so it can use one
@@ -606,7 +606,7 @@ that really does the job. On stdout you see the call and the refusal:
 
 ```
 [tool] run_command {"command":"npm install"}
-[tool] run_command -> Error: the command was not approved: no screen to ask on (...)
+[tool] run_command -> Error: the command was not run: there was no screen to ask the user on (...)
 ```
 
 The run keeps reading lines. At the end, if anything was refused, it prints a summary notice and

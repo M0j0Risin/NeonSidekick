@@ -25,7 +25,7 @@ public static class DockerText
     public static string EngineDown(string pipe) => $"Error: Docker Desktop is not running (nothing answers on {pipe}); start Docker Desktop, or check Docker engine pipe on the Docker tab of /tools";
 
     /// <summary>Windows refused this account the pipe. Pinned.</summary>
-    public static string PipeDenied(string pipe) => $"Error: Windows refused access to {pipe}; the account may need to be in the docker-users group";
+    public static string PipeDenied(string pipe) => $"Error: Windows refused access to {pipe}; the user may need to add the account to the docker-users group, then sign out and back in";
 
     /// <summary>Any other transport failure, as it came.</summary>
     public static string Unreachable(string pipe, string detail) => $"Error: cannot reach the Docker engine on {pipe}: {detail.Trim()}";
@@ -50,7 +50,7 @@ public static class DockerText
     public const string NotWindows = "Error: the Docker tools reach Docker Desktop through its Windows named pipe; this system has none";
 
     /// <summary><c>Docker writes</c> is off. Pinned.</summary>
-    public const string WritesOff = "Error: Docker writes is off, so the model may only look; the user can act with /docker, or switch Docker writes on in /tools";
+    public const string WritesOff = "Error: Docker writes is off, so the model may only look; the user can act with /docker, or turn on Docker writes on the Docker tab of /tools";
 
     /// <summary>The user said no on the pane. Pinned.</summary>
     public const string Declined = "Error: the user declined this Docker action; do not retry it unless they ask";
