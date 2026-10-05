@@ -887,6 +887,8 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Setting | What it does | Default |
 |---|---|---|
 | MySQL tools | Offers the MySQL tools (connections, databases, tables, columns, describe, relationships, indexes, query), for MySQL 8.0.16+ and MariaDB 10.2+. | off |
+| MySQL mode | `read-only`: the tools only read. `read-write`: `mysql_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See MySQL › Changes. | read-only |
+| MySQL statements allowed | Under `read-write`: the kinds of statement `mysql_execute` may run (a checklist; A all, N none, D the default). See MySQL › Changes. | changing data, creating, reading |
 | MySQL connections offered | As *SQL connections offered*. | none |
 | MySQL default connection | As *SQL default connection*. | (the first connection) |
 | MySQL set password | As *SQL set password*. | — |
@@ -1722,6 +1724,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 * **`sslMode`**: `preferred` (default), `required`, `verify-ca`, `verify-full` or `none`.
 * **`allowPublicKeyRetrieval`**: `true` only for a `caching_sha2_password` account without TLS (off by default; a man in the middle could supply its own key).
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
+* **`access`**: `read` (default) or `readwrite`. Changes through `mysql_execute` need `readwrite` **and** *MySQL mode* `read-write`, both checked at every call.
 
 ```json
 {
@@ -1745,7 +1748,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 }
 ```
 
-**MySQL add connection** (the MySQL tab of `/tools`) walks through a new one and can **test** it: who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. **MySQL set password** updates a password.
+**MySQL add connection** (the MySQL tab of `/tools`) walks through a new one and can **test** it: who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
 
 #### Safety
 
@@ -1764,8 +1767,32 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 | `mysql_relationships` | `connection?, database?, table?` | Foreign-key join paths: a database's or a table's. |
 | `mysql_indexes` | `connection?, database?, table?` | Indexes: kind, key columns, cardinality, and reads and writes since restart where `performance_schema` allows. |
 | `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` as for SQL (`@id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+| `mysql_execute` | `sql, connection?, database?, params?, max_rows?` | Only under *MySQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *MySQL statements allowed* ticks. Answers with the rows changed and any rows the statement returned (MariaDB's `RETURNING`, `ANALYZE TABLE`'s report). |
 
 `--mysql-check <connection>` proves the tools against a real server on the published exe (every type, the gate, the session, the transaction, a cancel and a timeout).
+
+#### Changes
+
+With *MySQL mode* set to `read-write`, the model gets `mysql_execute` beside the eight reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
+
+1. **The kinds.** *MySQL statements allowed* decides which kinds of statement may run; a statement needs every kind it does, and the refusal names the kinds that are ticked.
+
+   | Kind | Statements | Default |
+   |---|---|---|
+   | changing data | `INSERT`, `UPDATE`, `REPLACE` (upserts included) | ✓ |
+   | deleting | `DELETE`, `TRUNCATE` |  |
+   | creating | `CREATE TABLE`, `INDEX`, `VIEW`, `SEQUENCE` (MariaDB) | ✓ |
+   | changing structure | `ALTER TABLE`, `VIEW`, `SEQUENCE`; `RENAME TABLE` |  |
+   | dropping | `DROP` of those, and of procedures, functions and triggers |  |
+   | upkeep | `ANALYZE`, `OPTIMIZE`, `CHECK`, `REPAIR`, `CHECKSUM TABLE` |  |
+   | procedures and triggers | `CALL`, and `CREATE`/`ALTER` of a procedure, function or trigger: code whose effects can't be read from the statement, so it's off by default |  |
+   | reading | `SELECT`: never asks, and runs as `mysql_query` does (read-only, rolled back) once its gate passes it too | ✓ |
+
+2. **The gate.** One statement per call, lexed by the same rules as the reading gate (executable comments still refused). A `CREATE PROCEDURE`, `FUNCTION` or `TRIGGER` body between `BEGIN` and its `END` may hold its own `;`s (the compound statements nest). An allow-list: a statement it doesn't know is refused. Always refused: `START TRANSACTION`/`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`XA` (each call is its own transaction), `GRANT`/`REVOKE`, users and roles, `DEFINER =`, `SET`/`USE`, `PREPARE`/`EXECUTE`, `LOAD DATA`, `INTO OUTFILE`/`DUMPFILE`, `HANDLER`, `DO`, `LOCK`/`UNLOCK`, `FLUSH`, `KILL`, `SHUTDOWN`, `RESET`, `PURGE`, `INSTALL`, `CREATE`/`DROP` of a database, server, tablespace or event, and the reading gate's denied functions (MariaDB's `NEXTVAL`/`SETVAL` are allowed here).
+3. **Your allow.** Every change asks on a pane that names the connection and database and shows the statement: **Deny**, **Allow once**, or **Allow for this session** (that connection and database only, until `/new`, `/clear` or a profile switch).
+4. **The run.** The session starts as for a read (`sql_mode` without `NO_BACKSLASH_ESCAPES`/`ANSI_QUOTES`, the statement cap) but with no transaction of the app's: the statement commits as it runs (autocommit; DDL commits anyway). MariaDB caps every statement's run time; MySQL caps a `SELECT` only, and the query timeout stops the rest. A failed, timed-out or cancelled statement changes nothing.
+5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
+6. **The account.** It's still the real guard. Give a `readwrite` connection an account with only the grants you want the model to use.
 
 </details>
 

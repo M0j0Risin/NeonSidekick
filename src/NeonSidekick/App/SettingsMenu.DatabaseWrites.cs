@@ -127,6 +127,8 @@ internal sealed partial class SettingsMenu
     {
         SettingsField.PostgresMode => await PickWriteModeAsync(field, Postgres.PostgresStatementKinds.Family, saved.PostgresMode, (d, v) => d.PostgresMode = v, cancellationToken).ConfigureAwait(false),
         SettingsField.PostgresStatementsAllowed => await EditWriteStatementsAsync(field, Postgres.PostgresStatementKinds.Family, d => d.PostgresStatementsAllowed, (d, v) => d.PostgresStatementsAllowed = v, cancellationToken).ConfigureAwait(false),
+        SettingsField.MySqlMode => await PickWriteModeAsync(field, MySql.MySqlStatementKinds.Family, saved.MySqlMode, (d, v) => d.MySqlMode = v, cancellationToken).ConfigureAwait(false),
+        SettingsField.MySqlStatementsAllowed => await EditWriteStatementsAsync(field, MySql.MySqlStatementKinds.Family, d => d.MySqlStatementsAllowed, (d, v) => d.MySqlStatementsAllowed = v, cancellationToken).ConfigureAwait(false),
         _ => null,
     };
 }

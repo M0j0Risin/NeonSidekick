@@ -158,6 +158,102 @@ public sealed class MySqlAccess
     }
 
     /// <summary>
+    /// <c>mysql_execute</c>'s run (2026-10-05, <c>MySQL mode</c> <c>read-write</c>): one statement the write gate passed, on a connection
+    /// whose entry says <c>"access": "readwrite"</c> (any other is <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the caller
+    /// checked), in <paramref name="database"/> when given. The session as for a read — <c>sql_mode</c> without
+    /// <c>NO_BACKSLASH_ESCAPES</c>/<c>ANSI_QUOTES</c>, so the server splits strings as the gate does, and the statement cap (MariaDB's caps
+    /// every statement, MySQL's a SELECT alone; the command timeout stops the rest, the driver killing the query) — and no transaction:
+    /// autocommit, so the statement commits on its own, atomically (DDL commits anyway). The rows a statement gives back (MariaDB's
+    /// <c>RETURNING</c>, <c>ANALYZE TABLE</c>'s report) are read to <paramref name="maxRows"/> and the rest drained, never killed: a kill
+    /// would undo the statement. <see cref="SqlRun.Changes"/> is the rows the server counts.
+    /// </summary>
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? database, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        if (Resolve(name, defaultName, out var refused) is not { } target)
+        {
+            return refused!;
+        }
+
+        if (!target.Config.IsReadWrite)
+        {
+            return SqlRun.Refused(SqlOutcome.ReadOnlyConnection, "", target.Name);
+        }
+
+        var secret = MySqlSecrets.Resolve(target);
+        if (secret.Error is { } missing)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
+        }
+
+        await using var connection = new MySqlConnection(target.Config.Builder(secret.Value).ConnectionString);
+        try
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (MySqlException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            DiagnosticLog.Warn(MySqlConfigFile.Category, MySqlText.ConnectFailedLogLine(target.Name, ex.Number, LogText.Excerpt(ex.Message)));
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, Message(ex), target.Name);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException && !cancellationToken.IsCancellationRequested)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, LogText.Excerpt(ex.Message), target.Name);
+        }
+
+        var watch = Stopwatch.StartNew();
+        var grids = new List<SqlGrid>();
+        string workIn = "";
+        int? changes;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(database))
+            {
+                await connection.ChangeDatabaseAsync(database.Trim(), cancellationToken).ConfigureAwait(false);
+            }
+
+            workIn = connection.Database ?? "";
+            await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds), timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            await using var command = new MySqlCommand(sql, connection) { CommandTimeout = timeoutSeconds };
+            var named = MySqlReadOnlyGate.Binds(sql);
+            foreach (var parameter in parameters.Where(p => named.Contains(p.Name, StringComparer.OrdinalIgnoreCase)))
+            {
+                command.Parameters.Add(Bind(parameter));
+            }
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (reader.FieldCount > 0)
+                {
+                    grids.Add(await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false));
+                }
+
+                await reader.CloseAsync().ConfigureAwait(false);
+                changes = reader.RecordsAffected >= 0 ? reader.RecordsAffected : null;
+            }
+        }
+        catch (MySqlException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
+        }
+        catch (MySqlException ex) when (IsTimeout(ex))
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && ex.InnerException is MySqlException inner && IsTimeout(inner))
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
+        }
+        catch (MySqlException ex)
+        {
+            return new SqlRun(SqlOutcome.Failed, Message(ex), target.Name, workIn, grids, watch.Elapsed);
+        }
+
+        return new SqlRun(SqlOutcome.Ok, "", target.Name, workIn, grids, watch.Elapsed) { Changes = changes };
+    }
+
+    /// <summary>
     /// The session's own statement, before the transaction: <c>sql_mode</c> without <c>NO_BACKSLASH_ESCAPES</c> and
     /// <c>ANSI_QUOTES</c> (an empty slot the two leave is one the server accepts), and the statement time cap in the server's
     /// own variable and unit. Pure.

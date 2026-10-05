@@ -647,6 +647,12 @@ public enum SettingsField
     /// <summary>A toggle: whether a turn offers the eight MySQL tools (<see cref="Settings.AppSettingsData.MySqlTools"/>). The MySQL tab's first row (2026-09-30); no reconnect.</summary>
     MySqlTools,
 
+    /// <summary>A picker: what the MySQL tools may do — <c>read-only</c> / <c>read-write</c> (<see cref="Settings.AppSettingsData.MySqlMode"/>). The MySQL tab's second row (2026-10-05).</summary>
+    MySqlMode,
+
+    /// <summary>A checklist: the kinds of statement <c>mysql_execute</c> may run under read-write (<see cref="Settings.AppSettingsData.MySqlStatementsAllowed"/>). The MySQL tab's third row (2026-10-05).</summary>
+    MySqlStatementsAllowed,
+
     /// <summary>A checklist: which connections of <c>mysql.json</c> this profile offers (<see cref="Settings.AppSettingsData.MySqlConnectionsOffered"/>). The MySQL tab (2026-09-30).</summary>
     MySqlConnectionsOffered,
 
@@ -1377,7 +1383,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
-        [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
+        [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
         [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
@@ -1947,6 +1953,8 @@ internal sealed partial class SettingsMenu
         SettingsField.OracleConnectionsProfile => "Oracle connections (profile)",
         SettingsField.OracleConnectionsGlobal => "Oracle connections (global)",
         SettingsField.MySqlTools => "MySQL tools",
+        SettingsField.MySqlMode => "MySQL mode",
+        SettingsField.MySqlStatementsAllowed => "MySQL statements allowed",
         SettingsField.MySqlConnectionsOffered => "MySQL connections offered",
         SettingsField.MySqlDefaultConnection => "MySQL default connection",
         SettingsField.MySqlSetPassword => "MySQL set password",
@@ -2288,6 +2296,8 @@ internal sealed partial class SettingsMenu
             SettingsField.OracleConnectionsProfile => OracleConnectionsLabel(Oracle.OracleConfigFile.ProfilePath(profileDirectory)),
             SettingsField.OracleConnectionsGlobal => OracleConnectionsLabel(Oracle.OracleConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.MySqlTools => OnOff(data.MySqlTools),
+            SettingsField.MySqlMode => data.MySqlMode,
+            SettingsField.MySqlStatementsAllowed => WriteStatementsValue(data.MySqlStatementsAllowed, data.MySqlMode),
             SettingsField.MySqlDefaultConnection => string.IsNullOrWhiteSpace(data.MySqlDefaultConnection) ? FirstSqlConnectionLabel : data.MySqlDefaultConnection,
             SettingsField.MySqlSetPassword => SqlSetPasswordLabel,
             SettingsField.MySqlAddConnection => SqlAddConnectionLabel,

@@ -24,12 +24,13 @@ public static class MySqlText
     public const string NoPasswordConnections = "No connection in mysql.json yet; add one first (MySQL add connection).";
 
     /// <summary>One connection as <c>mysql_connections</c> lists it: the name, where, the user, the database, the description — never the password.</summary>
-    public static string ConnectionLine(MySqlNamedConnection connection, bool isDefault)
+    /// <remarks>A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>MySQL mode</c> read-write) lets it change.</remarks>
+    public static string ConnectionLine(MySqlNamedConnection connection, bool isDefault, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = string.IsNullOrWhiteSpace(config.Database) ? "" : $" / {config.Database.Trim()}";
-        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Endpoint}{database}, user {config.User?.Trim()}";
+        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(MySqlStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -49,7 +50,7 @@ public static class MySqlText
     }
 
     /// <summary><c>mysql_connections</c>' whole answer: a count, then one line each, then the problems that kept any out.</summary>
-    public static string Connections(MySqlCatalog catalog, string? defaultName)
+    public static string Connections(MySqlCatalog catalog, string? defaultName, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -63,7 +64,7 @@ public static class MySqlText
             sb.Append(SqlText.Count(catalog.Connections.Count, "MySQL connection")).Append(" (every MySQL tool takes one by name in \"connection\"; the default is used when it is left out):");
             foreach (var connection in catalog.Connections)
             {
-                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen)));
+                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
             }
         }
 
@@ -119,6 +120,7 @@ public static class MySqlText
             SqlOutcome.UnknownConnection => UnknownConnection(run.Connection, run.Detail),
             SqlOutcome.ConnectFailed => ConnectFailed(run.Connection, run.Detail),
             SqlOutcome.Timeout => Timeout(run.Connection, run.Detail),
+            SqlOutcome.ReadOnlyConnection => ServerWriteText.ReadOnlyConnection(MySqlStatementKinds.Family, run.Connection),
             _ => Failed(run.Connection, run.Detail),
         };
     }
@@ -386,9 +388,15 @@ public static class MySqlText
     /// <summary>The wizard's test line: who it signed in as, the server and its version. Pinned.</summary>
     public static string TestOk(string name, string user, string version) => $"Connected to '{name}' as {user}, {version}.";
 
-    /// <summary>The wizard's warning when the account could change data (the tools will not; a SELECT-only account is the real guard). Pinned.</summary>
-    public static string CanWrite(IReadOnlyList<string> what) =>
-        $"This account can change data ({string.Join("; ", what.Take(3))}{(what.Count > 3 ? $"; and {Invariant(what.Count - 3)} more" : "")}); the MySQL tools only read, but a SELECT-only account is the real guard.";
+    /// <summary>
+    /// The wizard's warning when the account could change data (the tools will not; a SELECT-only account is the real guard). Pinned.
+    /// A <c>readwrite</c> connection (2026-10-05) is told what may then change it: <c>mysql_execute</c>, each change allowed by the user.
+    /// </summary>
+    public static string CanWrite(IReadOnlyList<string> what, bool readWrite = false) =>
+        $"This account can change data ({string.Join("; ", what.Take(3))}{(what.Count > 3 ? $"; and {Invariant(what.Count - 3)} more" : "")}); " +
+        (readWrite
+            ? "as readwrite, mysql_execute may use those powers under MySQL mode read-write, each change allowed by you; the account is still the real guard."
+            : "the MySQL tools only read, but a SELECT-only account is the real guard.");
 
     /// <summary>The privileges that only read (or only connect); every other one in a <c>SHOW GRANTS</c> line can change something.</summary>
     public static readonly IReadOnlySet<string> ReadingPrivileges = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

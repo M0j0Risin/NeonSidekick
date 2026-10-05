@@ -54,7 +54,7 @@ public partial class ToolsMenuTests
     public async Task TheMySqlOffered_DropsAGoneName_AsItOpens()
     {
         WriteProfileFile(NeonSidekick.MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "shop": { "host": "localhost", "user": "reader" } } }""");
-        await AssertDroppedAsItOpensAsync(SettingsField.MySqlConnectionsOffered, (d, v) => d.MySqlConnectionsOffered = v, d => d.MySqlConnectionsOffered, () => OpenMySqlRow(1), "shop");
+        await AssertDroppedAsItOpensAsync(SettingsField.MySqlConnectionsOffered, (d, v) => d.MySqlConnectionsOffered = v, d => d.MySqlConnectionsOffered, () => OpenMySqlRow(3), "shop");
     }
 
     [Fact]

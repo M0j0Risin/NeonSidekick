@@ -25,7 +25,7 @@ public sealed class MySqlConnectionsTool : MySqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe() => MySqlText.Connections(Server.Catalog(), Effective.MySqlDefaultConnection);
+    public string Describe() => MySqlText.Connections(Server.Catalog(), Effective.MySqlDefaultConnection, DatabaseWriteModes.IsReadWrite(Effective.MySqlMode));
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         new(Describe());

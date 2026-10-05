@@ -1041,7 +1041,7 @@ internal sealed partial class ChatScreen
         _oracle = new OracleAccess(() => OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().OracleConnectionsOffered));
         _oracleTools = OracleTools(_oracle, _effective);
         _mysql = new MySqlAccess(() => MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().MySqlConnectionsOffered));
-        _mysqlTools = MySqlTools(_mysql, _effective);
+        _mysqlTools = MySqlTools(_mysql, _effective, AllowDatabaseWriteAsync);
         _sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqliteDatabasesOffered), () => _effective().SqliteSandboxFiles ? _files : null);
         // sqlite_execute (2026-10-05) asks on the camera's allow pane, per file (AllowSqliteWriteAsync).
         _sqliteTools = SqliteTools(_sqlite, _effective, AllowSqliteWriteAsync);
@@ -3366,6 +3366,7 @@ internal sealed partial class ChatScreen
         var docker = Without(DockerToolsFor(_dockerTools, effective), disabled);
         var sqlite = Without(SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), disabled);
         var postgres = Without(PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), disabled);
+        var mysql = Without(MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), disabled);
         // The web, ask and session sentences (2026-10-04: /sys had left them out of its rules), read as ComposeTurnTools reads them.
         var web = Without(WebToolsFor(_webTools, filesOffered), disabled);
         IReadOnlyList<AIFunction> ask = _pane.Enabled && effective.AskUser ? Without(_askTools, disabled) : [];
@@ -3408,7 +3409,7 @@ internal sealed partial class ChatScreen
             OracleOffered(effective, _oracle),
             Without(_oracleTools, disabled).Count,
             MySqlOffered(effective, _mysql),
-            Without(_mysqlTools, disabled).Count,
+            mysql.Count,
             UncOffered(effective, _unc),
             unc.Count,
             unc.Any(t => t is UncFetchTool),
@@ -3429,7 +3430,7 @@ internal sealed partial class ChatScreen
             Without(_sessionTools, disabled).Count,
             MemoryMode.Saves(effective),
             sqlite.Any(t => SqliteWriteToolNames.Contains(t.Name)),
-            ServerWritesOf(PostgresOffered(effective, _postgres) ? postgres : []));
+            ServerWritesOf([.. (MySqlOffered(effective, _mysql) ? mysql : []), .. (PostgresOffered(effective, _postgres) ? postgres : [])]));
     }
 
     /// <summary>
@@ -3493,7 +3494,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -4478,7 +4479,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? _mysqlTools : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? _sqlTools : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? _oracleTools : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -4536,7 +4537,7 @@ internal sealed partial class ChatScreen
     /// <summary>Every tool group as <c>/tools</c> lists it, offered or not.</summary>
     private IReadOnlyList<ToolGroup> ToolsGroups(AppSettingsData effective, IReadOnlySet<string> disabled)
     {
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
         return groups;
     }
 
@@ -4550,7 +4551,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: _mysqlTools, mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: _sqlTools, sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: _oracleTools, oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
         return groups.Where(g => g.Switch is not (SettingsField.MemoryMode or SettingsField.AgentSkills or SettingsField.ComfyTools)).ToList();
     }
 
@@ -4991,7 +4992,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The eight MySQL tools (2026-09-30), <see cref="OracleTools"/>' twin, offered while <see cref="MySqlOffered"/> says so (headless too).</summary>
-    public static IReadOnlyList<AIFunction> MySqlTools(MySqlAccess mysql, Func<AppSettingsData> effective) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> MySqlTools(MySqlAccess mysql, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
     {
         new MySqlConnectionsTool(mysql, effective),
         new MySqlDatabasesTool(mysql, effective),
@@ -5001,6 +5002,7 @@ internal sealed partial class ChatScreen
         new MySqlRelationshipsTool(mysql, effective),
         new MySqlIndexesTool(mysql, effective),
         new MySqlQueryTool(mysql, effective),
+        new MySqlExecuteTool(mysql, effective, allow),
     };
 
     /// <summary>The MySQL tools' names: their result's first line is the transcript's note (<see cref="SqlText.Note"/>).</summary>
@@ -5014,7 +5016,22 @@ internal sealed partial class ChatScreen
         MySqlRelationshipsTool.ToolName,
         MySqlIndexesTool.ToolName,
         MySqlQueryTool.ToolName,
+        MySqlExecuteTool.ToolName,
     };
+
+    /// <summary>
+    /// What a turn may offer of the MySQL tools (2026-10-05, <see cref="PostgresToolsFor"/>'s shape): the reads always;
+    /// <c>mysql_execute</c> only while <c>MySQL mode</c> is <c>read-write</c>, <paramref name="pane"/> can ask, <c>MySQL statements
+    /// allowed</c> ticks a kind and an offered connection of <paramref name="catalog"/> says <c>"access": "readwrite"</c>.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> MySqlToolsFor(IReadOnlyList<AIFunction> tools, AppSettingsData effective, bool pane, MySql.MySqlCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(catalog);
+        bool writes = WritesOffered(pane, effective.MySqlMode, effective.MySqlStatementsAllowed, catalog.Connections.Any(c => c.Config.IsReadWrite));
+        return writes ? tools : tools.Where(t => t.Name != MySqlExecuteTool.ToolName).ToList();
+    }
 
     /// <summary>
     /// The PostgreSQL tools (2026-10-04), <see cref="MySqlTools"/>' twin, offered while <see cref="PostgresOffered"/> says so (headless too):
@@ -5596,7 +5613,7 @@ internal sealed partial class ChatScreen
         PrintEnabled = PrintOffered(effective),
         Oracle = _oracleTools,
         OracleEnabled = OracleOffered(effective, _oracle),
-        MySql = _mysqlTools,
+        MySql = MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()),
         MySqlEnabled = MySqlOffered(effective, _mysql),
         Sqlite = SqliteToolsFor(_sqliteTools, effective, _pane.Enabled),
         SqliteEnabled = SqliteOffered(effective, _sqlite),

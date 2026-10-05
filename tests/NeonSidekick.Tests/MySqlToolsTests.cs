@@ -40,8 +40,8 @@ public sealed class MySqlToolsTests
     [Fact]
     public void Names_AndSchemas_ArePinned()
     {
-        Assert.Equal(MySqlToolNames.All, _tools.Select(t => t.Name));
-        Assert.Equal(MySqlToolNames.All.Order(StringComparer.Ordinal), ChatScreen.MySqlToolNames.Order(StringComparer.Ordinal));
+        Assert.Equal(MySqlToolNames.WithExecute, _tools.Select(t => t.Name));
+        Assert.Equal(MySqlToolNames.WithExecute.Order(StringComparer.Ordinal), ChatScreen.MySqlToolNames.Order(StringComparer.Ordinal));
         static string[] Properties(AIFunction tool) => tool.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray();
         Assert.Empty(Properties(Tool<MySqlConnectionsTool>()));
         Assert.Equal(["connection"], Properties(Tool<MySqlDatabasesTool>()));

@@ -890,7 +890,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.OracleQueryTimeoutSeconds,
                 SettingsField.OracleConnectionsProfile,
                 SettingsField.OracleConnectionsGlobal,
-                SettingsField.MySqlTools,   // later on 2026-09-30, the MySQL tab's ten
+                SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed,   // later on 2026-09-30, the MySQL tab's ten
                 SettingsField.MySqlConnectionsOffered,
                 SettingsField.MySqlDefaultConnection,
                 SettingsField.MySqlSetPassword,

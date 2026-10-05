@@ -700,7 +700,8 @@ public sealed class SidekickApp
         var oracle = new Oracle.OracleAccess(() => Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.OracleConnectionsOffered));
         var oracleTools = ChatScreen.OracleTools(oracle, () => EffectiveSettings);
         var mysql = new MySql.MySqlAccess(() => MySql.MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.MySqlConnectionsOffered));
-        var mysqlTools = ChatScreen.MySqlTools(mysql, () => EffectiveSettings);
+        // mysql_execute never headless (2026-10-05): no pane to allow a change on.
+        var mysqlTools = ChatScreen.MySqlToolsFor(ChatScreen.MySqlTools(mysql, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, mysql.Catalog());
         // The SQLite tools (2026-10-04): no console needed, so headless has them too.
         var sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqliteDatabasesOffered), () => EffectiveSettings.SqliteSandboxFiles ? files : null);
         // sqlite_execute (2026-10-05) never: every change waits for the user's allow on a pane, and headless has none.

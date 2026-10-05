@@ -16,6 +16,7 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlyDictionary<string, ServerWrites> ServerWriteToolFlags = new Dictionary<string, ServerWrites>(StringComparer.Ordinal)
     {
         [PostgresExecuteTool.ToolName] = ServerWrites.Postgres,
+        [MySqlExecuteTool.ToolName] = ServerWrites.MySql,
     };
 
     /// <summary>The families whose <c>_execute</c> tool is among <paramref name="tools"/>: what the rules' write sentences ride on.</summary>

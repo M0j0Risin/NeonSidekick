@@ -8,7 +8,7 @@ namespace NeonSidekick.App;
 /// <summary>
 /// <c>MySQL add connection</c> (2026-09-30), the <c>Oracle add connection</c> wizard's shape over <c>mysql.json</c>: one page per
 /// choice — which file, the name, the host, the port, the database, the user, where its password is kept, the password (masked),
-/// the TLS mode, the connect timeout, the description — then a summary that tests the unsaved draft (who it signs in as, the
+/// the TLS mode, the connect timeout, the access (2026-10-05: read, or readwrite for <c>mysql_execute</c>), the description — then a summary that tests the unsaved draft (who it signs in as, the
 /// server and its version, and a warning when <c>SHOW GRANTS</c> says the account could change data: the tools never will, but a
 /// SELECT-only account is the real guard) and saves it (<see cref="MySqlConfigFile.AddConnection"/>, the password after it through
 /// <see cref="MySqlSecrets.Save"/>). ESC steps back, and on the first page ends the visit with nothing written; Enter on a summary
@@ -18,7 +18,7 @@ internal sealed partial class SettingsMenu
 {
     /// <summary>The wizard's rows, one per <see cref="MySqlWizardStep"/> before the summary, in its order. Pinned.</summary>
     public static readonly IReadOnlyList<string> MySqlWizardLabels =
-        ["File", "Name", "Host", "Port", "Database", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Description"];
+        ["File", "Name", "Host", "Port", "Database", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Access", "Description"];
 
     public const string MySqlWizardFileQuestion = "Scope for mysql.json?";
     public const string MySqlWizardHostQuestion = "The server's host name or address (localhost, db01.example.com).";
@@ -61,6 +61,7 @@ internal sealed partial class SettingsMenu
         Password,
         Tls,
         Timeout,
+        Access,
         Description,
         Summary,
     }
@@ -105,6 +106,7 @@ internal sealed partial class SettingsMenu
             MySqlWizardStep.Password => draft.Password.Length > 0 ? SqlWizardMasked : SqlWizardUnset,
             MySqlWizardStep.Tls => c.SslMode ?? MySqlConnectionConfig.SslModeWords[0],
             MySqlWizardStep.Timeout => Invariant(c.ConnectTimeoutSeconds ?? MySqlConnectionConfig.DefaultConnectTimeoutSeconds),
+            MySqlWizardStep.Access => DatabaseWizardAccessValue(c.IsReadWrite),
             _ => OrUnset(c.Description),
         };
     }
@@ -321,6 +323,18 @@ internal sealed partial class SettingsMenu
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
+            case MySqlWizardStep.Access:
+            {
+                if (await MySqlWizardPickAsync(DatabaseWizardAccessQuestion, DatabaseWizardAccessRows(MySql.MySqlStatementKinds.Family), c.IsReadWrite ? 1 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    return false;
+                }
+
+                c.Access = Sql.ConnectionAccess.Stored(picked == 1);
+                NoticeAccessModeOff(MySql.MySqlStatementKinds.Family, c.IsReadWrite, _settings.Current.MySqlMode);
+                return true;
+            }
+
             default:
                 return await MySqlWizardTypeAsync(step, draft, SqlWizardDescriptionQuestion, c.Description ?? "", allowEmpty: true, mask: false, text =>
                 {
@@ -436,6 +450,7 @@ internal sealed partial class SettingsMenu
             SslMode = c.SslMode,
             AllowPublicKeyRetrieval = c.AllowPublicKeyRetrieval,
             ConnectTimeoutSeconds = c.ConnectTimeoutSeconds,
+            Access = c.Access,
         };
         if (copy.Problem is { } problem)
         {
@@ -456,7 +471,7 @@ internal sealed partial class SettingsMenu
         var powers = MySqlText.WritePowers(run.Grids.Count > 1 ? run.Grids[1].Rows.Select(r => r[0]) : []);
         if (powers.Count > 0)
         {
-            Sink.Warning(MySqlText.CanWrite(powers));
+            Sink.Warning(MySqlText.CanWrite(powers, c.IsReadWrite));
         }
     }
 
