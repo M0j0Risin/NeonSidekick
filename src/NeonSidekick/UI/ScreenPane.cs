@@ -195,6 +195,16 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private string? _dragHint;
     // The row's whole text while an alert stands (2026-10-01, SetAlertHint), and the UTC tick it lapses at; null for none.
     private string? _alertHint;
+
+    // The alert is a flash (2026-10-04, the copy's "copied 142 characters"): drawn in the hint's style, not the warning's.
+    private bool _alertFlash;
+
+    // When the top busy label last changed (2026-10-04): the step's own clock beside the turn's.
+    private long _stageSince;
+
+    private Func<bool> _stopHintShown = () => false;
+
+    private Func<bool> _stepClockShown = () => false;
     private long _alertUntil;
     private Func<string> _queued = () => "";
     private Func<string> _usage = () => "";
@@ -2391,6 +2401,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             if (_busyLabels.Count == 0)
             {
                 _busySince = _time.GetTimestamp();
+                _stageSince = _busySince;
                 _frame = 0;
             }
 
@@ -2420,6 +2431,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _busyLabels[slot] = label;
             if (slot == _busyLabels.Count - 1)
             {
+                if (!string.Equals(_busyLabel, label, StringComparison.Ordinal))
+                {
+                    _stageSince = _time.GetTimestamp();   // a new step: its own clock starts (2026-10-04)
+                }
+
                 _busyLabel = label;
                 RedrawHint();
             }
@@ -2521,6 +2537,36 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// <see cref="BusyText(string, TimeSpan)"/> with the step's own time first when the label has changed since the spinner started
+    /// (2026-10-04, the UI review: a long tool showed only the turn's clock): <c>🛠️ read_file 00:03 · 00:12</c>; null is the bare form. Pinned.
+    /// </summary>
+    public static string BusyText(string label, TimeSpan elapsed, TimeSpan? step) =>
+        step is { } own ? BusyText(label, own) + HintSeparator + ElapsedText.Countdown(elapsed) : BusyText(label, elapsed);
+
+    /// <summary>The dim part a turn's busy row ends with while no pane is open over it (2026-10-04, the UI review). Pinned.</summary>
+    public const string StopHint = "esc to stop";
+
+    /// <summary>
+    /// Whether the busy row ends with <see cref="StopHint"/> (2026-10-04): the screen says so while its turn is the one running — not
+    /// for a menu's own spinner or a download, which ESC does not stop. False by default.
+    /// </summary>
+    public Func<bool> StopHintShown
+    {
+        get => _stopHintShown;
+        set => _stopHintShown = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// Whether the busy row shows the step's own clock beside the turn's (2026-10-04, <see cref="BusyText(string, TimeSpan, TimeSpan?)"/>):
+    /// the screen says so while a tool runs; a thinking or writing stage, or any other spinner, keeps the one clock. False by default.
+    /// </summary>
+    public Func<bool> StepClockShown
+    {
+        get => _stepClockShown;
+        set => _stepClockShown = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
     /// The busy row's text past the frame: <see cref="BusyText"/>, and behind <see cref="HintSeparator"/>
     /// the overlay's own hint when one is open under the spinner (<c>thinking 00:12 · ESC closes · ←/→ tabs · ↑/↓ scroll</c>:
     /// a pane opened mid-turn needs its keys named, ESC closing it rather than the turn). An empty
@@ -2595,7 +2641,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// still wins over it). The tick takes it back once it lapses; null takes it back at once. No zone of the row answers a
     /// click meanwhile. Any thread; disabled: nothing.
     /// </summary>
-    public void SetAlertHint(string? text, TimeSpan lasts)
+    public void SetAlertHint(string? text, TimeSpan lasts) => SetAlertHint(text, lasts, flash: false);
+
+    /// <summary>
+    /// A passing note on the hint row (2026-10-04, the UI review: a copy said nothing): <see cref="SetAlertHint(string?, TimeSpan)"/>'s
+    /// slot for <see cref="FlashLasts"/>, in the hint's style rather than the warning's. Any thread; disabled: nothing.
+    /// </summary>
+    public void Flash(string text) => SetAlertHint(text, FlashLasts, flash: true);
+
+    /// <summary>How long <see cref="Flash"/> stands. Pinned.</summary>
+    public static readonly TimeSpan FlashLasts = TimeSpan.FromSeconds(2);
+
+    private void SetAlertHint(string? text, TimeSpan lasts, bool flash)
     {
         if (!Enabled)
         {
@@ -2604,6 +2661,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
+            _alertFlash = flash;
             _alertUntil = text is null ? 0 : _time.GetUtcNow().UtcTicks + lasts.Ticks;
             if (string.Equals(text, _alertHint, StringComparison.Ordinal))
             {
@@ -4674,7 +4732,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // A picture on its way to the line (2026-09-28): the row is the drag's alone, in the strip button's style, no zones.
             // An alert (2026-10-01, the kill switch's first press) the same, in the warning's style.
             string shown = Fit(whole, max);
-            _inner.Write(new RawText(shown, _dragHint is null ? Theme.WarnText : Theme.AccentSecondary));
+            _inner.Write(new RawText(shown, _dragHint is not null ? Theme.AccentSecondary : _alertFlash ? Theme.Hint : Theme.WarnText));
             _inner.Write(EraseLineEnd);
             _shownHint = shown;
             _hintStrip = "";
@@ -4701,10 +4759,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // under the scroll's until 2026-10-01, when it went to a row of its own).
             string usage = _overlay is null ? _busyUsage() : "";
             var elapsed = _time.GetElapsedTime(_busySince);
+            TimeSpan? step = _stageSince != _busySince && _stepClockShown() ? _time.GetElapsedTime(_stageSince) : null;
             // A label that trails the tally (LabelAfterUsage, the ComfyUI generation's) swaps the two; nothing else moves.
             bool after = usage.Length > 0 && _labelAfterUsage(label);
-            string unfitted = " " + BusyRow(label, elapsed, _overlay?.Hint ?? "", queued, usage, after);
-            string labelled = " " + Labelled(BusyText(label, elapsed), usage, after);
+            // The way out named at the row's end (2026-10-04) while the screen's turn runs and no pane's keys stand there instead.
+            string hint = _overlay?.Hint ?? (_stopHintShown() ? StopHint : "");
+            string unfitted = " " + HintRow(HintRow(Labelled(BusyText(label, elapsed, step), usage, after), queued), hint);
+            string labelled = " " + Labelled(BusyText(label, elapsed, step), usage, after);
             // Read once (2026-10-01): an embedded download's strip turns with the clock, and two reads astride a frame
             // would leave _hintStrip blank below — its 📥 dead to a click for the draw.
             string glyphs = _strip();

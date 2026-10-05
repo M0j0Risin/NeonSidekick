@@ -238,6 +238,10 @@ public sealed partial class InputLine
     /// <summary>Ctrl+C over a selection when the clipboard would not take it. Pinned.</summary>
     public const string CopyFailedNotice = "Could not write the selection to the clipboard; try again.";
 
+    /// <summary>The hint row's flash after a copy (2026-10-04, the UI review): <c>copied 142 characters</c>. Pinned.</summary>
+    public static string CopiedFlash(int characters) =>
+        "copied " + characters.ToString(System.Globalization.CultureInfo.InvariantCulture) + (characters == 1 ? " character" : " characters");
+
     /// <summary>The hint row's label while a dropped image is read. Pinned.</summary>
     public const string ReadingImage = "reading image…";
 

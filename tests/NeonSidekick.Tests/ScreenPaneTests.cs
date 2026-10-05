@@ -4911,4 +4911,14 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal([null, 9, 9, null], new[] { 93, 94, 95, 96 }.Select(y => pane.PictureAt(19, y)));   // a 4×4 picture is two rows
         Assert.Equal([null, 9, 9, null], new[] { 17, 18, 21, 22 }.Select(x => pane.PictureAt(x, 94)));
     }
+
+    /// <summary>The busy row's step clock (2026-10-04, the UI review): the step's own time first once the label changed, the turn's after it.</summary>
+    [Fact]
+    public void BusyText_WithAStep_ShowsBothClocks()
+    {
+        Assert.Equal("🛠️ read_file 00:03 · 00:12", ScreenPane.BusyText("🛠️ read_file", TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(3)));
+        Assert.Equal("thinking 00:12", ScreenPane.BusyText("thinking", TimeSpan.FromSeconds(12), null));
+        Assert.Equal("esc to stop", ScreenPane.StopHint);
+        Assert.Equal(TimeSpan.FromSeconds(2), ScreenPane.FlashLasts);
+    }
 }

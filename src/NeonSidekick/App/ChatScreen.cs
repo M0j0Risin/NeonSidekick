@@ -1122,6 +1122,10 @@ internal sealed partial class ChatScreen
             // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
             // Either kind since 2026-09-26: 🖼️ text-to-image, 🎨 image-to-image.
             LabelAfterUsage = ComfyText.IsGeneratingLabel,
+            // "esc to stop" at the busy row's end while the turn runs (2026-10-04, the UI review), not under a menu's own spinner.
+            StopHintShown = () => _turnRunning,
+            // A running tool's own clock beside the turn's (2026-10-04, the UI review).
+            StepClockShown = () => _turnRunning && _toolStage,
             // The embedded model's load (2026-10-01, the review's finding): its spinner and label are their own zone, so a
             // double-click there cancels the load while one on the tally beside them still opens /usage.
             LabelZone = _ => _loadCancel is not null,
@@ -1986,6 +1990,8 @@ internal sealed partial class ChatScreen
             ("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"),
             ("Left / Right", "change tabs in menus · hold Shift to select text"),
             ("Home / End", "the start or end of the line, pressed again of the whole message · hold Shift to select text"),
+            ("Ctrl+Left / Right", "a word back or on · hold Shift to select words"),   // 2026-10-04, the UI review
+            ("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
             ("PgUp / PgDn", "scroll the transcript a page at a time"),
         };
         if (voiceOn)
@@ -7754,6 +7760,7 @@ internal sealed partial class ChatScreen
         string markdown = _log.Markdown(copied, withUserText, action.Thinking).ReplaceLineEndings("\r\n");
         if (_copy(markdown))
         {
+            _pane.Flash(InputLine.CopiedFlash(markdown.Length));   // the hint row says it too (2026-10-04)
             _transcript.Notice(CopiedNotice(copied, _log.Count, withUserText, action.Thinking));
         }
         else
@@ -13413,6 +13420,7 @@ internal sealed partial class ChatScreen
                 // stale one); the opening calls above never reach it — buffered, already done.
                 if (busy is not null && stages.Advance(events.Current) is { } stage)
                 {
+                    _toolStage = stages.InTool;
                     busy.SetLabel(stage);
                 }
 

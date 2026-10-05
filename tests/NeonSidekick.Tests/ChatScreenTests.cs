@@ -9391,7 +9391,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         string strip = ChatScreen.SpeechGlyphs(true, false, false, false);
         // The spinner row: the strip, then the frame with the label — the strip ahead of the spinner.
-        Assert.Contains(Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero), strip: strip), output);
+        Assert.Contains(Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint, strip: strip), output);
         // (The startup connect's spinner ran before speech was connected, so it has no strip — only the reply's is checked.)
         Assert.DoesNotContain(rule + "\n" + Theme.SpinnerFrames[0] + " " + ChatScreen.ThinkingLabel, output);
         // The info pane's hint keeps it too, and the idle line has it as before.
@@ -9442,10 +9442,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Commands (basic)    Commands (advanced)    Keys ") + "\n \nEnter", output);
-        // The label column follows the widest key ("Left / Right", 12 cells) + the gap of 2.
-        Assert.Contains("Ctrl+Home     scroll to top of the chat pane", output);
-        Assert.Contains("Ctrl+End      scroll to bottom of the chat pane", output);
-        Assert.Contains("Ctrl+C        copy the selected text · stop the speech · cancel the reply · twice to exit", output);
+        // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04) + the gap of 2.
+        Assert.Contains("Ctrl+Home                scroll to top of the chat pane", output);
+        Assert.Contains("Ctrl+End                 scroll to bottom of the chat pane", output);
+        Assert.Contains("Ctrl+C                   copy the selected text · stop the speech · cancel the reply · twice to exit", output);
         Assert.DoesNotContain("F4", output[output.IndexOf("Help   Commands (basic)    Commands (advanced)    Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
@@ -10426,9 +10426,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 44)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04
-    [InlineData(true, false, 45)]
-    [InlineData(true, true, 46)]
+    [InlineData(false, false, 46)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04
+    [InlineData(true, false, 47)]
+    [InlineData(true, true, 48)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -10442,7 +10442,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"), rows[4]);   // the row moves 2026-09-21
         Assert.Equal(("Left / Right", "change tabs in menus · hold Shift to select text"), rows[5]);
         Assert.Equal(("Home / End", "the start or end of the line, pressed again of the whole message · hold Shift to select text"), rows[6]);   // 2026-10-04: the keys go to the line's ends now
-        Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
+        Assert.Equal(("Ctrl+Left / Right", "a word back or on · hold Shift to select words"), rows[7]);   // 2026-10-04, the UI review
+        Assert.Equal(("Ctrl+Backspace / Delete", "delete the word before or after the cursor"), rows[8]);
+        Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[9]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
         Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^36]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
         Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^35]);
@@ -10502,13 +10504,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
         {
-            Assert.Equal(("F8", "talk (push-to-talk key)"), rows[8]);
+            Assert.Equal(("F8", "talk (push-to-talk key)"), rows[10]);   // after the two word rows (2026-10-04)
         }
 
         Assert.Equal(wakeReady, rows.Any(r => r.Key == "say \"hey neon\""));
         if (wakeReady)
         {
-            Assert.Equal(("say \"hey neon\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"), rows[9]);
+            Assert.Equal(("say \"hey neon\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"), rows[11]);
         }
         Assert.DoesNotContain(rows, r => r.Key.Contains("Ctrl+Q") || r.Meaning.Contains("Ctrl+Q"));
     }
@@ -11060,7 +11062,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string spinner = Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero));
+        string spinner = Row(Theme.SpinnerFrames[0] + " " + ScreenPane.BusyText(ChatScreen.ThinkingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint);   // the way out named (2026-10-04)
         int busy = output.IndexOf(spinner, StringComparison.Ordinal);
         int first = output.IndexOf("One moment.", StringComparison.Ordinal);
         int call = output.IndexOf("🛠️ Friday 11 September 2026", first, StringComparison.Ordinal);
@@ -18006,7 +18008,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("🛠️ " + FileText.OutsideRoot(@"..\profile.json"), output);
+        Assert.Contains("✗  " + FileText.OutsideRoot(@"..\profile.json"), output);   // a failed result wears its own mark (2026-10-04)
         var result = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
         Assert.Equal(FileText.OutsideRoot(@"..\profile.json"), result.Result);
     }

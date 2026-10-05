@@ -792,4 +792,19 @@ public class TranscriptRendererTests : IDisposable
 
         Assert.Equal("", s.Output[mark..]);
     }
+
+    /// <summary>A failed tool result looks like one (2026-10-04, the UI review): its own ✗ in the warning colour, and the run's summary counts it.</summary>
+    [Fact]
+    public void AFailedToolResult_IsMarked_AndTheSummaryCountsIt()
+    {
+        Assert.True(TranscriptRenderer.IsToolFailure("Error: no such file"));
+        Assert.True(TranscriptRenderer.IsToolFailure("  Error: x"));
+        Assert.False(TranscriptRenderer.IsToolFailure("4 lines"));
+        Assert.Equal("[#FFC832]  ✗  read_file → Error: gone[/]", TranscriptRenderer.ToolResultMarkup("read_file", "Error: gone"));
+        Assert.Equal("[#9A8BB8]  🛠️ read_file → 4 lines[/]", TranscriptRenderer.ToolResultMarkup("read_file", "4 lines"));
+        Assert.Equal("[#FFC832]  ✗  Error: refused[/]", TranscriptRenderer.ToolNoteMarkup("Error: refused"));
+        Assert.Equal(5, TextCells.Width(TranscriptRenderer.ToolFailedGlyph));
+        Assert.Equal("  ▸ 🛠️ 3 tool calls · 1 failed — grep ×2, read_file", ToolGroupText.Summary([("grep", 2), ("read_file", 1)], expanded: false, failed: 1));
+        Assert.Equal(" · 2 failed", ToolGroupText.FailedNote(2));
+    }
 }

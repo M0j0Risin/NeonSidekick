@@ -91,7 +91,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("🛠️ Error: the command was denied by the user: echo hi; do not retry it or work around the refusal\n", output);
+        Assert.Contains("✗  Error: the command was denied by the user: echo hi; do not retry it or work around the refusal\n", output);
         Assert.Contains("Fine, I will not.", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Equal("Error: the command was denied by the user: echo hi; do not retry it or work around the refusal", ToolResult(_chat.Requests[1], "c1"));
@@ -107,7 +107,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(@"👮 Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it" + "\n", output);
-        Assert.DoesNotContain("🛠️ Error: outside", output);
+        Assert.DoesNotContain("✗  Error: outside", output);
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);   // the pane never opened
         Assert.Contains("Staying inside.", output);
         Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", ToolResult(_chat.Requests[1], "c1"));
@@ -128,7 +128,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("👮 " + ShellText.ForbiddenShown("rd /s") + "\n", output);
-        Assert.DoesNotContain("🛠️ Error: forbidden", output);
+        Assert.DoesNotContain("✗  Error: forbidden", output);
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);
         Assert.Equal(ShellText.Forbidden, ToolResult(_chat.Requests[1], "c1"));
         Assert.DoesNotContain("rd /s", ToolResult(_chat.Requests[1], "c1"), StringComparison.OrdinalIgnoreCase);
@@ -143,7 +143,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(@"🛠️ Error: the command was denied by the user: type C:\Windows\win.ini; do not retry it or work around the refusal" + "\n", output);
+        Assert.Contains(@"✗  Error: the command was denied by the user: type C:\Windows\win.ini; do not retry it or work around the refusal" + "\n", output);
         Assert.DoesNotContain("👮", output);
         Assert.Contains(Assistant.ShellRuleWithoutBridgeUnpoliced, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("may only name paths under it", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
@@ -450,7 +450,7 @@ public partial class ChatScreenTests
         Assert.StartsWith("exit 0 in 0.0 s (cmd): ver\n", ToolResult(_chat.Requests[2], "c2"));
         Assert.Contains(events, e => e.Message == "approval: refused (never asked) — cmd \"echo hi\"");
         Assert.Contains(events, e => e.Message == "approval: on the allow list — cmd \"ver\"");
-        Assert.Contains("🛠️ Error: the command was not approved", output);
+        Assert.Contains("✗  Error: the command was not approved", output);
     }
 
 }

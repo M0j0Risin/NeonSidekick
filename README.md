@@ -150,11 +150,12 @@ The `--*-check` modes keep nothing (`--sql-check` makes one temporary table insi
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](#picture-viewer).
 
 ### The input line
-* It is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End, Delete; Shift+arrows, Ctrl+A or a drag to select; a double-click selects a word (letters, digits and `_`; all of a password field); Ctrl+C / Ctrl+X copy / cut; right-click or Alt+V pastes; ↑/↓ walk the history.
+* It is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End (the line's ends, pressed again the message's), Delete; Ctrl+←/→ move a word, Ctrl+Backspace / Ctrl+Delete delete one; Shift+arrows (Ctrl+Shift+←/→ by words), Ctrl+A or a drag to select; a double-click selects a word (letters, digits and `_`; all of a password field); Ctrl+C / Ctrl+X copy / cut (the hint row says how much was copied); right-click or Alt+V pastes, Nerd Font glyphs included; ↑/↓ walk the history.
 * `/`, `@`, `#`, `$`, `%`, `^` and `*` open their lists. The mention lists work inside a command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view`, `/print` and `/pdf`, which complete their own path.
 * Drag a picture from the ComfyUI picture strip or the transcript onto the input row to attach it, as if dropped from the desktop. The hint row reads **🖼️ drop on line** while you drag; letting go elsewhere attaches nothing.
 * Enter during a reply queues the message. A draft left on the row survives the reply.
-* ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does).
+* ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does, and keeps it in the history: ↑ brings it back). While a reply runs the hint row ends with **esc to stop**, and a running tool shows its own time beside the reply's.
+* A tool result that failed is marked ✗ in the warning colour, and a folded tool run counts them (`· 1 failed`).
 * ESC twice on an empty line opens `/rewind` (the hint row prompts for the second press).
 
 ### Keyboard shortcuts

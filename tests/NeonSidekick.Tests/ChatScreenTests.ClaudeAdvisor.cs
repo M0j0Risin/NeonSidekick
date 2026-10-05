@@ -115,7 +115,7 @@ public partial class ChatScreenTests
 
         Assert.Empty(_claudeCli.Requests);
         Assert.Equal(ClaudeText.AdvisorNotAskedError, ToolResult(_chat.Requests[1], "c1"));
-        Assert.Contains("🛠️ Error: claude_advisor_cli needs the user's yes", output);
+        Assert.Contains("✗  Error: claude_advisor_cli needs the user's yes", output);
     }
 
     /// <summary>The model calls the advisor under <c>Claude CLI advisor tool confirm</c>, the pane is answered with <paramref name="keys"/>, then the reply.</summary>
@@ -169,6 +169,6 @@ public partial class ChatScreenTests
 
         Assert.Equal(ClaudeText.AdvisorDeclinedError, ToolResult(_chat.Requests[1], "c1"));
         Assert.Empty(_claudeCli.Requests);
-        Assert.Contains("🛠️ Error: the user declined to let you ask Claude", output);
+        Assert.Contains("✗  Error: the user declined to let you ask Claude", output);
     }
 }

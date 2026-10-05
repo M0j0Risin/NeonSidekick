@@ -23,7 +23,7 @@ public static class ToolGroupText
     /// in the order first called): <c>  ▸ 🛠️ 1 tool call — grep</c>, <c>  ▾ 🛠️ 3 tool calls — grep ×2, read_file</c>;
     /// <c>  ▸ 🛠️ tool calls</c> when nothing was counted. Cut at <see cref="TranscriptRenderer.ToolTextLimit"/>.
     /// </summary>
-    public static string Summary(IReadOnlyList<(string Name, int Count)> tally, bool expanded)
+    public static string Summary(IReadOnlyList<(string Name, int Count)> tally, bool expanded, int failed = 0)
     {
         ArgumentNullException.ThrowIfNull(tally);
         string head = "  " + (expanded ? ExpandedGlyph : CollapsedGlyph) + " " + TranscriptRenderer.ToolGlyph.TrimStart();
@@ -39,12 +39,17 @@ public static class ToolGroupText
             .ThenBy(t => t.First)
             .Select(t => t.Count == 1 ? t.Name : t.Name + " ×" + t.Count.ToString(CultureInfo.InvariantCulture));
         string calls = total.ToString(CultureInfo.InvariantCulture) + (total == 1 ? " tool call" : " tool calls");
-        return TranscriptRenderer.Truncate(head + calls + " — " + string.Join(", ", names), TranscriptRenderer.ToolTextLimit);
+        // The failures counted (2026-10-04, the UI review) before the names, so a long list never cuts them off.
+        string failures = failed > 0 ? FailedNote(failed) : "";
+        return TranscriptRenderer.Truncate(head + calls + failures + " — " + string.Join(", ", names), TranscriptRenderer.ToolTextLimit);
     }
 
+    /// <summary>After the count of a run with failed results (2026-10-04): <c> · 1 failed</c>. Pinned.</summary>
+    public static string FailedNote(int failed) => " · " + failed.ToString(CultureInfo.InvariantCulture) + " failed";
+
     /// <summary><see cref="Summary"/> dim, as a tool line is.</summary>
-    public static string SummaryMarkup(IReadOnlyList<(string Name, int Count)> tally, bool expanded) =>
-        Theme.ColorMarkup(Theme.Dim, Summary(tally, expanded));
+    public static string SummaryMarkup(IReadOnlyList<(string Name, int Count)> tally, bool expanded, int failed = 0) =>
+        Theme.ColorMarkup(failed > 0 ? Theme.Warn : Theme.Dim, Summary(tally, expanded, failed));
 
     /// <summary>The transcript's notice after <c>/expand</c> or <c>/collapse</c> (<c>/tools expand|collapse</c> until later on 2026-09-22; thinking too since 2026-09-26). Pinned.</summary>
     public static string ExpandedNotice(bool expanded) =>

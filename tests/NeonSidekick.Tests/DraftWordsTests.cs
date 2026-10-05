@@ -92,4 +92,35 @@ public class DraftWordsTests
         Assert.Equal("𝒳𝒴z", Word(text, 3));   // on a pair's low half
         Assert.Equal("𝒳𝒴z", Word(text, 6));
     }
+
+    /// <summary>The word moves' stops (2026-10-04): back to a word's start over blanks, on to the next word's start; a token one word; the ends.</summary>
+    [Theory]
+    [InlineData("the quick brown", 15, 10)]
+    [InlineData("the quick brown", 10, 4)]
+    [InlineData("the quick brown", 6, 4)]
+    [InlineData("the quick brown", 0, 0)]
+    [InlineData("the   quick", 6, 0)]
+    [InlineData("a, b", 4, 3)]
+    [InlineData("a, b", 3, 1)]
+    [InlineData("one\ntwo", 4, 0)]
+    public void PreviousStart_IsTheWordsStart(string text, int from, int expected) => Assert.Equal(expected, DraftWords.PreviousStart(text, from));
+
+    [Theory]
+    [InlineData("the quick brown", 0, 4)]
+    [InlineData("the quick brown", 5, 10)]
+    [InlineData("the quick brown", 10, 15)]
+    [InlineData("the quick brown", 15, 15)]
+    [InlineData("a, b", 0, 1)]
+    [InlineData("a, b", 1, 3)]
+    [InlineData("one\ntwo", 0, 4)]
+    public void NextStart_IsTheNextWordsStart(string text, int from, int expected) => Assert.Equal(expected, DraftWords.NextStart(text, from));
+
+    [Fact]
+    public void ATokenIsAWordOfItsOwn()
+    {
+        string text = "see \uE000\uE001 now";
+        Assert.Equal(5, DraftWords.PreviousStart(text, 6));
+        Assert.Equal(5, DraftWords.NextStart(text, 4));
+        Assert.Equal(7, DraftWords.NextStart(text, 5));
+    }
 }

@@ -3794,4 +3794,47 @@ public class InputLineTests : IDisposable
         Assert.Equal(0, InputLine.LineHome("", 0));
         Assert.Equal(0, InputLine.LineEnd("", 0));
     }
+
+    private static ConsoleKeyInfo CtrlKey(ConsoleKey key, char c = '\0', bool shift = false) => new(c, key, shift, alt: false, control: true);
+
+    /// <summary>Ctrl+←/→ move a word at a time (2026-10-04, the UI review: the draft had no word moves), the Windows way: ← to a word's start, → to the next word's.</summary>
+    [Fact]
+    public async Task CtrlArrows_MoveAWordAtATime()
+    {
+        Push([.. Chars("the quick brown"), CtrlKey(ConsoleKey.LeftArrow), CtrlKey(ConsoleKey.LeftArrow), CtrlKey(ConsoleKey.RightArrow), Keys.Char('X'), Keys.Enter]);
+
+        Assert.Equal("the quick Xbrown", await SubmitAsync());
+    }
+
+    /// <summary>Ctrl+Shift+← selects back to the word's start; typing replaces it.</summary>
+    [Fact]
+    public async Task CtrlShiftLeft_SelectsAWord()
+    {
+        Push([.. Chars("the quick brown"), CtrlKey(ConsoleKey.LeftArrow, shift: true), .. Chars("fox"), Keys.Enter]);
+
+        Assert.Equal("the quick fox", await SubmitAsync());
+    }
+
+    /// <summary>Ctrl+Backspace takes the word before the cursor, Ctrl+Delete the rest of the word after it and its blanks (2026-10-04).</summary>
+    [Fact]
+    public async Task CtrlBackspace_AndCtrlDelete_TakeAWord()
+    {
+        Push([.. Chars("the quick brown"), CtrlKey(ConsoleKey.Backspace, '\x7f'), CtrlKey(ConsoleKey.Backspace, '\x7f'), Keys.Enter]);
+        Assert.Equal("the", await SubmitAsync());
+
+        Push([.. Chars("one two three"), new ConsoleKeyInfo('\0', ConsoleKey.Home, false, false, false), CtrlKey(ConsoleKey.Delete), Keys.Enter]);
+        Assert.Equal("two three", await SubmitAsync());
+    }
+
+    /// <summary>ESC on a draft keeps it in the history (2026-10-04, the UI review): Up brings back what ESC cleared.</summary>
+    [Fact]
+    public async Task Escape_OnADraft_KeepsItInTheHistory()
+    {
+        Push([.. Chars("half a thought"), Keys.Escape, Keys.Up, Keys.Enter]);
+
+        Assert.Equal("half a thought", await SubmitAsync());
+        Assert.Equal(new[] { "half a thought" }, _line.History);
+        Assert.Equal("copied 1 character", InputLine.CopiedFlash(1));
+        Assert.Equal("copied 142 characters", InputLine.CopiedFlash(142));
+    }
 }

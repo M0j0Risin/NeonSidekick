@@ -59,6 +59,19 @@ public sealed class TranscriptRenderer : INoticeSink
     public const string ToolGlyph = "  🛠️ ";
 
     /// <summary>
+    /// A tool result that failed (2026-10-04, the UI review: a failure read as dim as a success): its own mark in the warning colour,
+    /// the tool glyph's five cells. Pinned.
+    /// </summary>
+    public const string ToolFailedGlyph = "  ✗  ";
+
+    /// <summary>What a failed tool result starts with: every tool's own refusals and errors read <c>Error: …</c>. Pinned.</summary>
+    public const string ToolErrorPrefix = "Error:";
+
+    /// <summary>Whether a tool's result (or note) says it failed (<see cref="ToolErrorPrefix"/>, blanks before it let go). Pure.</summary>
+    public static bool IsToolFailure(string text) =>
+        text is not null && text.AsSpan().TrimStart().StartsWith(ToolErrorPrefix, StringComparison.Ordinal);
+
+    /// <summary>
     /// A skill line's glyph (later on 2026-09-21, the user's call): the mortarboard the toolbar and the
     /// Skills pane wear, so <c>loaded skill 'x'</c> and the skill editor's <c>created skill 'x'</c> read as
     /// the skills' and not as any other tool's. A surrogate pair, two cells, the indent <see cref="ToolGlyph"/>'s.
@@ -159,11 +172,15 @@ public sealed class TranscriptRenderer : INoticeSink
         Theme.ColorMarkup(Theme.Dim, $"{ToolGlyph}{name} {Truncate(argumentsJson, ToolTextLimit)}");
 
     public static string ToolResultMarkup(string name, string text) =>
-        Theme.ColorMarkup(Theme.Dim, $"{ToolGlyph}{name} → {Truncate(text, ToolTextLimit)}");
+        IsToolFailure(text)
+            ? Theme.ColorMarkup(Theme.Warn, $"{ToolFailedGlyph}{name} → {Truncate(text, ToolTextLimit)}")
+            : Theme.ColorMarkup(Theme.Dim, $"{ToolGlyph}{name} → {Truncate(text, ToolTextLimit)}");
 
     /// <summary>A tool's outcome on one line without its name or arguments (<c>🛠️ remembered: …</c>), for a tool whose result says it all.</summary>
     public static string ToolNoteMarkup(string text) =>
-        Theme.ColorMarkup(Theme.Dim, ToolGlyph + Truncate(text, ToolTextLimit));
+        IsToolFailure(text)
+            ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph + Truncate(text, ToolTextLimit))
+            : Theme.ColorMarkup(Theme.Dim, ToolGlyph + Truncate(text, ToolTextLimit));
 
     /// <summary>A skill tool's outcome as <see cref="ToolNoteMarkup"/> is a tool's, behind <see cref="SkillGlyph"/>.</summary>
     public static string SkillNoteMarkup(string text) =>
@@ -312,9 +329,36 @@ public sealed class TranscriptRenderer : INoticeSink
 
     public void Tool(string name, string argumentsJson) => ToolLine(ToolMarkup(name, argumentsJson), ToolMarkup(name, argumentsJson).TrimStart());
 
-    public void ToolResult(string name, string text) => ToolLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart());
+    public void ToolResult(string name, string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ToolLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart());
+        CountFailure(text);
+    }
 
-    public void ToolNote(string text) => ToolLine(ToolNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
+    public void ToolNote(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ToolLine(ToolNoteMarkup(text), IsToolFailure(text)
+            ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph.TrimStart() + Truncate(text, ToolTextLimit))
+            : Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
+        CountFailure(text);
+    }
+
+    /// <summary>A failed result counted for the run's summary (<c>· 1 failed</c>, 2026-10-04), the summary pushed again.</summary>
+    private void CountFailure(string text)
+    {
+        if (!IsToolFailure(text))
+        {
+            return;
+        }
+
+        _failed++;
+        if (_run)
+        {
+            PushSummary();
+        }
+    }
 
     /// <summary>
     /// A tool note's detail line (later still on 2026-09-24, <c>ComfyUI show prompts</c>): the same dim line behind the tools'
@@ -837,7 +881,7 @@ public sealed class TranscriptRenderer : INoticeSink
 
     /// <summary>The open run's summary from the tally, folded and unfolded, into the pane.</summary>
     private void PushSummary() =>
-        _pane!.SetToolGroupSummary(new Markup(ToolGroupText.SummaryMarkup(_tally, expanded: false)), new Markup(ToolGroupText.SummaryMarkup(_tally, expanded: true)));
+        _pane!.SetToolGroupSummary(new Markup(ToolGroupText.SummaryMarkup(_tally, expanded: false, _failed)), new Markup(ToolGroupText.SummaryMarkup(_tally, expanded: true, _failed)));
 
     /// <summary>
     /// Something other than a tool line is said: the open run is over (the pane shrinks a folded
@@ -846,6 +890,7 @@ public sealed class TranscriptRenderer : INoticeSink
     private void EndRun()
     {
         _tally.Clear();
+        _failed = 0;
         if (_run)
         {
             _run = false;
@@ -856,6 +901,9 @@ public sealed class TranscriptRenderer : INoticeSink
     // The open tool run (the pane holds it) and the calls counted for its summary.
     private bool _run;
     private readonly List<(string Name, int Count)> _tally = new();
+
+    // The run's failed results (2026-10-04): the summary's "· N failed".
+    private int _failed;
 
     /// <summary>A line-shaped write that is not a tool's: it ends the tool run, then <see cref="WriteLine"/>.</summary>
     private void Line(string fullMarkup, string inlineMarkup)

@@ -74,6 +74,83 @@ public static class DraftWords
         return (starts[first], starts[end + 1]);
     }
 
+    /// <summary>
+    /// Where Ctrl+← (and Ctrl+Backspace's reach) takes the cursor from <paramref name="index"/> (2026-10-04, the UI review: the draft
+    /// had no word moves): back over blanks and line breaks, then to the start of the run before them — a word, a token alone, or a
+    /// run of the same other cluster, the double-click's runs (<see cref="At"/>). 0 at the start. Pure.
+    /// </summary>
+    public static int PreviousStart(string text, int index)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var starts = ClusterStarts(text);
+        int last = starts.Count - 1;
+        int e = 0;
+        while (e < last && starts[e] < Math.Clamp(index, 0, text.Length))
+        {
+            e++;   // e: the first cluster at or after index, so e − 1 is the one before the cursor
+        }
+
+        while (e > 0 && KindOf(text, starts[e - 1]) is Kind.Space or Kind.Break)
+        {
+            e--;
+        }
+
+        if (e == 0)
+        {
+            return 0;
+        }
+
+        var kind = KindOf(text, starts[e - 1]);
+        if (kind == Kind.Token)
+        {
+            return starts[e - 1];
+        }
+
+        string? other = kind == Kind.Other ? text[starts[e - 1]..starts[e]] : null;
+        e--;
+        while (e > 0 && Same(text, starts, e - 1, kind, other))
+        {
+            e--;
+        }
+
+        return starts[e];
+    }
+
+    /// <summary>
+    /// Where Ctrl+→ (and Ctrl+Delete's reach) takes the cursor from <paramref name="index"/> (2026-10-04), as Windows' edit controls do:
+    /// past the run it is in (a word, a token alone, a run of the same other cluster), then past the blanks after it, to the start of
+    /// the next word; the text's end at the end. Pure.
+    /// </summary>
+    public static int NextStart(string text, int index)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var starts = ClusterStarts(text);
+        int last = starts.Count - 1;
+        int e = 0;
+        while (e < last && starts[e + 1] <= Math.Clamp(index, 0, text.Length))
+        {
+            e++;   // e: the cluster holding index
+        }
+
+        if (e < last && KindOf(text, starts[e]) is not (Kind.Space or Kind.Break))
+        {
+            var kind = KindOf(text, starts[e]);
+            string? other = kind == Kind.Other ? text[starts[e]..starts[e + 1]] : null;
+            e++;
+            while (kind != Kind.Token && e < last && Same(text, starts, e, kind, other))
+            {
+                e++;
+            }
+        }
+
+        while (e < last && KindOf(text, starts[e]) is Kind.Space or Kind.Break)
+        {
+            e++;
+        }
+
+        return starts[e];
+    }
+
     // Whether cluster `c` continues a run of `kind` (anything else only with the same cluster: "--", "...", "⚠️⚠️").
     private static bool Same(string text, List<int> starts, int c, Kind kind, string? other)
     {

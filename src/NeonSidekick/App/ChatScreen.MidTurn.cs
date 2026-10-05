@@ -63,6 +63,9 @@ internal sealed partial class ChatScreen
     // True from a turn's start until its pane phase (if any) closed and its acts were drained.
     private volatile bool _turnRunning;
 
+    // Whether the turn's stage is a tool's (2026-10-04): the busy row's step clock (ScreenPane.StepClockShown).
+    private volatile bool _toolStage;
+
     // The reconnects the turn's quick switches owe, applied after the turn (the turn task only).
     private SettingsChanges _deferred;
 

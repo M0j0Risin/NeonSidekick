@@ -47,6 +47,9 @@ internal sealed class TurnStages
         _random = random;
     }
 
+    /// <summary>Whether a tool runs (or a mid-turn compact): the stage whose own clock the busy row shows beside the turn's (2026-10-04).</summary>
+    public bool InTool => _stage == Stage.Tool;
+
     /// <summary>The turn's first label: the thinking stage.</summary>
     public string Start()
     {

@@ -587,6 +587,14 @@ public sealed partial class InputLine
                         return new EditOutcome.End(new InputResult.Cancelled());
                     }
 
+                    // The cleared draft goes to the history first (2026-10-04, the UI review): Up brings back what ESC took.
+                    if (_o.Remember && !_o.Mask)
+                    {
+                        _line.Remember(_text.ToString());
+                        _historyIndex = _line._history.Count;   // the walk starts past it, so the next Up is the line just cleared
+                        _walking = false;
+                    }
+
                     _text.Clear();
                     _cursor = 0;
                     _anchor = -1;
@@ -598,6 +606,16 @@ public sealed partial class InputLine
                     if (HasSelection)
                     {
                         DeleteSelection();
+                        Redraw();
+                        break;
+                    }
+
+                    if (control)
+                    {
+                        // Ctrl+Backspace (2026-10-04): the word before the cursor and the blanks after it, as Ctrl+← would cross them.
+                        int from = DraftWords.PreviousStart(_text.ToString(), _cursor);
+                        _text.Remove(from, _cursor - from);
+                        _cursor = from;
                         Redraw();
                         break;
                     }
@@ -631,11 +649,31 @@ public sealed partial class InputLine
 
                     if (_cursor < _text.Length)
                     {
-                        TextCells.ElementWidth(_text.ToString(), _cursor, out int len);
+                        // Ctrl+Delete (2026-10-04): up to the next word's start, as Ctrl+→ would go; else one element.
+                        int len = control ? DraftWords.NextStart(_text.ToString(), _cursor) - _cursor : 0;
+                        if (len <= 0)
+                        {
+                            TextCells.ElementWidth(_text.ToString(), _cursor, out len);
+                        }
+
                         _text.Remove(_cursor, len);
                         Redraw();
                     }
 
+                    break;
+
+                case ConsoleKey.LeftArrow when control:
+                    // Ctrl+← (2026-10-04, the UI review): the start of the word, a word back past blanks; with Shift, selecting.
+                    _anchor = shift ? Anchor() : -1;
+                    _cursor = DraftWords.PreviousStart(_text.ToString(), _cursor);
+                    Redraw();
+                    break;
+
+                case ConsoleKey.RightArrow when control:
+                    // Ctrl+→ (2026-10-04): the next word's start; with Shift, selecting.
+                    _anchor = shift ? Anchor() : -1;
+                    _cursor = DraftWords.NextStart(_text.ToString(), _cursor);
+                    Redraw();
                     break;
 
                 case ConsoleKey.LeftArrow:
@@ -1020,12 +1058,15 @@ public sealed partial class InputLine
         {
             int start = Math.Min(Math.Min(_anchor, _cursor), _text.Length);
             int end = Math.Min(Math.Max(_anchor, _cursor), _text.Length);
-            if (_o.Mask || _line._copy is null || !_line._copy(_line._pastes.Expand(_text.ToString(start, end - start))))
+            string copied = _line._pastes.Expand(_text.ToString(start, end - start));
+            if (_o.Mask || _line._copy is null || !_line._copy(copied))
             {
                 _line._notices?.Notice(CopyFailedNotice);
                 return false;
             }
 
+            // The copy says so on the hint row a moment (2026-10-04, the UI review: it was silent).
+            _line._pane.Flash(CopiedFlash(copied.Length));
             return true;
         }
 
