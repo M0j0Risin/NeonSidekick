@@ -188,6 +188,9 @@ public static class ToolsText
     /// <summary>After a group's heading while its switch is off: <c>(off: File tools is off)</c>, the shape of the Skills pane's old <c>(off: external skills disabled)</c> note. Pinned.</summary>
     public static string GroupOffSuffix(string switchLabel) => $"(off: {switchLabel} is off)";
 
+    /// <summary>After the Memory group's heading while <c>Memory mode</c> is disabled (2026-10-04; <c>(off: Memory is off)</c> until then). Pinned.</summary>
+    public const string MemoryOffSuffix = "(off: Memory mode is disabled)";
+
     /// <summary>The status line after a flip: <c>read_file: off</c>, the <see cref="SettingsMenu.SavedNotice"/> shape. Pinned.</summary>
     public static string FlippedNotice(string tool, bool on) => $"{tool}: {State(on)}";
 
@@ -311,6 +314,12 @@ public static class ToolsText
         {
             // The camera's shape (2026-10-04).
             return ScreenOffSuffix;
+        }
+
+        if (group.Switch == SettingsField.MemoryMode)
+        {
+            // A picker, not a switch (2026-10-04): the group is off only when the mode is disabled.
+            return MemoryOffSuffix;
         }
 
         return group.Switch is { } field ? GroupOffSuffix(SettingsMenu.FieldName(field)) : "";

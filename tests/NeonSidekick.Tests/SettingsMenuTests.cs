@@ -134,17 +134,19 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · TTS output: off", _console.Output);
     }
 
+    /// <summary>Memory mode (2026-10-04, the user's ask; the Memory toggle until then): a picker over the three modes, read-write under the cursor, no reconnect.</summary>
     [Fact]
-    public async Task Toggle_Memory_PersistsAndNeedsNoReconnect()
+    public async Task MemoryMode_PersistsAndNeedsNoReconnect()
     {
-        Assert.True(_settings.Current.Memory);
-        Down(1);                     // Memory is the second row, under Profile
-        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off picker (2026-09-17): the saved value under the cursor, the other row picked
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        Down(1);                     // Memory mode is the second row, under Profile
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the picker: the saved mode under the cursor, read-only picked
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
-        Assert.False(_settings.Current.Memory);
-        Assert.Contains("  · Memory: off", _console.Output);
+        Assert.Equal("read-only", _settings.Current.MemoryMode);
+        Assert.Contains("  · Memory mode: read-only", _console.Output);
+        Assert.Contains(MemoryMode.Describe("disabled"), _console.Output);   // the picker's rows, each with its hint
     }
 
     [Fact]
@@ -820,7 +822,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(
             new[]
             {
-                SettingsField.Profile, SettingsField.Memory, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds,
+                SettingsField.Profile, SettingsField.MemoryMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey, SettingsField.LlmReasoning, SettingsField.LlmRequestTimeoutSeconds,
                 SettingsField.LlmTurnTimeoutSeconds, SettingsField.TtsOutput, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2,
                 SettingsField.TtsVoiceMix, SettingsField.TtsSpeed,
                 SettingsField.SttInput, SettingsField.SttWake, SettingsField.SttWakePhrase,
@@ -1119,7 +1121,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(20, SettingsMenu.ToolsTabFields.Count);   // Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(16, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 15 until Reflection downloaded skills (then Reflection installed skills) came on 2026-10-02; 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yields to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.Memory, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.General]);   // Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep command history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect; the four in led by default since 2026-10-02 (the user's ask).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Show performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));
@@ -1659,12 +1661,12 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Working directory (cwd)                 [#EFE6FF]D:\\x\\[[v]][/]", SettingsMenu.FieldLabel(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory, null));
         Assert.Equal(@"(D:\home\profiles\p\files)", SettingsMenu.DefaultWorkingDirectoryLabel(@"D:\home\profiles\p"));
         Assert.Equal("Could not create Q:\\nope (boom); keeping (profile folder).", SettingsMenu.WorkingDirectoryCreateError(@"Q:\nope", "boom", "(profile folder)"));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.Memory));
-        Assert.False(SettingsMenu.IsLlmField(SettingsField.Memory));
-        Assert.False(SettingsMenu.IsTtsField(SettingsField.Memory));
-        Assert.False(SettingsMenu.IsVoiceField(SettingsField.Memory));
-        Assert.Equal("Memory", SettingsMenu.FieldName(SettingsField.Memory));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.Memory, data, _settings.ProfileDirectory));
+        Assert.False(SettingsMenu.IsToggle(SettingsField.MemoryMode));   // a picker since 2026-10-04
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.MemoryMode));
+        Assert.False(SettingsMenu.IsTtsField(SettingsField.MemoryMode));
+        Assert.False(SettingsMenu.IsVoiceField(SettingsField.MemoryMode));
+        Assert.Equal("Memory mode", SettingsMenu.FieldName(SettingsField.MemoryMode));
+        Assert.Equal("read-write", SettingsMenu.FieldValue(SettingsField.MemoryMode, data, _settings.ProfileDirectory));
         Assert.True(SettingsMenu.IsToggle(SettingsField.CopyUserPrompt));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.CopyUserPrompt));
         Assert.False(SettingsMenu.IsTtsField(SettingsField.CopyUserPrompt));
@@ -3170,7 +3172,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory                       on\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 32\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 32\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -3227,41 +3229,41 @@ public partial class SettingsMenuTests : IDisposable
     {
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        input.PushClick(4, 105);                 // Memory (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18)
+        input.PushClick(4, 105);                 // Memory mode (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18)
         input.PushClick(4, 105);
-        input.PushClick(238, 100);               // the × on the on/off page: back to the list
+        input.PushClick(238, 100);               // the × on the mode page: back to the list
         input.PushClick(239, 100);               // the × on the list: closed
         input.Push(Keys.Escape);                 // never read
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.True(_settings.Current.Memory);
-        Assert.Contains("\n" + Titled(Breadcrumb("Memory")) + "\n \n▸ on  ", _console.Output);
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  ", _console.Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.True(input.IsAvailable);
         pane.Dispose();
     }
 
-    /// <summary>The user's example (2026-09-18): a double-click on General's Memory row opens its on/off page as Enter would, a double-click on off picks it.</summary>
+    /// <summary>The user's example (2026-09-18): a double-click on General's Memory row opens its page as Enter would, a double-click on a choice picks it (Memory mode's read-only since 2026-10-04).</summary>
     [Fact]
     public async Task OnThePane_ADoubleClickOnARow_OpensItsPage_AndOneOnAChoice_PicksIt()
     {
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        Assert.True(_settings.Current.Memory);
-        input.PushClick(4, 105);                 // Memory: strip 100, spacer 101, Profile 102, New profile mode 103, Working directory 104 (under it since 2026-10-01, the queue's two rows before)
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        input.PushClick(4, 105);                 // Memory mode: strip 100, spacer 101, Profile 102, New profile mode 103, Working directory 104 (under it since 2026-10-01, the queue's two rows before)
         input.PushClick(4, 105);
-        input.PushClick(4, 103);                 // off: breadcrumb 100, spacer 101, on 102
+        input.PushClick(4, 103);                 // read-only: breadcrumb 100, spacer 101, read-write 102
         input.PushClick(6, 103);
         input.Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.False(_settings.Current.Memory);
-        Assert.Contains("\n" + Titled(Breadcrumb("Memory")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.Memory, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.Memory, false) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory: off\n  Profile                      default (", _console.Output);
-        Assert.Contains("\n▸ Memory                       off\n", _console.Output);
+        Assert.Equal("read-only", _settings.Current.MemoryMode);
+        Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  " + MemoryMode.Describe("read-write") + "\n  read-only   " + MemoryMode.Describe("read-only") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory mode: read-only\n  Profile                      default (", _console.Output);
+        Assert.Contains("\n▸ Memory mode                  read-only\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -3272,11 +3274,11 @@ public partial class SettingsMenuTests : IDisposable
     {
         _console.Profile.Width = 240;
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        Assert.True(_settings.Current.Memory);
-        input.PushClick(4, 105);                 // Memory (see the double-click test for the rows)
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        input.PushClick(4, 105);                 // Memory mode (see the double-click test for the rows)
         input.PushClick(4, 105);
-        input.PushClick(4, 50);                  // the transcript under the on/off page: a first
-        input.Push(Keys.Down);                   // a key ends the pair: off under the cursor, nothing picked
+        input.PushClick(4, 50);                  // the transcript under the mode page: a first
+        input.Push(Keys.Down);                   // a key ends the pair: read-only under the cursor, nothing picked
         input.PushClick(4, 50);                  // a first again
         input.PushClick(60, 50);                 // the pair: every level closes
         input.Push(Keys.Escape);                 // never read
@@ -3284,12 +3286,12 @@ public partial class SettingsMenuTests : IDisposable
         int mark = _console.Output.Length;
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.True(_settings.Current.Memory);
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
         Assert.False(pane.OverlayOpen);
         Assert.False(pane.Dismissed);
         Assert.True(input.IsAvailable);
         // Nothing after the page's draw: the unwinding drew no list.
-        int page = _console.Output.LastIndexOf(Titled(Breadcrumb("Memory")), StringComparison.Ordinal);
+        int page = _console.Output.LastIndexOf(Titled(Breadcrumb("Memory mode")), StringComparison.Ordinal);
         Assert.True(page > mark);
         Assert.DoesNotContain(Titled(Strip), _console.Output[page..]);
         Assert.Equal(0, pane.FlowRow);
@@ -3302,7 +3304,7 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                       // Profile: refused
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Working directory: refused
-        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Memory (right under Working directory since 2026-10-01): a General toggle, its page opens, off picked, saved
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Memory mode (right under Working directory since 2026-10-01): a General picker, its page opens, read-only picked, saved
         GoTo(SettingsTab.Llm); Push(Keys.Down, Keys.Enter);   // LLM URL: refused
         GoFrom(SettingsTab.Llm, SettingsTab.Tts); Push(Keys.Enter);   // TTS output: refused (LLM second since 2026-10-04, the tabs between skipped)
         Push(Keys.Right, Keys.Enter);           // STT input: refused
@@ -3310,14 +3312,14 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None, midTurn: true));
 
-        Assert.False(_settings.Current.Memory);
+        Assert.Equal("read-only", _settings.Current.MemoryMode);
         Assert.True(_settings.Current.TtsOutput);
         Assert.False(_settings.Current.SttInput);
         // The refusal on the status line under the strip (a redraw repeats it, so no count), the toggle's own line too.
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Profile", _console.Output);
         Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ TTS output", _console.Output);
         Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ STT input", _console.Output);
-        Assert.Contains("  · Memory: off", _console.Output);
+        Assert.Contains("  · Memory mode: read-only", _console.Output);
         Assert.DoesNotContain(SettingsMenu.ProfileTitle + "\n", _console.Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
@@ -3346,7 +3348,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.LlmCompactType));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.LlmMaxToolIterations));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.TtsVoicePreview));
-        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.Memory));
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.MemoryMode));
     }
 
     [Fact]
@@ -4380,8 +4382,6 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("on  " + Theme.DimMarkup("replies are read aloud"), SettingsMenu.ToggleLabel(SettingsField.TtsOutput, true));
         Assert.Equal("off " + Theme.DimMarkup("replies are text only"), SettingsMenu.ToggleLabel(SettingsField.TtsOutput, false));
-        Assert.Equal("memory enabled", SettingsMenu.ToggleDescribe(SettingsField.Memory, true));   // the user's words, 2026-09-21
-        Assert.Equal("memory disabled", SettingsMenu.ToggleDescribe(SettingsField.Memory, false));
         Assert.Equal("no tools at all; a change starts a new conversation", SettingsMenu.ToggleDescribe(SettingsField.LlmOfferTools, false));
         Assert.Equal("%USERPROFILE%\\.agents\\skills is read too", SettingsMenu.ToggleDescribe(SettingsField.ExternalSkills, true));
         Assert.Equal("use project file (NEON.md or AGENTS.md in the working directory)", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, true));   // the user's words, 2026-10-01
@@ -4975,7 +4975,6 @@ public partial class SettingsMenuTests : IDisposable
             }
         }
 
-        Assert.True(SettingsMenu.IsOn(SettingsField.Memory, data));
         Assert.False(SettingsMenu.IsOn(SettingsField.LlmUseFunVerbs, data));
         Assert.True(SettingsMenu.IsOn(SettingsField.LlmShowThinking, data));
     }
@@ -4983,19 +4982,19 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task Toggle_TheSavedValuePickedAgain_IsUnchanged_AndEscapeKeeps()
     {
-        Assert.True(_settings.Current.Memory);
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
         Down(1);
-        Push(Keys.Enter, Keys.Enter);           // Memory: the page opens on "on", on picked again
+        Push(Keys.Enter, Keys.Enter);           // Memory mode: the page opens on read-write, read-write picked again (a picker since 2026-10-04)
         Push(Keys.Enter, Keys.Escape);          // the page again, ESC
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
-        Assert.True(_settings.Current.Memory);
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
         Assert.Equal(2, _console.Output.Split(SettingsMenu.UnchangedNotice).Length - 1);
-        Assert.DoesNotContain("Memory: on", _console.Output);
-        Assert.Contains(SettingsMenu.PromptTitle(Breadcrumb("Memory"), SettingsMenu.PickKeys), _console.Output);
-        Assert.Contains(SettingsMenu.ToggleDescribe(SettingsField.Memory, false), _console.Output);
+        Assert.DoesNotContain("Memory mode: read-write", _console.Output);
+        Assert.Contains(SettingsMenu.PromptTitle(Breadcrumb("Memory mode"), SettingsMenu.PickKeys), _console.Output);
+        Assert.Contains(MemoryMode.Describe("disabled"), _console.Output);
     }
 
     [Fact]

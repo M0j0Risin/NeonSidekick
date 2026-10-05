@@ -124,7 +124,7 @@ public partial class ChatScreenTests
     public async Task BotChat_Memory_SharedParent_EveryBotSeesAndWritesTheParentsMemories()
     {
         BotChatFixture();
-        _settings.Update(d => { d.BotChatMemory = true; d.Memory = false; });
+        _settings.Update(d => { d.BotChatMemory = true; d.MemoryMode = "disabled"; });
         new MemoryStore(_settings.ProfileDirectory).Add("The user likes pizza.");
         _chat.Enqueue(FakeChatClient.Call("m1", SaveMemoryTool.ToolName, new Dictionary<string, object?> { ["text"] = "The user plays chess." }));
         _chat.EnqueueText("Noted.");
@@ -181,7 +181,7 @@ public partial class ChatScreenTests
 
         await RunAsync();
 
-        Assert.True(_settings.Current.Memory);
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
         Assert.Empty(ToolNames(_chat.Options[0]));
         Assert.DoesNotContain(MemoryPrompt.DirectiveWithoutTool, SystemText(_chat.Requests[0]));
         Assert.DoesNotContain("pizza", SystemText(_chat.Requests[0]));

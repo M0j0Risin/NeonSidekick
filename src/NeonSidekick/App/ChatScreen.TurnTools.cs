@@ -18,6 +18,9 @@ internal sealed record TurnToolInputs
     public bool ToolsEnabled { get; init; } = true;
     public IReadOnlyList<AIFunction> Memory { get; init; } = [];
     public bool MemoryEnabled { get; init; }
+
+    /// <summary><c>Memory mode</c> read-write (2026-10-04): false (read-only) leaves <c>save_memory</c> out of the memory group.</summary>
+    public bool MemorySave { get; init; } = true;
     public IReadOnlyList<AIFunction> Skills { get; init; } = [];
     public IReadOnlyList<AIFunction>? Web { get; init; }
     public bool WebEnabled { get; init; }
@@ -112,7 +115,8 @@ internal sealed partial class ChatScreen
         var comfyTools = inputs.Comfy;
         var homeTools = inputs.Home;
         var printTools = inputs.Print;
-        var memoryTools = inputs.Memory;
+        // Memory mode read-only (2026-10-04, the user's ask): save_memory is never offered, whatever /tools says.
+        var memoryTools = inputs.MemorySave ? inputs.Memory : inputs.Memory.Where(t => t is not SaveMemoryTool).ToList();
         var skillTools = inputs.Skills;
         var sessionTools = inputs.Sessions;
         var askTools = inputs.Ask;

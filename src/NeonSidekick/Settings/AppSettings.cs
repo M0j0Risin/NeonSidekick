@@ -690,7 +690,7 @@ public sealed class AppSettings : IDisposable
         ThumbsWindowTop = source.ThumbsWindowTop,
         HideExitAutocomplete = source.HideExitAutocomplete,
         ImageThumbnailSize = source.ImageThumbnailSize,
-        Memory = source.Memory,
+        MemoryMode = source.MemoryMode,
         NewProfileMode = source.NewProfileMode,
         PastePreviewLines = source.PastePreviewLines,
         QueueCancelMode = source.QueueCancelMode,

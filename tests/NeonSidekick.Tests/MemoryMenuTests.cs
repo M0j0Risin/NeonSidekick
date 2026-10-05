@@ -211,36 +211,37 @@ public class MemoryMenuTests : IDisposable
         pane.Dispose();
     }
 
-    /// <summary>The menu over a pane with Memory's switch wired (2026-10-03): the setting is <paramref name="on"/>, each switch recorded.</summary>
-    private (MemoryMenu Menu, ScreenPane Pane, List<bool> Switched) SwitchMenu(bool on)
+    /// <summary>The menu over a pane with Memory mode's buttons wired (2026-10-03; three modes since 2026-10-04): the setting is <paramref name="mode"/>, each change recorded.</summary>
+    private (MemoryMenu Menu, ScreenPane Pane, List<MemoryAccess> Switched) SwitchMenu(MemoryAccess mode)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
-        var switched = new List<bool>();
+        var switched = new List<MemoryAccess>();
         var menu = new MemoryMenu(new ConsoleWithInput(pane, keys), _store, new TranscriptRenderer(pane), new MenuPane(pane, keys),
-            () => on, value => { on = value; switched.Add(value); });
+            () => mode, value => { mode = value; switched.Add(value); return true; });
         pane.Show();
         return (menu, pane, switched);
     }
 
-    private static string SwitchTitle => MemoryMenu.Title + "   " + MemoryMenu.OnButton + "    " + MemoryMenu.OffButton + " ";
+    private static string SwitchTitle(MemoryAccess mode) => MemoryMenu.Title + "   " + string.Join("    ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";
 
     /// <summary>
-    /// Memory's switch on the title row (2026-10-03, the user's ask: ask/yolo's shape): F switches it off and the list comes
-    /// back, F again (the lit one) does nothing, N switches it on; the hint names the keys; the rows are untouched.
+    /// Memory mode's buttons on the title row (2026-10-03, the user's ask: ask/yolo's shape; three since 2026-10-04): D sets disabled
+    /// and the list comes back, D again (the lit one) does nothing, R read-only, W read-write; the hint names the keys; the rows are untouched.
     /// </summary>
     [Fact]
-    public async Task OnThePane_TheTitleButtonsSwitchMemory_TheLitOneDoesNothing()
+    public async Task OnThePane_TheTitleButtonsSetMemoryMode_TheLitOneDoesNothing()
     {
         Seed("one");
-        var (menu, pane, switched) = SwitchMenu(on: true);
-        Push(Keys.Char('f'), Keys.Char('f'), Keys.Char('n'), Keys.Escape);
+        var (menu, pane, switched) = SwitchMenu(MemoryAccess.ReadWrite);
+        Push(Keys.Char('d'), Keys.Char('d'), Keys.Char('r'), Keys.Char('w'), Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal([false, true], switched);
-        Assert.Contains("\n" + Titled(SwitchTitle) + "\n", _console.Output);
+        Assert.Equal([MemoryAccess.Disabled, MemoryAccess.ReadOnly, MemoryAccess.ReadWrite], switched);
+        Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadWrite)) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadOnly)) + "\n", _console.Output);
         Assert.Contains("\n" + MemoryMenu.SwitchKeys + "\n", _console.Output);
         Assert.Equal(["one"], _store.Snapshot());
         Assert.False(pane.OverlayOpen);
@@ -252,15 +253,15 @@ public class MemoryMenuTests : IDisposable
     public async Task OnThePane_WithTheSwitch_AnEmptyStoreOpens_AndTheLastRemovalStaysOpen()
     {
         Seed("only");
-        var (menu, pane, switched) = SwitchMenu(on: false);
+        var (menu, pane, switched) = SwitchMenu(MemoryAccess.Disabled);
         int flow = pane.FlowRow;
-        Push(Keys.Enter, Keys.Enter, Keys.Char('n'), Keys.Escape);   // remove it, Enter on the empty row, on, close
+        Push(Keys.Enter, Keys.Enter, Keys.Char('w'), Keys.Escape);   // remove it, Enter on the empty row, read-write, close
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(0, _store.Count);
-        Assert.Equal([true], switched);
-        Assert.Contains("\n" + Titled(SwitchTitle) + "\n  · (💾 removed: only)\n▸ " + MemoryMenu.EmptyNotice + "\n", _console.Output);
+        Assert.Equal([MemoryAccess.ReadWrite], switched);
+        Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.Disabled)) + "\n  · (💾 removed: only)\n▸ " + MemoryMenu.EmptyNotice + "\n", _console.Output);
         Assert.Contains("\n" + MemoryMenu.EmptySwitchKeys + "\n", _console.Output);
         Assert.Equal(flow, pane.FlowRow);   // nothing reached the transcript
         Assert.False(pane.OverlayOpen);
@@ -270,7 +271,7 @@ public class MemoryMenuTests : IDisposable
     [Fact]
     public async Task WithTheSwitch_ButNoPane_TheEmptyStoreStillSaysSo()
     {
-        var menu = new MemoryMenu(_console, _store, new TranscriptRenderer(_console), NoPane(_console), () => true, _ => { });
+        var menu = new MemoryMenu(_console, _store, new TranscriptRenderer(_console), NoPane(_console), () => MemoryAccess.ReadWrite, _ => true);
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -286,12 +287,13 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal("💾 Memory", MemoryMenu.Title);
         Assert.Equal(MemoryMenu.Title + "   Enter = remove · ESC = back", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));
         Assert.Equal("(💾 nothing remembered)", MemoryMenu.EmptyNotice);
-        Assert.Equal("Enter = remove · N = on · F = off · ESC = back", MemoryMenu.SwitchKeys);   // 2026-10-03
-        Assert.Equal("N = on · F = off · ESC = back", MemoryMenu.EmptySwitchKeys);
-        Assert.Equal(["● on", "○ off"], MemoryMenu.Buttons(true).Select(b => b.Title));
-        Assert.Equal([true, false], MemoryMenu.Buttons(true).Select(b => b.On));
-        Assert.Equal([false, true], MemoryMenu.Buttons(false).Select(b => b.On));
-        Assert.Equal(['n', 'f'], MemoryMenu.Buttons(false).Select(b => b.Key!.Value));
+        Assert.Equal("Enter = remove · W = read-write · R = read-only · D = disabled · ESC = back", MemoryMenu.SwitchKeys);   // 2026-10-03; Memory mode's three since 2026-10-04
+        Assert.Equal("W = read-write · R = read-only · D = disabled · ESC = back", MemoryMenu.EmptySwitchKeys);
+        Assert.Equal(["● read-write", "○ read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
+        Assert.Equal(["○ read-write", "● read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
+        Assert.Equal([true, false, false], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.On));
+        Assert.Equal([false, false, true], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.On));
+        Assert.Equal(['w', 'r', 'd'], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Key!.Value));
         Assert.Equal("(💾 removed: x)", MemoryMenu.RemovedNotice("x"));
         Assert.Equal("Could not remove the memory: locked", MemoryMenu.RemoveFailedError("locked"));
         Assert.Equal("2026-09-11", MemoryMenu.DateLabel(dated));

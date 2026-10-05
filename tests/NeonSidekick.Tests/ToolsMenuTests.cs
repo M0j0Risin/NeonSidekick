@@ -69,7 +69,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         var e = _settings.Current;
         var disabled = ToolsText.DisabledSet(e.ToolsDisabled);
-        return new ToolsFacts(SystemPromptSummary.ToolGroups(_clock, _timers, _files, _memory, e.Memory, e.LlmOfferTools, _web, e.WebTools, e.FileTools, _questions, e.AskUser, _paneOn, disabled: disabled), e.LlmOfferTools, disabled);
+        return new ToolsFacts(SystemPromptSummary.ToolGroups(_clock, _timers, _files, _memory, MemoryMode.Enabled(e), e.LlmOfferTools, _web, e.WebTools, e.FileTools, _questions, e.AskUser, _paneOn, disabled: disabled), e.LlmOfferTools, disabled);
     }
 
     private void Push(params ConsoleKeyInfo[] keys)

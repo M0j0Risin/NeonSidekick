@@ -11,7 +11,7 @@ namespace NeonSidekick.App;
 /// a new one too, until later on 2026-09-29, the user's call); an empty list is no toolbar row at all. <see cref="Resolve"/> is the one place the saved list becomes the set: a display
 /// setting, so an unknown word is dropped without a warning. The glyphs are <see cref="ChatScreen"/>'s, one source; the
 /// lock and police items keep the switches they followed before (<see cref="ChatScreen.ToolbarStripFor(IReadOnlySet{string}, Shell.CommandPolicyMode, bool)"/>);
-/// the memory item is always drawn since later on 2026-10-03, on the off slab while Memory is off (<see cref="ChatScreen.ToolbarItemOff"/>).
+/// the memory item is always drawn since later on 2026-10-03, on the off slab while Memory mode is disabled (<see cref="ChatScreen.ToolbarItemOff"/>).
 /// Seventeen more on 2026-10-03 (the user's ask, their glyphs and names): the tool switches, each opening its group's switch
 /// (<c>/tools &lt;group&gt;</c>) and drawn on the off slab while it is off, and the log and the two viewers, each opening its
 /// window or closing it as its chord does; the user's order with them, the chart moved behind the log, and later that day

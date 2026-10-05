@@ -66,7 +66,7 @@ public class SystemPromptSummaryTests : IDisposable
                 "Persona — default",
                 "Operating rules — default",
                 NoNotesHeading,
-                "Memory — on, directive (the list rides the opening recall_memory call)",
+                "Memory — read-write, directive (the list rides the opening recall_memory call)",
                 NoSkillsHeading,
             ],
             sections.Select(s => s.Heading));
@@ -129,14 +129,14 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Persona — persona.md (12 chars)", sections[0].Heading);
         Assert.Equal("You are Rex.", sections[0].Body);
         // The list rides the opening memory call (2026-09-17): the prompt section is the directive alone.
-        Assert.Equal("Memory — on, directive (the list rides the opening recall_memory call)", sections[3].Heading);
+        Assert.Equal("Memory — read-write, directive (the list rides the opening recall_memory call)", sections[3].Heading);
         Assert.Equal(MemoryPrompt.Directive, sections[3].Body);
         Assert.DoesNotContain("Their name is Chris.", sections[3].Body);
         // No vocalia.md, no voice section, spoken or not (2026-10-03: there is no default directive).
         Assert.Equal(5, sections.Count);
         Assert.DoesNotContain(sections, s => s.Heading.StartsWith("Voice directive", StringComparison.Ordinal));
 
-        Assert.Equal("Memory — off, not included", Headings(Facts(memoryEnabled: false))[3]);
+        Assert.Equal("Memory — disabled, not included", Headings(Facts(memoryEnabled: false))[3]);
         Assert.Equal("", SystemPromptSummary.PromptSections(Facts(memoryEnabled: false))[3].Body);
         // The voice directive only while it is included (2026-09-26): no heading on a silent turn, nor while TTS is not ready.
         Assert.DoesNotContain(Headings(Facts(speechOutput: true, speechReady: false)), h => h.StartsWith("Voice directive", StringComparison.Ordinal));
@@ -217,7 +217,7 @@ public class SystemPromptSummaryTests : IDisposable
         var facts = Facts(memories: ["Their name is Chris."], disabled: ["recall_memory"]);
         var sections = SystemPromptSummary.PromptSections(facts);
 
-        Assert.Equal("Memory — on, 1 fact remembered (in the prompt: recall_memory is off in /tools)", sections[3].Heading);
+        Assert.Equal("Memory — read-write, 1 fact remembered (in the prompt: recall_memory is off in /tools)", sections[3].Heading);
         Assert.Equal(MemoryPrompt.Section(["Their name is Chris."], tools: false), sections[3].Body);
         Assert.Equal(Assistant.SystemPrompt(false, ["Their name is Chris."], skills: [], recall: false), SystemPromptSummary.SystemPrompt(facts));
         Assert.False(facts.Recall);
@@ -309,7 +309,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.False(groups[1].Offers(ReadFileTool.ToolName));
         Assert.True(groups[1].Offers(WriteFileTool.ToolName));
         Assert.Equal(SettingsField.FileTools, groups[1].Switch);
-        Assert.Equal(SettingsField.Memory, groups[2].Switch);
+        Assert.Equal(SettingsField.MemoryMode, groups[2].Switch);
         Assert.Null(groups[0].Switch);
         Assert.Empty(groups[3].ToolNotes);
         // The plain lines and the tab carry the note after the description.
@@ -392,7 +392,7 @@ public class SystemPromptSummaryTests : IDisposable
                 "Persona — default",
                 "Operating rules — default (LLM offer tools is off)",
                 NoNotesHeading,
-                "Memory — on, 1 fact remembered",
+                "Memory — read-write, 1 fact remembered",
                 "Skills — not included (LLM offer tools is off)",
             ],
             sections.Select(s => s.Heading));
@@ -438,7 +438,7 @@ public class SystemPromptSummaryTests : IDisposable
                 "Operating rules — default",
                 "  " + Assistant.OperatingRules,
                 NoNotesHeading,
-                "Memory — on, directive (the list rides the opening recall_memory call)",
+                "Memory — read-write, directive (the list rides the opening recall_memory call)",
                 "  " + MemoryPrompt.Directive,
                 NoSkillsHeading,
                 "  " + SkillsPrompt.DirectiveWithoutSkills,
@@ -514,10 +514,10 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal([SaveMemoryTool.ToolName, RecallMemoryTool.ToolName], on[2].Tools.Select(t => t.Name));
 
         var off = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory is off", off[2].Title);
+        Assert.Equal("Memory (2) — not offered: memory mode is disabled", off[2].Title);
         // The title is the name and the note joined: the pane draws the two apart (2026-09-16).
         Assert.Equal("Memory (2)", off[2].Name);
-        Assert.Equal(SystemPromptSummary.NotOffered("memory is off"), off[2].Note);
+        Assert.Equal(SystemPromptSummary.NotOffered(SystemPromptSummary.MemoryOffSuffix), off[2].Note);
         Assert.False(off[2].Offered);
         Assert.Equal(on.Where(g => g.Label != "Memory").Select(g => g.Title), off.Where(g => g.Label != "Memory").Select(g => g.Title));
 
@@ -529,7 +529,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.All(none, g => Assert.False(g.Offered));
         Assert.Equal(on.Select(g => g.Tools), none.Select(g => g.Tools));
         var neither = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false, toolsEnabled: false);
-        Assert.Equal("Memory (2) — not offered: memory is off", neither[2].Title);
+        Assert.Equal("Memory (2) — not offered: memory mode is disabled", neither[2].Title);
         Assert.Equal(none.Where(g => g.Label != "Memory").Select(g => g.Title), neither.Where(g => g.Label != "Memory").Select(g => g.Title));
 
         // The web group (2026-09-15): after the files, before memory, marked when the setting Web tools is off; nothing when no list is given.
@@ -765,7 +765,7 @@ public class SystemPromptSummaryTests : IDisposable
         using var off = new TestConsole();
         off.Profile.Width = 400;
         off.Write(SystemPromptSummary.ToolsTab(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: false)));
-        Assert.Contains(RuleLine("── Memory · 2 ── " + SystemPromptSummary.NotOffered("memory is off"), 400), off.Output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()));
+        Assert.Contains(RuleLine("── Memory · 2 ── " + SystemPromptSummary.NotOffered(SystemPromptSummary.MemoryOffSuffix), 400), off.Output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()));
 
         // The heading keeps the section colour whether the group is offered or not (later on 2026-09-20,
         // the user's call, the /tools rule): the same escape sequence leads "Memory" on and off.

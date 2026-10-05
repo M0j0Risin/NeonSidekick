@@ -186,7 +186,7 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(Heading("Web", "4"), rows.First(r => r.Heading && r.Markup.Contains("Web", StringComparison.Ordinal)).Markup);
         Assert.Equal("(off: Ask user is off)", ToolsText.HeadingSuffix(Facts(askEnabled: false).Groups.Single(g => g.Label == "Questions"), toolsEnabled: true));
         Assert.Equal("(off: no pane)", ToolsText.HeadingSuffix(Facts(paneOn: false).Groups.Single(g => g.Label == "Questions"), toolsEnabled: true));
-        Assert.Equal("(off: Memory is off)", ToolsText.HeadingSuffix(Facts(memoryEnabled: false).Groups.Single(g => g.Label == "Memory"), toolsEnabled: true));
+        Assert.Equal("(off: Memory mode is disabled)", ToolsText.HeadingSuffix(Facts(memoryEnabled: false).Groups.Single(g => g.Label == "Memory"), toolsEnabled: true));
         Assert.Equal("", ToolsText.HeadingSuffix(Facts().Groups[0], toolsEnabled: true));
         Assert.Equal("", ToolsText.HeadingSuffix(Facts(toolsEnabled: false).Groups[2], toolsEnabled: false));   // the off line says it once
     }

@@ -23,8 +23,11 @@ public enum SettingsField
     /// <summary>Which profile is loaded: a picker over <see cref="Settings.Profiles.List"/>. Not a field of the data; the first row.</summary>
     Profile,
 
-    /// <summary>Long-term memory on/off; a toggle that needs no reconnect (every turn reads it). Second row, under the profile it belongs to.</summary>
-    Memory,
+    /// <summary>
+    /// What the model may do with long-term memory: a picker over <see cref="App.MemoryMode.Names"/> (2026-10-04, the user's ask;
+    /// the toggle <c>Memory</c> until then). No reconnect (every turn reads it). Under the profile it belongs to.
+    /// </summary>
+    MemoryMode,
     LlmUrl,
     LlmModel,
 
@@ -1287,7 +1290,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
-        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.Memory,
+        [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
          SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
@@ -1729,7 +1732,7 @@ internal sealed partial class SettingsMenu
 
     public static bool IsToggle(SettingsField field) =>
         field is SettingsField.TtsOutput or SettingsField.SttInput or SettingsField.SttWake or SettingsField.SttInterrupt
-            or SettingsField.Memory or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
+            or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
             or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
@@ -1794,7 +1797,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmReasoning => "LLM reasoning",
         SettingsField.TtsVoice2 => "TTS voice 2",
         SettingsField.TtsVoiceMix => "TTS voice mix",
-        SettingsField.Memory => "Memory",
+        SettingsField.MemoryMode => "Memory mode",
         SettingsField.WorkingDirectory => "Working directory (cwd)",
         SettingsField.CopyUserPrompt => "Copy user prompt",
         SettingsField.DraftEditor => "Draft editor",
@@ -2119,7 +2122,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmReasoning => data.LlmReasoning,
             SettingsField.TtsVoice2 => string.IsNullOrWhiteSpace(data.TtsVoice2) ? NoSecondaryVoice : data.TtsVoice2,
             SettingsField.TtsVoiceMix => Mix(data.TtsVoiceMix),
-            SettingsField.Memory => OnOff(data.Memory),
+            SettingsField.MemoryMode => data.MemoryMode,
             SettingsField.WorkingDirectory => string.IsNullOrWhiteSpace(data.WorkingDirectory) ? DefaultWorkingDirectoryLabel(profileDirectory) : data.WorkingDirectory,
             SettingsField.CopyUserPrompt => OnOff(data.CopyUserPrompt),
             SettingsField.ShowImageThumbnails => OnOff(data.ShowImageThumbnails),
@@ -3022,6 +3025,10 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the botchat-img2img-mode picker: the mode and its hint (padded to thirteen: <c>chat-history</c> is twelve). Pinned.</summary>
     public static string BotChatImg2ImgModeLabel(string name) =>
         Markup.Escape(name.PadRight(13)) + Theme.DimMarkup(App.BotChatImg2ImgMode.Describe(name));
+
+    /// <summary>One row of the memory-mode picker (2026-10-04): the mode and its hint (padded to twelve: <c>read-write</c> is ten). Pinned.</summary>
+    public static string MemoryModeLabel(string name) =>
+        Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(App.MemoryMode.Describe(name));
 
     /// <summary>One row of the botchat-memory-mode picker (2026-10-04): the mode and its hint (padded to fifteen: <c>shared-parent</c> is thirteen). Pinned.</summary>
     public static string BotChatMemoryModeLabel(string name) =>
@@ -4256,6 +4263,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BotChatMemoryMode)
         {
             return await PickBotChatMemoryModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.MemoryMode)
+        {
+            return await PickMemoryModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.WelcomeSplash)
@@ -6089,18 +6101,19 @@ internal sealed partial class SettingsMenu
         PickToggleAsync(field, _settings.Current, cancellationToken);
 
     /// <summary>
-    /// Memory switched straight (2026-10-03, the user's ask: the on and off buttons on the 💾 pane, and <c>/memory on|off</c>):
-    /// the Memory row's own save and notice, on the pane's status line while one is open. False, with <see cref="UnchangedNotice"/>,
-    /// when it already is.
+    /// Memory mode set straight (2026-10-03 as the Memory switch's on and off, the user's ask: the buttons on the 💾 pane and
+    /// <c>/memory on|off</c>; three modes since 2026-10-04): the Memory mode row's own save and notice, on the pane's status line
+    /// while one is open. False, with <see cref="UnchangedNotice"/>, when it already is.
     /// </summary>
-    internal bool SetMemory(bool on)
+    internal bool SetMemoryMode(MemoryAccess mode)
     {
-        if (_settings.Current.Memory == on)
+        string name = App.MemoryMode.Name(mode);
+        if (string.Equals(_settings.Current.MemoryMode, name, StringComparison.Ordinal))
         {
             return Unchanged();
         }
 
-        Apply(SettingsField.Memory, data => SetToggle(SettingsField.Memory, data, on));
+        Apply(SettingsField.MemoryMode, data => data.MemoryMode = name);
         return true;
     }
 
@@ -6214,7 +6227,6 @@ internal sealed partial class SettingsMenu
             SettingsField.SttInput => data.SttInput,
             SettingsField.SttWake => data.SttWake,
             SettingsField.SttInterrupt => data.SttInterrupt,
-            SettingsField.Memory => data.Memory,
             SettingsField.CopyUserPrompt => data.CopyUserPrompt,
             SettingsField.ShowImageThumbnails => data.ShowImageThumbnails,
             SettingsField.FileTreeShowSizes => data.FileTreeShowSizes,
@@ -6319,7 +6331,6 @@ internal sealed partial class SettingsMenu
             case SettingsField.SttInput: data.SttInput = on; break;
             case SettingsField.SttWake: data.SttWake = on; break;
             case SettingsField.SttInterrupt: data.SttInterrupt = on; break;
-            case SettingsField.Memory: data.Memory = on; break;
             case SettingsField.CopyUserPrompt: data.CopyUserPrompt = on; break;
             case SettingsField.ShowImageThumbnails: data.ShowImageThumbnails = on; break;
             case SettingsField.FileTreeShowSizes: data.FileTreeShowSizes = on; break;
@@ -6424,7 +6435,6 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static string ToggleDescribe(SettingsField field, bool on) => field switch
     {
-        SettingsField.Memory => on ? "memory enabled" : "memory disabled",
         SettingsField.CopyUserPrompt => on ? "/copy copies user prompts and model replies" : "/copy copies model replies only",
         SettingsField.ShowImageThumbnails => on ? "image thumbnails are shown in the chat transcript" : "no image thumbnails in the chat transcript",
         SettingsField.TranscriptMarkdown => on ? "replies are styled as Markdown in the pane" : "replies stream as plain text",
@@ -7428,6 +7438,27 @@ internal sealed partial class SettingsMenu
             (d, next) => d.BotChatLimitedComfyWorkflows = next.Count == 0 ? null : next,
             d => d.BotChatComfy ? LimitedComfyUnusedCaption : null,
             cancellationToken);
+
+    /// <summary>The memory-mode picker under the settings list (2026-10-04): one <see cref="MemoryModeLabel"/> row per <see cref="App.MemoryMode.Names"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickMemoryModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = App.MemoryMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.MemoryMode)), names.Select(MemoryModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.MemoryMode)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        if (string.Equals(name, saved.MemoryMode, StringComparison.Ordinal))
+        {
+            return Unchanged();   // the mode in force picked again, as a toggle's own value is
+        }
+
+        Apply(SettingsField.MemoryMode, d => d.MemoryMode = name);
+        return true;
+    }
 
     /// <summary>The botchat-memory-mode picker under the settings list (2026-10-04): one <see cref="BotChatMemoryModeLabel"/> row per <see cref="App.BotChatMemoryMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickBotChatMemoryModeAsync(AppSettingsData saved, CancellationToken cancellationToken)

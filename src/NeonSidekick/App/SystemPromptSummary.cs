@@ -20,7 +20,8 @@ namespace NeonSidekick.App;
 /// <param name="Persona">The <c>persona.md</c> text, null for the default persona.</param>
 /// <param name="OperatingRules">The <c>operata.md</c> text, null for the default operating rules.</param>
 /// <param name="VoiceDirective">The <c>vocalia.md</c> text, null for none (there is no default since 2026-10-03); only in the prompt while the turn speaks.</param>
-/// <param name="Memory">The memory switch; off means no memory section, no <c>save_memory</c> / <c>recall_memory</c> tool and no opening memory call.</param>
+/// <param name="Memory">Memory on at all (<c>Memory mode</c> not disabled, 2026-10-04); off means no memory section, no <c>save_memory</c> / <c>recall_memory</c> tool and no opening memory call.</param>
+/// <param name="MemorySave"><c>Memory mode</c> read-write (2026-10-04): false (read-only) drops the save sentences and notes <c>save_memory</c> as not offered.</param>
 /// <param name="Memories">What is remembered, oldest first (empty when memory is off).</param>
 /// <param name="TtsOutput">The speech-output switch.</param>
 /// <param name="SpeechReady">Whether the TTS server answered: the directive goes in only when both are true.</param>
@@ -125,7 +126,8 @@ public sealed record SystemPromptFacts(
     bool Download = false,
     AskLimits? Ask = null,
     bool SessionsEnabled = false,
-    int SessionTools = 0)
+    int SessionTools = 0,
+    bool MemorySave = true)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.WebRule"/>: tools on, the switch on and at least one web tool offered (2026-10-04).</summary>
     public bool Web => ToolsEnabled && WebEnabled && WebTools > 0;
@@ -196,6 +198,9 @@ public sealed record SystemPromptFacts(
     /// <summary>Whether the opening <c>recall_memory</c> call rides: memory on and the tool not switched off — else the list is in the prompt (2026-09-19).</summary>
     public bool Recall => Memory && !Off(RecallMemoryTool.ToolName);
 
+    /// <summary>The <c>Memory mode</c> word for the Prompt tab's memory status (2026-10-04): read-write, read-only or disabled.</summary>
+    public string MemoryModeName => !Memory ? MemoryMode.Disabled : MemorySave ? MemoryMode.ReadWrite : MemoryMode.ReadOnly;
+
     /// <summary>Whether the rules carry <see cref="Assistant.TimerRule"/>: any of the three timer tools not switched off on <c>/tools</c> (2026-09-20; the emptied group drops its sentence).</summary>
     public bool Timers => !(Off(StartTimerTool.ToolName) && Off(StopTimerTool.ToolName) && Off(ListTimersTool.ToolName));
 }
@@ -209,7 +214,7 @@ public sealed record SystemPromptFacts(
 /// </summary>
 public sealed record SystemPromptSection(string Label, string Status, string Body)
 {
-    /// <summary>The plain heading: <c>Memory — on, 3 facts remembered</c>, the label alone with no status. Pinned.</summary>
+    /// <summary>The plain heading: <c>Memory — read-write, 3 facts remembered</c>, the label alone with no status. Pinned.</summary>
     public string Heading => Status.Length > 0 ? $"{Label} — {Status}" : Label;
 
     /// <summary>True for a section whose text is in the system message.</summary>
@@ -269,6 +274,12 @@ public static class SystemPromptSummary
     /// <summary>The tab titles.</summary>
     public const string PromptTabTitle = "Prompt";
     public const string ToolsTabTitle = "Tools";
+
+    /// <summary>The tail of the Memory group while the setting <c>Memory mode</c> is disabled (2026-10-04; <c>memory is off</c> until then). Pinned.</summary>
+    public const string MemoryOffSuffix = "memory mode is disabled";
+
+    /// <summary>Why <c>save_memory</c> is not offered while <c>Memory mode</c> is read-only (2026-10-04). Pinned.</summary>
+    public const string MemoryReadOnlySuffix = "memory mode is read-only";
 
     /// <summary>The tail of every heading that the setting <c>LLM offer tools</c> turned off. Pinned.</summary>
     public const string ToolsOffSuffix = "LLM offer tools is off";
@@ -405,20 +416,20 @@ public static class SystemPromptSummary
         if (facts.Memory && facts.ToolsEnabled && facts.Recall)
         {
             // The list rides the opening call (2026-09-17): the section is the directive alone, the facts are under Also sent.
-            sections.Add(new(MemoryLabel, $"on, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true)));
+            sections.Add(new(MemoryLabel, $"{facts.MemoryModeName}, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true, save: facts.MemorySave)));
         }
         else if (facts.Memory && facts.ToolsEnabled)
         {
             // recall_memory switched off on /tools (2026-09-19): nothing can carry the list, so it rides the prompt as under LLM offer tools off.
-            sections.Add(new(MemoryLabel, $"on, {remembered} (in the prompt: {ToolOff(RecallMemoryTool.ToolName)})", MemoryPrompt.Section(facts.Memories, tools: false)));
+            sections.Add(new(MemoryLabel, $"{facts.MemoryModeName}, {remembered} (in the prompt: {ToolOff(RecallMemoryTool.ToolName)})", MemoryPrompt.Section(facts.Memories, tools: false)));
         }
         else if (facts.Memory)
         {
-            sections.Add(new(MemoryLabel, $"on, {remembered}", MemoryPrompt.Section(facts.Memories, tools: false)));
+            sections.Add(new(MemoryLabel, $"{facts.MemoryModeName}, {remembered}", MemoryPrompt.Section(facts.Memories, tools: false)));
         }
         else
         {
-            sections.Add(new(MemoryLabel, "off, not included", ""));
+            sections.Add(new(MemoryLabel, MemoryMode.Disabled + ", not included", ""));
         }
 
         // The skills block (2026-09-16): after the memory section, only with tools to load one.
@@ -476,6 +487,7 @@ public static class SystemPromptSummary
             skills: facts.SkillsEnabled ? facts.Skills ?? [] : null,
             markdown: facts.Markdown,
             recall: facts.Recall,
+            save: facts.MemorySave,
             delete: !facts.Off(DeleteTool.ToolName),
             mcp: facts.Mcp,
             timers: facts.Timers,
@@ -621,14 +633,15 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? sqlite = null,
         bool sqliteEnabled = true,
         IReadOnlyList<AIFunction>? postgres = null,
-        bool postgresEnabled = true)
+        bool postgresEnabled = true,
+        bool memorySave = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(memory);
         string standing = toolsEnabled ? "" : NotOffered(ToolsOffSuffix);
-        string memoryNote = !memoryEnabled ? NotOffered("memory is off") : standing;
+        string memoryNote = !memoryEnabled ? NotOffered(MemoryOffSuffix) : standing;
         string webNote = !webEnabled ? NotOffered("web is off") : standing;
         string filesNote = !filesEnabled ? NotOffered(FilesOffSuffix) : standing;
         string questionsNote = !askEnabled ? NotOffered(AskOffSuffix) : !paneOn ? NotOffered(NoPaneSuffix) : standing;
@@ -765,7 +778,9 @@ public static class SystemPromptSummary
             groups.Add(Group("Web", web, webNote, webEnabled && toolsEnabled, SettingsField.WebTools, disabled, notes));
         }
 
-        groups.Add(Group("Memory", memory, memoryNote, memoryEnabled && toolsEnabled, SettingsField.Memory, disabled));
+        // Memory mode read-only (2026-10-04): save_memory stays in the group, noted as not offered, the reason the mode.
+        var memoryNotes = memoryEnabled && !memorySave && memory.Any(t => t is SaveMemoryTool) ? new Dictionary<string, string>(StringComparer.Ordinal) { [SaveMemoryTool.ToolName] = NotOffered(MemoryReadOnlySuffix) } : null;
+        groups.Add(Group("Memory", memory, memoryNote, memoryEnabled && toolsEnabled, SettingsField.MemoryMode, disabled, memoryNotes));
         if (skills is not null)
         {
             // The skill tools (2026-09-16): after the memory tool, offered while the setting Agent skills says so; load_skill only with a skill to load.

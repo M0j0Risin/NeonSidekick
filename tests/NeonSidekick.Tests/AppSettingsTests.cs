@@ -57,7 +57,7 @@ public class AppSettingsTests : IDisposable
         BotChatMemory = false,
         BotChatMemoryMode = "independent",
         BotChatVision = true,
-        Memory = false,
+        MemoryMode = "read-only",
         NewProfileMode = "advanced",
         PastePreviewLines = 7,
         QueueCancelMode = "drain",
@@ -191,7 +191,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.HideExitAutocomplete, actual.HideExitAutocomplete);
         Assert.Equal(expected.ImageThumbnailSize, actual.ImageThumbnailSize);
         Assert.Equal(expected.Theme, actual.Theme);
-        Assert.Equal(expected.Memory, actual.Memory);
+        Assert.Equal(expected.MemoryMode, actual.MemoryMode);
         Assert.Equal(expected.NewProfileMode, actual.NewProfileMode);
         Assert.Equal(expected.PastePreviewLines, actual.PastePreviewLines);
         Assert.Equal(expected.QueueCancelMode, actual.QueueCancelMode);
@@ -348,7 +348,7 @@ public class AppSettingsTests : IDisposable
             d.HideExitAutocomplete = full.HideExitAutocomplete;
             d.ImageThumbnailSize = full.ImageThumbnailSize;
             d.Theme = full.Theme;
-            d.Memory = full.Memory;
+            d.MemoryMode = full.MemoryMode;
             d.NewProfileMode = full.NewProfileMode;
             d.PastePreviewLines = full.PastePreviewLines;
             d.QueueCancelMode = full.QueueCancelMode;
@@ -491,7 +491,7 @@ public class AppSettingsTests : IDisposable
                 d.HideExitAutocomplete = full.HideExitAutocomplete;
                 d.ImageThumbnailSize = full.ImageThumbnailSize;
                 d.Theme = full.Theme;
-                d.Memory = full.Memory;
+                d.MemoryMode = full.MemoryMode;
                 d.NewProfileMode = full.NewProfileMode;
                 d.PastePreviewLines = full.PastePreviewLines;
                 d.QueueCancelMode = full.QueueCancelMode;
@@ -1384,7 +1384,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("none", s.LlmReasoning);
         Assert.Equal("am_eric", s.TtsVoice2);   // the defaults since 2026-09-16 fill the missing fields
         Assert.Equal(80, s.TtsVoiceMix);
-        Assert.True(s.Memory);
+        Assert.Equal("read-write", s.MemoryMode);
         Assert.Equal(100, s.SttInterruptEchoGuard);
         Assert.Equal(200, s.SttInterruptConfirmMs);   // 150 until 2026-09-17
         Assert.Equal("", s.WorkingDirectory);

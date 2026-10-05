@@ -162,7 +162,7 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory [on | off | forget | edit | copy <profile> [overwrite]]", "List memories on a pane (Enter removes one); **● on** (N) and **○ off** (F) on its title row switch *Memory*, as `on` and `off` do. `forget` forgets them all. `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning). `copy` adds them to another profile's memory, skipping duplicates, or replaces it with `overwrite`. `forget` and `copy` ask first."),
+            new("/memory [read-write | read-only | disabled | forget | edit | copy <profile> [overwrite]]", "List memories on a pane (Enter removes one); **read-write** (W), **read-only** (R) and **disabled** (D) on its title row set *Memory mode*, as the words do (`on` and `off` still mean read-write and disabled). `forget` forgets them all. `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning). `copy` adds them to another profile's memory, skipping duplicates, or replaces it with `overwrite`. `forget` and `copy` ask first."),
         ]),
         new("/model",
         [

@@ -20,9 +20,10 @@ namespace NeonSidekick.App;
 /// console that cannot show menus gets the numbered list instead, and removes nothing.</para>
 ///
 /// <para>On the pane the title row carries Memory's switch (2026-10-03, the user's ask: "actions at the top, similar to ...
-/// Tools › Shell allowed commands' ask and yolo"): <see cref="OnButton"/> and <see cref="OffButton"/>, the lit one the setting
-/// in force, a press of the other switching it (<see cref="SettingsMenu.SetMemory"/>, the Memory row's own save and notice) and
-/// showing the list again. So the switch is always in reach, the pane opens with nothing remembered too, on one dim row, and
+/// Tools › Shell allowed commands' ask and yolo"): since 2026-10-04 <c>Memory mode</c>'s three buttons, <see cref="ReadWriteButton"/>,
+/// <see cref="ReadOnlyButton"/> and <see cref="DisabledButton"/> (W, R, D: the old on was N, which meant none and No on other panes), the
+/// lit one the mode in force, a press of another setting it (<see cref="SettingsMenu.SetMemoryMode"/>, the Memory mode row's own save and
+/// notice) and showing the list again. So the switch is always in reach, the pane opens with nothing remembered too, on one dim row, and
 /// stays open when the last row goes.</para>
 /// </summary>
 internal sealed class MemoryMenu
@@ -33,24 +34,24 @@ internal sealed class MemoryMenu
     public const string Keys = "Enter = remove · ESC = back";
     public const string EmptyNotice = "(" + NoticeGlyphs.Memory + "nothing remembered)";   // the disk since 2026-09-22
 
-    /// <summary>The pane's hints with Memory's switch on the title row (2026-10-03): the rows, then with nothing remembered. Pinned.</summary>
-    public const string SwitchKeys = "Enter = remove · N = on · F = off · ESC = back";
-    public const string EmptySwitchKeys = "N = on · F = off · ESC = back";
+    /// <summary>The pane's hints with Memory mode's buttons on the title row (2026-10-03; three modes since 2026-10-04): the rows, then with nothing remembered. Pinned.</summary>
+    public const string SwitchKeys = "Enter = remove · W = read-write · R = read-only · D = disabled · ESC = back";
+    public const string EmptySwitchKeys = "W = read-write · R = read-only · D = disabled · ESC = back";
 
-    /// <summary>Memory's switch on the pane's title row (2026-10-03, the user's ask): the ask/yolo pair's shape, the lit one in force. Pinned.</summary>
-    public const string OnButton = "● on";
-    public const char OnKey = 'n';
-    public const string OffButton = "○ off";
-    public const char OffKey = 'f';
-    public const int OnIndex = 0;
-    public const int OffIndex = 1;
+    /// <summary>Memory mode's buttons on the pane's title row (2026-10-04, the user's ask; on and off since 2026-10-03): the ask/yolo pair's shape, the lit one in force. Pinned.</summary>
+    public const string ReadWriteButton = "read-write";
+    public const char ReadWriteKey = 'w';
+    public const string ReadOnlyButton = "read-only";
+    public const char ReadOnlyKey = 'r';
+    public const string DisabledButton = "disabled";
+    public const char DisabledKey = 'd';
 
-    /// <summary>The title row's buttons with Memory <paramref name="on"/> or off: the one in force lit.</summary>
-    public static IReadOnlyList<MenuButton> Buttons(bool on) =>
-    [
-        new(OnButton, OnKey, on),
-        new(OffButton, OffKey, !on),
-    ];
+    /// <summary>The button of each mode, in <see cref="MemoryAccess"/>'s order: its index is the enum's value.</summary>
+    private static readonly (string Title, char Key)[] ModeButtons = [(ReadWriteButton, ReadWriteKey), (ReadOnlyButton, ReadOnlyKey), (DisabledButton, DisabledKey)];
+
+    /// <summary>The title row's buttons with <paramref name="mode"/> in force: that one lit (●), the others ○.</summary>
+    public static IReadOnlyList<MenuButton> Buttons(MemoryAccess mode) =>
+        ModeButtons.Select((b, i) => new MenuButton((i == (int)mode ? "● " : "○ ") + b.Title, b.Key, i == (int)mode)).ToList();
 
     /// <summary>How an entry with no saved date shows; the width of a <c>yyyy-MM-dd</c> date.</summary>
     public const string NoDate = "----------";
@@ -59,25 +60,25 @@ internal sealed class MemoryMenu
     private readonly MemoryStore _store;
     private readonly INoticeSink _transcript;
     private readonly MenuPane _pane;
-    private readonly Func<bool>? _memoryOn;
-    private readonly Action<bool>? _setMemory;
+    private readonly Func<MemoryAccess>? _memoryMode;
+    private readonly Func<MemoryAccess, bool>? _setMemoryMode;
 
     /// <param name="transcript">Where the lines outside the pane go: the transcript, or the screen's deferring sink when the list may open while a reply runs.</param>
     /// <param name="pane">The menu host in the bottom pane; disabled (no pane), the list is a Spectre prompt.</param>
-    /// <param name="memoryOn">Whether Memory is on (2026-10-03): with <paramref name="setMemory"/>, the switch on the pane's title row; null, no switch.</param>
-    /// <param name="setMemory">Switches Memory, saving and saying so (<see cref="SettingsMenu.SetMemory"/>).</param>
-    public MemoryMenu(IAnsiConsole console, MemoryStore store, INoticeSink transcript, MenuPane pane, Func<bool>? memoryOn = null, Action<bool>? setMemory = null)
+    /// <param name="memoryMode">The Memory mode in force (2026-10-03 as Memory's switch): with <paramref name="setMemoryMode"/>, the buttons on the pane's title row; null, none.</param>
+    /// <param name="setMemoryMode">Sets Memory mode, saving and saying so (<see cref="SettingsMenu.SetMemoryMode"/>).</param>
+    public MemoryMenu(IAnsiConsole console, MemoryStore store, INoticeSink transcript, MenuPane pane, Func<MemoryAccess>? memoryMode = null, Func<MemoryAccess, bool>? setMemoryMode = null)
     {
         _console = console ?? throw new ArgumentNullException(nameof(console));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
-        _memoryOn = memoryOn;
-        _setMemory = setMemory;
+        _memoryMode = memoryMode;
+        _setMemoryMode = setMemoryMode;
     }
 
     /// <summary>Whether the pane carries Memory's switch: wired, and a pane to put it on (the Spectre prompt has no buttons).</summary>
-    private bool HasSwitch => _memoryOn is not null && _setMemory is not null && _pane.Enabled;
+    private bool HasSwitch => _memoryMode is not null && _setMemoryMode is not null && _pane.Enabled;
 
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
     private INoticeSink Sink => _pane.IsOpen ? _pane : _transcript;
@@ -144,19 +145,19 @@ internal sealed class MemoryMenu
                 MenuPick? pick;
                 if (HasSwitch)
                 {
-                    // The switch on the title row (2026-10-03): the list, or one dim row with nothing remembered.
-                    bool on = _memoryOn!();
+                    // The buttons on the title row (2026-10-03): the list, or one dim row with nothing remembered.
+                    var mode = _memoryMode!();
                     var page = entries.Count > 0
                         ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), SwitchKeys)
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], EmptySwitchKeys);
-                    pick = await _pane.PickAsync(page with { Buttons = Buttons(on) }, cursor, cancellationToken).ConfigureAwait(false);
-                    if (pick is { Button: OnIndex or OffIndex } pressed)
+                    pick = await _pane.PickAsync(page with { Buttons = Buttons(mode) }, cursor, cancellationToken).ConfigureAwait(false);
+                    if (pick is { Button: >= 0 } pressed)
                     {
                         cursor = pressed.Row;
-                        bool wanted = pressed.Button == OnIndex;
-                        if (wanted != on)
+                        var wanted = (MemoryAccess)pressed.Button;
+                        if (wanted != mode)
                         {
-                            _setMemory!(wanted);
+                            _setMemoryMode!(wanted);
                         }
 
                         continue;

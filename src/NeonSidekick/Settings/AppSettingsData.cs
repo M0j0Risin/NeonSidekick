@@ -153,13 +153,16 @@ public sealed class AppSettingsData
     public string ImageThumbnailSize { get; set; } = UI.ThumbnailSize.Default;
 
     /// <summary>
-    /// Whether long-term memory is on: the model is offered <c>save_memory</c> and sees what is
-    /// remembered on every turn, and <c>/remember</c> works. Off leaves <c>memory.json</c>
-    /// untouched; <c>/memory forget</c> erases it. The toolbar wears 💾 while it is on (2026-09-22), whose
-    /// double-click is <c>/memory</c> — the typed word works either way. No environment variable,
-    /// like the other switches.
+    /// What the model may do with long-term memory (2026-10-04, the user's ask: the Memory switch, a bool until then, became three
+    /// modes). One of <see cref="App.MemoryMode.Names"/>: <c>read-write</c> (the default: the model is offered <c>save_memory</c> and
+    /// <c>recall_memory</c> and sees what is remembered on every turn), <c>read-only</c> (<c>recall_memory</c> alone, the save sentences
+    /// out of the prompt; <c>/remember</c> and <c>/memory</c> stay the user's) or <c>disabled</c> (neither, no section, and <c>/remember</c>
+    /// refused; <c>memory.json</c> untouched, <c>/memory forget</c> erases it). Anything else reads as the default
+    /// (<see cref="App.MemoryMode.Resolve"/>). No migration from the old <c>Memory</c> key (the user's call, the earlier renames'):
+    /// a saved <c>false</c> is skipped and read-write stands. The toolbar wears 💾 while it is not disabled (2026-09-22), whose
+    /// double-click is <c>/memory</c>. No environment variable, like the other switches.
     /// </summary>
-    public bool Memory { get; set; } = true;
+    public string MemoryMode { get; set; } = App.MemoryMode.Default;
 
     /// <summary>
     /// What <c>/profile add</c> copies from the current profile: <c>basic</c> (the default: the settings and

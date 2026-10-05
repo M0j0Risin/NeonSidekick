@@ -2811,7 +2811,10 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /cmdlist or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
     private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + "   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ";
-    private static readonly string MemoryPaneTitle = MemoryMenu.Title + "   " + MemoryMenu.OnButton + "    " + MemoryMenu.OffButton + " ";   // Memory's switch on the title row (2026-10-03)
+    /// <summary>The Memory mode row's saved notice for <paramref name="mode"/> (2026-10-04).</summary>
+    private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
+
+    private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + "   " + string.Join("    ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
     private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths) + "   " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
 
     /// <summary>
@@ -3699,7 +3702,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Remember_WithMemoryOff_SavesNothing_AndSaysSo()
     {
-        _settings.Update(d => d.Memory = false);
+        _settings.Update(d => d.MemoryMode = "disabled");
         PushLine("/remember my name is Chris");
         PushLine("/exit");
 
@@ -3708,6 +3711,20 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.MemoryOffNotice, output);
         Assert.Equal(0, _memory.Count);
         Assert.False(File.Exists(_memory.FilePath));
+    }
+
+    /// <summary>Memory mode read-only (2026-10-04, the user's call): about the model alone, so /remember, the user's own hand, still saves.</summary>
+    [Fact]
+    public async Task Remember_WithMemoryReadOnly_StillSaves()
+    {
+        _settings.Update(d => d.MemoryMode = "read-only");
+        PushLine("/remember my name is Chris");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · (💾 remembered: my name is Chris)", output);
+        Assert.Equal(1, _memory.Count);
     }
 
     [Fact]
@@ -4177,7 +4194,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotContain("Opening working-directory call", output);   // the opening calls left the Prompt tab (2026-09-26)
-        Assert.Contains("── Memory ── on, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
+        Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
         Assert.Contains("── Operating rules ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
         Assert.Matches(ToolsHeading("Files (15)", null, "search_files"), output);
@@ -4902,7 +4919,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Turn_MemoryOff_OffersTheStandingToolsOnly_AndTheOldPrompt()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.Memory = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "disabled"; });
         _memory.Add("Their name is Chris.");
         _chat.EnqueueText("Hello.");
         PushLine("hi");
@@ -6066,7 +6083,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("\n" + HeadingRow("── Operating rules ── default (LLM offer tools is off)") + "\n" + Indent(Assistant.MarkdownRule) + "\n \n", output);
-        Assert.Contains("\n" + HeadingRow("── Memory ── on, 0 facts remembered") + "\n" + Indent(MemoryPrompt.DirectiveWithoutTool) + "\n", output);
+        Assert.Contains("\n" + HeadingRow("── Memory ── read-write, 0 facts remembered") + "\n" + Indent(MemoryPrompt.DirectiveWithoutTool) + "\n", output);
         Assert.DoesNotContain("Reply format", output);   // 2026-09-26: the rules say it
         Assert.DoesNotContain("Opening clock call", output);
         // No tool offered (2026-09-26): no group at all, the tab's one line says why.
@@ -6162,9 +6179,9 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane: the title, a spacer, the rows with the pointer, the keys on the hint row.
-        Assert.Contains(rule + "\n" + Titled(MemoryPaneTitle) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + rule + "\n" + Row(MemoryMenu.SwitchKeys) + "\n", output);
+        Assert.Contains(rule + "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + rule + "\n" + Row(MemoryMenu.SwitchKeys) + "\n", output);
         // Re-shown after the removal with the notice as the status line, not a transcript line.
-        Assert.Contains("\n" + Titled(MemoryPaneTitle) + "\n  · (💾 removed: Their name is Chris.)\n▸ " + rows[1] + "\n" + rule + "\n", output);
+        Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n  · (💾 removed: Their name is Chris.)\n▸ " + rows[1] + "\n" + rule + "\n", output);
         Assert.DoesNotContain(SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys), output);
         Assert.Equal(new[] { "They live in Leeds." }, new MemoryStore(_settings.ProfileDirectory).Snapshot());
         Assert.Empty(_chat.Requests);
@@ -6273,13 +6290,17 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("copy work overwrite please"));
         Assert.Equal("forget", ChatScreen.MemoryForgetWord);
         Assert.Equal("edit", ChatScreen.MemoryEditWord);
-        Assert.Equal(new MemoryAction(MemoryActionKind.On), ChatScreen.ParseMemoryArgs("on"));   // 2026-10-03, the user's ask
-        Assert.Equal(new MemoryAction(MemoryActionKind.Off), ChatScreen.ParseMemoryArgs(" OFF "));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadWrite), ChatScreen.ParseMemoryArgs("on"));   // 2026-10-03, the user's ask; read-write's alias since 2026-10-04
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs(" OFF "));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadOnly), ChatScreen.ParseMemoryArgs("Read-Only"));   // 2026-10-04, the user's ask
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadWrite), ChatScreen.ParseMemoryArgs("read-write"));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs("disabled"));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("read-only now"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("on off"));
         Assert.Equal("on", ChatScreen.MemoryOnWord);
         Assert.Equal("off", ChatScreen.MemoryOffWord);
-        Assert.Equal([new CompletionItem("on", ChatScreen.MemoryOnNote), new CompletionItem("off", ChatScreen.MemoryOffNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("copy", ChatScreen.MemoryCopyNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
-        Assert.Equal([new CompletionItem("on", ChatScreen.MemoryOnNote), new CompletionItem("off", ChatScreen.MemoryOffNote)], ChatScreen.ArgumentItems("/memory", "o", Sources()));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("disabled", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("copy", ChatScreen.MemoryCopyNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
         Assert.Equal([new CompletionItem("copy", ChatScreen.MemoryCopyNote)], ChatScreen.ArgumentItems("/memory", "co", Sources()));
         Assert.Equal([new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "ED", Sources()));
@@ -6329,53 +6350,60 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// /memory on and off (2026-10-03, the user's ask): the Memory row's own save and notice; the word already in force says
-    /// unchanged. What is remembered stays either way.
+    /// /memory's mode words (2026-10-03 as on and off, the user's ask; Memory mode's three since 2026-10-04, on and off kept as
+    /// aliases): the Memory mode row's own save and notice; the word already in force says unchanged. What is remembered stays.
     /// </summary>
     [Fact]
-    public async Task Memory_OnAndOff_SwitchTheSetting_AndSayUnchangedWhenItAlreadyIs()
+    public async Task Memory_ModeWords_SetTheSetting_AndSayUnchangedWhenItAlreadyIs()
     {
         _memory.Add("Their name is Chris.");
         PushLine("/memory off");
-        PushLine("/memory off");
+        PushLine("/memory disabled");
+        PushLine("/memory read-only");
         PushLine("/memory on");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.True(_settings.Current.Memory);
-        int off = output.IndexOf(SettingsMenu.SavedNotice(SettingsField.Memory, new AppSettingsData { Memory = false }, _settings.ProfileDirectory), StringComparison.Ordinal);
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        int off = output.IndexOf(Saved("disabled"), StringComparison.Ordinal);
         int unchanged = output.IndexOf("  · " + SettingsMenu.UnchangedNotice, off, StringComparison.Ordinal);
-        int on = output.IndexOf(SettingsMenu.SavedNotice(SettingsField.Memory, new AppSettingsData { Memory = true }, _settings.ProfileDirectory), StringComparison.Ordinal);
-        Assert.True(off > 0 && unchanged > off && on > unchanged, output);
+        int readOnly = output.IndexOf(Saved("read-only"), unchanged, StringComparison.Ordinal);
+        int on = output.IndexOf(Saved("read-write"), readOnly, StringComparison.Ordinal);
+        Assert.True(off > 0 && unchanged > off && readOnly > unchanged && on > readOnly, output);
         Assert.Equal(1, _memory.Count);
         Assert.Empty(_chat.Requests);
     }
 
     /// <summary>
-    /// The 💾 pane's switch (2026-10-03, the user's ask: ask/yolo's shape): F switches Memory off and the list comes back with
-    /// off lit, N on again; the pane opens with nothing remembered too, on its one dim row, Enter there removing nothing.
+    /// The 💾 pane's buttons (2026-10-03, the user's ask: ask/yolo's shape; Memory mode's three since 2026-10-04): D sets disabled and
+    /// the list comes back with it lit, R read-only, W read-write again; the pane opens with nothing remembered too, on its one dim
+    /// row, Enter there removing nothing.
     /// </summary>
     [Fact]
-    public async Task Memory_OnThePane_TheTitleButtonsSwitchMemory_AndAnEmptyStoreStillOpens()
+    public async Task Memory_OnThePane_TheTitleButtonsSetMemoryMode_AndAnEmptyStoreStillOpens()
     {
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/memory");
-        _console.Input.PushKey(Keys.Char('f'));    // off
+        _console.Input.PushKey(Keys.Char('d'));    // disabled
         _console.Input.PushKey(Keys.Enter);        // the empty row: nothing
-        _console.Input.PushKey(Keys.Char('n'));    // on again
+        _console.Input.PushKey(Keys.Char('r'));    // read-only
+        _console.Input.PushKey(Keys.Char('w'));    // read-write again
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.True(_settings.Current.Memory);
-        Assert.Contains("\n" + Titled(MemoryPaneTitle) + "\n \n▸ " + MemoryMenu.EmptyNotice + "\n", output);
+        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + MemoryMenu.EmptyNotice + "\n", output);
+        Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.Disabled)) + "\n", output);
         Assert.Contains(Row(MemoryMenu.EmptySwitchKeys), output);
-        int off = output.IndexOf(SettingsMenu.SavedNotice(SettingsField.Memory, new AppSettingsData { Memory = false }, _settings.ProfileDirectory), StringComparison.Ordinal);
-        Assert.True(off > 0 && output.IndexOf(SettingsMenu.SavedNotice(SettingsField.Memory, new AppSettingsData { Memory = true }, _settings.ProfileDirectory), off, StringComparison.Ordinal) > off, output);
+        int off = output.IndexOf(Saved("disabled"), StringComparison.Ordinal);
+        int readOnly = output.IndexOf(Saved("read-only"), off, StringComparison.Ordinal);
+        Assert.True(off > 0 && readOnly > off && output.IndexOf(Saved("read-write"), readOnly, StringComparison.Ordinal) > readOnly, output);
         Assert.DoesNotContain("  · " + MemoryMenu.EmptyNotice, output);   // no transcript line: the pane said it
         Assert.Empty(_chat.Requests);
     }
@@ -6398,7 +6426,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MemoryLabels_ArePinned()
     {
-        Assert.Equal("💾 Memory is off; turn it on in /settings (the Memory row).", ChatScreen.MemoryOffNotice);
+        Assert.Equal("💾 Memory mode is disabled; set it in /settings (the Memory mode row) or with /memory read-write.", ChatScreen.MemoryOffNotice);
         Assert.Equal("Memory is full (200 entries); /memory forget clears it.", ChatScreen.MemoryFullError);
         Assert.Equal("(💾 nothing to forget)", ChatScreen.NothingToForgetNotice);
         Assert.Equal("(💾 remembered: x)", ChatScreen.RememberedNotice("x"));
@@ -8710,11 +8738,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPoliceOutsidePaths));   // the same text either way
         Assert.True(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = false }));
         Assert.False(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = true }));
-        Assert.All(new[] { "settings", "cmdlist", "police", "log", "liveview", "comfyview", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { Memory = false, ShellCommandPolicy = "off" })));
+        Assert.All(new[] { "settings", "cmdlist", "police", "log", "liveview", "comfyview", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
         // The disk on the slab while Memory is off (later on 2026-10-03, the user's ask: always drawn, telling which).
-        Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { Memory = false }));
-        Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { Memory = true }));
-        (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { Memory = false });
+        Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "disabled" }));
+        Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-only" }));   // 2026-10-04: read-only is still memory
+        Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-write" }));
+        (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { MemoryMode = "disabled" });
         Assert.Equal("📊 💾", strip);
         Assert.Equal([1], off);
         Assert.All(ToolsText.SwitchWords.Where(w => w != "shell"), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default
@@ -8746,7 +8775,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.Memory = false; d.ShellPoliceOutsidePaths = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPoliceOutsidePaths = false; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -8800,7 +8829,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),                                                    // closed, unchanged: the draft back
             input => input.Push(Keys.Char('!'), Keys.Enter),
             Line("/settings"),
-            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape),   // General's fourth row, Memory (since 2026-10-01): its page on "on", off picked; the pane closed: the disk on its slab
+            input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // General's fourth row, Memory mode (since 2026-10-01): its page on read-write, disabled picked; the pane closed: the disk on its slab
             input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 🔒 still at 27: the list
             Key(Keys.Escape),
             Line("/tools"),
@@ -8814,9 +8843,9 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);   // the disk there with Memory on and off alike
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false), cwd, 239), output);
-        Assert.False(_settings.Current.Memory);
+        Assert.Equal("disabled", _settings.Current.MemoryMode);
         Assert.False(_settings.Current.ShellPoliceOutsidePaths);
-        string memory = "\n" + Titled(MemoryPaneTitle) + "\n";
+        string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
@@ -9431,10 +9460,10 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page (2026-09-17)
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Enter);         // off
+        _console.Input.PushKey(Keys.Enter);         // read-only (Memory mode's second, 2026-10-04)
         _console.Input.PushKey(Keys.Right);   // the LLM tab (second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);          // LLM model (the scan mode and the URL above it)
@@ -9451,7 +9480,7 @@ public partial class ChatScreenTests : IDisposable
         const string strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n \n▸ Profile", output);
         Assert.Contains(rule + "\n" + Row(SettingsMenu.TabKeys) + "\n", output);
-        Assert.Contains("\n" + Titled(strip) + "\n  · Memory: off\n", output);
+        Assert.Contains("\n" + Titled(strip) + "\n  · Memory mode: read-only\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · 🖥️ LLM model: qwen3\n", output);
         // The typed edit ran in the pane: the edit keys in the hint row, no › line in the transcript.
         Assert.Contains(rule + "\n" + Row(SettingsMenu.EditKeys), output);
@@ -9459,7 +9488,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("  · 🖥️ LLM model: qwen3", output.Replace("\n" + Titled(strip) + "\n  · 🖥️ LLM model: qwen3", ""));
         Assert.DoesNotContain(SettingsMenu.PromptTitle(SettingsMenu.Title, SettingsMenu.TitleKeys), output);
         Assert.Equal("qwen3", _settings.Current.LlmModel);
-        Assert.False(_settings.Current.Memory);
+        Assert.Equal("read-only", _settings.Current.MemoryMode);
         // ESC: the normal pane again, and the next line is read as usual — the saved model on the row's right.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null), model: "qwen3") + "\n", output);
     }
@@ -9497,7 +9526,7 @@ public partial class ChatScreenTests : IDisposable
         // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
         Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
-        Assert.Contains("\n" + HeadingRow("── Memory ── on, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
+        Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
         Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
         Assert.DoesNotContain("Voice directive", output);
         Assert.DoesNotContain("Also sent", output);
@@ -9572,9 +9601,9 @@ public partial class ChatScreenTests : IDisposable
         // 12 rows: 8 overlay rows, 6 of content, one of them the more row: the first page is five lines.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
         Assert.Contains("\n" + MenuPane.MoreHint + "\n" + rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph) + "\n", output);   // speech on here: the strip stays under the pane's hint
-        Assert.DoesNotContain("── Memory ── on", output[..output.IndexOf(MenuPane.MoreHint, StringComparison.Ordinal)]);
+        Assert.DoesNotContain("── Memory ── read-write", output[..output.IndexOf(MenuPane.MoreHint, StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
-        Assert.Contains("── Memory ── on, directive (the list rides the opening recall_memory call) ─", output);
+        Assert.Contains("── Memory ── read-write, directive (the list rides the opening recall_memory call) ─", output);
         Assert.Contains("── Voice directive ── vocalia.md (20 chars), included (speech output on, TTS ready), always last ─", output);
         Assert.DoesNotContain("Their name is Chris.", output);
         Assert.DoesNotContain("Request — ", output);
@@ -9583,7 +9612,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task WithGeometry_SysPromptWithMemoryOff_SaysSo_InBothTabs()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.Memory = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "disabled"; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 110;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
@@ -9593,7 +9622,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + HeadingRow("── Memory ── off, not included") + "\n \n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
+        Assert.Contains("\n" + HeadingRow("── Memory ── disabled, not included") + "\n \n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
         Assert.DoesNotContain("Opening memory call", output);   // 2026-09-26
         Assert.DoesNotContain(MemoryPrompt.Directive, output);
         Assert.DoesNotContain(RecallMemoryTool.ToolName + " →", output);
@@ -9613,7 +9642,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[0] + "\n", output);   // a line per notice: the persona is lines since 2026-10-03
         Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[^1] + "\n", output);
         Assert.Contains("  · Operating rules — default", output);
-        Assert.Contains("  · Memory — on, directive (the list rides the opening recall_memory call)", output);
+        Assert.Contains("  · Memory — read-write, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
         Assert.Contains("  · Files (17)", output);
@@ -9704,16 +9733,16 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/settings");
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // Memory (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
+        _console.Input.PushKey(Keys.Down);          // Memory mode (General, fourth row: New profile mode sits under Profile, Memory under Working directory since 2026-10-01)
         _console.Input.PushKey(Keys.Enter);         // its on/off page
         _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Enter);         // off: the list again
+        _console.Input.PushKey(Keys.Enter);         // read-only: the list again
         _console.Input.PushKey(Keys.Escape);        // closed
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("\n  · Memory: off\n", output);
+        Assert.Contains("\n  · Memory mode: read-only\n", output);
         // The screen's hold; the list (kept), the on/off page (kept), the list again (kept), the close (the standing hold again).
         Assert.Equal(new[] { true, true, true, true, true }, owned);
         Assert.Equal(new[] { true, true, true, true, true }, wheel);
@@ -9877,13 +9906,13 @@ public partial class ChatScreenTests : IDisposable
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
         int sessions = output.IndexOf("\n" + Titled(SessionsMenu.Title) + "\n", StringComparison.Ordinal);
         int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
-        int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle) + "\n", StringComparison.Ordinal);
+        int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
         int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
         int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
-        Assert.Equal(1, output.Split("\n" + Titled(MemoryPaneTitle) + "\n").Length - 1);
+        Assert.Equal(1, output.Split("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n").Length - 1);
         Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
@@ -9975,7 +10004,7 @@ public partial class ChatScreenTests : IDisposable
         string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Options ") + "\n";
-        string memory = "\n" + Titled(MemoryPaneTitle) + "\n";
+        string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string usage = "\n" + Titled(UsageText.Label) + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         string police = "\n" + Titled(PoliceTitle) + "\n";
@@ -10558,7 +10587,7 @@ public partial class ChatScreenTests : IDisposable
     private static Regex GroupHeading(string label) =>
         new("\n── " + Regex.Escape(label) + @" · \d+( of \d+)?");
 
-    /// <summary>A heading rule as the pane prints it (2026-10-03): <paramref name="text"/> (<c>── Memory ── off, not included</c>), a space, the rule to the fixture's 240 columns.</summary>
+    /// <summary>A heading rule as the pane prints it (2026-10-03): <paramref name="text"/> (<c>── Memory ── disabled, not included</c>), a space, the rule to the fixture's 240 columns.</summary>
     private static string HeadingRow(string text, int width = 240) => text + " " + new string(ScreenPane.RuleGlyph, width - TextCells.Width(text) - 1);
 
     /// <summary>Text under a Prompt-tab heading as the pane prints it (2026-10-03): every line two cells in.</summary>

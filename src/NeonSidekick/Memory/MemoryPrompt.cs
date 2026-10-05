@@ -39,6 +39,12 @@ public static class MemoryPrompt
     public const string RecallSentence =
         "What you remember arrives as the result of " + Llm.Tools.RecallMemoryTool.ToolName + " at the start of the conversation; call it again when the list is no longer in view.";
 
+    /// <summary>
+    /// The directive under <c>Memory mode</c> read-only (2026-10-04, the user's ask): the memory exists and where the list arrives,
+    /// but no save sentence, since <c>save_memory</c> is not offered. Pinned.
+    /// </summary>
+    public const string ReadOnlyDirective = DirectiveWithoutTool + " " + RecallSentence;
+
     /// <summary>Above the list, only when there is one.</summary>
     public const string Heading = "What you remember about the user, oldest first:";
 
@@ -70,16 +76,17 @@ public static class MemoryPrompt
 
     /// <summary>
     /// The prompt's memory section. With <paramref name="tools"/> the <see cref="Directive"/> alone —
-    /// the list rides the opening <c>recall_memory</c> pair. Without them <see cref="DirectiveWithoutTool"/>
+    /// the list rides the opening <c>recall_memory</c> pair — or, with <paramref name="save"/> false (<c>Memory mode</c>
+    /// read-only, 2026-10-04), <see cref="ReadOnlyDirective"/>. Without them <see cref="DirectiveWithoutTool"/>
     /// and, when there are any, the list under it (<see cref="Recalled"/>): no tool can carry it, so
     /// the prompt does.
     /// </summary>
-    public static string Section(IReadOnlyList<string> memories, bool tools = true)
+    public static string Section(IReadOnlyList<string> memories, bool tools = true, bool save = true)
     {
         ArgumentNullException.ThrowIfNull(memories);
         if (tools)
         {
-            return Directive;
+            return save ? Directive : ReadOnlyDirective;
         }
 
         return memories.Count == 0 ? DirectiveWithoutTool : DirectiveWithoutTool + "\n\n" + Recalled(memories);

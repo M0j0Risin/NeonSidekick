@@ -92,7 +92,7 @@ What to use instead:
 | `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` need the TUI, or the files under `<home>\profiles`. |
 | `/settings`, `//`, `/tools`, `/skills` (the pane, its revert and `/skills purge`; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. A key typed into `profile.json` in plain text (LLM, Claude or Home Assistant API key) is encrypted (DPAPI) the next time the profile loads. Environment variables override some values for one run. |
 | `/remember <text>` | Ask in a message ("Remember that …"); the model has the `save_memory` tool. |
-| `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. `/memory on` / `off` need the TUI, or `Memory` in `profile.json`. |
+| `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. `/memory read-write` / `read-only` / `disabled` need the TUI, or `MemoryMode` in `profile.json`. |
 | `/sessions` | Ask the model to search past sessions (the sessions tool is offered when *Session tool* is on). Restoring a session needs the TUI. |
 | `/imagine …` | Ask the model to make the picture (`generate_image` is offered when ComfyUI is set up). The prompt is then the model's, not sent word for word. |
 | `/loop …` | Repeat the line in the input, or loop in the calling script. |

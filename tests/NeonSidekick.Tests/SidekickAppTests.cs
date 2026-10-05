@@ -829,7 +829,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_MemoryOff_OffersTheClockToolsOnly()
     {
         ServerOn1234("llama");
-        _settings.Update(d => d.Memory = false);
+        _settings.Update(d => d.MemoryMode = "disabled");
         _chat.EnqueueText("Hi.");
 
         await Headless("hello\n");

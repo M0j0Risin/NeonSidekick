@@ -571,9 +571,10 @@ public sealed class Assistant
     /// false drops <see cref="DownloadRule"/>, and <paramref name="recall"/> false (<c>recall_memory</c> off while memory
     /// is on) puts the list into the memory section as under <paramref name="tools"/> false, since no opening call carries it;
     /// the third (2026-09-20) is a whole group: <paramref name="timers"/> false (no timer tool offered — headless, or the
-    /// three switched off) drops <see cref="TimerRule"/>.
+    /// three switched off) drops <see cref="TimerRule"/>. With <paramref name="save"/> false (<c>Memory mode</c> read-only, 2026-10-04)
+    /// the memory directive loses its save sentences (<see cref="MemoryPrompt.ReadOnlyDirective"/>).
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool advisor = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
@@ -586,7 +587,7 @@ public sealed class Assistant
 
         if (memories is not null)
         {
-            sb.Append("\n\n").Append(MemoryPrompt.Section(memories, tools && recall));
+            sb.Append("\n\n").Append(MemoryPrompt.Section(memories, tools && recall, save));
         }
 
         if (tools && skills is not null)
