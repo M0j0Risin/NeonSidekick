@@ -17,7 +17,7 @@ namespace NeonSidekick.App;
 /// window or closing it as its chord does; the user's order with them, the chart moved behind the log, and later that day
 /// behind the two viewers, the last glyph on the row and the checklist. Two more on 2026-10-04 (the user's ask): 🧮 Themes after
 /// the profile (<c>/theme</c>'s picker) and 🪟 the Comfy thumb viewer after the Comfy viewer (<c>/comfy thumbs</c>, opening or
-/// closing the thumbnail browser) — 🪟 was SQL's until then, which took 🛢️. One more on 2026-10-05 (the user's ask): ⏳ Process
+/// closing the thumbnail browser) — 🪟 was SQL's until then, which took 🛢️. One more on 2026-10-05 (the user's ask): ⚡ Process
 /// after the log, <c>/process</c>'s list of the model's background processes (a pane, not a window).
 /// </summary>
 public static class ToolbarItems
@@ -58,7 +58,7 @@ public static class ToolbarItems
 
     // The windows (2026-10-03, the user's ask): each opens or closes its window as its Ctrl+Alt chord does.
     public const string Log = "log";
-    public const string Process = "process";         // 2026-10-05, the user's ask: ⏳, /process's list (a pane)
+    public const string Process = "process";         // 2026-10-05, the user's ask: ⚡, /process's list (a pane)
     public const string LiveView = "liveview";
     public const string ComfyView = "comfyview";
     public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs

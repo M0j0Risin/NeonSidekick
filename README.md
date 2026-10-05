@@ -242,7 +242,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
 | 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page (📸's has a **watch** button (W) that turns `/camera watch` on or off) |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
-| ⏳ | always | `/process`, the background processes' list |
+| ⚡ | always | `/process`, the background processes' list |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
@@ -1297,7 +1297,7 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 
 #### Process window
 
-`/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⏳) lists the processes, and Enter or a double-click on one there opens it here.
+`/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⚡) lists the processes, and Enter or a double-click on one there opens it here.
 
 * **One window:** `/process` with another id switches it to that process, in the same place on screen.
 * **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. A process that has ended ignores Ctrl+K. The `/process` list's **✖ kill** button (or **K**) stops the highlighted one the same way, after a yes/no.

@@ -71,7 +71,7 @@ internal sealed class ProcessMenu
         return ShellText.ListHeader(sessions.Count, sessions.Count(s => !s.HasExited));
     }
 
-    /// <summary>The question before the kill: <c>⏳ Stop proc_3f2a1b (npm run dev)?</c></summary>
+    /// <summary>The question before the kill: <c>⚡ Stop proc_3f2a1b (npm run dev)?</c></summary>
     public static string KillPrompt(ProcessSession session)
     {
         ArgumentNullException.ThrowIfNull(session);

@@ -59,12 +59,12 @@ public sealed class ProcessMenuTests : IDisposable
     [Fact]
     public void Strings_ArePinned()
     {
-        Assert.Equal("⏳ Process", ProcessMenu.Title);
+        Assert.Equal("⚡ Process", ProcessMenu.Title);
         Assert.Equal("Enter = open window · k = kill · ESC = close", ProcessMenu.Keys);
         Assert.Equal("✖ kill", ProcessMenu.KillButton);
         Assert.Equal('k', ProcessMenu.KillKey);
         Assert.Equal(ChatScreen.KeptNotice, ProcessMenu.KeptNotice);
-        Assert.Equal("(⏳ stopping proc_3f2a1b)", ProcessMenu.StoppingNotice("proc_3f2a1b"));
+        Assert.Equal("(⚡ stopping proc_3f2a1b)", ProcessMenu.StoppingNotice("proc_3f2a1b"));
     }
 
     [Fact]
@@ -77,8 +77,8 @@ public sealed class ProcessMenuTests : IDisposable
         Assert.Equal(Spectre.Console.Markup.Escape(ProcessWindowText.Row(running)), ProcessMenu.RowMarkup(running));
         Assert.Equal(Theme.DimMarkup(ProcessWindowText.Row(done)), ProcessMenu.RowMarkup(done));
         Assert.Equal("2 processes (1 running)", ProcessMenu.Caption(_registry.List()));
-        Assert.Equal("⏳ Stop " + running.Id + " (" + ProcessWindowText.Label(running.Label) + ")?", ProcessMenu.KillPrompt(running));
-        Assert.Equal("(⏳ " + done.Id + " has ended: exited 0)", ProcessMenu.EndedNotice(done));
+        Assert.Equal("⚡ Stop " + running.Id + " (" + ProcessWindowText.Label(running.Label) + ")?", ProcessMenu.KillPrompt(running));
+        Assert.Equal("(⚡ " + done.Id + " has ended: exited 0)", ProcessMenu.EndedNotice(done));
     }
 
     [Fact]

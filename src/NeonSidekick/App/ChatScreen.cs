@@ -1420,10 +1420,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The process item (2026-10-05, the user's ask): <c>/process</c>'s list of the model's background processes, after the log on
-    /// the strip — a pane, not a window, so a second double-click off the open pane closes it as any pane's does. The hourglass is
-    /// the queue's notice glyph too; no other toolbar item wears it. Pinned.
+    /// the strip — a pane, not a window, so a second double-click off the open pane closes it as any pane's does. The bolt is the
+    /// process alert's glyph too (<see cref="TranscriptRenderer.ProcessGlyph"/>); ⏳ for a few hours, the queue's glyph, until the user's call. Pinned.
     /// </summary>
-    public const string ProcessToolGlyph = "⏳";
+    public const string ProcessToolGlyph = "⚡";
 
     /// <summary>The lines the window items run (2026-10-03): the typed commands their chords run. Pinned.</summary>
     public const string LogToolLine = "/log";

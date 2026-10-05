@@ -140,12 +140,12 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(ProcessWindowText.ListHint, output);   // the pane's keys say it now
     }
 
-    /// <summary>The toolbar's ⏳ (2026-10-05, the user's ask): a double-click runs the bare <c>/process</c>, none yet its line.</summary>
+    /// <summary>The toolbar's ⚡ (2026-10-05, the user's ask): a double-click runs the bare <c>/process</c>, none yet its line.</summary>
     [Fact]
     public async Task Process_TheToolbarsHourglass_RunsTheBareCommand()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Process]; });
-        _geometry = new ScreenGeometry(() => null, () => 100);   // the toolbar at 103, ⏳ at 0
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the toolbar at 103, ⚡ at 0
         StepsWhenIdle(input => input.PushClick(0, 103), input => input.PushClick(1, 103), Line("/exit"));
 
         string output = await RunAsync();

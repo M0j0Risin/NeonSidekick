@@ -18,7 +18,7 @@ public sealed class ToolbarItemsTests
             "shell", "files", "web", "claude", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "postgres", "unc", "ha", "comfy", "camera", "print",
             "log", "process", "liveview", "comfyview", "comfythumbs", "perf", "path",
         ], ToolbarItems.Names);
-        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⏳ 📺 🎞️ 🪟 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 📺 🎞️ 🪟 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
         Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
@@ -96,7 +96,7 @@ public sealed class ToolbarItemsTests
         Assert.Equal("[[ ]] 🏠  HA                      " + Theme.DimMarkup("/tools ha"), ToolbarItems.Label("ha", false));
         Assert.Equal("[[ ]] 🎨  ComfyUI                 " + Theme.DimMarkup("/tools comfy"), ToolbarItems.Label("comfy", false));
         Assert.Equal("[[ ]] 📄  Log                     " + Theme.DimMarkup("/log"), ToolbarItems.Label("log", false));
-        Assert.Equal("[[ ]] ⏳  Process                 " + Theme.DimMarkup("/process"), ToolbarItems.Label("process", false));   // 2026-10-05, the user's ask
+        Assert.Equal("[[ ]] ⚡  Process                 " + Theme.DimMarkup("/process"), ToolbarItems.Label("process", false));   // 2026-10-05, the user's ask
         Assert.Equal("[[ ]] 📺  Live viewer             " + Theme.DimMarkup("/camera live"), ToolbarItems.Label("liveview", false));
         Assert.Equal("[[ ]] 🎞️  Comfy viewer            " + Theme.DimMarkup("/comfy view"), ToolbarItems.Label("comfyview", false));
     }
