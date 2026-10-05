@@ -63,6 +63,63 @@ public sealed class SqliteWriteGateTests
         Assert.Contains(part, refused);
     }
 
+    [Theory]
+    [InlineData("INSERT INTO t VALUES (1)", SqliteStatementKind.Data)]
+    [InlineData("replace into t values (1)", SqliteStatementKind.Data)]
+    [InlineData("UPDATE t SET a = 1", SqliteStatementKind.Data)]
+    [InlineData("DELETE FROM t RETURNING *", SqliteStatementKind.Data)]
+    [InlineData("WITH c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c LIMIT 5) INSERT INTO t SELECT x FROM c", SqliteStatementKind.Data)]
+    [InlineData("WITH RECURSIVE c AS (SELECT 1), d AS MATERIALIZED (VALUES (2)) DELETE FROM t WHERE a IN (SELECT * FROM c)", SqliteStatementKind.Data)]
+    [InlineData("WITH c AS (SELECT 1) SELECT * FROM c", SqliteStatementKind.Read)]
+    [InlineData("CREATE TABLE t (a)", SqliteStatementKind.Create)]
+    [InlineData("CREATE TABLE t AS SELECT * FROM u", SqliteStatementKind.Create)]
+    [InlineData("CREATE UNIQUE INDEX i ON t (a)", SqliteStatementKind.Create)]
+    [InlineData("CREATE VIRTUAL TABLE f USING fts5(body)", SqliteStatementKind.Create)]
+    [InlineData("CREATE TRIGGER tr AFTER INSERT ON t BEGIN DELETE FROM u; END", SqliteStatementKind.Create)]
+    [InlineData("ALTER TABLE t RENAME COLUMN a TO b", SqliteStatementKind.Alter)]
+    [InlineData("DROP VIEW IF EXISTS v", SqliteStatementKind.Drop)]
+    [InlineData("VACUUM", SqliteStatementKind.Upkeep)]
+    [InlineData("REINDEX", SqliteStatementKind.Upkeep)]
+    [InlineData("ANALYZE t", SqliteStatementKind.Upkeep)]
+    [InlineData("PRAGMA user_version = 3", SqliteStatementKind.Pragma)]
+    [InlineData("SELECT 1", SqliteStatementKind.Read)]
+    [InlineData("(SELECT 1)", SqliteStatementKind.Read)]
+    [InlineData("VALUES (1)", SqliteStatementKind.Read)]
+    [InlineData("EXPLAIN QUERY PLAN DELETE FROM t", SqliteStatementKind.Read)]
+    public void Classify_ByTheStatement_AWithByWhatFollowsIt(string sql, SqliteStatementKind kind) => Assert.Equal(kind, SqliteWriteGate.Classify(sql));
+
+    [Fact]
+    public void Check_RefusesAKindNotTicked_NamingWhatIs()
+    {
+        IReadOnlyList<SqliteStatementKind> data = [SqliteStatementKind.Data];
+        Assert.Null(SqliteWriteGate.Check("WITH c AS (SELECT 1) INSERT INTO t SELECT * FROM c", data));
+        Assert.Equal(
+            "Error: the SQL is dropping (DROP TABLE, INDEX, VIEW, TRIGGER), which the user has not allowed; sqlite_execute may run changing data — the user ticks more in SQLite statements allowed on the SQLite tab of /tools",
+            SqliteWriteGate.Check("DROP TABLE t", data));
+        Assert.Contains("is reading (SELECT, VALUES, EXPLAIN)", SqliteWriteGate.Check("SELECT 1", data));
+        Assert.Contains("may run changing data, settings —", SqliteWriteGate.Check("CREATE TABLE t (a)", [SqliteStatementKind.Data, SqliteStatementKind.Pragma]));
+        // The structural refusals come first, whatever is ticked.
+        Assert.StartsWith("Error: the SQL uses ATTACH", SqliteWriteGate.Check("ATTACH 'x.db' AS x", data));
+        Assert.Equal(SqliteText.UnknownStatement("FOO"), SqliteWriteGate.Check("FOO BAR"));
+        Assert.Null(SqliteWriteGate.Classify("WITH c AS (SELECT 1)"));
+    }
+
+    [Fact]
+    public void TheKinds_ChangingDataByDefault_ReadCaseBlind()
+    {
+        Assert.Equal(["data"], new AppSettingsData().SqliteStatementsAllowed);
+        Assert.Equal([SqliteStatementKind.Data], SqliteStatementKinds.Resolve((IReadOnlyList<string>?)null));
+        Assert.Equal([SqliteStatementKind.Create, SqliteStatementKind.Read], SqliteStatementKinds.Resolve([" READ ", "create", "nonsense"]));
+        Assert.Empty(SqliteStatementKinds.Resolve([]));
+        Assert.Equal(Enum.GetValues<SqliteStatementKind>().Length, SqliteStatementKinds.Names.Length);
+        Assert.Equal("changing data (INSERT, UPDATE, DELETE, REPLACE); settings (PRAGMA)", SqliteStatementKinds.Describe([SqliteStatementKind.Data, SqliteStatementKind.Pragma]));
+
+        string data = SqliteExecuteTool.DescribeFor([SqliteStatementKind.Data]);
+        Assert.Contains("only these kinds: changing data (INSERT, UPDATE, DELETE, REPLACE).", data);
+        Assert.DoesNotContain("With create", data);
+        Assert.Contains("With create it makes a new database file", SqliteExecuteTool.DescribeFor([SqliteStatementKind.Data, SqliteStatementKind.Create]));
+    }
+
     [Fact]
     public void TheMode_ParsesBothWords_AndFallsBackToReadOnly()
     {
@@ -91,7 +148,7 @@ public sealed class SqliteExecuteTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("neon-sqlite-write-").FullName;
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { SqliteTools = true, SqliteProtectionMode = "read-write", SqliteDatabasesOffered = ["shop"] };
+    private readonly AppSettingsData _settings = new() { SqliteTools = true, SqliteProtectionMode = "read-write", SqliteDatabasesOffered = ["shop"], SqliteStatementsAllowed = [.. SqliteStatementKinds.Names] };
     private readonly string _profile;
     private readonly string _work;
     private readonly string _shop;
@@ -297,11 +354,37 @@ public sealed class SqliteExecuteTests : IDisposable
     }
 
     [Fact]
+    public async Task TheTool_RunsOnlyTheTickedKinds_AndCreateNeedsCreating()
+    {
+        int asked = 0;
+        var tool = new SqliteExecuteTool(Access(), () => _settings, (_, _, _, _) =>
+        {
+            asked++;
+            return Task.FromResult<bool?>(true);
+        });
+        _settings.SqliteStatementsAllowed = ["data"];
+        Assert.StartsWith("Error: the SQL is dropping", await tool.RunAsync("DROP TABLE customers", null, [], null, false, CancellationToken.None));
+        Assert.Equal(SqliteText.CreateNotAllowed, await tool.RunAsync("INSERT INTO t VALUES (1)", "data/new.db", [], null, true, CancellationToken.None));
+        Assert.False(File.Exists(Path.Combine(_work, "data", "new.db")));
+        Assert.Equal(0, asked);   // refused before asking
+        Assert.StartsWith("Changed 1 row", await tool.RunAsync("DELETE FROM customers WHERE id = 1", null, [], null, false, CancellationToken.None));
+        Assert.Equal(1, asked);
+
+        _settings.SqliteStatementsAllowed = [];
+        Assert.Equal(SqliteText.NoKindsAllowed, await tool.RunAsync("DELETE FROM customers", null, [], null, false, CancellationToken.None));
+        Assert.Equal("1", Read(_shop, "SELECT count(*) FROM customers"));
+        Assert.Equal(1, asked);
+    }
+
+    [Fact]
     public void TheTurn_OffersExecute_OnlyUnderReadWrite_WithAPane()
     {
         var all = ChatScreen.SqliteTools(Access(), () => _settings, allow: null);
         Assert.Contains(SqliteExecuteTool.ToolName, ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));
         Assert.DoesNotContain(SqliteExecuteTool.ToolName, ChatScreen.SqliteToolsFor(all, _settings, pane: false).Select(t => t.Name));
+        _settings.SqliteStatementsAllowed = [];
+        Assert.DoesNotContain(SqliteExecuteTool.ToolName, ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));   // no kind ticked
+        _settings.SqliteStatementsAllowed = ["data"];
         _settings.SqliteProtectionMode = "read-only";
         Assert.Equal([SqliteDatabasesTool.ToolName, SqliteTablesTool.ToolName, SqliteDescribeTool.ToolName, SqliteQueryTool.ToolName], ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));
     }

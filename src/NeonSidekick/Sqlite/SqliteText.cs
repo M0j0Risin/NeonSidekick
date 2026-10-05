@@ -90,6 +90,19 @@ public static class SqliteText
     public const string NoStatement = "Error: give the statement to run in \"sql\"";
     public static string WriteNotOneStatement(int count) => $"Error: the SQL is {Invariant(count)} statements; sqlite_execute runs exactly one per call — send the next one in the next call";
     public static string WriteForbidden(string what, string why) => $"Error: the SQL uses {what}, which sqlite_execute refuses: {why}";
+    public static string UnknownStatement(string word) => $"Error: the SQL starts with {word}, which is no statement sqlite_execute runs";
+
+    /// <summary>A statement of a kind the user has not ticked: its kind, then what is allowed. Pinned.</summary>
+    public static string KindNotAllowed(SqliteStatementKind kind, IReadOnlyList<SqliteStatementKind> allowed)
+    {
+        ArgumentNullException.ThrowIfNull(allowed);
+        string may = allowed.Count == 0 ? "nothing" : string.Join(", ", allowed.Select(SqliteStatementKinds.Title));
+        return $"Error: the SQL is {SqliteStatementKinds.Title(kind)} ({SqliteStatementKinds.Statements(kind)}), which the user has not allowed; sqlite_execute may run {may} — the user ticks more in SQLite statements allowed on the SQLite tab of /tools";
+    }
+
+    public const string CreateNotAllowed = "Error: \"create\" makes a new database, and the user has not allowed creating (SQLite statements allowed on the SQLite tab of /tools)";
+    public const string NoKindsAllowed = "Error: the user has allowed no kind of statement for sqlite_execute (SQLite statements allowed on the SQLite tab of /tools)";
+
     public const string OwnTransaction = "each call is a transaction of its own, committed when its statement succeeds";
     public const string AnotherFile = "it reaches a file other than this database";
     public const string Corrupts = "it can corrupt the database file";

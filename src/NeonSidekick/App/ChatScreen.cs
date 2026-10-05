@@ -5073,14 +5073,16 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What a turn may offer of the SQLite tools (2026-10-05, <see cref="DockerToolsFor"/>'s shape): the reads always;
-    /// <c>sqlite_execute</c> only while <c>SQLite protection mode</c> is <c>read-write</c> and <paramref name="pane"/> can ask —
+    /// <c>sqlite_execute</c> only while <c>SQLite protection mode</c> is <c>read-write</c>, <paramref name="pane"/> can ask and
+    /// <c>SQLite statements allowed</c> ticks at least one kind —
     /// checked again at every call, and each change still asks. Pure.
     /// </summary>
     public static IReadOnlyList<AIFunction> SqliteToolsFor(IReadOnlyList<AIFunction> tools, AppSettingsData effective, bool pane)
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(effective);
-        return pane && Sqlite.SqliteProtectionMode.Resolve(effective) == Sqlite.SqliteProtection.ReadWrite ? tools : tools.Where(t => !SqliteWriteToolNames.Contains(t.Name)).ToList();
+        bool writes = pane && Sqlite.SqliteProtectionMode.Resolve(effective) == Sqlite.SqliteProtection.ReadWrite && Sqlite.SqliteStatementKinds.Resolve(effective).Count > 0;
+        return writes ? tools : tools.Where(t => !SqliteWriteToolNames.Contains(t.Name)).ToList();
     }
 
     /// <summary>Whether the SQLite group is offered (2026-10-04): the setting <c>SQLite tools</c> on, and a named database offered or the sandbox's files allowed.</summary>

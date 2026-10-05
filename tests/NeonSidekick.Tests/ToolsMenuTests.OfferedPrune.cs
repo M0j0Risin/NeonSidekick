@@ -68,7 +68,7 @@ public partial class ToolsMenuTests
     public async Task TheSqliteOffered_DropsAGoneName_AsItOpens()
     {
         Assert.Null(SqliteConfigFile.AddDatabase(SqliteConfigFile.GlobalPath(_settings.StorageDirectory), "notes", new SqliteDatabaseConfig { Path = MakeSqliteFile("notes.db") }));
-        await AssertDroppedAsItOpensAsync(SettingsField.SqliteDatabasesOffered, (d, v) => d.SqliteDatabasesOffered = v, d => d.SqliteDatabasesOffered, () => OpenSqliteRow(2), "notes");
+        await AssertDroppedAsItOpensAsync(SettingsField.SqliteDatabasesOffered, (d, v) => d.SqliteDatabasesOffered = v, d => d.SqliteDatabasesOffered, () => OpenSqliteRow(3), "notes");
     }
 
     [Fact]

@@ -88,6 +88,62 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
+    /// <summary>
+    /// The value of <c>SQLite statements allowed</c> (later on 2026-10-05): the ticked kinds by name while two or fewer, else how many,
+    /// <c>none</c> with none; while the mode is not read-write it says the list is unused till then. Pinned.
+    /// </summary>
+    public static string SqliteStatementsValue(IReadOnlyList<string>? saved, string? mode)
+    {
+        var kinds = SqliteStatementKinds.Resolve(saved);
+        string list = kinds.Count == 0 ? "none"
+            : kinds.Count <= 2 ? string.Join(", ", kinds.Select(SqliteStatementKinds.Title))
+            : kinds.Count.ToString(CultureInfo.InvariantCulture) + " of " + SqliteStatementKinds.Names.Length.ToString(CultureInfo.InvariantCulture);
+        return SqliteProtectionMode.TryParse(mode, out var protection) && protection == SqliteProtection.ReadWrite ? list : list + " (used under read-write)";
+    }
+
+    /// <summary>One row of the <c>SQLite statements allowed</c> checklist: the mark, the kind, its statements dim. Pinned.</summary>
+    public static string SqliteStatementRow(SqliteStatementKind kind, bool on) =>
+        Markup.Escape((on ? "[x] " : "[ ] ") + SqliteStatementKinds.Title(kind).PadRight(20)) + Theme.DimMarkup(Markup.Escape(SqliteStatementKinds.Statements(kind)));
+
+    /// <summary>
+    /// <c>SQLite statements allowed</c> (later on 2026-10-05, the user's ask), the Docker containers checklist's shape over the seven
+    /// kinds: Enter or Space flips one, A all, N none, until ESC. Saved as the kinds' words in menu order. True when anything changed.
+    /// </summary>
+    private async Task<bool> EditSqliteStatementsAsync(CancellationToken cancellationToken)
+    {
+        var kinds = Enum.GetValues<SqliteStatementKind>();
+        bool changed = false;
+        int cursor = 0;
+        while (true)
+        {
+            var on = SqliteStatementKinds.Resolve(_settings.Current.SqliteStatementsAllowed).ToHashSet();
+            var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteStatementsAllowed)), kinds.Select(k => SqliteStatementRow(k, on.Contains(k))).ToList(), ToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, kinds.Length - 1), cancellationToken).ConfigureAwait(false);
+            if (picked is not { } pick)
+            {
+                if (!changed)
+                {
+                    Sink.Notice(UnchangedNotice);
+                }
+
+                return changed;
+            }
+
+            cursor = pick.Row;
+            var next = pick.Button == SelectAllIndex ? kinds.ToList()
+                : pick.Button == SelectNoneIndex ? []
+                : kinds.Where(k => on.Contains(k) != (k == kinds[pick.Row])).ToList();
+            if (next.Count == on.Count && next.All(on.Contains))
+            {
+                continue;
+            }
+
+            var words = next.Select(SqliteStatementKinds.NameOf).ToList();
+            Apply(SettingsField.SqliteStatementsAllowed, d => d.SqliteStatementsAllowed = words);
+            changed = true;
+        }
+    }
+
     /// <summary><c>SQLite databases offered</c>, <see cref="EditMySqlOfferedAsync"/>'s twin: every named database, ticked or not, Enter or Space flipping one until ESC. True when anything changed.</summary>
     private async Task<bool> EditSqliteOfferedAsync(CancellationToken cancellationToken)
     {

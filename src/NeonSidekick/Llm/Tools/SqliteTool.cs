@@ -287,8 +287,9 @@ public sealed class SqliteQueryTool : SqliteTool
 
 /// <summary>
 /// <c>sqlite_execute(sql, database?, params?, max_rows?, create?)</c> (2026-10-05, the user's ask): one statement that may change
-/// the database — DML, DDL, PRAGMA — offered only while <c>SQLite protection mode</c> is <c>read-write</c> and a pane can ask
-/// (checked again at every call). <see cref="SqliteWriteGate"/> first, then the database (with <c>create</c>, a new file in the
+/// the database — DML, DDL, PRAGMA — offered only while <c>SQLite protection mode</c> is <c>read-write</c>, a pane can ask and
+/// <c>SQLite statements allowed</c> ticks a kind (all checked again at every call; the statement's kind must be ticked, and
+/// <c>create</c> needs creating). <see cref="SqliteWriteGate"/> first, then the database (with <c>create</c>, a new file in the
 /// working directory), then the user's allow — Deny / Allow once / Allow for this session, per file — then
 /// <see cref="SqliteAccess.Execute"/>, committed as it runs. Every change is written to the log (the audit line). The answer is
 /// the rows changed and any rows a RETURNING or PRAGMA gave back. Plan mode drops it.
@@ -303,11 +304,11 @@ public sealed class SqliteExecuteTool : SqliteTool
         {
           "type": "object",
           "properties": {
-            "sql": { "type": "string", "description": "One SQLite statement: INSERT, UPDATE, DELETE (RETURNING allowed), CREATE, DROP, ALTER, PRAGMA, VACUUM. No ATTACH, BEGIN/COMMIT or second statement." },
+            "sql": { "type": "string", "description": "One SQLite statement of a kind this tool's description lists (RETURNING allowed). No ATTACH, BEGIN/COMMIT or second statement." },
             {{DatabaseProperty}},
             "params": { "type": "object", "description": "Values for the named placeholders in the SQL (@name, :name, $name), each by its name, e.g. {\"id\": 101} for @id or :id; strings, numbers, true, false or null." },
             "max_rows": { "type": "integer", "description": "How many returned rows (RETURNING, PRAGMA) to show at most, 1 to 100000. Leave it out for the user's default." },
-            "create": { "type": "boolean", "description": "true to create a new database file at \"database\", a path in the working directory ending .db, .sqlite, .sqlite3 or .db3 (its folder must exist); an existing file is just opened." }
+            "create": { "type": "boolean", "description": "true to create a new database file at \"database\", a path in the working directory ending .db, .sqlite, .sqlite3 or .db3 (its folder must exist); only when the description says creating is allowed. An existing file is just opened." }
           },
           "required": ["sql"]
         }
@@ -323,10 +324,17 @@ public sealed class SqliteExecuteTool : SqliteTool
 
     public override string Name => ToolName;
 
-    public override string Description =>
-        "Runs one statement that changes a SQLite database — INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, PRAGMA — or, with create, makes a new " +
-        "database file in the working directory. The user allows each change first; a change is permanent once it runs. " +
-        "Bind values as @name through params. For reading, use sqlite_query.";
+    /// <summary>The description, read at each turn: it names the kinds <c>SQLite statements allowed</c> ticks (later on 2026-10-05), and create only with creating.</summary>
+    public override string Description => DescribeFor(SqliteStatementKinds.Resolve(Effective));
+
+    /// <summary>The description for <paramref name="kinds"/>. Pinned.</summary>
+    public static string DescribeFor(IReadOnlyList<SqliteStatementKind> kinds)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        return "Runs one statement that changes a SQLite database. The user allows only these kinds: " + SqliteStatementKinds.Describe(kinds) + ". " +
+            (kinds.Contains(SqliteStatementKind.Create) ? "With create it makes a new database file in the working directory. " : "") +
+            "The user allows each change first; a change is permanent once it runs. Bind values as @name through params. For reading, use sqlite_query.";
+    }
 
     public override JsonElement JsonSchema => Schema;
 
@@ -346,7 +354,18 @@ public sealed class SqliteExecuteTool : SqliteTool
             return SqlText.BadMaxRows(SqliteQueryTool.MinRows, SqliteQueryTool.MaxRows);
         }
 
-        if (SqliteWriteGate.Check(sql) is { } refused)
+        var kinds = SqliteStatementKinds.Resolve(effective);
+        if (kinds.Count == 0)
+        {
+            return SqliteText.NoKindsAllowed;
+        }
+
+        if (create && !kinds.Contains(SqliteStatementKind.Create))
+        {
+            return SqliteText.CreateNotAllowed;
+        }
+
+        if (SqliteWriteGate.Check(sql, kinds) is { } refused)
         {
             return refused;
         }

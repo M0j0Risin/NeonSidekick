@@ -843,6 +843,7 @@ public sealed class AppSettings : IDisposable
         MySqlQueryTimeoutSeconds = source.MySqlQueryTimeoutSeconds,
         SqliteTools = source.SqliteTools,
         SqliteProtectionMode = source.SqliteProtectionMode,
+        SqliteStatementsAllowed = source.SqliteStatementsAllowed is null ? null : [.. source.SqliteStatementsAllowed],
         SqliteDefaultDatabase = source.SqliteDefaultDatabase,
         SqliteDatabasesOffered = source.SqliteDatabasesOffered is null ? null : [.. source.SqliteDatabasesOffered],
         SqliteSandboxFiles = source.SqliteSandboxFiles,

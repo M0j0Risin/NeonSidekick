@@ -1775,6 +1775,14 @@ public sealed class AppSettingsData
     /// </summary>
     public string SqliteProtectionMode { get; set; } = Sqlite.SqliteProtectionMode.Default;
 
+    /// <summary>
+    /// The kinds of statement <c>sqlite_execute</c> may run under <c>read-write</c> (2026-10-05, the user's ask): words of
+    /// <see cref="Sqlite.SqliteStatementKinds.Names"/> — <c>data</c>, <c>create</c>, <c>alter</c>, <c>drop</c>, <c>upkeep</c>,
+    /// <c>pragma</c>, <c>read</c>. Changing data alone by default; null is the default too, an empty list allows none (and
+    /// <c>sqlite_execute</c> is then not offered). <c>create: true</c> needs <c>create</c>. Unused while read-only. No variable.
+    /// </summary>
+    public List<string>? SqliteStatementsAllowed { get; set; } = Sqlite.SqliteStatementKinds.Default();
+
     /// <summary>The <c>sqlite.json</c> database a SQLite tool uses when the call names none; empty = the first offered.</summary>
     public string SqliteDefaultDatabase { get; set; } = "";
 

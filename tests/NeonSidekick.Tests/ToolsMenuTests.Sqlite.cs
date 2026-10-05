@@ -32,7 +32,7 @@ public partial class ToolsMenuTests
     {
         Assert.Equal(TabIndex(ToolsText.MySqlTabTitle) + 1, TabIndex(ToolsText.SqliteTabTitle));
         Assert.Equal(
-            [SettingsField.SqliteTools, SettingsField.SqliteProtectionMode, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
+            [SettingsField.SqliteTools, SettingsField.SqliteProtectionMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
             TabFields(ToolsText.SqliteTabTitle));
         Assert.Equal("Enter to start database wizard", SettingsMenu.SqliteAddDatabaseLabel);
         Assert.Equal("Opened 'shop' read-only: 3 tables and views.", SettingsMenu.SqliteWizardTestOk("shop", 3));
@@ -47,7 +47,7 @@ public partial class ToolsMenuTests
         string db = MakeSqliteFile("shop.db");
         string path = SqliteConfigFile.ProfilePath(_settings.ProfileDirectory);
         var (menu, _, _) = PaneMenu();
-        OpenSqliteRow(5);
+        OpenSqliteRow(6);
         Push(Keys.Enter);                         // the profile's file
         Type("my shop");                          // refused: a space
         Push([.. Enumerable.Repeat(Keys.Backspace, 7)]);
@@ -85,13 +85,56 @@ public partial class ToolsMenuTests
         Assert.Contains(SqliteProtectionMode.Describe("read-only"), _console.Output);
     }
 
+    /// <summary><c>SQLite statements allowed</c> (later on 2026-10-05): changing data by default; Enter ticks dropping beside it.</summary>
+    [Fact]
+    public async Task OnThePane_TheStatementsAllowed_TicksAKind()
+    {
+        Assert.Equal(["data"], _settings.Current.SqliteStatementsAllowed);
+        var (menu, _, _) = PaneMenu();
+        OpenSqliteRow(2);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // dropping
+        Push(Keys.Escape);                                   // out of the checklist
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["data", "drop"], _settings.Current.SqliteStatementsAllowed);
+        Assert.Contains("DROP TABLE, INDEX, VIEW, TRIGGER", _console.Output);
+    }
+
+    /// <summary>N clears every kind and A ticks them all, saved in menu order.</summary>
+    [Fact]
+    public async Task OnThePane_TheStatementsAllowed_NoneThenAll()
+    {
+        var (menu, _, _) = PaneMenu();
+        OpenSqliteRow(2);
+        Push(Keys.Char('n'));
+        Push(Keys.Char('a'));
+        Push(Keys.Escape);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(SqliteStatementKinds.Names, _settings.Current.SqliteStatementsAllowed);
+    }
+
+    [Fact]
+    public void TheStatementsAllowed_Value_NamesTwo_CountsMore_AndSaysWhenUnused()
+    {
+        Assert.Equal("changing data", SettingsMenu.SqliteStatementsValue(["data"], "read-write"));
+        Assert.Equal("changing data, dropping", SettingsMenu.SqliteStatementsValue(["DROP", "data", "nonsense"], "read-write"));
+        Assert.Equal("3 of 7", SettingsMenu.SqliteStatementsValue(["data", "create", "read"], "read-write"));
+        Assert.Equal("none (used under read-write)", SettingsMenu.SqliteStatementsValue([], "read-only"));
+        Assert.Equal("changing data (used under read-write)", SettingsMenu.SqliteStatementsValue(null, null));
+    }
+
     /// <summary>The checklist ticks a named database, the default pick lists the offered ones, ESC out of the wizard's first page writes nothing.</summary>
     [Fact]
     public async Task OnThePane_TheChecklist_TheDefault_AndEscOutOfTheWizard()
     {
         Assert.Null(SqliteConfigFile.AddDatabase(SqliteConfigFile.GlobalPath(_settings.StorageDirectory), "notes", new SqliteDatabaseConfig { Path = MakeSqliteFile("notes.db") }));
         var (menu, _, _) = PaneMenu();
-        OpenSqliteRow(2);
+        OpenSqliteRow(3);
         Push(Keys.Enter);                         // tick notes
         Push(Keys.Escape);
         Push(Keys.Down, Keys.Enter);              // SQLite default database, under the checklist

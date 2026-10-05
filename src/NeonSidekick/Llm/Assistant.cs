@@ -271,8 +271,8 @@ public sealed class Assistant
     /// the user's allow, so change only what was asked, one statement at a time after a look, and never retry a declined one. Pinned.
     /// </summary>
     public const string SqliteWriteRule =
-        "The user has allowed changes too: " + NeonSidekick.Llm.Tools.SqliteExecuteTool.ToolName + " runs one INSERT, UPDATE, DELETE, CREATE, DROP, ALTER or PRAGMA per call, " +
-        "and with create makes a new database file in the working directory; each change waits for the user's allow and is permanent once run. " +
+        "The user has allowed changes too: " + NeonSidekick.Llm.Tools.SqliteExecuteTool.ToolName + " runs one statement per call, only of the kinds its description lists " +
+        "(with creating among them, create makes a new database file in the working directory); each change waits for the user's allow and is permanent once run. " +
         "Change only what the user asks for, describe a table before changing it, say what you changed, and do not retry one they decline.";
 
     /// <summary>

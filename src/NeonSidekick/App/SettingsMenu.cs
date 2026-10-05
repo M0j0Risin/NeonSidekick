@@ -866,6 +866,9 @@ public enum SettingsField
     /// <summary>A picker: what the SQLite tools may do — <c>read-only</c> / <c>read-write</c> (<see cref="Settings.AppSettingsData.SqliteProtectionMode"/>). The SQLite tab's second row (2026-10-05).</summary>
     SqliteProtectionMode,
 
+    /// <summary>A checklist: the kinds of statement <c>sqlite_execute</c> may run under read-write (<see cref="Settings.AppSettingsData.SqliteStatementsAllowed"/>). The SQLite tab's third row (later on 2026-10-05).</summary>
+    SqliteStatementsAllowed,
+
     /// <summary>A checklist: which databases of <c>sqlite.json</c> this profile offers (<see cref="Settings.AppSettingsData.SqliteDatabasesOffered"/>). The SQLite tab (2026-10-04).</summary>
     SqliteDatabasesOffered,
 
@@ -1369,7 +1372,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
-        [SettingsField.SqliteTools, SettingsField.SqliteProtectionMode, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
+        [SettingsField.SqliteTools, SettingsField.SqliteProtectionMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
         [SettingsField.PostgresTools, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort, SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
@@ -1949,6 +1952,7 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlConnectionsGlobal => "MySQL connections (global)",
         SettingsField.SqliteTools => "SQLite tools",
         SettingsField.SqliteProtectionMode => "SQLite protection mode",
+        SettingsField.SqliteStatementsAllowed => "SQLite statements allowed",
         SettingsField.SqliteDatabasesOffered => "SQLite databases offered",
         SettingsField.SqliteDefaultDatabase => "SQLite default database",
         SettingsField.SqliteSandboxFiles => "SQLite sandbox files",
@@ -2287,6 +2291,7 @@ internal sealed partial class SettingsMenu
             SettingsField.MySqlConnectionsGlobal => MySqlConnectionsLabel(MySql.MySqlConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.SqliteTools => OnOff(data.SqliteTools),
             SettingsField.SqliteProtectionMode => data.SqliteProtectionMode,
+            SettingsField.SqliteStatementsAllowed => SqliteStatementsValue(data.SqliteStatementsAllowed, data.SqliteProtectionMode),
             SettingsField.SqliteDefaultDatabase => string.IsNullOrWhiteSpace(data.SqliteDefaultDatabase) ? FirstSqliteDatabaseLabel : data.SqliteDefaultDatabase,
             SettingsField.SqliteDatabasesOffered => SqliteOfferedValue(data.SqliteDatabasesOffered, Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
             SettingsField.SqliteSandboxFiles => OnOff(data.SqliteSandboxFiles),
@@ -4513,6 +4518,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.SqliteProtectionMode)
         {
             return await PickSqliteProtectionAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.SqliteStatementsAllowed)
+        {
+            return await EditSqliteStatementsAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.SqliteDatabasesOffered)

@@ -9,7 +9,8 @@ namespace NeonSidekick.Sqlite;
 /// (<see cref="SqliteReadOnlyGate.DeniedFunctions"/>, a quoted name too), <c>sqlite_dbpage</c> (raw pages) and
 /// <c>writable_schema</c> (both can corrupt the file), a positional <c>?</c>. Refused as the statement's first word only, since
 /// BEGIN, END and ROLLBACK stand inside a trigger and an <c>ON CONFLICT</c>: the transaction words (each call is a transaction
-/// of its own). And <c>VACUUM INTO</c>, which writes another file outside the sandbox's reach.
+/// of its own). And <c>VACUUM INTO</c>, which writes another file outside the sandbox's reach. Since later on 2026-10-05 the
+/// statement's kind (<see cref="Classify"/>) must also be one of those <c>SQLite statements allowed</c> ticks.
 /// </summary>
 public static class SqliteWriteGate
 {
@@ -19,8 +20,11 @@ public static class SqliteWriteGate
         "BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE",
     };
 
-    /// <summary>Null when <paramref name="sql"/> may run; else the <c>Error:</c> sentence the model reads.</summary>
-    public static string? Check(string sql)
+    /// <summary>
+    /// Null when <paramref name="sql"/> may run; else the <c>Error:</c> sentence the model reads. <paramref name="allowed"/> is the
+    /// kinds the user ticked (<see cref="SqliteStatementKinds.Resolve(Settings.AppSettingsData)"/>); null allows every kind.
+    /// </summary>
+    public static string? Check(string sql, IReadOnlyList<SqliteStatementKind>? allowed = null)
     {
         ArgumentNullException.ThrowIfNull(sql);
         if (string.IsNullOrWhiteSpace(sql))
@@ -94,7 +98,73 @@ public static class SqliteWriteGate
             }
         }
 
-        return null;
+        if (Classify(tokens, lead) is not { } kind)
+        {
+            return SqliteText.UnknownStatement(first.Kind == SqliteReadOnlyGate.TokenKind.Word ? first.Text : "'" + first.Text + "'");
+        }
+
+        return allowed is null || allowed.Contains(kind) ? null : SqliteText.KindNotAllowed(kind, allowed);
+    }
+
+    /// <summary>The kind of the one statement <paramref name="sql"/> is; null when it does not lex or is none <c>sqlite_execute</c> knows.</summary>
+    public static SqliteStatementKind? Classify(string sql)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        if (SqliteReadOnlyGate.Tokenize(sql, out _) is not { } tokens)
+        {
+            return null;
+        }
+
+        int lead = tokens.FindIndex(t => !IsSymbol(t, "("));
+        return lead < 0 ? null : Classify(tokens, lead);
+    }
+
+    /// <summary>
+    /// The kind by the statement's first word; a <c>WITH</c> by the first statement word after its common table expressions (the
+    /// first SELECT, VALUES, INSERT, REPLACE, UPDATE or DELETE outside every parenthesis), an <c>EXPLAIN</c> a read (it runs
+    /// nothing).
+    /// </summary>
+    private static SqliteStatementKind? Classify(List<SqliteReadOnlyGate.Token> tokens, int lead)
+    {
+        if (tokens[lead].Kind != SqliteReadOnlyGate.TokenKind.Word)
+        {
+            return null;
+        }
+
+        string word = tokens[lead].Text;
+        if (word == "WITH")
+        {
+            int depth = 0;
+            for (int i = lead + 1; i < tokens.Count; i++)
+            {
+                var t = tokens[i];
+                if (IsSymbol(t, "("))
+                {
+                    depth++;
+                }
+                else if (IsSymbol(t, ")"))
+                {
+                    depth--;
+                }
+                else if (depth == 0 && t.Kind == SqliteReadOnlyGate.TokenKind.Word && t.Text is "SELECT" or "VALUES" or "INSERT" or "REPLACE" or "UPDATE" or "DELETE")
+                {
+                    word = t.Text;
+                    break;
+                }
+            }
+        }
+
+        return word switch
+        {
+            "INSERT" or "REPLACE" or "UPDATE" or "DELETE" => SqliteStatementKind.Data,
+            "CREATE" => SqliteStatementKind.Create,
+            "ALTER" => SqliteStatementKind.Alter,
+            "DROP" => SqliteStatementKind.Drop,
+            "VACUUM" or "REINDEX" or "ANALYZE" => SqliteStatementKind.Upkeep,
+            "PRAGMA" => SqliteStatementKind.Pragma,
+            "SELECT" or "VALUES" or "EXPLAIN" => SqliteStatementKind.Read,
+            _ => null,
+        };
     }
 
     /// <summary>

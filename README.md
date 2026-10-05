@@ -896,7 +896,8 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Setting | What it does | Default |
 |---|---|---|
 | SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases named in `sqlite.json` and, below, the working directory's files. | off |
-| SQLite protection mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` is offered too, one change per call (DML, DDL, PRAGMA, VACUUM) or a new database file in the working directory, each allowed on a pane (Deny, Allow once, Allow for this session). See *SQLite* › *Changes*. | read-only |
+| SQLite protection mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` is offered too, one change per call of the kinds below, or a new database file in the working directory, each allowed on a pane (Deny, Allow once, Allow for this session). See *SQLite* › *Changes*. | read-only |
+| SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run, as a checklist: changing data, creating, changing structure, dropping, upkeep, settings, reading (see *SQLite* › *Changes*). With none ticked, `sqlite_execute` isn't offered. | changing data |
 | SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. Otherwise as *SQL connections offered*. | none |
 | SQLite default database | The database a call uses when it names none. | (the first database) |
 | SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`). | on |
@@ -1793,7 +1794,7 @@ The four reading tools stay read-only whatever *SQLite protection mode* says:
 | `sqlite_describe` | `table, database?` | One table or view: columns (type, nullability, primary key, default; generated and hidden columns marked), foreign keys both ways, indexes (their columns in order, an expression shown as `(expression)`) and the `CREATE` statement. |
 | `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name`, `$name` or `#name`, as SQLite reads them (a `$` inside a name, as in `@a$b`, is part of it), each given by its name after the mark (`{"id": 5}` or `{":id": 5}` for `:id`; a TCL form whole, `{"a(1)": 5}` for `$a(1)`); one `params` does not give is NULL; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 
-| `sqlite_execute` | `sql, database?, params?, max_rows?, create?` | Only under *SQLite protection mode* `read-write`. One statement that may change the database: `INSERT`, `UPDATE`, `DELETE` (with `RETURNING`), `REPLACE`, `CREATE`, `DROP`, `ALTER`, `PRAGMA`, `VACUUM`, `REINDEX`, `ANALYZE`. `create: true` makes a new database file at `database`, a path in the working directory ending `.db`, `.sqlite`, `.sqlite3` or `.db3`. Answers with the rows changed and any rows the statement returned. |
+| `sqlite_execute` | `sql, database?, params?, max_rows?, create?` | Only under *SQLite protection mode* `read-write`. One statement that may change the database, of a kind *SQLite statements allowed* ticks (`RETURNING` allowed). `create: true` (with creating ticked) makes a new database file at `database`, a path in the working directory ending `.db`, `.sqlite`, `.sqlite3` or `.db3`. Answers with the rows changed and any rows the statement returned. |
 
 `--sqlite-check <database>` proves the tools against a real file on the published exe (it opens and counts, every storage class, the gate, a write refused, the interrupt).
 
@@ -1801,12 +1802,24 @@ The four reading tools stay read-only whatever *SQLite protection mode* says:
 
 With *SQLite protection mode* set to `read-write`, the model gets `sqlite_execute` beside the four reading tools. It is never offered headless or in plan mode.
 
-1. **The gate.** One statement per call, lexed by the same rules as the reading gate. A `CREATE TRIGGER` body may hold its own `;`s. Still refused: `ATTACH`/`DETACH` and `VACUUM INTO` (they reach another file), `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`RELEASE` as the statement (each call is its own transaction), `writable_schema` and `sqlite_dbpage` (they can corrupt the file), `load_extension()` and its kin, and positional `?` placeholders.
-2. **Your allow.** Every call asks on a pane that names the file and shows the statement: **Deny**, **Allow once**, or **Allow for this session** (that file only, until `/new`, `/clear` or a profile switch).
-3. **The run.** The file is opened read-write with no transaction of the app's, so the statement commits as it runs, atomically. A failed or interrupted statement changes nothing. The timeout and ESC interrupt it as they do a query.
-4. **The log.** Every change is written to the log: the database, its file, the rows changed and the statement.
+1. **The kinds.** *SQLite statements allowed* decides which kinds of statement may run; a statement of a kind left unticked is refused, and the refusal names the kinds that are ticked. A `WITH` counts as the statement after its common table expressions.
 
-**Creating a database.** `create: true` needs *SQLite sandbox files* on. The new file must end `.db`, `.sqlite`, `.sqlite3` or `.db3`, and its folder must already exist. A file already there is just opened, and a name from `sqlite.json` is never made. If the statement fails, the new file is removed again. To make an empty database, create it with a first table, or with `PRAGMA user_version = 0`.
+   | Kind | Statements | Default |
+   |---|---|---|
+   | changing data | `INSERT`, `UPDATE`, `DELETE`, `REPLACE` (upserts, `OR …`, `RETURNING` included) | ✓ |
+   | creating | `CREATE TABLE`, `INDEX`, `VIEW`, `TRIGGER`, `VIRTUAL TABLE`; also needed for `create` | |
+   | changing structure | `ALTER TABLE` | |
+   | dropping | `DROP TABLE`, `INDEX`, `VIEW`, `TRIGGER` | |
+   | upkeep | `VACUUM`, `REINDEX`, `ANALYZE` | |
+   | settings | `PRAGMA` | |
+   | reading | `SELECT`, `VALUES`, `EXPLAIN` (`sqlite_query` is the tool for reading) | |
+
+2. **The gate.** One statement per call, lexed by the same rules as the reading gate. A `CREATE TRIGGER` body may hold its own `;`s. Still refused: `ATTACH`/`DETACH` and `VACUUM INTO` (they reach another file), `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`RELEASE` as the statement (each call is its own transaction), `writable_schema` and `sqlite_dbpage` (they can corrupt the file), `load_extension()` and its kin, and positional `?` placeholders.
+3. **Your allow.** Every call asks on a pane that names the file and shows the statement: **Deny**, **Allow once**, or **Allow for this session** (that file only, until `/new`, `/clear` or a profile switch).
+4. **The run.** The file is opened read-write with no transaction of the app's, so the statement commits as it runs, atomically. A failed or interrupted statement changes nothing. The timeout and ESC interrupt it as they do a query.
+5. **The log.** Every change is written to the log: the database, its file, the rows changed and the statement.
+
+**Creating a database.** `create: true` needs creating ticked in *SQLite statements allowed* and *SQLite sandbox files* on. The new file must end `.db`, `.sqlite`, `.sqlite3` or `.db3`, and its folder must already exist. A file already there is just opened, and a name from `sqlite.json` is never made. If the statement fails, the new file is removed again. To make an empty database, create it with a first table, or with `PRAGMA user_version = 0`.
 
 </details>
 
