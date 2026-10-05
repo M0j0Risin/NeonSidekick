@@ -112,7 +112,9 @@ public sealed class SqlConfigFile
         "  //\n" +
         "  // \"passwordStore\": \"credman\" works for a SQL login too; \"credential\" names another Credential Manager entry.\n" +
         "  // encrypt: strict, mandatory (the default) or optional; trustServerCertificate only for a self-signed certificate;\n" +
-        "  // connectTimeoutSeconds: 1 to 120 (15 by default). The tools only read, but a read-only login is the real guard.\n" +
+        "  // connectTimeoutSeconds: 1 to 120 (15 by default). access: read (the default) or readwrite — sql_execute may change a\n" +
+        "  // readwrite connection's databases while SQL mode is read-write, each change allowed by you. A read-only login is the\n" +
+        "  // real guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";
 

@@ -79,6 +79,10 @@ public sealed class SqlConnectionConfig
     public int? ConnectTimeoutSeconds { get; set; }
 
     /// <summary>What the database holds, in the user's words; the model reads it to pick a connection.</summary>
+    /// <summary><c>read</c> (the default) or <c>readwrite</c>: whether <c>sql_execute</c> may change this connection's databases while
+    /// <c>SQL mode</c> is <c>read-write</c> too (2026-10-05, the user's two-key call, <c>unc.json</c>'s shape; <see cref="Sql.ConnectionAccess"/>).</summary>
+    public string? Access { get; set; }
+
     public string? Description { get; set; }
 
     /// <summary>Whether the entry signs in as the app's Windows identity.</summary>
@@ -99,6 +103,10 @@ public sealed class SqlConnectionConfig
 
     /// <summary>The Credential Manager entry this connection's password is read from under <c>credman</c>.</summary>
     public string CredentialTarget(string name) => string.IsNullOrWhiteSpace(Credential) ? CredentialPrefix + name : Credential.Trim();
+
+    /// <summary>Whether the entry allows changes (<c>readwrite</c>); the tools still need the family's mode <c>read-write</c>.</summary>
+    [JsonIgnore]
+    public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
     /// <summary>
     /// The reason this entry cannot connect, or null: no server, an <see cref="Auth"/> or <see cref="Encrypt"/>
@@ -145,6 +153,11 @@ public sealed class SqlConnectionConfig
             if (encrypt.Length > 0 && !EncryptWords.Contains(encrypt.ToLowerInvariant()))
             {
                 return SqlText.BadEncrypt(encrypt);
+            }
+
+            if (Sql.ConnectionAccess.Problem(Access) is { } access)
+            {
+                return access;
             }
 
             if (ConnectTimeoutSeconds is { } seconds && (seconds < 1 || seconds > MaxConnectTimeoutSeconds))

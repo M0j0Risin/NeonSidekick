@@ -106,7 +106,7 @@ public sealed class PostgresConnectionsTool : PostgresTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe() => PostgresText.Connections(Server.Catalog(), Effective.PostgresDefaultConnection);
+    public string Describe() => PostgresText.Connections(Server.Catalog(), Effective.PostgresDefaultConnection, DatabaseWriteModes.IsReadWrite(Effective.PostgresMode));
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new(Describe());
 }
@@ -421,5 +421,108 @@ public sealed class PostgresQueryTool : PostgresTool
         }
 
         return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// <c>postgres_execute(sql, connection?, database?, params?, max_rows?)</c> (2026-10-05, the user's ask: <c>sqlite_execute</c>
+/// mirrored): one statement that may change a database, offered only while <c>PostgreSQL mode</c> is <c>read-write</c>, a pane can ask,
+/// <c>PostgreSQL statements allowed</c> ticks a kind and an offered connection says <c>"access": "readwrite"</c> (all checked again at
+/// every call). <see cref="PostgresWriteGate"/> first, then the connection, then a read runs as <c>postgres_query</c>'s do without
+/// asking, else the user's allow — per connection and database — then <see cref="PostgresAccess.ExecuteAsync"/>, committed as it runs,
+/// written to the log (<see cref="ServerExecute"/>). Plan mode drops it.
+/// </summary>
+public sealed class PostgresExecuteTool : PostgresTool
+{
+    public const string ToolName = "postgres_execute";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        "{ \"type\": \"object\", \"properties\": { " +
+        "\"sql\": { \"type\": \"string\", \"description\": \"One PostgreSQL statement of a kind this tool's description lists (RETURNING allowed). No BEGIN/COMMIT, SET, GRANT or second statement.\" }, " +
+        ConnectionProperty + ", " + DatabaseProperty + ", " +
+        "\"params\": { \"type\": \"object\", \"description\": \"Values for @name placeholders in the SQL, e.g. {\\\"id\\\": 101} for @id; strings, numbers, true, false or null.\" }, " +
+        "\"max_rows\": { \"type\": \"integer\", \"description\": \"How many returned rows (RETURNING) to show at most, 1 to 100000. Leave it out for the user's default.\" } }, \"required\": [\"sql\"] }");
+
+    private readonly DatabaseWriteAllow? _allow;
+
+    /// <param name="allow">The user's allow for one change. Null where nothing can ask: every change is refused.</param>
+    public PostgresExecuteTool(PostgresAccess postgres, Func<AppSettingsData> effective, DatabaseWriteAllow? allow) : base(postgres, effective)
+    {
+        _allow = allow;
+    }
+
+    public override string Name => ToolName;
+
+    /// <summary>The description, read at each turn: it names the kinds <c>PostgreSQL statements allowed</c> ticks.</summary>
+    public override string Description => DescribeFor(ServerStatementKinds.Resolve(Effective.PostgresStatementsAllowed));
+
+    /// <summary>The description for <paramref name="kinds"/>. Pinned.</summary>
+    public static string DescribeFor(IReadOnlyList<ServerStatementKind> kinds) =>
+        ServerWriteText.Describe(PostgresStatementKinds.Family, kinds, PostgresQueryTool.ToolName, "PostgreSQL SQL; bind values as @name through params.");
+
+    public override JsonElement JsonSchema => Schema;
+
+    public Task<string> RunAsync(string sql, string? connection, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        var effective = Effective;
+        int rows = maxRows ?? PostgresQueryTool.DefaultRows(effective);
+        if (rows < PostgresQueryTool.MinRows || rows > PostgresQueryTool.MaxRows)
+        {
+            return Task.FromResult(SqlText.BadMaxRows(PostgresQueryTool.MinRows, PostgresQueryTool.MaxRows));
+        }
+
+        int timeout = TimeoutSeconds(effective);
+        var hooks = new ServerExecuteHooks(
+            PostgresWriteGate.Check,
+            PostgresWriteGate.Kinds,
+            PostgresReadOnlyGate.Check,
+            PostgresReadOnlyGate.Body,
+            () => Server.Resolve(connection, effective.PostgresDefaultConnection, out var refused) is { } target
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, Place(target.Config, database)), null)
+                : (null, PostgresText.Error(refused!)),
+            async (body, token) =>
+            {
+                var run = await Server.RunAsync(connection, effective.PostgresDefaultConnection, database, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                return run.Outcome == SqlOutcome.Ok ? PostgresText.Query(run, rows, SqlTool.ResultChars(effective)) : PostgresText.Error(run);
+            },
+            (body, token) => Server.ExecuteAsync(connection, effective.PostgresDefaultConnection, database, body, parameters, rows, timeout, token),
+            PostgresText.Error);
+        return ServerExecute.RunAsync(PostgresStatementKinds.Family, effective.PostgresMode, effective.PostgresStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
+    }
+
+    /// <summary>The database a call works in: the one it names, else the connection's own, else <c>postgres</c>.</summary>
+    public static string Place(PostgresConnectionConfig config, string? database)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        return !string.IsNullOrWhiteSpace(database) ? database.Trim() : !string.IsNullOrWhiteSpace(config.Database) ? config.Database.Trim() : PostgresConnectionConfig.DefaultDatabase;
+    }
+
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (!ToolArguments.TryReadInt32(arguments, PostgresQueryTool.MaxRowsArgument, out var max, out var raw))
+        {
+            return ClockText.BadInteger(PostgresQueryTool.MaxRowsArgument, raw);
+        }
+
+        if (!ToolArguments.TryReadObjectList(arguments, PostgresQueryTool.ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        {
+            return PostgresText.BadParams(sent);
+        }
+
+        IReadOnlyList<SqlParameterValue> parameters = [];
+        if (objects.Count == 1)
+        {
+            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
+            {
+                return error;
+            }
+
+            parameters = read;
+        }
+
+        return await RunAsync(ToolArguments.ReadString(arguments, PostgresQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
     }
 }

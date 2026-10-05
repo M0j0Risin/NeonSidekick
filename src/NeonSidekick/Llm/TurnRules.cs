@@ -36,9 +36,10 @@ public sealed record TurnRules(
     bool Help = false,
     bool Sqlite = false,
     bool Postgres = false,
-    bool SqliteWrite = false)
+    bool SqliteWrite = false,
+    ServerWrites ServerWrites = ServerWrites.None)
 {
     /// <summary>The default operating rules for <paramref name="markdown"/>: <c>Assistant.DefaultRules</c> with these flags and tools on. Pure.</summary>
     public string DefaultRules(bool markdown) =>
-        Assistant.DefaultRules(markdown, tools: true, Files, Web, Ask, Sessions, Download, Delete, Mcp, Timers, Git, Shell, Bridge, Police, Obsidian, ObsidianDelete, Sql, Native, Advisor, HomeAssistant, Oracle, MySql, Unc, UncFetch, UncWrite, Docker, DockerWrite, Help, Sqlite, Postgres, Sqlite && SqliteWrite);
+        Assistant.DefaultRules(markdown, tools: true, Files, Web, Ask, Sessions, Download, Delete, Mcp, Timers, Git, Shell, Bridge, Police, Obsidian, ObsidianDelete, Sql, Native, Advisor, HomeAssistant, Oracle, MySql, Unc, UncFetch, UncWrite, Docker, DockerWrite, Help, Sqlite, Postgres, Sqlite && SqliteWrite, ServerWrites);
 }

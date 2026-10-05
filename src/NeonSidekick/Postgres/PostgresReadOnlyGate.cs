@@ -199,7 +199,8 @@ public static class PostgresReadOnlyGate
         return trimmed.EndsWith(';') ? trimmed[..^1].TrimEnd() : trimmed;
     }
 
-    private static bool IsDeniedFunction(string upper) =>
+    /// <summary>Whether an upper-cased name is a denied function or of a denied family (<see cref="PostgresWriteGate"/> reads it too).</summary>
+    internal static bool IsDeniedFunction(string upper) =>
         DeniedFunctions.Contains(upper) || DeniedPrefixes.Any(p => upper.StartsWith(p, StringComparison.Ordinal));
 
     private static bool IsSymbol(Token token, string symbol) => token.Kind == TokenKind.Symbol && token.Text == symbol;

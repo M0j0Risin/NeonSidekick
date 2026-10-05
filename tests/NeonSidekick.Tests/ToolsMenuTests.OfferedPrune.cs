@@ -61,7 +61,7 @@ public partial class ToolsMenuTests
     public async Task ThePostgresOffered_DropsAGoneName_AsItOpens()
     {
         WriteProfileFile(NeonSidekick.Postgres.PostgresConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "shop": { "host": "localhost", "database": "shop", "user": "reader" } } }""");
-        await AssertDroppedAsItOpensAsync(SettingsField.PostgresConnectionsOffered, (d, v) => d.PostgresConnectionsOffered = v, d => d.PostgresConnectionsOffered, () => OpenPostgresRow(1), "shop");
+        await AssertDroppedAsItOpensAsync(SettingsField.PostgresConnectionsOffered, (d, v) => d.PostgresConnectionsOffered = v, d => d.PostgresConnectionsOffered, () => OpenPostgresRow(3), "shop");
     }
 
     [Fact]

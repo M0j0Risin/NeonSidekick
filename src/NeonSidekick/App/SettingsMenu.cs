@@ -899,6 +899,12 @@ public enum SettingsField
     /// <summary>A toggle: whether a turn offers the nine PostgreSQL tools (<see cref="Settings.AppSettingsData.PostgresTools"/>). The PostgreSQL tab's first row (2026-10-04); no reconnect.</summary>
     PostgresTools,
 
+    /// <summary>A picker: what the PostgreSQL tools may do — <c>read-only</c> / <c>read-write</c> (<see cref="Settings.AppSettingsData.PostgresMode"/>). The PostgreSQL tab's second row (2026-10-05).</summary>
+    PostgresMode,
+
+    /// <summary>A checklist: the kinds of statement <c>postgres_execute</c> may run under read-write (<see cref="Settings.AppSettingsData.PostgresStatementsAllowed"/>). The PostgreSQL tab's third row (2026-10-05).</summary>
+    PostgresStatementsAllowed,
+
     /// <summary>A checklist: which connections of <c>postgres.json</c> this profile offers (<see cref="Settings.AppSettingsData.PostgresConnectionsOffered"/>). The PostgreSQL tab (2026-10-04).</summary>
     PostgresConnectionsOffered,
 
@@ -1373,7 +1379,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SqlTools, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
-        [SettingsField.PostgresTools, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
+        [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort, SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
@@ -1963,6 +1969,8 @@ internal sealed partial class SettingsMenu
         SettingsField.SqliteDatabasesProfile => "SQLite databases (profile)",
         SettingsField.SqliteDatabasesGlobal => "SQLite databases (global)",
         SettingsField.PostgresTools => "PostgreSQL tools",
+        SettingsField.PostgresMode => "PostgreSQL mode",
+        SettingsField.PostgresStatementsAllowed => "PostgreSQL statements allowed",
         SettingsField.PostgresConnectionsOffered => "PostgreSQL connections offered",
         SettingsField.PostgresDefaultConnection => "PostgreSQL default connection",
         SettingsField.PostgresSetPassword => "PostgreSQL set password",
@@ -2302,6 +2310,8 @@ internal sealed partial class SettingsMenu
             SettingsField.SqliteDatabasesProfile => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.ProfilePath(profileDirectory)),
             SettingsField.SqliteDatabasesGlobal => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.PostgresTools => OnOff(data.PostgresTools),
+            SettingsField.PostgresMode => data.PostgresMode,
+            SettingsField.PostgresStatementsAllowed => WriteStatementsValue(data.PostgresStatementsAllowed, data.PostgresMode),
             SettingsField.PostgresDefaultConnection => string.IsNullOrWhiteSpace(data.PostgresDefaultConnection) ? FirstSqlConnectionLabel : data.PostgresDefaultConnection,
             SettingsField.PostgresSetPassword => SqlSetPasswordLabel,
             SettingsField.PostgresAddConnection => SqlAddConnectionLabel,
@@ -4514,6 +4524,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.SqliteDefaultDatabase)
         {
             return await PickSqliteDatabaseAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (await EditWriteFieldAsync(field, saved, cancellationToken).ConfigureAwait(false) is { } written)
+        {
+            return written;
         }
 
         if (field == SettingsField.SqliteMode)

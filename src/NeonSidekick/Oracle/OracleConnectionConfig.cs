@@ -56,6 +56,10 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
     public int? ConnectTimeoutSeconds { get; set; }
 
     /// <summary>What the database holds, in the user's words; the model reads it to pick a connection.</summary>
+    /// <summary><c>read</c> (the default) or <c>readwrite</c>: whether <c>oracle_execute</c> may change this connection's databases while
+    /// <c>Oracle mode</c> is <c>read-write</c> too (2026-10-05, the user's two-key call, <c>unc.json</c>'s shape; <see cref="Sql.ConnectionAccess"/>).</summary>
+    public string? Access { get; set; }
+
     public string? Description { get; set; }
 
     /// <summary>Whether the password lives in Windows Credential Manager rather than in the file.</summary>
@@ -64,6 +68,10 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
 
     /// <summary>The Credential Manager entry this connection's password is read from under <c>credman</c>.</summary>
     public string CredentialTarget(string name) => string.IsNullOrWhiteSpace(Credential) ? CredentialPrefix + name : Credential.Trim();
+
+    /// <summary>Whether the entry allows changes (<c>readwrite</c>); the tools still need the family's mode <c>read-write</c>.</summary>
+    [JsonIgnore]
+    public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
     /// <summary>
     /// The reason this entry cannot connect, or null: no data source, no user, <c>SYS</c> (or a user that asks for a
@@ -95,6 +103,11 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
             if (store.Length > 0 && !store.Equals(FileStore, StringComparison.OrdinalIgnoreCase) && !store.Equals(CredmanStore, StringComparison.OrdinalIgnoreCase))
             {
                 return Sql.SqlText.BadPasswordStore(store);
+            }
+
+            if (Sql.ConnectionAccess.Problem(Access) is { } access)
+            {
+                return access;
             }
 
             if (ConnectTimeoutSeconds is { } seconds && (seconds < 1 || seconds > MaxConnectTimeoutSeconds))

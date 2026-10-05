@@ -15,6 +15,9 @@ public enum SqlOutcome
     ConnectFailed,
     Timeout,
     Failed,
+
+    /// <summary>A change asked of a connection whose entry does not say <c>"access": "readwrite"</c> (2026-10-05; the server families' <c>_execute</c> tools).</summary>
+    ReadOnlyConnection,
 }
 
 /// <summary>One named value bound as <c>@Name</c>.</summary>

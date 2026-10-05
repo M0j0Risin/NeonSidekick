@@ -266,7 +266,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools));
         return new TurnToolSet(
             tools,
             offered,

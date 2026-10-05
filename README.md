@@ -919,6 +919,8 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Setting | What it does | Default |
 |---|---|---|
 | PostgreSQL tools | Offers the PostgreSQL tools (connections, databases, schemas, tables, columns, describe, relationships, indexes, query). | off |
+| PostgreSQL mode | `read-only`: the tools only read. `read-write`: `postgres_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See PostgreSQL › Changes. | read-only |
+| PostgreSQL statements allowed | Under `read-write`: the kinds of statement `postgres_execute` may run (a checklist; A all, N none, D the default). See PostgreSQL › Changes. | changing data, creating, reading |
 | PostgreSQL connections offered | As *SQL connections offered*. | none |
 | PostgreSQL default connection | As *SQL default connection*; `database` works in another database on the same server. | (the first connection) |
 | PostgreSQL set password | As *SQL set password*. | — |
@@ -1847,6 +1849,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 * **`user`**, and **`passwordStore`** `file` or `credman` (`NeonSidekick/postgres/<connection_name>`), as for SQL.
 * **`sslMode`**: `prefer` (default), `require`, `verify-ca`, `verify-full` or `disable`.
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
+* **`access`**: `read` (default) or `readwrite`. Changes through `postgres_execute` need `readwrite` **and** *PostgreSQL mode* `read-write`, both checked at every call.
 
 ```json
 {
@@ -1857,7 +1860,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 }
 ```
 
-**PostgreSQL add connection** (the Postgres tab of `/tools`) walks through a new one and can **test** it: who it signs in as, the version, and a warning when the role is a superuser or holds write grants. **PostgreSQL set password** updates a password.
+**PostgreSQL add connection** (the Postgres tab of `/tools`) walks through a new one and can **test** it: who it signs in as, the version, and a warning when the role is a superuser or holds write grants. It asks for the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
 
 #### Safety
 
@@ -1877,8 +1880,32 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 | `postgres_relationships` | `connection?, database?, schema?, table?` | Foreign keys: a schema's, or a table's either way. |
 | `postgres_indexes` | `connection?, database?, schema?, table?` | Indexes: unique, primary, the definition, scans since the statistics reset. |
 | `postgres_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name` (straight after an operator, as in `id=@id`, only a name `params` gives: `<@tags` stays the operator and a column, and an unbound `id=@id` fails with a hint to pass `id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+| `postgres_execute` | `sql, connection?, database?, params?, max_rows?` | Only under *PostgreSQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *PostgreSQL statements allowed* ticks (`RETURNING` allowed). Answers with the rows changed and any rows the statement returned. |
 
 `--postgres-check <connection>` proves the tools against a real server on the published exe (who it is, every type, the gate, a write refused, the timeout).
+
+#### Changes
+
+With *PostgreSQL mode* set to `read-write`, the model gets `postgres_execute` beside the nine reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
+
+1. **The kinds.** *PostgreSQL statements allowed* decides which kinds of statement may run; a statement needs every kind it does (a `WITH` that deletes and inserts needs deleting and changing data), and the refusal names the kinds that are ticked.
+
+   | Kind | Statements | Default |
+   |---|---|---|
+   | changing data | `INSERT`, `UPDATE`, `MERGE` (upserts and `RETURNING` included) | ✓ |
+   | deleting | `DELETE`, `TRUNCATE`, a `MERGE` that deletes | |
+   | creating | `CREATE TABLE`, `INDEX`, `VIEW`, `MATERIALIZED VIEW`, `SEQUENCE`, `TYPE`, `DOMAIN`, `SCHEMA` | ✓ |
+   | changing structure | `ALTER` of those, `COMMENT ON` | |
+   | dropping | `DROP` of those, and of functions, procedures and triggers | |
+   | upkeep | `VACUUM`, `ANALYZE`, `REINDEX`, `CLUSTER`, `REFRESH MATERIALIZED VIEW` | |
+   | procedures and triggers | `CALL`, `DO`, and `CREATE`/`ALTER` of a function, procedure, trigger or rule: code whose effects can't be read from the statement, so it's off by default | |
+   | reading | `SELECT`, `VALUES`, `TABLE`: never asks, and runs as `postgres_query` does (read-only, rolled back) once its gate passes it too | ✓ |
+
+2. **The gate.** One statement per call, lexed by the same rules as the reading gate (a function's or `DO` block's body is dollar-quoted, so its `;`s don't count). An allow-list: a statement it doesn't know is refused. Always refused: `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` (each call is its own transaction), `GRANT`/`REVOKE`, roles, users, policies and `OWNER TO`, `SET`/`RESET`/`DISCARD`, `PREPARE`/`EXECUTE`, `COPY`, `LOAD`, `LOCK`, `LISTEN`/`NOTIFY`, `CHECKPOINT`, `CREATE`/`DROP` of a database, tablespace, extension, server, foreign table or language, `ALTER SYSTEM`, and the reading gate's denied functions (`nextval`/`setval` are allowed here).
+3. **Your allow.** Every change asks on a pane that names the connection and database and shows the statement: **Deny**, **Allow once**, or **Allow for this session** (that connection and database only, until `/new`, `/clear` or a profile switch).
+4. **The run.** The session starts as for a read but without the read-only default; `statement_timeout`, `lock_timeout` and `standard_conforming_strings` stay. There's no transaction of the app's, so the statement commits as it runs, atomically, and `VACUUM` can run. A failed, timed-out or cancelled statement changes nothing.
+5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
+6. **The account.** It's still the real guard: give a `readwrite` connection a role with only the grants you want the model to use.
 
 </details>
 

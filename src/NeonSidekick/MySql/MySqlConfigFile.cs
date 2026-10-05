@@ -71,8 +71,9 @@ public sealed class MySqlConfigFile
         "  //\n" +
         "  // port: 3306 by default; database: the one a call works in when it names none (the listings then cover them all);\n" +
         "  // sslMode: preferred (the default), required, verify-ca, verify-full or none; allowPublicKeyRetrieval: true only for a\n" +
-        "  // caching_sha2_password account over a connection without TLS; connectTimeoutSeconds: 1 to 120 (15 by default). The\n" +
-        "  // tools only read, but an account with SELECT grants alone is the real guard.\n" +
+        "  // caching_sha2_password account over a connection without TLS; connectTimeoutSeconds: 1 to 120 (15 by default).\n" +
+        "  // access: read (the default) or readwrite — mysql_execute may change a readwrite connection's databases while MySQL\n" +
+        "  // mode is read-write, each change allowed by you. An account with SELECT grants alone is the real guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";
 

@@ -70,8 +70,10 @@ public sealed class OracleConfigFile
         "  // },\n" +
         "  //\n" +
         "  // \"schema\": the schema a call works in when it names none (the user's own by default); \"credential\" names another\n" +
-        "  // Credential Manager entry; connectTimeoutSeconds: 1 to 120 (15 by default). SYS is refused. The tools only read,\n" +
-        "  // but a read-only account (ALTER USER … READ ONLY on 23ai, or SELECT grants alone) is the real guard.\n" +
+        "  // Credential Manager entry; connectTimeoutSeconds: 1 to 120 (15 by default). SYS is refused. access: read (the\n" +
+        "  // default) or readwrite — oracle_execute may change a readwrite connection's schemas while Oracle mode is read-write,\n" +
+        "  // each change allowed by you. A read-only account (ALTER USER … READ ONLY on 23ai, or SELECT grants alone) is the\n" +
+        "  // real guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";
 

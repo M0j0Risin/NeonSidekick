@@ -707,7 +707,8 @@ public sealed class SidekickApp
         var sqliteTools = ChatScreen.SqliteToolsFor(ChatScreen.SqliteTools(sqlite, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false);
         // The PostgreSQL tools (2026-10-04): no console needed, so headless has them too.
         var postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.PostgresConnectionsOffered));
-        var postgresTools = ChatScreen.PostgresTools(postgres, () => EffectiveSettings);
+        // postgres_execute never headless (2026-10-05): no pane to allow a change on, so the cut drops it whatever the mode.
+        var postgresTools = ChatScreen.PostgresToolsFor(ChatScreen.PostgresTools(postgres, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, postgres.Catalog());
         // The UNC tools (2026-09-30): no console needed, so headless has them too; every change still needs UNC writes and a readwrite share.
         var uncTools = ChatScreen.UncTools(unc, files, () => EffectiveSettings);
         // The image tools (2026-09-24): no console needed, so headless has them too.

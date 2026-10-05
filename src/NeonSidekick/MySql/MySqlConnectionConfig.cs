@@ -66,6 +66,10 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
     public int? ConnectTimeoutSeconds { get; set; }
 
     /// <summary>What the database holds, in the user's words; the model reads it to pick a connection.</summary>
+    /// <summary><c>read</c> (the default) or <c>readwrite</c>: whether <c>mysql_execute</c> may change this connection's databases while
+    /// <c>MySQL mode</c> is <c>read-write</c> too (2026-10-05, the user's two-key call, <c>unc.json</c>'s shape; <see cref="Sql.ConnectionAccess"/>).</summary>
+    public string? Access { get; set; }
+
     public string? Description { get; set; }
 
     /// <summary>Whether the password lives in Windows Credential Manager rather than in the file.</summary>
@@ -78,6 +82,10 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
     /// <summary>The host and port as one place: <c>host:port</c>.</summary>
     [JsonIgnore]
     public string Endpoint => Host?.Trim() + ":" + (Port ?? DefaultPort).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Whether the entry allows changes (<c>readwrite</c>); the tools still need the family's mode <c>read-write</c>.</summary>
+    [JsonIgnore]
+    public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
     /// <summary>The reason this entry cannot connect, or null: no host, no user, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
     [JsonIgnore]
@@ -110,6 +118,11 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
             if (ssl.Length > 0 && !SslModeWords.Contains(ssl.ToLowerInvariant()))
             {
                 return MySqlText.BadSslMode(ssl);
+            }
+
+            if (Sql.ConnectionAccess.Problem(Access) is { } access)
+            {
+                return access;
             }
 
             if (ConnectTimeoutSeconds is { } seconds && (seconds < 1 || seconds > MaxConnectTimeoutSeconds))

@@ -177,6 +177,99 @@ public sealed class PostgresAccess
         return new SqlRun(SqlOutcome.Ok, "", target.Name, workIn, grids, watch.Elapsed);
     }
 
+    /// <summary>
+    /// <c>postgres_execute</c>'s run (2026-10-05, <c>PostgreSQL mode</c> <c>read-write</c>): one statement the write gate passed, on a
+    /// connection whose entry says <c>"access": "readwrite"</c> (any other is <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the
+    /// caller checked), in <paramref name="database"/> when given. The session as for a read but for <c>default_transaction_read_only</c>
+    /// (<see cref="PostgresConnectionConfig.Builder"/>: <c>statement_timeout</c>, <c>lock_timeout</c> and the strings stay), and no
+    /// transaction of the app's: the statement commits on its own, atomically, so VACUUM runs and a failed one changes nothing. The rows a
+    /// RETURNING gives back are read to <paramref name="maxRows"/> (the rest drained, never cancelled: a cancel would undo the
+    /// statement); <see cref="SqlRun.Changes"/> is the rows the server counts (null for DDL). A timeout, a failed connect and a server
+    /// error are outcomes; a cancelled token throws (the server undoes the statement).
+    /// </summary>
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? database, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        if (Resolve(name, defaultName, out var refused) is not { } target)
+        {
+            return refused!;
+        }
+
+        if (!target.Config.IsReadWrite)
+        {
+            return SqlRun.Refused(SqlOutcome.ReadOnlyConnection, "", target.Name);
+        }
+
+        var secret = PostgresSecrets.Resolve(target);
+        if (secret.Error is { } missing)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
+        }
+
+        var builder = target.Config.Builder(secret.Value, database, timeoutSeconds, readOnly: false);
+        await using var source = Build(builder.ConnectionString);
+        NpgsqlConnection connection;
+        try
+        {
+            connection = await source.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is NpgsqlException or InvalidOperationException or ArgumentException or TimeoutException && !cancellationToken.IsCancellationRequested)
+        {
+            string detail = ex is PostgresException pg ? PostgresText.ServerError(pg.SqlState, pg.MessageText) : LogText.Excerpt(ex.Message.ReplaceLineEndings(" "));
+            DiagnosticLog.Warn(PostgresConfigFile.Category, PostgresText.ConnectFailedLogLine(target.Name, detail));
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, detail, target.Name);
+        }
+
+        await using var held = connection;
+        string workIn = connection.Database ?? builder.Database ?? "";
+        var watch = Stopwatch.StartNew();
+        var grids = new List<SqlGrid>();
+        int? changes;
+        try
+        {
+            await using var command = new NpgsqlCommand(sql, connection) { CommandTimeout = timeoutSeconds + 5 };
+            foreach (string bind in PostgresReadOnlyGate.Binds(sql, parameters.Select(p => p.Name)))
+            {
+                var value = parameters.FirstOrDefault(p => string.Equals(p.Name, bind, StringComparison.OrdinalIgnoreCase));
+                command.Parameters.Add(Bind(bind, value?.Value));
+            }
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (reader.FieldCount > 0)
+                {
+                    grids.Add(await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false));
+                }
+
+                await reader.CloseAsync().ConfigureAwait(false);
+                changes = reader.RecordsAffected >= 0 ? reader.RecordsAffected : null;
+            }
+        }
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested && ex is NpgsqlException or InvalidOperationException)
+        {
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
+        }
+        catch (PostgresException ex) when (ex.SqlState == QueryCanceled)
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
+        }
+        catch (NpgsqlException ex) when (ex.InnerException is TimeoutException)
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
+        }
+        catch (PostgresException ex)
+        {
+            return new SqlRun(SqlOutcome.Failed, Message(ex) + OperatorBindHint(ex.SqlState, ex.MessageText, [sql], parameters.Select(p => p.Name)), target.Name, workIn, grids, watch.Elapsed);
+        }
+        catch (NpgsqlException ex)
+        {
+            return new SqlRun(SqlOutcome.Failed, LogText.Excerpt(ex.Message.ReplaceLineEndings(" "), 600), target.Name, workIn, grids, watch.Elapsed);
+        }
+
+        return new SqlRun(SqlOutcome.Ok, "", target.Name, workIn, grids, watch.Elapsed) { Changes = changes };
+    }
+
     /// <summary>One statement's rows: the <c>@names</c> it uses bound, read to the cap; the last statement cancelled on the server when more rows are left (its cancel answer then expected), so a huge result is not drained.</summary>
     private static async Task<SqlGrid> ReadAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool last, CancellationToken cancellationToken)
     {

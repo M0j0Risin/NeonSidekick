@@ -22,12 +22,13 @@ public static class PostgresText
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's postgres.json was checked for plain passwords: {detail}";
     public const string NoPasswordConnections = "No connection in postgres.json yet; add one first (PostgreSQL add connection).";
 
-    public static string ConnectionLine(PostgresNamedConnection connection, bool isDefault)
+    /// <summary>One connection as <c>postgres_connections</c> lists it; a <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>PostgreSQL mode</c> read-write) lets it change.</summary>
+    public static string ConnectionLine(PostgresNamedConnection connection, bool isDefault, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = string.IsNullOrWhiteSpace(config.Database) ? "" : $" / {config.Database.Trim()}";
-        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Endpoint}{database}, user {config.User?.Trim()}";
+        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(PostgresStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -44,7 +45,7 @@ public static class PostgresText
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 
-    public static string Connections(PostgresCatalog catalog, string? defaultName)
+    public static string Connections(PostgresCatalog catalog, string? defaultName, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -58,7 +59,7 @@ public static class PostgresText
             sb.Append(SqlText.Count(catalog.Connections.Count, "PostgreSQL connection")).Append(" (every PostgreSQL tool takes one by name in \"connection\"; the default is used when it is left out):");
             foreach (var connection in catalog.Connections)
             {
-                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen)));
+                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
             }
         }
 
@@ -119,6 +120,7 @@ public static class PostgresText
             SqlOutcome.UnknownConnection => UnknownConnection(run.Connection, run.Detail),
             SqlOutcome.ConnectFailed => ConnectFailed(run.Connection, run.Detail),
             SqlOutcome.Timeout => Timeout(Where(run), run.Detail),
+            SqlOutcome.ReadOnlyConnection => ServerWriteText.ReadOnlyConnection(PostgresStatementKinds.Family, run.Connection),
             _ => Failed(Where(run), run.Detail),
         };
     }
@@ -235,9 +237,14 @@ public static class PostgresText
     /// <summary>The wizard's test line: who it signed in as, where, the server's version. Pinned.</summary>
     public static string TestOk(string name, string user, string database, string version) => $"Connected to '{name}' as {user} in {database}: {version}";
 
-    /// <summary>The wizard's warning when the account could change data: what it may do. Pinned.</summary>
-    public static string CanWrite(IReadOnlyList<string> powers) =>
-        $"This account can change data ({string.Join(", ", powers)}). The tools never will, but a SELECT-only role is the real guard.";
+    /// <summary>
+    /// The wizard's warning when the account could change data: what it may do. Pinned. A <c>readwrite</c> connection (2026-10-05)
+    /// is told what may then change it: <c>postgres_execute</c>, each change allowed by the user.
+    /// </summary>
+    public static string CanWrite(IReadOnlyList<string> powers, bool readWrite = false) =>
+        readWrite
+            ? $"This account can change data ({string.Join(", ", powers)}). As readwrite, postgres_execute may use those powers under PostgreSQL mode read-write, each change allowed by you; the account is still the real guard."
+            : $"This account can change data ({string.Join(", ", powers)}). The tools never will, but a SELECT-only role is the real guard.";
 
     private static SqlGrid Set(SqlRun run, int index) => index < run.Grids.Count ? run.Grids[index] : new SqlGrid([], [], false);
 

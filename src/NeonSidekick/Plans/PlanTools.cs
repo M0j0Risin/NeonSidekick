@@ -76,6 +76,8 @@ public static class PlanTools
         "docker_lifecycle", "docker_pull", "docker_remove", "docker_prune",
         // SQLite's changes (2026-10-05, SQLite mode read-write): a database changed or made
         "sqlite_execute",
+        // The server families' changes (2026-10-05, each family's mode read-write).
+        "postgres_execute",
     };
 
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>

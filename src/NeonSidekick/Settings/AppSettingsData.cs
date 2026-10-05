@@ -1626,6 +1626,21 @@ public sealed class AppSettingsData
     public bool SqlTools { get; set; }
 
     /// <summary>
+    /// What the SQL tools may do (2026-10-05, the user's ask: SQLite's read-write mode mirrored): <c>read-only</c> (the default,
+    /// the tools as they were) or <c>read-write</c>, which adds <c>sql_execute</c> on the connections of <c>sql.json</c> whose entry says
+    /// <c>"access": "readwrite"</c> — one statement per call, of the kinds <see cref="SqlStatementsAllowed"/> ticks, each allowed on the
+    /// pane. <c>sql_query</c> stays read-only either way; read at each call. One of <see cref="Sql.DatabaseWriteModes.Names"/>. No variable.
+    /// </summary>
+    public string SqlMode { get; set; } = Sql.DatabaseWriteModes.Default;
+
+    /// <summary>
+    /// The kinds of statement <c>sql_execute</c> may run under <c>read-write</c> (2026-10-05): words of
+    /// <see cref="Sql.ServerStatementKinds.Names"/>. Changing data, creating and reading by default; null is the default too, an empty
+    /// list allows none (and <c>sql_execute</c> is then not offered). Unused while read-only. No variable.
+    /// </summary>
+    public List<string>? SqlStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
+
+    /// <summary>
     /// The connection a SQL tool uses when the call names none (2026-09-23): a name in <c>sql.json</c>; empty, or a
     /// name no longer there (or no longer offered, <see cref="SqlConnectionsOffered"/>), = the first offered connection.
     /// A default, never a limit: a call that names another offered connection gets that one. The SQL tab of
@@ -1704,6 +1719,21 @@ public sealed class AppSettingsData
     public bool OracleTools { get; set; }
 
     /// <summary>
+    /// What the Oracle tools may do (2026-10-05, the user's ask: SQLite's read-write mode mirrored): <c>read-only</c> (the default,
+    /// the tools as they were) or <c>read-write</c>, which adds <c>oracle_execute</c> on the connections of <c>oracle.json</c> whose entry says
+    /// <c>"access": "readwrite"</c> — one statement per call, of the kinds <see cref="OracleStatementsAllowed"/> ticks, each allowed on the
+    /// pane. <c>oracle_query</c> stays read-only either way; read at each call. One of <see cref="Sql.DatabaseWriteModes.Names"/>. No variable.
+    /// </summary>
+    public string OracleMode { get; set; } = Sql.DatabaseWriteModes.Default;
+
+    /// <summary>
+    /// The kinds of statement <c>oracle_execute</c> may run under <c>read-write</c> (2026-10-05): words of
+    /// <see cref="Sql.ServerStatementKinds.Names"/>. Changing data, creating and reading by default; null is the default too, an empty
+    /// list allows none (and <c>oracle_execute</c> is then not offered). Unused while read-only. No variable.
+    /// </summary>
+    public List<string>? OracleStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
+
+    /// <summary>
     /// The connection an Oracle tool uses when the call names none (2026-09-30), <see cref="SqlDefaultConnection"/>'s twin: a
     /// name in <c>oracle.json</c>; empty, or a name no longer there (or no longer offered), = the first offered connection.
     /// The Oracle tab of <c>/tools</c>. No variable.
@@ -1744,6 +1774,21 @@ public sealed class AppSettingsData
 
     /// <summary>Whether a turn offers the eight MySQL tools over the connections in <c>mysql.json</c> (2026-09-30); read at each turn like <see cref="OracleTools"/>, no reconnect. Off by default. No variable.</summary>
     public bool MySqlTools { get; set; }
+
+    /// <summary>
+    /// What the MySQL tools may do (2026-10-05, the user's ask: SQLite's read-write mode mirrored): <c>read-only</c> (the default,
+    /// the tools as they were) or <c>read-write</c>, which adds <c>mysql_execute</c> on the connections of <c>mysql.json</c> whose entry says
+    /// <c>"access": "readwrite"</c> — one statement per call, of the kinds <see cref="MySqlStatementsAllowed"/> ticks, each allowed on the
+    /// pane. <c>mysql_query</c> stays read-only either way; read at each call. One of <see cref="Sql.DatabaseWriteModes.Names"/>. No variable.
+    /// </summary>
+    public string MySqlMode { get; set; } = Sql.DatabaseWriteModes.Default;
+
+    /// <summary>
+    /// The kinds of statement <c>mysql_execute</c> may run under <c>read-write</c> (2026-10-05): words of
+    /// <see cref="Sql.ServerStatementKinds.Names"/>. Changing data, creating and reading by default; null is the default too, an empty
+    /// list allows none (and <c>mysql_execute</c> is then not offered). Unused while read-only. No variable.
+    /// </summary>
+    public List<string>? MySqlStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
 
     /// <summary>The connection a MySQL tool uses when the call names none (2026-09-30), <see cref="OracleDefaultConnection"/>'s twin; empty = the first offered. No variable.</summary>
     public string MySqlDefaultConnection { get; set; } = "";
@@ -1812,6 +1857,21 @@ public sealed class AppSettingsData
 
     /// <summary>Whether a turn offers the nine PostgreSQL tools over the connections in <c>postgres.json</c> (2026-10-04); read at each turn, no reconnect. Off by default. No variable.</summary>
     public bool PostgresTools { get; set; }
+
+    /// <summary>
+    /// What the PostgreSQL tools may do (2026-10-05, the user's ask: SQLite's read-write mode mirrored): <c>read-only</c> (the default,
+    /// the tools as they were) or <c>read-write</c>, which adds <c>postgres_execute</c> on the connections of <c>postgres.json</c> whose entry says
+    /// <c>"access": "readwrite"</c> — one statement per call, of the kinds <see cref="PostgresStatementsAllowed"/> ticks, each allowed on the
+    /// pane. <c>postgres_query</c> stays read-only either way; read at each call. One of <see cref="Sql.DatabaseWriteModes.Names"/>. No variable.
+    /// </summary>
+    public string PostgresMode { get; set; } = Sql.DatabaseWriteModes.Default;
+
+    /// <summary>
+    /// The kinds of statement <c>postgres_execute</c> may run under <c>read-write</c> (2026-10-05): words of
+    /// <see cref="Sql.ServerStatementKinds.Names"/>. Changing data, creating and reading by default; null is the default too, an empty
+    /// list allows none (and <c>postgres_execute</c> is then not offered). Unused while read-only. No variable.
+    /// </summary>
+    public List<string>? PostgresStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
 
     /// <summary>The <c>postgres.json</c> connection a PostgreSQL tool uses when the call names none; empty = the first offered.</summary>
     public string PostgresDefaultConnection { get; set; } = "";

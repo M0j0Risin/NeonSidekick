@@ -69,6 +69,7 @@ namespace NeonSidekick.App;
 /// <param name="SessionsEnabled">The setting <c>Session tool</c>.</param>
 /// <param name="SessionTools">How many session tools the next turn offers; the rules carry <see cref="Assistant.SessionRule"/> while any is.</param>
 /// <param name="SqliteWrite">Whether <c>sqlite_execute</c> is among the SQLite tools offered (2026-10-05, <see cref="ChatScreen.SqliteToolsFor"/>): the rules add <see cref="Assistant.SqliteWriteRule"/>.</param>
+/// <param name="ServerWrites">The server families whose <c>_execute</c> tool is offered (2026-10-05, <see cref="ChatScreen.ServerWritesOf"/>): each family's rule is followed by its write sentence.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -129,7 +130,8 @@ public sealed record SystemPromptFacts(
     bool SessionsEnabled = false,
     int SessionTools = 0,
     bool MemorySave = true,
-    bool SqliteWrite = false)
+    bool SqliteWrite = false,
+    ServerWrites ServerWrites = ServerWrites.None)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.WebRule"/>: tools on, the switch on and at least one web tool offered (2026-10-04).</summary>
     public bool Web => ToolsEnabled && WebEnabled && WebTools > 0;
@@ -400,7 +402,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -524,7 +526,8 @@ public static class SystemPromptSummary
             help: facts.Help,
             sqlite: facts.Sqlite,
             postgres: facts.Postgres,
-            sqliteWrite: facts.SqliteWriting);
+            sqliteWrite: facts.SqliteWriting,
+            serverWrites: facts.ServerWrites);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>

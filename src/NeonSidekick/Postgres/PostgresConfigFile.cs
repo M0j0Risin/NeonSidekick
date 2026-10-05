@@ -70,8 +70,9 @@ public sealed class PostgresConfigFile
         "  // },\n" +
         "  //\n" +
         "  // port: 5432 by default; database: the one a call works in when it names none (postgres when absent); sslMode: prefer\n" +
-        "  // (the default), require, verify-ca, verify-full or disable; connectTimeoutSeconds: 1 to 120 (15 by default). The tools\n" +
-        "  // only read, but an account with SELECT grants alone is the real guard.\n" +
+        "  // (the default), require, verify-ca, verify-full or disable; connectTimeoutSeconds: 1 to 120 (15 by default). access:\n" +
+        "  // read (the default) or readwrite — postgres_execute may change a readwrite connection's databases while PostgreSQL\n" +
+        "  // mode is read-write, each change allowed by you. An account with SELECT grants alone is the real guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";
 

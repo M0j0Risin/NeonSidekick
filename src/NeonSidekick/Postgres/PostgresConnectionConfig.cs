@@ -52,6 +52,10 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     public int? ConnectTimeoutSeconds { get; set; }
 
+    /// <summary><c>read</c> (the default) or <c>readwrite</c>: whether <c>postgres_execute</c> may change this connection's databases while
+    /// <c>PostgreSQL mode</c> is <c>read-write</c> too (2026-10-05, the user's two-key call, <c>unc.json</c>'s shape; <see cref="Sql.ConnectionAccess"/>).</summary>
+    public string? Access { get; set; }
+
     public string? Description { get; set; }
 
     [JsonIgnore]
@@ -61,6 +65,10 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     [JsonIgnore]
     public string Endpoint => Host?.Trim() + ":" + (Port ?? DefaultPort).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Whether the entry allows changes (<c>readwrite</c>); the tools still need the family's mode <c>read-write</c>.</summary>
+    [JsonIgnore]
+    public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
     /// <summary>The reason this entry cannot connect, or null: no host, no user, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
     [JsonIgnore]
@@ -95,6 +103,11 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
                 return PostgresText.BadSslMode(ssl);
             }
 
+            if (Sql.ConnectionAccess.Problem(Access) is { } access)
+            {
+                return access;
+            }
+
             if (ConnectTimeoutSeconds is { } seconds && (seconds < 1 || seconds > MaxConnectTimeoutSeconds))
             {
                 return Sql.SqlText.BadConnectTimeout(seconds, MaxConnectTimeoutSeconds);
@@ -112,9 +125,11 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     /// source per call, unpooled, disposed after). <c>standard_conforming_strings</c> is pinned on (the 2026-10-04 review, MySQL's
     /// <c>NO_BACKSLASH_ESCAPES</c> strip in reverse): the gate reads a backslash in a plain <c>'…'</c> string as a character, and a
     /// server, database or role with it off would read <c>\'</c> as an escaped quote and split the text where the gate did not.
-    /// Call only on an entry without a <see cref="Problem"/>.
+    /// Call only on an entry without a <see cref="Problem"/>. <paramref name="readOnly"/> false (2026-10-05, <c>postgres_execute</c>
+    /// on a <c>readwrite</c> connection) leaves <c>default_transaction_read_only</c> out and nothing else: the strings and the timeouts
+    /// stay as the gate and the reads have them.
     /// </summary>
-    public NpgsqlConnectionStringBuilder Builder(string? password, string? database, int timeoutSeconds)
+    public NpgsqlConnectionStringBuilder Builder(string? password, string? database, int timeoutSeconds, bool readOnly = true)
     {
         long millis = Math.Max(1, timeoutSeconds) * 1000L;
         return new NpgsqlConnectionStringBuilder
@@ -128,7 +143,7 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
             CommandTimeout = Math.Max(1, timeoutSeconds) + 5,
             ApplicationName = "NeonSidekick",
             Pooling = false,
-            Options = "-c default_transaction_read_only=on -c standard_conforming_strings=on -c statement_timeout=" + millis.ToString(CultureInfo.InvariantCulture)
+            Options = (readOnly ? "-c default_transaction_read_only=on " : "") + "-c standard_conforming_strings=on -c statement_timeout=" + millis.ToString(CultureInfo.InvariantCulture)
                 + " -c lock_timeout=" + millis.ToString(CultureInfo.InvariantCulture) + " -c idle_in_transaction_session_timeout=" + (millis * 2).ToString(CultureInfo.InvariantCulture),
             SslMode = (SslMode?.Trim().ToLowerInvariant() ?? "") switch
             {

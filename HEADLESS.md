@@ -14,8 +14,8 @@ tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` s
 The SQL, Oracle, MySQL, UNC and ComfyUI tools also offer nothing until entries are ticked in their *… offered* lists (the
 `/tools` tabs, or an add wizard's offer row; in `profile.json`, `SqlConnectionsOffered`, `OracleConnectionsOffered`,
 `MySqlConnectionsOffered`, `UncSharesOffered`, `ComfyWorkflowsOffered`); headless has no way to tick them.
-The SQLite tools only read headless: `sqlite_execute` (*SQLite mode* `read-write`) is never offered, since each
-change waits for an allow on a pane and there is none.
+The SQLite and PostgreSQL tools only read headless: `sqlite_execute` (*SQLite mode* `read-write`) and `postgres_execute`
+(*PostgreSQL mode* `read-write`) are never offered, since each change waits for an allow on a pane and there is none.
 
 ## What the output looks like
 

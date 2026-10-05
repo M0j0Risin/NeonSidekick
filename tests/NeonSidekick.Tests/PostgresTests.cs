@@ -225,9 +225,9 @@ public sealed class PostgresToolsTests : IDisposable
         var catalog = new PostgresCatalog([new PostgresNamedConnection("shop", Config(), "x.json")], []);
         var access = new PostgresAccess(() => catalog.Offered(_settings.PostgresConnectionsOffered));
         var tools = ChatScreen.PostgresTools(access, () => _settings);
-        Assert.Equal(9, tools.Count);
+        Assert.Equal(10, tools.Count);   // the nine reads and postgres_execute (2026-10-05), which plan mode drops
         Assert.Equal(ChatScreen.PostgresToolNames, tools.Select(t => t.Name).ToHashSet());
-        Assert.All(tools, t => Assert.True(PlanTools.Allowed(t.Name), t.Name));
+        Assert.All(tools.Where(t => t is not PostgresExecuteTool), t => Assert.True(PlanTools.Allowed(t.Name), t.Name));
         Assert.StartsWith("1 PostgreSQL connection (every PostgreSQL tool", tools.OfType<PostgresConnectionsTool>().Single().Describe());
 
         var query = tools.OfType<PostgresQueryTool>().Single();
