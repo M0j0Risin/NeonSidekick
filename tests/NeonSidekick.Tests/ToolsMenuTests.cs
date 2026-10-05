@@ -203,6 +203,31 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("⚙️ Settings", SettingsMenu.Title);
     }
 
+    /// <summary>
+    /// The Offered tab's footer (2026-10-05, the user's ask: the band under the list stood blank there): the cursor's tool's whole
+    /// description, following the cursor; a filter keeps it on the tool shown.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheOfferedTabsFooter_SaysTheCursorsToolWhole()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Down);                                       // get_current_time → shift_date
+        Push("read_file".Select(Keys.Char).ToArray());          // the filter: read_file alone
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var facts = Facts();
+        foreach (string tool in new[] { GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, ReadFileTool.ToolName })
+        {
+            var footer = ToolsText.ToolFooter(facts, tool);
+            Assert.NotNull(footer);
+            Assert.Contains("\n" + MenuLayout.Footer(footer, 220), _console.Output);   // the padding to the tallest tab goes under it
+        }
+
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_OpensOnTheOfferedTab_OnTheFirstTool_AndEscClosesIt()
     {

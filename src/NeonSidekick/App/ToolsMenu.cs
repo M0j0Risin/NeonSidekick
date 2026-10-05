@@ -62,8 +62,10 @@ internal sealed class ToolsMenu
     /// tool row past its heading; the headings are rules the cursor never rests on (<see cref="MenuTab.Headings"/>, 2026-10-03).
     /// The Offered tab filters (later on 2026-10-03, <see cref="MenuFilter"/>): <paramref name="offered"/> are the rows under
     /// <paramref name="filter"/>, <paramref name="total"/> the tools there are, for the caption while a filter is typed.
+    /// <paramref name="toolFooter"/> (2026-10-05, the user's ask) says under the list what the cursor's tool does, whole
+    /// (<see cref="ToolsText.ToolFooter"/>); null leaves the band blank on the Offered tab, as it stood until then.
     /// </summary>
-    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool, bool Heading)> offered, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0)
+    public static MenuPage Page(IReadOnlyList<(string Markup, string? Tool, bool Heading)> offered, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null)
     {
         ArgumentNullException.ThrowIfNull(offered);
         ArgumentNullException.ThrowIfNull(saved);
@@ -86,7 +88,10 @@ internal sealed class ToolsMenu
         {
             SpaceToggles = true,
             TabCursors = [ToolsText.FirstToolRow(offered), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            Footer = (t, row) => t > 0 && row < SettingsMenu.ToolsTabFields[t - 1].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[t - 1][row], saved) : null,
+            // The Offered tab's band says the cursor's tool (2026-10-05): a heading, a gap, the off line and the no-match row name none.
+            Footer = (t, row) => t == 0
+                ? row < offered.Count && offered[row].Tool is { } name ? toolFooter?.Invoke(name) : null
+                : row < SettingsMenu.ToolsTabFields[t - 1].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[t - 1][row], saved) : null,
         };
     }
 
@@ -138,7 +143,7 @@ internal sealed class ToolsMenu
                 var facts = _facts();
                 var saved = _settings.Current;
                 var offered = ToolsText.OfferedRows(facts, filter);
-                var page = Page(offered, saved, _menu, tab, filter, facts.Groups.Sum(g => g.Tools.Count));
+                var page = Page(offered, saved, _menu, tab, filter, facts.Groups.Sum(g => g.Tools.Count), name => ToolsText.ToolFooter(facts, name));
                 if (cursor < 0)
                 {
                     cursor = ToolsText.FirstToolRow(offered);

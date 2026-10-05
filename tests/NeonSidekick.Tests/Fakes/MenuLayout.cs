@@ -20,9 +20,12 @@ internal static class MenuLayout
     /// The footer's <see cref="MenuPane.FooterRows"/> rows as printed under the list at <paramref name="width"/> columns for the cursor on
     /// <paramref name="field"/> (null for a row with none: blank rows), each ending in a line break.
     /// </summary>
-    public static string Footer(SettingsField? field, int width)
+    public static string Footer(SettingsField? field, int width) => Footer(field is { } f ? SettingsMenu.FieldFooter(f) : null, width);
+
+    /// <summary>The footer's rows for any <paramref name="footer"/> (a tool's or a skill's, 2026-10-05), as <see cref="Footer(SettingsField?, int)"/>.</summary>
+    public static string Footer(MenuFooter? footer, int width)
     {
-        var lines = field is { } f ? MenuPane.FooterLines(SettingsMenu.FieldFooter(f), width - TextCells.Width(MenuPane.NoPointer)) : [];
+        var lines = footer is { } f ? MenuPane.FooterLines(f, width - TextCells.Width(MenuPane.NoPointer)) : [];
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < MenuPane.FooterRows; i++)
         {
@@ -32,6 +35,6 @@ internal static class MenuLayout
         return sb.ToString();
     }
 
-    /// <summary>Blank footer rows: a tab whose rows say nothing under the list (a tool list, the servers).</summary>
-    public static string BlankFooter => Footer(null, 1);
+    /// <summary>Blank footer rows: a row that says nothing under the list (the servers, a heading, the off line).</summary>
+    public static string BlankFooter => Footer((MenuFooter?)null, 1);
 }

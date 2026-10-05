@@ -413,6 +413,32 @@ public static class ToolsText
         return rows;
     }
 
+    /// <summary>
+    /// What the Offered tab says under the list for the cursor's tool (2026-10-05, the user's ask: the footer band stood blank
+    /// there, while every row cuts its description at the pane's edge): the whole description, word-wrapped, and on a last line
+    /// of its own why the turn does not offer it — the tool's own note, else its group's while the group is off. Null for a name
+    /// no group holds. Plain text, as <see cref="SettingsMenu.FieldFooter(SettingsField)"/>'s. Pure.
+    /// </summary>
+    public static MenuFooter? ToolFooter(ToolsFacts facts, string tool)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(tool);
+        foreach (var group in facts.Groups)
+        {
+            if (group.Tools.FirstOrDefault(t => string.Equals(t.Name, tool, StringComparison.Ordinal)) is not { } found)
+            {
+                continue;
+            }
+
+            string? why = group.ToolNotes.TryGetValue(tool, out var note) ? note
+                : !group.Offered && group.Note.Length > 0 ? group.Note
+                : null;
+            return new MenuFooter(found.Description, why);
+        }
+
+        return null;
+    }
+
     /// <summary>The tool rows of <paramref name="rows"/> (those that name a tool), for the filter's count.</summary>
     public static int ToolCount(IReadOnlyList<(string Markup, string? Tool, bool Heading)> rows)
     {

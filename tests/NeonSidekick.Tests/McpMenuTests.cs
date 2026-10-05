@@ -261,7 +261,9 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(["docker__fail"], _settings.Current.ToolsDisabled);
         // The servers' headings are rules with a gap between them (2026-10-03), the /tools look.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + MenuLayout.BlankFooter + Rule(100), _console.Output);
+        // The band under the list says the cursor's tool whole (2026-10-05, the user's ask: it stood blank on this tab).
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + MenuLayout.Footer(new MenuFooter("Always fails."), 100) + Rule(100), _console.Output);
+        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Echoes the text back."), 100) + Rule(100), _console.Output);   // the first, before the move
         Assert.Contains("  · 🔌 docker__fail: on\n" + Heading("── docker · 2") + "\n", _console.Output);
         Assert.Contains(ToolsText.OfferedKeys, _console.Output);
         pane.Dispose();

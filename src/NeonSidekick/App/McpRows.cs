@@ -190,6 +190,19 @@ public static class McpRows
         return rows;
     }
 
+    /// <summary>
+    /// What the Tools tab says under the list for the cursor's tool (2026-10-05, <see cref="ToolsText.ToolFooter"/>'s twin): its
+    /// whole description, word-wrapped. Null for a name no connected server holds. Pure.
+    /// </summary>
+    public static MenuFooter? ToolFooter(McpFacts facts, string tool)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(tool);
+        return facts.Servers.Where(s => s.State == McpState.Connected).SelectMany(s => s.Tools).FirstOrDefault(t => string.Equals(t.Name, tool, StringComparison.Ordinal)) is { } found
+            ? new MenuFooter(found.Description)
+            : null;
+    }
+
     /// <summary>The first server row (the cursor's opening place); 0 when there is none.</summary>
     public static int FirstServerRow(IReadOnlyList<(string Markup, McpRow? Row)> rows)
     {

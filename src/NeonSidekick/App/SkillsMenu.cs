@@ -264,7 +264,11 @@ internal sealed class SkillsMenu
         return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with
         {
             TabCursors = [0, 0, 0],
-            Footer = (t, row) => t is OptionsTab or ReflectionTab && row < SettingsFields(t).Count ? menu.FieldFooter(SettingsFields(t)[row], saved) : null,
+            // The Offered tab's band says the cursor's skill whole, its warning on a last line (2026-10-05, the user's ask: it stood
+            // blank there while every row cuts its description at the pane's edge); the off, none and problem rows name none.
+            Footer = (t, row) => t is OptionsTab or ReflectionTab
+                ? row < SettingsFields(t).Count ? menu.FieldFooter(SettingsFields(t)[row], saved) : null
+                : row < loaded.Count && loaded[row].Skill is { } skill ? new MenuFooter(skill.Description, skill.Warning) : null,
         };
     }
 

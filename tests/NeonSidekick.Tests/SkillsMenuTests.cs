@@ -287,6 +287,26 @@ public class SkillsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The Offered tab's footer (2026-10-05, the user's ask: the band stood blank there): the cursor's skill's whole description,
+    /// word-wrapped under the list, following the cursor and the filter.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheOfferedTabsFooter_SaysTheCursorsSkillWhole()
+    {
+        string longer = "Writes a haiku of seventeen syllables in three lines of five, seven and five about any topic the user names, then explains the season word it chose and why.";
+        Put(SkillScope.Profile, "haiku", longer);
+        Put(SkillScope.Profile, "pdf", "Extracts PDF text.");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter(longer), 100), _console.Output);   // haiku, the first
+        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Extracts PDF text."), 100), _console.Output);   // pdf, after Down
+        pane.Dispose();
+    }
+
     /// <summary>The toggle saves off and stays off past the pane (the next turn reads it); mid-turn it flips too, as every Options row edits there.</summary>
     [Fact]
     public async Task OnThePane_TheProjectFileRow_SavesOff_MidTurnToo()

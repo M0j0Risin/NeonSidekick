@@ -105,6 +105,30 @@ public class ToolsTextTests : IDisposable
 
     private static AIFunction ToolNamed(ToolsFacts facts, string name) => facts.Groups.SelectMany(g => g.Tools).Single(t => t.Name == name);
 
+    /// <summary>
+    /// The Offered tab's footer (2026-10-05, the user's ask: the band stood blank there): the cursor's tool's whole description,
+    /// and on its last line why the turn does not offer it — the tool's own note, else its off group's; null for no such tool.
+    /// </summary>
+    [Fact]
+    public void ToolFooter_IsTheWholeDescription_WithWhyItIsNotOffered()
+    {
+        var facts = Facts();
+        var read = ToolNamed(facts, ReadFileTool.ToolName);
+        Assert.Equal(new MenuFooter(read.Description), ToolsText.ToolFooter(facts, ReadFileTool.ToolName));
+        Assert.Null(ToolsText.ToolFooter(facts, "no_such_tool"));
+
+        var webOff = Facts(webEnabled: false);
+        var web = webOff.Groups.Single(g => g.Tools.Any(t => t.Name == DownloadFileTool.ToolName));
+        Assert.False(web.Offered);
+        Assert.Equal(new MenuFooter(ToolNamed(webOff, DownloadFileTool.ToolName).Description, web.Note), ToolsText.ToolFooter(webOff, DownloadFileTool.ToolName));
+
+        // A tool's own note wins (load_skill with no skill installed, in the offered Skills group).
+        var noSkill = Facts(skillInstalled: false);
+        var notes = noSkill.Groups.Where(g => g.Offered).SelectMany(g => g.ToolNotes).ToList();
+        Assert.NotEmpty(notes);
+        Assert.All(notes, n => Assert.Equal(n.Value, ToolsText.ToolFooter(noSkill, n.Key)!.Last));
+    }
+
     [Fact]
     public void OfferedRows_ListEveryGroup_WithHeadingsAndOnOff_TheToolBesideItsRow()
     {
