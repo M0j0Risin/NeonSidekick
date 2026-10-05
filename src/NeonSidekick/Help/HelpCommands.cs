@@ -254,7 +254,9 @@ public static class HelpCommands
         ]),
         new("/settings",
         [
-            new("/settings, //", "Edit and save the settings. Ctrl+/ runs it too."),
+            new("/settings, //", "Edit and save the settings. Ctrl+/ runs it too. A letter typed on a tab searches every setting."),
+            new("/settings <words>", "Search every setting (/settings, /tools, /skills, /mcp) by its name, tab or description; Enter edits the row found."),
+            new("/settings changed", "The settings that are not their defaults, with each default; Enter edits, R puts the row back to its default."),
         ]),
         new("/skills",
         [

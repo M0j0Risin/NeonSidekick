@@ -9479,7 +9479,7 @@ public partial class ChatScreenTests : IDisposable
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
         const string strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);
-        Assert.Contains(rule + "\n" + Row(SettingsMenu.TabKeys) + "\n", output);
+        Assert.Contains(rule + "\n" + Row(SettingsMenu.SettingsTabKeys) + "\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · Memory mode: read-only\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · 🖥️ LLM model: qwen3\n", output);
         // The typed edit ran in the pane: the edit keys in the hint row, no › line in the transcript.

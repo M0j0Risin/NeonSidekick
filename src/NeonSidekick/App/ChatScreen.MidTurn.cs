@@ -458,7 +458,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Settings:
                 // The rows that would reconnect, switch the profile, move the sandbox or reshape
                 // the history are refused on the pane, so the flags come back empty.
-                await _menu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
+                await _menu.ShowAsync(cancellationToken, midTurn: true, words: args).ConfigureAwait(false);
                 break;
             case SlashCommand.Memory:
                 // /memory (2026-09-22): the list pane, or forget's or copy's confirmation — the panes

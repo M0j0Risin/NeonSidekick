@@ -264,7 +264,7 @@ internal sealed class SkillsMenu
         return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with
         {
             TabCursors = [0, 0, 0],
-            Footer = (t, row) => t is OptionsTab or ReflectionTab && row < SettingsFields(t).Count ? SettingsMenu.FieldFooter(SettingsFields(t)[row]) : null,
+            Footer = (t, row) => t is OptionsTab or ReflectionTab && row < SettingsFields(t).Count ? menu.FieldFooter(SettingsFields(t)[row], saved) : null,
         };
     }
 

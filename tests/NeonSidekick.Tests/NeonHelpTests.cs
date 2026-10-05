@@ -300,4 +300,15 @@ public class NeonHelpTests
         Assert.Null(group.Switch);
         Assert.False(group.Offers(NeonHelpTool.ToolName));
     }
+
+    /// <summary>The settings search's finder (2026-10-04): the name first, the description after, the shorter name on a tie; none for no word.</summary>
+    [Fact]
+    public void FindSettings_ScoresNameOverDescription()
+    {
+        var found = NeonHelp.FindSettings("tts voice");
+        Assert.Equal(SettingsField.TtsVoice, found[0].Field);
+        Assert.All(NeonHelp.FindSettings("wake phrase").Take(1), r => Assert.Equal(SettingsField.SttWakePhrase, r.Field));
+        Assert.Empty(NeonHelp.FindSettings("   "));
+        Assert.True(NeonHelp.FindSettings("a", max: 3).Count <= 3);
+    }
 }

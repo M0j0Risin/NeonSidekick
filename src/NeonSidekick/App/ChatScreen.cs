@@ -469,6 +469,9 @@ internal sealed partial class ChatScreen
     // the user's ask: the wipe was the standalone /forget, and the copy the standalone /memcopy, until
     // that day). The /queue trio's shape; the copy's words are CopyWord and OverwriteWord, shared with
     // the prompt files and /cmdcopy. Pinned.
+    /// <summary>The completion note of <c>/settings changed</c> (2026-10-04). Pinned.</summary>
+    public const string SettingsChangedNote = "the settings that are not their defaults";
+
     public const string MemoryForgetWord = "forget";
     public const string MemoryForgetNote = "forget every memory";
     public const string MemoryEditWord = "edit";   // 2026-09-23, the user's ask: memory.json in the editor, as /profile edit opens profile.json
@@ -3793,6 +3796,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Imagine:
                 // The workflow names (later on 2026-09-24, the user's ask): only while the first word is typed; the prompt after it is free text.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Workflows?.Invoke() ?? [], argText);
+
+            case SlashCommand.Settings:
+                // The changed settings (2026-10-04); any other words are a search, nothing to complete.
+                return MentionCompleter.Matches([new(SettingsMenu.ChangedWord, SettingsChangedNote)], argText);
 
             case SlashCommand.Theme:
             {
@@ -10140,9 +10147,10 @@ internal sealed partial class ChatScreen
     /// an LLM / TTS / STT change its own session quietly, the tools switch forgets the conversation.
     /// </summary>
     /// <param name="open">A row whose edit runs as the pane opens (2026-09-30: the app's start opens Embedded models with it).</param>
-    private async Task OpenSettingsAsync(CancellationToken cancellationToken, SettingsField? open = null)
+    /// <param name="words">What followed <c>/settings</c> (2026-10-04): the settings search's words, or <c>changed</c>.</param>
+    private async Task OpenSettingsAsync(CancellationToken cancellationToken, SettingsField? open = null, string? words = null)
     {
-        var changes = await _menu.ShowAsync(cancellationToken, midTurn: false, open).ConfigureAwait(false);
+        var changes = await _menu.ShowAsync(cancellationToken, midTurn: false, open, words).ConfigureAwait(false);
 
         // An embedded model used or installed from the catalog (2026-09-29): its own install and connect below stand for
         // the LLM reconnect any other change on the tab asked for.
@@ -10363,7 +10371,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Settings:
-                await OpenSettingsAsync(cancellationToken).ConfigureAwait(false);
+                await OpenSettingsAsync(cancellationToken, words: args).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt:

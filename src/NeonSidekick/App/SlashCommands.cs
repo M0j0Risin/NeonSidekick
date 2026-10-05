@@ -577,5 +577,5 @@ public static class SlashCommands
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
-        or SlashCommand.Log or SlashCommand.Tools;
+        or SlashCommand.Log or SlashCommand.Tools or SlashCommand.Settings;
 }

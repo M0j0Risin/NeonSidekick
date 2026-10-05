@@ -3172,7 +3172,7 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 32\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.TabKeys + "\n", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 7 of 32\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);
         Assert.False(pane.OverlayOpen);
@@ -5104,5 +5104,90 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("What the model may do with long-term memory", footer.Text);
         Assert.Equal("Default: read-write", footer.Last);
         Assert.Equal("a b c", SettingsMenu.PlainHelp("`a` *b* c"));
+    }
+
+    /// <summary>
+    /// /settings &lt;words&gt; (2026-10-04, the UI review): every pane's settings searched, each found row with its value and where it
+    /// lives; Enter edits it there as its tab would; the first ESC clears the words, the next closes.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_Words_SearchEverySetting_AndEnterEditsTheRowFound()
+    {
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Enter, Keys.Down, Keys.Enter);   // Copy user prompt: its page, off picked
+        Push(Keys.Escape, Keys.Escape);            // the words cleared, then closed
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None, midTurn: false, words: "copy user prompt"));
+
+        Assert.False(_settings.Current.CopyUserPrompt);
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("copy user prompt"))), _console.Output);
+        Assert.Matches(@"▸ Copy user prompt +on  /settings › General", _console.Output);
+        Assert.Contains("  · Copy user prompt: off", _console.Output);
+        Assert.Contains(SettingsMenu.SearchEmptyLine, _console.Output);   // the words cleared
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>A letter typed on a settings tab starts the search with it (2026-10-04); ESC twice comes back to the tab.</summary>
+    [Fact]
+    public async Task OnThePane_ALetterTypedOnATab_StartsTheSearch_AndTheTabComesBack()
+    {
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('w'), Keys.Char('a'), Keys.Char('k'), Keys.Char('e'));   // the search, refined as typed
+        Push(Keys.Escape, Keys.Escape);   // the words cleared, then the search closed: the tab again
+        Push(Keys.Escape);                // the menu closed
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel(""))), _console.Output);   // the first ESC: the words gone (the four letters arrived as one run)
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("wake"))), _console.Output);
+        Assert.Matches(@"▸ STT wake +off  /settings › STT", _console.Output);
+        Assert.True(_console.Output.LastIndexOf(SettingsMenu.SettingsTabKeys, StringComparison.Ordinal) > _console.Output.LastIndexOf(SettingsMenu.SearchKeys, StringComparison.Ordinal));   // the tab came back after the search
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The changed settings (2026-10-04): a value is changed when the menu shows it unlike a fresh profile's; put back to its default,
+    /// the properties that move its row return to a fresh profile's, with the row's notice; the profile row is never changed.
+    /// </summary>
+    [Fact]
+    public async Task Changed_IsAgainstAFreshProfile_AndAResetPutsTheDefaultBack()
+    {
+        var (menu, pane) = PaneMenu();
+        _settings.Update(d => d.TtsSpeed = 1.5);
+        string dir = _settings.ProfileDirectory;
+
+        Assert.True(SettingsMenu.IsChanged(SettingsField.TtsSpeed, _settings.Current, dir));
+        Assert.False(SettingsMenu.IsChanged(SettingsField.Profile, _settings.Current, dir));
+        Assert.False(SettingsMenu.IsChanged(SettingsField.WorkingDirectory, new AppSettingsData(), dir));
+        Assert.Equal(["TtsSpeed"], SettingsMenu.DefaultingProperties(SettingsField.TtsSpeed, _settings.Current, dir).Select(p => p.Name));
+        Assert.Empty(SettingsMenu.DefaultingProperties(SettingsField.CopyUserPrompt, new AppSettingsData(), dir));
+
+        Assert.True(menu.ResetToDefault(SettingsField.TtsSpeed));
+        Assert.Equal(new AppSettingsData().TtsSpeed, _settings.Current.TtsSpeed);
+        Assert.False(menu.ResetToDefault(SettingsField.TtsSpeed));   // already there: unchanged
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.TtsSpeed).Last + SettingsMenu.ChangedNote, menu.FieldFooter(SettingsField.TtsSpeed, new AppSettingsData { TtsSpeed = 1.5 }).Last);
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.TtsSpeed), menu.FieldFooter(SettingsField.TtsSpeed, new AppSettingsData()));
+        pane.Dispose();
+    }
+
+    /// <summary>/settings changed lists the changed rows with their defaults; R on one puts it back.</summary>
+    [Fact]
+    public async Task OnThePane_ChangedWord_ListsTheChangedRows_AndRResetsOne()
+    {
+        var (menu, pane) = PaneMenu();
+        var fresh = new AppSettingsData();
+        _settings.Update(d => { foreach (var p in Settings.SettingsJsonContext.Default.AppSettingsData.Properties) { if (p.Get is not null && p.Set is not null) { p.Set(d, p.Get(fresh)); } } d.CopyUserPrompt = false; });
+        Push(Keys.Char('r'));   // the one changed row back to its default
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, words: "changed");
+
+        Assert.True(_settings.Current.CopyUserPrompt);
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.ChangedLabel) + "   " + SettingsMenu.ResetButton + " "), _console.Output);
+        Assert.Matches(@"▸ Copy user prompt +off  Default: on  /settings › General", _console.Output);
+        Assert.Contains("  · Copy user prompt: on", _console.Output);
+        Assert.Contains(SettingsMenu.NothingChangedLine, _console.Output);
+        pane.Dispose();
     }
 }

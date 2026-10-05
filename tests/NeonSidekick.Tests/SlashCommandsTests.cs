@@ -369,8 +369,6 @@ public class SlashCommandsTests
     [InlineData("/usage reset", "reset")]
     [InlineData("/about x", "x")]
     [InlineData("/help me", "me")]
-    [InlineData("/settings x", "x")]
-    [InlineData("// x", "x")]
     [InlineData("/window 80", "80")]
     [InlineData("/draft notes.txt", "notes.txt")]   // 2026-09-19: the editor is the argument, never a file
     public void Parse_AKnownCommandWithAnArgumentItDoesNotTake_IsOverloaded(string line, string args)
@@ -389,7 +387,7 @@ public class SlashCommandsTests
             SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.CmdCopy, SlashCommand.KeyCopy, SlashCommand.Profile, SlashCommand.Timer,   // /cmdcopy 2026-09-21; /keycopy 2026-09-28; /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Terminal, SlashCommand.Copy, SlashCommand.Session, SlashCommand.GitUser,   // /vault [path] 2026-09-23; /terminal [folder] 2026-10-03
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Perf, SlashCommand.Toolbar, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log, SlashCommand.Tools,   // /pdf later on 2026-10-03; /tools <group> 2026-10-03; /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /toolbar [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perfbar later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Perf, SlashCommand.Toolbar, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log, SlashCommand.Tools, SlashCommand.Settings,   // /settings <words> | changed 2026-10-04; /pdf later on 2026-10-03; /tools <group> 2026-10-03; /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /toolbar [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perfbar later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {

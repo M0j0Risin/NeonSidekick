@@ -1042,6 +1042,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The settings list's hint on the pane, where the rows sit under tabs.</summary>
     public const string TabKeys = "Enter = edit · Space = flip · ←/→ tabs · ESC = close";   // Space since 2026-10-04
+
+    /// <summary>The hint row of <c>/settings</c>' own tabs (2026-10-04): <see cref="TabKeys"/> and the search a typed letter starts. Pinned.</summary>
+    public const string SettingsTabKeys = "Enter = edit · Space = flip · type = search · ←/→ tabs · ESC = close";
     public const string EditKeys = "Enter = save · ESC = back";
     public const string PickKeys = "Enter = choose · ESC = back";
 
@@ -3266,9 +3269,10 @@ internal sealed partial class SettingsMenu
         FieldLabel(field, data, profileDirectory, overriddenBy, LabelWidth);
 
     /// <summary>A row padded to <paramref name="width"/> (a tab's column on the pane).</summary>
-    public static string FieldLabel(SettingsField field, AppSettingsData data, string profileDirectory, string? overriddenBy, int width, string? locatedBrowser = null, string? name = null)
+    public static string FieldLabel(SettingsField field, AppSettingsData data, string profileDirectory, string? overriddenBy, int width, string? locatedBrowser = null, string? name = null, bool changed = false)
     {
-        string row = Markup.Escape((name ?? FieldName(field)).PadRight(width)) + Theme.ColorMarkup(Theme.Ink, FieldValue(field, data, profileDirectory, locatedBrowser));
+        // A value that is not the default reads in the secondary accent (2026-10-04, the UI review; the footer says so in words).
+        string row = Markup.Escape((name ?? FieldName(field)).PadRight(width)) + Theme.ColorMarkup(changed ? Theme.Secondary : Theme.Ink, FieldValue(field, data, profileDirectory, locatedBrowser));
         return overriddenBy is null ? row : row + Theme.DimMarkup($"  (overridden by {overriddenBy})");
     }
 
@@ -3303,7 +3307,7 @@ internal sealed partial class SettingsMenu
     /// <paramref name="open"/> (2026-09-30) starts on that row's tab with the cursor on it and runs its edit at once, as Enter
     /// would: the app's start opens Embedded models so. ESC from the edit leaves the pane on the settings list at that row.
     /// </summary>
-    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn, SettingsField? open = null)
+    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn, SettingsField? open = null, string? words = null)
     {
         if (!CanShowMenus())
         {
@@ -3320,6 +3324,15 @@ internal sealed partial class SettingsMenu
         _midTurn = midTurn;
         try
         {
+            if (!string.IsNullOrWhiteSpace(words))
+            {
+                // /settings <words> (2026-10-04): the search, or the changed settings; ESC there closes the menu.
+                changes = string.Equals(words.Trim(), ChangedWord, StringComparison.OrdinalIgnoreCase)
+                    ? await ChangedAsync(cancellationToken).ConfigureAwait(false)
+                    : await SearchAsync(words.Trim(), cancellationToken).ConfigureAwait(false);
+                return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
+            }
+
             while (true)
             {
                 var saved = _settings.Current;
@@ -3327,9 +3340,23 @@ internal sealed partial class SettingsMenu
                     ? located
                     : await PickSettingAsync(saved, tab, cursor, cancellationToken).ConfigureAwait(false);
                 open = null;
-                if (picked is not var (field, page, row, flip))
+                if (picked is not var (field, page, row, flip, search))
                 {
                     return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
+                }
+
+                if (search is not null)
+                {
+                    // A letter typed on a tab (2026-10-04): the search, then the tab again — unless the profile changed under it.
+                    tab = page.Tab;
+                    cursor = row;
+                    changes |= await SearchAsync(search, cancellationToken).ConfigureAwait(false);
+                    if (changes.HasFlag(SettingsChanges.Profile))
+                    {
+                        return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
+                    }
+
+                    continue;
                 }
 
                 tab = page.Tab;
@@ -3435,7 +3462,7 @@ internal sealed partial class SettingsMenu
     /// prompt. The field picked, the page it was picked from (its <see cref="MenuPage.Tab"/> is the
     /// tab shown at Enter) and the row within that page; null for ESC.
     /// </summary>
-    private async Task<(SettingsField Field, MenuPage Page, int Row, bool Flip)?> PickSettingAsync(AppSettingsData saved, int tab, int cursor, CancellationToken cancellationToken)
+    private async Task<(SettingsField Field, MenuPage Page, int Row, bool Flip, string? Search)?> PickSettingAsync(AppSettingsData saved, int tab, int cursor, CancellationToken cancellationToken)
     {
         if (_pane.Enabled)
         {
@@ -3447,11 +3474,16 @@ internal sealed partial class SettingsMenu
                     return null;
                 }
 
+                if (pick.Filter is { Length: > 0 } typed)
+                {
+                    return (SettingsField.Profile, tabbed, pick.Row, false, typed);   // a letter typed: the search (2026-10-04), the tab kept to come back to
+                }
+
                 // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows.
                 var shown = pick.Tab == tabbed.Tab ? tabbed : MenuPage.Tabbed(Title, tabbed.Tabs!, pick.Tab, TabKeys) with { Footer = tabbed.Footer };
                 if (TabRows(pick.Tab)[pick.Row] is { } field)
                 {
-                    return (field, shown, pick.Row, pick.Toggle);
+                    return (field, shown, pick.Row, pick.Toggle, null);
                 }
 
                 (tab, cursor) = (pick.Tab, pick.Row);   // a heading is never a stop; nothing to do there
@@ -3464,14 +3496,14 @@ internal sealed partial class SettingsMenu
             return null;
         }
 
-        return (Fields[row], page, row, false);
+        return (Fields[row], page, row, false, null);
     }
 
     /// <summary>
     /// Where <paramref name="field"/> sits as <see cref="PickSettingAsync"/> would hand it back — the pane's tab page and the row in it,
     /// or the prompt host's list and the row there — or null for a field neither shows (2026-09-30, <see cref="ShowAsync(CancellationToken, bool, SettingsField?)"/>'s open).
     /// </summary>
-    private (SettingsField Field, MenuPage Page, int Row, bool Flip)? Locate(SettingsField field, AppSettingsData saved)
+    private (SettingsField Field, MenuPage Page, int Row, bool Flip, string? Search)? Locate(SettingsField field, AppSettingsData saved)
     {
         if (_pane.Enabled)
         {
@@ -3480,7 +3512,7 @@ internal sealed partial class SettingsMenu
                 int row = RowOf(tab, field);
                 if (row >= 0)
                 {
-                    return (field, SettingsTabs(saved, _settings.ProfileName, tab), row, false);
+                    return (field, SettingsTabs(saved, _settings.ProfileName, tab), row, false, null);
                 }
             }
 
@@ -3488,7 +3520,7 @@ internal sealed partial class SettingsMenu
         }
 
         int index = Array.IndexOf(Fields, field);
-        return index < 0 ? null : (field, SettingsPage(saved, _settings.ProfileName), index, false);
+        return index < 0 ? null : (field, SettingsPage(saved, _settings.ProfileName), index, false, null);
     }
 
     /// <summary>The settings list as the prompt host shows it: one row per field from <paramref name="saved"/>, the profile row from the loaded name.</summary>
@@ -3511,10 +3543,11 @@ internal sealed partial class SettingsMenu
         var tabs = new MenuTab[TabTitles.Count];
         for (int t = 0; t < tabs.Length; t++)
         {
-            tabs[t] = FieldsTab(TabTitles[t], TabFields[t], saved, profile, TabSections.GetValueOrDefault((SettingsTab)t), shortNames: true);
+            // A letter typed on a tab starts the settings search (2026-10-04): the tab's filter, never shown, hands it over.
+            tabs[t] = FieldsTab(TabTitles[t], TabFields[t], saved, profile, TabSections.GetValueOrDefault((SettingsTab)t), shortNames: true) with { Filter = "" };
         }
 
-        return MenuPage.Tabbed(Title, tabs, tab, TabKeys) with { Footer = (t, row) => TabRows(t)[row] is { } field ? FieldFooter(field) : null };
+        return MenuPage.Tabbed(Title, tabs, tab, SettingsTabKeys) with { Footer = (t, row) => TabRows(t)[row] is { } field ? FieldFooter(field, _settings.Current) : null };
     }
 
     /// <summary>
@@ -3558,7 +3591,7 @@ internal sealed partial class SettingsMenu
     {
         if (EmbeddedValue(field, saved) is not { } embedded)
         {
-            return FieldLabel(field, saved, _settings.ProfileDirectory, _overriddenBy(field), width, located, name);
+            return FieldLabel(field, saved, _settings.ProfileDirectory, _overriddenBy(field), width, located, name, IsChanged(field, saved, _settings.ProfileDirectory));
         }
 
         string row = Markup.Escape((name ?? FieldName(field)).PadRight(width)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(embedded));

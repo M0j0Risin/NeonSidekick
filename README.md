@@ -1076,7 +1076,9 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/sampling [field value]` | Edits the per-model sampling on a pane, or the connected model's directly with `<field> <value>`, `<field> clear`, `extra <json>` or `clear`. See Sampling per model. |
 | `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. The argument list offers each of those words while it applies. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | Lists, restores, renames and purges stored sessions. An age is days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name. |
-| `/settings`, `//` | Edits and saves the settings. |
+| `/settings`, `//` | Edits and saves the settings. A letter typed on a tab searches every setting. |
+| `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by its name, tab or description; Enter edits the row found. |
+| `/settings changed` | Lists the settings that are not their defaults, with each default; Enter edits, R puts the row back to its default. A changed value reads in the accent colour on every settings tab. |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab, typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/skills add <search words \| owner/repo[/skill] \| github url \| zip url> [--global \| --profile]` | Installs an [Agent Skill](https://agentskills.io) from the web after a preview. Refused during a reply. See Installing skills. |
 | `/skills purge list <age>` | Lists the skills unused for that long. See Skill records and purging unused skills. |

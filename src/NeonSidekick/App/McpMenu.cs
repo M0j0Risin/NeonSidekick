@@ -84,7 +84,7 @@ internal sealed class McpMenu
         {
             SpaceToggles = true,
             TabCursors = [McpRows.FirstServerRow(servers), ToolsText.FirstToolRow(tools), 0],
-            Footer = (t, row) => t == 2 && row < SettingsMenu.McpTabFields[0].Count ? SettingsMenu.FieldFooter(SettingsMenu.McpTabFields[0][row]) : null,
+            Footer = (t, row) => t == 2 && row < SettingsMenu.McpTabFields[0].Count ? menu.FieldFooter(SettingsMenu.McpTabFields[0][row], saved) : null,
         };
     }
 

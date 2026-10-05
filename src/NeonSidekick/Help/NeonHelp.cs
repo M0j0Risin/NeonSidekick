@@ -175,6 +175,31 @@ internal static class NeonHelp
     }
 
     /// <summary>
+    /// The settings rows <paramref name="q"/> finds (2026-10-04, the UI review: <c>/settings &lt;words&gt;</c> and typing on a settings
+    /// tab), by <see cref="Scored"/>'s rule over the settings alone — three points for a word in the row's name or tab, one for a
+    /// word only in its description, the shorter name first on a tie — at most <paramref name="max"/>; none for no word.
+    /// </summary>
+    public static IReadOnlyList<HelpRow> FindSettings(string q, int max = 40)
+    {
+        ArgumentNullException.ThrowIfNull(q);
+        var words = Words(q).Where(w => !s_stopWords.Contains(w)).Distinct(StringComparer.Ordinal).ToList();
+        if (words.Count == 0)
+        {
+            return [];
+        }
+
+        return HelpLocation.Rows
+            .Select((row, index) => (Row: row, Score: Score(words, row.Label + " " + row.Tab, HelpSettings.Describe(row.Field)), Index: index))
+            .Where(i => i.Score > 0)
+            .OrderByDescending(i => i.Score)
+            .ThenBy(i => i.Row.Label.Length)
+            .ThenBy(i => i.Index)
+            .Take(max)
+            .Select(i => i.Row)
+            .ToList();
+    }
+
+    /// <summary>
     /// Plain words, scored: per query word, three points when it is in an item's name (a command's syntax, a setting's
     /// label, a key), one when only in its text; a word of four letters or more matches by prefix, and a trailing <c>s</c>
     /// is let go. Items that miss every word drop out; of two that tie the shorter name wins (TTS voice over TTS voice preview),

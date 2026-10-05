@@ -86,7 +86,7 @@ internal sealed class ToolsMenu
         {
             SpaceToggles = true,
             TabCursors = [ToolsText.FirstToolRow(offered), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            Footer = (t, row) => t > 0 && row < SettingsMenu.ToolsTabFields[t - 1].Count ? SettingsMenu.FieldFooter(SettingsMenu.ToolsTabFields[t - 1][row]) : null,
+            Footer = (t, row) => t > 0 && row < SettingsMenu.ToolsTabFields[t - 1].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[t - 1][row], saved) : null,
         };
     }
 
