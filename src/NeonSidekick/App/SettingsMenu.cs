@@ -940,6 +940,9 @@ public enum SettingsField
 
     /// <summary>A picker over beside-original and overwrite-original: where an edited picture goes, for the picture windows' right-click menu and <c>image_edit</c> (<see cref="Settings.AppSettingsData.ImageEditMode"/>). The Files tab, under Image edit metadata (later on 2026-10-04, the user's ask); no reconnect. Last in the enum, as every newcomer.</summary>
     ImageEditMode,
+
+    /// <summary>How the transcript draws the user's sent line (<see cref="Settings.AppSettingsData.UserLineStyle"/>, 2026-10-04): a picker, no reconnect. Last, so the flat list's rows above keep their places.</summary>
+    UserLineStyle,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1295,7 +1298,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
          SettingsField.QueueMessages, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
-         SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt,
+         SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey,
@@ -1803,6 +1806,7 @@ internal sealed partial class SettingsMenu
         SettingsField.MemoryMode => "Memory mode",
         SettingsField.WorkingDirectory => "Working directory (cwd)",
         SettingsField.CopyUserPrompt => "Copy user prompt",
+        SettingsField.UserLineStyle => "User line style",
         SettingsField.DraftEditor => "Draft editor",
         SettingsField.ImageEditor => "Image viewer",   // "Image editor" until later still on 2026-09-24 (the user's call); the field and the setting keep the old name
         SettingsField.FileViewImageMaxPerCall => "File view image max (per call)",
@@ -2128,6 +2132,7 @@ internal sealed partial class SettingsMenu
             SettingsField.MemoryMode => data.MemoryMode,
             SettingsField.WorkingDirectory => string.IsNullOrWhiteSpace(data.WorkingDirectory) ? DefaultWorkingDirectoryLabel(profileDirectory) : data.WorkingDirectory,
             SettingsField.CopyUserPrompt => OnOff(data.CopyUserPrompt),
+            SettingsField.UserLineStyle => data.UserLineStyle,
             SettingsField.ShowImageThumbnails => OnOff(data.ShowImageThumbnails),
             SettingsField.LlmCompactType => data.LlmCompactType,
             SettingsField.LlmCompactKeepRecent => Turns(data.LlmCompactKeepRecent),
@@ -4323,6 +4328,22 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.MemoryMode)
         {
             return await PickMemoryModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.UserLineStyle)
+        {
+            // The user line's style (2026-10-04): MemoryMode's picker shape, each row its hint.
+            var names = UI.UserLineStyle.Names;
+            var styles = new MenuPage(Crumb(FieldName(field)), names.Select(n => Markup.Escape(n.PadRight(8)) + Theme.DimMarkup(UI.UserLineStyle.Describe(n))).ToList(), PickKeys);
+            if (await PickAsync(styles, Math.Max(0, Array.IndexOf(names, saved.UserLineStyle)), cancellationToken).ConfigureAwait(false) is not { } index
+                || string.Equals(names[index], saved.UserLineStyle, StringComparison.Ordinal))
+            {
+                return Unchanged();
+            }
+
+            string name = names[index];
+            Apply(field, d => d.UserLineStyle = name);
+            return true;
         }
 
         if (field == SettingsField.WelcomeSplash)

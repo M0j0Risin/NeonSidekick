@@ -4502,7 +4502,7 @@ public partial class ChatScreenTests : IDisposable
         int summary = output.LastIndexOf(folded, StringComparison.Ordinal);
         Assert.True(summary >= 0, output);
         // The reply's own run, under its glyph (the opening calls before the glyph are a run of their own, within the count).
-        Assert.Contains(TranscriptRenderer.AssistantGlyph + folded + "4 tool calls — " + GetCurrentTimeTool.ToolName + " ×4\n", output[(summary - TranscriptRenderer.AssistantGlyph.Length)..]);
+        Assert.Contains("  " + folded + "4 tool calls — " + GetCurrentTimeTool.ToolName + " ×4\n", output[(summary - 2)..]);   // no glyph over a tool run since 2026-10-04: the reply's text wears it
         // The last rebuild: the summary alone above the reply, no tool line between them.
         int reply = output.IndexOf("It is noon.", summary, StringComparison.Ordinal);
         Assert.True(reply > summary, output);
@@ -12886,7 +12886,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("● " + ChatScreen.WithdrawnNotice, output);
+        Assert.Contains("  · " + ChatScreen.WithdrawnNotice, output);   // no glyph over a notice (2026-10-04)
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal("hi", UserText(_chat.Requests[1]));   // the restored draft, sent by the bare Enter; the withdrawn copy left the history
         Assert.Equal(["hi", "later"], _chat.Requests[2].Where(m => m.Role == ChatRole.User).Select(m => m.Text));

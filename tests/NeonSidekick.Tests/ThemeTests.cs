@@ -174,7 +174,8 @@ public class ThemeTests
         Assert.Equal(green, Theme.AccentSecondary.Foreground);
         Assert.Equal(Decoration.None, Theme.AccentSecondary.Decoration);
         Assert.Equal(green, Theme.User.Foreground);              // the alias follows its source
-        Assert.Equal(green, Theme.MarkdownHeading.Foreground);
+        Assert.Equal(ThemePalette.Synthwave.Tertiary, Theme.MarkdownHeading.Foreground);   // H2 off the secondary since 2026-10-04 (the tertiary's)
+        Assert.Equal(Theme.MarkdownBold, Theme.MarkdownHeading3);                         // H3 and below: the body ink, bold
         Assert.Equal(red, Theme.SpinnerStyle.Foreground);        // changed itself
         Assert.Equal(Decoration.None, Theme.SpinnerStyle.Decoration);   // over its source's final style
         Assert.Equal(ThemePalette.Synthwave.Dim, Theme.CodeComment.Foreground);

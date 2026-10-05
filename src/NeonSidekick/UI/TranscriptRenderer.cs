@@ -135,6 +135,10 @@ public sealed class TranscriptRenderer : INoticeSink
     private TimeSpan _thinkingElapsed;
     private bool _glyphAfterThinking;
 
+    // The reply's glyph not drawn yet (2026-10-04, the UI review: it landed on the first tool line): a tool line, a notice or a
+    // break that comes while only the glyph stood takes it out of the slot, and the reply's first text puts it back.
+    private bool _glyphPending;
+
     /// <param name="console">Where the lines go; a <see cref="ScreenPane"/> on the screen also takes the spinner into its hint row.</param>
     public TranscriptRenderer(IAnsiConsole console)
     {
@@ -236,7 +240,7 @@ public sealed class TranscriptRenderer : INoticeSink
     {
         EndRun();
         BreakIfMidText();
-        _console.MarkupLine(UserMarkup(text));
+        _console.MarkupLine(InputLine.SubmittedMarkup(text, _pane?.UserLineStyle()));
         _state = LineState.AtLineStart;
     }
 
@@ -552,6 +556,12 @@ public sealed class TranscriptRenderer : INoticeSink
                 _glyph = false;
             }
 
+            if (_reply.Length == 0 && _glyphPending)
+            {
+                _glyph = true;   // the reply's first text after a tool line or a notice: the glyph it waited for (2026-10-04)
+                _glyphPending = false;
+            }
+
             _reply.Append(text);
             _pane!.SetLive(new ReplyBlock(_reply.ToString(), _glyph, codeKeep: _codeKeep));
             _state = LineState.MidText;
@@ -584,6 +594,7 @@ public sealed class TranscriptRenderer : INoticeSink
     {
         EndThinking();
         EndRun();
+        _glyphPending = false;
         if (!_assistantOpen)
         {
             return;
@@ -796,7 +807,82 @@ public sealed class TranscriptRenderer : INoticeSink
     /// the pane folds the run under its summary. Otherwise the plain line it always was.
     /// </summary>
     private void ToolLine(string fullMarkup, string inlineMarkup) =>
-        ToolWrite(new Markup(fullMarkup + "\n"), () => WriteLine(fullMarkup, inlineMarkup));
+        ToolWrite(new EndedLine(Hanging(fullMarkup)), () => WriteLine(fullMarkup, inlineMarkup));
+
+    /// <summary>
+    /// A one-line markup (<c>[style]  · text[/]</c>, every line builder's shape) as a renderable whose wrapped rows start under its
+    /// text, not at column 0 (2026-10-04, the UI review: a long path in a 🛠️ line wrapped to the window's edge): the leading
+    /// blanks, the glyph and the blanks after it are the first row's prefix, as many blanks the others'. Any other shape — nested
+    /// markup, nothing after the glyph — is the plain line it was.
+    /// </summary>
+    internal static IRenderable Hanging(string markup)
+    {
+        ArgumentNullException.ThrowIfNull(markup);
+        int close = markup.IndexOf(']', StringComparison.Ordinal);
+        if (!markup.StartsWith('[') || markup.StartsWith("[[", StringComparison.Ordinal) || close < 0 || !markup.EndsWith("[/]", StringComparison.Ordinal))
+        {
+            return new Markup(markup);
+        }
+
+        string tag = markup[1..close];
+        string inner = markup[(close + 1)..^3];
+        if (inner.Replace("[[", "", StringComparison.Ordinal).Contains('['))
+        {
+            return new Markup(markup);   // a span inside: drawn whole
+        }
+
+        int start = 0;
+        while (start < inner.Length && inner[start] == ' ')
+        {
+            start++;
+        }
+
+        int end = start;
+        while (end < inner.Length && inner[end] != ' ')
+        {
+            end++;
+        }
+
+        int text = end;
+        while (text < inner.Length && inner[text] == ' ')
+        {
+            text++;
+        }
+
+        if (start == end || text == end || text == inner.Length)
+        {
+            return new Markup(markup);
+        }
+
+        string prefix = inner[..text].Replace("[[", "[", StringComparison.Ordinal).Replace("]]", "]", StringComparison.Ordinal);
+        Style style;
+        try
+        {
+            style = Style.Parse(tag);
+        }
+        catch (InvalidOperationException)
+        {
+            return new Markup(markup);
+        }
+
+        return new UI.Markdown.HangingIndent(prefix, new string(' ', TextCells.Width(prefix)), style, new Markup("[" + tag + "]" + inner[text..] + "[/]"));
+    }
+
+    /// <summary>A renderable and a line break after it: a tool run's member must end with one.</summary>
+    private sealed class EndedLine(IRenderable inner) : IRenderable
+    {
+        public Measurement Measure(RenderOptions options, int maxWidth) => inner.Measure(options, maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+        {
+            foreach (var segment in inner.Render(options, maxWidth))
+            {
+                yield return segment;
+            }
+
+            yield return Segment.LineBreak;
+        }
+    }
 
     /// <summary>
     /// <see cref="ToolLine"/> for any write (2026-10-03, an edit's diff of many rows): <paramref name="member"/> joins the run —
@@ -824,10 +910,15 @@ public sealed class TranscriptRenderer : INoticeSink
                     bool plain = !_slot;
                     if (_slot)
                     {
+                        // The glyph waits for the reply's text (2026-10-04): the run starts with no lead.
                         DropSlot();
+                        _glyphPending = true;
+                        _pane.BeginToolGroup(keep);
                     }
-
-                    _pane.BeginToolGroup(keep, new RawText(AssistantGlyph, Theme.Accent), absorbOpenLine: plain);
+                    else
+                    {
+                        _pane.BeginToolGroup(keep, new RawText(AssistantGlyph, Theme.Accent), absorbOpenLine: plain);
+                    }
                 }
                 else
                 {
@@ -861,8 +952,8 @@ public sealed class TranscriptRenderer : INoticeSink
                 using (_pane!.Batch())
                 {
                     DropSlot();
-                    _console.Write(new RawText(AssistantGlyph, Theme.Accent));
-                    _console.Write(inline);
+                    _glyphPending = true;   // the glyph kept for the reply's text (2026-10-04)
+                    _console.Write(full);
                 }
             }
             else
@@ -921,12 +1012,12 @@ public sealed class TranscriptRenderer : INoticeSink
         {
             if (_slot)
             {
-                // The bare glyph is in the slot: dropped, and written into the flow ahead of the line.
+                // The bare glyph is in the slot: dropped, the line on its own, the glyph kept for the reply's text (2026-10-04).
                 using (_pane!.Batch())
                 {
                     DropSlot();
-                    _console.Write(new RawText(AssistantGlyph, Theme.Accent));
-                    _console.MarkupLine(inlineMarkup);
+                    _glyphPending = true;
+                    _console.MarkupLine(fullMarkup);
                 }
             }
             else
@@ -937,7 +1028,7 @@ public sealed class TranscriptRenderer : INoticeSink
         else
         {
             BreakIfMidText();
-            _console.MarkupLine(fullMarkup);
+            _console.Write(new EndedLine(Hanging(fullMarkup)));   // wrapped rows under the text (2026-10-04)
         }
 
         _state = LineState.AtLineStart;
@@ -956,12 +1047,9 @@ public sealed class TranscriptRenderer : INoticeSink
         {
             if (_state == LineState.GlyphOnly)
             {
-                using (_pane!.Batch())
-                {
-                    DropSlot();
-                    _console.Write(new RawText(AssistantGlyph, Theme.Accent));
-                    _console.WriteLine();
-                }
+                // The bare glyph out of the slot, kept for the reply's text (2026-10-04): no lone glyph line.
+                DropSlot();
+                _glyphPending = true;
             }
             else
             {

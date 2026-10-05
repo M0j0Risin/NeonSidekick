@@ -183,6 +183,9 @@ public static class Theme
     public static Style MarkdownHeading1 => s_current[ThemeStyleSlot.MarkdownHeading1];
     /// <summary>Every other heading level.</summary>
     public static Style MarkdownHeading => s_current[ThemeStyleSlot.MarkdownHeading];
+
+    /// <summary>A third-level heading and below (2026-10-04): the body ink, bold.</summary>
+    public static Style MarkdownHeading3 => s_current[ThemeStyleSlot.MarkdownHeading3];
     /// <summary>The bullet or number ahead of a list item.</summary>
     public static Style MarkdownBullet => s_current[ThemeStyleSlot.MarkdownBullet];
     /// <summary>The gutter bar of a blockquote.</summary>

@@ -134,7 +134,7 @@ public sealed class MarkdownView : IRenderable
     private static IRenderable Block(MarkdownBlock block, Style? quote) => block switch
     {
         ParagraphBlock paragraph => Paragraph(paragraph.Inlines, quote),
-        HeadingBlock heading => Paragraph(heading.Inlines, heading.Level == 1 ? Theme.MarkdownHeading1 : Theme.MarkdownHeading, flat: true),
+        HeadingBlock heading => Paragraph(heading.Inlines, heading.Level switch { 1 => Theme.MarkdownHeading1, 2 => Theme.MarkdownHeading, _ => Theme.MarkdownHeading3 }, flat: true),
         CodeBlock code => Code(code),
         ListBlock list => List(list, quote),
         QuoteBlock inner => new HangingIndent(QuoteGlyph, QuoteGlyph, Theme.MarkdownQuoteBar, Compose(inner.Blocks, Theme.MarkdownQuote, tight: false)),

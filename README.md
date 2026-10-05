@@ -157,6 +157,7 @@ The `--*-check` modes keep nothing (`--sql-check` makes one temporary table insi
 * Enter during a reply queues the message. A draft left on the row survives the reply.
 * ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does, and keeps it in the history: ↑ brings it back). While a reply runs the hint row ends with **esc to stop**, and a running tool shows its own time beside the reply's.
 * A tool result that failed is marked ✗ in the warning colour, and a folded tool run counts them (`· 1 failed`).
+* A reply keeps one left edge: the ● sits on its first text (never on a tool line) and every stretch after a tool keeps its indent; a notice or tool line that wraps continues under its text. Headings: level 1 in the accent, level 2 in the tertiary colour, level 3 and below bold in the body colour.
 * ESC twice on an empty line opens `/rewind` (the hint row prompts for the second press).
 
 ### Keyboard shortcuts
@@ -278,6 +279,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Show image thumbnails | Draws a small thumbnail of each picture you send, each one a tool fetches or makes, and each `/botchat` picture. `/view` and `/imagine` always draw theirs. | on |
 | Image thumbnail size | `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20), `xlarge` (96×24) columns × rows, or `fullsize` (as large as the transcript allows). | `small` |
 | Copy user prompt | `/copy` includes your prompt above the reply. | on |
+| User line style | How your sent line looks in the transcript: `quiet` (the › in the user colour, your words in the body colour), `slab` (your line on a faint fill) or `bold` (the whole line bold in the user colour, the look before 2026-10-04). | quiet |
 | Theme | `abyssal`, `cyberpunk`, `grid`, `mainframe`, `netrunner`, `noir`, `nostromo`, `replicant`, `synthwave`, `vaporwave`, and your own (see [Custom themes](#custom-themes)), sorted by name. A wide enough window previews the highlighted theme (on the terminal's own background when *Themed background* is off); a typed letter jumps to the next theme starting with it. | `synthwave` |
 | Themed background | Gives the terminal the theme's background while the app runs. Off, the terminal profile's own background (colour, acrylic or picture) stays. | on |
 | Themed external windows | The picture viewer, the camera's window and the log window wear the theme (dark title bar and theme colours). Off, they stay black. | on |

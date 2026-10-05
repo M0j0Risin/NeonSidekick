@@ -139,13 +139,16 @@ public sealed class ReplyBlock : IRenderable
         return _view!.CodeSpans(options, ViewWidth(maxWidth));
     }
 
-    private int ViewWidth(int maxWidth) => Glyph ? Math.Max(1, maxWidth - TextCells.Width(TranscriptRenderer.AssistantGlyph)) : maxWidth;
+    // The glyph's two cells or, without it, the same two of indent (2026-10-04, the UI review: one left edge for the whole reply).
+    private int ViewWidth(int maxWidth) => Math.Max(1, maxWidth - TextCells.Width(TranscriptRenderer.AssistantGlyph));
 
     private IRenderable Content => _content ??= Build();
 
     private IRenderable Build()
     {
         _view = new MarkdownView(Document);
-        return Glyph ? new HangingIndent(TranscriptRenderer.AssistantGlyph, ContinuationIndent, Theme.Accent, _view) : _view;
+        // A stretch after a tool line keeps the reply's left edge (2026-10-04, the UI review: it went flush-left, its bullets and code
+        // labels at column 0): the indent the glyph's line has, under no glyph.
+        return Glyph || Text.Length > 0 ? new HangingIndent(Glyph ? TranscriptRenderer.AssistantGlyph : ContinuationIndent, ContinuationIndent, Theme.Accent, _view) : _view;
     }
 }

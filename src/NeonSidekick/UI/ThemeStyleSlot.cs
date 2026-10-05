@@ -69,6 +69,7 @@ public enum ThemeStyleSlot
     Thinking,
     MarkdownHeading1,
     MarkdownHeading,
+    MarkdownHeading3,
     MarkdownBullet,
     MarkdownQuoteBar,
     MarkdownQuote,
@@ -132,7 +133,7 @@ public static class ThemeKeys
         "body", "dimText", "accent", "accentSecondary", "accentTertiary", "label", "user", "assistant", "systemText", "errorText",
         "goodText", "warnText", "sectionHeading", "border", "tableHeader", "spinner", "paneRule", "hint", "trailerMark", "menuHighlight",
         "menuHighlightDim", "menuDisabled", "selectedText", "pasteLabel", "placeholder", "markdownBold", "markdownItalic", "markdownCode",
-        "markdownCodeBlock", "markdownCodeLabel", "thinking", "markdownHeading1", "markdownHeading", "markdownBullet", "markdownQuoteBar",
+        "markdownCodeBlock", "markdownCodeLabel", "thinking", "markdownHeading1", "markdownHeading", "markdownHeading3", "markdownBullet", "markdownQuoteBar",
         "markdownQuote", "markdownLinkUrl", "markdownRule", "codeKeyword", "codeType", "codeString", "codeNumber", "codeComment",
         "codePunctuation", "codeFunction", "codeVariable", "codeAttribute", "codeTag", "codeHeading", "codeInserted", "codeDeleted",
         "diffAdded", "diffRemoved",
@@ -171,7 +172,8 @@ public static class ThemeKeys
         ThemeStyleSlot.Hint => ThemeStyleSlot.DimText,
         ThemeStyleSlot.MarkdownCodeLabel => ThemeStyleSlot.DimText,
         ThemeStyleSlot.MarkdownHeading1 => ThemeStyleSlot.Accent,
-        ThemeStyleSlot.MarkdownHeading => ThemeStyleSlot.AccentSecondary,
+        ThemeStyleSlot.MarkdownHeading => ThemeStyleSlot.AccentTertiary,   // H2 off the user's secondary (2026-10-04, the UI review)
+        ThemeStyleSlot.MarkdownHeading3 => ThemeStyleSlot.MarkdownBold,   // H3 and below: the body ink, bold (2026-10-04)
         ThemeStyleSlot.MarkdownBullet => ThemeStyleSlot.TrailerMark,
         ThemeStyleSlot.MarkdownQuoteBar => ThemeStyleSlot.TrailerMark,
         ThemeStyleSlot.MarkdownQuote => ThemeStyleSlot.DimText,

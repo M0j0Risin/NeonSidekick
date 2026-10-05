@@ -258,9 +258,9 @@ public class MarkdownViewTests : IDisposable
     }
 
     [Fact]
-    public void ReplyBlock_WithoutTheGlyph_IsFlushLeft()
+    public void ReplyBlock_WithoutTheGlyph_KeepsTheRepliesLeftEdge()
     {
-        Assert.Equal(new[] { "Hello" }, Render(new ReplyBlock("Hello", glyph: false)).Select(Text));
+        Assert.Equal(new[] { "  Hello" }, Render(new ReplyBlock("Hello", glyph: false)).Select(Text));   // two cells, as under the glyph (2026-10-04; flush-left until then)
     }
 
     [Fact]

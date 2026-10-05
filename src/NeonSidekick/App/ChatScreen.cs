@@ -1124,6 +1124,8 @@ internal sealed partial class ChatScreen
             LabelAfterUsage = ComfyText.IsGeneratingLabel,
             // "esc to stop" at the busy row's end while the turn runs (2026-10-04, the UI review), not under a menu's own spinner.
             StopHintShown = () => _turnRunning,
+            // How a sent line is kept (2026-10-04, the UI review: User line style).
+            UserLineStyle = () => _effective().UserLineStyle,
             // A running tool's own clock beside the turn's (2026-10-04, the UI review).
             StepClockShown = () => _turnRunning && _toolStage,
             // The embedded model's load (2026-10-01, the review's finding): its spinner and label are their own zone, so a

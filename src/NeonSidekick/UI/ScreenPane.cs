@@ -205,6 +205,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private Func<bool> _stopHintShown = () => false;
 
     private Func<bool> _stepClockShown = () => false;
+
+    private Func<string> _userLineStyle = () => UI.UserLineStyle.Default;
     private long _alertUntil;
     private Func<string> _queued = () => "";
     private Func<string> _usage = () => "";
@@ -2560,6 +2562,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// Whether the busy row shows the step's own clock beside the turn's (2026-10-04, <see cref="BusyText(string, TimeSpan, TimeSpan?)"/>):
     /// the screen says so while a tool runs; a thinking or writing stage, or any other spinner, keeps the one clock. False by default.
     /// </summary>
+    /// <summary>The setting <c>User line style</c> as the screen reads it (2026-10-04): how a sent line is kept in the transcript (<see cref="InputLine.SubmittedMarkup"/>).</summary>
+    public Func<string> UserLineStyle
+    {
+        get => _userLineStyle;
+        set => _userLineStyle = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
     public Func<bool> StepClockShown
     {
         get => _stepClockShown;
@@ -2869,7 +2878,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         if (!Enabled)
         {
             _inner.Cursor.Move(CursorDirection.Left, TextCells.Width(InputLine.PromptGlyph) + _cursorCell);
-            _inner.Write(new Markup(InputLine.SubmittedMarkup(submitted)));
+            _inner.Write(new Markup(InputLine.SubmittedMarkup(submitted, _userLineStyle())));
             int stale = _renderedCells - TextCells.Width(submitted);
             if (stale > 0)
             {
@@ -2903,7 +2912,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        Write(new Markup(InputLine.SubmittedMarkup(submitted) + Environment.NewLine + under));
+        Write(new Markup(InputLine.SubmittedMarkup(submitted, _userLineStyle()) + Environment.NewLine + under));
     }
 
     /// <summary>

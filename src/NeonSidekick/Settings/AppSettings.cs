@@ -676,6 +676,7 @@ public sealed class AppSettings : IDisposable
         CommandTypoIntercept = source.CommandTypoIntercept,
         KeepCommandHistory = source.KeepCommandHistory,
         CopyUserPrompt = source.CopyUserPrompt,
+        UserLineStyle = source.UserLineStyle,
         DraftEditor = source.DraftEditor,
         ImageEditor = source.ImageEditor,
         ThemedBackground = source.ThemedBackground,

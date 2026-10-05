@@ -4019,7 +4019,7 @@ public class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Equal(0, pane.LiveCommitted);
         Assert.Equal(4, pane.LiveRows);
-        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c10\n  c11\n  c12\n", Output[mark..]);
+        Assert.Contains("  " + MarkdownView.CodeHeading("text") + "\n    c10\n    c11\n    c12\n", Output[mark..]);   // a block with no glyph keeps the reply's two cells (2026-10-04)
         Assert.DoesNotContain("  c9\n", Output[mark..]);
         Assert.DoesNotContain(CodeFoldText.Summary("text", 12, expanded: false), Output);
 
@@ -4028,7 +4028,7 @@ public class ScreenPaneTests : IDisposable
         pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 13), glyph: false, codeKeep: 3));
         _time.Advance(ScreenPane.Tick);
         Assert.Equal(0, pane.LiveCommitted);
-        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c11\n  c12\n  c13\n", Output[mark..]);
+        Assert.Contains("  " + MarkdownView.CodeHeading("text") + "\n    c11\n    c12\n    c13\n", Output[mark..]);   // a block with no glyph keeps the reply's two cells (2026-10-04)
 
         mark = Output.Length;
         pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 13) + "\n```\n\nafter", glyph: false, codeKeep: 3));
@@ -4112,7 +4112,7 @@ public class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Equal(0, pane.LiveCommitted);
         Assert.Equal(3, pane.LiveRows);
-        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c11\n  c12\n", Output[mark..]);
+        Assert.Contains("  " + MarkdownView.CodeHeading("text") + "\n    c11\n    c12\n", Output[mark..]);   // a block with no glyph keeps the reply's two cells (2026-10-04)
     }
 
     [Fact]
@@ -4124,7 +4124,7 @@ public class ScreenPaneTests : IDisposable
         pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 3), glyph: false, codeKeep: 5));
         _time.Advance(ScreenPane.Tick);
         Assert.Equal(4, pane.LiveRows);
-        Assert.Contains(MarkdownView.CodeHeading("text") + "\n  c1\n  c2\n  c3\n", Output[mark..]);
+        Assert.Contains("  " + MarkdownView.CodeHeading("text") + "\n    c1\n    c2\n    c3\n", Output[mark..]);   // a block with no glyph keeps the reply's two cells (2026-10-04)
     }
 
     [Fact]
@@ -4196,7 +4196,7 @@ public class ScreenPaneTests : IDisposable
         pane.SetLive(new ReplyBlock("```text\na\nb\nc\nd\n```\n\nafter", glyph: false));
         pane.CommitLive();
 
-        Assert.Contains("text\n  a\n  b\n  c\n  d\n", Output);
+        Assert.Contains("text\n    a\n    b\n    c\n    d\n", Output);
         Assert.DoesNotContain(ToolGroupText.CollapsedGlyph, Output);
     }
 

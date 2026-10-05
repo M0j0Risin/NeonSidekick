@@ -723,7 +723,7 @@ public class TranscriptRendererTests : IDisposable
     }
 
     [Fact]
-    public void Markdown_ANoticeAfterTheBareGlyph_ContinuesTheGlyphLine()
+    public void Markdown_ANoticeAfterTheBareGlyph_IsItsOwnLine_TheGlyphKeptForText()
     {
         using var s = new Styled();
         s.T.BeginAssistant(markdown: true);
@@ -733,7 +733,7 @@ public class TranscriptRendererTests : IDisposable
         s.T.EndAssistant();
 
         Assert.False(s.Pane.LiveOpen);
-        InOrder(s.Output, "● (cancelled)\n", "\n" + s.PaneAfter(2));
+        InOrder(s.Output, "  · (cancelled)\n", "\n" + s.PaneAfter(2));   // the glyph only ever on the reply's text (2026-10-04)
         Assert.Equal(2, s.Pane.FlowRow);
     }
 
@@ -806,5 +806,40 @@ public class TranscriptRendererTests : IDisposable
         Assert.Equal(5, TextCells.Width(TranscriptRenderer.ToolFailedGlyph));
         Assert.Equal("  ▸ 🛠️ 3 tool calls · 1 failed — grep ×2, read_file", ToolGroupText.Summary([("grep", 2), ("read_file", 1)], expanded: false, failed: 1));
         Assert.Equal(" · 2 failed", ToolGroupText.FailedNote(2));
+    }
+
+    /// <summary>
+    /// One left edge for a reply (2026-10-04, the UI review): a turn that calls a tool first draws no glyph over the tool's line; the
+    /// reply's first text wears it, and a stretch after a tool line keeps the two cells; one blank row between the blocks.
+    /// </summary>
+    [Fact]
+    public void AReplyAfterAToolLine_TakesTheGlyph_AndEveryStretchKeepsTheLeftEdge()
+    {
+        using var s = new Styled();
+        s.T.BeginAssistant(markdown: true);
+        s.Tick();
+        s.T.Tool("read_file", "{}");
+        s.T.ToolResult("read_file", "4 lines");
+        s.T.AppendDelta("Here is the list:\n\n- one\n- two\n\nAnd code:\n\n```python\nprint(1)\n```\n\nDone.");
+        s.Tick();
+        s.T.Tool("read_file", "{}");
+        s.T.AppendDelta("After it.");
+        s.T.EndAssistant();
+
+        Assert.DoesNotContain("● " + TranscriptRenderer.ToolGlyph.TrimStart(), s.Output);
+        InOrder(s.Output, "read_file", "● Here is the list:\n   \n  • one\n  • two\n   \n  And code:\n   \n  " + NeonSidekick.UI.Markdown.MarkdownView.CodeHeading("python"), "  Done.\n", "  After it.\n");
+    }
+
+    /// <summary>A notice or tool line that wraps continues under its text (2026-10-04, the UI review), not at column 0; a span inside draws whole.</summary>
+    [Fact]
+    public void AWrappedLine_ContinuesUnderItsText()
+    {
+        var console = new TestConsole();
+        console.Profile.Width = 20;
+        console.Write(TranscriptRenderer.Hanging(TranscriptRenderer.NoticeMarkup("one two three four five six")));
+        Assert.Equal(["  · one two three", "    four five six"], console.Output.TrimEnd().Split('\n').Select(l => l.TrimEnd()));
+        Assert.IsType<Markup>(TranscriptRenderer.Hanging("[red]a [bold]b[/][/]"));
+        Assert.IsType<Markup>(TranscriptRenderer.Hanging("plain"));
+        Assert.IsType<Markup>(TranscriptRenderer.Hanging("[red]  ·[/]"));
     }
 }

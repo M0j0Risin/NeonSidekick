@@ -372,10 +372,22 @@ public sealed partial class InputLine
     /// </summary>
     public Func<int, DroppedPicture?>? PictureFile { get; set; }
 
-    public static string SubmittedMarkup(string text)
+    /// <summary>
+    /// The sent line as the transcript keeps it, in <paramref name="style"/> (<see cref="UserLineStyle"/>) (2026-10-04, the UI review: always bold in the
+    /// secondary colour until then, whatever a theme's <c>user</c> style said): <c>quiet</c> the glyph in <see cref="Theme.User"/> and the
+    /// words in <see cref="Theme.Body"/>, <c>slab</c> the whole on <see cref="Theme.MenuHighlight"/>'s fill, <c>bold</c> the whole in
+    /// <see cref="Theme.User"/>. A second line starts under the first's words.
+    /// </summary>
+    public static string SubmittedMarkup(string text, string? style = null)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return string.Concat("[", Theme.ToHex(Theme.Secondary), " bold]", Markup.Escape(PromptGlyph + text.Replace("\n", "\n" + ContinuationIndent, StringComparison.Ordinal)), "[/]");
+        string words = text.Replace("\n", "\n" + ContinuationIndent, StringComparison.Ordinal);
+        return UserLineStyle.Resolve(style) switch
+        {
+            UserLineStyle.Bold => Theme.StyleMarkup(Theme.User, PromptGlyph + words),
+            UserLineStyle.Slab => Theme.StyleMarkup(Theme.MenuHighlight, PromptGlyph + words),
+            _ => Theme.StyleMarkup(Theme.User, PromptGlyph) + Theme.StyleMarkup(Theme.Body, words),
+        };
     }
 
     /// <summary>

@@ -1041,7 +1041,12 @@ public class InputLineTests : IDisposable
     [Fact]
     public void SubmittedMarkup_IsPinned_AndEscaped()
     {
-        Assert.Equal("[#33E0FF bold]› hi [[x]][/]", InputLine.SubmittedMarkup("hi [x]"));
+        // User line style (2026-10-04): quiet by default (the glyph in the user style, the words in the body's), slab, and bold (the old line).
+        Assert.Equal("[bold #33E0FF]› [/][#EFE6FF]hi [[x]][/]", InputLine.SubmittedMarkup("hi [x]"));
+        Assert.Equal(InputLine.SubmittedMarkup("hi [x]"), InputLine.SubmittedMarkup("hi [x]", "nonsense"));
+        Assert.Equal("[bold #33E0FF]› hi [[x]][/]", InputLine.SubmittedMarkup("hi [x]", UserLineStyle.Bold));
+        Assert.Equal("[" + Theme.MenuHighlight.ToMarkup() + "]› hi [[x]][/]", InputLine.SubmittedMarkup("hi [x]", " SLAB "));
+        Assert.Equal(["quiet", "slab", "bold"], UserLineStyle.Names);
         Assert.Equal(37, InputLine.AvailableCells(40));
         Assert.Equal(1, InputLine.AvailableCells(2));
     }
@@ -2243,7 +2248,8 @@ public class InputLineTests : IDisposable
     [Fact]
     public void SubmittedMarkup_IndentsTheLinesAfterTheFirst()
     {
-        Assert.EndsWith("]› a\n  b\n  c[/]", InputLine.SubmittedMarkup("a\nb\nc"));
+        Assert.EndsWith("]a\n  b\n  c[/]", InputLine.SubmittedMarkup("a\nb\nc"));
+        Assert.EndsWith("]› a\n  b\n  c[/]", InputLine.SubmittedMarkup("a\nb\nc", UserLineStyle.Bold));
         Assert.Throws<ArgumentNullException>(() => InputLine.SubmittedMarkup(null!));
     }
 

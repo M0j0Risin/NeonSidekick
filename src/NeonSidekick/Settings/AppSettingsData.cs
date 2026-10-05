@@ -55,9 +55,16 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether <c>/copy</c> puts the user's own prompt (as a blockquote) above each reply it
-    /// copies, or the replies alone. A toggle like <see cref="Memory"/>: no variable.
+    /// copies, or the replies alone. A toggle: no variable.
     /// </summary>
     public bool CopyUserPrompt { get; set; } = true;
+
+    /// <summary>
+    /// How the transcript draws your sent line (2026-10-04, the UI review): one of <see cref="UI.UserLineStyle.Names"/> —
+    /// <c>quiet</c> (the default: the <c>›</c> in the user colour, the words in the body's), <c>slab</c> (the line on a faint fill)
+    /// or <c>bold</c> (the bold line it was until then). Anything else reads as the default. No variable.
+    /// </summary>
+    public string UserLineStyle { get; set; } = UI.UserLineStyle.Default;
 
     /// <summary>
     /// The command line <c>/draft</c> opens its temporary file with (2026-09-19), the file's path
