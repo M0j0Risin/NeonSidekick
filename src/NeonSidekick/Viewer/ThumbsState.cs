@@ -74,7 +74,7 @@ public enum ThumbChange
 }
 
 /// <summary>
-/// The thumbnail browser's state, with no window in it (2026-10-04, the user's ask: <c>/thumbs &lt;folder&gt;</c>, a grid of the
+/// The thumbnail browser's state, with no window in it (2026-10-04, the user's ask: <c>/thumbs &lt;folder&gt;</c>, now <c>/view &lt;folder&gt; --thumbs</c>, a grid of the
 /// folder's pictures beside the picture viewer). The pictures are kept oldest first by creation time, the path breaking a tie —
 /// the viewer's own order (<see cref="ViewerState.Reset"/>) — so a picture that arrives (ComfyUI generating, the user's case)
 /// goes on the end and no tile already drawn ever moves (the user's ask: "keep the thumbnails from jumping around"). A

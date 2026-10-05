@@ -16,6 +16,33 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public Func<IReadOnlyList<CameraDevice>>? Cameras { get; set; }
 
+    /// <summary>
+    /// Whether <c>/camera watch</c> runs, for the Camera tool page's button (2026-10-04, the user's ask): the screen's watch; null
+    /// where there is no camera layer (the page then has no button), and set with <see cref="SetCameraWatch"/>.
+    /// </summary>
+    public Func<bool>? CameraWatching { get; set; }
+
+    /// <summary>
+    /// Watch mode started (true, at <c>Camera watch every</c>) or stopped (false) for the Camera tool page's button (2026-10-04):
+    /// the screen's own start and stop, with the line <c>/camera watch</c> would say and whether it failed.
+    /// </summary>
+    public Func<bool, (bool Ok, string Text)>? SetCameraWatch { get; set; }
+
+    /// <summary>
+    /// The Camera tool page's button (2026-10-04, the user's ask: an action at the top, as the Web page's): <c>/camera watch</c> on
+    /// or off, a monochrome glyph before the word as every header button has. Pinned.
+    /// </summary>
+    public const string CameraWatchButtonTitle = "◉ watch";
+
+    /// <summary>The key that is <see cref="CameraWatchButtonTitle"/>.</summary>
+    public const char CameraWatchKey = 'w';
+
+    /// <summary>The Camera tool page's hint: <see cref="PickKeys"/> with the watch button's key (2026-10-04). Pinned.</summary>
+    public const string CameraToggleKeys = "Enter = choose · W = watch · ESC = back";
+
+    /// <summary>The Camera tool page's one button (2026-10-04): <see cref="CameraWatchButtonTitle"/>, lit while watch mode runs, a press switching it. Pinned.</summary>
+    public static IReadOnlyList<MenuButton> CameraWatchButtons(bool watching) => [new(CameraWatchButtonTitle, CameraWatchKey, watching)];
+
     /// <summary>How the menu shows an empty <c>Camera output folder</c> (2026-10-02): the photos land in the working directory itself. Pinned.</summary>
     public const string CameraOutputHereLabel = "(the working directory)";
 

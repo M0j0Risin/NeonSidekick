@@ -8,7 +8,7 @@ using static NeonSidekick.Viewer.ViewerNative;
 namespace NeonSidekick.Viewer;
 
 /// <summary>
-/// The thumbnail browser (2026-10-04, the user's ask: <c>/thumbs &lt;folder&gt;</c> and <c>/comfy thumbs</c>, a window of a folder's
+/// The thumbnail browser (2026-10-04, the user's ask: <c>/thumbs &lt;folder&gt;</c> — <c>/view &lt;folder&gt; --thumbs</c> since later that day — and <c>/comfy thumbs</c>, a window of a folder's
 /// pictures as thumbnails beside the picture viewer). A click on a tile moves the viewer to that picture (<see cref="Picked"/>, through
 /// the chat, which also moves the console's picture strip); the viewer's own keys and the strip's arrows move the selection here
 /// (<see cref="Follow"/>, which never answers back, so the three cannot chase each other). Pictures arriving in the folder go on the

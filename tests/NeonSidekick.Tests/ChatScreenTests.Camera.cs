@@ -664,4 +664,32 @@ public partial class ChatScreenTests
 
         Assert.DoesNotContain(CameraCaptureTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
     }
+
+    /// <summary>
+    /// The toolbar's 📸 opens the Camera tool page with the watch button (2026-10-04, the user's ask): W starts /camera watch at
+    /// the setting's interval, its line on the pane, and the typed /camera watch off then finds it running.
+    /// </summary>
+    [Fact]
+    public async Task TheCameraToolPage_TheWatchButton_StartsWatch()
+    {
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["camera"]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 200;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the toolbar at 103: 📸 at 0
+        StepsWhenIdle(
+            input => { input.PushClick(0, 103); input.PushClick(0, 103); },   // 📸: the Camera tool page
+            input => input.Push(Keys.Char('w'), Keys.Escape),                  // watch on, the page left
+            Line("/camera watch off"),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        var saved = _settings.Current;
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + "   " + SettingsMenu.CameraWatchButtonTitle + " ") + "\n", output);
+        Assert.Contains(CameraText.WatchOn(saved.CameraWatchSeconds, saved.CameraWatchThreshold, saved.CameraWatchUnprompted), output);
+        Assert.Contains(CameraText.WatchOff, output);
+        Assert.DoesNotContain(CameraText.WatchNotOn, output);
+        Assert.Empty(_chat.Requests);
+    }
 }

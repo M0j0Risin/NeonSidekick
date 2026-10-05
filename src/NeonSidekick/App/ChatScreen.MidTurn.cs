@@ -193,8 +193,9 @@ internal sealed partial class ChatScreen
     /// dropped it) are <see cref="MidTurnClass.Quick"/>: the camera has its own thread and the viewer its own window, and none
     /// of them opens a pane or touches the line; a word <c>/camera</c> does not know is its error at once. The bare
     /// <c>/camera</c> (its pane would take the keys from the reply) and <c>/camera snap</c> (the photo goes on the idle line) still
-    /// wait. <c>/thumbs &lt;folder&gt;</c> and <c>/comfy thumbs</c> (2026-10-04) are <see cref="MidTurnClass.Quick"/> as <c>/view</c> and
-    /// <c>/comfy view</c> are: a window of its own; the bare <c>/thumbs</c> is its usage error after the reply. Pure.
+    /// wait. <c>/view &lt;path&gt; --thumbs</c> (<c>/thumbs &lt;folder&gt;</c> until later on 2026-10-04) and <c>/comfy thumbs</c> (2026-10-04)
+    /// are <see cref="MidTurnClass.Quick"/> as <c>/view</c> and <c>/comfy view</c> are: a window of its own; a bare <c>--thumbs</c>, or
+    /// with <c>--chat</c> as well, is the usage error after the reply. Pure.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
@@ -202,7 +203,6 @@ internal sealed partial class ChatScreen
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb is not (Camera.CameraVerb.Shutter or Camera.CameraVerb.Snap) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
-        SlashCommand.Thumbs when args.Trim().Length > 0 => MidTurnClass.Quick,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
         _ => MidTurnPolicy(command, args.Length > 0),
@@ -596,14 +596,22 @@ internal sealed partial class ChatScreen
                 // /comfy view alone reaches here (2026-09-27, MidTurnPolicy's string form); the notice lands in the reply.
                 OpenViewer(notice: true);
                 break;
-            case SlashCommand.Thumbs:
-                // /thumbs <folder> (2026-10-04): the window, never the transcript the turn owns.
-                HandleThumbs(args);
-                break;
             case SlashCommand.View:
-                // /view <path> alone reaches here (later on 2026-09-27): the window, never the transcript the turn owns.
-                OpenInViewer(ParseViewArgs(args).Path);
+            {
+                // /view <path> alone reaches here (later on 2026-09-27): the window, never the transcript the turn owns; with
+                // --thumbs (2026-10-04) the thumbnail browser's.
+                var (path, _, thumbs) = ParseViewArgs(args);
+                if (thumbs)
+                {
+                    OpenThumbsAt(path);
+                }
+                else
+                {
+                    OpenInViewer(path);
+                }
+
                 break;
+            }
             case SlashCommand.Camera:
                 // /camera live | watch | off | list | use alone reach here (2026-10-02, MidTurnPolicy's string form): the camera's
                 // own thread and window; nothing of the turn's is touched.

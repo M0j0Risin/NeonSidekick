@@ -136,4 +136,71 @@ public partial class ToolsMenuTests
         Assert.Contains("Camera watch min gap (s) " + SettingsMenu.CameraWatchMinGapRangeError + "; keeping 120.", _console.Output);
         pane.Dispose();
     }
+
+    /// <summary>
+    /// The Camera tool page's watch button (2026-10-04, the user's ask): W starts watch with its line on the status line, the page
+    /// comes back, W again stops it, ESC leaves with no "unchanged" over them and the switch untouched; a failure is an error line.
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_Camera_TheWatchButton_StartsAndStopsWatch()
+    {
+        var (menu, pane, settings) = PaneMenu();
+        bool watching = false;
+        var asked = new List<bool>();
+        settings.CameraWatching = () => watching;
+        settings.SetCameraWatch = on =>
+        {
+            asked.Add(on);
+            if (asked.Count == 3)
+            {
+                return (false, "No camera answered.");
+            }
+
+            watching = on;
+            return (true, on ? "Watching now." : "Stopped now.");
+        };
+        bool was = _settings.Current.CameraTools;
+        Push(Keys.Char('w'), Keys.Char('w'), Keys.Char('w'), Keys.Escape);
+
+        await menu.ShowSwitchAsync(SettingsField.CameraTools, CancellationToken.None);
+
+        Assert.Equal([true, false, true], asked);
+        Assert.False(watching);
+        Assert.Equal(was, _settings.Current.CameraTools);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + "   " + SettingsMenu.CameraWatchButtonTitle + " ") + "\n", _console.Output);
+        Assert.Contains(SettingsMenu.CameraToggleKeys, _console.Output);
+        Assert.Contains("  · Watching now.\n", _console.Output);
+        Assert.Contains("  · Stopped now.\n", _console.Output);
+        Assert.Contains("No camera answered.", _console.Output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>Without a camera layer (no callbacks) the page is the plain on/off page: no button, the plain keys (2026-10-04).</summary>
+    [Fact]
+    public async Task ShowSwitch_Camera_WithoutACameraLayer_HasNoButton()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('w'), Keys.Escape);
+
+        await menu.ShowSwitchAsync(SettingsField.CameraTools, CancellationToken.None);
+
+        Assert.DoesNotContain(SettingsMenu.CameraWatchButtonTitle, _console.Output);
+        Assert.DoesNotContain(SettingsMenu.CameraToggleKeys, _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public void CameraWatchButtons_LightWhileWatching()
+    {
+        // 2026-10-04: one button, key W, lit while /camera watch runs; a monochrome glyph of one cell before the word.
+        var off = Assert.Single(SettingsMenu.CameraWatchButtons(false));
+        Assert.Equal("◉ watch", off.Title);
+        Assert.Equal('w', off.Key);
+        Assert.False(off.On);
+        Assert.True(Assert.Single(SettingsMenu.CameraWatchButtons(true)).On);
+        Assert.Equal(1, TextCells.Width(off.Title[..1]));
+        Assert.Equal("Enter = choose · W = watch · ESC = back", SettingsMenu.CameraToggleKeys);
+    }
 }

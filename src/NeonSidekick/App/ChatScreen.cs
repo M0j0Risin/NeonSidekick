@@ -958,7 +958,8 @@ internal sealed partial class ChatScreen
         Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null,
         Action<string, string?>? openThumbs = null,
         Action<string>? followThumbs = null,
-        Action<string>? showInViewer = null)
+        Action<string>? showInViewer = null,
+        Func<bool>? closeThumbs = null)
     {
         _logFile = logFile;
         _openTerminal = openTerminal;
@@ -990,10 +991,11 @@ internal sealed partial class ChatScreen
         // The strip's arrows moving an open viewer (2026-09-28): PictureWindow.Follow in the app on Windows; null = the strip keeps to itself.
         _followViewer = followViewer;
         // The thumbnail browser (2026-10-04): ThumbsWindow.Open and Follow, and the viewer moved without the keyboard
-        // (PictureWindow.ShowQuietly), in the app on Windows; null = /thumbs refused, the hub's moves skipped.
+        // (PictureWindow.ShowQuietly), in the app on Windows; null = /view --thumbs refused, the hub's moves skipped.
         _openThumbs = openThumbs;
         _followThumbs = followThumbs;
         _showInViewer = showInViewer;
+        _closeThumbs = closeThumbs;
         _ownsMcp = mcp is null;
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
         _clockTools = ClockTools(time);
@@ -1233,6 +1235,9 @@ internal sealed partial class ChatScreen
         // The Docker tab's container checklist (2026-10-02): the screen's engine door, the pipe the settings name.
         _menu.DockerContainers = _docker.ContainersAsync;
         _menu.Cameras = _camera.Available ? _camera.List : null;
+        // The Camera tool page's watch button (2026-10-04, the user's ask), only where there is a camera layer to watch with.
+        _menu.CameraWatching = _camera.Available ? () => _cameraWatch.Running : null;
+        _menu.SetCameraWatch = _camera.Available ? SetWatchFromPane : null;
         _menu.Effective = _effective;
         _menu.BeforeEmbeddedRemove = StopEmbeddedDownloadOfAsync;
         BindProfile();
@@ -1345,6 +1350,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     public const string SettingsToolGlyph = "⚙️";
     public const string ProfileToolGlyph = "🪪";
+
+    /// <summary>The Themes item (2026-10-04, the user's ask): an abacus, after the ID card; its double-click is <c>/theme</c>'s picker, which wears it too. Pinned.</summary>
+    public const string ThemeToolGlyph = "🧮";
     public const string ToolsToolGlyph = "🛠️";
     public const string McpToolGlyph = McpText.Glyph;
     public const string SkillsToolGlyph = "🎓";
@@ -1374,7 +1382,9 @@ internal sealed partial class ChatScreen
     public const string ClaudeToolGlyph = "✴️";
     public const string DockerToolGlyph = DockerText.Glyph;
     public const string ObsidianToolGlyph = "💎";
-    public const string SqlToolGlyph = "🪟";
+
+    /// <summary>The SQL tools' toolbar glyph: a drum since 2026-10-04 (the user's ask; the window until then, which the Comfy thumb viewer took).</summary>
+    public const string SqlToolGlyph = "🛢️";
     public const string OracleToolGlyph = "🔮";
     public const string MySqlToolGlyph = "🐬";
 
@@ -1392,19 +1402,22 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The windows (2026-10-03, the user's picks): the log, <c>/camera live</c>'s window and the picture viewer (the picture
     /// strip's button glyph), always drawn; a double-click opens the window, or closes it while it is open, as Ctrl+Alt+G, V
-    /// and U do (<see cref="CloseByChord"/>). Pinned.
+    /// and U do (<see cref="CloseByChord"/>). The Comfy thumb viewer after them (2026-10-04, the user's ask): <c>/comfy thumbs</c>'
+    /// browser, opened or closed the same way, though no chord runs it. Pinned.
     /// </summary>
     public const string LogToolGlyph = "📄";
     public const string LiveViewToolGlyph = "📺";
     public const string ComfyViewToolGlyph = ViewerText.StripButton;
+    public const string ComfyThumbsToolGlyph = "🪟";
 
     /// <summary>The lines the window items run (2026-10-03): the typed commands their chords run. Pinned.</summary>
     public const string LogToolLine = "/log";
     public const string LiveViewToolLine = "/camera live";
     public const string ComfyViewToolLine = "/comfy " + ViewerText.ViewWord;
+    public const string ComfyThumbsToolLine = "/comfy " + ThumbsText.ThumbsWord;
 
-    /// <summary>Whether <paramref name="line"/> is a window item's (<see cref="LogToolLine"/> and the two viewers'): its double-click closes the window while it is open, as the chord's second press does.</summary>
-    public static bool TogglesWindow(string? line) => line is LogToolLine or LiveViewToolLine or ComfyViewToolLine;
+    /// <summary>Whether <paramref name="line"/> is a window item's (<see cref="LogToolLine"/>, the two viewers' and the thumb viewer's): its double-click closes the window while it is open, as the chord's second press does.</summary>
+    public static bool TogglesWindow(string? line) => line is LogToolLine or LiveViewToolLine or ComfyViewToolLine or ComfyThumbsToolLine;
 
     /// <summary>
     /// The glyphs every item checked always draws, in strip order: all but the lock and the officer, which come and go with
@@ -1713,6 +1726,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Comfy when string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) && _closeViewer?.Invoke() == true:
                 _flow.Notice(ViewerText.Closed);
                 return true;
+            // The toolbar's 🪟 a second time (2026-10-04): no chord runs /comfy thumbs, so only the item's double-click comes here.
+            case SlashCommand.Comfy when string.Equals(args.Trim(), ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase) && _closeThumbs?.Invoke() == true:
+                _flow.Notice(ThumbsText.Closed);
+                return true;
             case SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Live && _liveLease is not null:
                 StopLive();
                 _transcript.Notice(Camera.CameraText.LiveOff);
@@ -1807,6 +1824,7 @@ internal sealed partial class ChatScreen
     {
         SettingsToolGlyph => SlashCommands.SettingsWord,
         ProfileToolGlyph => SlashCommands.ProfileWord,
+        ThemeToolGlyph => SlashCommands.ThemeWord,
         SkillsToolGlyph => SlashCommands.SkillsWord,
         ToolsToolGlyph => SlashCommands.ToolsWord,
         McpToolGlyph => SlashCommands.McpWord,
@@ -1836,6 +1854,7 @@ internal sealed partial class ChatScreen
         LogToolGlyph => LogToolLine,
         LiveViewToolGlyph => LiveViewToolLine,
         ComfyViewToolGlyph => ComfyViewToolLine,
+        ComfyThumbsToolGlyph => ComfyThumbsToolLine,
         _ => null,
     };
 
@@ -4013,7 +4032,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Cwd:
                 return MentionCompleter.Matches([new(CwdHomeWord, CwdDefaultNote), new(CwdBrowseWord, FolderText.BrowseNote)], argText);
 
-            case SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Thumbs:
+            case SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal:
                 return MentionCompleter.Matches(sources.Folders(argText).Select(folder => new CompletionItem(folder, "")).ToList(), argText);
 
             case SlashCommand.Vault:
@@ -4230,7 +4249,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static bool TakesPathArgument(string command) =>
         SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
-            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault or SlashCommand.Thumbs;
+            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault;
 
     /// <summary>
     /// The path list for a command whose argument is a sandbox path — <c>/speak</c> (2026-09-17),
@@ -4266,11 +4285,12 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        // /view --chat <path> (2026-09-27): the path after the flag completes, and a pick keeps the flag (a pick replaces the whole argument).
+        // /view --chat <path> (2026-09-27), and --thumbs (2026-10-04): the path after the flag completes, and a pick keeps the flag
+        // (a pick replaces the whole argument).
         string flag = "";
-        if (kind == SlashCommand.View && argText.StartsWith(ViewChatFlag + " ", StringComparison.OrdinalIgnoreCase))
+        if (kind == SlashCommand.View && Array.Find([ViewChatFlag, ViewThumbsFlag], f => argText.StartsWith(f + " ", StringComparison.OrdinalIgnoreCase)) is { } leading)
         {
-            flag = argText[..(ViewChatFlag.Length + 1)];
+            flag = argText[..(leading.Length + 1)];
             argText = argText[flag.Length..].TrimStart();
         }
 
@@ -7385,55 +7405,90 @@ internal sealed partial class ChatScreen
 
     // ── /view (2026-09-17) ──────────────────────────────────────────────────
 
-    /// <summary>A bare <c>/view</c> (or <c>--chat</c> alone). Pinned.</summary>
-    public const string ViewUsageError = "Usage: /view <image or folder> [--chat]";
+    /// <summary>A bare <c>/view</c> (or a flag alone, or both flags, 2026-10-04). Pinned.</summary>
+    public const string ViewUsageError = "Usage: /view <image or folder> [--chat | --thumbs]";
 
     /// <summary><c>/view</c>'s word for drawing the picture in the transcript rather than opening the viewer (2026-09-27). Matched ignoring case. Pinned.</summary>
     public const string ViewChatFlag = "--chat";
+
+    /// <summary>
+    /// <c>/view</c>'s word for the thumbnail browser rather than the viewer (2026-10-04, the user's ask: <c>/thumbs &lt;folder&gt;</c>
+    /// folded in): a folder opens the browser on it, a picture its folder with it selected (<see cref="OpenThumbsAt"/>). Matched
+    /// ignoring case. Pinned.
+    /// </summary>
+    public const string ViewThumbsFlag = "--thumbs";
 
     /// <summary>The codecs read the file for the model but refused it for the screen. Pinned.</summary>
     public static string ViewNotDrawnError(string relative) => $"Could not draw '{relative}'";
 
     /// <summary>
-    /// <c>/view</c>'s argument split into the path and <see cref="ViewChatFlag"/> (2026-09-27): the flag counts as the first or
-    /// the last word, any case, and the path between keeps its inner spaces. Pure.
+    /// <c>/view</c>'s argument split into the path, <see cref="ViewChatFlag"/> (2026-09-27) and <see cref="ViewThumbsFlag"/>
+    /// (2026-10-04): a flag counts as the first or the last word, any case, peeled off either end until none is left, and the path
+    /// between keeps its inner spaces. Both flags are the caller's usage error. Pure.
     /// </summary>
-    public static (string Path, bool Chat) ParseViewArgs(string args)
+    public static (string Path, bool Chat, bool Thumbs) ParseViewArgs(string args)
     {
         ArgumentNullException.ThrowIfNull(args);
         string text = args.Trim();
-        if (string.Equals(text, ViewChatFlag, StringComparison.OrdinalIgnoreCase))
+        bool chat = false, thumbs = false;
+        while (PeelViewFlag(ref text) is { } flag)
         {
-            return ("", true);
+            chat |= flag == ViewChatFlag;
+            thumbs |= flag == ViewThumbsFlag;
         }
 
-        if (text.StartsWith(ViewChatFlag, StringComparison.OrdinalIgnoreCase) && text.Length > ViewChatFlag.Length && char.IsWhiteSpace(text[ViewChatFlag.Length]))
+        return (text, chat, thumbs);
+    }
+
+    /// <summary>One of <c>/view</c>'s flags taken off the whole of <paramref name="text"/>, its front or its back (a whole word only), or null.</summary>
+    private static string? PeelViewFlag(ref string text)
+    {
+        foreach (string flag in (ReadOnlySpan<string>)[ViewChatFlag, ViewThumbsFlag])
         {
-            return (text[ViewChatFlag.Length..].Trim(), true);
+            if (string.Equals(text, flag, StringComparison.OrdinalIgnoreCase))
+            {
+                text = "";
+                return flag;
+            }
+
+            if (text.StartsWith(flag, StringComparison.OrdinalIgnoreCase) && text.Length > flag.Length && char.IsWhiteSpace(text[flag.Length]))
+            {
+                text = text[flag.Length..].Trim();
+                return flag;
+            }
+
+            if (text.EndsWith(flag, StringComparison.OrdinalIgnoreCase) && text.Length > flag.Length && char.IsWhiteSpace(text[^(flag.Length + 1)]))
+            {
+                text = text[..^flag.Length].Trim();
+                return flag;
+            }
         }
 
-        if (text.EndsWith(ViewChatFlag, StringComparison.OrdinalIgnoreCase) && text.Length > ViewChatFlag.Length && char.IsWhiteSpace(text[^(ViewChatFlag.Length + 1)]))
-        {
-            return (text[..^ViewChatFlag.Length].Trim(), true);
-        }
-
-        return (text, false);
+        return null;
     }
 
     /// <summary>
-    /// <c>/view &lt;image or folder&gt; [--chat]</c> (2026-09-27, the user's ask: now that there is a built-in viewer, <c>/view</c>
+    /// <c>/view &lt;image or folder&gt; [--chat | --thumbs]</c> (2026-09-27, the user's ask: now that there is a built-in viewer, <c>/view</c>
     /// opens it): a picture opens the viewer on its folder, held on it, a folder opens the viewer on the folder (its newest
     /// picture, new ones followed) — <see cref="OpenInViewer"/>. With <see cref="ViewChatFlag"/> the picture is drawn in the
-    /// transcript as before (<see cref="DrawView"/>), and so is a picture where there is no viewer (not Windows). Sandbox
-    /// paths only, either way. The window form works under a reply too (<see cref="MidTurnPolicy(SlashCommand, string)"/>);
-    /// <c>--chat</c> waits. Not headless.
+    /// transcript as before (<see cref="DrawView"/>), and so is a picture where there is no viewer (not Windows). With
+    /// <see cref="ViewThumbsFlag"/> (2026-10-04) the thumbnail browser opens instead (<see cref="OpenThumbsAt"/>); both flags, or
+    /// either with no path, are the usage error (the user's call: a bare <c>--thumbs</c> opens nothing). Sandbox paths only,
+    /// either way. The window forms work under a reply too (<see cref="MidTurnPolicy(SlashCommand, string)"/>); <c>--chat</c>
+    /// waits. Not headless.
     /// </summary>
     private void HandleView(string args)
     {
-        var (path, chat) = ParseViewArgs(args);
-        if (path.Length == 0)
+        var (path, chat, thumbs) = ParseViewArgs(args);
+        if (path.Length == 0 || (chat && thumbs))
         {
             _transcript.Error(ViewUsageError);
+            return;
+        }
+
+        if (thumbs)
+        {
+            OpenThumbsAt(path);
             return;
         }
 
@@ -10553,10 +10608,6 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.View:
                 HandleView(args);
-                return false;
-
-            case SlashCommand.Thumbs:
-                HandleThumbs(args);
                 return false;
 
             case SlashCommand.Imagine:

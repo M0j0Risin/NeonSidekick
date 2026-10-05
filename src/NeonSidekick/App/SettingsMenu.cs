@@ -1082,8 +1082,8 @@ internal sealed partial class SettingsMenu
     /// <summary>The <c>/reasoning</c> picker's label; ESC keeps the level in use. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/>.</summary>
     public const string ReasoningTitle = "💭 LLM reasoning";
 
-    /// <summary>The title of <c>/theme</c>'s picker (2026-09-23). Pinned.</summary>
-    public const string ThemeTitle = "🎨 Theme";
+    /// <summary>The title of <c>/theme</c>'s picker (2026-09-23); the abacus since 2026-10-04, the toolbar's Themes glyph (the palette until then, ComfyUI's too). Pinned.</summary>
+    public const string ThemeTitle = "🧮 Theme";
 
     /// <summary>What <c>/theme &lt;name&gt;</c> answers to a word that is not one of <see cref="ThemeName.Names"/>. Pinned.</summary>
     public static string ThemeNameError(string name) => ThemeNameError(name, ThemeName.Names);
@@ -6253,6 +6253,37 @@ internal sealed partial class SettingsMenu
                 break;
             }
         }
+        else if (field == SettingsField.CameraTools && CameraWatching is { } watching && SetCameraWatch is { } setWatch)
+        {
+            // The Camera tool page carries the watch button (2026-10-04, the user's ask): a press starts or stops /camera watch at
+            // once, its line on the status line, and the page comes back with the button lit or not. Where there is no camera
+            // layer there is no button (the screen leaves both callbacks null).
+            var camera = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], _pane.Enabled ? CameraToggleKeys : PickKeys);
+            int cursor = was ? 0 : 1;
+            while (true)
+            {
+                var pressed = await PickChecklistAsync(camera, cursor, cancellationToken, CameraWatchButtons(watching())).ConfigureAwait(false);
+                if (pressed is { Button: >= 0 } button)
+                {
+                    cursor = button.Row;
+                    var (ok, text) = setWatch(!watching());
+                    if (ok)
+                    {
+                        Sink.Notice(text);
+                        modeChanged = true;
+                    }
+                    else
+                    {
+                        Sink.Error(text);
+                    }
+
+                    continue;
+                }
+
+                picked = pressed?.Row;
+                break;
+            }
+        }
         else
         {
             var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], PickKeys);
@@ -6261,7 +6292,8 @@ internal sealed partial class SettingsMenu
 
         if (picked is not { } index || (index == 0) == was)
         {
-            // A browser mode switched on the Web page is a change of its own: no "unchanged" over its notice.
+            // A browser mode switched on the Web page is a change of its own, and so is watch mode on the Camera tool page: no
+            // "unchanged" over its notice.
             return modeChanged || Unchanged();
         }
 

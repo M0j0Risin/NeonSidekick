@@ -9,7 +9,8 @@ using NeonSidekick.Viewer;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The thumbnail browser on the screen (2026-10-04): <c>/thumbs</c> and <c>/comfy thumbs</c> open it, and the chat keeps it, the viewer
+/// The thumbnail browser on the screen (2026-10-04): <c>/view &lt;path&gt; --thumbs</c> (<c>/thumbs</c> until later that day), <c>/comfy
+/// thumbs</c> and the toolbar's 🪟 open it, and the chat keeps it, the viewer
 /// and the strip on one picture; the picture menu's attach, print and lines arrive from a window's thread.
 /// </summary>
 public partial class ChatScreenTests
@@ -17,9 +18,10 @@ public partial class ChatScreenTests
     private Action<string, string?>? _openThumbs;   // ThumbsWindow.Open: null = none, as off Windows
     private Action<string>? _followThumbs;          // ThumbsWindow.Follow: null = none
     private Action<string>? _showInViewer;          // PictureWindow.ShowQuietly: null = none
+    private Func<bool>? _closeThumbs;               // ThumbsWindow.Close: null = none
 
     [Fact]
-    public async Task Thumbs_OpensOnAFolder_OrOnAPicturesFolderWithItSelected_AndTheErrors()
+    public async Task ViewThumbs_OpensOnAFolder_OrOnAPicturesFolderWithItSelected_AndTheErrors()
     {
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -28,12 +30,13 @@ public partial class ChatScreenTests
         File.WriteAllText(Path.Combine(files, "notes.txt"), "text");
         var opened = new List<(string Folder, string? Select)>();
         _openThumbs = (folder, select) => opened.Add((folder, select));
-        PushLine("/thumbs docs");
-        PushLine("/thumbs docs/square.bmp");
-        PushLine("/thumbs");
-        PushLine("/thumbs nope");
-        PushLine("/thumbs notes.txt");
-        PushLine(@"/thumbs ..\x");
+        PushLine("/view docs --thumbs");
+        PushLine("/view --thumbs docs/square.bmp");
+        PushLine("/view --thumbs");                  // no path: the usage error (the user's call, 2026-10-04)
+        PushLine("/view --chat docs --thumbs");      // both: the usage error
+        PushLine("/view nope --thumbs");
+        PushLine("/view notes.txt --thumbs");
+        PushLine(@"/view ..\x --thumbs");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -42,7 +45,7 @@ public partial class ChatScreenTests
         Assert.Equal([(docs, null), (docs, Path.Combine(docs, "square.bmp"))], opened);
         Assert.Equal(2, Count(output, ThumbsText.Opened(docs)));
         Assert.Contains(ThumbsText.Keys, output);
-        Assert.Contains("  ✗ " + ThumbsText.UsageError, output);
+        Assert.Equal(2, Count(output, "  ✗ " + ChatScreen.ViewUsageError));
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
         Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x"), output);
@@ -62,7 +65,7 @@ public partial class ChatScreenTests
         }
 
         PushLine("/comfy thumbs");
-        PushLine("/thumbs .");
+        PushLine("/view . --thumbs");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -81,7 +84,7 @@ public partial class ChatScreenTests
         }
     }
 
-    /// <summary><c>/comfy thumbs</c> and <c>/thumbs &lt;folder&gt;</c> under a reply: the window opens, its line lands in the reply, the reply runs on.</summary>
+    /// <summary><c>/comfy thumbs</c> and <c>/view &lt;folder&gt; --thumbs</c> under a reply: the window opens, its line lands in the reply, the reply runs on.</summary>
     [Fact]
     public async Task MidTurn_Thumbs_OpensTheWindow_TheReplyRunsOn()
     {
@@ -92,7 +95,7 @@ public partial class ChatScreenTests
             if (i == 1)
             {
                 PushLine("/comfy thumbs");
-                PushLine("/thumbs .");
+                PushLine("/view . --thumbs");
             }
         });
 
@@ -101,12 +104,48 @@ public partial class ChatScreenTests
         Assert.Equal(2, opened.Count);
         Assert.Contains(ThumbsText.Opened(Path.GetDirectoryName(ComfyPicture("x.png"))!), output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/comfy"), output);
-        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/thumbs"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/view"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
-        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Thumbs, "docs"));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.View, "docs --thumbs"));
         Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Comfy, "thumbs"));
-        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Thumbs, ""));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.View, "--thumbs"));
+    }
+
+    /// <summary>
+    /// The toolbar's 🪟 (2026-10-04, the user's ask): a double-click opens the browser on the ComfyUI output folder, the next closes
+    /// it, as 🎞️ does the viewer; the typed <c>/comfy thumbs</c> only opens. 🧮 opens <c>/theme</c>'s picker, which wears it.
+    /// </summary>
+    [Fact]
+    public async Task TheToolbarsWindow_OpensAndClosesTheComfyThumbs_AndTheAbacusOpensTheThemes()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Themes, ToolbarItems.ComfyThumbs]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102, the toolbar 103
+        bool open = false;
+        var opened = new List<string>();
+        int closed = 0;
+        _openThumbs = (folder, _) => { opened.Add(folder); open = true; };
+        _closeThumbs = () => { bool was = open; open = false; closed += was ? 1 : 0; return was; };
+        StepsWhenIdle(
+            input => { input.PushClick(3, 103); input.PushClick(3, 103); },   // 🪟: opened
+            input => { input.PushClick(3, 103); input.PushClick(3, 103); },   // 🪟 again: closed
+            Line("/comfy thumbs"),                                            // typed: opened
+            Line("/comfy thumbs"),                                            // typed again: brought forward, never closed
+            input => { input.PushClick(0, 103); input.PushClick(0, 103); },   // 🧮: the theme picker
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, opened.Count);
+        Assert.Equal(1, closed);
+        Assert.True(open);
+        Assert.Contains(ThumbsText.Closed, output);
+        Assert.Contains(SettingsMenu.ThemeTitle, output);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ThemeToolGlyph + " " + ChatScreen.ComfyThumbsToolGlyph, "", 239), output);
+        Assert.Empty(_chat.Requests);
     }
 
     /// <summary>

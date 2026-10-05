@@ -8,8 +8,8 @@ using NeonSidekick.Viewer;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The thumbnail browser's side of the chat (2026-10-04, the user's ask): <c>/thumbs &lt;folder&gt;</c> and <c>/comfy thumbs</c> open
-/// it, and the chat is the hub that keeps it, the picture viewer and the console's picture strip on the same picture — a click in the
+/// The thumbnail browser's side of the chat (2026-10-04, the user's ask): <c>/view &lt;folder or picture&gt; --thumbs</c> (<c>/thumbs
+/// &lt;folder&gt;</c> until later that day, folded into <c>/view</c> at the user's ask) and <c>/comfy thumbs</c> open it, and the chat is the hub that keeps it, the picture viewer and the console's picture strip on the same picture — a click in the
 /// browser moves the viewer (<see cref="ThumbsPicked"/>), the viewer's keys and the strip's arrows move the browser
 /// (<see cref="FollowThumbs"/>), and neither window's follow answers back, so nothing chases itself. The picture menu's attach and
 /// print come here from the windows' threads (<see cref="AttachPicture"/>, <see cref="PrintPicture"/>), queued for the idle line,
@@ -23,6 +23,9 @@ internal sealed partial class ChatScreen
     /// <summary>An open thumbnail browser moved to a picture quietly (<see cref="ThumbsWindow.Follow"/>); null where there is none.</summary>
     private readonly Action<string>? _followThumbs;
 
+    /// <summary>The thumbnail browser closed, true when one was open (2026-10-04, the toolbar's 🪟 a second time: <see cref="ThumbsWindow.Close"/>); null where there is none.</summary>
+    private readonly Func<bool>? _closeThumbs;
+
     /// <summary>The viewer moved to a picture without the keyboard, opened when there is none (<see cref="PictureWindow.ShowQuietly"/>); null where there is none.</summary>
     private readonly Action<string>? _showInViewer;
 
@@ -34,18 +37,14 @@ internal sealed partial class ChatScreen
     private bool WindowWorkReady => !_windowAttaches.IsEmpty || !_windowPrints.IsEmpty;
 
     /// <summary>
-    /// <c>/thumbs &lt;folder&gt;</c>: the folder resolved in the sandbox (as <c>/view</c>'s path), the browser opened on it (or the open one
-    /// pointed at it and brought forward); a picture's path opens its folder with it selected. Errors and the notices go through the
-    /// flow sink, so it is safe under a reply. Any thread.
+    /// <c>/view &lt;folder or picture&gt; --thumbs</c> (<see cref="ViewThumbsFlag"/>; <c>/thumbs &lt;folder&gt;</c> until later on 2026-10-04):
+    /// the folder resolved in the sandbox (as <c>/view</c>'s path), the browser opened on it (or the open one pointed at it and brought
+    /// forward); a picture's path opens its folder with it selected. <see cref="HandleView"/> has refused an empty path already. Errors
+    /// and the notices go through the flow sink, so it is safe under a reply. Any thread.
     /// </summary>
-    private void HandleThumbs(string args)
+    private void OpenThumbsAt(string args)
     {
         string path = args.Trim().Trim('"');
-        if (path.Length == 0)
-        {
-            _flow.Error(ThumbsText.UsageError);
-            return;
-        }
 
         var outcome = _files.Resolve(path, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)

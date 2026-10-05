@@ -458,7 +458,7 @@ public sealed class ThumbsTests
         Assert.Equal(@"D:\p — 1 picture · NeonSidekick thumbnails", ThumbsText.Title(@"D:\p", 1, null, 0));
         Assert.Equal("0001.png — 3/12 · NeonSidekick thumbnails", ThumbsText.Title(@"D:\p", 12, "0001.png", 3));
         Assert.Equal("(\U0001F5BC\uFE0F thumbnails of D:\\p)", ThumbsText.Opened(@"D:\p"));
-        Assert.Equal("Usage: /thumbs <folder>", ThumbsText.UsageError);
+        Assert.Equal("(🖼️ thumbnails closed)", ThumbsText.Closed);
         Assert.Equal("thumbs", ThumbsText.ThumbsWord);
         Assert.Contains("Ctrl+wheel", ThumbsText.Keys);
         Assert.Contains("TAB terminal", ThumbsText.Keys);

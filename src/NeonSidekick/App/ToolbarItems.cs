@@ -15,12 +15,15 @@ namespace NeonSidekick.App;
 /// Seventeen more on 2026-10-03 (the user's ask, their glyphs and names): the tool switches, each opening its group's switch
 /// (<c>/tools &lt;group&gt;</c>) and drawn on the off slab while it is off, and the log and the two viewers, each opening its
 /// window or closing it as its chord does; the user's order with them, the chart moved behind the log, and later that day
-/// behind the two viewers, the last glyph on the row and the checklist.
+/// behind the two viewers, the last glyph on the row and the checklist. Two more on 2026-10-04 (the user's ask): 🧮 Themes after
+/// the profile (<c>/theme</c>'s picker) and 🪟 the Comfy thumb viewer after the Comfy viewer (<c>/comfy thumbs</c>, opening or
+/// closing the thumbnail browser) — 🪟 was SQL's until then, which took 🛢️.
 /// </summary>
 public static class ToolbarItems
 {
     public const string Settings = "settings";
     public const string Profile = "profile";   // later on 2026-09-29, the user's ask: 🪪, /profile's picker
+    public const string Themes = "themes";     // 2026-10-04, the user's ask: 🧮, /theme's picker
     public const string Tools = "tools";
     public const string Mcp = "mcp";
     public const string Skills = "skills";
@@ -56,18 +59,19 @@ public static class ToolbarItems
     public const string Log = "log";
     public const string LiveView = "liveview";
     public const string ComfyView = "comfyview";
+    public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs
     public const string Path = "path";
 
     /// <summary>
     /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,
     /// the disk, the lock and the officer, the tool switches, the log, the two viewers, the chart (the last glyph, later on
-    /// 2026-10-03, the user's ask). Pinned.
+    /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
+        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
         Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, LiveView, ComfyView, Perf, Path,
+        Log, LiveView, ComfyView, ComfyThumbs, Perf, Path,
     ];
 
     /// <summary>
@@ -87,6 +91,7 @@ public static class ToolbarItems
     {
         Settings => ChatScreen.SettingsToolGlyph,
         Profile => ChatScreen.ProfileToolGlyph,
+        Themes => ChatScreen.ThemeToolGlyph,
         Tools => ChatScreen.ToolsToolGlyph,
         Mcp => ChatScreen.McpToolGlyph,
         Skills => ChatScreen.SkillsToolGlyph,
@@ -116,6 +121,7 @@ public static class ToolbarItems
         Log => ChatScreen.LogToolGlyph,
         LiveView => ChatScreen.LiveViewToolGlyph,
         ComfyView => ChatScreen.ComfyViewToolGlyph,
+        ComfyThumbs => ChatScreen.ComfyThumbsToolGlyph,
         Path => FolderText.FolderGlyph,
         _ => "",
     };
@@ -125,6 +131,7 @@ public static class ToolbarItems
     {
         Settings => "Settings",
         Profile => "Profile",
+        Themes => "Themes",
         Tools => "Tools",
         Mcp => "MCP",
         Skills => "Skills",
@@ -138,7 +145,7 @@ public static class ToolbarItems
         Shell => "Shell",
         Files => "Files",
         Web => "Web",
-        Claude => "Claude",
+        Claude => "Claude CLI advisor",   // "Claude" until 2026-10-04 (the user's ask)
         Docker => "Docker",
         Obsidian => "Obsidian",
         Sql => "SQL",
@@ -154,6 +161,7 @@ public static class ToolbarItems
         Log => "Log",
         LiveView => "Live viewer",
         ComfyView => "Comfy viewer",
+        ComfyThumbs => "Comfy thumb viewer",
         Path => "Working directory path",
         _ => id,
     };
@@ -166,6 +174,7 @@ public static class ToolbarItems
     {
         Settings => "/settings",
         Profile => "/profile",
+        Themes => SlashCommands.ThemeWord,
         Tools => "/tools",
         Mcp => "/mcp",
         Skills => "/skills",
@@ -179,6 +188,7 @@ public static class ToolbarItems
         Log => ChatScreen.LogToolLine,
         LiveView => ChatScreen.LiveViewToolLine,
         ComfyView => ChatScreen.ComfyViewToolLine,
+        ComfyThumbs => ChatScreen.ComfyThumbsToolLine,
         Path => "/cwd browse",
         _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
@@ -292,7 +302,7 @@ public static class ToolbarItems
         return new(last is null || Resolve(last).Count == 0 ? null : Save(Resolve(last)), last?.ToList());
     }
 
-    /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>4 of 30</c>. Pinned.</summary>
+    /// <summary>The <c>Show toolbar</c> row's value: <c>all</c>, <c>off</c> with nothing checked, else <c>7 of 34</c>. Pinned.</summary>
     public static string Value(IReadOnlyList<string>? saved)
     {
         int count = Resolve(saved).Count;

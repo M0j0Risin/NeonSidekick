@@ -494,17 +494,45 @@ internal sealed partial class ChatScreen
             }
         }
 
+        var (ok, text) = StartWatch(seconds);
+        if (ok)
+        {
+            _transcript.Notice(text);
+        }
+        else
+        {
+            _transcript.Error(text);
+        }
+    }
+
+    /// <summary>Watch mode started every <paramref name="seconds"/>: <see cref="CameraText.WatchOn"/>, or the camera's failure.</summary>
+    private (bool Ok, string Text) StartWatch(int seconds)
+    {
+        var effective = _effective();
         try
         {
             _cameraWatch.Start(seconds);
         }
         catch (CameraException e)
         {
-            _transcript.Error(e.Message);
-            return;
+            return (false, e.Message);
         }
 
-        _transcript.Notice(CameraText.WatchOn(seconds, Math.Clamp(effective.CameraWatchThreshold, AppSettingsData.MinCameraWatchThreshold, AppSettingsData.MaxCameraWatchThreshold), effective.CameraWatchUnprompted));
+        return (true, CameraText.WatchOn(seconds, Math.Clamp(effective.CameraWatchThreshold, AppSettingsData.MinCameraWatchThreshold, AppSettingsData.MaxCameraWatchThreshold), effective.CameraWatchUnprompted));
+    }
+
+    /// <summary>
+    /// The Camera tool page's watch button (2026-10-04, the user's ask): <c>/camera watch</c> at the <c>Camera watch every</c>
+    /// setting, or <c>/camera watch off</c>, its line handed back for the pane's status line rather than the transcript.
+    /// </summary>
+    private (bool Ok, string Text) SetWatchFromPane(bool on)
+    {
+        if (!on)
+        {
+            return (true, StopWatch() ? CameraText.WatchOff : CameraText.WatchNotOn);
+        }
+
+        return StartWatch(Math.Clamp(_effective().CameraWatchSeconds, AppSettingsData.MinCameraWatchSeconds, AppSettingsData.MaxCameraWatchSeconds));
     }
 
     /// <summary>A kept watch frame (on a pool thread): under <c>Camera watch speaks up</c> the idle read is nudged so the loop may show it to the model.</summary>

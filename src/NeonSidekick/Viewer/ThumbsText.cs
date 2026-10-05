@@ -3,7 +3,7 @@ using System.Globalization;
 namespace NeonSidekick.Viewer;
 
 /// <summary>
-/// The thumbnail browser's words (2026-10-04, <c>/thumbs</c> and <c>/comfy thumbs</c>): the window's title, the line it shows with
+/// The thumbnail browser's words (2026-10-04, <c>/view --thumbs</c> — <c>/thumbs</c> until later that day — and <c>/comfy thumbs</c>): the window's title, the line it shows with
 /// nothing to show, and the chat's lines. Pinned.
 /// </summary>
 public static class ThumbsText
@@ -47,8 +47,8 @@ public static class ThumbsText
     /// <summary>The window's keys and mouse, the line under <see cref="Opened"/>. Pinned.</summary>
     public const string Keys = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − or Ctrl+wheel size · F5 refresh · F11 full screen · TAB terminal · ESC close)";
 
-    /// <summary>A bare <c>/thumbs</c>. Pinned.</summary>
-    public const string UsageError = "Usage: /thumbs <folder>";
+    /// <summary>The transcript's line after the toolbar's 🪟 closed the window (2026-10-04), <see cref="ViewerText.Closed"/>'s twin. Pinned.</summary>
+    public const string Closed = "(🖼️ thumbnails closed)";
 
     /// <summary>The transcript's error when there is no window to open (not Windows). Pinned.</summary>
     public const string Unavailable = "The thumbnail browser needs Windows.";

@@ -209,7 +209,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/thumbs <folder>` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -235,15 +235,16 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
-| ⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
+| ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/theme` (the theme picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
 | 💾 | always; on the slab while *Memory mode* is `disabled` | `/memory`: the memories, with **read-write** (W), **read-only** (R) and **disabled** (D) on its title row |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 / 🥷 | *Shell police outside paths* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
-| 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page |
+| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page (📸's has a **watch** button (W) that turns `/camera watch` on or off) |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
+| 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
 | 📈 | always | `/perfbar`: hides or shows the performance bar |
 | working directory (right edge) | always | `/cwd browse` |
 | blank space | — | `/settings` |
@@ -287,7 +288,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it, shown at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). **A** / **N** / **D** pick all, none or the default seven; none hides the row. | Tools, Shell allowed commands, Shell police, Shell, Files, Web, path (7 of 30) |
+| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). **A** / **N** / **D** pick all, none or the default seven; none hides the row. | Tools, Shell allowed commands, Shell police, Shell, Files, Web, path (7 of 34) |
 | Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates). **A** / **N** / **D** pick all, none or the default four; none hides the bar. The title row picks the look: **text** (T), **gauge** (G), **spark** (S, the last ten seconds) or **led** (L). See Performance bar below. | CPU, RAM, GPU, VRAM, `led` |
 | Menus max height | How much of the window a menu or info pane may take: `half-screen`, `three-quarters` or `full-screen` (all but one row). Longer lists scroll; every tab keeps the tallest tab's height. | `full-screen` |
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…). Empty uses Windows' `.txt` editor. | (default .txt editor) |
@@ -750,7 +751,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. | off |
+| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. Its on/off page (the toolbar's 📸) has a **watch** button (W) that starts or stops `/camera watch`. | off |
 | Camera shutter | `user`: the camera pane shows the request; Space takes the photo, R retakes, Enter sends, ESC declines. `model`: a pane asks Deny / Allow once / Allow for this session, and on a yes the app takes it. | `user` |
 | Camera preview | `live`: a camera window of its own shows the camera mirrored while you frame, then the photo. `post`: the picture viewer opens on the photo. `disabled`: no window. Neither takes the keyboard. | `live` |
 | Camera device | The camera, by its Windows name. `(first camera)`, or a camera that isn't connected, uses the first. | (first camera) |
@@ -1098,13 +1099,12 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/timer [duration [name] \| stop <name> \| stop all]` | Lists, starts (`10m`, `90s`, `1h30m`) or stops timers. |
 | `/toolbar [on \| off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
 | `/tools` | Switches the model's tools and edits their settings (Web, Files, Shell, Ask, Camera, Claude, Home Assistant, Print, Obsidian, ComfyUI, SQL, Oracle, MySQL, UNC, Docker, GitLib). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
-| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (D, H, C) for *Web browser mode*. |
+| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (D, H, C) for *Web browser mode*; `camera`'s has a **watch** button (W) that turns `/camera watch` on or off. |
 | `/tree [path]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
 | `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
 | `/vault [path]` | Shows a tree of the *Obsidian vault* (or a folder in it) in a pane, like `/tree`. |
-| `/view <image or folder> [--chat]` | Opens an image (or a folder's newest picture) in the picture viewer; `--chat` draws it in the transcript instead. |
-| `/thumbs <folder>` | Opens a folder of the working directory as thumbnails in a window beside the picture viewer, in step with it (see Thumbnail browser). |
+| `/view <image or folder> [--chat \| --thumbs]` | Opens an image (or a folder's newest picture) in the picture viewer; `--chat` draws it in the transcript instead; `--thumbs` opens the folder (an image's folder, with the image selected) as thumbnails in a window beside the picture viewer, in step with it (see Thumbnail browser). Either flag can be the first or last word. |
 | `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]` | Generates a picture on ComfyUI from your prompt exactly as typed. See Imagine options. |
 | `/comfy` | The ComfyUI server's status, the workflows found, skipped files and where workflows go, in a pane (a server that doesn't answer is an error line in the chat). |
 | `/comfy edit json <workflow>`, `/comfy edit markdown <workflow>` | Opens a workflow's graph, or its `.md` (created if missing), in your editor. |
@@ -1250,7 +1250,7 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 
 #### Thumbnail browser
 
-`/thumbs <folder>` (a folder of the working directory) or `/comfy thumbs` (the ComfyUI output folder) opens the folder's pictures as thumbnails in a window of their own (Windows only), oldest first.
+`/view <folder or image> --thumbs` (a folder of the working directory, or an image's folder with the image selected), `/comfy thumbs` or the toolbar's **🪟** (the ComfyUI output folder) opens the folder's pictures as thumbnails in a window of their own (Windows only), oldest first.
 
 * **In step:** a click on a thumbnail moves the picture viewer to it without taking the keyboard (opening the viewer when it is closed); the viewer's own keys and the strip's arrows move the selection here.
 * **No jumping:** new pictures go on the end and nothing already shown moves. A view scrolled to the bottom of a long folder stays at the bottom as pictures arrive.
@@ -1537,7 +1537,7 @@ The vault tools work on the vault's files directly: no plugin, no network, and O
 </details>
 
 <details>
-<summary><b>🪟 SQL</b></summary>
+<summary><b>🛢️ SQL</b></summary>
 
 ### SQL
 

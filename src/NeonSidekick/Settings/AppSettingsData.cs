@@ -137,7 +137,7 @@ public sealed class AppSettingsData
     public int? LogWindowTop { get; set; }
 
     /// <summary>
-    /// The thumbnail browser's top-left corner as it last closed (2026-10-04, <c>/thumbs</c>' window): the <see cref="ViewerLeft"/>
+    /// The thumbnail browser's top-left corner as it last closed (2026-10-04, <c>/view --thumbs</c>' window, <c>/thumbs</c>' until later that day): the <see cref="ViewerLeft"/>
     /// pair's twin, set by the window itself (<see cref="Viewer.ThumbsWindow.Placed"/>). No menu row; null opens it where Windows puts it.
     /// </summary>
     public int? ThumbsWindowLeft { get; set; }

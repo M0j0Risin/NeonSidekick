@@ -14,11 +14,11 @@ public sealed class ToolbarItemsTests
         // switches, the log and the two viewers in the user's order, the chart moved behind the log (2026-10-03) and behind the viewers later that day, the last glyph.
         Assert.Equal(
         [
-            "settings", "profile", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police",
+            "settings", "profile", "themes", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police",
             "shell", "files", "web", "claude", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "postgres", "unc", "ha", "comfy", "camera", "print",
-            "log", "liveview", "comfyview", "perf", "path",
+            "log", "liveview", "comfyview", "comfythumbs", "perf", "path",
         ], ToolbarItems.Names);
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 🪟 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
         Assert.All(ToolbarItems.Names.SkipLast(1), id => Assert.Equal(ChatScreen.ToolbarWord(ToolbarItems.Glyph(id)), ToolbarItems.Describe(id)));   // the note is the line the glyph runs
@@ -77,10 +77,10 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("7 of 32", ToolbarItems.Value(null));   // the defaults (2026-10-03; 3 from 2026-10-02, of 13 until 2026-10-03)
+        Assert.Equal("7 of 34", ToolbarItems.Value(null));   // the defaults (2026-10-03; 3 from 2026-10-02, of 13 until 2026-10-03)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
-        Assert.Equal("2 of 32", ToolbarItems.Value(["usage", "path"]));
+        Assert.Equal("2 of 34", ToolbarItems.Value(["usage", "path"]));
         Assert.Equal("[[x]] ⚙️  Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
         Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse"), ToolbarItems.Label("path", false));
         Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory"), ToolbarItems.Label("memory", true));
@@ -88,8 +88,11 @@ public sealed class ToolbarItemsTests
         Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perfbar"), ToolbarItems.Label("perf", false));   // the command alone (2026-10-02)
         // The tool switches, the log and the viewers (2026-10-03, the user's names).
         Assert.Equal("[[x]] 🐚  Shell                   " + Theme.DimMarkup("/tools shell"), ToolbarItems.Label("shell", true));
-        Assert.Equal("[[ ]] ✴️  Claude                  " + Theme.DimMarkup("/tools claude"), ToolbarItems.Label("claude", false));
-        Assert.Equal("[[ ]] 🪟  SQL                     " + Theme.DimMarkup("/tools sql"), ToolbarItems.Label("sql", false));
+        Assert.Equal("[[ ]] ✴️  Claude CLI advisor      " + Theme.DimMarkup("/tools claude"), ToolbarItems.Label("claude", false));   // "Claude" until 2026-10-04 (the user's ask)
+        Assert.Equal("[[ ]] 🛢️  SQL                     " + Theme.DimMarkup("/tools sql"), ToolbarItems.Label("sql", false));   // 🪟 until 2026-10-04
+        // Themes and the Comfy thumb viewer (2026-10-04, the user's ask).
+        Assert.Equal("[[ ]] 🧮  Themes                  " + Theme.DimMarkup("/theme"), ToolbarItems.Label("themes", false));
+        Assert.Equal("[[ ]] 🪟  Comfy thumb viewer      " + Theme.DimMarkup("/comfy thumbs"), ToolbarItems.Label("comfythumbs", false));
         Assert.Equal("[[ ]] 🏠  HA                      " + Theme.DimMarkup("/tools ha"), ToolbarItems.Label("ha", false));
         Assert.Equal("[[ ]] 🎨  ComfyUI                 " + Theme.DimMarkup("/tools comfy"), ToolbarItems.Label("comfy", false));
         Assert.Equal("[[ ]] 📄  Log                     " + Theme.DimMarkup("/log"), ToolbarItems.Label("log", false));

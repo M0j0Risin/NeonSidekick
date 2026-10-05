@@ -289,7 +289,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -8733,16 +8733,16 @@ public partial class ChatScreenTests : IDisposable
         var items = ToolbarItems.Resolve(["settings", "cmdlist", "police", "shell", "web", "sql", "log"]);
         var shown = new AppSettingsData { WebTools = true, SqlTools = false, ShellCommandPolicy = "off" };
         var (strip, off) = ChatScreen.ToolbarStripFor(items, shown);
-        Assert.Equal("⚙️ 🐚 🌐 🪟 📄", strip);   // no lock, no officer under off
+        Assert.Equal("⚙️ 🐚 🌐 🛢️ 📄", strip);   // no lock, no officer under off
         Assert.Equal([1, 3], off);
         shown.ShellCommandPolicy = "ask";
         (strip, off) = ChatScreen.ToolbarStripFor(items, shown);
-        Assert.Equal("⚙️ 🔒 👮 🐚 🌐 🪟 📄", strip);
+        Assert.Equal("⚙️ 🔒 👮 🐚 🌐 🛢️ 📄", strip);
         Assert.Equal([5], off);
         Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPoliceOutsidePaths));   // the same text either way
         Assert.True(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = false }));
         Assert.False(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = true }));
-        Assert.All(new[] { "settings", "cmdlist", "police", "log", "liveview", "comfyview", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
+        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "liveview", "comfyview", "comfythumbs", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
         // The disk on the slab while Memory is off (later on 2026-10-03, the user's ask: always drawn, telling which).
         Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "disabled" }));
         Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-only" }));   // 2026-10-04: read-only is still memory
@@ -8788,7 +8788,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),
             Line("/tools"),
             input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
-            input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 🔓: the list
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🔓: the list
             Key(Keys.Escape),
             Line("/exit"));
 
@@ -8822,23 +8822,23 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         _memory.Add("Their name is Chris.");
         StepsWhenIdle(
-            input => { input.PushClick(24, 103); input.PushClick(24, 103); },    // 💾: the Memory pane (at 24 right after the Usage chart since 2026-10-03)
+            input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 💾: the Memory pane (at 27 right after the Usage chart since 2026-10-03, 🧮 ahead of it since 2026-10-04)
             Key(Keys.Escape),
             input =>
             {
                 input.Push(Keys.Char('h'), Keys.Char('i'));
-                input.PushClick(30, 103);                                        // 👮: the police page (later on 2026-09-22)
-                input.PushClick(30, 103);
+                input.PushClick(33, 103);                                        // 👮: the police page (later on 2026-09-22)
+                input.PushClick(33, 103);
             },
             Key(Keys.Escape),                                                    // closed, unchanged: the draft back
             input => input.Push(Keys.Char('!'), Keys.Enter),
             Line("/settings"),
             input => input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape),   // General's fourth row, Memory mode (since 2026-10-01): its page on read-write, disabled picked; the pane closed: the disk on its slab
-            input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 🔒 still at 27: the list
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🔒 still at 30: the list
             Key(Keys.Escape),
             Line("/tools"),
             input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police outside paths: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
-            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🥷 now (2026-10-02): the police page again
+            input => { input.PushClick(33, 103); input.PushClick(33, 103); },    // 🥷 now (2026-10-02): the police page again
             Key(Keys.Escape),
             Line("/exit"));
 
@@ -9869,23 +9869,23 @@ public partial class ChatScreenTests : IDisposable
                 input.PushClick(1, 103);
             },
             Key(Keys.Escape),                                    // the settings closed
-            input => { input.PushClick(6, 103); input.PushClick(6, 103); },      // 🛠️
+            input => { input.PushClick(9, 103); input.PushClick(9, 103); },      // 🛠️
             Key(Keys.Escape),
-            input => { input.PushClick(9, 103); input.PushClick(9, 103); },      // 🔌
+            input => { input.PushClick(12, 103); input.PushClick(12, 103); },      // 🔌
             Key(Keys.Escape),
-            input => { input.PushClick(12, 103); input.PushClick(12, 103); },      // 🎓
+            input => { input.PushClick(15, 103); input.PushClick(15, 103); },      // 🎓
             Key(Keys.Escape),
-            input => { input.PushClick(15, 103); input.PushClick(15, 103); },    // 🎭
+            input => { input.PushClick(18, 103); input.PushClick(18, 103); },    // 🎭
             Key(Keys.Escape),
-            input => { input.PushClick(18, 103); input.PushClick(18, 103); },    // 💬 (later on 2026-09-21)
+            input => { input.PushClick(21, 103); input.PushClick(21, 103); },    // 💬 (later on 2026-09-21)
             Key(Keys.Escape),
-            input => { input.PushClick(21, 103); input.PushClick(21, 103); },    // 📊 (2026-09-29): the Usage pane
+            input => { input.PushClick(24, 103); input.PushClick(24, 103); },    // 📊 (2026-09-29): the Usage pane
             Key(Keys.Escape),
-            input => { input.PushClick(24, 103); input.PushClick(24, 103); },    // 💾 (2026-09-22: Memory is on by default; at 24 right after the Usage chart since 2026-10-03)
+            input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 💾 (2026-09-22: Memory is on by default; at 27 right after the Usage chart since 2026-10-03, 🧮 ahead of it since 2026-10-04)
             Key(Keys.Escape),
-            input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 🔒 (later still on 2026-09-21: the policy is ask by default; behind the disk since 2026-09-22)
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🔒 (later still on 2026-09-21: the policy is ask by default; behind the disk since 2026-09-22)
             Key(Keys.Escape),
-            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 👮 (2026-09-22: the police are on by default): the police page (later that day)
+            input => { input.PushClick(33, 103); input.PushClick(33, 103); },    // 👮 (2026-09-22: the police are on by default): the police page (later that day)
             Key(Keys.Escape),
             input => { input.PushClick(120, 103); input.PushClick(120, 103); },  // the blanks: /settings (later on 2026-09-21; nothing before)
             Key(Keys.Escape),
@@ -9971,32 +9971,32 @@ public partial class ChatScreenTests : IDisposable
             Line("/tools"),                                                       // typed: the Tools pane
             input => { int y = ToolbarUnderPane(); input.PushClick(0, y); input.PushClick(1, y); },       // ⚙️ under it: Tools closed, Settings opened
             input => { int y = ToolbarUnderPane(); input.PushClick(0, y); input.PushClick(0, y); },       // ⚙️ under the Settings: closed, nothing more
-            input => { input.PushClick(6, 103); input.PushClick(6, 103); },                               // 🛠️ at the idle line (the toolbar at 103 there): Tools
+            input => { input.PushClick(9, 103); input.PushClick(9, 103); },                               // 🛠️ at the idle line (the toolbar at 103 there): Tools
             input => { int y = ToolbarUnderPane(); input.PushClick(120, y); input.PushClick(120, y); },   // the blanks under it: Tools closed, Settings opened
             input => { int y = ToolbarUnderPane(); input.PushClick(120, y); input.PushClick(120, y); },   // the blanks under the Settings: closed
             Line("/help"),
-            input => { int y = ToolbarUnderPane(); input.PushClick(15, y); input.PushClick(15, y); },     // 🎭 under Help: Help closed, the system prompt opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(6, y); input.PushClick(6, y); },       // 🛠️ under it: Tools
-            input => { int y = ToolbarUnderPane(); input.PushClick(6, y); input.PushClick(6, y); },       // 🛠️ again: closed
-            input => { input.PushClick(18, 103); input.PushClick(18, 103); },                             // 💬 at the idle line: Sessions (later on 2026-09-21)
-            input => { int y = ToolbarUnderPane(); input.PushClick(12, y); input.PushClick(12, y); },       // 🎓 under it: Sessions closed, Skills opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(18, y); input.PushClick(18, y); },     // 💬 under the Skills: closed, Sessions opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(18, y); input.PushClick(18, y); },     // 💬 again: closed
-            input => { input.PushClick(21, 103); input.PushClick(21, 103); },                             // 📊 at the idle line: Usage (2026-09-29)
-            input => { int y = ToolbarUnderPane(); input.PushClick(12, y); input.PushClick(12, y); },       // 🎓 under it: Usage closed, Skills opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(21, y); input.PushClick(22, y); },     // 📊 under the Skills (either cell): closed, Usage opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(21, y); input.PushClick(21, y); },     // 📊 again: closed
-            input => { input.PushClick(24, 103); input.PushClick(24, 103); },                             // 💾 at the idle line: Memory (2026-09-22; at 24 right after the Usage chart since 2026-10-03)
-            input => { int y = ToolbarUnderPane(); input.PushClick(12, y); input.PushClick(12, y); },       // 🎓 under it: Memory closed, Skills opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(24, y); input.PushClick(24, y); },     // 💾 under the Skills: closed, Memory opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(24, y); input.PushClick(24, y); },     // 💾 again: closed
-            input => { input.PushClick(27, 103); input.PushClick(27, 103); },                             // 🔒 at the idle line: the allowed-commands list (later still on 2026-09-21; behind the disk since 2026-09-22)
-            input => { int y = ToolbarUnderPane(); input.PushClick(6, y); input.PushClick(6, y); },       // 🛠️ under it: the list closed, Tools opened (another command, though the list is its row)
-            input => { int y = ToolbarUnderPane(); input.PushClick(27, y); input.PushClick(27, y); },     // 🔒 under Tools: closed, the list opened
-            input => { int y = ToolbarUnderPane(); input.PushClick(27, y); input.PushClick(27, y); },     // 🔒 again: closed
-            input => { input.PushClick(6, 103); input.PushClick(6, 103); },                               // 🛠️ at the idle line: Tools
-            input => { int y = ToolbarUnderPane(); input.PushClick(30, y); input.PushClick(30, y); },     // 👮 under it: Tools closed, the police page opened (later on 2026-09-22)
-            input => { int y = ToolbarUnderPane(); input.PushClick(30, y); input.PushClick(30, y); },     // 👮 again: closed
+            input => { int y = ToolbarUnderPane(); input.PushClick(18, y); input.PushClick(18, y); },     // 🎭 under Help: Help closed, the system prompt opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(9, y); input.PushClick(9, y); },       // 🛠️ under it: Tools
+            input => { int y = ToolbarUnderPane(); input.PushClick(9, y); input.PushClick(9, y); },       // 🛠️ again: closed
+            input => { input.PushClick(21, 103); input.PushClick(21, 103); },                             // 💬 at the idle line: Sessions (later on 2026-09-21)
+            input => { int y = ToolbarUnderPane(); input.PushClick(15, y); input.PushClick(15, y); },       // 🎓 under it: Sessions closed, Skills opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(21, y); input.PushClick(21, y); },     // 💬 under the Skills: closed, Sessions opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(21, y); input.PushClick(21, y); },     // 💬 again: closed
+            input => { input.PushClick(24, 103); input.PushClick(24, 103); },                             // 📊 at the idle line: Usage (2026-09-29)
+            input => { int y = ToolbarUnderPane(); input.PushClick(15, y); input.PushClick(15, y); },       // 🎓 under it: Usage closed, Skills opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(24, y); input.PushClick(25, y); },     // 📊 under the Skills (either cell): closed, Usage opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(24, y); input.PushClick(24, y); },     // 📊 again: closed
+            input => { input.PushClick(27, 103); input.PushClick(27, 103); },                             // 💾 at the idle line: Memory (2026-09-22; at 27 right after the Usage chart since 2026-10-03, 🧮 ahead of it since 2026-10-04)
+            input => { int y = ToolbarUnderPane(); input.PushClick(15, y); input.PushClick(15, y); },       // 🎓 under it: Memory closed, Skills opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(27, y); input.PushClick(27, y); },     // 💾 under the Skills: closed, Memory opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(27, y); input.PushClick(27, y); },     // 💾 again: closed
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },                             // 🔒 at the idle line: the allowed-commands list (later still on 2026-09-21; behind the disk since 2026-09-22)
+            input => { int y = ToolbarUnderPane(); input.PushClick(9, y); input.PushClick(9, y); },       // 🛠️ under it: the list closed, Tools opened (another command, though the list is its row)
+            input => { int y = ToolbarUnderPane(); input.PushClick(30, y); input.PushClick(30, y); },     // 🔒 under Tools: closed, the list opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(30, y); input.PushClick(30, y); },     // 🔒 again: closed
+            input => { input.PushClick(9, 103); input.PushClick(9, 103); },                               // 🛠️ at the idle line: Tools
+            input => { int y = ToolbarUnderPane(); input.PushClick(33, y); input.PushClick(33, y); },     // 👮 under it: Tools closed, the police page opened (later on 2026-09-22)
+            input => { int y = ToolbarUnderPane(); input.PushClick(33, y); input.PushClick(33, y); },     // 👮 again: closed
             input => input.Push(Keys.Char('h'), Keys.Char('i'), Keys.Enter),      // the idle line again: a message
             Line("/exit"));
 
@@ -10131,7 +10131,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 🪟 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📈", ChatScreen.ToolbarStripFor(Items("perf", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29)
     }
@@ -10202,8 +10202,8 @@ public partial class ChatScreenTests : IDisposable
         // The masks since later on 2026-09-21 (the detective before); the sessions' balloon later still that day; the chart
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
-        const string Panes = "⚙️ 🪪 🛠️ 🔌 🎓 🎭 💬 📊";
-        const string Rest = "🐚 📁 🌐 ✴️ 🐳 💎 🪟 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 📈";
+        const string Panes = "⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04
+        const string Rest = "🐚 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 📺 🎞️ 🪟 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04
         Assert.Equal(Panes + " 💾 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask)
         Assert.Equal(Panes + " 💾 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -10251,16 +10251,23 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/log", ChatScreen.ToolbarWord(ChatScreen.LogToolGlyph));
         Assert.Equal("/camera live", ChatScreen.ToolbarWord(ChatScreen.LiveViewToolGlyph));
         Assert.Equal("/comfy view", ChatScreen.ToolbarWord(ChatScreen.ComfyViewToolGlyph));
+        // The abacus and the window (2026-10-04, the user's ask): the theme picker, which wears it, and /comfy thumbs' browser.
+        Assert.Equal("🧮", ChatScreen.ThemeToolGlyph);
+        Assert.Equal("/theme", ChatScreen.ToolbarWord(ChatScreen.ThemeToolGlyph));
+        Assert.Equal(ChatScreen.ThemeToolGlyph + " Theme", SettingsMenu.ThemeTitle);
+        Assert.Equal("🪟", ChatScreen.ComfyThumbsToolGlyph);
+        Assert.Equal("/comfy thumbs", ChatScreen.ToolbarWord(ChatScreen.ComfyThumbsToolGlyph));
+        Assert.Equal("🛢️", ChatScreen.SqlToolGlyph);
         Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the picture strip's button, one source
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
         Assert.All(ToolsText.SwitchWords, word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));
-        Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/camera live") && ChatScreen.TogglesWindow("/comfy view"));
+        Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/camera live") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
         Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log --file") || ChatScreen.TogglesWindow(null));
         Assert.Null(ChatScreen.ToolbarWord("📂"));
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(29, glyphs.Length);   // 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04
+        Assert.Equal(31, glyphs.Length);   // 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));
@@ -10277,31 +10284,31 @@ public partial class ChatScreenTests : IDisposable
         foreach (var (policy, padlock) in new[] { (CommandPolicyMode.Ask, ChatScreen.CmdAskToolGlyph), (CommandPolicyMode.Yolo, ChatScreen.CmdYoloToolGlyph) })
         {
             Assert.Equal(2, TextCells.Width(padlock));
-            string strip = ChatScreen.ToolbarStripFor(policy, false);   // the disk at 24 whatever Memory is (later on 2026-10-03), the lock at 27
-            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(strip, -1, 0, 26).Zone);   // the separator ahead of the lock
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 27), ScreenPane.ToolbarHitAt(strip, -1, 0, 27));
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 27), ScreenPane.ToolbarHitAt(strip, -1, 0, 28));
-            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(strip, -1, 0, 29).Zone);   // past it
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.NinjaToolGlyph, 30), ScreenPane.ToolbarHitAt(strip, -1, 0, 31));   // the ninja after it (2026-10-02)
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.ShellToolGlyph, 33), ScreenPane.ToolbarHitAt(strip, -1, 0, 33));   // the shell after that (2026-10-03)
+            string strip = ChatScreen.ToolbarStripFor(policy, false);   // the disk at 27 whatever Memory is (later on 2026-10-03; 24 until 🧮, 2026-10-04), the lock at 30
+            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(strip, -1, 0, 29).Zone);   // the separator ahead of the lock
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 30), ScreenPane.ToolbarHitAt(strip, -1, 0, 30));
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 30), ScreenPane.ToolbarHitAt(strip, -1, 0, 31));
+            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(strip, -1, 0, 32).Zone);   // past it
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.NinjaToolGlyph, 33), ScreenPane.ToolbarHitAt(strip, -1, 0, 34));   // the ninja after it (2026-10-02)
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.ShellToolGlyph, 36), ScreenPane.ToolbarHitAt(strip, -1, 0, 36));   // the shell after that (2026-10-03)
 
-            string full = ChatScreen.ToolbarStripFor(policy, true);   // the disk, then the lock at 27, the officer after at 30 (the disk right after the Usage chart since 2026-10-03)
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 24), ScreenPane.ToolbarHitAt(full, -1, 0, 24));
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 24), ScreenPane.ToolbarHitAt(full, -1, 0, 25));
-            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(full, -1, 0, 26).Zone);
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 27), ScreenPane.ToolbarHitAt(full, -1, 0, 27));
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 27), ScreenPane.ToolbarHitAt(full, -1, 0, 28));
+            string full = ChatScreen.ToolbarStripFor(policy, true);   // the disk, then the lock at 30, the officer after at 33 (the disk right after the Usage chart since 2026-10-03)
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 27), ScreenPane.ToolbarHitAt(full, -1, 0, 27));
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 27), ScreenPane.ToolbarHitAt(full, -1, 0, 28));
             Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(full, -1, 0, 29).Zone);
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 30), ScreenPane.ToolbarHitAt(full, -1, 0, 30));
-            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 30), ScreenPane.ToolbarHitAt(full, -1, 0, 31));
-            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(full, -1, 0, 32).Zone);   // past it
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 30), ScreenPane.ToolbarHitAt(full, -1, 0, 30));
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, padlock, 30), ScreenPane.ToolbarHitAt(full, -1, 0, 31));
+            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(full, -1, 0, 32).Zone);
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 33), ScreenPane.ToolbarHitAt(full, -1, 0, 33));
+            Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 33), ScreenPane.ToolbarHitAt(full, -1, 0, 34));
+            Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(full, -1, 0, 35).Zone);   // past it
 
         }
 
         string noLock = ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, true);   // policy off: neither the lock nor the officer (later on 2026-09-22), the shell after the disk
-        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 24), ScreenPane.ToolbarHitAt(noLock, -1, 0, 24));
-        Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(noLock, -1, 0, 26).Zone);
-        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.ShellToolGlyph, 27), ScreenPane.ToolbarHitAt(noLock, -1, 0, 27));
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 27), ScreenPane.ToolbarHitAt(noLock, -1, 0, 27));
+        Assert.Equal(ScreenPane.ToolbarZone.Row, ScreenPane.ToolbarHitAt(noLock, -1, 0, 29).Zone);
+        Assert.Equal(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, ChatScreen.ShellToolGlyph, 30), ScreenPane.ToolbarHitAt(noLock, -1, 0, 30));
     }
 
     /// <summary>A double-click on the scroll's hint at the idle line (later on 2026-09-18) is Ctrl+End — the bottom again, the draft kept, no settings pane.</summary>
@@ -11832,6 +11839,9 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.View, "a.png --CHAT", MidTurnClass.Deferred)]
     [InlineData(SlashCommand.View, "--chat", MidTurnClass.Deferred)]
     [InlineData(SlashCommand.View, "", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.View, "pics --thumbs", MidTurnClass.Quick)]   // the thumbnail browser's window (2026-10-04)
+    [InlineData(SlashCommand.View, "--thumbs", MidTurnClass.Deferred)]   // its usage error, after the reply
+    [InlineData(SlashCommand.View, "--chat pics --thumbs", MidTurnClass.Deferred)]
     public void MidTurnPolicy_ReadsTheComfyViewWord(SlashCommand command, string args, MidTurnClass expected) =>
         Assert.Equal(expected, ChatScreen.MidTurnPolicy(command, args));
 
@@ -11917,8 +11927,8 @@ public partial class ChatScreenTests : IDisposable
             }
             else if (i == 1)
             {
-                Scripted().PushClick(15, 103);                   // 🎭: the busy row at 102, the toolbar at 103
-                Scripted().PushClick(16, 103);
+                Scripted().PushClick(18, 103);                   // 🎭: the busy row at 102, the toolbar at 103
+                Scripted().PushClick(19, 103);
             }
             else if (i == 2)
             {
@@ -11956,18 +11966,18 @@ public partial class ChatScreenTests : IDisposable
             switch (i)
             {
                 case 0:
-                    Scripted().PushClick(6, 103);                    // 🛠️: the Tools pane under the reply
-                    Scripted().PushClick(6, 103);
+                    Scripted().PushClick(9, 103);                    // 🛠️: the Tools pane under the reply
+                    Scripted().PushClick(9, 103);
                     break;
                 // Each row waits for the pane the step before opened (2026-09-26): the steps run off the stream, not the pane's draw.
                 case 1:
-                    PushDoubleClick(15, ToolbarUnder(ToolsText.Label));                // 🎭 under it: Tools closed, the system prompt opened
+                    PushDoubleClick(18, ToolbarUnder(ToolsText.Label));                // 🎭 under it: Tools closed, the system prompt opened
                     break;
                 case 2:
-                    PushDoubleClick(27, ToolbarUnder(SystemPromptSummary.Label));      // 🔒 under it (later still on 2026-09-21; behind the disk since 2026-09-22; at 27 since 2026-10-03): closed, the allowed-commands list opened
+                    PushDoubleClick(30, ToolbarUnder(SystemPromptSummary.Label));      // 🔒 under it (later still on 2026-09-21; behind the disk since 2026-09-22; at 30 since 2026-10-04): closed, the allowed-commands list opened
                     break;
                 case 3:
-                    PushDoubleClick(18, ToolbarUnder(AllowedCommandsTitle));           // 💬 under it (later on 2026-09-21): closed, the Sessions opened
+                    PushDoubleClick(21, ToolbarUnder(AllowedCommandsTitle));           // 💬 under it (later on 2026-09-21): closed, the Sessions opened
                     break;
                 case 4:
                     PushDoubleClick(238, ToolbarUnder(SessionsMenu.Title));            // the path under it: closed, nothing opened
@@ -14018,7 +14028,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, Count(output, lead + "▀▀▀▀"));
         Assert.DoesNotContain("\n▀▀▀▀", output);
         Assert.Contains("  ✗ " + ChatScreen.ViewUsageError, output);
-        Assert.Equal("Usage: /view <image or folder> [--chat]", ChatScreen.ViewUsageError);
+        Assert.Equal("Usage: /view <image or folder> [--chat | --thumbs]", ChatScreen.ViewUsageError);   // --thumbs later on 2026-10-04
         Assert.Contains("  ✗ " + FileText.Missing("nope.png"), output);
         Assert.Contains("  ✗ " + FileText.IsDirectory(@"docs\"), output);
         Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);
@@ -14121,7 +14131,19 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("my --chat pics", "my --chat pics", false)]
     [InlineData("", "", false)]
     public void ParseViewArgs_ReadsTheFlagFirstOrLast(string args, string path, bool chat) =>
-        Assert.Equal((path, chat), ChatScreen.ParseViewArgs(args));
+        Assert.Equal((path, chat, false), ChatScreen.ParseViewArgs(args));
+
+    /// <summary><c>--thumbs</c> (2026-10-04, <c>/thumbs</c> folded in): first or last as <c>--chat</c> is, and both read, one at each end.</summary>
+    [Theory]
+    [InlineData("pics --thumbs", "pics", false, true)]
+    [InlineData("--THUMBS pics/a b.png", "pics/a b.png", false, true)]
+    [InlineData("--thumbs", "", false, true)]
+    [InlineData("--chat pics --thumbs", "pics", true, true)]
+    [InlineData("--thumbs --chat", "", true, true)]
+    [InlineData("--thumbsup.png", "--thumbsup.png", false, false)]
+    [InlineData("my --thumbs pics", "my --thumbs pics", false, false)]
+    public void ParseViewArgs_ReadsTheThumbsFlag(string args, string path, bool chat, bool thumbs) =>
+        Assert.Equal((path, chat, thumbs), ChatScreen.ParseViewArgs(args));
 
     // ── /imagine and /comfy (2026-09-24) ────────────────────────────────────
 
