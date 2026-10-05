@@ -82,6 +82,21 @@ public sealed class ProcessMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task CursorAfter_FollowsTheProcess_WhenTheRowsShift_AndKeepsTheRowOnceItIsGone()
+    {
+        // The registry's eviction drops the oldest from the front: the cursor stays on the process, not the row (2026-10-05, the code review).
+        var a = Start("exit 0");
+        var b = Start("exit 0");
+        var c = Start("exit 0");
+        await Task.WhenAll(a.Exited, b.Exited, c.Exited).WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(0, ProcessMenu.CursorAfter([b, c], b, 1));   // a went: b moved up a row
+        Assert.Equal(1, ProcessMenu.CursorAfter([a, c], b, 1));   // b went: the row it stood on
+        Assert.Equal(1, ProcessMenu.CursorAfter([a, c], b, 5));   // in range
+        Assert.Equal(0, ProcessMenu.CursorAfter([], b, 3));
+    }
+
+    [Fact]
     public async Task Enter_OpensTheHighlightedOne_ThePaneStaysOpen()
     {
         var first = Start("ping -n 30 127.0.0.1 >nul");

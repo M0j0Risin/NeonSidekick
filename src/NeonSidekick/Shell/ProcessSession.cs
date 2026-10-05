@@ -156,8 +156,12 @@ public sealed class ProcessSession : IDisposable
         }
     }
 
-    /// <summary>Ends the process and everything it started, parent first; a no-op once it has exited.</summary>
-    public void Kill()
+    /// <summary>
+    /// Ends the process and everything it started, parent first; a no-op once it has exited. True when the kill was sent
+    /// (2026-10-05, the code review: <see cref="ProcessRegistry.StopByUser"/> reads it, since a child gone on its own while its pumps
+    /// still drain is not <see cref="HasExited"/> yet but is past killing).
+    /// </summary>
+    public bool Kill()
     {
         try
         {
@@ -165,12 +169,15 @@ public sealed class ProcessSession : IDisposable
             {
                 Killed = true;
                 _process.Kill(entireProcessTree: true);
+                return true;
             }
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
         {
             // Already gone, or not ours to kill: the wait ends either way.
         }
+
+        return false;
     }
 
     /// <summary>

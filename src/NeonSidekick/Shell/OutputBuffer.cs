@@ -113,6 +113,8 @@ public sealed class OutputBuffer
     /// Every kept line numbered <paramref name="from"/> or later (1-based over everything written), oldest first, added to
     /// <paramref name="into"/>; returns <see cref="FirstKeptLine"/> as the copy saw it, so the first line copied is numbered
     /// <c>Math.Max(from, returned)</c> — <c>DiagnosticBuffer.CopySince</c>'s contract, for <c>/process</c>'s window (2026-10-05).
+    /// The new lines are found from the newest end (the code review, same day): the window reads after every line, and a walk from
+    /// the head crossed up to <see cref="DefaultMaxLines"/> nodes under the lock the pumps append under; this crosses only the new ones.
     /// </summary>
     public long CopyFrom(long from, ICollection<OutputLine> into)
     {
@@ -121,9 +123,21 @@ public sealed class OutputBuffer
         {
             long first = _dropped + 1;
             long skip = Math.Max(0, from - first);
-            foreach (var line in _lines.Skip((int)Math.Min(skip, _lines.Count)))
+            int wanted = _lines.Count - (int)Math.Min(skip, _lines.Count);
+            if (wanted == 0)
             {
-                into.Add(line);
+                return first;
+            }
+
+            var node = _lines.Last!;
+            for (int i = 1; i < wanted; i++)
+            {
+                node = node.Previous!;
+            }
+
+            for (LinkedListNode<OutputLine>? at = node; at is not null; at = at.Next)
+            {
+                into.Add(at.Value);
             }
 
             return first;

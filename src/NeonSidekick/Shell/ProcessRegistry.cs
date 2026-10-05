@@ -155,14 +155,18 @@ public sealed class ProcessRegistry : IDisposable
     /// The user's own stop (2026-10-05, Ctrl+K twice in <c>/process</c>'s window): the session marked <see cref="ProcessSession.StoppedByUser"/>
     /// and notified whatever the model asked, then killed, so its exit goes the way of every notified one — an alert line in the
     /// chat and a seeded poll on the next turn that tells the model. Called on the window's thread: it never writes, the alert's
-    /// <c>signal</c> wakes the screen. False when it is not this registry's, or has exited already.
+    /// <c>signal</c> wakes the screen. False when it is not this registry's, or has exited already — the child gone on its own while
+    /// its pumps still drain too (2026-10-05, the code review: the kill was a no-op there, yet the session was notified, so the model
+    /// got an alert it never asked for whose poll said "exited N" under the menu's "stopping"). The kill is sent under the lock and the
+    /// session marked only when it landed: <see cref="WatchAsync"/> reads <see cref="ProcessSession.Notify"/> under the same lock, so
+    /// an exit racing the stop sees the flags either before or after, never half set.
     /// </summary>
     public bool StopByUser(ProcessSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
         lock (_lock)
         {
-            if (_disposed || session.HasExited || !_sessions.Contains(session))
+            if (_disposed || session.HasExited || !_sessions.Contains(session) || !session.Kill())
             {
                 return false;
             }
@@ -172,7 +176,6 @@ public sealed class ProcessRegistry : IDisposable
         }
 
         DiagnosticLog.Info(ShellKinds.Category, $"{session.Id}: stopped by the user ({session.Kind}) {session.Label}");
-        session.Kill();
         return true;
     }
 

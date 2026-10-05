@@ -322,6 +322,26 @@ public sealed class ThumbsTests
     }
 
     [Fact]
+    public void PressDelete_TheArm_NeverComesBack_WhenTheSelectionReturns()
+    {
+        // The viewer pages away and back (followThumbs: no key, no click here): one Del must only arm again (2026-10-05, the code review).
+        var state = Grid(3);
+        state.SelectIndex(1);
+        state.PressDelete(0);
+        state.SelectIndex(2);
+        state.SelectIndex(1);
+        Assert.False(state.DeleteArmed);
+        Assert.Null(state.PressDelete(100));
+        Assert.True(state.DeleteArmed);
+
+        // Another picture leaving, the selection on the same one: the arm stands. The armed one leaving drops it.
+        Assert.True(state.Remove(@"D:\pics\002.png"));
+        Assert.True(state.DeleteArmed);
+        Assert.True(state.Remove(@"D:\pics\001.png"));
+        Assert.False(state.DeleteArmed);
+    }
+
+    [Fact]
     public void Bucket_TheSmallestThatCovers()
     {
         Assert.Equal(128, ThumbsState.Bucket(96));

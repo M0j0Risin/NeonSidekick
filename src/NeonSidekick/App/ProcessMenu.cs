@@ -88,6 +88,24 @@ internal sealed class ProcessMenu
         return "(" + ChatScreen.ProcessToolGlyph + " " + session.Id + " has ended: " + ProcessWindowText.State(session) + ")";
     }
 
+    /// <summary>
+    /// The row <paramref name="session"/> stands on in <paramref name="sessions"/> (the list read again), or, once it is gone, the row
+    /// it stood on (<paramref name="row"/>) kept in range.
+    /// </summary>
+    public static int CursorAfter(IReadOnlyList<ProcessSession> sessions, ProcessSession session, int row)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+        for (int i = 0; i < sessions.Count; i++)
+        {
+            if (ReferenceEquals(sessions[i], session))
+            {
+                return i;
+            }
+        }
+
+        return Math.Clamp(row, 0, Math.Max(0, sessions.Count - 1));
+    }
+
     // ── Screen ──────────────────────────────────────────────────────────────
 
     /// <summary>Shows the list until ESC; none to show is <see cref="ProcessWindowText.NoneYet"/> on the transcript.</summary>
@@ -123,14 +141,16 @@ internal sealed class ProcessMenu
                     await KillAsync(session, cancellationToken).ConfigureAwait(false);
                 }
 
-                // A process may have started meanwhile (the model's, under a reply): the list again, the cursor kept in range.
+                // A process may have started meanwhile (the model's, under a reply), and the oldest finished ones gone from the front
+                // (the registry's eviction): the list again, the cursor on the same process wherever it moved to (2026-10-05, the code
+                // review: kept as a row number, it could land on another process, and the kill button then asked about that one).
                 sessions = _processes.List();
                 if (sessions.Count == 0)
                 {
                     return;
                 }
 
-                cursor = Math.Min(cursor, sessions.Count - 1);
+                cursor = CursorAfter(sessions, session, cursor);
             }
         }
         finally

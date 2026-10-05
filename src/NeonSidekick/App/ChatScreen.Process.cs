@@ -16,6 +16,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private Task ListProcessesAsync(INoticeSink sink, CancellationToken cancellationToken)
     {
+        if (_pane.Enabled)
+        {
+            // The menu reads the list and says NoneYet itself.
+            return new ProcessMenu(_processes, sink, _menuPane, OpenProcessWindow).ShowAsync(cancellationToken);
+        }
+
         var sessions = _processes.List();
         if (sessions.Count == 0)
         {
@@ -23,12 +29,7 @@ internal sealed partial class ChatScreen
             return Task.CompletedTask;
         }
 
-        if (_pane.Enabled)
-        {
-            return new ProcessMenu(_processes, sink, _menuPane, OpenProcessWindow).ShowAsync(cancellationToken);
-        }
-
-        var lines = new List<string> { ShellText.ListHeader(sessions.Count, sessions.Count(s => !s.HasExited)), "" };
+        var lines = new List<string> { ProcessMenu.Caption(sessions), "" };
         lines.AddRange(sessions.Select(ProcessWindowText.Row));
         lines.Add("");
         lines.Add(ProcessWindowText.ListHint);

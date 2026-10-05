@@ -29,7 +29,8 @@ public static class ProcessWindow
 
     /// <summary>
     /// The window on <paramref name="session"/>: the open one brought forward when it shows that session already, else the open
-    /// one closed (its corner remembered) and a new one opened in its place, at the bottom and following. <paramref name="stop"/>
+    /// one switched to it in place (<see cref="LogWindowThread.Swap"/>), at the bottom and following; a new one only when none is
+    /// open. <paramref name="stop"/>
     /// is Ctrl+K's second press, on the window's thread. Throws <see cref="InvalidOperationException"/> with the reason when no
     /// window could be made.
     /// </summary>
@@ -51,7 +52,13 @@ public static class ProcessWindow
                     return;
                 }
 
-                open.Close();
+                // Another process: the open window swapped onto it (2026-10-05, the code review: a close and a reopen held the
+                // caller for up to twelve seconds, a slash command under a reply among them). Only a window gone meanwhile opens anew.
+                if (open.Swap(new ProcessFeed(session, stop, TimeProvider.System)))
+                {
+                    s_session = session;
+                    return;
+                }
             }
 
             var window = new LogWindowThread(new ProcessFeed(session, stop, TimeProvider.System), "Process window", Position, Placed);

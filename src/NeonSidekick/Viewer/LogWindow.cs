@@ -100,6 +100,7 @@ internal sealed unsafe class LogWindowThread
 {
     private const uint AppendedMessage = WmApp + 1;
     private const uint RaiseMessage = WmApp + 2;
+    private const uint SwapMessage = WmApp + 3;
     private const uint ProbeMessage = WmApp + 9;
     private static readonly IntPtr ProbeAnswer = new(0x10C);
     private static readonly IntPtr AutoScrollTimer = new(1);
@@ -123,11 +124,12 @@ internal sealed unsafe class LogWindowThread
     private static IntPtr s_className;
     private static ushort s_atom;
 
-    private readonly ILineFeed _feed;
+    private ILineFeed _feed;
+    private ILineFeed? _pendingFeed;
     private readonly string _name;
     private readonly Func<(int X, int Y)?>? _position;
     private readonly Action<int, int>? _placed;
-    private readonly LogViewState _state = new();
+    private LogViewState _state = new();
     private readonly WindowChrome _chrome;
     private readonly ManualResetEventSlim _ready = new();
     private readonly List<LogLine> _scratch = [];
@@ -183,6 +185,39 @@ internal sealed unsafe class LogWindowThread
 
     /// <summary>The open window brought forward; false when it is gone.</summary>
     public bool Raise() => _alive && PostMessageW(_hwnd, RaiseMessage, IntPtr.Zero, IntPtr.Zero);
+
+    /// <summary>
+    /// The open window shown over <paramref name="feed"/> in place of its own, without a wait (2026-10-05, the code review: the
+    /// process window switched to another process by closing and reopening, which held the caller — a slash command under a
+    /// reply — for the close's join and the new thread's start). The swap is the window thread's: the old feed is disposed there,
+    /// the view starts again at the bottom and following, and the place and size stay. The window owns <paramref name="feed"/>
+    /// whatever comes of it: true when the swap was posted, false when the window is gone (the feed disposed; the caller opens a
+    /// new window with a feed of its own). A swap posted as the window closes is disposed by the closing thread.
+    /// </summary>
+    public bool Swap(ILineFeed feed)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        if (!_alive || _hwnd == IntPtr.Zero)
+        {
+            feed.Dispose();
+            return false;
+        }
+
+        // A swap not taken yet is overtaken by this one: the window only ever shows the newest.
+        Interlocked.Exchange(ref _pendingFeed, feed)?.Dispose();
+        if (PostMessageW(_hwnd, SwapMessage, IntPtr.Zero, IntPtr.Zero))
+        {
+            return true;
+        }
+
+        // Not posted (the window went meanwhile): taken back and disposed, unless the closing thread disposed it already.
+        if (Interlocked.CompareExchange(ref _pendingFeed, null, feed) == feed)
+        {
+            feed.Dispose();
+        }
+
+        return false;
+    }
 
     /// <summary>The window asked to close, and its thread waited for a moment.</summary>
     public void Close()
@@ -416,6 +451,7 @@ internal sealed unsafe class LogWindowThread
             }
 
             _feed.Dispose();
+            Interlocked.Exchange(ref _pendingFeed, null)?.Dispose();   // a swap posted as it closed
 
             if (!_started && _hwnd != IntPtr.Zero)
             {
@@ -606,6 +642,11 @@ internal sealed unsafe class LogWindowThread
                 ApplyStyle();
                 _chrome.BringForward();
                 return IntPtr.Zero;
+            case SwapMessage:
+                TakeSwap();
+                ApplyStyle();
+                _chrome.BringForward();
+                return IntPtr.Zero;
             case WmClose:
                 _chrome.RememberPosition(_placed);
                 DestroyWindow(hwnd);
@@ -626,6 +667,30 @@ internal sealed unsafe class LogWindowThread
         {
             Volatile.Write(ref _appendPosted, 0);
         }
+    }
+
+    // Swap's other half, on the window's thread: the old feed let go, a fresh view over the new one (at the bottom, following, the
+    // grid the same), its lines read and the title forced, as Run does at the open. A drag in progress ends first.
+    private void TakeSwap()
+    {
+        var next = Interlocked.Exchange(ref _pendingFeed, null);
+        if (next is null)
+        {
+            return;   // overtaken: a later swap's message takes the newest
+        }
+
+        ReleaseCapture();
+        _feed.Appended -= OnAppended;
+        _feed.Dispose();
+        _feed = next;
+        _state = new LogViewState();
+        _scratch.Clear();
+        TakeAppended();
+        _feed.Appended += OnAppended;
+        TakeAppended();
+        Layout();
+        UpdateTitle(force: true);
+        InvalidateRect(_hwnd, null, false);
     }
 
     // The lines the window lacks read from the buffer (the flag cleared first, so a line added during the read posts again).

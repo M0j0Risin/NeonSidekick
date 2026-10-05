@@ -125,7 +125,7 @@ public sealed class ThumbsState
     private string? _armedPath;
     private long _armedAt;
 
-    /// <summary>Whether a Del armed the selected picture (the title shows the hint). The selection moving off it drops it.</summary>
+    /// <summary>Whether a Del armed the selected picture (the title shows the hint). The selection moving off it, or the picture leaving, drops it for good.</summary>
     public bool DeleteArmed => _armedPath is not null && string.Equals(_armedPath, SelectedPath, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The folder the pictures are in.</summary>
@@ -301,10 +301,17 @@ public sealed class ThumbsState
             return false;
         }
 
+        string? before = SelectedPath;
         _entries.RemoveAt(index);
         if (Selected is int selected)
         {
             Selected = _entries.Count == 0 ? null : selected > index ? selected - 1 : Math.Min(selected, _entries.Count - 1);
+        }
+
+        // The armed picture gone, or the selection closed up onto another one: the arm never comes back (as SelectIndex's move).
+        if (string.Equals(path, _armedPath, StringComparison.OrdinalIgnoreCase) || !string.Equals(before, SelectedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _armedPath = null;
         }
 
         ScrollTop = Math.Clamp(ScrollTop, 0, MaxScroll);
@@ -334,6 +341,13 @@ public sealed class ThumbsState
         }
 
         bool changed = Selected != index;
+        if (changed)
+        {
+            // A move drops the arm for good (2026-10-05, the code review): kept and matched by path, it came back when the viewer paged
+            // away and back without a key or a click here, and one Del then deleted with no hint shown since the move.
+            _armedPath = null;
+        }
+
         Selected = index;
         EnsureVisible(index);
         return changed;

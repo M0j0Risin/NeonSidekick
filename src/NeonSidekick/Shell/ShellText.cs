@@ -131,12 +131,34 @@ public static class ShellText
     public static string ListHeader(int count, int running) =>
         count == 0 ? "0 processes" : $"{N(count)} {(count == 1 ? "process" : "processes")} ({N(running)} running)";
 
-    /// <summary>One row of <c>list</c>: the id, <c>running</c> or <c>exit N</c>, the elapsed, the kind, the command. Pinned.</summary>
+    /// <summary>One row of <c>list</c>: the id, <see cref="ModelState"/>, the elapsed, the kind, the command. Pinned.</summary>
     public static string ListRow(ProcessSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        string state = session.HasExited ? "exit " + N(session.ExitCode ?? -1) : "running";
-        return $"{session.Id}  {state,-9} {Elapsed(session.Elapsed),-9} {session.Kind,-10} {session.Label}";
+        return SessionRow(session, ModelState(session), 9, session.Label);
+    }
+
+    /// <summary>
+    /// A session's state in the model's words: <c>running</c>, <c>exit N</c>, or <see cref="StoppedByUserWords"/> once the user stopped
+    /// it (2026-10-05, the code review: <c>list</c> and <c>log</c> said <c>exit 1</c> after the poll had said "stopped by the user", and
+    /// a model reading a crash there may start again what the user stopped on purpose). Pinned.
+    /// </summary>
+    public static string ModelState(ProcessSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return !session.HasExited ? "running" : session.StoppedByUser ? StoppedByUserWords : "exit " + N(session.ExitCode ?? -1);
+    }
+
+    /// <summary>
+    /// One session as a row, the model's <c>list</c> (<see cref="ListRow"/>) and <c>/process</c>'s (<c>ProcessWindowText.Row</c>) alike
+    /// (2026-10-05, the code review: two copies of it had drifted): the id, <paramref name="state"/> padded to
+    /// <paramref name="stateCells"/>, the elapsed, the kind and <paramref name="label"/>.
+    /// </summary>
+    public static string SessionRow(ProcessSession session, string state, int stateCells, string label)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(state);
+        return $"{session.Id}  {state.PadRight(stateCells)} {Elapsed(session.Elapsed),-9} {session.Kind,-10} {label}";
     }
 
     /// <summary>
@@ -167,7 +189,7 @@ public static class ShellText
     public static string LogHeader(ProcessSession session, long first, long last)
     {
         ArgumentNullException.ThrowIfNull(session);
-        string state = session.HasExited ? "exit " + N(session.ExitCode ?? -1) : "running";
+        string state = ModelState(session);
         string range = first == 0 ? "no lines" : $"lines {Count(first)}-{Count(last)} of {Count(session.Output.TotalLines)}";
         return $"{session.Id} {range} ({state}): {session.Label}";
     }

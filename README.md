@@ -1300,8 +1300,8 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 
 `/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⚡) lists the processes, and Enter or a double-click on one there opens it here.
 
-* **One window:** `/process` with another id switches it to that process, in the same place on screen.
-* **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. A process that has ended ignores Ctrl+K. The `/process` list's **✖ kill** button (or **K**) stops the highlighted one the same way, after a yes/no.
+* **One window:** `/process` with another id switches it to that process, in the same place on screen, without closing it.
+* **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. Once the process has ended, Ctrl+K goes on to the chat as any other key. The `/process` list's **✖ kill** button (or **K**) stops the highlighted one the same way, after a yes/no.
 
 Otherwise it is read-only: scroll, follow, select and copy as in the log window, Tab back to the terminal. It reopens where it was closed and closes with the app.
 

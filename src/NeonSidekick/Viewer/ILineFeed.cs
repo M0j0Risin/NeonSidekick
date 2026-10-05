@@ -129,12 +129,20 @@ internal sealed class ProcessFeed : ILineFeed
             return false;
         }
 
+        if (_session.HasExited)
+        {
+            // Nothing left to stop (2026-10-05, the code review): the key goes on to the chat as it did before the window took it,
+            // rather than vanishing without a word. The arm is dropped, so the title loses its prompt.
+            _arm.Press(_time.GetUtcNow(), exited: true);
+            return false;
+        }
+
         if (repeat)
         {
             return true;   // a held Ctrl+K is one press (2026-10-05, the code review): taken, so it never reaches the chat, but no second
         }
 
-        switch (_arm.Press(_time.GetUtcNow(), _session.HasExited))
+        switch (_arm.Press(_time.GetUtcNow(), exited: false))
         {
             case KillPress.Armed:
                 // The title goes back once the window lapses: a tick just past it raises Appended, and the title is read again.

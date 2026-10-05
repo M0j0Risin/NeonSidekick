@@ -190,9 +190,10 @@ public sealed class ProcessWindowTests : IDisposable
 
         session.Kill();
         await Exit(session);
-        Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));     // taken, but an exited process is never stopped
-        Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));
+        Assert.False(feed.Key(ProcessFeed.VkK, control: true, repeat: false));    // an exited process: the key goes on to the chat
+        Assert.False(feed.Key(ProcessFeed.VkK, control: true, repeat: true));
         Assert.Single(stops);
+        Assert.DoesNotContain("Press Ctrl+K", feed.Title(following: true), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -295,8 +296,49 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal([session.Id], _registry.TakeNotes());
         Assert.Equal(1, _signals);
         Assert.Equal(session.Id + " stopped by the user after 0.0 s (cmd): ping -n 30 127.0.0.1 >nul — no new output", ShellText.PollHeader(session, 0));
+        // The model's list and log say the same as its poll, not "exit 1" (2026-10-05, the code review).
+        Assert.Equal(session.Id + "  stopped by the user 0.0 s     cmd        ping -n 30 127.0.0.1 >nul", ShellText.ListRow(session));
+        Assert.Equal(session.Id + " no lines (stopped by the user): ping -n 30 127.0.0.1 >nul", ShellText.LogHeader(session, 0, 0));
+        Assert.Equal(session.Id + "  stopped by you 0.0 s     cmd        ping -n 30 127.0.0.1 >nul", ProcessWindowText.Row(session));
 
         Assert.False(_registry.StopByUser(session));   // exited already
+    }
+
+    [Fact]
+    public async Task StopByUser_AChildGoneWhileItsOutputDrains_IsNotStopped_NorNotified()
+    {
+        // cmd exits at once while the ping it started holds the output pipe open: the session is not HasExited until the ping ends,
+        // but there is nothing left to kill. The stop must say so and leave Notify alone (2026-10-05, the code review).
+        var session = Start("start /b ping -n 4 127.0.0.1 & exit /b 3");
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (!ParentGone(session.Pid) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.True(ParentGone(session.Pid));
+        Assert.False(session.HasExited);                // the ping still drains into the pipe
+        Assert.False(_registry.StopByUser(session));
+        Assert.False(session.Notify);
+
+        await Exit(session);
+        Assert.False(session.StoppedByUser);
+        Assert.Equal(3, session.ExitCode);
+        Assert.False(_registry.TryTakeAlert(out _));
+        Assert.Empty(_registry.TakeNotes());
+
+        static bool ParentGone(int pid)
+        {
+            try
+            {
+                using var process = System.Diagnostics.Process.GetProcessById(pid);
+                return process.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+        }
     }
 
     [Fact]

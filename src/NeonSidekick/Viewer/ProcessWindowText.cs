@@ -71,11 +71,11 @@ public static class ProcessWindowText
     /// <summary><c>/process</c> with no session started in this conversation's screen. Pinned.</summary>
     public const string NoneYet = "No background processes yet: the model starts one with run_command's background option.";
 
-    /// <summary>One row of <c>/process</c>'s list: the id, the state, the elapsed, the kind and the command. Pinned.</summary>
+    /// <summary>One row of <c>/process</c>'s list: <see cref="ShellText.SessionRow"/> with <see cref="State"/> and the cut <see cref="Label"/>. Pinned.</summary>
     public static string Row(ProcessSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        return $"{session.Id}  {State(session),-14} {ShellText.Elapsed(session.Elapsed),-9} {session.Kind,-10} {Label(session.Label)}";
+        return ShellText.SessionRow(session, State(session), 14, Label(session.Label));
     }
 
     /// <summary>The list's last line: how to open one. Pinned.</summary>
