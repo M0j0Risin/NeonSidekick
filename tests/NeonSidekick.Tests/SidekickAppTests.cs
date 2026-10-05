@@ -532,7 +532,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_UnderTheYoloFlag_ThePoliceStillRefuses_AndExitsWith3()
     {
         ServerOn1234("llama");
-        _settings.Update(d => d.ShellPoliceOutsidePaths = true);
+        _settings.Update(d => d.ShellPolice = true);
         _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = @"type C:\Windows\win.ini", ["shell"] = "cmd" }));
         _chat.EnqueueText("Refused.");
 
@@ -550,7 +550,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_UnderYoloAndNoPolice_AnOutsidePathRuns_AndNothingIsSaved()
     {
         ServerOn1234("llama");
-        _settings.Update(d => d.ShellPoliceOutsidePaths = true);
+        _settings.Update(d => d.ShellPolice = true);
         _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = @"type C:\Windows\win.ini", ["shell"] = "cmd" }));
         _chat.EnqueueText("Read it.");
         var loose = SidekickOptions.None with { Yolo = true, NoPolice = true };
@@ -559,15 +559,15 @@ public partial class SidekickAppTests : IDisposable
 
         Assert.Contains(@"[tool] run_command -> exit 0 in 0.0 s (cmd): type C:\Windows\win.ini", output);
         Assert.DoesNotContain("[notice] ", output);
-        Assert.True(_settings.Current.ShellPoliceOutsidePaths);   // never saved
+        Assert.True(_settings.Current.ShellPolice);   // never saved
 
         var flagged = App(null, new StringReader(""), new StringWriter());
         Assert.Equal(0, await flagged.RunAsync(loose with { Headless = true }, CancellationToken.None));
-        Assert.Equal(SidekickOptions.NoPoliceFlag, flagged.OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
+        Assert.Equal(SidekickOptions.NoPoliceFlag, flagged.OverriddenBy(SettingsField.ShellPolice));
         var variable = App(new EnvironmentOverrides(n => n == EnvironmentOverrides.ShellPoliceVariable ? "off" : null), new StringReader(""), new StringWriter());
         Assert.Equal(0, await variable.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
-        Assert.Equal(EnvironmentOverrides.ShellPoliceVariable, variable.OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
-        Assert.Null(App().OverriddenBy(SettingsField.ShellPoliceOutsidePaths));
+        Assert.Equal(EnvironmentOverrides.ShellPoliceVariable, variable.OverriddenBy(SettingsField.ShellPolice));
+        Assert.Null(App().OverriddenBy(SettingsField.ShellPolice));
         // Shell prefer native tools has its variable too (later on 2026-09-26), no flag.
         var native = App(new EnvironmentOverrides(n => n == EnvironmentOverrides.ShellNativeVariable ? "off" : null), new StringReader(""), new StringWriter());
         Assert.Equal(0, await native.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));

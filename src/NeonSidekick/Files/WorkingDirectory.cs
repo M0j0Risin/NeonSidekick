@@ -70,6 +70,12 @@ public enum FileOutcome
 
     /// <summary>A <c>delete</c> of <c>.git</c>, of anything in it, or of a folder holding one (2026-09-23, the user's call): git's own store is never deleted.</summary>
     GitProtected,
+
+    /// <summary>
+    /// A change to a SQLite database file, or a <c>delete</c>/<c>move</c> of a folder holding one, while the SQLite tools are on
+    /// (2026-10-05, the user's call; <see cref="WorkingDirectory.Databases"/>): a database changes only through <c>sqlite_execute</c>.
+    /// </summary>
+    DatabaseProtected,
 }
 
 public readonly record struct DirectoryEntry(string Name, bool IsDirectory, long Length);
@@ -438,6 +444,14 @@ public sealed class WorkingDirectory
     /// <summary>How this instance treats its root (<see cref="WorkingDirectoryOptions"/>).</summary>
     public WorkingDirectoryOptions Options => _options;
 
+    /// <summary>
+    /// The SQLite database files no file tool may change (2026-10-05, the user's call), read at every write: null, or a null
+    /// answer, while the SQLite tools are off. Set on the working directory alone (never a share's); a write <see cref="Resolve(string, bool, out string)"/>
+    /// to such a file is <see cref="FileOutcome.DatabaseProtected"/>, and a delete or move of a folder holding one too
+    /// (<see cref="HoldsDatabase"/>), so a database changes only through <c>sqlite_execute</c>. The shell police reads it too.
+    /// </summary>
+    public Func<DatabaseGuard?>? Databases { get; set; }
+
     /// <summary>The setting's meaning: blank is the profile's <see cref="DefaultFolderName"/> folder, anything else a full path.</summary>
     public static string Resolve(string configured, string profileDirectory)
     {
@@ -522,8 +536,31 @@ public sealed class WorkingDirectory
             return FileOutcome.OutsideRoot;
         }
 
+        // A write to a SQLite database file while the SQLite tools are on (2026-10-05): the one choke point every writer passes.
+        if (forWrite && Databases?.Invoke() is { } databases && databases.IsDatabaseFile(candidate))
+        {
+            return FileOutcome.DatabaseProtected;
+        }
+
         full = candidate;
         return FileOutcome.Ok;
+    }
+
+    /// <summary>
+    /// Whether a database file of <paramref name="guard"/> is anywhere under <paramref name="directory"/>, never through a reparse
+    /// point (<see cref="HoldsGit"/>'s walk); the first hit ends it, an unreadable subfolder is passed over.
+    /// </summary>
+    public static bool HoldsDatabase(string directory, DatabaseGuard guard)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(guard);
+        return Directory.EnumerateFiles(directory, "*", new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            ReturnSpecialDirectories = false,
+        }).Any(guard.IsDatabaseFile);
     }
 
     /// <summary>How many links one judgement follows before it gives up and calls the path outside (a loop of links never ends otherwise).</summary>
@@ -1935,6 +1972,12 @@ public sealed class WorkingDirectory
             return new MoveResult(outcome, from, to, false, false);
         }
 
+        // A folder moved takes its databases with it (2026-10-05): refused like moving one of them.
+        if (move && Directory.Exists(source) && RealLinkTarget(source) is null && Databases?.Invoke() is { } databases && HoldsDatabase(source, databases))
+        {
+            return new MoveResult(FileOutcome.DatabaseProtected, Relative(source, isDirectory: true), to, false, false);
+        }
+
         outcome = Resolve(to, forWrite: true, out string destination);
         if (outcome != FileOutcome.Ok)
         {
@@ -2175,6 +2218,11 @@ public sealed class WorkingDirectory
             if (IsGitPath(Relative(full)) || (isDirectory && !isLink && HoldsGit(full)))
             {
                 return new DeleteResult(FileOutcome.GitProtected, display, isDirectory);
+            }
+
+            if (isDirectory && !isLink && Databases?.Invoke() is { } databases && HoldsDatabase(full, databases))
+            {
+                return new DeleteResult(FileOutcome.DatabaseProtected, display, isDirectory);
             }
 
             if (isDirectory && isLink)
@@ -2498,6 +2546,12 @@ public sealed class WorkingDirectory
                 if (!overwrite && (File.Exists(target) || Directory.Exists(target)))
                 {
                     return new ZipResult(FileOutcome.Exists, display, Relative(target), 0, 0);
+                }
+
+                // An entry that would land on a database file (2026-10-05): the whole archive refused, nothing extracted.
+                if (Databases?.Invoke() is { } databases && databases.IsDatabaseFile(target))
+                {
+                    return new ZipResult(FileOutcome.DatabaseProtected, display, Relative(target), 0, 0);
                 }
 
                 plan.Add((entry, target));

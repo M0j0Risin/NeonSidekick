@@ -946,7 +946,7 @@ public sealed class AppSettings : IDisposable
         ShellDefault = source.ShellDefault,
         ShellForegroundCapSeconds = source.ShellForegroundCapSeconds,
         ShellOutputMaxChars = source.ShellOutputMaxChars,
-        ShellPoliceOutsidePaths = source.ShellPoliceOutsidePaths,
+        ShellPolice = source.ShellPolice,
         ShellPoliceForbiddenStrings = [.. source.ShellPoliceForbiddenStrings],
         ShellPreferNative = source.ShellPreferNative,
         ShellTimeoutSeconds = source.ShellTimeoutSeconds,

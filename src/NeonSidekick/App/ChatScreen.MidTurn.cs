@@ -142,7 +142,7 @@ internal sealed partial class ChatScreen
     /// profile's file, nothing the turn holds —, so the word never changes the class; the standalone
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
     /// <c>/cmdclear</c>'s (2026-09-25) confirmation (<c>/emptytrash</c>'s too until 2026-10-01) and the <c>/reasoning</c>
-    /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as is <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police outside paths</c> row the same way); the four speech switches, <c>/reasoning</c>
+    /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as is <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police</c> row the same way); the four speech switches, <c>/reasoning</c>
     /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/remember</c>, <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c>, <c>/comfy view</c> (2026-09-27, the string form of this policy) and an unknown
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19), <c>/rewind</c> (2026-09-30: it rewrites the history the turn appends to, so the reply stops and the picker opens at the idle line) and <c>/exit</c> cancel; the rest
     /// (<c>/profile</c>, <c>/theme</c> (2026-09-23, the user's call: a theme change waits for the reply to end, like its <c>Theme</c> row on the settings pane — it cancelled the reply as <c>/splash</c> does until later that day), <c>/server</c>, <c>/model</c>, <c>/compact</c>, <c>/cwd</c>, <c>/tree</c>, <c>/vault</c> (2026-09-22, as <c>/tree</c>),
@@ -454,7 +454,7 @@ internal sealed partial class ChatScreen
                 await _samplingMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Police:
-                // /police (2026-09-22): the Shell police outside paths row alone, which /tools edits under a reply already; a flip is read at the next call.
+                // /police (2026-09-22): the Shell police row alone, which /tools edits under a reply already; a flip is read at the next call.
                 await _toolsMenu.ShowPoliceAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.CmdList:

@@ -154,8 +154,8 @@ public sealed class ExecuteCodeToolTests : IDisposable
     [Fact]
     public void PoliceOff_TheDescriptionAndSchema_NeverMentionTheWorkingDirectory()
     {
-        // Shell police outside paths off (2026-09-22): the text until that day — nothing tells the model where a script may reach, so it does not try to leave.
-        _settings.ShellPoliceOutsidePaths = false;
+        // Shell police off (2026-09-22): the text until that day — nothing tells the model where a script may reach, so it does not try to leave.
+        _settings.ShellPolice = false;
         Assert.Equal(
             "Runs a script (python, node or powershell) in a fresh process and returns what it printed. " +
             "The script can call this app's other tools by name through the neon_tools module, so several steps can be done in one call; " +
@@ -176,8 +176,23 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(ExecuteCodeTool.DescriptionWithoutBridgeUnpoliced, ExecuteCodeTool.DescribeTool(bridge: false, police: false));
 
         // Back on: the cached schema follows.
-        _settings.ShellPoliceOutsidePaths = true;
+        _settings.ShellPolice = true;
         Assert.EndsWith(ExecuteCodeTool.CodeDescriptionPolicedSuffix, _tool.JsonSchema.GetProperty("properties").GetProperty("code").GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public async Task SqlitePolice_AScriptReachingSqlite_IsRefusedBeforeTheGate()
+    {
+        // 2026-10-05: while the SQLite tools are on (the guard set), a script that reaches SQLite never runs, yolo or not.
+        _files.Databases = () => Files.DatabaseGuard.ByExtension;
+        var shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("language", "powershell"), ("code", "Add-Type -Path System.Data.SQLite.dll\n$c = New-Object System.Data.SQLite.SQLiteConnection"))));
+        Assert.Equal(ShellText.SqlitePoliced, shown.Text);
+        Assert.Equal("SQLite: 'System.Data.SQLite.dll' — not run", shown.Shown);
+        Assert.Equal(["powershell script"], _gate.Refusals);
+
+        shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("language", "powershell"), ("code", "Remove-Item 'data/app.db'"))));
+        Assert.Equal("SQLite: 'app.db' — not run", shown.Shown);
+        _files.Databases = null;
     }
 
     [Fact]
@@ -194,7 +209,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
         // Off with the police: the gate's turn (denied here).
         _settings.ShellCommandPolicy = "ask";
         _answer = CommandChoice.Deny;
-        _settings.ShellPoliceOutsidePaths = false;
+        _settings.ShellPolice = false;
         Assert.Equal("Error: the script was denied by the user (powershell); do not retry it or work around the refusal", await Invoke(("language", "powershell"), ("code", "Remove-Item -Recurse build")));
         Assert.Single(_asked);
     }
@@ -202,7 +217,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
     [Fact]
     public async Task Police_RefusesAScriptNamingAnOutsidePath_BeforeTheGate()
     {
-        // Shell police outside paths (2026-09-22): the script's text is read before the gate; a refusal never asks, and off it goes through to the gate.
+        // Shell police (2026-09-22): the script's text is read before the gate; a refusal never asks, and off it goes through to the gate.
         _settings.ShellCommandPolicy = "ask";
         _answer = CommandChoice.Deny;
         Assert.Equal(@"Error: outside the working directory: 'C:\Users\x.txt' — a command or a script may only name paths under it", await Invoke(("language", "powershell"), ("code", "Get-Content 'C:\\Users\\x.txt'")));   // powershell: always installed
@@ -211,7 +226,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Empty(_asked);
         Assert.Equal("Error: the script was denied by the user (powershell); do not retry it or work around the refusal", await Invoke(("language", "powershell"), ("code", "Get-ChildItem '" + _root + "'")));   // under the root: the gate's turn
         Assert.Single(_asked);
-        _settings.ShellPoliceOutsidePaths = false;
+        _settings.ShellPolice = false;
         Assert.Equal("Error: the script was denied by the user (powershell); do not retry it or work around the refusal", await Invoke(("language", "powershell"), ("code", "Get-ChildItem $env:APPDATA")));
         Assert.Equal(2, _asked.Count);
 

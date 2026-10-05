@@ -5,8 +5,11 @@ namespace NeonSidekick.Sqlite;
 /// <summary>What a statement <c>sqlite_execute</c> runs does (<see cref="SqliteStatementKinds"/>).</summary>
 public enum SqliteStatementKind
 {
-    /// <summary>INSERT, UPDATE, DELETE, REPLACE (a WITH may lead them; RETURNING, upserts and OR … included).</summary>
+    /// <summary>INSERT, UPDATE, REPLACE (a WITH may lead them; RETURNING, upserts and OR … included).</summary>
     Data,
+
+    /// <summary>DELETE (a WITH may lead it; RETURNING included): its own kind since later on 2026-10-05, the user's call, off by default.</summary>
+    Delete,
 
     /// <summary>CREATE TABLE, INDEX, VIEW, TRIGGER, VIRTUAL TABLE.</summary>
     Create,
@@ -29,15 +32,17 @@ public enum SqliteStatementKind
 
 /// <summary>
 /// The setting <c>SQLite statements allowed</c> (2026-10-05, the user's ask): which kinds of statement <c>sqlite_execute</c> may
-/// run under <c>SQLite mode</c> <c>read-write</c>, a checklist of seven, changing data, creating and reading by default (reading and creating
-/// added to the default the same day, the user's call: neither can lose data, and <c>create</c> needs creating). Saved by the
+/// run under <c>SQLite mode</c> <c>read-write</c>, a checklist of eight, changing data, creating and reading by default (reading and creating
+/// added to the default the same day, the user's call: neither can lose data, and <c>create</c> needs creating). DELETE was
+/// changing data's until later that day, when it became deleting, a kind of its own and off by default (the user's call; a saved
+/// <c>data</c> no longer covers it, no migration). Saved by the
 /// words of <see cref="Names"/>; <see cref="Resolve"/> is the one place they become kinds (a null list is the default, a word it
 /// does not know is passed over). <see cref="SqliteWriteGate"/> tells a statement's kind (<see cref="SqliteWriteGate.Classify"/>).
 /// </summary>
 public static class SqliteStatementKinds
 {
     /// <summary>The kinds' saved words, in menu order (the order of <see cref="SqliteStatementKind"/>).</summary>
-    public static readonly string[] Names = ["data", "create", "alter", "drop", "upkeep", "pragma", "read"];
+    public static readonly string[] Names = ["data", "delete", "create", "alter", "drop", "upkeep", "pragma", "read"];
 
     /// <summary>A fresh profile's list: changing data, creating, reading.</summary>
     public static List<string> Default() => ["data", "create", "read"];
@@ -48,6 +53,7 @@ public static class SqliteStatementKinds
     public static string Title(SqliteStatementKind kind) => kind switch
     {
         SqliteStatementKind.Data => "changing data",
+        SqliteStatementKind.Delete => "deleting",
         SqliteStatementKind.Create => "creating",
         SqliteStatementKind.Alter => "changing structure",
         SqliteStatementKind.Drop => "dropping",
@@ -59,7 +65,8 @@ public static class SqliteStatementKinds
     /// <summary>The statements a kind covers. Pinned.</summary>
     public static string Statements(SqliteStatementKind kind) => kind switch
     {
-        SqliteStatementKind.Data => "INSERT, UPDATE, DELETE, REPLACE",
+        SqliteStatementKind.Data => "INSERT, UPDATE, REPLACE",
+        SqliteStatementKind.Delete => "DELETE",
         SqliteStatementKind.Create => "CREATE TABLE, INDEX, VIEW, TRIGGER, VIRTUAL TABLE",
         SqliteStatementKind.Alter => "ALTER TABLE",
         SqliteStatementKind.Drop => "DROP TABLE, INDEX, VIEW, TRIGGER",
@@ -82,7 +89,7 @@ public static class SqliteStatementKinds
         return Resolve(effective.SqliteStatementsAllowed);
     }
 
-    /// <summary>Each kind in words with its statements: <c>changing data (INSERT, UPDATE, DELETE, REPLACE); creating (…)</c>. Pinned.</summary>
+    /// <summary>Each kind in words with its statements: <c>changing data (INSERT, UPDATE, REPLACE); creating (…)</c>. Pinned.</summary>
     public static string Describe(IReadOnlyList<SqliteStatementKind> kinds)
     {
         ArgumentNullException.ThrowIfNull(kinds);

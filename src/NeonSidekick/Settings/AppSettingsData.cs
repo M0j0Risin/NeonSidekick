@@ -246,7 +246,7 @@ public sealed class AppSettingsData
     /// row comes back once): ids from <see cref="App.ToolbarItems.Names"/>. The pane glyphs sit at its left (a
     /// double-click opens <c>/settings</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/sys</c>, <c>/sessions</c>,
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
-    /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPoliceOutsidePaths"/>
+    /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPolice"/>
     /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
     /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Tools, Shell allowed commands,
     /// Shell police, the Shell, Files and Web switches and the path since 2026-10-03 (the user's pick; Shell allowed commands,
@@ -1792,9 +1792,10 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether a SQLite tool may also open any file in the working directory by its path (2026-10-04, the user's call: named and
-    /// sandbox); the sandbox's own rule refuses a path outside it. On by default: the working directory is the user's already.
+    /// sandbox); the sandbox's own rule refuses a path outside it. On by default until 2026-10-05, off since (the user's call): a
+    /// database is offered by name in sqlite.json unless the user lets the working directory's files in; a saved value stands.
     /// </summary>
-    public bool SqliteSandboxFiles { get; set; } = true;
+    public bool SqliteSandboxFiles { get; set; }
 
     /// <summary>Whether <c>%</c> and part of a name lists the <c>sqlite.json</c> databases on the input line too; on by default.</summary>
     public bool SqlitePercentMention { get; set; } = true;
@@ -2077,16 +2078,18 @@ public sealed class AppSettingsData
     /// The toolbar wears 👮 while it is on (later that day); its double-click is <c>/police</c>, this row's on/off page (later still that day).
     /// While it is off the toolbar wears 🥷 in the officer's place (2026-10-02, the user's ask), the same double-click; neither under policy off.
     /// Read at each call and at each turn's prompt, no reconnect. <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
-    /// outranks it for a launch, and <c>--no-police</c> outranks both (2026-09-26).
+    /// outranks it for a launch, and <c>--no-police</c> outranks both (2026-09-26). <c>ShellPoliceOutsidePaths</c> ("Shell police
+    /// outside paths") until 2026-10-05, renamed at the user's call as the switch over every police rule (the forbidden strings, the
+    /// SQLite rule); no migration, so a profile that had saved it off reads on again until it is switched off.
     /// </summary>
-    public bool ShellPoliceOutsidePaths { get; set; } = true;
+    public bool ShellPolice { get; set; } = true;
 
     /// <summary>
     /// The strings the shell police refuses outright (2026-10-03, the user's idea): a <c>run_command</c> line, an
     /// <c>execute_code</c> script or the text <c>process</c> writes that contains one (<see cref="Shell.ForbiddenStrings.Find"/>:
     /// case ignored, every run of whitespace one space, so <c>rm -rf</c> catches <c>RM   -RF</c>) is refused before the gate
     /// is asked — <c>yolo</c> never skips it. Under the police's own switch (the user's call): enforced only while
-    /// <see cref="ShellPoliceOutsidePaths"/> is on, so <c>/police</c> off, <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
+    /// <see cref="ShellPolice"/> is on, so <c>/police</c> off, <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
     /// and <c>--no-police</c> stop it too. The model is told it was refused, never which string (the user's call: a named
     /// string is one to spell around); the transcript's 👮 line and the log name it for the user. A tripwire, not a sandbox:
     /// a model that builds the text in pieces gets past it. Kept as typed, the user's case, no duplicates ignoring case

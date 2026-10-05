@@ -18,6 +18,7 @@ public sealed class ProcessToolTests : IDisposable
     private readonly ProcessRegistry _registry;
     private readonly ProcessTool _tool;
     private readonly CommandGate _gate;
+    private readonly Files.WorkingDirectory _files;
     private int _signals;
 
     public ProcessToolTests()
@@ -26,7 +27,8 @@ public sealed class ProcessToolTests : IDisposable
         _gate = new CommandGate(() => _settings, new CommandAllowList(() => [], _ => { }), null);
         _runner = new ShellRunner(_time);
         _registry = new ProcessRegistry(_runner, new Random(7), () => Interlocked.Increment(ref _signals));
-        _tool = new ProcessTool(_registry, new Files.WorkingDirectory(() => _dir, _time), () => _settings, _gate);
+        _files = new Files.WorkingDirectory(() => _dir, _time);
+        _tool = new ProcessTool(_registry, _files, () => _settings, _gate);
     }
 
     public void Dispose()
@@ -134,17 +136,17 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal("Error: " + session.Id + " has exited; kill needs a running process", await Invoke(("action", "kill"), ("session_id", session.Id)));
         Assert.Equal("Error: " + session.Id + " has exited; write needs a running process", await Invoke(("action", "write"), ("session_id", session.Id), ("data", "x")));
 
-        // The police reads what goes to stdin (Shell police outside paths, 2026-09-22): a line naming an outside path is refused and nothing is sent; off, it goes.
+        // The police reads what goes to stdin (Shell police, 2026-09-22): a line naming an outside path is refused and nothing is sent; off, it goes.
         var typed = Start("set /p name=&& call echo hello %name%");
         Assert.Equal(@"Error: outside the working directory: 'C:\' — a command or a script may only name paths under it", await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", @"cd C:\")));
         Assert.Equal("Error: outside the working directory: '..' — a command or a script may only name paths under it", await Invoke(("action", "write"), ("session_id", typed.Id), ("data", "cd ..")));   // relative to where it started: the root
         Assert.Equal("sent a line to " + typed.Id, await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", "sub")));
         Assert.Equal(typed.Id + " exited 0 after 0.0 s (cmd): set /p name=&& call echo hello %name% — 1 new line\nhello sub", await Invoke(("action", "wait"), ("session_id", typed.Id), ("timeout", 30)));
-        _settings.ShellPoliceOutsidePaths = false;
+        _settings.ShellPolice = false;
         var loose = Start("set /p name=&& call echo hello %name%");
         Assert.Equal("sent a line to " + loose.Id, await Invoke(("action", "submit"), ("session_id", loose.Id), ("data", @"C:\")));
         Assert.Equal(loose.Id + " exited 0 after 0.0 s (cmd): set /p name=&& call echo hello %name% — 1 new line\nhello C:\\", await Invoke(("action", "wait"), ("session_id", loose.Id), ("timeout", 30)));
-        _settings.ShellPoliceOutsidePaths = true;
+        _settings.ShellPolice = true;
         Assert.Equal([@"cd C:\", "cd .."], _gate.Refusals);   // the two policed writes, noted on the gate (2026-09-26)
 
         // A forbidden string in what goes to stdin (2026-10-03): refused, nothing sent, noted on the gate; the user's line names it.
@@ -153,9 +155,17 @@ public sealed class ProcessToolTests : IDisposable
         var shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("action", "submit"), ("session_id", guarded.Id), ("data", "SHUTDOWN /s"))));
         Assert.Equal(ShellText.Forbidden, shown.Text);
         Assert.Equal(ShellText.ForbiddenShown("shutdown"), shown.Shown);
+
+        // The SQLite police (2026-10-05): what goes to stdin reaching SQLite is refused while the SQLite tools are on, nothing sent.
+        _files.Databases = () => Files.DatabaseGuard.ByExtension;
+        var policed = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("action", "submit"), ("session_id", guarded.Id), ("data", "sqlite3 shop.db"))));
+        Assert.Equal(ShellText.SqlitePoliced, policed.Text);
+        Assert.Equal("SQLite: 'sqlite3' — not run", policed.Shown);
+        _files.Databases = null;
+
         Assert.Equal("sent a line to " + guarded.Id, await Invoke(("action", "submit"), ("session_id", guarded.Id), ("data", "sub")));
         Assert.Equal(guarded.Id + " exited 0 after 0.0 s (cmd): set /p name=&& call echo hello %name% — 1 new line\nhello sub", await Invoke(("action", "wait"), ("session_id", guarded.Id), ("timeout", 30)));
-        Assert.Equal([@"cd C:\", "cd ..", "SHUTDOWN /s"], _gate.Refusals);
+        Assert.Equal([@"cd C:\", "cd ..", "SHUTDOWN /s", "sqlite3 shop.db"], _gate.Refusals);
         _settings.ShellPoliceForbiddenStrings = [];
 
         var sleeper = Start("ping -n 30 127.0.0.1 >nul");

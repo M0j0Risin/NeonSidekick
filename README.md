@@ -241,7 +241,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/theme` (the theme picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
 | 💾 | always; on the slab while *Memory mode* is `disabled` | `/memory`: the memories, with **read-write** (W), **read-only** (R) and **disabled** (D) on its title row |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
-| 👮 / 🥷 | *Shell police outside paths* is on / off, and the policy isn't `off` | `/police` |
+| 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
 | 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (O) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (W, `/camera watch` on or off), **live** (L, the camera's window), **snap** (S, `/camera snap`) and **screen** (C, `/screen`); snap and screen close the pane first |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
@@ -714,8 +714,8 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list goes to the approval pane; refused with no pane) or `yolo` (everything runs). See Shell guards. | `off` |
 | Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter removes one; the pane's *Allow … always* adds one. The ask and yolo buttons (A, Y) switch the policy. `/cmdlist` opens it; `/cmdcopy` copies it to another profile. | none |
-| Shell police outside paths | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first, and also stops the forbidden strings; `/police` opens it. See Shell guards. | on |
-| Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police outside paths* is on. The top row adds one, Enter removes one; `/police`'s strings button (S) opens it too. See Shell guards. | none |
+| Shell police | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first, and also stops the forbidden strings and the SQLite rule; `/police` opens it. See Shell guards. | on |
+| Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police* is on. The top row adds one, Enter removes one; `/police`'s strings button (S) opens it too. See Shell guards. | none |
 | Shell prefer native tools | Steers the model to the app's own tools: a lone shell command one of them covers is sent back (once a turn). See Shell guards. | on |
 | Shell default | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd`, or `bash` (Git Bash). | `powershell` |
 | Shell timeout (s) | How long a foreground command without its own `timeout` may run (1–3600). | 180 |
@@ -735,6 +735,12 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
   * It reads text, not what runs: a computed path isn't seen, and a cmd switch (`dir /s`), a URL or a device (`>nul`, `/dev/null`) isn't a path.
   * `--no-police` and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` never does.
 * **Forbidden strings:** while the path police is on, a `run_command` line, `execute_code` script or `process` input that contains a string on *Shell police forbidden strings* is refused before it runs or asks, even under `--yolo`. Case is ignored and any run of spaces, tabs or line breaks counts as one space (`rm -rf` catches `RM   -RF`). The model gets `Error: forbidden by the shell police — the user does not allow this command or script…`, never the string; the 👮 line shows it to you (`forbidden string 'rm -rf' — not run`) and the log names it. It reads text, so a command built in pieces gets past it: a tripwire, not a sandbox.
+* **SQLite:** while the path police and *SQLite tools* are both on, a `run_command` line, `execute_code` script or `process` input that reaches SQLite is refused before it runs or asks, even under `--yolo`, so a database is reached only through the sqlite_ tools (whose read-only mode, statement kinds and Allow pane would otherwise be walked around). Reaching SQLite means:
+  * the word `sqlite` anywhere (the `sqlite3` CLI, Python's `sqlite3`, `System.Data.SQLite`, `Microsoft.Data.Sqlite`, `better-sqlite3`, `node:sqlite`);
+  * a file *sqlite.json* names, by path or file name;
+  * a `.db`, `.db3`, `.sqlite` or `.sqlite3` file name (with `-journal`, `-wal` or `-shm` too). In a script it counts only quoted or after a slash, so `self.db` passes.
+
+  A script file a `run_command` line runs (`python insert.py`) is read and judged too. The model gets `Error: refused by the shell police — SQLite…`, sent to the sqlite_ tools; the 👮 line shows what tripped it (`SQLite: 'sqlite3' in insert.py — not run`). It reads text, so a script that builds the word in pieces gets past it; only `ask` shows you every command.
 * **Prefer native tools:** the operating rules name the tools offered that turn and the commands each replaces:
   * `cat`/`type`/`Get-Content`/`dir`/`ls`/`grep` → `read_file`/`search_files`
   * `git status`/`log`/`diff`/`add`/`commit` → the GitLib tools
@@ -895,12 +901,12 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 
 | Setting | What it does | Default |
 |---|---|---|
-| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases named in `sqlite.json` and, below, the working directory's files. | off |
+| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases named in `sqlite.json` and, below, the working directory's files. While on, the shell police and the file tools keep out of SQLite databases (see *SQLite* › *Shell and files*). | off |
 | SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` is offered too, one change per call of the kinds below, or a new database file in the working directory, each allowed on a pane (Deny, Allow once, Allow for this session). See *SQLite* › *Changes*. | read-only |
-| SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run, as a checklist: changing data, creating, changing structure, dropping, upkeep, settings, reading (see *SQLite* › *Changes*). With none ticked, `sqlite_execute` isn't offered. | changing data, creating, reading |
+| SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run, as a checklist: changing data, deleting, creating, changing structure, dropping, upkeep, settings, reading (see *SQLite* › *Changes*). **A** / **N** / **D** pick all, none or the default. With none ticked, `sqlite_execute` isn't offered. | changing data, creating, reading |
 | SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. Otherwise as *SQL connections offered*. | none |
 | SQLite default database | The database a call uses when it names none. | (the first database) |
-| SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`). | on |
+| SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`), and `sqlite_execute`'s `create` may make one there. | off |
 | SQLite add database | The wizard: the file to save in, the name, the database file, a description; its test opens the file read-only and counts the tables. | — |
 | SQLite %-mention enabled | Lists the SQLite databases in the `%` list too, marked `SQLite ·`. | on |
 | SQLite max rows | As *SQL max rows*, for `sqlite_query`. | 100 |
@@ -1030,7 +1036,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix; the ask and yolo buttons (A, Y) switch *Shell command policy*. |
-| `/police` | Opens the on/off page for *Shell police outside paths*; its strings button (S) opens *Shell police forbidden strings*. |
+| `/police` | Opens the on/off page for *Shell police*; its strings button (S) opens *Shell police forbidden strings*. |
 | `/compact [focus]` | Shrinks the context; a focus tells the summary what to concentrate on. |
 | `/copy [n \| all] [--thinking]` | Copies the last reply (or the last *n*, or the whole transcript) as Markdown. `--thinking` includes the thinking, quoted under `💭 **Thinking**`. |
 | `/cwd [path \| ~ \| browse]` | Shows or changes the working directory. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
@@ -1806,7 +1812,8 @@ With *SQLite mode* set to `read-write`, the model gets `sqlite_execute` beside t
 
    | Kind | Statements | Default |
    |---|---|---|
-   | changing data | `INSERT`, `UPDATE`, `DELETE`, `REPLACE` (upserts, `OR …`, `RETURNING` included) | ✓ |
+   | changing data | `INSERT`, `UPDATE`, `REPLACE` (upserts, `OR …`, `RETURNING` included) | ✓ |
+   | deleting | `DELETE` (`RETURNING` included) | |
    | creating | `CREATE TABLE`, `INDEX`, `VIEW`, `TRIGGER`, `VIRTUAL TABLE`; also needed for `create` | ✓ |
    | changing structure | `ALTER TABLE` | |
    | dropping | `DROP TABLE`, `INDEX`, `VIEW`, `TRIGGER` | |
@@ -1818,6 +1825,10 @@ With *SQLite mode* set to `read-write`, the model gets `sqlite_execute` beside t
 3. **Your allow.** Every change asks on a pane that names the file and shows the statement: **Deny**, **Allow once**, or **Allow for this session** (that file only, until `/new`, `/clear` or a profile switch).
 4. **The run.** The file is opened read-write with no transaction of the app's, so the statement commits as it runs, atomically. A failed or interrupted statement changes nothing. The timeout and ESC interrupt it as they do a query.
 5. **The log.** Every change is written to the log: the database, its file, the rows changed and the statement.
+
+**Shell and files.** While *SQLite tools* is on, the rest of the app keeps out of the databases, in either mode:
+* The shell police's SQLite rule (Shell guards) refuses a command, script or process input that reaches SQLite, so `sqlite_execute` and its Allow pane can't be walked around by a script. It's a tripwire that reads text, not a sandbox; only Shell command policy `ask` shows you every command.
+* The file tools never change a database file: a `.db`/`.db3`/`.sqlite`/`.sqlite3` file (or its journal), or one *sqlite.json* names. That covers `write_file`, `patch_file`, `move`, `copy` onto one, `delete` (a folder holding one too), `unzip` into one, `download_file` and `unc_fetch`. Reading one and copying from one still work.
 
 **Creating a database.** `create: true` needs creating ticked in *SQLite statements allowed* and *SQLite sandbox files* on. The new file must end `.db`, `.sqlite`, `.sqlite3` or `.db3`, and its folder must already exist. A file already there is just opened, and a name from `sqlite.json` is never made. If the statement fails, the new file is removed again. To make an empty database, create it with a first table, or with `PRAGMA user_version = 0`.
 
@@ -2155,7 +2166,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 ### Shell
 
-Runs commands on your machine, starting in the working directory (`workdir` picks a folder under it), guarded by *Shell command policy* and *Shell police outside paths* (see Shell guards). A denied command tells the model not to work around it.
+Runs commands on your machine, starting in the working directory (`workdir` picks a folder under it), guarded by *Shell command policy* and *Shell police* (see Shell guards). A denied command tells the model not to work around it.
 
 * Commands run hidden, output read as UTF-8 with colours and pagers off, and stdin closed (background processes keep it for `process`).
 * A command that times out is killed with everything it started. Background processes stop when the app closes; a crash leaves running commands running.
@@ -2303,7 +2314,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 | Variable | Overrides | Accepts |
 |---|---|---|
 | `NEONSIDEKICK_COMMAND_POLICY` | Shell command policy (`--yolo` wins) | `off`, `ask`, `yolo`. Headless under `ask`, only allow-listed commands run. |
-| `NEONSIDEKICK_SHELL_POLICE` | Shell police outside paths (`--no-police` wins) | on/off |
+| `NEONSIDEKICK_SHELL_POLICE` | Shell police (`--no-police` wins) | on/off |
 | `NEONSIDEKICK_SHELL_NATIVE` | Shell prefer native tools | on/off |
 
 ### Claude

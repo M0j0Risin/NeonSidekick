@@ -67,7 +67,7 @@ public enum SlashCommand
     /// <summary><c>/cmdlist</c>: this profile's allowed shell commands (the <c>Shell allowed commands</c> prefixes) on a pane, Enter removing one — the Tools pane's row opened straight, ESC closing the pane (2026-09-21, the user's ask: the toolbar's lock glyph's word, typed). No argument.</summary>
     CmdList,
 
-    /// <summary><c>/police</c> (2026-09-22, the user's ask): the <c>Shell police outside paths</c> on/off page on a pane — the Tools pane's row opened straight, ESC closing the pane, as <see cref="CmdList"/> opens the allowed list; the toolbar officer's word. No argument.</summary>
+    /// <summary><c>/police</c> (2026-09-22, the user's ask): the <c>Shell police</c> on/off page on a pane — the Tools pane's row opened straight, ESC closing the pane, as <see cref="CmdList"/> opens the allowed list; the toolbar officer's word. No argument.</summary>
     Police,
 
     /// <summary><c>/persona</c>: open <c>persona.md</c> in the editor Windows associates with it, <c>/persona reset</c> to remove it (2026-09-16), or <c>/persona copy &lt;profile&gt; [force]</c> to copy it into another profile (2026-09-21).</summary>
@@ -460,7 +460,7 @@ public static class SlashCommands
     public const string SysWord = "/sys";
     public const string SessionsWord = "/sessions";   // later on 2026-09-21, the sixth glyph
     public const string CmdListWord = "/cmdlist";     // later still on 2026-09-21, the seventh: the lock, whichever way the policy turns it
-    public const string PoliceWord = "/police";       // 2026-09-22, the officer last of all, while Shell police outside paths is on
+    public const string PoliceWord = "/police";       // 2026-09-22, the officer last of all, while Shell police is on
     public const string MemoryWord = "/memory";       // 2026-09-22, the disk between the balloon and the lock, while Memory is on
     public const string ProfileWord = "/profile";     // later on 2026-09-29, the ID card after the gear: the profile picker
     public const string ThemeWord = "/theme";         // 2026-10-04, the abacus after the ID card: the theme picker

@@ -27,7 +27,7 @@ namespace NeonSidekick.App;
 /// root <c>/expand</c> and <c>/collapse</c> later that day, the user's ask; since 2026-10-03 <c>/tools &lt;group&gt;</c> opens one
 /// group's switch straight (<see cref="ShowSwitchAsync"/>, the toolbar's tool switches).
 /// The Shell tab's allowed-commands row has a door of its own since later on 2026-09-21:
-/// <see cref="ShowAllowedCommandsAsync"/> (<c>/cmdlist</c>, the toolbar's lock glyph); its <c>Shell police outside paths</c>
+/// <see cref="ShowAllowedCommandsAsync"/> (<c>/cmdlist</c>, the toolbar's lock glyph); its <c>Shell police</c>
 /// row since 2026-09-22: <see cref="ShowPoliceAsync"/> (<c>/police</c>, the toolbar's officer).
 /// </summary>
 internal sealed class ToolsMenu
@@ -272,11 +272,11 @@ internal sealed class ToolsMenu
         }
     }
 
-    /// <summary>What <c>/police</c> prints without the pane: the row's name and its value, <c>Shell police outside paths: on</c>. Pinned.</summary>
+    /// <summary>What <c>/police</c> prints without the pane: the row's name and its value, <c>Shell police: on</c>. Pinned.</summary>
     public static string PoliceLine(AppSettingsData saved)
     {
         ArgumentNullException.ThrowIfNull(saved);
-        return SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths) + ": " + (saved.ShellPoliceOutsidePaths ? "on" : "off");
+        return SettingsMenu.FieldName(SettingsField.ShellPolice) + ": " + (saved.ShellPolice ? "on" : "off");
     }
 
     /// <summary>
@@ -303,8 +303,8 @@ internal sealed class ToolsMenu
 
     /// <summary>
     /// <c>/police</c> and the toolbar's officer (2026-09-22, the user's ask): the Shell tab's
-    /// <c>Shell police outside paths</c> row opened straight — its on/off page under the crumb
-    /// <c>Tools › Shell police outside paths</c> — with nothing of the Tools pane around it, so ESC
+    /// <c>Shell police</c> row opened straight — its on/off page under the crumb
+    /// <c>Tools › Shell police</c> — with nothing of the Tools pane around it, so ESC
     /// closes the pane, as <see cref="ShowAllowedCommandsAsync"/> does for the lock. Picking off asks first
     /// (<see cref="SettingsMenu.PoliceOffConfirmQuestion"/>, 2026-10-02) and then puts the ninja in the officer's place on
     /// the toolbar as the pane closes (the strip follows the switch at each draw). The page's strings button (S, 2026-10-03,
@@ -328,7 +328,7 @@ internal sealed class ToolsMenu
         _menu.Root = ToolsText.Label;
         try
         {
-            await _menu.EditToggleAsync(SettingsField.ShellPoliceOutsidePaths, cancellationToken).ConfigureAwait(false);
+            await _menu.EditToggleAsync(SettingsField.ShellPolice, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

@@ -148,6 +148,14 @@ public static class FileText
     public static string GitProtected(string path) =>
         $"Error: '{path}' is or holds a {WorkingDirectory.GitFolderName} folder, which delete never removes";
 
+    /// <summary>
+    /// A file tool's change to a SQLite database file, or a delete or move of a folder holding one, while the SQLite tools are on
+    /// (2026-10-05, the user's call): what to use instead, and not to go around it. Pinned.
+    /// </summary>
+    public static string DatabaseProtected(string path) =>
+        $"Error: '{path}' is or holds a SQLite database, which the file tools never change while the SQLite tools are on; " +
+        "change a database only with sqlite_execute (when the user allows it), and do not try another way";
+
     /// <summary>A line as a refusal quotes it: trimmed, cut at <see cref="WorkingDirectory.MaxQuotedChars"/> with an ellipsis.</summary>
     public static string Quote(string line)
     {
@@ -192,6 +200,7 @@ public static class FileText
             FileOutcome.AlreadyApplied => AlreadyApplied(path),
             FileOutcome.FolderInTheWay => FolderInTheWay(path),
             FileOutcome.GitProtected => GitProtected(path),
+            FileOutcome.DatabaseProtected => DatabaseProtected(path),
             _ => CouldNot(verb, path, detail),
         };
 

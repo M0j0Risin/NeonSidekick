@@ -346,7 +346,7 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, bridge: true));   // the bridge rides the shell rule alone
     }
 
-    /// <summary>The police off (Shell police outside paths, 2026-09-22): the head says a command starts in the working directory and nothing about where it may reach — until that day it said "can reach the whole computer", and no variant does now.</summary>
+    /// <summary>The police off (Shell police, 2026-09-22): the head says a command starts in the working directory and nothing about where it may reach — until that day it said "can reach the whole computer", and no variant does now.</summary>
     [Fact]
     public void SystemPrompt_ShellOn_PoliceOff_AppendsTheUnpolicedRule()
     {

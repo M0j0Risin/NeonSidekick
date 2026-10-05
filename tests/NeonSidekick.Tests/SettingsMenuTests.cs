@@ -847,7 +847,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds, SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits,
                 SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars,
                 SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellCodeMaxToolCalls,
-                SettingsField.LlmCompactShowSummary, SettingsField.GitLibEmail, SettingsField.GitLibName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPoliceOutsidePaths,
+                SettingsField.LlmCompactShowSummary, SettingsField.GitLibEmail, SettingsField.GitLibName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPolice,
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
                 SettingsField.SqlTools, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
@@ -1267,7 +1267,7 @@ public partial class SettingsMenuTests : IDisposable
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages, their timeout, the tool bridge (the tab's one toggle, later that day) above the tool-call cap it governs; none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
         // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate; the forbidden strings (2026-10-03) between them, the police's own list.
-        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls }, ToolsMenuTests.TabFields(ToolsText.ShellTabTitle));
+        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls }, ToolsMenuTests.TabFields(ToolsText.ShellTabTitle));
         Assert.Equal("Shell tool bridge", SettingsMenu.FieldName(SettingsField.ShellToolBridge));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShellToolBridge));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.ShellToolBridge));
@@ -1275,13 +1275,13 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShellToolBridge, new AppSettingsData { ShellToolBridge = true }, _settings.ProfileDirectory));
         Assert.Equal("a script may call this app's other tools through its neon_tools module", SettingsMenu.ToggleDescribe(SettingsField.ShellToolBridge, true));
         Assert.Equal("a script does everything itself: no neon_tools module, no tool calls", SettingsMenu.ToggleDescribe(SettingsField.ShellToolBridge, false));
-        Assert.Equal("Shell police outside paths", SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ShellPoliceOutsidePaths));
-        Assert.False(SettingsMenu.IsLlmField(SettingsField.ShellPoliceOutsidePaths));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShellPoliceOutsidePaths, data, _settings.ProfileDirectory));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShellPoliceOutsidePaths, new AppSettingsData { ShellPoliceOutsidePaths = false }, _settings.ProfileDirectory));
-        Assert.Equal("shell police enabled", SettingsMenu.ToggleDescribe(SettingsField.ShellPoliceOutsidePaths, true));
-        Assert.Equal("shell police disabled", SettingsMenu.ToggleDescribe(SettingsField.ShellPoliceOutsidePaths, false));
+        Assert.Equal("Shell police", SettingsMenu.FieldName(SettingsField.ShellPolice));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ShellPolice));
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.ShellPolice));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShellPolice, data, _settings.ProfileDirectory));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShellPolice, new AppSettingsData { ShellPolice = false }, _settings.ProfileDirectory));
+        Assert.Equal("shell police enabled", SettingsMenu.ToggleDescribe(SettingsField.ShellPolice, true));
+        Assert.Equal("shell police disabled", SettingsMenu.ToggleDescribe(SettingsField.ShellPolice, false));
         Assert.Equal("Shell code languages", SettingsMenu.FieldName(SettingsField.ShellCodeLanguages));
         Assert.Equal("Shell code timeout (s)", SettingsMenu.FieldName(SettingsField.ShellCodeTimeoutSeconds));
         Assert.Equal("Shell tool bridge max calls", SettingsMenu.FieldName(SettingsField.ShellCodeMaxToolCalls));
@@ -1304,7 +1304,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Shell prefer native tools", SettingsMenu.FieldName(SettingsField.ShellPreferNative));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShellPreferNative, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShellPreferNative, new AppSettingsData { ShellPreferNative = false }, _settings.ProfileDirectory));
-        Assert.Equal([SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPreferNative, SettingsField.ShellToolBridge], ToolsMenuTests.TabFields(ToolsText.ShellTabTitle).Where(SettingsMenu.IsToggle));
+        Assert.Equal([SettingsField.ShellPolice, SettingsField.ShellPreferNative, SettingsField.ShellToolBridge], ToolsMenuTests.TabFields(ToolsText.ShellTabTitle).Where(SettingsMenu.IsToggle));
         Assert.All(ToolsMenuTests.TabFields(ToolsText.ShellTabTitle), f => Assert.False(SettingsMenu.RefusedMidTurn(f)));
         Assert.Equal("ask", SettingsMenu.FieldValue(SettingsField.ShellCommandPolicy, data, _settings.ProfileDirectory));
         Assert.Equal("none", SettingsMenu.FieldValue(SettingsField.ShellCommandAllowed, data, _settings.ProfileDirectory));
@@ -4591,7 +4591,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
         Assert.Contains(SettingsMenu.SelectNoneButton, _console.Output);
         Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
-        Assert.Contains(SettingsMenu.ToolbarToggleKeys, _console.Output);
+        Assert.Contains(SettingsMenu.DefaultToggleKeys, _console.Output);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(_console.Output, "  · Show toolbar: all"));
         pane.Dispose();
 

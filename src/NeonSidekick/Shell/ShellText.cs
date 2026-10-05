@@ -378,11 +378,33 @@ public static class ShellText
     /// <summary>The 👮 line the user reads for <see cref="Forbidden"/>, the string named: <c>forbidden string 'rm -rf' — not run</c>. Never the model's. Pinned.</summary>
     public static string ForbiddenShown(string entry) => $"forbidden string '{entry}' — not run";
 
-    /// <summary>Whether <paramref name="result"/> is either police's refusal: the transcript draws it behind 👮 rather than 🛠️.</summary>
+    /// <summary>What a result the SQLite police refused opens with (<see cref="SqlitePolice"/>, 2026-10-05).</summary>
+    public const string SqliteHead = "Error: refused by the shell police — SQLite";
+
+    /// <summary>
+    /// What the model is told when the SQLite police tripped (2026-10-05, the user's call): while the SQLite tools are on, a
+    /// database is theirs alone, and no other way is to be tried. Pinned.
+    /// </summary>
+    public const string SqlitePoliced = SqliteHead + ": while the SQLite tools are on, a SQLite database is reached only through them — " +
+        "sqlite_query to read, and sqlite_execute to change one when SQLite mode allows it. Do not try another way (a script, another driver, " +
+        "the file tools); tell the user if a change is needed that the tools refuse.";
+
+    /// <summary>The 👮 line the user reads for <see cref="SqlitePoliced"/>: <c>SQLite: 'sqlite3' in insert.py — not run</c>. Pinned.</summary>
+    public static string SqliteShown(string token, string? file) =>
+        file is null ? $"SQLite: '{token}' — not run" : $"SQLite: '{token}' in {file} — not run";
+
+    /// <summary><c>police: sqlite ('sqlite3' in insert.py) — powershell "python insert.py"</c>: the SQLite police's line, before the gate is asked (2026-10-05).</summary>
+    public static string SqliteLogLine(CommandRequest request, string token, string? file)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return $"police: sqlite ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
+    }
+
+    /// <summary>Whether <paramref name="result"/> is any police's refusal: the transcript draws it behind 👮 rather than 🛠️.</summary>
     public static bool IsPoliced(string result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal);
+        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal) || result.StartsWith(SqliteHead, StringComparison.Ordinal);
     }
 
     /// <summary>

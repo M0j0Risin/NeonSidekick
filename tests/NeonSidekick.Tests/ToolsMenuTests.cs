@@ -176,7 +176,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
         Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         Assert.Equal([SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder], TabFields(ToolsText.FilesTabTitle));   // image_edit's three last (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
-        Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26; the forbidden strings under the police, 2026-10-03)
+        Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's four (2026-09-21; the bridge switch later that day; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26; the forbidden strings under the police, 2026-10-03)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));
         Assert.Equal([SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName], TabFields(ToolsText.GitTabTitle));   // the switch first, then the limits, then the identity pair (2026-09-21); the GitLib labels later that day
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], TabFields(ToolsText.ObsidianTabTitle));   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
@@ -1117,7 +1117,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(ToTab(ToolsText.ShellTabTitle));   // Ask, Web, Shell
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // Shell command policy: the picker opens on ask, yolo picked and confirmed (2026-10-03)
         Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);               // Shell allowed commands: the list, dotnet build removed, back
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police outside paths (2026-09-22), its forbidden strings (2026-10-03) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police (2026-09-22), its forbidden strings (2026-10-03) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
         Push(Keys.Down, Keys.Enter);                                        // Shell timeout (s): the typed slot, pre-filled with 180; 0 is out of range, kept
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);
         Push(Keys.Escape);
@@ -1129,7 +1129,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("cmd", _settings.Current.ShellDefault);
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police outside paths      on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", _console.Output);
         Assert.Contains("  · Shell command policy: yolo\n", _console.Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
@@ -1165,18 +1165,18 @@ public partial class ToolsMenuTests : IDisposable
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Shell
-        Push(Keys.Down, Keys.Down, Keys.Enter);                 // Shell police outside paths: the picker opens on on
+        Push(Keys.Down, Keys.Down, Keys.Enter);                 // Shell police: the picker opens on on
         Push(Keys.Down, Keys.Enter);                            // off is the row below
         Push(Keys.Char('y'), Keys.Enter);                       // yes to the question (2026-10-02)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.False(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.False(_settings.Current.ShellPolice);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police outside paths   ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", _console.Output);
-        Assert.Contains("  · Shell police outside paths: off", _console.Output);
-        Assert.Contains("\n▸ Shell police outside paths      off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police   ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", _console.Output);
+        Assert.Contains("  · Shell police: off", _console.Output);
+        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n", _console.Output);
         pane.Dispose();
     }
 
@@ -1192,9 +1192,9 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowPoliceAsync(CancellationToken.None);
 
-        Assert.True(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.True(_settings.Current.ShellPolice);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
-        Assert.DoesNotContain("Shell police outside paths: off", _console.Output);
+        Assert.DoesNotContain("Shell police: off", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1207,7 +1207,7 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowPoliceAsync(CancellationToken.None);
 
-        Assert.False(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.False(_settings.Current.ShellPolice);
         Assert.Contains(SettingsMenu.PoliceOffConfirmQuestion, _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -1217,13 +1217,13 @@ public partial class ToolsMenuTests : IDisposable
     [Fact]
     public async Task ShowPolice_OnAsksNothing()
     {
-        _settings.Update(d => d.ShellPoliceOutsidePaths = false);
+        _settings.Update(d => d.ShellPolice = false);
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Up, Keys.Enter);   // on is the row above
 
         await menu.ShowPoliceAsync(CancellationToken.None);
 
-        Assert.True(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.True(_settings.Current.ShellPolice);
         Assert.DoesNotContain(SettingsMenu.PoliceOffConfirmQuestion, _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -1735,7 +1735,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
         Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", _console.Output);
         Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", _console.Output);
-        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: on\n  ·   SQLite add database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add connection: Enter to start connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add connection: Enter to start connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add connection: Enter to start connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: off\n  ·   SQLite add database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add connection: Enter to start connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add connection: Enter to start connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1885,7 +1885,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // under Shell police outside paths: the list, on its add row
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // under Shell police: the list, on its add row
         Push(Keys.Enter);
         Push(Typed("rm  -rf"));                              // added as "rm -rf"
         Push(Keys.Enter);
@@ -1935,10 +1935,10 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowPoliceAsync(CancellationToken.None);
 
         Assert.Equal(["shutdown"], _settings.Current.ShellPoliceForbiddenStrings);
-        Assert.True(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.True(_settings.Current.ShellPolice);
         // The button counts the strings (2026-10-04): none before, one when the page comes back.
-        string police = "\n" + Titled(ToolsText.Label + " › Shell police outside paths   ≡ strings (none) ") + "\n";
-        string policeAfter = "\n" + Titled(ToolsText.Label + " › Shell police outside paths   ≡ strings (1) ") + "\n";
+        string police = "\n" + Titled(ToolsText.Label + " › Shell police   ≡ strings (none) ") + "\n";
+        string policeAfter = "\n" + Titled(ToolsText.Label + " › Shell police   ≡ strings (1) ") + "\n";
         string list = "\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n";
         Assert.Contains(SettingsMenu.PoliceToggleKeys, _console.Output);
         Assert.True(_console.Output.IndexOf(police, StringComparison.Ordinal) < _console.Output.IndexOf(list, StringComparison.Ordinal), _console.Output);
@@ -1961,7 +1961,7 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowPoliceAsync(CancellationToken.None);
 
-        Assert.Contains("  · Shell police outside paths: on\n  · Shell police forbidden strings\n  ·   Format\n  ·   rm -rf\n", _console.Output);
+        Assert.Contains("  · Shell police: on\n  · Shell police forbidden strings\n  ·   Format\n  ·   rm -rf\n", _console.Output);
         Assert.Equal(["Shell police forbidden strings", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.ForbiddenStringLines(new AppSettingsData()));
         pane.Dispose();
     }

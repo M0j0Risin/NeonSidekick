@@ -263,7 +263,8 @@ public sealed class Assistant
         "The SQLite tools read SQLite database files (SQLite SQL: LIMIT n; \"double quotes\" for names) — the user's named databases, or a file in the working directory by its path — and never change data: " +
         NeonSidekick.Llm.Tools.SqliteDatabasesTool.ToolName + " lists the databases and " + NeonSidekick.Llm.Tools.SqliteTablesTool.ToolName + " a file's tables; " +
         NeonSidekick.Llm.Tools.SqliteDescribeTool.ToolName + " shows a table's columns, keys and indexes — look before you query, never guess a column; " +
-        NeonSidekick.Llm.Tools.SqliteQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params.";
+        NeonSidekick.Llm.Tools.SqliteQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as @name through params. " +
+        "Reach SQLite only through these tools — never the shell, a script or the file tools, which are refused.";
 
     /// <summary>
     /// The sentence after <see cref="SqliteRule"/> while <c>sqlite_execute</c> is offered (2026-10-05, <c>SQLite mode</c>
@@ -322,7 +323,7 @@ public sealed class Assistant
     /// script can call the tools through <c>neon_tools</c> — only while the setting <c>Shell tool bridge</c> is on;
     /// off (later on 2026-09-21) the rules carry <see cref="ShellRuleWithoutBridge"/>, which does not, so the prompt
     /// never promises a module the run does not write. Since 2026-09-22 (the user's ask) the head follows the setting
-    /// <c>Shell police outside paths</c> too: on (the default), it says the shell may only name paths under the working
+    /// <c>Shell police</c> too: on (the default), it says the shell may only name paths under the working
     /// directory (<see cref="ShellRuleHeadPoliced"/>); off, it says only that a command starts there (<see cref="ShellRuleHeadUnpoliced"/>,
     /// the <c>…Unpoliced</c> variants) — until that day the head said a command "can reach the whole computer", and
     /// neither variant says so now, so the model does not try to leave unless asked. Pinned.
@@ -332,7 +333,7 @@ public sealed class Assistant
     /// <summary><see cref="ShellRule"/> with the bridge off: the same head, and <c>execute_code</c> runs a script that does everything itself. Pinned.</summary>
     public const string ShellRuleWithoutBridge = ShellRuleHeadPoliced + ShellRulePlainTail;
 
-    /// <summary><see cref="ShellRule"/> with the setting <c>Shell police outside paths</c> off (2026-09-22): the head says a command starts in the working directory and no more. Pinned.</summary>
+    /// <summary><see cref="ShellRule"/> with the setting <c>Shell police</c> off (2026-09-22): the head says a command starts in the working directory and no more. Pinned.</summary>
     public const string ShellRuleUnpoliced = ShellRuleHeadUnpoliced + ShellRuleBridgeTail;
 
     /// <summary><see cref="ShellRuleWithoutBridge"/> with the police off (2026-09-22): neither the bridge nor the confinement is named. Pinned.</summary>
@@ -531,8 +532,7 @@ public sealed class Assistant
     /// Timers group emptied on <c>/tools</c>, 2026-09-20); <see cref="ShellRule"/> rides after the git sentence with
     /// <paramref name="shell"/> (the shell tools offered: <c>Shell command policy</c> not off, 2026-09-21), as
     /// <see cref="ShellRuleWithoutBridge"/> unless <paramref name="bridge"/> (the setting <c>Shell tool bridge</c>, off by
-    /// default, later that day), and as the <c>…Unpoliced</c> variant with <paramref name="police"/> false (the setting <c>Shell police
-    /// outside paths</c> off, 2026-09-22; <see cref="ShellRuleFor"/>), followed by <see cref="ShellNativeRule"/> with <paramref name="native"/>
+    /// default, later that day), and as the <c>…Unpoliced</c> variant with <paramref name="police"/> false (the setting <c>Shell police</c> off, 2026-09-22; <see cref="ShellRuleFor"/>), followed by <see cref="ShellNativeRule"/> with <paramref name="native"/>
     /// (the setting <c>Shell prefer native tools</c>, 2026-09-26) when it names a group. <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
     /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23), <see cref="OracleRule"/> after it with <paramref name="oracle"/> (2026-09-30), <see cref="MySqlRule"/> after that with <paramref name="mysql"/> (the same day), <see cref="HomeAssistantRule"/> after it with <paramref name="homeAssistant"/> (2026-09-28), <see cref="DockerRule"/> after it with <paramref name="docker"/> and <see cref="DockerWriteRule"/> with <paramref name="dockerWrite"/> (2026-10-02), <see cref="ClaudeAdvisorRule"/> after that with <paramref name="advisor"/> (2026-09-27). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
     /// </summary>

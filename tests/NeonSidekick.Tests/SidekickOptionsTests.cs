@@ -260,13 +260,13 @@ public class SidekickOptionsTests
     [Fact]
     public void ApplyTo_Yolo_SetsThePolicy_AndLeavesThePolice()
     {
-        var effective = new AppSettingsData { ShellCommandPolicy = "off", ShellPoliceOutsidePaths = true };
+        var effective = new AppSettingsData { ShellCommandPolicy = "off", ShellPolice = true };
         var o = SidekickOptions.Parse(new[] { "--yolo" });
 
         var result = o.ApplyTo(effective);
 
         Assert.Equal("yolo", result.ShellCommandPolicy);
-        Assert.True(result.ShellPoliceOutsidePaths);
+        Assert.True(result.ShellPolice);
         Assert.Equal("off", effective.ShellCommandPolicy);   // input untouched
         Assert.Equal("off", SidekickOptions.None.ApplyTo(effective).ShellCommandPolicy);
     }
@@ -289,14 +289,14 @@ public class SidekickOptionsTests
     [Fact]
     public void ApplyTo_NoPolice_TurnsThePoliceOff_AndLeavesThePolicy()
     {
-        var effective = new AppSettingsData { ShellCommandPolicy = "ask", ShellPoliceOutsidePaths = true };
+        var effective = new AppSettingsData { ShellCommandPolicy = "ask", ShellPolice = true };
 
         var result = SidekickOptions.Parse(new[] { "--no-police" }).ApplyTo(effective);
 
-        Assert.False(result.ShellPoliceOutsidePaths);
+        Assert.False(result.ShellPolice);
         Assert.Equal("ask", result.ShellCommandPolicy);
-        Assert.True(effective.ShellPoliceOutsidePaths);   // input untouched
-        Assert.True(SidekickOptions.None.ApplyTo(effective).ShellPoliceOutsidePaths);
+        Assert.True(effective.ShellPolice);   // input untouched
+        Assert.True(SidekickOptions.None.ApplyTo(effective).ShellPolice);
     }
 
     [Fact]

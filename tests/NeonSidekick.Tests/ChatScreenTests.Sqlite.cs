@@ -18,7 +18,7 @@ public partial class ChatScreenTests
     /// </summary>
     private void SqliteExecuteFixture(ConsoleKeyInfo[] answer, string reply, params Dictionary<string, object?>[] calls)
     {
-        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = "read-write"; d.SqliteStatementsAllowed = ["data", "create"]; });
+        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = "read-write"; d.SqliteStatementsAllowed = ["data", "create"]; d.SqliteSandboxFiles = true; });
         Directory.CreateDirectory(WorkingDirectory.Resolve("", _settings.ProfileDirectory));
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);   // the pane: nothing can ask without it
@@ -80,13 +80,35 @@ public partial class ChatScreenTests
         Assert.False(File.Exists(SqliteWorkFile("app.db")));
     }
 
+    /// <summary>
+    /// The file tools' guard (2026-10-05): while the SQLite tools are on, a model's write_file onto a database file is refused
+    /// end to end, the file untouched, in either mode; sqlite_execute's create (SQLite making the file) is not a file tool's.
+    /// </summary>
+    [Fact]
+    public async Task SqliteTools_On_TheFileToolsNeverWriteADatabase()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.FileTools = true; });
+        string db = SqliteWorkFile("app.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(db)!);
+        File.WriteAllText(db, "pretend");
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "app.db", [WriteFileTool.ContentArgument] = "overwritten" }));
+        _chat.EnqueueText("Refused.");
+        PushLine("overwrite app.db");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.StartsWith("Error: 'app.db' is or holds a SQLite database", (string)Assert.Single(Results(_chat.Requests[^1])).Result!);
+        Assert.Equal("pretend", File.ReadAllText(db));
+    }
+
     [Theory]
     [InlineData("read-write", true)]
     [InlineData("read-only", false)]
     public async Task SqliteExecute_IsOffered_OnlyUnderReadWrite(string mode, bool offered)
     {
         _chat.EnqueueText("one");
-        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = mode; });
+        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = mode; d.SqliteSandboxFiles = true; });   // something to open
         _geometry = new ScreenGeometry(() => null);
         PushLine("hi");
         PushLine("/exit");

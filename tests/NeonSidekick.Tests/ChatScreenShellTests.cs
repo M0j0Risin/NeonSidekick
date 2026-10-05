@@ -138,7 +138,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task RunCommand_PoliceOff_TheLineReachesThePane_AndTheRulesSayOnlyWhereACommandStarts()
     {
-        _settings.Update(d => d.ShellPoliceOutsidePaths = false);
+        _settings.Update(d => d.ShellPolice = false);
         ShellFixture([Keys.Down, Keys.Escape], "Denied then.", command: @"type C:\Windows\win.ini");
 
         string output = await RunAsync();

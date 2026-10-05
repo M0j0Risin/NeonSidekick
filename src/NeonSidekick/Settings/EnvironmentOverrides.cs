@@ -153,7 +153,7 @@ public sealed class EnvironmentOverrides
     public string? ShellCommandPolicy => ReadCommandPolicy(CommandPolicyVariable);
 
     /// <summary>
-    /// The path police for this launch (<c>Shell police outside paths</c>), or null when unset or not a switch word
+    /// The path police for this launch (<c>Shell police</c>), or null when unset or not a switch word
     /// (2026-09-26, the user's ask: the police could only be turned off by saving the profile, which every later
     /// launch then inherited). Either way: <c>on</c> can bring it back over a saved <c>off</c>. <c>--no-police</c>
     /// outranks it. Separate from <see cref="ShellCommandPolicy"/> on purpose: <c>yolo</c> never implies it.
@@ -347,7 +347,7 @@ public sealed class EnvironmentOverrides
         if (LlmContextLength is { } context) effective.LlmContextLength = context;
         if (WebSearxngUrl is { } searxng) effective.WebSearxngUrl = searxng;
         if (ShellCommandPolicy is { } policy) effective.ShellCommandPolicy = policy;
-        if (ShellPolice is { } police) effective.ShellPoliceOutsidePaths = police;
+        if (ShellPolice is { } police) effective.ShellPolice = police;
         if (ShellNative is { } native) effective.ShellPreferNative = native;
         if (ObsidianVault is { } vault) effective.ObsidianVault = vault;
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;

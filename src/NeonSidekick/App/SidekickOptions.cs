@@ -35,7 +35,7 @@ namespace NeonSidekick.App;
 /// to set for one command in PowerShell or cmd). <see cref="ApplyTo"/> sets <c>Shell command policy</c> to <c>yolo</c>, so it
 /// outranks the variable and the saved setting and is never saved; every mode, the screen included (no approval pane
 /// this launch). The path police is a setting of its own and still applies (the user's call) unless <see cref="NoPolice"/>.</param>
-/// <param name="NoPolice"><c>--no-police</c>: <c>Shell police outside paths</c> off for this launch (2026-09-26, the user's
+/// <param name="NoPolice"><c>--no-police</c>: <c>Shell police</c> off for this launch (2026-09-26, the user's
 /// ask: the police could only be turned off by saving the profile). Outranks <c>NEONSIDEKICK_SHELL_POLICE</c> and the saved
 /// setting and is never saved; every mode. Never implied by <see cref="Yolo"/>: the two together leave no guard at all, so
 /// each has to be asked for.</param>
@@ -494,7 +494,7 @@ public sealed record SidekickOptions(
 
         if (NoPolice)
         {
-            result.ShellPoliceOutsidePaths = false;
+            result.ShellPolice = false;
         }
 
         return result;

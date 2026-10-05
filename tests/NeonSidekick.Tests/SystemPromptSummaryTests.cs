@@ -687,7 +687,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Assistant.DefaultRules(false, true, git: true, shell: true, bridge: true), SystemPromptSummary.PromptSections(Facts(gitTools: 11, shellTools: 1, shellBridge: true))[1].Body);
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], shell: true), SystemPromptSummary.SystemPrompt(Facts(shellTools: 1)));
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], shell: true, bridge: true), SystemPromptSummary.SystemPrompt(Facts(shellTools: 1, shellBridge: true)));
-        // The head follows the setting Shell police outside paths (2026-09-22): off, the …Unpoliced variant, which says nothing about where a command may reach.
+        // The head follows the setting Shell police (2026-09-22): off, the …Unpoliced variant, which says nothing about where a command may reach.
         Assert.Contains(Assistant.ShellRuleWithoutBridgeUnpoliced, SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellPolice: false))[1].Body);
         Assert.Contains(Assistant.ShellRuleUnpoliced, SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellBridge: true, shellPolice: false))[1].Body);
         Assert.DoesNotContain("under it", SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellPolice: false))[1].Body);

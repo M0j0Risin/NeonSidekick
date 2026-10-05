@@ -399,11 +399,13 @@ policy means headless:
   *Shell allowed commands* list run. See [When a command is refused](#when-a-command-is-refused) below.
 - `yolo`: every `run_command` command and `execute_code` script runs without asking.
 
-`yolo` does **not** switch off the path police. With *Shell police outside paths* on (the default),
+`yolo` does **not** switch off the path police. With *Shell police* on (the default),
 a command that names a path outside the working directory is still refused, and the run still ends
 with exit code 3. Keep `--cwd` narrow, or see [Turning off the path police](#turning-off-the-path-police).
 The same holds for the profile's *Shell police forbidden strings*: while the police is on, a command,
 script or `process` write containing one (case and spacing ignored) is refused and counts toward exit code 3.
+And while *SQLite tools* is on, so is a command, script or `process` write that reaches SQLite (the word `sqlite`, a
+`.db`/`.sqlite` file, a database sqlite.json names, or a script file the line runs that does): the SQLite tools are the way in.
 
 ### With the flag
 
@@ -517,7 +519,7 @@ The path police refuses any command, script or `process` write that names a path
 working directory (`C:\…`, a `..` that climbs out, `~`, `%USERPROFILE%`, `$env:TEMP`…). It's a
 separate switch from the command policy, so `--yolo` leaves it on. Its setting for a run comes
 from, in order: the `--no-police` flag, the `NEONSIDEKICK_SHELL_POLICE` variable (`on`/`off`, also
-`true`/`false`, `1`/`0`, `yes`/`no`), then the profile's saved *Shell police outside paths*.
+`true`/`false`, `1`/`0`, `yes`/`no`), then the profile's saved *Shell police*.
 Neither the flag nor the variable is saved. Turning the police off also stops the profile's
 *Shell police forbidden strings*.
 
@@ -559,7 +561,7 @@ NEONSIDEKICK_SHELL_POLICE=off NeonSidekick.exe --headless --cwd /d/Repo/MyApp < 
 The variable works both ways: `NEONSIDEKICK_SHELL_POLICE=on` turns the police back on for a run
 on a profile that saved it off.
 
-A third option, if a profile should always run without it: save *Shell police outside paths* off
+A third option, if a profile should always run without it: save *Shell police* off
 in that profile (`/police` in the TUI), and pick it with `--profile`. Your everyday profile keeps
 the police on.
 

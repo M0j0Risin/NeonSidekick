@@ -5,7 +5,7 @@ using NeonSidekick.Files;
 namespace NeonSidekick.Shell;
 
 /// <summary>
-/// The outside-paths police (2026-09-22, the user's ask; the setting <c>Shell police outside paths</c>,
+/// The outside-paths police (2026-09-22, the user's ask; the setting <c>Shell police</c>,
 /// on by default): reads the text the model sends a shell — a <c>run_command</c> line, an
 /// <c>execute_code</c> script, the text <c>process</c> writes to a background process's stdin — and names
 /// the first token that points outside the working directory, so the tool can refuse the call before

@@ -91,7 +91,7 @@ public class EnvironmentOverridesTests
         Assert.Equal("yolo", e.ShellCommandPolicy);   // normalised to the saved word (2026-09-21)
         Assert.Equal(@"D:\Notes", e.ObsidianVault);   // trimmed (2026-09-22)
         Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
-        Assert.False(e.ShellPoliceOutsidePaths);   // any case, trimmed (2026-09-26)
+        Assert.False(e.ShellPolice);   // any case, trimmed (2026-09-26)
         Assert.False(e.ShellPreferNative);   // the police's switch words (later on 2026-09-26)
         Assert.Equal(@"D:\bin\claude.exe", e.ClaudeCliExecutable);   // trimmed (2026-09-27)
         Assert.Equal("full", e.ClaudeCliPermissions);   // normalised to the saved word (2026-09-27)
@@ -124,7 +124,7 @@ public class EnvironmentOverridesTests
         var env = With((EnvironmentOverrides.ShellPoliceVariable, raw));
 
         Assert.Equal(expected, env.ShellPolice);
-        Assert.Equal(expected, env.ApplyTo(new AppSettingsData { ShellPoliceOutsidePaths = !expected }).ShellPoliceOutsidePaths);
+        Assert.Equal(expected, env.ApplyTo(new AppSettingsData { ShellPolice = !expected }).ShellPolice);
         Assert.Contains(EnvironmentOverrides.ShellPoliceVariable, env.ActiveVariables());
     }
 
@@ -136,7 +136,7 @@ public class EnvironmentOverridesTests
         var env = With((EnvironmentOverrides.ShellPoliceVariable, raw));
 
         Assert.Null(env.ShellPolice);
-        Assert.False(env.ApplyTo(new AppSettingsData { ShellPoliceOutsidePaths = false }).ShellPoliceOutsidePaths);
+        Assert.False(env.ApplyTo(new AppSettingsData { ShellPolice = false }).ShellPolice);
         Assert.DoesNotContain(EnvironmentOverrides.ShellPoliceVariable, env.ActiveVariables());
     }
 

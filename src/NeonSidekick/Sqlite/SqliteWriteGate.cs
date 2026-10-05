@@ -156,7 +156,8 @@ public static class SqliteWriteGate
 
         return word switch
         {
-            "INSERT" or "REPLACE" or "UPDATE" or "DELETE" => SqliteStatementKind.Data,
+            "INSERT" or "REPLACE" or "UPDATE" => SqliteStatementKind.Data,
+            "DELETE" => SqliteStatementKind.Delete,
             "CREATE" => SqliteStatementKind.Create,
             "ALTER" => SqliteStatementKind.Alter,
             "DROP" => SqliteStatementKind.Drop,

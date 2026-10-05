@@ -19,7 +19,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>Shell output max chars</c> without a spill — the ring keeps the last lines, <c>log</c> reaches
 /// them. Any unique prefix of an id will do. Offered with <c>run_command</c>; the gate is not
 /// consulted here — what runs was approved when it started. The police is (2026-09-22, the user's
-/// call): with <c>Shell police outside paths</c> on, the text <c>write</c> / <c>submit</c> send is read by
+/// call): with <c>Shell police</c> on, the text <c>write</c> / <c>submit</c> send is read by
 /// <see cref="PathPolice"/> before it goes — a background shell typed <c>cd C:\</c> would be the one
 /// hole left — and refused with <see cref="ShellText.OutsidePath"/>, nothing sent.
 /// </summary>
@@ -206,7 +206,7 @@ public sealed class ProcessTool : AIFunction
 
                 // The forbidden strings first (Shell police forbidden strings, 2026-10-03), under the police's own switch: a shell's stdin is a command line too.
                 var effective = _effective();
-                if (effective.ShellPoliceOutsidePaths && ForbiddenStrings.Find(data, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+                if (effective.ShellPolice && ForbiddenStrings.Find(data, effective.ShellPoliceForbiddenStrings) is { } forbidden)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
                     DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(refused, forbidden));
@@ -214,8 +214,17 @@ public sealed class ProcessTool : AIFunction
                     return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
                 }
 
-                // The police (Shell police outside paths, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
-                if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
+                // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a process's stdin (a shell, a REPL) is read as a script.
+                if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Find(data, script: true, databases) is { } sqlite)
+                {
+                    var refused = new CommandRequest(session.Kind, data, []);
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(refused, sqlite, null));
+                    _gate?.NoteRefused(refused);
+                    return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, null));
+                }
+
+                // The police (Shell police, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
+                if (effective.ShellPolice && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
                     DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(refused, outside));

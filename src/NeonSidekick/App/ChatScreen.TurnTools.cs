@@ -239,7 +239,7 @@ internal sealed partial class ChatScreen
         tools = advisor ? [.. tools, .. advisorTools!] : tools;
         // The shell rule's execute_code sentence promises neon_tools only while the setting Shell tool bridge is on (later on 2026-09-21).
         bool bridge = shell && inputs.ShellBridge;
-        // … and its head says the shell stays under the working directory only while the setting Shell police outside paths is on (2026-09-22); off, it says a command starts there and no more.
+        // … and its head says the shell stays under the working directory only while the setting Shell police is on (2026-09-22); off, it says a command starts there and no more.
         bool police = !shell || inputs.ShellPolice;
         tools = (web, memoryEnabled) switch
         {

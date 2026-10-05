@@ -2823,7 +2823,7 @@ public partial class ChatScreenTests : IDisposable
     private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
 
     private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + "   " + string.Join("    ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
-    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths) + "   " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
+    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPolice) + "   " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
 
     /// <summary>
     /// The rows of the pane drawn last (its title row, ending with the × glyph, to the rule under
@@ -4476,7 +4476,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ Ask user                      on\n", output);
         Assert.Contains("\n▸ File tools                      on\n", output);
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
-        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police outside paths      on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
+        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
         Assert.Contains("\n▸ SQL tools                   on\n  SQL connections offered     none of 0\n  SQL default connection      (the first connection)\n  SQL set password            Enter to set password for a connection\n  SQL add connection          Enter to start connection wizard\n  SQL %-mention enabled       on\n  SQL max rows                100 rows\n  SQL query timeout (s)       30\n  SQL query result max chars  32,000 chars\n  SQL connections (profile)   (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
@@ -8621,14 +8621,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    // ── /police (2026-09-22): the Shell police outside paths page straight, the toolbar officer's word ──
+    // ── /police (2026-09-22): the Shell police page straight, the toolbar officer's word ──
 
     /// <summary>The row's on/off page under the Tools crumb, as the Shell tab's Enter opens it: off picked saves, ESC closes the pane — never the Tools tabs.</summary>
     [Fact]
     public async Task Police_OpensTheOnOffPage_UnderTheToolsCrumb_PickingSaves_EscCloses()
     {
         _settings.Update(d => d.TtsOutput = false);
-        Assert.True(_settings.Current.ShellPoliceOutsidePaths);   // on by default
+        Assert.True(_settings.Current.ShellPolice);   // on by default
         _console.Profile.Height = 40;
         _console.Profile.Width = 200;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -8643,11 +8643,11 @@ public partial class ChatScreenTests : IDisposable
 
         string page = "\n" + Titled(PoliceTitle) + "\n \n";
         Assert.True(output.Split(page).Length - 1 >= 2, output);   // each /police drew it (a save redraws it too)
-        string on = "on  " + SettingsMenu.ToggleDescribe(SettingsField.ShellPoliceOutsidePaths, true);
-        string off = "off " + SettingsMenu.ToggleDescribe(SettingsField.ShellPoliceOutsidePaths, false);
+        string on = "on  " + SettingsMenu.ToggleDescribe(SettingsField.ShellPolice, true);
+        string off = "off " + SettingsMenu.ToggleDescribe(SettingsField.ShellPolice, false);
         Assert.Contains(page + "▸ " + on + "\n  " + off + "\n", output);    // the first time on "on"
         Assert.Contains(page + "  " + on + "\n▸ " + off + "\n", output);    // the second on "off"
-        Assert.False(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.False(_settings.Current.ShellPolice);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", output);   // off asks first (2026-10-02)
         Assert.DoesNotContain(ToolsText.Label + "   Offered", output);      // the crumb, never the tabs: ESC closes
         Assert.Empty(_chat.Requests);
@@ -8664,9 +8664,9 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  ✗ " + ChatScreen.NoArgumentError("/police"), output);
-        Assert.Contains("  · Shell police outside paths: on\n", output);
-        Assert.Equal("Shell police outside paths: off", ToolsMenu.PoliceLine(new AppSettingsData { ShellPoliceOutsidePaths = false }));
-        Assert.True(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.Contains("  · Shell police: on\n", output);
+        Assert.Equal("Shell police: off", ToolsMenu.PoliceLine(new AppSettingsData { ShellPolice = false }));
+        Assert.True(_settings.Current.ShellPolice);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Police, hasArgs: false));   // as /cmdlist: the row is never refused under a reply
         Assert.Empty(_chat.Requests);
     }
@@ -8743,7 +8743,7 @@ public partial class ChatScreenTests : IDisposable
         (strip, off) = ChatScreen.ToolbarStripFor(items, shown);
         Assert.Equal("⚙️ 🔒 👮 🐚 🌐 🛢️ 📄", strip);
         Assert.Equal([5], off);
-        Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPoliceOutsidePaths));   // the same text either way
+        Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPolice));   // the same text either way
         Assert.True(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = false }));
         Assert.False(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = true }));
         Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "liveview", "comfyview", "comfythumbs", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
@@ -8783,7 +8783,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPoliceOutsidePaths = false; });
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -8811,7 +8811,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>
     /// The toolbar's disk and officer follow their switches at each draw (2026-09-22, the user's
     /// ask): the disk after the balloon while Memory is on, its pair /memory — the pane, Enter
-    /// prunes; the officer last while Shell police outside paths is on, its pair /police — the row's
+    /// prunes; the officer last while Shell police is on, its pair /police — the row's
     /// on/off page, ESC closing it, the draft kept (nothing until later on 2026-09-22). Memory flipped off on the General tab: the disk
     /// stays where it is, on its slab (later on 2026-10-03, the user's ask; gone until then), its pair still /memory, the lock still
     /// behind it; the police flipped off on the Tools ›
@@ -8841,7 +8841,7 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🔒 still at 30: the list
             Key(Keys.Escape),
             Line("/tools"),
-            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police outside paths: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
+            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab's third row, Shell police: its page on "on", off picked and confirmed (2026-10-02); the pane closed: the officer gone
             input => { input.PushClick(33, 103); input.PushClick(33, 103); },    // 🥷 now (2026-10-02): the police page again
             Key(Keys.Escape),
             Line("/exit"));
@@ -8852,7 +8852,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);   // the disk there with Memory on and off alike
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false), cwd, 239), output);
         Assert.Equal("disabled", _settings.Current.MemoryMode);
-        Assert.False(_settings.Current.ShellPoliceOutsidePaths);
+        Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    GitLib    Options ") + "\n";
@@ -10199,7 +10199,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
 
-    /// <summary>The toolbar's glyphs, in the user's order, name their commands (2026-09-21): the six pane words (the sessions' later that day) and the chart's /usage (2026-09-29, the seventh), then the disk while Memory is on (2026-09-22) /memory, the lock Shell command policy turns — closed under ask, open under yolo, none under off (later still on 2026-09-21), either /cmdlist — and the officer while Shell police outside paths is on (2026-09-22), /police; nothing for anything else (the path's line is /cwd browse); every glyph two cells, whole under the pane's walk at either cell, the columns after the chart moving with the disk.</summary>
+    /// <summary>The toolbar's glyphs, in the user's order, name their commands (2026-09-21): the six pane words (the sessions' later that day) and the chart's /usage (2026-09-29, the seventh), then the disk while Memory is on (2026-09-22) /memory, the lock Shell command policy turns — closed under ask, open under yolo, none under off (later still on 2026-09-21), either /cmdlist — and the officer while Shell police is on (2026-09-22), /police; nothing for anything else (the path's line is /cwd browse); every glyph two cells, whole under the pane's walk at either cell, the columns after the chart moving with the disk.</summary>
     [Fact]
     public void ToolbarWord_IsPinned()
     {

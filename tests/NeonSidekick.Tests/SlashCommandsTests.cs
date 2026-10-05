@@ -430,7 +430,7 @@ public class SlashCommandsTests
     [Fact]
     public void Police_IsABareCommand_TheOfficersWord()
     {
-        // /police (2026-09-22): the Shell police outside paths page; no argument, so one given is the overloaded error.
+        // /police (2026-09-22): the Shell police page; no argument, so one given is the overloaded error.
         Assert.Equal((SlashCommand.Police, ""), SlashCommands.Parse("/police"));
         Assert.Equal((SlashCommand.Overloaded, "off"), SlashCommands.Parse("/police off"));
         Assert.False(SlashCommands.TakesArgument(SlashCommand.Police));

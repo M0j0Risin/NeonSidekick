@@ -51,7 +51,7 @@ public sealed class RunCommandToolTests : IDisposable
     {
         Assert.Equal("run_command", _tool.Name);
         Assert.Equal(["run_command", "process", "execute_code"], ShellToolNames.All);
-        // The description follows Shell police outside paths (2026-09-22): on, the command stays under the working directory; off, it starts there and nothing more — neither says "not confined".
+        // The description follows Shell police (2026-09-22): on, the command stays under the working directory; off, it starts there and nothing more — neither says "not confined".
         Assert.Equal(
             "Runs a command line in a shell on the user's computer and returns its exit code and output. " +
             "It runs in the working directory and may only name paths under it (relative, or absolute under it); the user approves a command before it runs and may deny it. " +
@@ -59,7 +59,7 @@ public sealed class RunCommandToolTests : IDisposable
             "Use background for a server or a long job and the process tool to read it.",
             _tool.Description);
         Assert.Equal(RunCommandTool.DescriptionPoliced, _tool.Description);
-        _settings.ShellPoliceOutsidePaths = false;
+        _settings.ShellPolice = false;
         Assert.Equal(
             "Runs a command line in a shell on the user's computer and returns its exit code and output. " +
             "It starts in the working directory; the user approves a command before it runs and may deny it. " +
@@ -69,7 +69,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(RunCommandTool.DescriptionUnpoliced, _tool.Description);
         Assert.DoesNotContain("confined", RunCommandTool.DescriptionUnpoliced);
         Assert.DoesNotContain("under it", RunCommandTool.DescriptionUnpoliced);
-        _settings.ShellPoliceOutsidePaths = true;
+        _settings.ShellPolice = true;
         var schema = _tool.JsonSchema;
         Assert.Equal("object", schema.GetProperty("type").GetString());
         Assert.Equal(["command", "shell", "workdir", "timeout", "background", "notify"], schema.GetProperty("properties").EnumerateObject().Select(p => p.Name));
@@ -99,7 +99,7 @@ public sealed class RunCommandToolTests : IDisposable
     [Fact]
     public async Task Police_RefusesAnOutsidePath_BeforeTheGate_AndOffLetsItThrough()
     {
-        // Shell police outside paths (2026-09-22): under ask, a line naming a path outside the sandbox is refused with the 👮 sentence and the asker is never called.
+        // Shell police (2026-09-22): under ask, a line naming a path outside the sandbox is refused with the 👮 sentence and the asker is never called.
         _settings.ShellCommandPolicy = "ask";
         Directory.CreateDirectory(Path.Combine(_root, "sub"));
         Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", await Invoke(("command", @"type C:\Windows\win.ini")));
@@ -112,7 +112,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal("Error: the command was denied by the user: cd ..; do not retry it or work around the refusal", await Invoke(("command", "cd .."), ("workdir", "sub")));   // sub\.. is the root
         Assert.Equal(2, _asked.Count);
         // Off: the same line reaches the gate.
-        _settings.ShellPoliceOutsidePaths = false;
+        _settings.ShellPolice = false;
         Assert.Equal(@"Error: the command was denied by the user: type C:\Windows\win.ini; do not retry it or work around the refusal", await Invoke(("command", @"type C:\Windows\win.ini")));
         Assert.Equal(3, _asked.Count);
 
@@ -140,15 +140,43 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Single(_asked);
 
         // Under the police's own switch (the user's call): off, the line goes to the gate.
-        _settings.ShellPoliceOutsidePaths = false;
+        _settings.ShellPolice = false;
         Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", "format build")));
         Assert.Equal(2, _asked.Count);
 
         // An empty list refuses nothing.
-        _settings.ShellPoliceOutsidePaths = true;
+        _settings.ShellPolice = true;
         _settings.ShellPoliceForbiddenStrings = [];
         Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", "format build")));
         Assert.Equal(3, _asked.Count);
+    }
+
+    [Fact]
+    public async Task SqlitePolice_RefusesALineOrItsScriptFile_EvenUnderYolo_WhileTheSqliteToolsAreOn()
+    {
+        // 2026-10-05: a model under yolo wrote a script that inserted into a database SQLite mode kept read-only.
+        _files.Databases = () => Files.DatabaseGuard.ByExtension;
+        var shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("command", "sqlite3 shop.db \"DELETE FROM t\""))));
+        Assert.Equal(ShellText.SqlitePoliced, shown.Text);
+        Assert.Equal("SQLite: 'sqlite3' — not run", shown.Shown);
+
+        File.WriteAllText(Path.Combine(_root, "insert.py"), "import sqlite3\nsqlite3.connect('shop.db').execute('INSERT INTO t VALUES (1)')\n");
+        shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("command", "python insert.py"))));
+        Assert.Equal("SQLite: 'sqlite3' in insert.py — not run", shown.Shown);
+        Assert.Equal(["sqlite3 shop.db \"DELETE FROM t\"", "python insert.py"], _gate.Refusals);   // counted: headless's exit 3
+
+        // A line with nothing of SQLite runs (yolo).
+        Assert.Contains("fine", await Invoke(("command", "echo fine")));
+
+        // Under Shell police (the user's call): off, the line goes to the gate (yolo runs it; no sqlite3 here, so it fails as a command).
+        _settings.ShellPolice = false;
+        Assert.False(ShellText.IsPoliced(await Invoke(("command", "sqlite3 shop.db .tables"))));
+        _settings.ShellPolice = true;
+
+        // The SQLite tools off: no guard, nothing refused.
+        _files.Databases = () => null;
+        Assert.False(ShellText.IsPoliced(await Invoke(("command", "sqlite3 shop.db .tables"))));
+        Assert.Equal(2, _gate.Refusals.Count);
     }
 
     [Fact]
@@ -188,7 +216,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", "type notes.txt")));
         // On, but the line names a path no native tool reaches (the police off): the shell's alone.
         _settings.ShellPreferNative = true;
-        _settings.ShellPoliceOutsidePaths = false;
+        _settings.ShellPolice = false;
         Assert.StartsWith("Error: the command was denied by the user", await Invoke(("command", @"type C:\Windows\win.ini")));
         Assert.Equal(2, _asked.Count);
         // … and a line under the root still goes back to read_file.

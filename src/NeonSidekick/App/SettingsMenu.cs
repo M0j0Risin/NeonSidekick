@@ -313,8 +313,8 @@ public enum SettingsField
     /// <summary>What the toolbar under the hint row shows (<see cref="Settings.AppSettingsData.ToolbarItems"/>): a toggle until 2026-09-29, a checklist since (the user's ask). The General tab's row after Show working directory (2026-09-21); no reconnect (read at each pane draw).</summary>
     ToolbarItems,
 
-    /// <summary>A toggle: whether a command line, a script or text to a background process may name a path outside the working directory (<see cref="Settings.AppSettingsData.ShellPoliceOutsidePaths"/>). The Shell tab's third row (2026-09-22), under the list it guards beside; no reconnect (read at each call and each turn). Last in the enum, as every newcomer: the flat no-pane list's row numbers are pinned.</summary>
-    ShellPoliceOutsidePaths,
+    /// <summary>A toggle: whether a command line, a script or text to a background process may name a path outside the working directory (<see cref="Settings.AppSettingsData.ShellPolice"/>). The Shell tab's third row (2026-09-22), under the list it guards beside; no reconnect (read at each call and each turn). Last in the enum, as every newcomer: the flat no-pane list's row numbers are pinned.</summary>
+    ShellPolice,
 
     /// <summary>Typed: how many lines of a tool run stay while it runs before it folds under its summary, 0 (off) to 100 (<see cref="Settings.AppSettingsData.ToolCollapseCount"/>). The Options tab of <c>/tools</c>, under <see cref="ToolsDollarMention"/> (2026-09-22, the user's place); no reconnect (read when a run opens). Last in the enum, as every newcomer.</summary>
     ToolCollapseCount,
@@ -421,7 +421,7 @@ public enum SettingsField
     /// <summary>Typed: the seconds <c>/botchat</c> rests after a reply when no voice plays, 0 (off) to 30 (<see cref="Settings.AppSettingsData.BotChatNonTtsDelaySeconds"/>). The Botchat tab's last row (2026-09-26, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatNonTtsDelaySeconds,
 
-    /// <summary>A toggle: whether <c>run_command</c> steps aside for a native tool (<see cref="Settings.AppSettingsData.ShellPreferNative"/>). The Shell tab's row under Shell police outside paths (2026-09-26, the user's ask); no reconnect (read at each call and each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether <c>run_command</c> steps aside for a native tool (<see cref="Settings.AppSettingsData.ShellPreferNative"/>). The Shell tab's row under Shell police (2026-09-26, the user's ask); no reconnect (read at each call and each turn). Last in the enum, as every newcomer.</summary>
     ShellPreferNative,
 
     /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's row under <see cref="LlmReasoning"/> (2026-10-01, the user's call: the thinking rows together; the last row from 2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
@@ -806,7 +806,7 @@ public enum SettingsField
     /// <summary>Typed: the most rows of an edit's diff the transcript shows, 0 (the header alone) to 500 (<see cref="Settings.AppSettingsData.DiffMaxLines"/>). The Options tab of <c>/tools</c>, under <see cref="ShowFileDiffs"/> (2026-10-03); no reconnect. Last in the enum, as every newcomer.</summary>
     DiffMaxLines,
 
-    /// <summary>A list the user types into: the strings the shell police refuses (<see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/>), its top row adding one and Enter on one removing it. The Shell tab, under <see cref="ShellPoliceOutsidePaths"/>, whose switch it rides (2026-10-03, the user's idea); also <c>/police</c>' strings button. No reconnect (read at each call). Last in the enum, as every newcomer.</summary>
+    /// <summary>A list the user types into: the strings the shell police refuses (<see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/>), its top row adding one and Enter on one removing it. The Shell tab, under <see cref="ShellPolice"/>, whose switch it rides (2026-10-03, the user's idea); also <c>/police</c>' strings button. No reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     ShellPoliceForbiddenStrings,
 
     /// <summary>A picker over <see cref="Pdf.PdfEngine.Names"/>: what makes a PDF (<see cref="Settings.AppSettingsData.PdfEngine"/>). The Print tab of <c>/tools</c>, after <see cref="PrintFontSize"/> (2026-10-03, the user's ask); no reconnect (read at each PDF). Last in the enum, as every newcomer.</summary>
@@ -1363,7 +1363,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
-        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
+        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
@@ -1754,7 +1754,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground
             or SettingsField.QueueMessages or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
-            or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPoliceOutsidePaths or SettingsField.ShellPreferNative
+            or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPolice or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatComfy or SettingsField.BotChatImageAsync or SettingsField.BotChatTools or SettingsField.BotChatSkills or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeCliAdvisor or SettingsField.ClaudeCliAdvisorConfirm
             or SettingsField.AnthropicApi or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
@@ -1863,7 +1863,7 @@ internal sealed partial class SettingsMenu
         SettingsField.GitLibDiffMaxLines => "GitLib diff max lines",
         SettingsField.ShellCommandPolicy => "Shell command policy",
         SettingsField.ShellCommandAllowed => "Shell allowed commands",
-        SettingsField.ShellPoliceOutsidePaths => "Shell police outside paths",
+        SettingsField.ShellPolice => "Shell police",
         SettingsField.ShellPoliceForbiddenStrings => "Shell police forbidden strings",
         SettingsField.ShellPreferNative => "Shell prefer native tools",
         SettingsField.ShellDefault => "Shell default",
@@ -2202,7 +2202,7 @@ internal sealed partial class SettingsMenu
             SettingsField.GitLibDiffMaxLines => Lines(data.GitLibDiffMaxLines),
             SettingsField.ShellCommandPolicy => data.ShellCommandPolicy,
             SettingsField.ShellCommandAllowed => Prefixes(data.ShellCommandAllowed.Count),
-            SettingsField.ShellPoliceOutsidePaths => OnOff(data.ShellPoliceOutsidePaths),
+            SettingsField.ShellPolice => OnOff(data.ShellPolice),
             SettingsField.ShellPoliceForbiddenStrings => Strings(Shell.ForbiddenStrings.Sorted(data.ShellPoliceForbiddenStrings).Count),
             SettingsField.ShellPreferNative => OnOff(data.ShellPreferNative),
             SettingsField.ShellDefault => data.ShellDefault,
@@ -2821,20 +2821,21 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Show toolbar's third title-row button (2026-09-29, the user's ask, beside select all and select none): the checklist
-    /// back to <see cref="App.ToolbarItems.Defaults"/>, which saves as null so the profile follows a later default. Pinned.
+    /// back to <see cref="App.ToolbarItems.Defaults"/>, which saves as null so the profile follows a later default. Since
+    /// 2026-10-05 SQLite statements allowed's too (the user's ask), back to <see cref="Sqlite.SqliteStatementKinds.Default"/>. Pinned.
     /// </summary>
     public const string DefaultsButton = "⊡ default";
 
     /// <summary>The key that is <see cref="DefaultsButton"/>.</summary>
     public const char DefaultsKey = 'd';
 
-    /// <summary>Show toolbar's buttons: <see cref="ChecklistButtons"/>, then default (index 2).</summary>
-    public static readonly IReadOnlyList<MenuButton> ToolbarChecklistButtons = [.. ChecklistButtons, new(DefaultsButton, DefaultsKey)];
+    /// <summary>The buttons of a checklist with a default (Show toolbar, SQLite statements allowed): <see cref="ChecklistButtons"/>, then default (index 2).</summary>
+    public static readonly IReadOnlyList<MenuButton> DefaultChecklistButtons = [.. ChecklistButtons, new(DefaultsButton, DefaultsKey)];
 
     private const int DefaultsIndex = 2;
 
-    /// <summary>Show toolbar's hint: <see cref="ToggleKeys"/> with D (2026-09-29). Pinned.</summary>
-    public const string ToolbarToggleKeys = "Enter / Space = on or off · A = all · N = none · D = default · ESC = back";
+    /// <summary>The hint of a checklist with a default: <see cref="ToggleKeys"/> with D (2026-09-29, Show toolbar's; SQLite statements allowed's since 2026-10-05). Pinned.</summary>
+    public const string DefaultToggleKeys = "Enter / Space = on or off · A = all · N = none · D = default · ESC = back";
 
     /// <summary>
     /// Show performance bar's buttons (2026-09-30, the user's ask: the look on the checklist's own screen):
@@ -2912,7 +2913,7 @@ internal sealed partial class SettingsMenu
     public const string YoloConfirmQuestion = "Change shell command policy to yolo (all commands accepted)?";
 
     /// <summary>
-    /// The yes/no asked before <c>Shell police outside paths</c> goes from on to off (2026-10-02, the user's ask), on its
+    /// The yes/no asked before <c>Shell police</c> goes from on to off (2026-10-02, the user's ask), on its
     /// on/off page wherever that opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Tools pane's Shell tab; a move
     /// to on never asks. Pinned.
     /// </summary>
@@ -6278,7 +6279,7 @@ internal sealed partial class SettingsMenu
         bool was = IsOn(field, saved);
         bool modeChanged = false;
         int? picked;
-        if (field == SettingsField.ShellPoliceOutsidePaths)
+        if (field == SettingsField.ShellPolice)
         {
             // The police's page carries the forbidden-strings button (2026-10-03, the user's pick): the list, then the page again.
             var police = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], _pane.Enabled ? PoliceToggleKeys : PickKeys);
@@ -6441,7 +6442,7 @@ internal sealed partial class SettingsMenu
     /// <summary>A toggle set to <paramref name="on"/> (its page's pick, or <see cref="FlipAsync"/>): the police's question first, then the save and its notice.</summary>
     private async Task<bool> SetToggleAsync(SettingsField field, AppSettingsData saved, bool on, CancellationToken cancellationToken)
     {
-        if (field == SettingsField.ShellPoliceOutsidePaths && !on)
+        if (field == SettingsField.ShellPolice && !on)
         {
             // Police off asks first (2026-10-02, the user's ask), on the same pane as the yolo button's question.
             var question = new MenuPage(PoliceOffConfirmQuestion, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
@@ -6567,7 +6568,7 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
             SettingsField.ShellToolBridge => data.ShellToolBridge,
-            SettingsField.ShellPoliceOutsidePaths => data.ShellPoliceOutsidePaths,
+            SettingsField.ShellPolice => data.ShellPolice,
             SettingsField.ShellPreferNative => data.ShellPreferNative,
             _ => false,
         };
@@ -6671,7 +6672,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
             case SettingsField.ShellToolBridge: data.ShellToolBridge = on; break;
-            case SettingsField.ShellPoliceOutsidePaths: data.ShellPoliceOutsidePaths = on; break;
+            case SettingsField.ShellPolice: data.ShellPolice = on; break;
             case SettingsField.ShellPreferNative: data.ShellPreferNative = on; break;
         }
     }
@@ -6779,7 +6780,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; what is stored still lists, restores and purges",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellToolBridge => on ? "a script may call this app's other tools through its neon_tools module" : "a script does everything itself: no neon_tools module, no tool calls",
-        SettingsField.ShellPoliceOutsidePaths => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03
+        SettingsField.ShellPolice => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03
         SettingsField.ShellPreferNative => on ? "a command a native tool covers is sent back to that tool first" : "the shell runs whatever it is given",
         _ => "",
     };
@@ -7460,8 +7461,8 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var on = App.ToolbarItems.Resolve(_settings.Current.ToolbarItems);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), names.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), ToolbarToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, cursor, cancellationToken, ToolbarChecklistButtons).ConfigureAwait(false);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ToolbarItems)), names.Select(id => App.ToolbarItems.Label(id, on.Contains(id))).ToList(), DefaultToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, cursor, cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)

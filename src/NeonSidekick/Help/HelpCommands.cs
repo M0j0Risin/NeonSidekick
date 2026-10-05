@@ -203,7 +203,7 @@ public static class HelpCommands
         ]),
         new("/police",
         [
-            new("/police", "Open the on/off page for *Shell police outside paths*. Turning it off asks first."),
+            new("/police", "Open the on/off page for *Shell police*. Turning it off asks first."),
         ]),
         new("/print",
         [

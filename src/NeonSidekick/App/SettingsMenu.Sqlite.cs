@@ -106,8 +106,9 @@ internal sealed partial class SettingsMenu
         Markup.Escape((on ? "[x] " : "[ ] ") + SqliteStatementKinds.Title(kind).PadRight(20)) + Theme.DimMarkup(Markup.Escape(SqliteStatementKinds.Statements(kind)));
 
     /// <summary>
-    /// <c>SQLite statements allowed</c> (later on 2026-10-05, the user's ask), the Docker containers checklist's shape over the seven
-    /// kinds: Enter or Space flips one, A all, N none, until ESC. Saved as the kinds' words in menu order. True when anything changed.
+    /// <c>SQLite statements allowed</c> (later on 2026-10-05, the user's ask), the Docker containers checklist's shape over the eight
+    /// kinds: Enter or Space flips one, A all, N none, D the default (2026-10-05, the user's ask: Show toolbar's button), until ESC.
+    /// Saved as the kinds' words in menu order. True when anything changed.
     /// </summary>
     private async Task<bool> EditSqliteStatementsAsync(CancellationToken cancellationToken)
     {
@@ -117,8 +118,8 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var on = SqliteStatementKinds.Resolve(_settings.Current.SqliteStatementsAllowed).ToHashSet();
-            var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteStatementsAllowed)), kinds.Select(k => SqliteStatementRow(k, on.Contains(k))).ToList(), ToggleKeys) { SpaceToggles = true };
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, kinds.Length - 1), cancellationToken).ConfigureAwait(false);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteStatementsAllowed)), kinds.Select(k => SqliteStatementRow(k, on.Contains(k))).ToList(), DefaultToggleKeys) { SpaceToggles = true };
+            var picked = await PickChecklistAsync(page, Math.Min(cursor, kinds.Length - 1), cancellationToken, DefaultChecklistButtons).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 if (!changed)
@@ -132,6 +133,7 @@ internal sealed partial class SettingsMenu
             cursor = pick.Row;
             var next = pick.Button == SelectAllIndex ? kinds.ToList()
                 : pick.Button == SelectNoneIndex ? []
+                : pick.Button == DefaultsIndex ? SqliteStatementKinds.Resolve(SqliteStatementKinds.Default()).ToList()
                 : kinds.Where(k => on.Contains(k) != (k == kinds[pick.Row])).ToList();
             if (next.Count == on.Count && next.All(on.Contains))
             {

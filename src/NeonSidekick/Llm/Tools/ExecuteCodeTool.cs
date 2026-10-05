@@ -24,7 +24,7 @@ namespace NeonSidekick.Llm.Tools;
 /// is the <c>run_command</c> shape with the tool-call count in the header; the run folder under
 /// the temp directory goes when the run does. No kernel: state lives in files the script writes.
 /// Since 2026-09-22 the police reads the script before the gate (<see cref="PathPolice"/>, the setting
-/// <c>Shell police outside paths</c>, on by default): a script whose text names a path outside the
+/// <c>Shell police</c>, on by default): a script whose text names a path outside the
 /// working directory is refused with <see cref="ShellText.OutsidePath"/>, and the description and the
 /// <c>code</c> property say the script stays under it (off, neither says a word about where it may reach).
 /// </summary>
@@ -83,7 +83,7 @@ public sealed class ExecuteCodeTool : AIFunction
         "Runs a script (python, node or powershell) in a fresh process and returns what it printed; " +
         "it runs in the working directory and may only name paths under it, the same approval as run_command applies, and a denied or refused script must not be retried or worked around.";
 
-    /// <summary><see cref="DescriptionWithBridge"/> with the police off (<c>Shell police outside paths</c>, 2026-09-22): the text until that day — not a word about where the script may reach. Pinned.</summary>
+    /// <summary><see cref="DescriptionWithBridge"/> with the police off (<c>Shell police</c>, 2026-09-22): the text until that day — not a word about where the script may reach. Pinned.</summary>
     public const string DescriptionWithBridgeUnpoliced =
         "Runs a script (python, node or powershell) in a fresh process and returns what it printed. " +
         "The script can call this app's other tools by name through the neon_tools module, so several steps can be done in one call; " +
@@ -106,7 +106,7 @@ public sealed class ExecuteCodeTool : AIFunction
     /// <summary>The bridge's on/off, read at each look — the description, the schema and the run all follow the setting.</summary>
     private bool Bridge => _effective().ShellToolBridge;
 
-    public override string Description => DescribeTool(Bridge, _effective().ShellPoliceOutsidePaths);
+    public override string Description => DescribeTool(Bridge, _effective().ShellPolice);
 
     /// <summary>The languages the model may name right now: the setting's, whose interpreter is found, in <see cref="CodeLanguages.Names"/> order.</summary>
     public IReadOnlyList<string> AvailableLanguages => _interpreters.AvailableLanguages(CodeLanguages.Resolve(_effective())).Select(CodeLanguages.Name).ToList();
@@ -119,7 +119,7 @@ public sealed class ExecuteCodeTool : AIFunction
             var effective = _effective();
             int cap = Math.Clamp(effective.ShellCodeTimeoutSeconds, AppSettingsData.MinShellCodeTimeoutSeconds, AppSettingsData.MaxShellCodeTimeoutSeconds);
             bool bridge = effective.ShellToolBridge;
-            bool police = effective.ShellPoliceOutsidePaths;
+            bool police = effective.ShellPolice;
             string key = string.Join(",", languages) + "|" + cap.ToString(CultureInfo.InvariantCulture) + (bridge ? "|bridge" : "") + (police ? "|police" : "");
             if (_schema.ValueKind == JsonValueKind.Undefined || !string.Equals(key, _schemaKey, StringComparison.Ordinal))
             {
@@ -215,15 +215,23 @@ public sealed class ExecuteCodeTool : AIFunction
 
         var request = new CommandRequest(name, code, [ShellText.ScriptPrefix(name)], IsScript: true);
         // The forbidden strings first (Shell police forbidden strings, 2026-10-03), anywhere in the script, under the police's own switch.
-        if (effective.ShellPoliceOutsidePaths && ForbiddenStrings.Find(code, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+        if (effective.ShellPolice && ForbiddenStrings.Find(code, effective.ShellPoliceForbiddenStrings) is { } forbidden)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(request, forbidden));
             _gate.NoteRefused(request);
             return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
         }
 
-        // The police before the gate (Shell police outside paths, 2026-09-22): a script naming a path outside the working directory is refused, and the pane is never asked about it.
-        if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(code, _files, workingDirectory, isScript: true) is { } outside)
+        // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a script that reaches SQLite is refused whatever the policy.
+        if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Find(code, script: true, databases) is { } sqlite)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite, null));
+            _gate.NoteRefused(request);
+            return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, null));
+        }
+
+        // The police before the gate (Shell police, 2026-09-22): a script naming a path outside the working directory is refused, and the pane is never asked about it.
+        if (effective.ShellPolice && PathPolice.Judge(code, _files, workingDirectory, isScript: true) is { } outside)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
             _gate.NoteRefused(request);

@@ -1011,6 +1011,8 @@ internal sealed partial class ChatScreen
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
         _files = new WorkingDirectory(() => WorkingDirectory.Resolve(_effective().WorkingDirectory, _settings.ProfileDirectory), time);
+        // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05).
+        _files.Databases = () => _effective().SqliteTools ? SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
         // The UNC shares' door (2026-09-30) before the file tools: open reaches the offered shares too (2026-10-01).
         // The profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
         _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
@@ -1148,7 +1150,7 @@ internal sealed partial class ChatScreen
             // per draw and on the tick, so a /cwd change or a changed Show toolbar shows at once —
             // and the lock (later still that day) follows Shell command policy the same way; TryParse,
             // not Resolve: the draw must not warn on a hand-edited word, the turn does. The disk and
-            // the officer (2026-09-22) follow Memory and Shell police outside paths the same way.
+            // the officer (2026-09-22) follow Memory and Shell police the same way.
             Toolbar = ToolbarParts,
             // The performance bar under the toolbar (2026-09-29): read per draw and on the tick, like the toolbar, so a
             // change of Show performance bar shows at once; the sampler runs only while it answers a row.
@@ -1349,8 +1351,7 @@ internal sealed partial class ChatScreen
     /// <c>/cmdlist</c>: the <c>Shell allowed commands</c> list opened straight, the typed word too.
     /// Two more come and go the same way (2026-09-22, the user's ask): the disk between the balloon
     /// and the lock while <c>Memory</c> is on — its pane's title already wore it — whose double-click
-    /// is <c>/memory</c>, the list Enter prunes; and the officer last of all while <c>Shell police
-    /// outside paths</c> is on, the glyph the transcript's refusal line wears, whose double-click is
+    /// is <c>/memory</c>, the list Enter prunes; and the officer last of all while <c>Shell police</c> is on, the glyph the transcript's refusal line wears, whose double-click is
     /// <c>/police</c> (later on 2026-09-22, the user's ask: no click of its own until then), that row's
     /// on/off page opened straight. Both follow their switch at each draw, so a flip on its pane shows
     /// as the pane closes; the columns after the balloon move with the disk, which the hit-test walk
@@ -1381,7 +1382,7 @@ internal sealed partial class ChatScreen
     public const string PoliceToolGlyph = "👮";
 
     /// <summary>
-    /// The police item while <c>Shell police outside paths</c> is off (2026-10-02, the user's ask: the item always shown, as the
+    /// The police item while <c>Shell police</c> is off (2026-10-02, the user's ask: the item always shown, as the
     /// lock is, the officer while on and the ninja while off). Its double-click is <c>/police</c> as the officer's is. Pinned.
     /// </summary>
     public const string NinjaToolGlyph = "🥷";
@@ -1477,7 +1478,7 @@ internal sealed partial class ChatScreen
     public static (string Strip, IReadOnlyList<int> Off) ToolbarStripFor(IReadOnlySet<string> items, AppSettingsData shown)
     {
         ArgumentNullException.ThrowIfNull(shown);
-        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPoliceOutsidePaths, id => ToolbarItemOff(id, shown));
+        return ToolbarGlyphs(items, ToolbarPolicy(shown), shown.ShellPolice, id => ToolbarItemOff(id, shown));
     }
 
     /// <summary>
@@ -1531,7 +1532,7 @@ internal sealed partial class ChatScreen
         string? state = id switch
         {
             ToolbarItems.Shell or ToolbarItems.CmdList => Shell.CommandPolicy.Name(ToolbarPolicy(shown)),
-            ToolbarItems.Police => shown.ShellPoliceOutsidePaths ? ToolbarItems.OnWord : ToolbarItems.OffWord,
+            ToolbarItems.Police => shown.ShellPolice ? ToolbarItems.OnWord : ToolbarItems.OffWord,
             ToolbarItems.Memory => MemoryMode.Name(memory),
             _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
             _ => null,
@@ -3390,7 +3391,7 @@ internal sealed partial class ChatScreen
             ShellOffered(effective),
             Without(ShellToolsFor(_shellTools), disabled).Count,
             effective.ShellToolBridge,
-            effective.ShellPoliceOutsidePaths,
+            effective.ShellPolice,
             ObsidianOffered(effective),
             Without(ObsidianToolsFor(_vaultTools, effective), disabled).Count,
             effective.ObsidianAllowDelete,
@@ -5085,6 +5086,13 @@ internal sealed partial class ChatScreen
         return writes ? tools : tools.Where(t => !SqliteWriteToolNames.Contains(t.Name)).ToList();
     }
 
+    /// <summary>
+    /// The database files the SQLite tools guard (2026-10-05): every one <c>sqlite.json</c> names, the profile's and the global, offered
+    /// or not, beside the extensions <see cref="DatabaseGuard"/> knows. Read at each write and each shell call.
+    /// </summary>
+    public static DatabaseGuard SqliteDatabaseGuard(string profileDirectory, string storageDirectory) =>
+        new(Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, storageDirectory).Databases.Select(d => d.FullPath).ToList());
+
     /// <summary>Whether the SQLite group is offered (2026-10-04): the setting <c>SQLite tools</c> on, and a named database offered or the sandbox's files allowed.</summary>
     public static bool SqliteOffered(AppSettingsData effective, Sqlite.SqliteAccess sqlite)
     {
@@ -5548,7 +5556,7 @@ internal sealed partial class ChatScreen
         Shell = _shellTools,
         ShellEnabled = ShellOffered(effective),
         ShellBridge = effective.ShellToolBridge,
-        ShellPolice = effective.ShellPoliceOutsidePaths,
+        ShellPolice = effective.ShellPolice,
         ShellNative = effective.ShellPreferNative,
         Obsidian = ObsidianToolsFor(_vaultTools, effective),
         ObsidianEnabled = ObsidianOffered(effective),
@@ -10823,7 +10831,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Police:
-                // The Shell police outside paths page straight (2026-09-22): the Tools pane's row without the pane around it, the toolbar officer's word.
+                // The Shell police page straight (2026-09-22): the Tools pane's row without the pane around it, the toolbar officer's word.
                 await _toolsMenu.ShowPoliceAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 

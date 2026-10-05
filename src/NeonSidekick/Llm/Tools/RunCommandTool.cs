@@ -19,8 +19,8 @@ namespace NeonSidekick.Llm.Tools;
 /// a command begins, and the guard is the gate (<see cref="CommandGate"/>) — under the default
 /// policy the user approves a command whose prefixes are not on the allow list before it runs,
 /// and a denial is an <c>Error:</c> sentence the model is told not to work around. Since 2026-09-22
-/// the police stands before the gate (<see cref="PathPolice"/>, the setting <c>Shell police outside
-/// paths</c>, on by default): a line whose text names a path outside the working directory is refused
+/// the police stands before the gate (<see cref="PathPolice"/>, the setting <c>Shell
+/// police</c>, on by default): a line whose text names a path outside the working directory is refused
 /// with <see cref="ShellText.OutsidePath"/> and never put to the pane; since 2026-09-26 a line a native tool offered
 /// that turn covers (<see cref="NativeRedirect"/>, the setting <c>Shell prefer native tools</c>) is sent back to that tool
 /// once a turn, the pane not asked either — lexical, the text and not what
@@ -83,7 +83,7 @@ public sealed class RunCommandTool : AIFunction
     public override string Name => ToolName;
 
     /// <summary>
-    /// What the model reads with the setting <c>Shell police outside paths</c> on (2026-09-22): the command may only
+    /// What the model reads with the setting <c>Shell police</c> on (2026-09-22): the command may only
     /// name paths under the working directory, and a refusal is final like a denial. Until that day the one
     /// description said the command "is not confined to" the working directory; neither variant says so now. Pinned.
     /// </summary>
@@ -103,7 +103,7 @@ public sealed class RunCommandTool : AIFunction
     /// <summary>The two descriptions by the setting (<see cref="DescriptionPoliced"/>, <see cref="DescriptionUnpoliced"/>).</summary>
     public static string DescribeTool(bool police) => police ? DescriptionPoliced : DescriptionUnpoliced;
 
-    public override string Description => DescribeTool(_effective().ShellPoliceOutsidePaths);
+    public override string Description => DescribeTool(_effective().ShellPolice);
 
     /// <summary>The shells the model may name right now, in <see cref="ShellKinds.Names"/> order.</summary>
     public IReadOnlyList<string> AvailableShells => _interpreters.AvailableShells().Select(ShellKinds.Name).ToList();
@@ -258,15 +258,24 @@ public sealed class RunCommandTool : AIFunction
 
         var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command));
         // The forbidden strings first (Shell police forbidden strings, 2026-10-03), under the police's own switch: the model is told it was refused, never which string.
-        if (effective.ShellPoliceOutsidePaths && ForbiddenStrings.Find(command, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+        if (effective.ShellPolice && ForbiddenStrings.Find(command, effective.ShellPoliceForbiddenStrings) is { } forbidden)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(request, forbidden));
             _gate.NoteRefused(request);
             return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
         }
 
-        // The police before the gate (Shell police outside paths, 2026-09-22): a line naming a path outside the working directory is refused, and the pane is never asked about it.
-        if (effective.ShellPoliceOutsidePaths && PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is { } outside)
+        // The SQLite police (2026-10-05, the user's call), under Shell police while the SQLite tools are on: a line, or a script
+        // file it runs, that reaches SQLite is refused whatever the policy, so a database is reached only through the sqlite_ tools.
+        if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Judge(command, workdir, _files.Root, databases) is { } sqlite)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite.Token, sqlite.File));
+            _gate.NoteRefused(request);
+            return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite.Token, sqlite.File));
+        }
+
+        // The police before the gate (Shell police, 2026-09-22): a line naming a path outside the working directory is refused, and the pane is never asked about it.
+        if (effective.ShellPolice && PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is { } outside)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
             _gate.NoteRefused(request);
@@ -276,7 +285,7 @@ public sealed class RunCommandTool : AIFunction
         // Then a native tool's own line (Shell prefer native tools, 2026-09-26): sent back once a turn, before the pane is asked. A path outside the working directory
         // with the police off is the shell's alone, no native tool reaching there.
         if (effective.ShellPreferNative
-            && (effective.ShellPoliceOutsidePaths || PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is null)
+            && (effective.ShellPolice || PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is null)
             && Redirect(command) is { } native)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.NativeLogLine(request, native.Prefix, native.Tool));

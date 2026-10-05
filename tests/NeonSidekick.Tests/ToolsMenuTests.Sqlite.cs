@@ -92,7 +92,7 @@ public partial class ToolsMenuTests
         Assert.Equal(["data", "create", "read"], _settings.Current.SqliteStatementsAllowed);
         var (menu, _, _) = PaneMenu();
         OpenSqliteRow(2);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // dropping
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // dropping, after deleting (later on 2026-10-05)
         Push(Keys.Escape);                                   // out of the checklist
         Push(Keys.Escape);
 
@@ -100,6 +100,24 @@ public partial class ToolsMenuTests
 
         Assert.Equal(["data", "create", "drop", "read"], _settings.Current.SqliteStatementsAllowed);
         Assert.Contains("DROP TABLE, INDEX, VIEW, TRIGGER", _console.Output);
+    }
+
+    /// <summary>D puts the default back (2026-10-05, the user's ask): changing data, creating, reading, whatever was ticked.</summary>
+    [Fact]
+    public async Task OnThePane_TheStatementsAllowed_DefaultPutsTheDefaultBack()
+    {
+        _settings.Update(d => d.SqliteStatementsAllowed = ["delete", "drop", "pragma"]);
+        var (menu, _, _) = PaneMenu();
+        OpenSqliteRow(2);
+        Push(Keys.Char('d'));
+        Push(Keys.Escape);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["data", "create", "read"], _settings.Current.SqliteStatementsAllowed);
+        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
+        Assert.Contains(SettingsMenu.DefaultToggleKeys, _console.Output);
     }
 
     /// <summary>N clears every kind and A ticks them all, saved in menu order.</summary>
@@ -124,7 +142,7 @@ public partial class ToolsMenuTests
         Assert.Equal("changing data", SettingsMenu.SqliteStatementsValue(["data"], "read-write"));
         Assert.Equal("changing data, dropping", SettingsMenu.SqliteStatementsValue(["DROP", "data", "nonsense"], "read-write"));
         Assert.Equal("changing data, creating, reading", SettingsMenu.SqliteStatementsValue(["data", "create", "read"], "read-write"));
-        Assert.Equal("4 of 7", SettingsMenu.SqliteStatementsValue(["data", "create", "drop", "read"], "read-write"));
+        Assert.Equal("4 of 8", SettingsMenu.SqliteStatementsValue(["data", "create", "drop", "read"], "read-write"));
         Assert.Equal("none (used under read-write)", SettingsMenu.SqliteStatementsValue([], "read-only"));
         Assert.Equal("changing data, creating, reading (used under read-write)", SettingsMenu.SqliteStatementsValue(null, null));
     }
