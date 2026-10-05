@@ -289,7 +289,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer);
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -2812,7 +2812,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /cmdlist or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
     private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + "   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ";
     private static readonly string MemoryPaneTitle = MemoryMenu.Title + "   " + MemoryMenu.OnButton + "    " + MemoryMenu.OffButton + " ";   // Memory's switch on the title row (2026-10-03)
-    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths) + "   " + SettingsMenu.PoliceStringsButton + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03
+    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPoliceOutsidePaths) + "   " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
 
     /// <summary>
     /// The rows of the pane drawn last (its title row, ending with the × glyph, to the rule under
@@ -9641,7 +9641,7 @@ public partial class ChatScreenTests : IDisposable
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         string output = string.Join("\n", raw.Split('\n').Select(l => l.TrimEnd()));
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
-        Assert.Contains(strip.TrimEnd() + "\n\nNeonSidekick " + SidekickApp.Version + "\n" + AboutText.CopyrightLine + "\n\nRuntime      " + RuntimeInformation.FrameworkDescription + " · JIT · ", output);
+        Assert.Contains(strip.TrimEnd() + "\n\nNeonSidekick " + SidekickApp.Version + "\n" + AboutText.CopyrightLine + "\n" + AboutText.RepositoryLine + "\n\nRuntime      " + RuntimeInformation.FrameworkDescription + " · JIT · ", output);
         Assert.Contains("\nHome         " + _settings.StorageDirectory + "\nProfile      " + _settings.ProfileDirectory + "\nModels       " + _settings.ModelsDirectory + "\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → the Components tab, → the License tab.
@@ -10397,9 +10397,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 43)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L on 2026-10-04
-    [InlineData(true, false, 44)]
-    [InlineData(true, true, 45)]
+    [InlineData(false, false, 44)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04
+    [InlineData(true, false, 45)]
+    [InlineData(true, true, 46)]
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -10415,9 +10415,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^35]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^34]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^33]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^36]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^35]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^34]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask), Ctrl+. and Ctrl+/ ahead of them.
         Assert.Equal(
         [
@@ -10438,10 +10438,11 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+U", "open the usage pane (/usage)"),   // from Ctrl+Alt+G
             ("Ctrl+X", "cut the selected text"),   // 2026-09-25
             ("Ctrl+Y", "open the system prompt pane (/sys)"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
-        ], rows[^32..^15]);
+            ("Ctrl+Z", "open the theme picker (/theme)"),   // 2026-10-04, the user's ask and wording
+        ], rows[^33..^15]);
         // Each plain-Ctrl chord's row names its command; Ctrl+L (the learning's cancel, 2026-10-04) has none.
         Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
-        foreach (var (row, key) in new[] { (rows[^32], Keys.CtrlPeriod), (rows[^31], Keys.CtrlSlash), (rows[^28], Keys.CtrlE), (rows[^27], Keys.CtrlF), (rows[^26], Keys.CtrlH), (rows[^24], Keys.CtrlM), (rows[^22], Keys.CtrlP), (rows[^21], Keys.CtrlR), (rows[^20], Keys.CtrlS), (rows[^19], Keys.CtrlT), (rows[^18], Keys.CtrlU), (rows[^16], Keys.Ctrl(ConsoleKey.Y)) })
+        foreach (var (row, key) in new[] { (rows[^33], Keys.CtrlPeriod), (rows[^32], Keys.CtrlSlash), (rows[^29], Keys.CtrlE), (rows[^28], Keys.CtrlF), (rows[^27], Keys.CtrlH), (rows[^25], Keys.CtrlM), (rows[^23], Keys.CtrlP), (rows[^22], Keys.CtrlR), (rows[^21], Keys.CtrlS), (rows[^20], Keys.CtrlT), (rows[^19], Keys.CtrlU), (rows[^17], Keys.Ctrl(ConsoleKey.Y)), (rows[^16], Keys.Ctrl(ConsoleKey.Z)) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -14909,7 +14910,7 @@ public partial class ChatScreenTests : IDisposable
         var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], None, None,
             Workflows: () => [new("juggernaut-xl", "juggernaut · text → image · 1024×1024"), new("pony-txt2img", "pony · text → image · 1024×1024")]);
 
-        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyOfferedWord, ChatScreen.ComfyPurgeWord, NeonSidekick.Viewer.ViewerText.ViewWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyOfferedWord, ChatScreen.ComfyPurgeWord, NeonSidekick.Viewer.ThumbsText.ThumbsWord, NeonSidekick.Viewer.ViewerText.ViewWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
         Assert.Equal(["view"], ChatScreen.ArgumentItems("/comfy", "v", sources).Select(i => i.Text));
         Assert.Equal(["purge"], ChatScreen.ArgumentItems("/comfy", "pu", sources).Select(i => i.Text));
         Assert.Equal(["edit"], ChatScreen.ArgumentItems("/comfy", "ed", sources).Select(i => i.Text));

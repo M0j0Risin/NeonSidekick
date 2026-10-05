@@ -130,6 +130,15 @@ public sealed class AppSettingsData
     public int? LogWindowTop { get; set; }
 
     /// <summary>
+    /// The thumbnail browser's top-left corner as it last closed (2026-10-04, <c>/thumbs</c>' window): the <see cref="ViewerLeft"/>
+    /// pair's twin, set by the window itself (<see cref="Viewer.ThumbsWindow.Placed"/>). No menu row; null opens it where Windows puts it.
+    /// </summary>
+    public int? ThumbsWindowLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="ThumbsWindowLeft"/>.</summary>
+    public int? ThumbsWindowTop { get; set; }
+
+    /// <summary>
     /// Whether the <c>/</c> completion list leaves <c>/exit</c> out (on by default, 2026-09-18) so a
     /// pick never ends the app by mistake; typed in full it exits as ever. Read at each keystroke. No variable.
     /// </summary>
@@ -1472,6 +1481,18 @@ public sealed class AppSettingsData
     public string ImageEditMetadata { get; set; } = DefaultImageEditMetadata;
 
     public const string DefaultImageEditMetadata = "none";
+
+    /// <summary>
+    /// Where an edited picture goes when nothing names a place (2026-10-04, the user's ask with the picture windows' right-click
+    /// menu, and the user's call that it rules <c>image_edit</c> too): <c>beside-original</c> (the default: a new file beside the
+    /// source, <c>photo-edited.png</c>, or into <see cref="ImageEditOutputFolder"/> for <c>image_edit</c>) or <c>overwrite-original</c>
+    /// (the result replaces the source; a format change writes <c>photo.jpg</c> and deletes <c>photo.png</c>). No confirmation
+    /// either way (the user's call). An explicit <c>to</c> is never affected. An unknown value reads as <c>beside-original</c>.
+    /// Read at each edit. No variable.
+    /// </summary>
+    public string ImageEditMode { get; set; } = DefaultImageEditMode;
+
+    public const string DefaultImageEditMode = "beside-original";
 
     /// <summary>
     /// The folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c> (2026-10-04, the Camera

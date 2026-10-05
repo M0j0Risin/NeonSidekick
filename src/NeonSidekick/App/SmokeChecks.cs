@@ -111,6 +111,8 @@ public static partial class SmokeChecks
         results.Add(ProbeViewerWindow());
         results.Add(ProbeViewerDrag());
         results.Add(ProbeLogWindow());
+        results.Add(ProbeThumbsWindow());
+        results.Add(ProbePictureMenu());
         results.Add(ProbeCameraMf());
         results.Add(ProbeCameraEncode());
         results.Add(ProbeScreenGdi());
@@ -663,6 +665,44 @@ public static partial class SmokeChecks
         try
         {
             var (ok, detail) = Viewer.LogWindow.Probe();
+            return new SmokeCheck(name, ok, detail);
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <c>viewer:thumbs</c> (2026-10-04): the thumbnail browser in the published binary — its class registered, a hidden window
+    /// answering through its own <c>[UnmanagedCallersOnly]</c> procedure, a caption in Segoe UI and a tile stretched into a memory DC
+    /// and copied out (<see cref="Viewer.ThumbsWindow.Probe"/>). Nothing is shown.
+    /// </summary>
+    public static SmokeCheck ProbeThumbsWindow()
+    {
+        const string name = "viewer:thumbs";
+        try
+        {
+            var (ok, detail) = Viewer.ThumbsWindow.Probe();
+            return new SmokeCheck(name, ok, detail);
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <c>viewer:menu</c> (2026-10-04): the picture menu's popup in the published binary — its class (with the system's shadow)
+    /// registered, a hidden popup answering through its procedure, Segoe UI measured, and the exe's path parsed into a shell item list,
+    /// Show in Explorer's first step (<see cref="Viewer.ContextMenuWindow.Probe"/>). Nothing is shown.
+    /// </summary>
+    public static SmokeCheck ProbePictureMenu()
+    {
+        const string name = "viewer:menu";
+        try
+        {
+            var (ok, detail) = Viewer.ContextMenuWindow.Probe();
             return new SmokeCheck(name, ok, detail);
         }
         catch (Exception ex)

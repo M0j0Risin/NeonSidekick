@@ -65,6 +65,7 @@ public static class HelpCommands
             new("/comfy edit json <workflow>, /comfy edit markdown <workflow>", "Open a workflow's graph, or its `.md`, in your editor (`md` works too; the `.md` is created with the family filled in if it doesn't exist)."),
             new("/comfy offered", "List the workflows currently offered to the model in a pane, one bullet each (name, family, input, size, description), without asking the server."),
             new("/comfy view", "Open the picture viewer on the output folder. Works while a reply runs."),
+            new("/comfy thumbs", "Open the thumbnail browser on the output folder. Works while a reply runs."),
             new("/comfy purge", "Permanently delete everything in the output folder, `.pasted` inputs included, after a yes/no. Refused when the output folder is the working directory."),
         ]),
         new("/compact",
@@ -288,7 +289,11 @@ public static class HelpCommands
         ]),
         new("/theme",
         [
-            new("/theme [name]", "Switch the colour theme (the *Theme* setting), built-in or custom. On its own it opens a list of the themes, with a preview of the highlighted one beside it when the window is wide enough; a typed letter jumps to the next theme starting with it, and nothing changes until Enter. During a reply, it runs when the reply ends. `/theme export <name> [new-name]` writes a theme to the `themes` folder as a file to edit (see Custom themes)."),
+            new("/theme [name]", "Switch the colour theme (the *Theme* setting), built-in or custom. On its own it opens a list of the themes, with a preview of the highlighted one beside it when the window is wide enough; a typed letter jumps to the next theme starting with it, and nothing changes until Enter. Ctrl+Z runs it too. During a reply, it runs when the reply ends. `/theme export <name> [new-name]` writes a theme to the `themes` folder as a file to edit (see Custom themes)."),
+        ]),
+        new("/thumbs",
+        [
+            new("/thumbs <folder>", "Open a folder from the working directory as thumbnails in a window of its own, in step with the picture viewer and the picture strip: a click shows the picture in the viewer, a double-click or Enter opens it there, and the viewer's own moves select it here. New pictures go on the end, so nothing moves. The tiles fit the window; + and − or Ctrl+wheel resize them, F5 lists and fits again. A right-click opens the picture menu, as in the viewer. Works while a reply runs."),
         ]),
         new("/timer",
         [
@@ -321,7 +326,7 @@ public static class HelpCommands
         ]),
         new("/view",
         [
-            new("/view <image or folder> [--chat]", "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. `--chat` (as the first or last word) draws it in the transcript instead. Works while a reply runs."),
+            new("/view <image or folder> [--chat]", "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. `--chat` (as the first or last word) draws it in the transcript instead. In the viewer the arrows or the mouse wheel step through the pictures, and a right-click opens the picture menu (rotate, flip, colour, resize, convert, shrink, copy the path, show in Explorer, attach, print, delete; edits go where *Image edit mode* says). Works while a reply runs."),
         ]),
         new("/vocalia",
         [

@@ -75,6 +75,13 @@ public static class AboutText
     public const string LicenseName = "GNU GPL v3";
     public const string LicenseNote = "(the License tab)";
 
+    /// <summary>
+    /// The third line of the About tab (2026-10-04, the user's ask: the repository's name and link on the General tab): plain
+    /// text, no click of ours — Windows Terminal finds the address itself. Pinned.
+    /// </summary>
+    public const string RepositoryName = "NeonSidekick on GitHub";
+    public const string RepositoryUrl = "https://github.com/M0j0Risin/NeonSidekick";
+
     /// <summary>The About tab's row labels, in order.</summary>
     public const string RuntimeLabel = "Runtime";
     public const string OsLabel = "OS";
@@ -180,6 +187,9 @@ public static class AboutText
     /// <summary><c>© 2026 Christopher Nelson · GNU GPL v3 (the License tab)</c>.</summary>
     public static string CopyrightLine => Copyright + Sep + LicenseName + " " + LicenseNote;
 
+    /// <summary><c>NeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick</c> (2026-10-04).</summary>
+    public static string RepositoryLine => RepositoryName + Sep + RepositoryUrl;
+
     /// <summary><c>.NET 10.0.0 · native AOT · x64</c>, or <c>· JIT ·</c> under <c>dotnet run</c>.</summary>
     public static string RuntimeLine(AboutFacts facts)
     {
@@ -234,7 +244,7 @@ public static class AboutText
 
     // ── The tabs ────────────────────────────────────────────────────────────
 
-    /// <summary>The About tab: the title and the copyright line, then the rows as two columns, the folders and the servers set apart by a blank row.</summary>
+    /// <summary>The About tab: the title, the copyright line and the repository's (2026-10-04), then the rows as two columns, the folders and the servers set apart by a blank row.</summary>
     public static IRenderable AboutTab(AboutFacts facts)
     {
         var rows = AboutRows(facts);
@@ -253,6 +263,7 @@ public static class AboutText
         return new Rows(
             new Text(TitleLine(facts), Theme.Label),
             new Text(CopyrightLine, Theme.DimText),
+            new Text(RepositoryLine, Theme.DimText),
             new Text(" "),
             grid);
     }
@@ -294,6 +305,7 @@ public static class AboutText
         yield return AboutTabTitle;
         yield return "  " + TitleLine(facts);
         yield return "  " + CopyrightLine;
+        yield return "  " + RepositoryLine;
         foreach (var (label, value) in AboutRows(facts))
         {
             yield return "  " + label.PadRight(13) + value;

@@ -247,4 +247,29 @@ public sealed class ImageToolsTests : IDisposable
         Assert.Equal(1, ImageEditTool.QualityOf(new AppSettingsData { ImageEditQuality = -5 }));
         Assert.Equal(100, ImageEditTool.QualityOf(new AppSettingsData { ImageEditQuality = 500 }));
     }
+
+    /// <summary>
+    /// Image edit mode overwrite-original (later on 2026-10-04, the user's call: it rules image_edit too): with no to the result replaces
+    /// the source, a format change writes the new name and deletes the source, an explicit to is untouched, and the description says so.
+    /// </summary>
+    [Fact]
+    public async Task OverwriteMode_ReplacesTheSource_AConversionDeletesIt_AnExplicitToUntouched()
+    {
+        _settings.ImageEditMode = "overwrite-original";
+        Put("p/cat.bmp", SmokeChecks.SolidBmp(40, 20));
+
+        Starts("replaced " + Rel("p/cat.bmp") + " (BMP, 20×40 from 40×20, ", await Text(Edit, ("path", "p/cat.bmp"), ("rotate", 90)));
+        Assert.False(Exists("p/cat-edited.bmp"));
+        string converted = await Text(Edit, ("path", "p/cat.bmp"), ("format", "png"));
+        Starts("wrote " + Rel("p/cat.png") + " (PNG", converted);
+        Ends("; deleted " + Rel("p/cat.bmp") + " (Image edit mode: overwrite-original)", converted);
+        Assert.False(Exists("p/cat.bmp"));
+        Starts("wrote " + Rel("p/copy.png"), await Text(Edit, ("path", "p/cat.png"), ("to", "p/copy.png"), ("filter", "grey")));
+        Assert.True(Exists("p/cat.png"));
+        Assert.Equal(ImageEditTool.DescriptionText + " " + ImageText.OverwriteModeSentence, Edit.Description);
+
+        _settings.ImageEditMode = "beside-original";
+        Assert.Equal(ImageEditTool.DescriptionText, Edit.Description);
+        Starts("wrote " + Rel("p/cat-edited.png"), await Text(Edit, ("path", "p/cat.png"), ("rotate", 90)));
+    }
 }

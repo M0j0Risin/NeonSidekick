@@ -932,8 +932,11 @@ public enum SettingsField
     /// <summary>A picker over none, basic and all: the metadata <c>image_edit</c> keeps when the call does not say (<see cref="Settings.AppSettingsData.ImageEditMetadata"/>). The Files tab, under Image edit quality (2026-10-04); no reconnect.</summary>
     ImageEditMetadata,
 
-    /// <summary>Typed: the folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c>, empty = beside the source (<see cref="Settings.AppSettingsData.ImageEditOutputFolder"/>). The Files tab's last row (2026-10-04), the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c>, empty = beside the source (<see cref="Settings.AppSettingsData.ImageEditOutputFolder"/>). The Files tab's last row (2026-10-04), the Camera output folder's rule; no reconnect.</summary>
     ImageEditOutputFolder,
+
+    /// <summary>A picker over beside-original and overwrite-original: where an edited picture goes, for the picture windows' right-click menu and <c>image_edit</c> (<see cref="Settings.AppSettingsData.ImageEditMode"/>). The Files tab, under Image edit metadata (later on 2026-10-04, the user's ask); no reconnect. Last in the enum, as every newcomer.</summary>
+    ImageEditMode,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1346,7 +1349,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPoliceOutsidePaths, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
-        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder],
+        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
@@ -1800,6 +1803,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileSearchMaxResults => "File search max results",
         SettingsField.ImageEditQuality => "Image edit quality",
         SettingsField.ImageEditMetadata => "Image edit metadata",
+        SettingsField.ImageEditMode => "Image edit mode",
         SettingsField.ImageEditOutputFolder => "Image edit output folder",
         SettingsField.McpServers => "MCP servers",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
@@ -2311,6 +2315,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileSearchMaxResults => Results(data.FileSearchMaxResults),
             SettingsField.ImageEditQuality => data.ImageEditQuality.ToString(CultureInfo.InvariantCulture),
             SettingsField.ImageEditMetadata => Images.ImageWords.MetadataName(data.ImageEditMetadata),
+            SettingsField.ImageEditMode => Images.ImageWords.EditModeName(data.ImageEditMode),
             SettingsField.ImageEditOutputFolder => string.IsNullOrWhiteSpace(data.ImageEditOutputFolder) ? ImageEditBesideLabel : data.ImageEditOutputFolder,
             SettingsField.McpServers => OnOff(data.McpServers),
             SettingsField.McpConnectTimeoutSeconds => Seconds(data.McpConnectTimeoutSeconds),
@@ -2719,6 +2724,10 @@ internal sealed partial class SettingsMenu
     public static string ImageEditMetadataLabel(string name) =>
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Images.ImageWords.DescribeMetadata(name));
 
+    /// <summary>A row of the image-edit mode picker: the name padded, where the result goes dim (later on 2026-10-04).</summary>
+    public static string ImageEditModeLabel(string name) =>
+        Markup.Escape(name.PadRight(20)) + Theme.DimMarkup(Images.ImageWords.DescribeEditMode(name));
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileSearchMaxResults"/> (2026-10-01). Pinned.</summary>
     public static readonly string FileSearchMaxResultsRangeError =
         "must be " + AppSettingsData.MinFileSearchMaxResults.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxFileSearchMaxResults.ToString(CultureInfo.InvariantCulture) + " results";
@@ -2900,10 +2909,17 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The police's on/off page's button (2026-10-03, the user's pick): the forbidden-strings list, opened from wherever that page
-    /// opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. Never lit: it opens, it does not switch. The list
-    /// glyph before it since later on 2026-10-03. Pinned.
+    /// opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. The list glyph before it since later on
+    /// 2026-10-03. The word the button's title starts with since 2026-10-04 (<see cref="PoliceStringsTitle"/>). Pinned.
     /// </summary>
     public const string PoliceStringsButton = "≡ strings";
+
+    /// <summary>
+    /// The strings button's title (2026-10-04, the user's ask: tell a list with strings from an empty one at a glance):
+    /// <see cref="PoliceStringsButton"/> with the count, <c>≡ strings (3)</c>, or <c>≡ strings (none)</c>. Pinned.
+    /// </summary>
+    public static string PoliceStringsTitle(int count) =>
+        PoliceStringsButton + " (" + (count == 0 ? "none" : count.ToString(CultureInfo.InvariantCulture)) + ")";
 
     /// <summary>The key that is <see cref="PoliceStringsButton"/>.</summary>
     public const char PoliceStringsKey = 's';
@@ -2911,8 +2927,11 @@ internal sealed partial class SettingsMenu
     /// <summary>The police's on/off page's hint: <see cref="PickKeys"/> with the strings button's key. Pinned.</summary>
     public const string PoliceToggleKeys = "Enter = choose · S = strings · ESC = back";
 
-    /// <summary>The police's on/off page's one button, <see cref="PoliceStringsButton"/> (2026-10-03). Pinned.</summary>
-    public static IReadOnlyList<MenuButton> PoliceButtons { get; } = [new(PoliceStringsButton, PoliceStringsKey, false)];
+    /// <summary>
+    /// The police's on/off page's one button (2026-10-03): <see cref="PoliceStringsTitle"/> for <paramref name="count"/> strings,
+    /// lit while the list holds any and dim while it is empty (2026-10-04, the user's call; it still opens the list, never switches). Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> PoliceButtons(int count) => [new(PoliceStringsTitle(count), PoliceStringsKey, count > 0)];
 
     /// <summary>
     /// One of the Web tools page's title-row buttons (2026-10-04, the user's ask: "actions at the top", as Memory's and
@@ -4042,6 +4061,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ImageEditMetadata)
         {
             return await PickImageEditMetadataAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.ImageEditMode)
+        {
+            return await PickImageEditModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.HomeAssistantTest)
@@ -5777,6 +5801,22 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
+    /// <summary>The image-edit mode picker (later on 2026-10-04): one <see cref="ImageEditModeLabel"/> row per <see cref="Images.ImageWords.EditModeNames"/> entry, the saved one under the cursor.</summary>
+    private async Task<bool> PickImageEditModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var names = Images.ImageWords.EditModeNames;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ImageEditMode)), names.Select(ImageEditModeLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, Images.ImageWords.EditModeName(saved.ImageEditMode))), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(SettingsField.ImageEditMode, d => d.ImageEditMode = name);
+        return true;
+    }
+
     /// <summary>
     /// The default-printer picker (2026-09-28): <see cref="WindowsDefaultPrinterLabel"/> first, then every installed printer (the
     /// Windows default marked), the saved one under the cursor; a saved printer no longer installed stays as a row of its own, so
@@ -6083,7 +6123,9 @@ internal sealed partial class SettingsMenu
             int cursor = was ? 0 : 1;
             while (true)
             {
-                var pressed = await PickChecklistAsync(police, cursor, cancellationToken, PoliceButtons).ConfigureAwait(false);
+                // Read again at each pass: the list may have changed under the button since the page was last drawn.
+                int strings = Shell.ForbiddenStrings.Sorted(_settings.Current.ShellPoliceForbiddenStrings).Count;
+                var pressed = await PickChecklistAsync(police, cursor, cancellationToken, PoliceButtons(strings)).ConfigureAwait(false);
                 if (pressed is { Button: >= 0 } button)
                 {
                     cursor = button.Row;

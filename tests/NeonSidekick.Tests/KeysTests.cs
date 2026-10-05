@@ -114,6 +114,7 @@ public class KeysTests
     [InlineData(ConsoleKey.T, '\x14', "/toolbar")]       // from Ctrl+Alt+B
     [InlineData(ConsoleKey.U, '\x15', "/usage")]     // from Ctrl+Alt+G
     [InlineData(ConsoleKey.Y, '\x19', "/sys")]       // from Ctrl+Alt+Y on 2026-10-03 (the user's ask)
+    [InlineData(ConsoleKey.Z, '\x1a', "/theme")]     // 2026-10-04 (the user's ask)
     public void ShortcutLine_ThePlainCtrlChords_AreTheirBareCommands_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
     {
         // Later still on 2026-10-01 (the user's ask): Ctrl+M, R and S, then H, P and U, Ctrl+E's shape — the console's CR, DC2 and DC3 and the

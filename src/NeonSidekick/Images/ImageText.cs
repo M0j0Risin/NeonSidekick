@@ -19,6 +19,36 @@ public static class ImageText
     public const string CropIncomplete = "Error: a crop needs all four of crop_x, crop_y, crop_width and crop_height";
     public const string OverwriteSource = "Error: that would write over the source picture; pass overwrite: true to replace it, or give another to";
 
+    /// <summary>
+    /// <c>image_edit</c>'s description's last sentence while <c>Image edit mode</c> is <c>overwrite-original</c> (later on 2026-10-04,
+    /// the user's call). Pinned.
+    /// </summary>
+    public const string OverwriteModeSentence =
+        "The user's Image edit mode is overwrite-original: without to, the result replaces the source picture, and a format change writes name.newext and deletes the source.";
+
+    /// <summary>A menu edit on a picture that is no longer there (2026-10-04, the picture windows' menu). Pinned.</summary>
+    public static string Gone(string name) => "Error: " + name + " is no longer there";
+
+    /// <summary>A Fit preset on a picture already within it: nothing written. Pinned.</summary>
+    public static string AlreadyFits(int side, int width, int height) =>
+        "Error: the picture is " + Size(width, height) + ", already within " + N(side) + " px; nothing was written";
+
+    /// <summary>A conversion to the format the picture already has: nothing written. Pinned.</summary>
+    public static string AlreadyFormat(ImageFormat format) => "Error: the picture is already " + format.Label + "; nothing was written";
+
+    /// <summary>A size cap the file is already under: nothing written. Pinned.</summary>
+    public static string AlreadyUnder(int kb, long bytes) =>
+        "Error: the file is " + FileText.Size(bytes) + ", already under " + N(kb) + " KB; nothing was written";
+
+    /// <summary><see cref="Written"/>'s verb for a picture that replaced its source (Image edit mode overwrite-original). Pinned.</summary>
+    public const string ReplacedVerb = "replaced";
+
+    /// <summary>What a converted picture's line adds once its source is deleted (overwrite-original). Pinned.</summary>
+    public static string SourceDeleted(string relative) => "; deleted " + relative + " (Image edit mode: overwrite-original)";
+
+    /// <summary>What a converted picture's line adds when its source could not be deleted: both are left. Pinned.</summary>
+    public static string SourceKept(string relative, string error) => "; " + relative + " was kept: " + error;
+
     /// <summary>What a written picture's line adds when the source had more frames than the one written. Pinned.</summary>
     public static string FirstOf(int frames) => "first of " + N(frames) + " frames";
 
@@ -57,10 +87,10 @@ public static class ImageText
     /// A written picture: <c>wrote photos/cat-edited.png (PNG, 1024×768 from 4032×3024, 812 KB)</c>, then what <c>max_kb</c> took and the
     /// frame note when they apply.
     /// </summary>
-    public static string Written(string relative, ImageEditResult result, int? maxKb = null)
+    public static string Written(string relative, ImageEditResult result, int? maxKb = null, string verb = "wrote")
     {
         ArgumentNullException.ThrowIfNull(result);
-        var sb = new System.Text.StringBuilder("wrote ");
+        var sb = new System.Text.StringBuilder(verb).Append(' ');
         sb.Append(relative).Append(" (").Append(result.Format.Label).Append(", ").Append(Size(result.Width, result.Height));
         if (result.Width != result.SourceWidth || result.Height != result.SourceHeight)
         {

@@ -17,7 +17,10 @@
     and ViewerImage, where its decisions and its decode live, stay covered. NeonSidekick.Viewer.LogWindow* and WindowChrome
     (2026-10-02): the log window's Win32 window and thread, and the frame it shares with the picture viewer (full screen, the
     place it last closed, the themed bar), proven by hand and by the smoke (viewer:log-window). LogViewState, LogViewStyle and
-    LogViewText, where its decisions live, stay covered.
+    LogViewText, where its decisions live, stay covered. NeonSidekick.Viewer.ThumbsWindow* and ContextMenuWindow (2026-10-04):
+    the thumbnail browser's Win32 window, its thread, watcher and reads, and the picture menu's popups; proven by hand and by the
+    smoke (viewer:thumbs, viewer:menu). ThumbsState, ThumbCache, ContextMenuState, MenuStyle, PictureMenu and PictureActions, where
+    their decisions live, stay covered.
   - NeonSidekick.Printing.WindowsPrintSpooler* and PrintNative (2026-09-28): the printers, a printer's device context and the
     shell's print verb; they need a real spooler and prove themselves in the published-exe smoke (print:spooler, a job to
     Microsoft Print to PDF) and a live fact. PrintLayout, PrintService and PrintCommand, where the decisions live, stay covered.
@@ -39,7 +42,7 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]NeonSidekick.Viewer.LogWindow*,[NeonSidekick]NeonSidekick.Viewer.WindowChrome*,[NeonSidekick]NeonSidekick.Printing.WindowsPrintSpooler*,[NeonSidekick]NeonSidekick.Printing.PrintNative,[NeonSidekick]NeonSidekick.Perf.PerfNative,[NeonSidekick]NeonSidekick.Perf.WindowsPerfSource,[NeonSidekick]NeonSidekick.Perf.NvmlGpu,[NeonSidekick]NeonSidekick.Perf.PdhGpu,[NeonSidekick]NeonSidekick.Camera.CameraNative,[NeonSidekick]NeonSidekick.Camera.MediaFoundationCameraSystem*,[NeonSidekick]Program</Exclude>
+          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]NeonSidekick.Viewer.LogWindow*,[NeonSidekick]NeonSidekick.Viewer.WindowChrome*,[NeonSidekick]NeonSidekick.Viewer.ThumbsWindow*,[NeonSidekick]NeonSidekick.Viewer.ContextMenuWindow,[NeonSidekick]NeonSidekick.Printing.WindowsPrintSpooler*,[NeonSidekick]NeonSidekick.Printing.PrintNative,[NeonSidekick]NeonSidekick.Perf.PerfNative,[NeonSidekick]NeonSidekick.Perf.WindowsPerfSource,[NeonSidekick]NeonSidekick.Perf.NvmlGpu,[NeonSidekick]NeonSidekick.Perf.PdhGpu,[NeonSidekick]NeonSidekick.Camera.CameraNative,[NeonSidekick]NeonSidekick.Camera.MediaFoundationCameraSystem*,[NeonSidekick]Program</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
           <IncludeTestAssembly>false</IncludeTestAssembly>

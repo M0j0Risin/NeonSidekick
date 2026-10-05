@@ -185,6 +185,9 @@ public enum SlashCommand
     /// <summary><c>/view &lt;image&gt;</c>: one picture from the working directory drawn in the transcript as large as the window allows — the model never sees it (2026-09-17).</summary>
     View,
 
+    /// <summary><c>/thumbs &lt;folder&gt;</c> (2026-10-04, the user's ask): the folder's pictures as thumbnails in a window of their own, beside and in step with the picture viewer.</summary>
+    Thumbs,
+
     /// <summary><c>/imagine [workflow] &lt;prompt&gt; [-- &lt;negative&gt;] [--seed N] …</c> (2026-09-24, the user's ask): the prompt sent to ComfyUI exactly as typed — no model in between — the picture drawn in the transcript and saved under the working directory, and handed to the model with the next message.</summary>
     Imagine,
 
@@ -352,6 +355,7 @@ public static class SlashCommands
             new("/sys", "show the system prompt and tools sent to the model"),
             new("/terminal", "open a new Windows Terminal in the working directory, or /terminal <folder>"),
             new("/test", "run LLM benchmark tests against the connected model and save the results: /test <id | reasoning | structured | long | all> | history, or /test to list them"),
+            new("/thumbs", "open a folder of images from the working directory as thumbnails in a window beside the picture viewer, in step with it: /thumbs <folder>"),
             new("/theme", "switch the colour theme, starting a new conversation with the splash screen, or /theme <name>"),
             new("/timer", "list timers, or /timer <duration> [name] (10m, 90s, 1h30m) | stop <name> | stop all"),
             new("/toolbar", ToolbarItems.HelpSummary),
@@ -433,7 +437,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/view", "/thumbs", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -520,6 +524,7 @@ public static class SlashCommands
             "/explore" => SlashCommand.Explore,
             "/terminal" => SlashCommand.Terminal,
             "/view" => SlashCommand.View,
+            "/thumbs" => SlashCommand.Thumbs,
             "/imagine" => SlashCommand.Imagine,
             "/comfy" => SlashCommand.Comfy,
             "/ha" => SlashCommand.HomeAssistant,
@@ -565,7 +570,7 @@ public static class SlashCommands
     /// </summary>
     public static bool TakesArgument(SlashCommand command) => command is
         SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme
-        or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Speak or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
+        or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Speak or SlashCommand.View or SlashCommand.Thumbs or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer

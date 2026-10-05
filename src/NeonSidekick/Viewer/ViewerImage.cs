@@ -32,7 +32,16 @@ public static class ViewerImage
     public static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(200);
 
     /// <summary>A picture file's bytes decoded, or null when the codecs refuse them. Pure apart from the codecs.</summary>
-    public static ViewerBitmap? Decode(byte[] bytes, string name)
+    public static ViewerBitmap? Decode(byte[] bytes, string name) => Decode(bytes, name, MaxSide, thumbnail: false);
+
+    /// <summary>
+    /// A thumbnail of a picture file's bytes (2026-10-04, the thumbnail browser): its longest side brought down to
+    /// <paramref name="side"/> (never up: a smaller picture is kept whole), MagicScaler's fast hybrid scaling on, as befits a tile.
+    /// Null when the codecs refuse them. Pure apart from the codecs.
+    /// </summary>
+    public static ViewerBitmap? DecodeThumbnail(byte[] bytes, string name, int side) => Decode(bytes, name, Math.Max(1, side), thumbnail: true);
+
+    private static ViewerBitmap? Decode(byte[] bytes, string name, int maxSide, bool thumbnail)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         ArgumentNullException.ThrowIfNull(name);
@@ -45,11 +54,15 @@ public static class ViewerImage
             }
 
             var settings = new ProcessImageSettings();
-            if (Math.Max(info.Frames[0].Width, info.Frames[0].Height) > MaxSide)
+            if (Math.Max(info.Frames[0].Width, info.Frames[0].Height) > maxSide)
             {
-                settings.Width = MaxSide;
-                settings.Height = MaxSide;
+                settings.Width = maxSide;
+                settings.Height = maxSide;
                 settings.ResizeMode = CropScaleMode.Max;
+                if (thumbnail)
+                {
+                    settings.HybridMode = HybridScaleMode.Turbo;
+                }
             }
 
             using var source = new MemoryStream(bytes, writable: false);
@@ -81,12 +94,14 @@ public static class ViewerImage
     /// <summary>
     /// <paramref name="path"/> read (shared, so ComfyUI's own handle is never in the way) and decoded, up to
     /// <see cref="Attempts"/> times <see cref="RetryDelay"/> apart; null when every attempt failed or it was cancelled.
-    /// <paramref name="delay"/> is the wait (tests pass none).
+    /// <paramref name="delay"/> is the wait (tests pass none); <paramref name="decode"/> the decoder (<see cref="Decode(byte[], string)"/>
+    /// unless given: the thumbnail browser passes <see cref="DecodeThumbnail"/>'s, 2026-10-04).
     /// </summary>
-    public static async Task<ViewerBitmap?> LoadAsync(string path, CancellationToken cancellationToken, Func<TimeSpan, CancellationToken, Task>? delay = null)
+    public static async Task<ViewerBitmap?> LoadAsync(string path, CancellationToken cancellationToken, Func<TimeSpan, CancellationToken, Task>? delay = null, Func<byte[], string, ViewerBitmap?>? decode = null)
     {
         ArgumentNullException.ThrowIfNull(path);
         delay ??= Task.Delay;
+        decode ??= Decode;
         string name = Path.GetFileName(path);
         for (int attempt = 1; attempt <= Attempts; attempt++)
         {
@@ -122,7 +137,7 @@ public static class ViewerImage
                 DiagnosticLog.Trace("Viewer", $"{name}: read {attempt} of {Attempts} failed: {e.Message}");
             }
 
-            if (bytes is not null && Decode(bytes, name) is { } bitmap)
+            if (bytes is not null && decode(bytes, name) is { } bitmap)
             {
                 return bitmap;
             }
@@ -144,10 +159,20 @@ public static class ViewerImage
     }
 
     /// <summary><see cref="LoadAsync"/>, its answer handed to <paramref name="done"/> (the window's thread cannot await: its class is unsafe).</summary>
-    public static async Task LoadThenAsync(string path, CancellationToken cancellationToken, Action<ViewerBitmap?> done)
+    public static async Task LoadThenAsync(string path, CancellationToken cancellationToken, Action<ViewerBitmap?> done, Func<byte[], string, ViewerBitmap?>? decode = null)
     {
         ArgumentNullException.ThrowIfNull(done);
-        done(await LoadAsync(path, cancellationToken).ConfigureAwait(false));
+        ViewerBitmap? bitmap = null;
+        try
+        {
+            bitmap = await LoadAsync(path, cancellationToken, decode: decode).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Trace("Viewer", $"{Path.GetFileName(path)}: {ex.Message}");
+        }
+
+        done(bitmap);
     }
 
     /// <summary>Packed pixels to GDI's 32-bit order: BGR as it is, grey spread over the channels, BGRA blended over black. Pure.</summary>

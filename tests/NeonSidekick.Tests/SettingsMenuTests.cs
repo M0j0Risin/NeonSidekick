@@ -927,6 +927,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows
                 SettingsField.DiffCollapseCount,   // later still on 2026-10-04, /tools' Options tab under Diff max lines: the diff's fold
                 SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder,   // later still on 2026-10-04, /tools' Files tab: image_edit's defaults
+                SettingsField.ImageEditMode,   // later still on 2026-10-04: the picture menu's and image_edit's
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1247,7 +1248,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("folder-remain " + Theme.DimMarkup("insert @folder/ and keep listing inside it"), SettingsMenu.MentionFolderModeLabel("folder-remain"));
         // The Files tab (2026-09-15; /tools' second since 2026-09-19): the file-tools switch first (the Safe edits switch under it from 2026-09-17 until 2026-10-01, when File safe edits went),
         // then the two /tree rows that were General's last two, then the @-mention folder mode (General's until 2026-09-17); none a reconnect, none refused mid-turn (read at each tool call).
-        Assert.Equal(new[] { SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder }, ToolsMenuTests.TabFields(ToolsText.FilesTabTitle));   // image_edit's three last (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
+        Assert.Equal(new[] { SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder }, ToolsMenuTests.TabFields(ToolsText.FilesTabTitle));   // image_edit's three last (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
         Assert.True(SettingsMenu.IsToggle(SettingsField.FileTools));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.FileTools));
         Assert.Equal("File tools", SettingsMenu.FieldName(SettingsField.FileTools));

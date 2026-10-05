@@ -47,6 +47,9 @@ public enum ViewerAction
 
     /// <summary>Esc during the slide show: the show stopped (the window stays).</summary>
     StopSlideShow,
+
+    /// <summary>The Apps key or Shift+F10 (2026-10-04): the picture menu on the shown picture, as a right-click opens it.</summary>
+    Menu,
 }
 
 /// <summary>
@@ -268,6 +271,29 @@ public sealed class ViewerState
         return !string.Equals(before, Current, StringComparison.OrdinalIgnoreCase) || Live;
     }
 
+    /// <summary>Whether <paramref name="path"/> is one of the folder's listed pictures.</summary>
+    public bool Contains(string path) => IndexOf(path) >= 0;
+
+    /// <summary>
+    /// A listed picture written again in place (2026-10-04: the picture menu's <c>overwrite-original</c>, a replace that arrives as a
+    /// rename onto the name, or a write's own change): it stays where it is — <see cref="Add"/> would move it to the newest and a held
+    /// window would slide off it. True when it is the shown one, which is then read again.
+    /// </summary>
+    public bool Touched(string path) => string.Equals(Current, path, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The pictures a wheel turn of <paramref name="delta"/> (120 a notch) steps (2026-10-04, the user's ask: the wheel browses the
+    /// viewer): one a notch, a precision touchpad's small turns added up in <paramref name="remainder"/>. Positive is a turn away from
+    /// the user, which steps newer (←); negative steps older (→), as a list scrolls down. Pure.
+    /// </summary>
+    public static int WheelSteps(ref int remainder, int delta)
+    {
+        remainder += delta;
+        int steps = remainder / 120;
+        remainder -= steps * 120;
+        return steps;
+    }
+
     /// <summary>A picture that left (deleted, or renamed out): gone from the list. True when the shown picture changed.</summary>
     public bool Remove(string path)
     {
@@ -344,14 +370,17 @@ public sealed class ViewerState
     public const int VkUp = 0x26;
     public const int VkDown = 0x28;
     public const int VkDelete = 0x2E;
+    public const int VkApps = 0x5D;
     public const int VkF9 = 0x78;
     public const int VkF10 = 0x79;
     public const int VkF11 = 0x7A;
 
-    /// <summary>What a key does: ← newer / → older, Home newest / End oldest (the strip's way since 2026-10-03), F9–F11, ↑/↓, Del, and Esc — the slide show stopped first, then out of full screen, then the window closed. Pure.</summary>
-    public static ViewerAction ActionFor(int virtualKey, bool fullScreen, bool slideShow = false) => virtualKey switch
+    /// <summary>What a key does: ← newer / → older, Home newest / End oldest (the strip's way since 2026-10-03), F9–F11, ↑/↓, Del, the Apps key or Shift+F10 the picture menu (2026-10-04), and Esc — the slide show stopped first, then out of full screen, then the window closed. Pure.</summary>
+    public static ViewerAction ActionFor(int virtualKey, bool fullScreen, bool slideShow = false, bool shift = false) => virtualKey switch
     {
         VkEscape when slideShow => ViewerAction.StopSlideShow,
+        VkF10 when shift => ViewerAction.Menu,
+        VkApps => ViewerAction.Menu,
         VkF9 => ViewerAction.ToggleSlideShow,
         VkF10 => ViewerAction.ToggleShuffle,
         VkUp => ViewerAction.LongerSlides,

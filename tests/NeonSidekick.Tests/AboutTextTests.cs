@@ -142,6 +142,7 @@ public class AboutTextTests
     {
         Assert.Equal("NeonSidekick 0.2.0", AboutText.TitleLine(Facts));
         Assert.Equal("© 2026 Christopher Nelson · GNU GPL v3 (the License tab)", AboutText.CopyrightLine);
+        Assert.Equal("NeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick", AboutText.RepositoryLine);   // 2026-10-04
     }
 
     [Fact]
@@ -182,14 +183,15 @@ public class AboutTextTests
         Assert.Equal("General", lines[0]);
         Assert.Equal("  NeonSidekick 0.2.0", lines[1]);
         Assert.Equal("  " + AboutText.CopyrightLine, lines[2]);
-        Assert.Equal("  Runtime      .NET 10.0.0 · native AOT · x64", lines[3]);
-        Assert.Equal(@"  Executable   D:\Apps\NeonSidekick\NeonSidekick.exe", lines[5]);
-        Assert.Equal("  Embedded     " + AboutText.EmbeddedLine(Facts), lines[10]);
-        Assert.Equal("  Speech       " + AboutText.SpeechLine, lines[11]);
-        Assert.Equal("Components", lines[12]);
-        Assert.Equal("  Spectre.Console 0.57.2 · MIT · the terminal UI: the transcript, the panes, the thumbnails", lines[13]);
+        Assert.Equal("  " + AboutText.RepositoryLine, lines[3]);
+        Assert.Equal("  Runtime      .NET 10.0.0 · native AOT · x64", lines[4]);
+        Assert.Equal(@"  Executable   D:\Apps\NeonSidekick\NeonSidekick.exe", lines[6]);
+        Assert.Equal("  Embedded     " + AboutText.EmbeddedLine(Facts), lines[11]);
+        Assert.Equal("  Speech       " + AboutText.SpeechLine, lines[12]);
+        Assert.Equal("Components", lines[13]);
+        Assert.Equal("  Spectre.Console 0.57.2 · MIT · the terminal UI: the transcript, the panes, the thumbnails", lines[14]);
         int license = Array.IndexOf(lines, "License");
-        Assert.Equal(13 + AboutText.Components.Count, license);
+        Assert.Equal(14 + AboutText.Components.Count, license);
         Assert.Equal("                      GNU GENERAL PUBLIC LICENSE", lines[license + 1]);   // the FSF's own centring, verbatim
         Assert.Equal("  <https://www.gnu.org/licenses/why-not-lgpl.html>.", lines[^1]);
     }
@@ -203,7 +205,7 @@ public class AboutTextTests
         console.Write(AboutText.AboutTab(Facts));
 
         string output = string.Join("\n", console.Output.Split('\n').Select(l => l.TrimEnd()));
-        Assert.StartsWith("NeonSidekick 0.2.0\n© 2026 Christopher Nelson · GNU GPL v3 (the License tab)\n\nRuntime      .NET 10.0.0 · native AOT · x64\nOS           Microsoft Windows 10.0.26200\nExecutable   D:\\Apps\\NeonSidekick\\NeonSidekick.exe\n\nHome         C:\\Users\\chris\\.neonsidekick\nProfile      C:\\Users\\chris\\.neonsidekick\\profiles\\default\nModels       C:\\Users\\chris\\.neonsidekick\\models\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
+        Assert.StartsWith("NeonSidekick 0.2.0\n© 2026 Christopher Nelson · GNU GPL v3 (the License tab)\nNeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick\n\nRuntime      .NET 10.0.0 · native AOT · x64\nOS           Microsoft Windows 10.0.26200\nExecutable   D:\\Apps\\NeonSidekick\\NeonSidekick.exe\n\nHome         C:\\Users\\chris\\.neonsidekick\nProfile      C:\\Users\\chris\\.neonsidekick\\profiles\\default\nModels       C:\\Users\\chris\\.neonsidekick\\models\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
         Assert.Contains("\nSpeech       " + AboutText.SpeechLine + "\n", output);
     }
 

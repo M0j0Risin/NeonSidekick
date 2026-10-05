@@ -14,12 +14,22 @@ namespace NeonSidekick.Viewer;
 /// monospace font, its metrics, a memory DC drawn and copied in one go — and the wheel, cursor and DPI messages; the smoke's
 /// <c>viewer:log-window</c> proves those. The viewer's arrows (2026-10-03, <see cref="ViewerNav"/>) add gdi32's
 /// <c>GdiAlphaBlend</c> over a <c>CreateDIBSection</c> (still gdi32, no msimg32), user32's <c>TrackMouseEvent</c> for the mouse
-/// leaving, and the hand cursor; <c>viewer:window</c> blends one.
+/// leaving, and the hand cursor; <c>viewer:window</c> blends one. The thumbnail browser and the picture menu (2026-10-04,
+/// <c>ThumbsWindow</c>, <c>ContextMenuWindow</c>) add the right button, a no-activate popup class with a drop shadow, a
+/// proportional font measured by <c>DrawTextW</c>, the cursor and monitor lookups a popup places itself with, and shell32's
+/// <c>SHOpenFolderAndSelectItems</c> for Show in Explorer — the shell's own call, no <c>explorer.exe</c> started by us, so no
+/// process-start site; <c>viewer:thumbs</c> and <c>viewer:menu</c> prove them.
 /// </summary>
 internal static unsafe partial class ViewerNative
 {
     public const uint WmCreate = 0x0001;
     public const uint WmDestroy = 0x0002;
+    public const uint WmMove = 0x0003;
+    public const uint WmKillFocus = 0x0008;
+    public const uint WmMouseActivate = 0x0021;
+    public const uint WmContextMenu = 0x007B;
+    public const uint WmRightButtonDown = 0x0204;
+    public const uint WmRightButtonUp = 0x0205;
     public const uint WmSize = 0x0005;
     public const uint WmActivate = 0x0006;
     public const uint WmPaint = 0x000F;
@@ -44,6 +54,18 @@ internal static unsafe partial class ViewerNative
     public const uint CsVRedraw = 0x0001;
     public const uint CsHRedraw = 0x0002;
     public const uint CsDoubleClicks = 0x0008;
+
+    /// <summary>CS_DROPSHADOW: the picture menu's popups cast the system's shadow (2026-10-04).</summary>
+    public const uint CsDropShadow = 0x00020000;
+
+    /// <summary>WS_EX_TOPMOST, WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE: the picture menu's popups sit over their window, stay off the
+    /// taskbar and never take the keyboard from it (2026-10-04).</summary>
+    public const uint WsExTopmost = 0x00000008;
+    public const uint WsExToolWindow = 0x00000080;
+    public const uint WsExNoActivate = 0x08000000;
+
+    /// <summary>MA_NOACTIVATE: WM_MOUSEACTIVATE's answer that a click on a popup leaves the active window as it is.</summary>
+    public const int MaNoActivate = 3;
 
     public const uint WsOverlappedWindow = 0x00CF0000;
     public const uint WsPopup = 0x80000000;
@@ -80,6 +102,10 @@ internal static unsafe partial class ViewerNative
     public const uint DtWordBreak = 0x0010;
     public const uint DtSingleLine = 0x0020;
     public const uint DtNoPrefix = 0x0800;
+    public const uint DtLeft = 0x0000;
+    public const uint DtRight = 0x0002;
+    public const uint DtCalcRect = 0x0400;
+    public const uint DtEndEllipsis = 0x8000;
 
     public const uint ImageIcon = 1;
     public const uint LrDefaultSize = 0x0040;
@@ -96,6 +122,9 @@ internal static unsafe partial class ViewerNative
 
     /// <summary>MK_SHIFT: Shift is down, in a mouse message's wParam.</summary>
     public const int MkShift = 0x0004;
+
+    /// <summary>MK_CONTROL: Ctrl is down, in a mouse message's wParam (the thumbnails' Ctrl+wheel zoom, 2026-10-04).</summary>
+    public const int MkControl = 0x0008;
 
     /// <summary>The idc ibeam cursor: over the log window's text.</summary>
     public const int IdcIBeam = 32513;
@@ -137,6 +166,9 @@ internal static unsafe partial class ViewerNative
     public const uint DefaultCharset = 1;
     public const uint ClearTypeQuality = 5;
     public const uint FixedPitchModern = 0x01 | 0x30;
+
+    /// <summary>VARIABLE_PITCH | FF_SWISS: Segoe UI, the thumbnails' captions and the picture menu (2026-10-04).</summary>
+    public const uint VariablePitchSwiss = 0x02 | 0x20;
 
     /// <summary>SM_CXDRAG / SM_CYDRAG: the rectangle, centred on a press, a move must leave before it is a drag.</summary>
     public const int SmCxDrag = 68;
@@ -516,6 +548,24 @@ internal static unsafe partial class ViewerNative
     public static partial IntPtr SetCursor(IntPtr hCursor);
 
     [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetCursorPos(Point* lpPoint);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ClientToScreen(IntPtr hWnd, Point* lpPoint);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr MonitorFromPoint(Point pt, uint dwFlags);
+
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetCapture();
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetWindowRect(IntPtr hWnd, Rect* lpRect);
+
+    [LibraryImport("user32.dll")]
     public static partial IntPtr GetDC(IntPtr hWnd);
 
     [LibraryImport("user32.dll")]
@@ -591,6 +641,10 @@ internal static unsafe partial class ViewerNative
 
     [LibraryImport("shell32.dll")]
     public static partial void ILFree(IntPtr pidl);
+
+    /// <summary>The folder of a full item ID list opened (or found open) in Explorer with the item selected (Show in Explorer, 2026-10-04).</summary>
+    [LibraryImport("shell32.dll")]
+    public static partial int SHOpenFolderAndSelectItems(IntPtr pidlFolder, uint cidl, IntPtr* apidl, uint dwFlags);
 
     // DWMWINDOWATTRIBUTE (dwmapi.h): the dark bar from Windows 10 20H1, the colours from Windows 11 (22000); older
     // builds answer E_INVALIDARG and keep their bar.

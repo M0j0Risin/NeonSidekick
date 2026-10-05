@@ -135,6 +135,8 @@ public static class Keys
     /// <see cref="ConsoleKey.OemPeriod"/>: "." has no control character, so the console reports the key with none, and a typed
     /// "." carries its character and stays a ".". OemPeriod is the "." key of a US layout and of most others; Shift, Alt and
     /// Ctrl+Alt are no chord.
+    /// On 2026-10-04 (the user's ask) Ctrl+Z is <c>/theme</c>, the theme picker: its SUB counts as no character. Nothing in the
+    /// app used Ctrl+Z (the line has no undo), and the app's windows hand it back to the terminal as every Ctrl chord.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -153,6 +155,7 @@ public static class Keys
                 (ConsoleKey.T, '\0' or '\x14') => "/toolbar",
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 (ConsoleKey.Y, '\0' or '\x19') => "/sys",
+                (ConsoleKey.Z, '\0' or '\x1a') => "/theme",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 (ConsoleKey.OemPeriod, '\0') => "/terminal",
                 _ => null,

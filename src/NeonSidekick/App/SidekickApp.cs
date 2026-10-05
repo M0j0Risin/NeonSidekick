@@ -109,6 +109,9 @@ public sealed class SidekickApp
     private readonly Action<string>? _openViewer;
     private readonly Action<string>? _viewPicture;
     private readonly Action<string>? _followViewer;
+    private readonly Action<string, string?>? _openThumbs;
+    private readonly Action<string>? _followThumbs;
+    private readonly Action<string>? _showInViewer;
 
     // The interactive screen while it runs (2026-09-28): the viewer's keys reach its strip through ViewerBrowsed.
     private volatile ChatScreen? _screen;
@@ -204,8 +207,15 @@ public sealed class SidekickApp
         Action? openLogWindow = null,
         Func<bool>? closeLogWindow = null,
         Func<bool>? closeViewer = null,
-        Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null)
+        Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null,
+        Action<string, string?>? openThumbs = null,
+        Action<string>? followThumbs = null,
+        Action<string>? showInViewer = null)
     {
+        // The thumbnail browser (2026-10-04): ThumbsWindow and PictureWindow.ShowQuietly in the app on Windows, null in tests and elsewhere.
+        _openThumbs = openThumbs;
+        _followThumbs = followThumbs;
+        _showInViewer = showInViewer;
         // The screen (2026-10-04): GDI in the app on Windows, a fake in tests, none elsewhere.
         _screenSystem = screenSystem;
         _hotkeyProbe = hotkeyProbe;
@@ -1941,7 +1951,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;
@@ -1970,6 +1980,18 @@ public sealed class SidekickApp
     /// screen. Any thread.
     /// </summary>
     public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
+
+    /// <summary>The picture the thumbnail browser's user picked (2026-10-04, <see cref="Viewer.ThumbsWindow.Picked"/>): the running screen moves the viewer and the strip (<see cref="ChatScreen.ThumbsPicked"/>). Any thread.</summary>
+    public void ThumbsPicked(string path) => _screen?.ThumbsPicked(path);
+
+    /// <summary>The picture menu's Attach to the chat (2026-10-04, <see cref="Viewer.PictureMenu.Attach"/>): queued for the running screen's idle line. Any thread.</summary>
+    public void AttachPicture(string path) => _screen?.AttachPicture(path);
+
+    /// <summary>The picture menu's Print (2026-10-04, <see cref="Viewer.PictureMenu.Print"/>): queued for the running screen's idle line. Any thread.</summary>
+    public void PrintPicture(string path) => _screen?.PrintPicture(path);
+
+    /// <summary>What a picture menu row did (2026-10-04, <see cref="Viewer.PictureMenu.Reported"/>), as a line in the running screen's chat. Any thread.</summary>
+    public void PictureReported(string line, bool error) => _screen?.PictureReported(line, error);
 
     /// <summary>
     /// The flag or variable that outranks the saved value of <paramref name="field"/> this launch,

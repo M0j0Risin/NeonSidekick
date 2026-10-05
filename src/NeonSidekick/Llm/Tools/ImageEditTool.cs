@@ -17,6 +17,9 @@ namespace NeonSidekick.Llm.Tools;
 /// source (or in <c>Image edit output folder</c>) as <c>photo-edited.png</c>, or <c>photo.png</c> for a bare conversion, a
 /// <c>-2</c> on a clash; never over a file without <c>overwrite</c>. A file tool: <c>File tools</c> rules it, no confirm (a
 /// sandbox write, as <c>write_file</c>'s), not in plan mode. <c>view: true</c> attaches the result as <c>view_image</c> would.
+/// Under <c>Image edit mode</c> <c>overwrite-original</c> (later on 2026-10-04, the user's call: the setting rules the picture
+/// windows' menu and this tool alike) a call with no <c>to</c> replaces the source instead, a format change writing
+/// <c>photo.jpg</c> beside it and deleting <c>photo.png</c>; the description says so while the mode is on.
 /// </summary>
 public sealed class ImageEditTool : FileTool
 {
@@ -118,7 +121,14 @@ public sealed class ImageEditTool : FileTool
 
     public override string Name => ToolName;
 
-    public override string Description => DescriptionText;
+    public override string Description => DescriptionFor(_effective());
+
+    /// <summary><see cref="DescriptionText"/>, and <see cref="ImageText.OverwriteModeSentence"/> after it while <c>Image edit mode</c> is <c>overwrite-original</c> (later on 2026-10-04). Pure.</summary>
+    public static string DescriptionFor(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return ImageWords.EditModeOf(effective.ImageEditMode) == ImageEditMode.OverwriteOriginal ? DescriptionText + " " + ImageText.OverwriteModeSentence : DescriptionText;
+    }
 
     /// <summary>The description. Pinned.</summary>
     public const string DescriptionText =
@@ -414,14 +424,19 @@ public sealed class ImageEditTool : FileTool
             return ImageText.NothingToDo;
         }
 
-        var (target, nameError) = ImageOutput.OutputFor(to, toIsFolder, read.Relative, format, onlyFormatChanged: !request.ChangesPixels && !sameFormat, effective.ImageEditOutputFolder);
+        // Image edit mode overwrite-original (later on 2026-10-04): no to, so the result takes the source's place — the same name, or
+        // a format change's name beside it with the source deleted after. Image edit output folder is not asked then.
+        bool replace = to.Length == 0 && ImageWords.EditModeOf(effective.ImageEditMode) == ImageEditMode.OverwriteOriginal;
+        var (target, nameError) = replace && sameFormat
+            ? (read.Relative, null)
+            : ImageOutput.OutputFor(to, toIsFolder, read.Relative, format, onlyFormatChanged: replace || (!request.ChangesPixels && !sameFormat), replace ? null : effective.ImageEditOutputFolder);
         if (target is null)
         {
             return nameError;
         }
 
         bool named = to.Length > 0 && !toIsFolder;
-        if (!overwrite && ImageOutput.SamePath(target, read.Relative))
+        if (!overwrite && !replace && ImageOutput.SamePath(target, read.Relative))
         {
             return ImageText.OverwriteSource;
         }
@@ -434,7 +449,11 @@ public sealed class ImageEditTool : FileTool
 
         cancellationToken.ThrowIfCancellationRequested();
         WriteResult written;
-        if (named || overwrite)
+        if (replace && sameFormat)
+        {
+            written = Files.WriteBytes(target, result.Bytes, overwrite: true);
+        }
+        else if (named || overwrite)
         {
             written = Files.WriteBytes(target, result.Bytes, overwrite);
         }
@@ -454,7 +473,23 @@ public sealed class ImageEditTool : FileTool
             return FileText.Error(written.Outcome, written.Relative, "write", written.Detail);
         }
 
-        string text = ImageText.Written(written.Relative, result, request.MaxKb);
+        string text;
+        if (replace && sameFormat)
+        {
+            text = ImageText.Written(written.Relative, result, request.MaxKb, ImageText.ReplacedVerb);
+        }
+        else if (replace)
+        {
+            // The converted picture is written: the source goes now. A refusal leaves both, and says so.
+            var deleted = Files.Delete(read.Relative);
+            text = ImageText.Written(written.Relative, result, request.MaxKb) + (deleted.Outcome == FileOutcome.Ok
+                ? ImageText.SourceDeleted(deleted.Relative)
+                : ImageText.SourceKept(read.Relative, FileText.Error(deleted.Outcome, deleted.Relative, "delete", deleted.Detail)));
+        }
+        else
+        {
+            text = ImageText.Written(written.Relative, result, request.MaxKb);
+        }
         if (!view)
         {
             return text;

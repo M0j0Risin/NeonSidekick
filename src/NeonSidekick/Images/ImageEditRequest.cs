@@ -56,6 +56,18 @@ public enum ImageMetadataPolicy
     All,
 }
 
+/// <summary>
+/// Where an edited picture goes when nothing names a place (later on 2026-10-04, <c>Image edit mode</c>): beside the source as a new
+/// file, or over the source.
+/// </summary>
+public enum ImageEditMode
+{
+    BesideOriginal,
+
+    /// <summary>The result replaces the source; a format change writes the new name and deletes the source.</summary>
+    OverwriteOriginal,
+}
+
 /// <summary>Chroma subsampling for a JPEG.</summary>
 public enum ImageChroma
 {
@@ -135,6 +147,9 @@ public static class ImageWords
     /// <summary>The metadata policies by name, in the picker's order. Pinned.</summary>
     public static readonly string[] MetadataNames = ["none", "basic", "all"];
 
+    /// <summary>The edit modes by name, in the picker's order (later on 2026-10-04, <c>Image edit mode</c>). Pinned.</summary>
+    public static readonly string[] EditModeNames = ["beside-original", "overwrite-original"];
+
     public static bool TryParseFit(string text, out ImageFit fit) => TryParse(text, out fit, ("contain", ImageFit.Contain), ("cover", ImageFit.Cover), ("fill", ImageFit.Cover), ("crop", ImageFit.Cover), ("pad", ImageFit.Pad), ("stretch", ImageFit.Stretch), ("shrink", ImageFit.Shrink), ("max", ImageFit.Shrink));
 
     public static bool TryParseAnchor(string text, out ImageAnchor anchor) => TryParse(text.Replace('_', '-').Replace(' ', '-'), out anchor,
@@ -159,6 +174,20 @@ public static class ImageWords
 
     /// <summary>A metadata setting as its name (<see cref="MetadataNames"/>); an unknown one reads as <c>none</c>.</summary>
     public static string MetadataName(string? setting) => MetadataNames[(int)MetadataOf(setting)];
+
+    /// <summary>An edit-mode setting as the mode it names; an unknown or empty one is beside-original (the safe reading). Case and <c>_</c> for <c>-</c> do not matter.</summary>
+    public static ImageEditMode EditModeOf(string? setting) =>
+        string.Equals((setting ?? "").Trim().Replace('_', '-'), EditModeNames[1], StringComparison.OrdinalIgnoreCase) ? ImageEditMode.OverwriteOriginal : ImageEditMode.BesideOriginal;
+
+    /// <summary>An edit-mode setting as its name (<see cref="EditModeNames"/>); an unknown one reads as <c>beside-original</c>.</summary>
+    public static string EditModeName(string? setting) => EditModeNames[(int)EditModeOf(setting)];
+
+    /// <summary>Where an edit mode puts the result, for the picker's dim note. Pinned.</summary>
+    public static string DescribeEditMode(string name) => EditModeOf(name) switch
+    {
+        ImageEditMode.OverwriteOriginal => "the result replaces the picture; a format change deletes the old file",
+        _ => "a new file beside the picture (photo-edited.png)",
+    };
 
     /// <summary>What a metadata policy keeps, for the picker's dim note. Pinned.</summary>
     public static string DescribeMetadata(string name) => MetadataOf(name) switch

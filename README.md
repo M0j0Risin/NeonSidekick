@@ -172,6 +172,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+T | `/toolbar` (toolbar on/off) | at once |
 | Ctrl+U | `/usage` | opens over the reply |
 | Ctrl+Y | `/sys` | opens over the reply |
+| Ctrl+Z | `/theme` | waits for the reply |
 | Ctrl+Alt+C | `/clear` | stops the reply first |
 | Ctrl+Alt+N | `/new` | stops the reply first |
 | Ctrl+Alt+P | `/splash` | stops the reply first |
@@ -201,7 +202,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Behaviour | Commands |
 |---|---|
 | Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/persona`, `/operata`, `/vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/view <path>` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/thumbs <folder>` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -690,6 +691,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | File search max results | The most rows one `search_files` or `unc_search` call returns, whatever its `limit` (1–5000). Without `limit`: 50 hits, 200 entries, 100 names or 10 recent files. | 200 |
 | Image edit quality | The quality `image_edit` writes a JPEG (or JPEG XL, HEIF) at when the model gives none (1–100), and where `max_kb` starts lowering it from. | 90 |
 | Image edit metadata | What metadata `image_edit` keeps unless the model asks otherwise: `none` (no camera, date or place), `basic` (author, copyright, title, comment, date taken, camera, exposure) or `all` (basic and the GPS position). | `none` |
+| Image edit mode | Where an edited picture goes, for the picture windows' right-click menu and `image_edit` (when the model names no `to`): `beside-original` writes a new file beside the source (`image_edit` uses *Image edit output folder* when set), `overwrite-original` replaces the source (a format change writes the new file and deletes the old). No confirmation. | `beside-original` |
 | Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the working directory, made on first use. Empty writes beside the source. | (beside the source) |
 
 #### Shell
@@ -1003,7 +1005,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 | Command | What it does |
 |---|---|
-| `/about` | Shows the version, runtime, folders, components and licence. |
+| `/about` | Shows the version, the GitHub repository, runtime, folders, components and licence. |
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
 | `/clear` | Starts a new conversation and clears the screen. |
@@ -1092,11 +1094,13 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
 | `/vault [path]` | Shows a tree of the *Obsidian vault* (or a folder in it) in a pane, like `/tree`. |
 | `/view <image or folder> [--chat]` | Opens an image (or a folder's newest picture) in the picture viewer; `--chat` draws it in the transcript instead. |
+| `/thumbs <folder>` | Opens a folder of the working directory as thumbnails in a window beside the picture viewer, in step with it (see Thumbnail browser). |
 | `/imagine [workflow] <prompt> [-- <negative> \| --no-negative] [--seed N] [--size WxH] [--steps N] [--cfg X] [--denoise X] [--image <path>] [--image2 <path>] [--image3 <path>] [--count N]` | Generates a picture on ComfyUI from your prompt exactly as typed. See Imagine options. |
 | `/comfy` | The ComfyUI server's status, the workflows found, skipped files and where workflows go, in a pane (a server that doesn't answer is an error line in the chat). |
 | `/comfy edit json <workflow>`, `/comfy edit markdown <workflow>` | Opens a workflow's graph, or its `.md` (created if missing), in your editor. |
 | `/comfy offered` | Lists the workflows currently offered to the model in a pane, one bullet each. |
 | `/comfy view` | Opens the picture viewer on the output folder. |
+| `/comfy thumbs` | Opens the thumbnail browser on the output folder. |
 | `/comfy purge` | Deletes everything in the output folder, `.pasted` included, after a yes/no. Refused when it is the working directory. |
 | `/vocalia [reset \| copy <profile> [force]]` | Edits `vocalia.md` (the voice directive, empty by default, added last to every spoken reply), removes it, or copies it to another profile. |
 | `/wake [on\|off]` | Toggles the wake word. |
@@ -1214,6 +1218,8 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 | Key | Action |
 |---|---|
 | ← / → | Newer / older picture, the strip's way (the newest is at the left and counts 1 in the title); reaching the newest follows new pictures again |
+| The mouse wheel | Up: newer, down: older, a picture a notch |
+| Right-click, the Apps key or Shift+F10 | The picture menu (see below) |
 | Click **<** / **>** | The same as ← / →. The two round arrows fade in at the sides while the mouse is over the window; **<** is hidden on the newest picture and **>** on the oldest |
 | Home / End | Newest (following again) / oldest picture |
 | F11 or double-click | Toggle full screen |
@@ -1228,8 +1234,32 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 
 * It wears the theme unless *Themed external windows* is off (a `/theme` change shows when it is next focused). There is one viewer, and it closes with the app.
 * It reopens where it was last closed (saved in the profile), at the default size.
-* It and the ComfyUI picture strip follow each other: browsing the viewer highlights the same picture in the strip, and picking one on the strip moves the viewer to it without bringing it forward.
+* It, the thumbnail browser and the ComfyUI picture strip follow each other: browsing the viewer highlights the same picture in the strip and the browser, and picking one on the strip or in the browser moves the viewer to it without bringing it forward.
+* **The picture menu** (a right-click on the picture, here and in the thumbnail browser) is drawn in the theme: *Rotate and flip* (right, left, 180°, horizontally, vertically), *Colour* (greyscale, sepia, negative, polaroid), *Resize* (50%, 25%, or fit in 3840, 1920, 1280, 1024 or 512 px, never enlarging), *Convert to* PNG, JPEG, GIF or BMP, *Shrink the file* under 2 MB, 1 MB, 500 KB or 200 KB, then *Copy the path*, *Show in Explorer*, *Attach to the chat* (pasted onto the input line as a picture), *Print*, and *Delete* (permanent, no confirmation). Its last row shows *Image edit mode*: `beside-original` writes `photo-edited.png` beside the picture and shows it, `overwrite-original` replaces the picture (a conversion writes the new file and deletes the old). An edit that would change nothing says so and writes nothing. What each row did is a line in the chat. Edits use *Image edit quality* and *Image edit metadata*, as `image_edit` does.
 * The camera's live view (*Camera preview* `live`, `/camera live`) is a separate window, so both can be open. It shows the camera mirrored, then the photo, never takes the keyboard, answers only F11, a double-click and Esc (plus Tab and the chords that go to the chat, as in the viewer; Ctrl+Alt+V closes it), and remembers its own place.
+
+#### Thumbnail browser
+
+`/thumbs <folder>` (a folder of the working directory) or `/comfy thumbs` (the ComfyUI output folder) opens the folder's pictures as thumbnails in a window of their own (Windows only), oldest first.
+
+* **In step:** a click on a thumbnail moves the picture viewer to it without taking the keyboard (opening the viewer when it is closed); the viewer's own keys and the strip's arrows move the selection here.
+* **No jumping:** new pictures go on the end and nothing already shown moves. A view scrolled to the bottom of a long folder stays at the bottom as pictures arrive.
+* **Size:** the thumbnails are as large as fits every picture in the window (down to a smallest size, then the window scrolls), chosen when it opens, is resized or goes full screen, and on F5. + and − (or Ctrl+wheel) make them bigger or smaller for the session; F5 fits them again.
+* **The picture menu:** a right-click on a thumbnail (or the Apps key, Shift+F10) opens the same menu as in the viewer, with *Open in the viewer* first.
+
+| Key | Action |
+|---|---|
+| Click / double-click or Enter | Select (the viewer follows) / open in the viewer, brought forward |
+| Arrows, PgUp / PgDn, Home / End | Move the selection |
+| The wheel, the scroll bar | Scroll |
+| + / − or Ctrl+wheel | Bigger / smaller thumbnails |
+| F5 | List the folder again and fit the thumbnails to the window |
+| F11 or double-click between thumbnails | Toggle full screen |
+| Esc | Close the menu, then leave full screen, then close |
+| Tab | Bring the terminal to the front |
+| Any other Ctrl or Alt chord | Runs in the chat as if pressed there; the keyboard stays in the window |
+
+Like the viewer, it follows the theme, reopens where it was closed, and closes with the app.
 
 #### Log window
 
@@ -1953,7 +1983,7 @@ The Home Assistant tools control your own Home Assistant over its REST API with 
 * **Formats:** PNG, JPEG, GIF, BMP and TIFF; JPEG XL and HEIF when Windows has their extensions (`image_info` says which). WebP and AVIF read but never write: Windows has no encoder for them, so a WebP comes out as PNG. JPEG takes `quality` and `chroma` (444 keeps text crisp); PNG and GIF take `colors` (a palette, much smaller) and `dither`; PNG takes `interlace`; any format takes `dpi`. An option the format cannot take is refused, not ignored.
 * **`max_kb`:** lowers the quality (lossy formats, down to 30), then shrinks the picture, until the file fits; nothing is written when it cannot.
 * **Metadata** is dropped unless asked for (*Image edit metadata*, or `metadata` per call); the EXIF orientation is always baked into the pixels. An animated picture gives its first frame, and the result says so.
-* **The output** goes beside the source (or into *Image edit output folder*) as `photo-edited.png`, or `photo.png` for a format change alone, with `-2`, `-3` on a clash; or where `to` says. An existing file, the source included, is replaced only with `overwrite`.
+* **The output** goes beside the source (or into *Image edit output folder*) as `photo-edited.png`, or `photo.png` for a format change alone, with `-2`, `-3` on a clash; or where `to` says. An existing file, the source included, is replaced only with `overwrite`. With *Image edit mode* `overwrite-original` and no `to`, the result replaces the source instead, and a format change writes `photo.jpg` and deletes `photo.png`.
 * **Limits:** a source up to 200 MB and 100 megapixels; a result up to 32768 pixels a side and 100 megapixels.
 
 </details>

@@ -190,13 +190,16 @@ internal sealed partial class ChatScreen
     /// dropped it) are <see cref="MidTurnClass.Quick"/>: the camera has its own thread and the viewer its own window, and none
     /// of them opens a pane or touches the line; a word <c>/camera</c> does not know is its error at once. The bare
     /// <c>/camera</c> (its pane would take the keys from the reply) and <c>/camera snap</c> (the photo goes on the idle line) still
-    /// wait. Pure.
+    /// wait. <c>/thumbs &lt;folder&gt;</c> and <c>/comfy thumbs</c> (2026-10-04) are <see cref="MidTurnClass.Quick"/> as <c>/view</c> and
+    /// <c>/comfy view</c> are: a window of its own; the bare <c>/thumbs</c> is its usage error after the reply. Pure.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.List => MidTurnClass.Pane,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb is not (Camera.CameraVerb.Shutter or Camera.CameraVerb.Snap) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
+        SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
+        SlashCommand.Thumbs when args.Trim().Length > 0 => MidTurnClass.Quick,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
         _ => MidTurnPolicy(command, args.Length > 0),
@@ -582,9 +585,17 @@ internal sealed partial class ChatScreen
                 // The bare /cwd alone reaches here (later on 2026-09-27): the path in force, read-only.
                 await HandleCwdAsync("", cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase):
+                // /comfy thumbs (2026-10-04): the thumbnail browser's own thread, as the viewer's.
+                OpenComfyThumbs();
+                break;
             case SlashCommand.Comfy:
                 // /comfy view alone reaches here (2026-09-27, MidTurnPolicy's string form); the notice lands in the reply.
                 OpenViewer(notice: true);
+                break;
+            case SlashCommand.Thumbs:
+                // /thumbs <folder> (2026-10-04): the window, never the transcript the turn owns.
+                HandleThumbs(args);
                 break;
             case SlashCommand.View:
                 // /view <path> alone reaches here (later on 2026-09-27): the window, never the transcript the turn owns.

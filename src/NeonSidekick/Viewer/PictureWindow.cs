@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Images;
 using static NeonSidekick.Viewer.ViewerNative;
 
 namespace NeonSidekick.Viewer;
@@ -172,6 +173,39 @@ public static class PictureWindow
     }
 
     /// <summary>
+    /// The viewer moved to <paramref name="picture"/> (a full path) without taking the keyboard (2026-10-04, a click in the thumbnail
+    /// browser): <see cref="Follow"/> when it shows that folder, pointed at the folder quietly — not raised over the window the click came
+    /// from — when it shows another, opened quietly when there is none.
+    /// </summary>
+    public static void ShowQuietly(string picture)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(picture);
+        if (!IsAvailable)
+        {
+            throw new PlatformNotSupportedException(ViewerText.Unavailable);
+        }
+
+        string folder = Path.GetDirectoryName(picture) ?? throw new ArgumentException($"{picture} has no folder", nameof(picture));
+        lock (s_gate)
+        {
+            if (s_open is { Alive: true } open)
+            {
+                bool done = string.Equals(open.ShownFolder, folder, StringComparison.OrdinalIgnoreCase)
+                    ? open.Follow(picture)
+                    : open.Retarget(folder, picture, activate: false, raise: false);
+                if (done)
+                {
+                    return;
+                }
+            }
+
+            var window = new PictureWindowThread(folder, picture, activate: false);
+            window.Start();
+            s_open = window;
+        }
+    }
+
+    /// <summary>
     /// The picture viewer closed and waited for briefly, the camera's window left as it is (later on 2026-10-02, the user's ask:
     /// Ctrl+Alt+U closes the viewer it opened). True when one was open, false when there was none or the user had closed it already.
     /// </summary>
@@ -234,7 +268,9 @@ internal sealed unsafe class PictureWindowThread
     private const uint LiveStartMessage = WmApp + 5;
     private const uint LiveFrameMessage = WmApp + 6;
     private const uint LiveEndMessage = WmApp + 7;
+    private const uint MenuChosenMessage = WmApp + 8;
     private const uint ProbeMessage = WmApp + 9;
+    private const uint EditedMessage = WmApp + 10;
     private static readonly IntPtr ProbeAnswer = new(0x5EE);
     private static readonly IntPtr DebounceTimer = new(1);
     private static readonly IntPtr DeleteArmTimer = new(2);
@@ -274,6 +310,11 @@ internal sealed unsafe class PictureWindowThread
     private (LiveView View, ViewerBitmap? Frame, string? Title)? _pendingFrame;
     private bool _framePosted;
     private bool _pendingActivate = true;
+    private bool _pendingRaise = true;
+    private ContextMenuWindow? _menu;
+    private string? _menuPath;
+    private PictureEditOutcome? _edited;
+    private int _wheel;
     private Thread? _thread;
     private IntPtr _hwnd;
     private string? _failure;
@@ -313,6 +354,7 @@ internal sealed unsafe class PictureWindowThread
         Created,
         Deleted,
         Renamed,
+        Changed,
     }
 
     private sealed record Change(int Generation, ChangeKind Kind, string Path, string? OldPath);
@@ -327,6 +369,11 @@ internal sealed unsafe class PictureWindowThread
     }
 
     public bool Alive => _alive;
+
+    /// <summary>The folder the window shows, read from any thread (<see cref="PictureWindow.ShowQuietly"/>); null for the camera's.</summary>
+    public string? ShownFolder => Volatile.Read(ref _shownFolder);
+
+    private string? _shownFolder;
 
     /// <summary>
     /// The thread started and the window made; throws with the reason when it could not be.
@@ -352,14 +399,19 @@ internal sealed unsafe class PictureWindowThread
         }
     }
 
-    /// <summary>Points the live window at <paramref name="folder"/> (held on <paramref name="select"/> when one is given) and brings it forward (or shows it quietly when <paramref name="activate"/> is false); false when the window is gone.</summary>
-    public bool Retarget(string folder, string? select = null, bool activate = true)
+    /// <summary>
+    /// Points the live window at <paramref name="folder"/> (held on <paramref name="select"/> when one is given) and brings it forward
+    /// (or shows it quietly when <paramref name="activate"/> is false — raised over the others unless <paramref name="raise"/> is false,
+    /// 2026-10-04, the thumbnail browser's click); false when the window is gone.
+    /// </summary>
+    public bool Retarget(string folder, string? select = null, bool activate = true, bool raise = true)
     {
         lock (_gate)
         {
             _pendingFolder = folder;
             _pendingSelect = select;
             _pendingActivate = activate;
+            _pendingRaise = raise;
         }
 
         return _alive && PostMessageW(_hwnd, RetargetMessage, IntPtr.Zero, IntPtr.Zero);
@@ -655,6 +707,8 @@ internal sealed unsafe class PictureWindowThread
                 return;
             }
 
+            _menu = new ContextMenuWindow(_hwnd, MenuChosenMessage);
+
             // Where it last closed first (2026-09-28), so the size below is the DPI of the monitor it opens on.
             _chrome.Window = _hwnd;
             _chrome.RestorePosition(_camera ? PictureWindow.LivePosition : PictureWindow.Position);
@@ -703,6 +757,7 @@ internal sealed unsafe class PictureWindowThread
         finally
         {
             _alive = false;
+            _menu?.Close();
             _live?.OnEnded();
             _live = null;
             if (!_started && _hwnd != IntPtr.Zero)
@@ -750,17 +805,38 @@ internal sealed unsafe class PictureWindowThread
             case WmEraseBackground:
                 return 1;
             case WmSize:
+                _menu?.Close();
                 InvalidateRect(hwnd, null, false);
                 return IntPtr.Zero;
+            case WmMove:
+                _menu?.Close();
+                break;
             case WmActivate:
+                if (((long)wParam & 0xFFFF) == 0)
+                {
+                    _menu?.Close();   // another window took the keyboard: the menu goes, as Windows' own does
+                }
+
                 // A /theme change reaches an open window the next time it is focused.
                 ApplyStyle();
                 break;
             case WmKeyDown:
             case WmSysKeyDown:   // F10 (random order) is the menu key, a system key, its menu mode not wanted; Alt chords too
             {
+                bool alt = TerminalHandoff.AltHeld();
+                if (_menu is { IsOpen: true } menu)
+                {
+                    // The picture menu has the keys while it shows (2026-10-04); a chord or TAB closes it and goes on as usual.
+                    if (!alt && GetKeyState(VkControl) >= 0 && menu.Key((int)wParam))
+                    {
+                        return IntPtr.Zero;
+                    }
+
+                    menu.Close();
+                }
+
                 // A key with Alt held is never the viewer's (2026-10-03): it goes to the terminal (TerminalHandoff) with the rest.
-                var action = TerminalHandoff.AltHeld() ? ViewerAction.None : ViewerState.ActionFor((int)wParam, _chrome.FullScreen, _state.SlideShow);
+                var action = alt ? ViewerAction.None : ViewerState.ActionFor((int)wParam, _chrome.FullScreen, _state.SlideShow, GetKeyState(VkShift) < 0);
                 if (_live is not null)
                 {
                     // A camera's picture (2026-10-02): full screen and closing only.
@@ -792,6 +868,33 @@ internal sealed unsafe class PictureWindowThread
             // A passed Alt chord's character: the default would look for a menu mnemonic and beep. Alt+Space keeps the system menu.
             case WmSysChar when (int)wParam != ' ':
                 return IntPtr.Zero;
+
+            // The keyboard's menu is opened on the key itself (the Apps key, Shift+F10) and the mouse's on the button's release: the
+            // default's own WM_CONTEXTMENU is not wanted there. One from the title bar is the system menu's, left to the default.
+            case WmContextMenu when ContextMenuWindow.IsClientContextMenu(hwnd, lParam):
+                return IntPtr.Zero;
+
+            // The picture menu (2026-10-04, the user's ask): a right-click on a folder's picture, never the camera's.
+            case WmRightButtonUp when _live is null:
+            {
+                var (x, y) = PointOf(lParam);
+                var point = new Point { X = x, Y = y };
+                ClientToScreen(hwnd, &point);
+                OpenMenu(point.X, point.Y, keyboard: false);
+                return IntPtr.Zero;
+            }
+
+            // The wheel browses (2026-10-04, the user's ask): a notch away newer (←), toward the user older (→), as the keys do.
+            case WmMouseWheel when _live is null:
+            {
+                int steps = ViewerState.WheelSteps(ref _wheel, (short)(((long)wParam >> 16) & 0xFFFF));
+                if (steps != 0)
+                {
+                    WheelBrowse(steps);
+                }
+
+                return IntPtr.Zero;
+            }
 
             case WmLeftButtonDoubleClick:
                 // A quick second click on an arrow is another step (2026-10-03), not full screen.
@@ -899,6 +1002,13 @@ internal sealed unsafe class PictureWindowThread
 
                 ApplyStyle();
 
+                bool raise;
+                lock (_gate)
+                {
+                    raise = _pendingRaise;
+                    _pendingRaise = true;
+                }
+
                 if (activate)
                 {
                     _chrome.BringForward();
@@ -906,7 +1016,10 @@ internal sealed unsafe class PictureWindowThread
                 else
                 {
                     ShowWindow(_hwnd, SwShowNoActivate);
-                    _chrome.RaiseQuietly();
+                    if (raise)
+                    {
+                        _chrome.RaiseQuietly();
+                    }
                 }
 
                 return IntPtr.Zero;
@@ -960,8 +1073,8 @@ internal sealed unsafe class PictureWindowThread
             }
 
             case WmTimer when wParam == SlideTimer:
-                // A picture armed for deleting holds the show until it is deleted or disarmed.
-                if (!_state.DeleteArmed && _state.NextSlide(Random.Shared))
+                // A picture armed for deleting holds the show until it is deleted or disarmed; an open picture menu holds it too.
+                if (!_state.DeleteArmed && _menu is not { IsOpen: true } && _state.NextSlide(Random.Shared))
                 {
                     UpdateTitle();
                     LoadCurrent();
@@ -1007,7 +1120,14 @@ internal sealed unsafe class PictureWindowThread
                 return IntPtr.Zero;
             }
 
+            case MenuChosenMessage:
+                RunCommand((PictureCommand)(int)wParam);
+                return IntPtr.Zero;
+            case EditedMessage:
+                TakeEdited();
+                return IntPtr.Zero;
             case WmClose:
+                _menu?.Close();
                 LeaveLive();
                 _chrome.RememberPosition(_camera ? PictureWindow.LivePlaced : PictureWindow.Placed);
                 DestroyWindow(hwnd);
@@ -1097,8 +1217,19 @@ internal sealed unsafe class PictureWindowThread
         switch (action)
         {
             case ViewerAction.ToggleFullScreen:
+                _menu?.Close();
                 _chrome.SetFullScreen(!_chrome.FullScreen);
                 break;
+            case ViewerAction.Menu:
+            {
+                Rect client;
+                GetClientRect(_hwnd, &client);
+                var point = new Point { X = client.Right / 2, Y = client.Bottom / 2 };
+                ClientToScreen(_hwnd, &point);
+                OpenMenu(point.X, point.Y, keyboard: true);
+                break;
+            }
+
             case ViewerAction.LeaveFullScreen:
                 _chrome.SetFullScreen(false);
                 break;
@@ -1128,6 +1259,132 @@ internal sealed unsafe class PictureWindowThread
                 }
 
                 break;
+        }
+    }
+
+    // The wheel's steps (2026-10-04): a first Del disarmed, then as many pictures newer (positive) or older, one load and one
+    // word to the strip for the lot — the user's own browsing, as the keys are.
+    private void WheelBrowse(int steps)
+    {
+        if (_state.Disarm())
+        {
+            KillTimer(_hwnd, DeleteArmTimer);
+            UpdateTitle();
+        }
+
+        bool moved = false;
+        for (int i = 0; i < Math.Abs(steps); i++)
+        {
+            moved |= _state.Browse(steps > 0 ? ViewerAction.Newer : ViewerAction.Older);
+        }
+
+        if (moved)
+        {
+            UpdateTitle();
+            LoadCurrent();
+            NotifyBrowsed();
+            RestartSlides();
+            InvalidateNav(_hwnd);
+        }
+    }
+
+    // The picture menu on the shown picture (2026-10-04): the path kept now, so a slide or an arriving picture changes nothing; a
+    // first Del disarmed. Never on the camera's picture.
+    private void OpenMenu(int x, int y, bool keyboard)
+    {
+        if (_menu is null || _live is not null || _state.Current is not { } path)
+        {
+            return;
+        }
+
+        if (_state.Disarm())
+        {
+            KillTimer(_hwnd, DeleteArmTimer);
+            UpdateTitle();
+        }
+
+        _menuPath = path;
+        _menu.Open(PictureMenu.BuildNow(thumbs: false, path), x, y, PictureMenu.StyleNow(_chrome), keyboard);
+    }
+
+    // A menu row chosen (posted by the menu after it closed): an edit off the thread, Delete, or a file action.
+    private void RunCommand(PictureCommand command)
+    {
+        if (_menuPath is not { } path)
+        {
+            return;
+        }
+
+        _menuPath = null;
+        if (PictureActions.IsEdit(command))
+        {
+            PictureMenu.Edit(path, command, outcome =>
+            {
+                lock (_gate)
+                {
+                    _edited = outcome;
+                }
+
+                if (_alive)
+                {
+                    PostMessageW(_hwnd, EditedMessage, IntPtr.Zero, IntPtr.Zero);
+                }
+            });
+            return;
+        }
+
+        if (command == PictureCommand.Delete)
+        {
+            if (PictureMenu.Delete(path) && _state.Remove(path))
+            {
+                UpdateTitle();
+                LoadCurrent();
+                RestartSlides();
+                NotifyBrowsed();
+            }
+
+            return;
+        }
+
+        PictureMenu.RunFileAction(path, command);
+    }
+
+    // An edit's end (2026-10-04): a new picture shown (the strip and the thumbnails told), one replaced in place read again, a
+    // converted one shown in its source's stead.
+    private void TakeEdited()
+    {
+        PictureEditOutcome? outcome;
+        lock (_gate)
+        {
+            outcome = _edited;
+            _edited = null;
+        }
+
+        if (outcome is not { Failed: false, Written: { } written } || _live is not null)
+        {
+            return;
+        }
+
+        if (outcome.Replaced)
+        {
+            if (_state.Touched(written))
+            {
+                LoadCurrent();
+            }
+
+            return;
+        }
+
+        if (outcome.Removed is { } removed)
+        {
+            _state.Remove(removed);
+        }
+
+        if (string.Equals(Path.GetDirectoryName(written), _state.Folder, StringComparison.OrdinalIgnoreCase))
+        {
+            Select(written);
+            UpdateTitle();
+            NotifyBrowsed();
         }
     }
 
@@ -1313,15 +1570,18 @@ internal sealed unsafe class PictureWindowThread
         }
 
         _state.Reset(folder, pictures);
+        Volatile.Write(ref _shownFolder, folder);
         RestartSlides();   // a new folder stops the show
         try
         {
             var watcher = new FileSystemWatcher(folder)
             {
                 IncludeSubdirectories = false,
-                NotifyFilter = NotifyFilters.FileName,
+                // LastWrite since 2026-10-04: a picture written again in place (the picture menu's overwrite) is read again.
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
             };
             watcher.Created += (_, e) => Post(new Change(generation, ChangeKind.Created, e.FullPath, null));
+            watcher.Changed += (_, e) => Post(new Change(generation, ChangeKind.Changed, e.FullPath, null));
             watcher.Deleted += (_, e) => Post(new Change(generation, ChangeKind.Deleted, e.FullPath, null));
             watcher.Renamed += (_, e) => Post(new Change(generation, ChangeKind.Renamed, e.FullPath, e.OldFullPath));
             watcher.Error += (_, e) => DiagnosticLog.Warn("Viewer", $"Watching {folder} failed: {e.GetException().Message}");
@@ -1383,6 +1643,14 @@ internal sealed unsafe class PictureWindowThread
                 continue;
             }
 
+            // A write to a listed picture (its own LastWrite, or a whole file moved onto its name, 2026-10-04) leaves it in its
+            // place and reads it again when it is the shown one; only a new name goes on the end.
+            if (change.Kind == ChangeKind.Changed)
+            {
+                shownChanged |= _state.Contains(change.Path) && _state.Touched(change.Path);
+                continue;
+            }
+
             any = true;
             if (change.OldPath is { } old && ImageFile.IsImagePath(old))
             {
@@ -1393,13 +1661,17 @@ internal sealed unsafe class PictureWindowThread
             {
                 shownChanged |= _state.Remove(change.Path);
             }
+            else if (change.Kind == ChangeKind.Renamed && _state.Contains(change.Path))
+            {
+                shownChanged |= _state.Touched(change.Path);
+            }
             else if (ImageFile.IsImagePath(change.Path))
             {
                 shownChanged |= _state.Add(change.Path, DateTime.UtcNow);
             }
         }
 
-        if (!any)
+        if (!any && !shownChanged)
         {
             return;
         }

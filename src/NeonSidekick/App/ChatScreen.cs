@@ -951,7 +951,10 @@ internal sealed partial class ChatScreen
         Func<bool>? closeLogWindow = null,
         Func<bool>? closeViewer = null,
         Action<string>? openTerminal = null,
-        Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null)
+        Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null,
+        Action<string, string?>? openThumbs = null,
+        Action<string>? followThumbs = null,
+        Action<string>? showInViewer = null)
     {
         _logFile = logFile;
         _openTerminal = openTerminal;
@@ -982,6 +985,11 @@ internal sealed partial class ChatScreen
         _viewPicture = viewPicture;
         // The strip's arrows moving an open viewer (2026-09-28): PictureWindow.Follow in the app on Windows; null = the strip keeps to itself.
         _followViewer = followViewer;
+        // The thumbnail browser (2026-10-04): ThumbsWindow.Open and Follow, and the viewer moved without the keyboard
+        // (PictureWindow.ShowQuietly), in the app on Windows; null = /thumbs refused, the hub's moves skipped.
+        _openThumbs = openThumbs;
+        _followThumbs = followThumbs;
+        _showInViewer = showInViewer;
         _ownsMcp = mcp is null;
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
         _clockTools = ClockTools(time);
@@ -2006,6 +2014,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+U", "open the usage pane (/usage)"));
         rows.Add(("Ctrl+X", "cut the selected text"));
         rows.Add(("Ctrl+Y", "open the system prompt pane (/sys)"));
+        rows.Add(("Ctrl+Z", "open the theme picker (/theme)"));
         rows.Add(("Ctrl+Alt+C", "start a new conversation and clear the screen (/clear)"));
         rows.Add(("Ctrl+Alt+D", "open the MCP pane (/mcp)"));
         rows.Add(("Ctrl+Alt+E", "open the sessions pane (/sessions)"));
@@ -3771,7 +3780,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote)], argText);
                 }
 
-                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyOfferedWord, ComfyOfferedNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
+                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyOfferedWord, ComfyOfferedNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ThumbsText.ThumbsWord, ThumbsText.ThumbsNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
             }
 
             case SlashCommand.Imagine:
@@ -3921,7 +3930,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Cwd:
                 return MentionCompleter.Matches([new(CwdHomeWord, CwdDefaultNote), new(CwdBrowseWord, FolderText.BrowseNote)], argText);
 
-            case SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal:
+            case SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Thumbs:
                 return MentionCompleter.Matches(sources.Folders(argText).Select(folder => new CompletionItem(folder, "")).ToList(), argText);
 
             case SlashCommand.Vault:
@@ -4138,7 +4147,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static bool TakesPathArgument(string command) =>
         SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
-            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault;
+            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault or SlashCommand.Thumbs;
 
     /// <summary>
     /// The path list for a command whose argument is a sandbox path — <c>/speak</c> (2026-09-17),
@@ -8100,6 +8109,9 @@ internal sealed partial class ChatScreen
                     continue;
                 }
 
+                // The picture windows' menus (2026-10-04): a print runs now, an attach becomes the line's paste below.
+                await TakeWindowWorkAsync(cancellationToken).ConfigureAwait(false);
+
                 IReadOnlyList<InputEvent>? replay = null;
                 SubmittedLine? send = null;
                 // A draft the editor just handed back (2026-09-19) goes first: the user is
@@ -8471,7 +8483,7 @@ internal sealed partial class ChatScreen
         }
 
         Volatile.Write(ref _alertSignal, alert);
-        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady)
+        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -10413,6 +10425,10 @@ internal sealed partial class ChatScreen
                 HandleView(args);
                 return false;
 
+            case SlashCommand.Thumbs:
+                HandleThumbs(args);
+                return false;
+
             case SlashCommand.Imagine:
                 await HandleImagineAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
@@ -10427,6 +10443,12 @@ internal sealed partial class ChatScreen
                 if (string.Equals(args.Trim(), ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase))
                 {
                     OpenViewer(notice: true);
+                    return false;
+                }
+
+                if (string.Equals(args.Trim(), ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    OpenComfyThumbs();
                     return false;
                 }
 
@@ -13750,7 +13772,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void FollowInViewer()
     {
-        if (_followViewer is null || _pictureStrip.SelectedId is not { } id)
+        if ((_followViewer is null && _followThumbs is null) || _pictureStrip.SelectedId is not { } id)
         {
             return;
         }
@@ -13768,12 +13790,15 @@ internal sealed partial class ChatScreen
 
         try
         {
-            _followViewer(path);
+            _followViewer?.Invoke(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
             DiagnosticLog.Warn("Viewer", $"Could not move the viewer to {Path.GetFileName(path)}: {ex.Message}");
         }
+
+        // The thumbnail browser too (2026-10-04): the three windows on the one picture.
+        FollowThumbs(path);
     }
 
     /// <summary>
@@ -13781,41 +13806,15 @@ internal sealed partial class ChatScreen
     /// the selected image in the picture strip would change to that selection as well"): the strip's newest tile for that file
     /// highlighted and the pane redrawn, always (the strip sync setting went later that day, <see cref="FollowInViewer"/>). A
     /// picture the strip does not hold is ignored, the highlight kept (the user's call), as is everything with the strip off.
-    /// Any thread (the viewer's).
+    /// The thumbnail browser follows it too (2026-10-04), strip or no strip. Any thread (the viewer's).
     /// </summary>
     public void ViewerBrowsed(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        if (!_effective().ComfyPictureStrip)
+        FollowThumbs(path);
+        if (_effective().ComfyPictureStrip)
         {
-            return;
-        }
-
-        string full;
-        try
-        {
-            full = Path.GetFullPath(path);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return;
-        }
-
-        var ids = new HashSet<int>();
-        lock (_pictures)
-        {
-            for (int id = 0; id < _pictures.Count; id++)
-            {
-                if (_pictures[id].FullPath is { } own && string.Equals(Path.GetFullPath(own), full, StringComparison.OrdinalIgnoreCase))
-                {
-                    ids.Add(id);
-                }
-            }
-        }
-
-        if (ids.Count > 0 && _pictureStrip.Highlight(ids.Contains))
-        {
-            _pane.RedrawStrip();
+            HighlightStrip(path);
         }
     }
 
