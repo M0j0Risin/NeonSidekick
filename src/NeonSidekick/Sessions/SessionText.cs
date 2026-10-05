@@ -88,7 +88,27 @@ public static class SessionText
     /// letters survive) becomes one hyphen, none at either end, cut to <see cref="MaxTitleChars"/>
     /// with no hyphen left at the cut; null when nothing is left. Pinned.
     /// </summary>
-    public static string? Slug(string text)
+    public static string? Slug(string text) => SlugOf(text);
+
+    /// <summary>
+    /// A title as the screen shows it (2026-10-04, the UI review: the rule read <c>summary-of-notes-file</c>): a model-written slug as
+    /// words, its first letter raised (<c>Summary of notes file</c>); a first-line or typed title as it is. The store keeps the slug. Pure.
+    /// </summary>
+    public static string DisplayTitle(SessionSummary session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return session.TitleSource == TitleSource.Model ? Words(session.Title) : session.Title;
+    }
+
+    /// <summary>A slug's words: hyphens as spaces, the first letter raised. Pure.</summary>
+    public static string Words(string slug)
+    {
+        ArgumentNullException.ThrowIfNull(slug);
+        string words = slug.Replace('-', ' ').Trim();
+        return words.Length == 0 ? words : char.ToUpperInvariant(words[0]) + words[1..];
+    }
+
+    private static string? SlugOf(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
         var sb = new StringBuilder(text.Length);

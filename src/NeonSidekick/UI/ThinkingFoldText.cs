@@ -21,6 +21,38 @@ public static class ThinkingFoldText
     public static string Summary(TimeSpan elapsed, bool expanded) =>
         "  " + (expanded ? ToolGroupText.ExpandedGlyph : ToolGroupText.CollapsedGlyph) + " " + Glyph + "thought for " + Duration(elapsed);
 
+    /// <summary>
+    /// <see cref="Summary(TimeSpan, bool)"/> with the thinking's first sentence after it (2026-10-04, the UI review: the fold said only how long),
+    /// <c>  ▸ 💭 thought for 4.2s — The user wants the time…</c>; the bare summary for a thinking with no words.
+    /// </summary>
+    public static string Summary(TimeSpan elapsed, bool expanded, string? thinking) =>
+        Gist(thinking) is { Length: > 0 } gist ? Summary(elapsed, expanded) + " — " + gist : Summary(elapsed, expanded);
+
+    /// <summary>The most cells of a thinking's first sentence on its fold row. Pinned.</summary>
+    public const int GistCells = 60;
+
+    /// <summary>The first sentence of <paramref name="thinking"/> (to its first <c>.</c>, <c>!</c> or <c>?</c> before a blank, or its first line), cut to <see cref="GistCells"/>; empty for none. Pure.</summary>
+    public static string Gist(string? thinking)
+    {
+        string text = (thinking ?? "").Trim();
+        int line = text.IndexOf('\n');
+        if (line >= 0)
+        {
+            text = text[..line].Trim();
+        }
+
+        for (int i = 0; i < text.Length - 1; i++)
+        {
+            if (text[i] is '.' or '!' or '?' && char.IsWhiteSpace(text[i + 1]))
+            {
+                text = text[..(i + 1)];
+                break;
+            }
+        }
+
+        return TranscriptRenderer.Truncate(text, GistCells);
+    }
+
     /// <summary><c>4.2s</c> under a minute, <c>1m 05s</c> from one on; never negative.</summary>
     public static string Duration(TimeSpan elapsed)
     {

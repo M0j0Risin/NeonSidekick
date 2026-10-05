@@ -562,7 +562,7 @@ public class TranscriptRendererTests : IDisposable
         Assert.False(s.T.ThinkingOpen);
         s.T.EndAssistant();
 
-        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(2.5), expanded: false) + "\n", "● It is blue.\n");
+        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(2.5), expanded: false, "Hmm, the sky.") + "\n", "● It is blue.\n");
     }
 
     [Fact]
@@ -575,7 +575,7 @@ public class TranscriptRendererTests : IDisposable
         s.T.AppendDelta("Done.");
         s.T.EndAssistant();
 
-        InOrder(s.Output, "● Let me check.\n", ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false) + "\n", "Done.\n");
+        InOrder(s.Output, "● Let me check.\n", ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false, "again") + "\n", "Done.\n");
         Assert.DoesNotContain("● Done.", s.Output);
     }
 
@@ -588,7 +588,7 @@ public class TranscriptRendererTests : IDisposable
         s.T.Tool("read_file", "{}");
         s.T.EndAssistant();
 
-        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false) + "\n", "read_file");
+        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false, "plan") + "\n", "read_file");
     }
 
     [Fact]
@@ -599,7 +599,7 @@ public class TranscriptRendererTests : IDisposable
         s.T.AppendThinking("only this", TimeSpan.FromSeconds(3));
         s.T.EndAssistant();
 
-        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(3), expanded: false) + "\n", "● " + TranscriptRenderer.NoReplyText);
+        InOrder(s.Output, ThinkingFoldText.Summary(TimeSpan.FromSeconds(3), expanded: false, "only this") + "\n", "● " + TranscriptRenderer.NoReplyText);
     }
 
     [Fact]
@@ -912,5 +912,40 @@ public class TranscriptRendererTests : IDisposable
             s.T.EndAssistant();
             Assert.Contains(ToolGroupText.Summary([("read_file", 3)], expanded: false), s.Output);
         }
+    }
+
+    /// <summary>The thinking fold's gist (2026-10-04): the first sentence of its first line, cut to the row's cells; none, the bare summary.</summary>
+    [Fact]
+    public void ThinkingFold_CarriesTheFirstSentence()
+    {
+        Assert.Equal("The user wants the time.", ThinkingFoldText.Gist("  The user wants the time. Then the zone."));
+        Assert.Equal("first line", ThinkingFoldText.Gist("first line\nsecond. third"));
+        Assert.Equal("v1.2 is out", ThinkingFoldText.Gist("v1.2 is out"));   // a dot before no blank is no end
+        Assert.Equal("Why?", ThinkingFoldText.Gist("Why? Because."));
+        Assert.Equal("", ThinkingFoldText.Gist(null));
+        Assert.Equal("", ThinkingFoldText.Gist(" \n "));
+        string gist = ThinkingFoldText.Gist(new string('x', 200));
+        Assert.True(TextCells.Width(gist) <= ThinkingFoldText.GistCells);
+        Assert.Equal("  ▸ 💭 thought for 1.0s — Plan.", ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false, "Plan. Go."));
+        Assert.Equal(ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false), ThinkingFoldText.Summary(TimeSpan.FromSeconds(1), expanded: false, ""));
+    }
+
+    /// <summary>A sent line's paste preview (2026-10-04): five lines or fewer stand as they are; more fold to the summary row once the next thing is said.</summary>
+    [Fact]
+    public void SentLine_FoldsAPreviewPastFiveLines()
+    {
+        string Preview(int lines) => InputLine.PreviewMarkup(string.Join("\n", Enumerable.Range(1, lines).Select(i => "p" + i)));
+        Assert.Null(new SentLineView("[bold]› hi[/]", "").Fold);
+        Assert.Null(new SentLineView("[bold]› hi[/]", Preview(SentLineView.PreviewKeep)).Fold);
+        var view = new SentLineView("[bold]› hi[/]", Preview(8));
+        var fold = Assert.IsType<FoldLayout>(view.Fold);
+        Assert.Equal((1, SentLineView.PreviewKeep, 8), (fold.Head, fold.Keep, fold.Size));
+        Assert.Equal("  ▸ 📋 8 lines of the paste", SentLineView.Summary(8, expanded: false));
+        Assert.Equal("  ▾ 📋 1 line of the paste", SentLineView.Summary(1, expanded: true));
+
+        var console = new TestConsole();
+        console.Profile.Width = 40;
+        console.Write(view);
+        Assert.Equal(["› hi", "  p1", "  p2", "  p3", "  p4", "  p5", "  p6", "  p7", "  p8"], console.Output.TrimEnd().Split('\n').Select(l => l.TrimEnd()));
     }
 }

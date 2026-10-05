@@ -162,7 +162,8 @@ public sealed class MarkdownView : IRenderable
     {
         var language = CodeLanguages.Find(code.Language);
         var lines = language is null || code.Lines.Count == 0 ? PlainCode(code.Lines) : HighlightedCode(code.Lines, language);
-        var block = new HangingIndent(CodeIndent, CodeIndent, Theme.MarkdownCodeBlock, new Rows(lines));
+        // One even slab, padded to the block's widest row (2026-10-04, the UI review).
+        var block = new HangingIndent(CodeIndent, CodeIndent, Theme.MarkdownCodeBlock, new PaddedSlab(new Rows(lines), Theme.MarkdownCodeBlock));
         return new Rows(new Text(CodeHeading(code.Language), Theme.MarkdownCodeLabel), block);
     }
 

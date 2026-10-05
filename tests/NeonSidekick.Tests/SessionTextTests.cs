@@ -238,4 +238,15 @@ public class SessionTextTests
         Assert.EndsWith(SessionText.ReadCut(3, 4), text, StringComparison.Ordinal);
         Assert.Equal(SessionText.Read(record, 1, 0, Zone), SessionText.Read(record, 1, 0, Zone, SessionText.MaxReadChars));
     }
+
+    /// <summary>A model-written title shows as words (2026-10-04, the UI review); a first-line or typed one as it is; the store keeps the slug.</summary>
+    [Fact]
+    public void DisplayTitle_ShowsAModelSlugAsWords()
+    {
+        Assert.Equal("Summary of notes file", SessionText.Words("summary-of-notes-file"));
+        Assert.Equal("", SessionText.Words("-"));
+        Assert.Equal("Vosk model wiring", SessionText.DisplayTitle(Summary(title: "vosk-model-wiring") with { TitleSource = TitleSource.Model }));
+        Assert.Equal("half-done notes", SessionText.DisplayTitle(Summary(title: "half-done notes")));
+        Assert.Equal("my-notes", SessionText.DisplayTitle(Summary(title: "my-notes") with { TitleSource = TitleSource.User }));
+    }
 }

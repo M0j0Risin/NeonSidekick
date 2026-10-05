@@ -2934,7 +2934,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        Write(new Markup(InputLine.SubmittedMarkup(submitted, _userLineStyle()) + Environment.NewLine + under));
+        // The preview folds past its first lines once the next thing is said (2026-10-04, SentLineView).
+        Write(new SentLineView(InputLine.SubmittedMarkup(submitted, _userLineStyle()), preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview)));
     }
 
     /// <summary>
@@ -4468,8 +4469,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         var elapsed = thinking.Elapsed ?? TimeSpan.Zero;
         _store.SetThinkingGroupSummary(
-            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: false), Theme.DimText)],
-            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: true), Theme.DimText)]);
+            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: false, thinking.Text), Theme.DimText)],
+            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: true, thinking.Text), Theme.DimText)]);
         _store.EndGroup();
     }
 

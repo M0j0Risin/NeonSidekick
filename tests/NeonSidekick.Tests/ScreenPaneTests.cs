@@ -1163,15 +1163,15 @@ public class ScreenPaneTests : IDisposable
         int mark = Output.Length;
         pane.SetLive(new ThinkingBlock("t1\nt2", TimeSpan.FromSeconds(4.2)));
         pane.CommitLive();
-        string folded = ThinkingFoldText.Summary(TimeSpan.FromSeconds(4.2), expanded: false);
-        Assert.Equal("  ▸ 💭 thought for 4.2s", folded);
+        string folded = ThinkingFoldText.Summary(TimeSpan.FromSeconds(4.2), expanded: false, "t1\nt2");
+        Assert.Equal("  ▸ 💭 thought for 4.2s — t1", folded);
         Assert.Contains("a\n" + folded + "\n", Output[mark..]);
         Assert.Equal(2, pane.StoredRows);
 
         mark = Output.Length;
         Assert.True(pane.TryToggleToolGroupAt(3, 94));
         Assert.Equal(4, pane.StoredRows);
-        Assert.Contains(ThinkingFoldText.Summary(TimeSpan.FromSeconds(4.2), expanded: true) + "\n    t1\n    t2\n", Output[mark..]);
+        Assert.Contains(ThinkingFoldText.Summary(TimeSpan.FromSeconds(4.2), expanded: true, "t1\nt2") + "\n    t1\n    t2\n", Output[mark..]);
         Assert.True(pane.TryToggleToolGroupAt(3, 94));
         Assert.Equal(2, pane.StoredRows);
 

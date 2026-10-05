@@ -4581,13 +4581,13 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string folded = ThinkingFoldText.Summary(TimeSpan.Zero, expanded: false);
+        string folded = ThinkingFoldText.Summary(TimeSpan.Zero, expanded: false, "Pondering the sky.");
         int summary = output.LastIndexOf(folded, StringComparison.Ordinal);
         Assert.True(summary >= 0, output);
         Assert.Contains("Pondering the sky.", output[..summary]);   // it streamed first
         int answer = output.IndexOf("It is blue.", summary, StringComparison.Ordinal);
         Assert.True(answer > summary, output);
-        Assert.DoesNotContain("Pondering", output[summary..answer]);   // the last rebuild: the summary alone above the answer
+        Assert.DoesNotContain("Pondering", output[(summary + folded.Length)..answer]);   // the last rebuild: the summary (its gist on it since 2026-10-04) alone above the answer
         Assert.Equal(new[] { "It is blue." }, _synth.SpokenText);
         Assert.DoesNotContain(_copied, c => c.Contains("Pondering", StringComparison.Ordinal));
         Assert.Contains(_copied, c => c.Contains("It is blue.", StringComparison.Ordinal));
@@ -4636,7 +4636,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        int open = output.LastIndexOf(ThinkingFoldText.Summary(TimeSpan.Zero, expanded: true), StringComparison.Ordinal);
+        int open = output.LastIndexOf(ThinkingFoldText.Summary(TimeSpan.Zero, expanded: true, "Pondering the sky."), StringComparison.Ordinal);
         Assert.True(open >= 0, output);
         Assert.Contains("Pondering the sky.", output[open..]);
     }
@@ -10641,9 +10641,9 @@ public partial class ChatScreenTests : IDisposable
         var typed = firstLine with { Title = "Notes", TitleSource = TitleSource.User };
         Assert.Equal("", ChatScreen.SessionRuleTitle(null, SessionNameDisplay.AllNames));
         Assert.Equal("hi there", ChatScreen.SessionRuleTitle(firstLine, SessionNameDisplay.AllNames));
-        Assert.Equal("greeting", ChatScreen.SessionRuleTitle(model, SessionNameDisplay.AllNames));
+        Assert.Equal("Greeting", ChatScreen.SessionRuleTitle(model, SessionNameDisplay.AllNames));   // a slug as words (2026-10-04)
         Assert.Equal("", ChatScreen.SessionRuleTitle(firstLine, SessionNameDisplay.ModelWritten));
-        Assert.Equal("greeting", ChatScreen.SessionRuleTitle(model, SessionNameDisplay.ModelWritten));
+        Assert.Equal("Greeting", ChatScreen.SessionRuleTitle(model, SessionNameDisplay.ModelWritten));
         Assert.Equal("Notes", ChatScreen.SessionRuleTitle(typed, SessionNameDisplay.ModelWritten));
         Assert.Equal("", ChatScreen.SessionRuleTitle(model, SessionNameDisplay.None));
     }
@@ -18613,9 +18613,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("greeting", Assert.Single(store.List(0)).Title);
         // The rule above the input row (2026-09-18): the first line while the title was written, the model's slug once it landed (the tick repaints the pane).
         Assert.Contains(TitledRule("hi") + "\n" + InputLine.PromptGlyph, running);
-        Assert.DoesNotContain(TitledRule("greeting"), running);
-        Assert.Contains(TitledRule("greeting") + "\n" + InputLine.PromptGlyph, output);
-        Assert.True(output.LastIndexOf(TitledRule("hi"), StringComparison.Ordinal) < output.LastIndexOf(TitledRule("greeting"), StringComparison.Ordinal));   // the slug is what stands at the end
+        Assert.DoesNotContain(TitledRule("Greeting"), running);
+        Assert.Contains(TitledRule("Greeting") + "\n" + InputLine.PromptGlyph, output);   // the slug as words (2026-10-04)
+        Assert.True(output.LastIndexOf(TitledRule("hi"), StringComparison.Ordinal) < output.LastIndexOf(TitledRule("Greeting"), StringComparison.Ordinal));   // the slug is what stands at the end
     }
 
     [Fact]
@@ -18662,7 +18662,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(TitledRule("vosk-model-wiring") + "\n" + InputLine.PromptGlyph, output);   // the restored session's title
+        Assert.Contains(TitledRule("Vosk model wiring") + "\n" + InputLine.PromptGlyph, output);   // the restored session's title, its slug as words
         Assert.EndsWith(TitledRule("Wiring notes") + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + new string(ScreenPane.RuleGlyph, 240) + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);   // the typed one in its place
     }
 

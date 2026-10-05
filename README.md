@@ -42,8 +42,8 @@ Neon Sidekick is an agentic terminal client built primarily for local LLMs, buil
 * **Auto-complete** for commands, files, folders, skills and tools.
 
 ### AI Connectivity & Context Management
-* **Local server discovery:** *LLM server scan mode* finds most OpenAI-compatible servers on this machine or your network (LM Studio, vLLM, SGLang, Ollama, Unsloth…), or type a URL.
-* **Embedded LLM:** no server? Install a Gemma 4 or Qwen model from `/settings` › Embedded. The app downloads it from Hugging Face and runs it on its own llama.cpp server (CUDA, Vulkan or CPU).
+* **Local server discovery:** *LLM server scan mode* finds most OpenAI-compatible servers on the local machine or your network (LM Studio, vLLM, SGLang, Ollama, Unsloth…), or type a URL.
+* **Embedded LLM:** no server? Install a Gemma, Qwen, or Muse model from `/settings` › Embedded. The app downloads it from Hugging Face and runs it on its own llama.cpp server (CUDA, Vulkan or CPU).
 * **Context compaction** at a share you choose keeps the conversation inside the model's window.
 * **Prompt transparency:** see exactly what the system prompt holds, and a summary of every compaction.
 * **Persistent memory** you can edit, added to the context automatically.
@@ -227,7 +227,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | the queued count | `/queue` |
 | 📷 (camera on) | `/camera off` |
 | blank space on the hint row | `/settings` |
-| the session name on the rule above the input row | renames it, like `/sessions title` (during `/botchat` the rule shows the cast instead) |
+| the session name on the rule above the input row (a model-written name reads as words, `Summary of notes file`) | renames it, like `/sessions title` (during `/botchat` the rule shows the cast instead) |
 
 **⤡** at the left end of that rule appears when something can fold; a click does what Ctrl+O does (unfold all if anything is folded, else fold all).
 
@@ -276,7 +276,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Command typo intercept | A command name without its slash (`clear`) or with extra ones (`//profile work`) asks *Did you mean /clear?* first. A bare `//` is still `/settings`. | on |
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` list; typing it in full still works. | on |
 | Transcript markdown | Renders replies as Markdown, with code fences highlighted (C#, JS/TS, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML, diff). | on |
-| Paste preview lines | How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200). | 25 |
+| Paste preview lines | How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200). More than five fold to `▸ 📋 N lines of the paste` once the next thing is said (Ctrl+O or `/expand` shows them). A one-line paste's placeholder gives its size, `[Pasted text #1 · 840 chars]`. | 25 |
 | Show image thumbnails | Draws a small thumbnail of each picture you send, each one a tool fetches or makes, and each `/botchat` picture. `/view` and `/imagine` always draw theirs. | on |
 | Image thumbnail size | `tiny` (32×8), `small` (48×12), `medium` (64×16), `large` (80×20), `xlarge` (96×24) columns × rows, or `fullsize` (as large as the transcript allows). | `small` |
 | Copy user prompt | `/copy` includes your prompt above the reply. | on |
@@ -316,7 +316,7 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM model | The model id. Empty takes the first the server lists; a Docker server serving one model saves its id here when it connects; `/model` picks one. | (first listed) |
 | LLM API key | The bearer token the server expects (`empty` for none). Saved encrypted for your Windows account (DPAPI) and shown as `(set, encrypted)`. | `empty` |
 | LLM reasoning | How hard the model thinks: `none`, `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
-| LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s` when the answer starts. Click it, Ctrl+O or `/expand` to see it again. Needs *Transcript markdown*. Thinking is never spoken or logged; only `/copy --thinking` copies it. | on |
+| LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s — <its first sentence>` when the answer starts. Click it, Ctrl+O or `/expand` to see it again. Needs *Transcript markdown*. Thinking is never spoken or logged; only `/copy --thinking` copies it. | on |
 | LLM preserve thinking | Sends earlier turns' thinking back to a local server (`reasoning_content`) and asks the chat template to keep it (`preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking is always sent back between tool calls. Costs context; a prune drops old thinking first. | off |
 | LLM reasoning estimate | How `/usage` counts reasoning when the server streams thinking but doesn't count it (llama.cpp, the embedded LLM, Ollama): `chars` (characters ÷ 4), `tokenize` (llama.cpp's exact `/tokenize`, else `chars`) or `off` (`—`). Estimates show as `~1,234`; a server's own count always wins. | `chars` |
 | LLM sampling | Per-model sampling overrides; Enter opens the `/sampling` pane. See Sampling per model. | (server defaults) |

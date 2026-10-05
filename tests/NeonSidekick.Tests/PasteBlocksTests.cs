@@ -27,7 +27,7 @@ public class PasteBlocksTests
         Assert.Equal(2, PasteBlocks.Lines("a\nb"));
         Assert.Equal(3, PasteBlocks.Lines("a\n\n"));
         Assert.Equal("[Pasted text #1 +49 lines]", PasteBlocks.Label(1, Lines(49)));
-        Assert.Equal("[Pasted text #12 +1 line]", PasteBlocks.Label(12, new string('x', 900)));
+        Assert.Equal("[Pasted text #12 · 900 chars]", PasteBlocks.Label(12, new string('x', 900)));
     }
 
     [Fact]

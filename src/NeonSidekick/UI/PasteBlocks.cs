@@ -81,7 +81,10 @@ public sealed class PasteBlocks
     public static string Label(int number, string block)
     {
         int lines = Lines(block);
-        return $"[Pasted text #{number} +{lines} {(lines == 1 ? "line" : "lines")}]";
+        // One long line (2026-10-04, the UI review): "+1 line" said nothing of its size; its characters do.
+        return lines == 1
+            ? $"[Pasted text #{number} · {block.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)} chars]"
+            : $"[Pasted text #{number} +{lines} lines]";
     }
 
     /// <summary>The label an image token is drawn as, and what it expands to. Pinned.</summary>

@@ -725,7 +725,7 @@ internal sealed partial class ChatScreen
         null => "",
         _ when display == SessionNameDisplay.None => "",
         { TitleSource: TitleSource.FirstLine } when display == SessionNameDisplay.ModelWritten => "",
-        _ => session.Title,
+        _ => SessionText.DisplayTitle(session),   // a slug as words (2026-10-04)
     };
 
     /// <summary>

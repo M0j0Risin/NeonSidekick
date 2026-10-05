@@ -89,7 +89,7 @@ internal sealed class SessionsMenu
     public static string RowMarkup(SessionSummary session, bool current, TimeZoneInfo zone, int idWidth = 0, int turnsWidth = 0)
     {
         ArgumentNullException.ThrowIfNull(session);
-        string row = Theme.DimMarkup(SessionText.Id(session.Id).PadRight(idWidth) + "  " + SessionText.Moment(session.UpdatedAt, zone) + "  " + SessionText.Turns(session.Turns).PadRight(turnsWidth)) + "  " + Markup.Escape(session.Title);
+        string row = Theme.DimMarkup(SessionText.Id(session.Id).PadRight(idWidth) + "  " + SessionText.Moment(session.UpdatedAt, zone) + "  " + SessionText.Turns(session.Turns).PadRight(turnsWidth)) + "  " + Markup.Escape(SessionText.DisplayTitle(session));
         return current ? row + "  " + Theme.DimMarkup(CurrentNote) : row;
     }
 

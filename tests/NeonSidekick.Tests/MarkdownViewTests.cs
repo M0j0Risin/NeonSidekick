@@ -117,7 +117,7 @@ public class MarkdownViewTests : IDisposable
     {
         var lines = Render(MarkdownView.Of("```csharp\nvar x = 1;\n\n\ty();\n```"));
 
-        Assert.Equal(new[] { "📜 csharp", "  var x = 1;", "   ", "      y();" }, lines.Select(Text));   // the scroll ahead of the label since 2026-09-22
+        Assert.Equal(new[] { "📜 csharp", "  var x = 1;", "            ", "      y();  " }, lines.Select(Text));   // the scroll ahead of the label since 2026-09-22; rows padded to the widest since 2026-10-04
         Assert.Equal(Theme.MarkdownCodeLabel, lines[0][0].Style);
         Assert.All(lines.Skip(1).SelectMany(l => l).Where(s => s.Text.Length > 0), s => Assert.Equal(Theme.PanelBg, s.Style.Background));
     }
@@ -146,7 +146,7 @@ public class MarkdownViewTests : IDisposable
     {
         var lines = Render(MarkdownView.Of("```c\n/* one\ntwo */ x\n```"));
 
-        Assert.Equal(new[] { "📜 c", "  /* one", "  two */ x" }, lines.Select(Text));
+        Assert.Equal(new[] { "📜 c", "  /* one  ", "  two */ x" }, lines.Select(Text));
         Assert.Equal(Theme.CodeComment, lines[1].Single(s => s.Text.Contains("one", StringComparison.Ordinal)).Style);
         Assert.Equal(Theme.CodeComment, lines[2].Single(s => s.Text.Contains("two", StringComparison.Ordinal)).Style);
     }
@@ -318,5 +318,17 @@ public class MarkdownViewTests : IDisposable
         Assert.Equal(3, TextCells.Width(MarkdownView.CodeGlyph));
         Assert.Equal("📜 csharp", MarkdownView.CodeHeading("csharp"));
         Assert.Equal("📜 code", MarkdownView.CodeHeading(null));
+    }
+
+    /// <summary>A code block is one even slab (2026-10-04, the UI review): every row padded in the block's style to the widest, never past the width.</summary>
+    [Fact]
+    public void Fence_RowsArePaddedToTheWidest_InTheBlocksStyle()
+    {
+        var lines = Render(MarkdownView.Of("```text\nab\nabcdef\n```"));
+        var rows = lines.Skip(1).ToArray();
+        Assert.Equal(["  ab    ", "  abcdef"], rows.Select(Text));
+        Assert.Equal(Theme.MarkdownCodeBlock, rows[0][rows[0].Count - 1].Style);   // SegmentLine.Length is cells, so no ^1
+        var narrow = Render(MarkdownView.Of("```text\n" + new string('x', 200) + "\ny\n```"));
+        Assert.All(narrow, l => Assert.True(Text(l).Length <= 80));
     }
 }
