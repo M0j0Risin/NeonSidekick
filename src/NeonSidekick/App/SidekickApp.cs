@@ -699,7 +699,8 @@ public sealed class SidekickApp
         // sql_execute never headless (2026-10-05): no pane to allow a change on.
         var sqlTools = ChatScreen.SqlToolsFor(ChatScreen.SqlTools(sql, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, sql.Catalog());
         var oracle = new Oracle.OracleAccess(() => Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.OracleConnectionsOffered));
-        var oracleTools = ChatScreen.OracleTools(oracle, () => EffectiveSettings);
+        // oracle_execute never headless (2026-10-05): no pane to allow a change on.
+        var oracleTools = ChatScreen.OracleToolsFor(ChatScreen.OracleTools(oracle, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, oracle.Catalog());
         var mysql = new MySql.MySqlAccess(() => MySql.MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.MySqlConnectionsOffered));
         // mysql_execute never headless (2026-10-05): no pane to allow a change on.
         var mysqlTools = ChatScreen.MySqlToolsFor(ChatScreen.MySqlTools(mysql, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, mysql.Catalog());

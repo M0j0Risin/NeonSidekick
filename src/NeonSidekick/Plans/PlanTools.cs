@@ -78,6 +78,7 @@ public static class PlanTools
         "sqlite_execute",
         // The server families' changes (2026-10-05, each family's mode read-write).
         "postgres_execute",
+        "oracle_execute",
         "sql_execute",
         "mysql_execute",
     };

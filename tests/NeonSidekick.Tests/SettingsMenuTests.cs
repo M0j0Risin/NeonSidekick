@@ -880,7 +880,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.EmbeddedHfDownloadType,   // 2026-09-30, single or parallel Hugging Face downloads
                 SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill,   // and the botchat's embedded bots
                 SettingsField.ClaudeCliServer,   // 2026-09-30, the Claude CLI server
-                SettingsField.OracleTools,   // 2026-09-30, the Oracle tab's ten
+                SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed,   // 2026-09-30, the Oracle tab's ten
                 SettingsField.OracleConnectionsOffered,
                 SettingsField.OracleDefaultConnection,
                 SettingsField.OracleSetPassword,

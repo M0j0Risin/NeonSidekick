@@ -45,8 +45,8 @@ public sealed class OracleToolsTests
     [Fact]
     public void Names_Schemas_AndDescriptions_ArePinned()
     {
-        Assert.Equal(OracleToolNames.All, _tools.Select(t => t.Name));
-        Assert.Equal(OracleToolNames.All.Order(StringComparer.Ordinal), ChatScreen.OracleToolNames.Order(StringComparer.Ordinal));
+        Assert.Equal(OracleToolNames.WithExecute, _tools.Select(t => t.Name));
+        Assert.Equal(OracleToolNames.WithExecute.Order(StringComparer.Ordinal), ChatScreen.OracleToolNames.Order(StringComparer.Ordinal));
         foreach (var tool in _tools)
         {
             Assert.Equal("object", tool.JsonSchema.GetProperty("type").GetString());
@@ -213,7 +213,7 @@ public sealed class OracleToolsTests
 
         var groups = SystemPromptSummary.ToolGroups([], [], [], [], false, oracle: _tools, oracleEnabled: false);
         var group = Assert.Single(groups, g => g.Label == ToolsText.OracleTabTitle);
-        Assert.Equal(8, group.Tools.Count);
+        Assert.Equal(OracleToolNames.WithExecute.Length, group.Tools.Count);   // the eight reads and oracle_execute (2026-10-05)
         Assert.False(group.Offered);
         Assert.Contains(SystemPromptSummary.OracleOffSuffix, group.Note);
     }

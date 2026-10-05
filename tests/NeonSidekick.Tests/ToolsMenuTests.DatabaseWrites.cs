@@ -9,6 +9,8 @@ public partial class ToolsMenuTests
 {
     public static TheoryData<string, SettingsField> WriteTabs() => new()
     {
+        { ToolsText.SqlTabTitle, SettingsField.SqlMode },
+        { ToolsText.OracleTabTitle, SettingsField.OracleMode },
         { ToolsText.MySqlTabTitle, SettingsField.MySqlMode },
         { ToolsText.PostgresTabTitle, SettingsField.PostgresMode },
     };
@@ -17,7 +19,7 @@ public partial class ToolsMenuTests
     [MemberData(nameof(WriteTabs))]
     public async Task OnThePane_EachFamilysMode_PicksReadWrite_AndItsChecklistTakesTheDefault(string tab, SettingsField mode)
     {
-        _settings.Update(d => d.MySqlStatementsAllowed = d.PostgresStatementsAllowed = ["drop"]);
+        _settings.Update(d => d.SqlStatementsAllowed = d.OracleStatementsAllowed = d.MySqlStatementsAllowed = d.PostgresStatementsAllowed = ["drop"]);
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(tab), Keys.Down, Keys.Enter]);   // the mode, second on the tab
         Push(Keys.Down, Keys.Enter);                     // read-write
@@ -28,10 +30,13 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
+        var c = _settings.Current;
         var (saved, kinds) = mode switch
         {
-            SettingsField.MySqlMode => (_settings.Current.MySqlMode, _settings.Current.MySqlStatementsAllowed),
-            _ => (_settings.Current.PostgresMode, _settings.Current.PostgresStatementsAllowed),
+            SettingsField.SqlMode => (c.SqlMode, c.SqlStatementsAllowed),
+            SettingsField.OracleMode => (c.OracleMode, c.OracleStatementsAllowed),
+            SettingsField.MySqlMode => (c.MySqlMode, c.MySqlStatementsAllowed),
+            _ => (c.PostgresMode, c.PostgresStatementsAllowed),
         };
         Assert.Equal("read-write", saved);
         Assert.Equal(ServerStatementKinds.Default(), kinds);

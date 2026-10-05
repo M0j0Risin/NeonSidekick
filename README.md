@@ -874,6 +874,8 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Setting | What it does | Default |
 |---|---|---|
 | Oracle tools | Offers the Oracle tools (connections, schemas, tables, columns, describe, relationships, indexes, query). | off |
+| Oracle mode | `read-only`: the tools only read. `read-write`: `oracle_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See Oracle › Changes. | read-only |
+| Oracle statements allowed | Under `read-write`: the kinds of statement `oracle_execute` may run (a checklist; A all, N none, D the default). See Oracle › Changes. | changing data, creating, reading |
 | Oracle connections offered | As *SQL connections offered*. | none |
 | Oracle default connection | As *SQL default connection*; `schema` works in another schema. | (the first connection) |
 | Oracle set password | As *SQL set password*. | — |
@@ -1684,11 +1686,12 @@ The SQL tools' twin for Oracle, through ODP.NET Core (fully managed; no Oracle C
 * **`user`**: the database user. `SYS` (and any `AS SYSDBA` sign-in) is refused, since Oracle doesn't hold SYS to a read-only transaction.
 * **`schema`**: the default schema for calls (the user's own by default).
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
+* **`access`**: `read` (default) or `readwrite`. Changes through `oracle_execute` need `readwrite` **and** *Oracle mode* `read-write`, both checked at every call.
 * **`passwordStore`**: `file` or `credman` (`NeonSidekick/oracle/<connection_name>`), as for SQL.
 
 #### Managing connections
 
-**Oracle add connection** (the Oracle tab of `/tools`) walks through a new connection. Its test (nothing written) shows who it signed in as, the container and the version, and warns when the account could change data: the tools never write, but a read-only account is the real guard. **Oracle set password** updates a password; or edit `oracle.json` directly.
+**Oracle add connection** (the Oracle tab of `/tools`) walks through a new connection. Its test (nothing written) shows who it signed in as, the container and the version, and warns when the account could change data: the tools only write through `oracle_execute` on a `readwrite` connection, and a read-only account is the real guard. It asks for the access too (`read` or `readwrite`). **Oracle set password** updates a password; or edit `oracle.json` directly.
 
 ```json
 {
@@ -1732,8 +1735,32 @@ Values go in as `:name` parameters. A `NUMBER` past 28 digits keeps every digit;
 | `oracle_relationships` | `connection?, schema?, table?` | Foreign-key join paths: all, a schema's or a table's. |
 | `oracle_indexes` | `connection?, table?, schema?` | Indexes: kind, key columns, status, visibility, the optimizer's counts, and recorded use where `DBA_INDEX_USAGE` is readable. |
 | `oracle_query` | `sql, connection?, schema?, params?, max_rows?` | One read-only `SELECT` (`FETCH FIRST n ROWS ONLY`, no trailing `;`). `params` as for SQL (`:id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+| `oracle_execute` | `sql, connection?, schema?, params?, max_rows?` | Only under *Oracle mode* `read-write`, on a `readwrite` connection. One statement that may change the schema, of a kind *Oracle statements allowed* ticks. A PL/SQL block or unit counts as one statement. Answers with the rows changed (`RETURNING … INTO` is refused: select the rows after the change). |
 
 `--oracle-check <connection>` proves the tools against a real database on the published exe (every type, the read-only layers, a cancel and a timeout).
+
+#### Changes
+
+With *Oracle mode* set to `read-write`, the model gets `oracle_execute` beside the eight reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
+
+1. **The kinds.** *Oracle statements allowed* decides which kinds of statement may run; a statement needs every kind it does, and the refusal names the kinds that are ticked.
+
+   | Kind | Statements | Default |
+   |---|---|---|
+   | changing data | `INSERT` (and `INSERT ALL`), `UPDATE`, `MERGE` | ✓ |
+   | deleting | `DELETE`, `TRUNCATE`, a `MERGE` that deletes |  |
+   | creating | `CREATE TABLE`, `INDEX`, `VIEW`, `MATERIALIZED VIEW`, `SEQUENCE`, `SYNONYM` | ✓ |
+   | changing structure | `ALTER` of those, `RENAME`, `COMMENT ON` |  |
+   | dropping | `DROP` of those, and of procedures, functions, packages, triggers and types |  |
+   | upkeep | `ANALYZE` (`DBMS_STATS` is a package call: procedures) |  |
+   | procedures and triggers | `CALL`, an anonymous `BEGIN … END;` or `DECLARE` block, and `CREATE`/`ALTER` of a procedure, function, package, trigger or type: code whose effects can't be read from the statement, so it's off by default |  |
+   | reading | `SELECT`: never asks, and runs as `oracle_query` does (read-only, rolled back) once its gate passes it too; a table made a moment ago is read again after 3 s (ORA-01466) | ✓ |
+
+2. **The gate.** One statement per call, lexed by the same rules as the reading gate. A PL/SQL unit (an anonymous block, or a `CREATE` of a procedure, function, package, trigger or type) is one whatever `;`s its body holds and keeps its final `;`; a trailing `/` is dropped, and a `/` with more text after it makes a second statement. An allow-list: a statement it doesn't know is refused. Always refused: `COMMIT`/`ROLLBACK`/`SAVEPOINT` (each call is its own transaction), `SET`, `ALTER SESSION`/`SYSTEM`, `GRANT`/`REVOKE`/`AUDIT`/`ADMINISTER`, users, roles, profiles, anything `PUBLIC`, tablespaces, directories, databases and database links, libraries and Java, `LOCK TABLE`, `PURGE`, `FLASHBACK`, and anywhere (bodies included) `@dblink`, the denied packages (`UTL_FILE`, `UTL_HTTP`, `DBMS_SQL`, `DBMS_SCHEDULER`…), `EXECUTE IMMEDIATE`, `WITH FUNCTION`, `BFILENAME` and `EXTERNAL(`; outside PL/SQL, `RETURNING … INTO`. `NEXTVAL` is allowed here. `SYS` stays refused.
+3. **Your allow.** Every change asks on a pane that names the connection and schema and shows the statement: **Deny**, **Allow once**, or **Allow for this session** (that connection and schema only, until `/new`, `/clear` or a profile switch).
+4. **The run.** A session of its own (no pooling, so never one a read left `READ_ONLY`), `CURRENT_SCHEMA` set, and no transaction of the app's: the statement commits as it runs (DDL commits anyway). A failed, timed-out or cancelled statement changes nothing.
+5. **The log.** Every change is written to the log: the connection and schema, the rows changed and the statement.
+6. **The account.** It's still the real guard. Give a `readwrite` connection an account with only the privileges you want the model to use.
 
 </details>
 

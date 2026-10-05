@@ -78,6 +78,9 @@ public static class ServerWriteText
     /// <summary>Why an explicit lock is refused.</summary>
     public const string Locks = "it locks what others use, and each call ends its own transaction";
 
+    /// <summary>Why Oracle's <c>RETURNING … INTO</c> outside PL/SQL is refused.</summary>
+    public const string ReturnsInto = "its INTO needs out binds the tool does not read back; select the rows after the change instead";
+
     /// <summary>Why a statement the family's read gate denies (a sleep, a lock, a file) is refused here too.</summary>
     public const string Denied = "it reaches outside the database, waits, or changes something no statement kind covers";
 

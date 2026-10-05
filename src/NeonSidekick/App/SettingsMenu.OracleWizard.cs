@@ -8,8 +8,8 @@ namespace NeonSidekick.App;
 /// <summary>
 /// <c>Oracle add connection</c> (2026-09-30, the user's ask: an Oracle tab "and a wizard to set up new connections"), the
 /// <c>SQL add connection</c> wizard's shape over <c>oracle.json</c>: one page per choice — which file, the name, the data
-/// source, the default schema, the user, where its password is kept, the password (masked), the connect timeout, the
-/// description — every row of the draft on each page, the current one marked, the question in the caption; then a summary
+/// source, the default schema, the user, where its password is kept, the password (masked), the connect timeout, the access
+/// (2026-10-05: read, or readwrite for <c>oracle_execute</c>), the description — every row of the draft on each page, the current one marked, the question in the caption; then a summary
 /// that tests the unsaved draft (who it signs in as, where, the server's version — and, since read-only is the user's first
 /// ask of these tools, a warning when the account could change data: the tools never will, but a read-only account is the
 /// real guard) and saves it (<see cref="OracleConfigFile.AddConnection"/>, the password after it through
@@ -20,7 +20,7 @@ internal sealed partial class SettingsMenu
 {
     /// <summary>The wizard's rows, one per <see cref="OracleWizardStep"/> before the summary, in its order. Pinned.</summary>
     public static readonly IReadOnlyList<string> OracleWizardLabels =
-        ["File", "Name", "Data source", "Default schema", "User", "Password store", "Password", "Connect timeout (s)", "Description"];
+        ["File", "Name", "Data source", "Default schema", "User", "Password store", "Password", "Connect timeout (s)", "Access", "Description"];
 
     public const string OracleWizardFileQuestion = "Scope for oracle.json?";
     public const string OracleWizardDataSourceQuestion = "The database: host:port/service (EZConnect, e.g. localhost:1521/FREEPDB1) or a whole (DESCRIPTION=…).";
@@ -46,6 +46,7 @@ internal sealed partial class SettingsMenu
         Store,
         Password,
         Timeout,
+        Access,
         Description,
         Summary,
     }
@@ -101,6 +102,7 @@ internal sealed partial class SettingsMenu
             OracleWizardStep.Store => c.InCredentialManager ? OracleConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : OracleConnectionConfig.FileStore,
             OracleWizardStep.Password => draft.Password.Length > 0 ? SqlWizardMasked : SqlWizardUnset,
             OracleWizardStep.Timeout => Invariant(c.ConnectTimeoutSeconds ?? OracleConnectionConfig.DefaultConnectTimeoutSeconds),
+            OracleWizardStep.Access => DatabaseWizardAccessValue(c.IsReadWrite),
             _ => OrUnset(c.Description),
         };
     }
@@ -308,6 +310,18 @@ internal sealed partial class SettingsMenu
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
+            case OracleWizardStep.Access:
+            {
+                if (await OracleWizardPickAsync(DatabaseWizardAccessQuestion, DatabaseWizardAccessRows(Oracle.OracleStatementKinds.Family), c.IsReadWrite ? 1 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    return false;
+                }
+
+                c.Access = Sql.ConnectionAccess.Stored(picked == 1);
+                NoticeAccessModeOff(Oracle.OracleStatementKinds.Family, c.IsReadWrite, _settings.Current.OracleMode);
+                return true;
+            }
+
             default:
                 return await OracleWizardTypeAsync(step, draft, SqlWizardDescriptionQuestion, c.Description ?? "", allowEmpty: true, mask: false, text =>
                 {
@@ -436,6 +450,7 @@ internal sealed partial class SettingsMenu
             Password = draft.Password,
             PasswordStore = OracleConnectionConfig.FileStore,
             ConnectTimeoutSeconds = c.ConnectTimeoutSeconds,
+            Access = c.Access,
         };
         if (copy.Problem is { } problem)
         {
@@ -456,7 +471,7 @@ internal sealed partial class SettingsMenu
         var powers = run.Grids.Count > 1 ? run.Grids[1].Rows.Select(r => r[0]).ToList() : [];
         if (powers.Count > 0)
         {
-            Sink.Warning(OracleText.CanWrite(powers));
+            Sink.Warning(OracleText.CanWrite(powers, c.IsReadWrite));
         }
     }
 

@@ -180,6 +180,91 @@ public sealed class OracleAccess
     }
 
     /// <summary>
+    /// <c>oracle_execute</c>'s run (2026-10-05, <c>Oracle mode</c> <c>read-write</c>): one statement the write gate passed (a PL/SQL
+    /// unit with its final <c>;</c>), on a connection whose entry says <c>"access": "readwrite"</c> (any other is
+    /// <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the caller checked; SYS stays refused by the entry's own problem), in
+    /// <paramref name="schema"/> when given (else the connection's own, else the user's). A session of its own — no pooling, so never
+    /// one a read left <c>READ_ONLY</c> — with <c>CURRENT_SCHEMA</c> set and no transaction of the app's: ODP.NET commits the one
+    /// statement as it runs (DDL commits anyway). Bound only the parameters it names. <see cref="SqlRun.Changes"/> is the rows the
+    /// server counts (none for DDL or a block). A timeout (ORA-01013), a failed connect and a server error are outcomes; a cancelled
+    /// token throws (the server undoes the statement).
+    /// </summary>
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? schema, string sql, IReadOnlyList<SqlParameterValue> parameters, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        if (Resolve(name, defaultName, out var refused) is not { } target)
+        {
+            return refused!;
+        }
+
+        if (!target.Config.IsReadWrite)
+        {
+            return SqlRun.Refused(SqlOutcome.ReadOnlyConnection, "", target.Name);
+        }
+
+        var secret = OracleSecrets.Resolve(target);
+        if (secret.Error is { } missing)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
+        }
+
+        string workIn = OracleIdentifier.Normalize(schema) ?? OracleIdentifier.Normalize(target.Config.Schema) ?? OracleIdentifier.Normalize(target.Config.User) ?? target.Config.User!.Trim().ToUpperInvariant();
+        await using var connection = new OracleConnection(target.Config.Builder(secret.Value, pooling: false).ConnectionString);
+        try
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OracleException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            DiagnosticLog.Warn(OracleConfigFile.Category, OracleText.ConnectFailedLogLine(target.Name, ex.Number, LogText.Excerpt(ex.Message)));
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, Message(ex), target.Name);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException && !cancellationToken.IsCancellationRequested)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, LogText.Excerpt(ex.Message), target.Name);
+        }
+
+        var watch = Stopwatch.StartNew();
+        int? changes;
+        try
+        {
+            if (OracleIdentifier.Quote(workIn) is { } quoted)
+            {
+                await ExecuteAsync(connection, null, "ALTER SESSION SET CURRENT_SCHEMA = " + quoted, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            }
+
+            await using var command = new OracleCommand(sql, connection) { BindByName = true, CommandTimeout = timeoutSeconds };
+            var named = OracleReadOnlyGate.Binds(sql);
+            foreach (var parameter in parameters.Where(p => named.Contains(p.Name, StringComparer.OrdinalIgnoreCase)))
+            {
+                command.Parameters.Add(Bind(parameter));
+            }
+
+            int count = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            changes = count >= 0 ? count : null;
+        }
+        catch (OracleException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
+        }
+        catch (OracleException ex) when (ex.Number == CancelledErrorNumber)
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, [], watch.Elapsed);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && ex.InnerException is OracleException { Number: CancelledErrorNumber })
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, [], watch.Elapsed);
+        }
+        catch (OracleException ex)
+        {
+            return new SqlRun(SqlOutcome.Failed, Message(ex), target.Name, workIn, [], watch.Elapsed);
+        }
+
+        return new SqlRun(SqlOutcome.Ok, "", target.Name, workIn, [], watch.Elapsed) { Changes = changes };
+    }
+
+    /// <summary>
     /// The session's layers, the app's own statements before any transaction: <c>READ_ONLY</c> on 23ai and later (skipped
     /// before, logged once per connection), then the schema this call works in.
     /// </summary>

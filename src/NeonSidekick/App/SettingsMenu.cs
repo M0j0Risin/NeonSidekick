@@ -623,6 +623,12 @@ public enum SettingsField
     /// <summary>A toggle: whether a turn offers the eight Oracle tools (<see cref="Settings.AppSettingsData.OracleTools"/>). The Oracle tab of <c>/tools</c>' first row (2026-09-30); no reconnect (read at each turn).</summary>
     OracleTools,
 
+    /// <summary>A picker: what the Oracle tools may do — <c>read-only</c> / <c>read-write</c> (<see cref="Settings.AppSettingsData.OracleMode"/>). The Oracle tab's second row (2026-10-05).</summary>
+    OracleMode,
+
+    /// <summary>A checklist: the kinds of statement <c>oracle_execute</c> may run under read-write (<see cref="Settings.AppSettingsData.OracleStatementsAllowed"/>). The Oracle tab's third row (2026-10-05).</summary>
+    OracleStatementsAllowed,
+
     /// <summary>A checklist: which connections of <c>oracle.json</c> this profile offers (<see cref="Settings.AppSettingsData.OracleConnectionsOffered"/>). The Oracle tab's second row (2026-09-30); no reconnect.</summary>
     OracleConnectionsOffered,
 
@@ -1392,7 +1398,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
         [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
-        [SettingsField.OracleTools, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
+        [SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort, SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
@@ -1951,6 +1957,8 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlConnectionsProfile => "SQL connections (profile)",
         SettingsField.SqlConnectionsGlobal => "SQL connections (global)",
         SettingsField.OracleTools => "Oracle tools",
+        SettingsField.OracleMode => "Oracle mode",
+        SettingsField.OracleStatementsAllowed => "Oracle statements allowed",
         SettingsField.OracleConnectionsOffered => "Oracle connections offered",
         SettingsField.OracleDefaultConnection => "Oracle default connection",
         SettingsField.OracleSetPassword => "Oracle set password",
@@ -2296,6 +2304,8 @@ internal sealed partial class SettingsMenu
             SettingsField.SqlConnectionsProfile => SqlConnectionsLabel(Sql.SqlConfigFile.ProfilePath(profileDirectory)),
             SettingsField.SqlConnectionsGlobal => SqlConnectionsLabel(Sql.SqlConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.OracleTools => OnOff(data.OracleTools),
+            SettingsField.OracleMode => data.OracleMode,
+            SettingsField.OracleStatementsAllowed => WriteStatementsValue(data.OracleStatementsAllowed, data.OracleMode),
             SettingsField.OracleDefaultConnection => string.IsNullOrWhiteSpace(data.OracleDefaultConnection) ? FirstSqlConnectionLabel : data.OracleDefaultConnection,
             SettingsField.OracleSetPassword => SqlSetPasswordLabel,
             SettingsField.OracleAddConnection => SqlAddConnectionLabel,

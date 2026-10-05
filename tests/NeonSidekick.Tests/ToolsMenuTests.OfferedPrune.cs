@@ -47,7 +47,7 @@ public partial class ToolsMenuTests
     public async Task TheOracleOffered_DropsAGoneName_AsItOpens()
     {
         WriteProfileFile(NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "free": { "dataSource": "x:1521/y", "user": "u" } } }""");
-        await AssertDroppedAsItOpensAsync(SettingsField.OracleConnectionsOffered, (d, v) => d.OracleConnectionsOffered = v, d => d.OracleConnectionsOffered, () => OpenOracleRow(1), "free");
+        await AssertDroppedAsItOpensAsync(SettingsField.OracleConnectionsOffered, (d, v) => d.OracleConnectionsOffered = v, d => d.OracleConnectionsOffered, () => OpenOracleRow(3), "free");
     }
 
     [Fact]

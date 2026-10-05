@@ -131,6 +131,8 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlStatementsAllowed => await EditWriteStatementsAsync(field, MySql.MySqlStatementKinds.Family, d => d.MySqlStatementsAllowed, (d, v) => d.MySqlStatementsAllowed = v, cancellationToken).ConfigureAwait(false),
         SettingsField.SqlMode => await PickWriteModeAsync(field, Sql.SqlStatementKinds.Family, saved.SqlMode, (d, v) => d.SqlMode = v, cancellationToken).ConfigureAwait(false),
         SettingsField.SqlStatementsAllowed => await EditWriteStatementsAsync(field, Sql.SqlStatementKinds.Family, d => d.SqlStatementsAllowed, (d, v) => d.SqlStatementsAllowed = v, cancellationToken).ConfigureAwait(false),
+        SettingsField.OracleMode => await PickWriteModeAsync(field, Oracle.OracleStatementKinds.Family, saved.OracleMode, (d, v) => d.OracleMode = v, cancellationToken).ConfigureAwait(false),
+        SettingsField.OracleStatementsAllowed => await EditWriteStatementsAsync(field, Oracle.OracleStatementKinds.Family, d => d.OracleStatementsAllowed, (d, v) => d.OracleStatementsAllowed = v, cancellationToken).ConfigureAwait(false),
         _ => null,
     };
 }

@@ -127,15 +127,16 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
     /// <summary>
     /// The ODP.NET connection string for this entry, <paramref name="password"/> the resolved one
     /// (<see cref="OracleSecrets.Resolve"/>). Pooling on (a pooled session keeps its <c>READ_ONLY</c>, and each call sets
-    /// its schema afresh); no <c>DBA Privilege</c>, ever. Call only on an entry without a <see cref="Problem"/>.
+    /// its schema afresh); no <c>DBA Privilege</c>, ever. Call only on an entry without a <see cref="Problem"/>. <paramref name="pooling"/>
+    /// false (2026-10-05, <c>oracle_execute</c>): a write's session is its own, never a pooled one a read left <c>READ_ONLY</c>.
     /// </summary>
-    public OracleConnectionStringBuilder Builder(string? password = null) => new()
+    public OracleConnectionStringBuilder Builder(string? password = null, bool pooling = true) => new()
     {
         DataSource = DataSource!.Trim(),
         UserID = User!.Trim(),
         Password = password ?? "",
         ConnectionTimeout = ConnectTimeoutSeconds ?? DefaultConnectTimeoutSeconds,
-        Pooling = true,
+        Pooling = pooling,
     };
 }
 
