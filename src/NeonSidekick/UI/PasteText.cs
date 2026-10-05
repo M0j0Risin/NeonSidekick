@@ -7,8 +7,9 @@ namespace NeonSidekick.UI;
 /// every line break (<c>\r\n</c>, <c>\r</c>, <c>\n</c>) is one <c>'\n'</c>, a tab is
 /// <see cref="TabSpaces"/> spaces (indentation of pasted code survives; a tab has no cell width),
 /// trailing line breaks are dropped (a copied block ends with one, and an empty last row is
-/// noise), private-use characters (U+E000–U+F8FF, the line's paste tokens — <see cref="PasteBlocks"/>)
-/// and every other control character are dropped, nothing else is trimmed (what landed is visible
+/// noise), every control character is dropped (private-use characters too until 2026-10-04, since the line's
+/// paste tokens live there; the line now keeps one as a literal token, <see cref="PasteBlocks.Literal"/>, the user's report: pasted
+/// Nerd Font glyphs vanished), nothing else is trimmed (what landed is visible
 /// and editable). <see cref="Flatten"/> is the one-paragraph form for a single-line field: line
 /// breaks and tabs are one space each. Both pinned.
 /// </summary>
@@ -45,7 +46,7 @@ public static class PasteText
             {
                 result.Append(' ', oneLine ? 1 : TabSpaces);
             }
-            else if (!char.IsControl(c) && !PasteBlocks.IsToken(c))
+            else if (!char.IsControl(c))
             {
                 result.Append(c);
             }

@@ -450,7 +450,7 @@ public sealed partial class InputLine
             if (k.KeyChar != '\0' && !char.IsControl(k.KeyChar) && !(alt && !control))
             {
                 DeleteSelection();
-                _text.Insert(_cursor, k.KeyChar);
+                _text.Insert(_cursor, _line._pastes.Literal(k.KeyChar));   // a typed private-use glyph is a literal token (2026-10-04)
                 _cursor++;
                 Redraw();
                 return EditOutcome.Handled;
@@ -699,7 +699,7 @@ public sealed partial class InputLine
 
                 case ConsoleKey.Home:
                     _anchor = shift ? Anchor() : -1;
-                    _cursor = 0;
+                    _cursor = LineHome(_text.ToString(), _cursor);
                     Redraw();
                     break;
 
@@ -718,7 +718,7 @@ public sealed partial class InputLine
 
                 case ConsoleKey.End:
                     _anchor = shift ? Anchor() : -1;
-                    _cursor = _text.Length;
+                    _cursor = LineEnd(_text.ToString(), _cursor);
                     Redraw();
                     break;
 

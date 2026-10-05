@@ -10441,7 +10441,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("ESC ESC", "on an empty line, rewind the conversation to an earlier message (/rewind)"), rows[3]);   // 2026-09-30
         Assert.Equal(("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"), rows[4]);   // the row moves 2026-09-21
         Assert.Equal(("Left / Right", "change tabs in menus · hold Shift to select text"), rows[5]);
-        Assert.Equal(("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"), rows[6]);
+        Assert.Equal(("Home / End", "the start or end of the line, pressed again of the whole message · hold Shift to select text"), rows[6]);   // 2026-10-04: the keys go to the line's ends now
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[7]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
         Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^36]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)

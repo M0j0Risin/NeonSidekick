@@ -251,12 +251,40 @@ public class TranscriptRendererTests : IDisposable
         Assert.Equal(new[] { "● 🛠️ Which colour? — blue", "  🛠️ Toppings? — cheese, olives", "Blue it is." }, _console.Lines);
     }
 
+    /// <summary>
+    /// The notice and error lines read their theme slots (2026-10-04, the UI review: SystemText and ErrorText had been unused, so a
+    /// user theme's override did nothing); a colour-only style writes the plain colour form.
+    /// </summary>
+    [Fact]
+    public void NoticeAndError_FollowTheirThemeSlots()
+    {
+        Assert.Equal(Theme.ColorMarkup(Theme.SystemText.Foreground, "  · n"), TranscriptRenderer.NoticeMarkup("n"));
+        Assert.Equal("[" + Theme.ErrorText.ToMarkup() + "]  ✗ e[/]", TranscriptRenderer.ErrorMarkup("e"));
+        Assert.Equal("[#112233]x[/]", Theme.StyleMarkup(new Spectre.Console.Style(new Spectre.Console.Color(0x11, 0x22, 0x33)), "x"));
+        Assert.Equal("[italic #112233]x [[y]][/]", Theme.StyleMarkup(new Spectre.Console.Style(new Spectre.Console.Color(0x11, 0x22, 0x33), decoration: Spectre.Console.Decoration.Italic), "x [y]"));
+    }
+
+    /// <summary>Truncate cuts by cells and between clusters (2026-10-04): never half an emoji, never a base without its selector.</summary>
+    [Fact]
+    public void Truncate_CountsCells_AndNeverSplitsACluster()
+    {
+        Assert.Equal("abc", TranscriptRenderer.Truncate("abc", 3));
+        Assert.Equal("ab…", TranscriptRenderer.Truncate("abcd", 3));
+        Assert.Equal("a b", TranscriptRenderer.Truncate("a\nb", 5));
+        Assert.Equal("", TranscriptRenderer.Truncate("abc", 0));
+        Assert.Equal("日…", TranscriptRenderer.Truncate("日本語", 4));          // 2 + 2 + 2 cells: one wide character and the ellipsis
+        Assert.Equal("a…", TranscriptRenderer.Truncate("a😀b", 3));          // the pair does not fit beside the ellipsis: dropped whole
+        Assert.Equal("a😀…", TranscriptRenderer.Truncate("a😀bcd", 4));
+        Assert.Equal("x…", TranscriptRenderer.Truncate("x⚙️yz", 3));        // gear and selector are two cells together, cut as one
+        Assert.Equal("x⚙️…", TranscriptRenderer.Truncate("x⚙️yz", 4));
+    }
+
     [Fact]
     public void MarkupBuilders_ArePinned()
     {
         Assert.Equal("[#9A8BB8]  · n[/]", TranscriptRenderer.NoticeMarkup("n"));
         Assert.Equal("[#FFC832]  ! w[/]", TranscriptRenderer.WarningMarkup("w"));
-        Assert.Equal("[#FF4D6D]  ✗ e[/]", TranscriptRenderer.ErrorMarkup("e"));
+        Assert.Equal("[bold #FF4D6D]  ✗ e[/]", TranscriptRenderer.ErrorMarkup("e"));   // Theme.ErrorText, bold, since 2026-10-04 (the slot had been unused)
         // Two spaces after the gear: the terminal advances one cell for U+2699 and the font overdraws the next.
         Assert.Equal("[#9A8BB8]  🛠️ t {}[/]", TranscriptRenderer.ToolMarkup("t", "{}"));
         Assert.Equal("[#9A8BB8]  🛠️ t → r[/]", TranscriptRenderer.ToolResultMarkup("t", "r"));

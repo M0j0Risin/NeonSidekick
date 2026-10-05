@@ -300,6 +300,16 @@ public static class Theme
     public static string DimMarkup(string text) =>
         string.Concat("[", ToHex(Dim), "]", Markup.Escape(text), "[/]");
 
+    /// <summary>
+    /// Text in a theme slot's style (2026-10-04: <see cref="SystemText"/> and <see cref="ErrorText"/> had been defined and
+    /// never used, so a user theme's override of either changed nothing). A style that is a colour alone writes exactly
+    /// <see cref="ColorMarkup"/>'s form; anything more (bold, a background) its full markup. The text is escaped.
+    /// </summary>
+    public static string StyleMarkup(Style style, string text) =>
+        style.Decoration == Decoration.None && style.Background == Color.Default
+            ? ColorMarkup(style.Foreground, text)
+            : string.Concat("[", style.ToMarkup(), "]", Markup.Escape(text), "[/]");
+
     /// <summary>Text in an arbitrary palette colour. The text is escaped.</summary>
     public static string ColorMarkup(Color color, string text) =>
         string.Concat("[", ToHex(color), "]", Markup.Escape(text), "[/]");

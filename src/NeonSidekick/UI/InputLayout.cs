@@ -45,7 +45,8 @@ public sealed record InputLayout(IReadOnlyList<string> Rows, IReadOnlyList<int> 
                 continue;
             }
 
-            int w = TextCells.ElementWidth(text, i, out int length);
+            // A cluster at a time (2026-10-04): a base and its U+FE0F, or a ZWJ sequence, never part over two rows.
+            int w = TextCells.ClusterWidth(text, i, out int length);
             length = Math.Max(1, length);
             if (cells > 0 && cells + w > availableCells)
             {

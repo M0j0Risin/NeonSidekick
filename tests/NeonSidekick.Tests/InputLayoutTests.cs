@@ -102,4 +102,39 @@ public class InputLayoutTests
             }
         }
     }
+
+    /// <summary>A base and its U+FE0F, or a ZWJ sequence, are one cluster to the wrap (2026-10-04): never parted over two rows.</summary>
+    [Fact]
+    public void Wrap_NeverPartsACluster()
+    {
+        // "ab⚙️": the gear and its selector are two cells together; on a three-cell row they go down as one.
+        var layout = InputLayout.Wrap("ab\u2699\uFE0F", 4, 3);
+        Assert.Equal(["ab", "\u2699\uFE0F"], layout.Rows);
+        Assert.Equal(2, TextCells.ClusterWidth("\u2699\uFE0F", 0, out int length));
+        Assert.Equal(2, length);
+        Assert.Equal(2, TextCells.ClusterWidth("\u26D3\uFE0F\u200D\U0001F4A5", 0, out length));   // ⛓️‍💥: as wide as its first part
+        Assert.Equal(5, length);
+    }
+
+    /// <summary>The BMP emoji drawn two cells wide (2026-10-04, the UI review found ✅ ❌ ⭐ ⛔ ➕ ⬛ counted one).</summary>
+    [Theory]
+    [InlineData('\u2705')]
+    [InlineData('\u274C')]
+    [InlineData('\u2B50')]
+    [InlineData('\u26D4')]
+    [InlineData('\u2795')]
+    [InlineData('\u2B1B')]
+    [InlineData('\u2615')]
+    [InlineData('\u231A')]
+    [InlineData('\u2728')]
+    [InlineData('\u2757')]
+    public void TheWideBmpEmoji_AreTwoCells(char c) => Assert.Equal(2, TextCells.Width(c));
+
+    [Theory]
+    [InlineData('\u2699')]   // ⚙ text presentation by default: one cell bare
+    [InlineData('\u2714')]   // ✔
+    [InlineData('\u25CF')]   // ●
+    [InlineData('\u2190')]   // ←
+    [InlineData('a')]
+    public void TextPresentationCharacters_StayOneCell(char c) => Assert.Equal(1, TextCells.Width(c));
 }

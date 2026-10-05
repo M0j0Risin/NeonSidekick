@@ -639,7 +639,7 @@ public sealed partial class InputLine
                             _notices?.Notice(error);
                         }
 
-                        pieces.Add(path);
+                        pieces.Add(_pastes.Literals(path));
                     }
                 }
             }
@@ -647,7 +647,31 @@ public sealed partial class InputLine
             return string.Join(' ', pieces);
         }
 
-        return multiline && PasteBlocks.Collapses(block) ? _pastes.Add(block).ToString() : block;
+        // A private-use glyph left on the line is a literal token (2026-10-04): the draft never reads it as a paste; a held block keeps it as it is.
+        return multiline && PasteBlocks.Collapses(block) ? _pastes.Add(block).ToString() : _pastes.Literals(block);
+    }
+
+    /// <summary>
+    /// Where Home takes the cursor (2026-10-04, the UI review: the help said "line" and the key went to the draft's start): the start of
+    /// the cursor's line of a multi-line draft (after the <c>'\n'</c> before it), or, already there, the draft's start. A one-line draft
+    /// is unchanged: its start.
+    /// </summary>
+    public static int LineHome(string text, int cursor)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        cursor = Math.Clamp(cursor, 0, text.Length);
+        int start = cursor == 0 ? 0 : text.LastIndexOf('\n', cursor - 1) + 1;
+        return start == cursor ? 0 : start;
+    }
+
+    /// <summary>Where End takes the cursor (2026-10-04): the end of the cursor's line (before the next <c>'\n'</c>), or, already there, the draft's end.</summary>
+    public static int LineEnd(string text, int cursor)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        cursor = Math.Clamp(cursor, 0, text.Length);
+        int end = text.IndexOf('\n', cursor);
+        end = end < 0 ? text.Length : end;
+        return end == cursor ? text.Length : end;
     }
 
     /// <summary>Cells the text may use on a row of <paramref name="width"/> (after the glyph or the indent): one is kept spare so the last cell never triggers a pending wrap.</summary>

@@ -51,6 +51,32 @@ public class PasteBlocksTests
         Assert.Null(blocks.LabelOf('x'));
     }
 
+    /// <summary>
+    /// A pasted or typed private-use character (a Nerd Font glyph) is a literal token (2026-10-04, the user's report: they were
+    /// dropped): one per distinct character, drawn and expanded as itself, never painted as a label, never numbered among the pastes.
+    /// </summary>
+    [Fact]
+    public void Literals_StandForTheirOwnGlyph()
+    {
+        var blocks = new PasteBlocks();
+        char paste = blocks.Add(Lines(5));
+        char glyph = blocks.Literal('\uE0B0');                       // the Powerline arrow
+        Assert.NotEqual('\uE0B0', glyph);
+        Assert.True(PasteBlocks.IsToken(glyph));
+        Assert.Equal(glyph, blocks.Literal('\uE0B0'));                // the same character, the same token
+        Assert.Equal('a', blocks.Literal('a'));
+        Assert.True(blocks.IsLiteral(glyph));
+        Assert.False(blocks.IsLiteral(paste));
+
+        string draft = blocks.Literals("git \uE0A0 main") + " " + paste;
+        Assert.Equal("git \uE0A0 main " + Lines(5), blocks.Expand(draft));
+        Assert.Equal("git \uE0A0 main [Pasted text #1 +5 lines]", blocks.Display(draft));
+        Assert.Single(blocks.LabelRanges(draft));                     // the paste's label alone; a glyph is text
+        Assert.Empty(blocks.Previews(blocks.Literals("\uE0A0"), 5));
+        Assert.Equal("[Pasted text #2 +4 lines]", blocks.LabelOf(blocks.Add(Lines(4))));   // the glyphs took no number
+        Assert.Equal("plain", blocks.Literals("plain"));
+    }
+
     [Fact]
     public void Display_AndExpand_ReplaceEveryToken()
     {

@@ -260,7 +260,7 @@ public class KeysTests
         Assert.Equal("  ▾ 🛠️ 1 tool call — grep", ToolGroupText.Summary([("grep", 1)], expanded: true));
         Assert.Equal("  ▸ 🛠️ tool calls", ToolGroupText.Summary([], expanded: false));
         Assert.Equal("  ▸ 🛠️ 4 tool calls — b ×2, a, c", ToolGroupText.Summary([("a", 1), ("b", 2), ("c", 1)], expanded: false));   // a tie keeps the order first called
-        Assert.True(ToolGroupText.Summary(Enumerable.Range(0, 50).Select(i => ("tool_number_" + i, 1)).ToList(), false).Length <= TranscriptRenderer.ToolTextLimit);
+        Assert.True(TextCells.Width(ToolGroupText.Summary(Enumerable.Range(0, 50).Select(i => ("tool_number_" + i, 1)).ToList(), false)) <= TranscriptRenderer.ToolTextLimit);   // cells since 2026-10-04
         Assert.Equal("(tool calls, code blocks, diffs and thinking expanded; Ctrl+O or /collapse folds them)", ToolGroupText.ExpandedNotice(true));   // diffs since 2026-10-04
         Assert.Equal("(tool calls, code blocks, diffs and thinking collapsed; Ctrl+O, /expand or a click on a summary unfolds them)", ToolGroupText.ExpandedNotice(false));
     }

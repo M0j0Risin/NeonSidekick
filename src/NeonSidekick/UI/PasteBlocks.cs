@@ -15,8 +15,10 @@ namespace NeonSidekick.UI;
 /// own); it expands into that label — the text the model reads names the picture — while the
 /// picture itself goes beside the text (<see cref="ImagesIn"/>). Tokens survive in the session
 /// history (Up recalls one; its block is still here), so the store lives as long as the
-/// <see cref="InputLine"/>. A private-use character in pasted text is dropped by
-/// <see cref="PasteText"/> so nothing but the line makes a token.
+/// <see cref="InputLine"/>. A private-use character that is pasted or typed is never read as
+/// a token: the line keeps it as a <em>literal</em> token of its own (<see cref="Literal"/>, 2026-10-04, the user's report:
+/// every pasted Nerd Font or Powerline glyph lives in that range and was dropped until then), drawn and expanded as the
+/// character itself, one per distinct character, never painted as a label.
 ///
 /// <para>The draft is the string with tokens (what the line edits); the <em>display</em> string is
 /// the draft with each token replaced by its label (what the pane draws). The two index mappings
@@ -39,10 +41,16 @@ public sealed class PasteBlocks
     private const char FirstToken = '';
     private const char LastToken = '';
 
-    /// <summary>One held thing: a text block or an image, with its number among its own kind — and an image's source, when known (<see cref="Original"/>).</summary>
-    private sealed record Block(int Number, string? Text, ImageAttachment? Image, byte[]? Original = null, string? SourcePath = null);
+    /// <summary>
+    /// One held thing: a text block or an image, with its number among its own kind — and an image's source, when known
+    /// (<see cref="Original"/>) — or a private-use character the user pasted or typed (<see cref="Literal"/>), which stands for itself.
+    /// </summary>
+    private sealed record Block(int Number, string? Text, ImageAttachment? Image, byte[]? Original = null, string? SourcePath = null, char? Glyph = null);
 
     private readonly List<Block> _blocks = new();
+
+    /// <summary>The literal token of each private-use character seen so far: one per character, however often it is pasted.</summary>
+    private readonly Dictionary<char, char> _literals = new();
     private int _texts;
     private int _images;
 
@@ -133,6 +141,50 @@ public sealed class PasteBlocks
         return previews ?? (IReadOnlyList<(string, string)>)[];
     }
 
+    /// <summary>
+    /// The draft's form of <paramref name="c"/> (2026-10-04): itself, or for a private-use character (a Nerd Font glyph) the literal
+    /// token that stands for it, so the draft never reads a pasted or typed glyph as one of its pastes.
+    /// </summary>
+    public char Literal(char c)
+    {
+        if (!IsToken(c))
+        {
+            return c;
+        }
+
+        lock (_blocks)
+        {
+            if (!_literals.TryGetValue(c, out char token))
+            {
+                token = Keep(new Block(0, null, null, Glyph: c));
+                _literals[c] = token;
+            }
+
+            return token;
+        }
+    }
+
+    /// <summary><paramref name="text"/> with every private-use character swapped for its literal token (<see cref="Literal"/>): pasted text as the draft holds it.</summary>
+    public string Literals(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (!text.Any(IsToken))
+        {
+            return text;
+        }
+
+        var result = new StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            result.Append(Literal(c));
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>Whether <paramref name="c"/> is one of this store's literal tokens: drawn as its character, never as a label.</summary>
+    public bool IsLiteral(char c) => TryIndex(c, out int i) && _blocks[i].Glyph is not null;
+
     /// <summary>Keeps <paramref name="block"/> and returns its token for the draft.</summary>
     public char Add(string block)
     {
@@ -210,14 +262,14 @@ public sealed class PasteBlocks
     }
 
     /// <summary>The text a token stands for (an image token's is its label); null for a character that is not one of this store's tokens.</summary>
-    public string? BlockOf(char c) => TryIndex(c, out int i) ? _blocks[i].Text ?? ImageLabel(_blocks[i].Number) : null;
+    public string? BlockOf(char c) => TryIndex(c, out int i) ? _blocks[i].Glyph is { } glyph ? glyph.ToString() : _blocks[i].Text ?? ImageLabel(_blocks[i].Number) : null;
 
     /// <summary>The image a token stands for; null for a text token or a character that is not one of this store's tokens.</summary>
     public ImageAttachment? ImageOf(char c) => TryIndex(c, out int i) ? _blocks[i].Image : null;
 
     /// <summary>The label a token is drawn as; null for a character that is not one of this store's tokens.</summary>
     public string? LabelOf(char c) =>
-        TryIndex(c, out int i) ? _blocks[i].Text is { } text ? Label(_blocks[i].Number, text) : ImageLabel(_blocks[i].Number) : null;
+        TryIndex(c, out int i) ? _blocks[i].Glyph is { } glyph ? glyph.ToString() : _blocks[i].Text is { } text ? Label(_blocks[i].Number, text) : ImageLabel(_blocks[i].Number) : null;
 
     /// <summary>
     /// The draft with every token replaced by its label: the transcript's line. <paramref name="unbreakable"/>
@@ -320,7 +372,11 @@ public sealed class PasteBlocks
         {
             if (LabelOf(c) is { } label)
             {
-                ranges.Add((display, label.Length));
+                if (!IsLiteral(c))
+                {
+                    ranges.Add((display, label.Length));   // a literal glyph is text, not a label (2026-10-04)
+                }
+
                 display += label.Length;
             }
             else

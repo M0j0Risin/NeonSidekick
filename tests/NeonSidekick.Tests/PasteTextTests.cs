@@ -13,7 +13,7 @@ public class PasteTextTests
     [InlineData("\n\nleading", "\n\nleading")]
     [InlineData("\r\n", "")]
     [InlineData("bell\a here\x1b[0m", "bell here[0m")]
-    [InlineData("token\uE000\uF8FF here", "token here")]
+    [InlineData("token\uE000\uF8FF here", "token\uE000\uF8FF here")]   // private use kept since 2026-10-04 (Nerd Font glyphs); the line makes them literal tokens
     [InlineData("", "")]
     [InlineData("日本\n😀", "日本\n😀")]
     public void Normalize_IsPinned(string text, string expected) => Assert.Equal(expected, PasteText.Normalize(text));
@@ -25,7 +25,7 @@ public class PasteTextTests
     [InlineData("  keep  ", "  keep  ")]
     [InlineData("trailing\r\n", "trailing ")]
     [InlineData("bell\a here\x1b[0m", "bell here[0m")]
-    [InlineData("token\uE000 here", "token here")]
+    [InlineData("token\uE000 here", "token\uE000 here")]
     [InlineData("", "")]
     [InlineData("日本\n😀", "日本 😀")]
     public void Flatten_IsPinned(string text, string expected) => Assert.Equal(expected, PasteText.Flatten(text));

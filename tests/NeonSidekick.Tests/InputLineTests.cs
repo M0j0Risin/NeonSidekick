@@ -1872,6 +1872,16 @@ public class InputLineTests : IDisposable
         Assert.Equal("see X now", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true)).Text);
     }
 
+    /// <summary>A pasted or typed Nerd Font glyph reaches the sent text (2026-10-04, the user's report: the paste dropped every one).</summary>
+    [Fact]
+    public async Task PrivateUseGlyphs_PastedOrTyped_AreSentAsTheyAre()
+    {
+        var (line, keys, _) = WordClickLine();
+        keys.PushPaste("branch \uE0A0 ").Push(Chars("main \uF113")).Push(Keys.Enter);
+
+        Assert.Equal("branch \uE0A0 main \uF113", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true)).Text);
+    }
+
     [Fact]
     public async Task AJitterOfTheSecondPress_KeepsTheWordWhole()
     {
@@ -3768,5 +3778,20 @@ public class InputLineTests : IDisposable
         var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
 
         Assert.Equal("/speak trunc", submitted.Text);
+    }
+
+    /// <summary>Home and End go to the cursor's line of a multi-line draft, and pressed again to the whole draft's ends (2026-10-04).</summary>
+    [Fact]
+    public void LineHome_AndLineEnd_TheLineFirst_ThenTheDraft()
+    {
+        const string text = "one\ntwo three\nfour";
+        Assert.Equal(4, InputLine.LineHome(text, 8));     // in "two three": its start
+        Assert.Equal(0, InputLine.LineHome(text, 4));     // already there: the draft's start
+        Assert.Equal(13, InputLine.LineEnd(text, 8));     // the end of "two three"
+        Assert.Equal(text.Length, InputLine.LineEnd(text, 13));
+        Assert.Equal(0, InputLine.LineHome("single", 3));
+        Assert.Equal(6, InputLine.LineEnd("single", 3));
+        Assert.Equal(0, InputLine.LineHome("", 0));
+        Assert.Equal(0, InputLine.LineEnd("", 0));
     }
 }

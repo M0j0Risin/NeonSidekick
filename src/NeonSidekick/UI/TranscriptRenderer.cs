@@ -143,11 +143,11 @@ public sealed class TranscriptRenderer : INoticeSink
     public static string SpeakerMarkup(string name, Color color) =>
         string.Concat("[", Theme.ToHex(color), " bold]", Markup.Escape(SpeakerGlyph + name), "[/]");
 
-    public static string NoticeMarkup(string text) => Theme.ColorMarkup(Theme.Dim, NoticeGlyph + text);
+    public static string NoticeMarkup(string text) => Theme.StyleMarkup(Theme.SystemText, NoticeGlyph + text);
 
     public static string WarningMarkup(string text) => Theme.ColorMarkup(Theme.Warn, WarningGlyph + text);
 
-    public static string ErrorMarkup(string text) => Theme.ColorMarkup(Theme.Bad, ErrorGlyph + text);
+    public static string ErrorMarkup(string text) => Theme.StyleMarkup(Theme.ErrorText, ErrorGlyph + text);
 
     /// <summary>A timer alert: the warning colour behind its own glyph, so it stands out from a diagnostic.</summary>
     public static string AlertMarkup(string text) => Theme.ColorMarkup(Theme.Warn, AlertGlyph + text);
@@ -176,7 +176,11 @@ public sealed class TranscriptRenderer : INoticeSink
     public static string DiagnosticMarkup(DiagnosticEvent evt) =>
         Theme.ColorMarkup(DiagnosticColor(evt.Level), $"  [{evt.Category}] {evt.Message}");
 
-    /// <summary>One line of at most <paramref name="max"/> characters; newlines become spaces, an overflow ends in an ellipsis.</summary>
+    /// <summary>
+    /// One line of at most <paramref name="max"/> cells; newlines become spaces, an overflow ends in an ellipsis. Cut between
+    /// clusters (<see cref="TextCells.ClusterWidth"/>, 2026-10-04: it counted UTF-16 units, so an emoji could be split in half
+    /// and a wide text ran past its budget).
+    /// </summary>
     public static string Truncate(string text, int max)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -186,7 +190,26 @@ public sealed class TranscriptRenderer : INoticeSink
             return "";
         }
 
-        return flat.Length <= max ? flat : flat[..(max - 1)] + "…";
+        if (TextCells.Width(flat) <= max)
+        {
+            return flat;
+        }
+
+        int cells = 0;
+        int end = 0;
+        while (end < flat.Length)
+        {
+            int w = TextCells.ClusterWidth(flat, end, out int length);
+            if (cells + w > max - 1)
+            {
+                break;
+            }
+
+            cells += w;
+            end += length;
+        }
+
+        return flat[..end] + "…";
     }
 
     // ── Lines ───────────────────────────────────────────────────────────────
@@ -264,7 +287,7 @@ public sealed class TranscriptRenderer : INoticeSink
         _state = LineState.AtLineStart;
     }
 
-    public void Notice(string text) => Line(NoticeMarkup(text), Theme.ColorMarkup(Theme.Dim, text));
+    public void Notice(string text) => Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, text));
 
     /// <summary>
     /// The banner's sunset rule across the transcript (<c>/new</c>, 2026-09-16): a divider between
@@ -281,7 +304,7 @@ public sealed class TranscriptRenderer : INoticeSink
 
     public void Warning(string text) => Line(WarningMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
 
-    public void Error(string text) => Line(ErrorMarkup(text), Theme.ColorMarkup(Theme.Bad, text));
+    public void Error(string text) => Line(ErrorMarkup(text), Theme.StyleMarkup(Theme.ErrorText, text));
 
     public void Alert(string text) => Line(AlertMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
 

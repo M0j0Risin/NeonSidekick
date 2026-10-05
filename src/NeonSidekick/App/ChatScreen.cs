@@ -1982,7 +1982,7 @@ internal sealed partial class ChatScreen
             (RewindText.KeyLabel, RewindText.KeyMeaning),
             ("Up / Down", "earlier lines · the draft's rows when it wraps · scroll in menus"),
             ("Left / Right", "change tabs in menus · hold Shift to select text"),
-            ("Home / End", "hold Shift to select text to the beginning or end of the line starting from the cursor"),
+            ("Home / End", "the start or end of the line, pressed again of the whole message · hold Shift to select text"),
             ("PgUp / PgDn", "scroll the transcript a page at a time"),
         };
         if (voiceOn)
