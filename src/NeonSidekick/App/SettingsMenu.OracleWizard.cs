@@ -6,7 +6,7 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// <c>Oracle add connection</c> (2026-09-30, the user's ask: an Oracle tab "and a wizard to set up new connections"), the
+/// <c>Oracle add/edit connection</c> (2026-09-30, the user's ask: an Oracle tab "and a wizard to set up new connections"), the
 /// <c>SQL add connection</c> wizard's shape over <c>oracle.json</c>: one page per choice — which file, the name, the data
 /// source, the default schema, the user, where its password is kept, the password (masked), the connect timeout, the access
 /// (2026-10-05: read, or readwrite for <c>oracle_execute</c>), the description — every row of the draft on each page, the current one marked, the question in the caption; then a summary
@@ -14,7 +14,7 @@ namespace NeonSidekick.App;
 /// ask of these tools, a warning when the account could change data: the tools never will, but a read-only account is the
 /// real guard) and saves it (<see cref="OracleConfigFile.AddConnection"/>, the password after it through
 /// <see cref="OracleSecrets.Save"/>). ESC steps back, and on the first page ends the visit with nothing written; Enter on a
-/// summary row changes that choice and comes back. Adds only: an existing entry is edited in the file.
+/// summary row changes that choice and comes back. It edits an entry too since 2026-10-05 (the user's ask): a first page of the entries, a pick prefilled (the ConnectionEdit part).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -60,7 +60,16 @@ internal sealed partial class SettingsMenu
 
         public string Password { get; set; } = "";
 
-        public OracleConnectionConfig Config { get; } = new() { PasswordStore = OracleConnectionConfig.FileStore };
+        /// <summary>An edit's entry name in its file (2026-10-05); null for a new connection.</summary>
+        public string? Original { get; init; }
+
+        /// <summary>An edit's Credential Manager target under its old name's default, removed when the save moves the password.</summary>
+        public string? OriginalTarget { get; init; }
+
+        /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
+        public bool PasswordKept { get; set; }
+
+        public OracleConnectionConfig Config { get; init; } = new() { PasswordStore = OracleConnectionConfig.FileStore };
     }
 
     private string OracleWizardPath(bool global) =>
@@ -100,7 +109,7 @@ internal sealed partial class SettingsMenu
             OracleWizardStep.Schema => string.IsNullOrWhiteSpace(c.Schema) ? "(the user's own)" : c.Schema.Trim(),
             OracleWizardStep.User => OrUnset(c.User),
             OracleWizardStep.Store => c.InCredentialManager ? OracleConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : OracleConnectionConfig.FileStore,
-            OracleWizardStep.Password => draft.Password.Length > 0 ? SqlWizardMasked : SqlWizardUnset,
+            OracleWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
             OracleWizardStep.Timeout => Invariant(c.ConnectTimeoutSeconds ?? OracleConnectionConfig.DefaultConnectTimeoutSeconds),
             OracleWizardStep.Access => DatabaseWizardAccessValue(c.IsReadWrite),
             _ => OrUnset(c.Description),
@@ -122,9 +131,62 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<bool> AddOracleConnectionAsync(CancellationToken cancellationToken)
     {
-        var draft = new OracleDraft();
-        var step = OracleWizardStep.File;
-        bool fromSummary = false;
+        // The first page of the entries when there are any (2026-10-05, the user's ask), as the SQL wizard's.
+        while (true)
+        {
+            var entries = ConnectionWizardEntries(OracleWizardPath(false), OracleWizardPath(true), path => OracleConfigFile.Load(path).Connections);
+            var draft = new OracleDraft();
+            if (entries.Count > 0)
+            {
+                if (await ConnectionWizardPickAsync(OracleWizardTitle, "connection", entries.Select(e => (e.Named.Name, e.Global)).ToList(), OracleWizardPath, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    Sink.Notice(SqlWizardCancelledNotice);
+                    return false;
+                }
+
+                if (picked >= 0)
+                {
+                    draft = OracleWizardDraftFrom(entries[picked].Named, entries[picked].Global);
+                }
+            }
+
+            if (await RunOracleWizardAsync(draft, cancellationToken).ConfigureAwait(false) is { } changed)
+            {
+                return changed;
+            }
+
+            if (entries.Count == 0)
+            {
+                Sink.Notice(SqlWizardCancelledNotice);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>An edit's draft (2026-10-05): the entry copied, its file and name kept as the original, its stored password read.</summary>
+    private OracleDraft OracleWizardDraftFrom(OracleNamedConnection named, bool global)
+    {
+        var c = named.Config;
+        var draft = new OracleDraft
+        {
+            Global = global,
+            Name = named.Name,
+            Original = named.Name,
+            OriginalTarget = c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            Config = CloneEntry(c, OracleJsonContext.Default.OracleConnectionConfig, x => x.Password = null),
+        };
+        draft.Password = StoredPassword(OracleSecrets.Resolve(named));
+        draft.PasswordKept = draft.Password.Length > 0;
+        return draft;
+    }
+
+    /// <summary>The wizard on <paramref name="draft"/>: null for ESC on its first page (the File page, or an edit's Name), else whether a setting changed.</summary>
+    private async Task<bool?> RunOracleWizardAsync(OracleDraft draft, CancellationToken cancellationToken)
+    {
+        // An edit opens on its summary (2026-10-05): Enter on a row changes that one; a stored password that could not be
+        // read asks first.
+        var step = draft.Original is null ? OracleWizardStep.File : OracleWizardMissing(draft) ?? OracleWizardStep.Summary;
+        bool fromSummary = draft.Original is not null;
         while (true)
         {
             if (step == OracleWizardStep.Summary)
@@ -140,6 +202,11 @@ internal sealed partial class SettingsMenu
                     step = target;
                     fromSummary = true;
                     continue;
+                }
+
+                if (draft.Original is not null)
+                {
+                    return null;   // an edit's ESC on its summary: back to the list
                 }
 
                 step = OracleWizardStep.Description;
@@ -160,10 +227,9 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            if (step == OracleWizardStep.File)
+            if (step == (draft.Original is null ? OracleWizardStep.File : OracleWizardStep.Name))
             {
-                Sink.Notice(SqlWizardCancelledNotice);
-                return false;
+                return null;
             }
 
             step--;
@@ -203,7 +269,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     string path = OracleWizardPath(draft.Global);
-                    if (OracleConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+                    if (OracleConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) && !string.Equals(x.Name, draft.Original, StringComparison.OrdinalIgnoreCase)))
                     {
                         return SqlWizardNameTaken(name, path);
                     }
@@ -288,6 +354,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     draft.Password = text;
+                    draft.PasswordKept = false;
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -385,7 +452,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<(bool Done, bool Changed, OracleWizardStep? Edit)> OracleWizardSummaryAsync(OracleDraft draft, CancellationToken cancellationToken)
     {
-        int cursor = 0;
+        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.OracleConnectionsOffered);
         while (true)
         {
             // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
@@ -408,7 +475,13 @@ internal sealed partial class SettingsMenu
             cursor = picked;
             if (picked >= actions.Count)
             {
-                return (false, false, (OracleWizardStep)(picked - actions.Count));
+                var edit = (OracleWizardStep)(picked - actions.Count);
+                if (edit == OracleWizardStep.File && draft.Original is not null)
+                {
+                    continue;   // an edit's file is fixed
+                }
+
+                return (false, false, edit);
             }
 
             if (picked == test)
@@ -419,7 +492,7 @@ internal sealed partial class SettingsMenu
 
             if (picked == test + 1)
             {
-                Sink.Notice(SqlWizardCancelledNotice);
+                Sink.Notice(draft.Original is null ? SqlWizardCancelledNotice : ConnectionWizardUnchangedNotice);
                 return (true, false, null);
             }
 
@@ -501,13 +574,13 @@ internal sealed partial class SettingsMenu
         }
 
         string path = OracleWizardPath(draft.Global);
-        if (OracleConfigFile.AddConnection(path, draft.Name, c) is { } error)
+        if ((draft.Original is { } original ? OracleConfigFile.ReplaceConnection(path, original, draft.Name, c) : OracleConfigFile.AddConnection(path, draft.Name, c)) is { } error)
         {
-            Sink.Error(Sql.SqlText.ConnectionAddFailed(draft.Name, error));
+            Sink.Error(draft.Original is null ? Sql.SqlText.ConnectionAddFailed(draft.Name, error) : Sql.SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
         }
 
-        Sink.Notice(Sql.SqlText.ConnectionAdded(draft.Name, path));
+        Sink.Notice(draft.Original is null ? Sql.SqlText.ConnectionAdded(draft.Name, path) : Sql.SqlText.ConnectionChanged(draft.Name, path));
         var (saved, notice) = OracleSecrets.Save(new OracleNamedConnection(draft.Name, c, path), draft.Password);
         if (saved)
         {
@@ -518,13 +591,7 @@ internal sealed partial class SettingsMenu
             Sink.Error(notice);
         }
 
-        if (!offer)
-        {
-            return false;
-        }
-
-        var offered = _settings.Current.OracleConnectionsOffered ?? [];   // null offers none (2026-10-01)
-        Apply(SettingsField.OracleConnectionsOffered, d => d.OracleConnectionsOffered = [.. offered, draft.Name]);
-        return true;
+        ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        return ApplyOfferedAfterSave(SettingsField.OracleConnectionsOffered, _settings.Current.OracleConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.OracleConnectionsOffered = next);
     }
 }

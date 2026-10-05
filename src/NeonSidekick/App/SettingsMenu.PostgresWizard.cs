@@ -6,13 +6,13 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// <c>PostgreSQL add connection</c> (2026-10-04), the <c>Oracle add connection</c> wizard's shape over <c>postgres.json</c>: one page per
+/// <c>PostgreSQL add/edit connection</c> (2026-10-04), the <c>Oracle add connection</c> wizard's shape over <c>postgres.json</c>: one page per
 /// choice — which file, the name, the host, the port, the database, the user, where its password is kept, the password (masked),
 /// the TLS mode, the connect timeout, the access (2026-10-05: read, or readwrite for <c>postgres_execute</c>), the description — then a summary that tests the unsaved draft (who it signs in as, the
 /// server and its version, and a warning when the role's attributes or grants say it could change data (a superuser is warned of, not refused: the user's call, 2026-10-04): the tools never will, but a
 /// SELECT-only account is the real guard) and saves it (<see cref="PostgresConfigFile.AddConnection"/>, the password after it through
 /// <see cref="PostgresSecrets.Save"/>). ESC steps back, and on the first page ends the visit with nothing written; Enter on a summary
-/// row changes that choice and comes back. Adds only: an existing entry is edited in the file.
+/// row changes that choice and comes back. It edits an entry too since 2026-10-05 (the user's ask): a first page of the entries, a pick prefilled (the ConnectionEdit part).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -75,7 +75,16 @@ internal sealed partial class SettingsMenu
 
         public string Password { get; set; } = "";
 
-        public PostgresConnectionConfig Config { get; } = new() { PasswordStore = PostgresConnectionConfig.FileStore };
+        /// <summary>An edit's entry name in its file (2026-10-05); null for a new connection.</summary>
+        public string? Original { get; init; }
+
+        /// <summary>An edit's Credential Manager target under its old name's default, removed when the save moves the password.</summary>
+        public string? OriginalTarget { get; init; }
+
+        /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
+        public bool PasswordKept { get; set; }
+
+        public PostgresConnectionConfig Config { get; init; } = new() { PasswordStore = PostgresConnectionConfig.FileStore };
     }
 
     private string PostgresWizardPath(bool global) =>
@@ -103,7 +112,7 @@ internal sealed partial class SettingsMenu
             PostgresWizardStep.Database => string.IsNullOrWhiteSpace(c.Database) ? PostgresConnectionConfig.DefaultDatabase : c.Database.Trim(),
             PostgresWizardStep.User => OrUnset(c.User),
             PostgresWizardStep.Store => c.InCredentialManager ? PostgresConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : PostgresConnectionConfig.FileStore,
-            PostgresWizardStep.Password => draft.Password.Length > 0 ? SqlWizardMasked : SqlWizardUnset,
+            PostgresWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
             PostgresWizardStep.Tls => c.SslMode ?? PostgresConnectionConfig.SslModeWords[0],
             PostgresWizardStep.Timeout => Invariant(c.ConnectTimeoutSeconds ?? PostgresConnectionConfig.DefaultConnectTimeoutSeconds),
             PostgresWizardStep.Access => DatabaseWizardAccessValue(c.IsReadWrite),
@@ -122,9 +131,62 @@ internal sealed partial class SettingsMenu
     /// <summary>The wizard: its steps in order, ESC one back (before the first: nothing written), a change from the summary back to it. True when a setting changed.</summary>
     private async Task<bool> AddPostgresConnectionAsync(CancellationToken cancellationToken)
     {
-        var draft = new PostgresDraft();
-        var step = PostgresWizardStep.File;
-        bool fromSummary = false;
+        // The first page of the entries when there are any (2026-10-05, the user's ask), as the SQL wizard's.
+        while (true)
+        {
+            var entries = ConnectionWizardEntries(PostgresWizardPath(false), PostgresWizardPath(true), path => PostgresConfigFile.Load(path).Connections);
+            var draft = new PostgresDraft();
+            if (entries.Count > 0)
+            {
+                if (await ConnectionWizardPickAsync(PostgresWizardTitle, "connection", entries.Select(e => (e.Named.Name, e.Global)).ToList(), PostgresWizardPath, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    Sink.Notice(SqlWizardCancelledNotice);
+                    return false;
+                }
+
+                if (picked >= 0)
+                {
+                    draft = PostgresWizardDraftFrom(entries[picked].Named, entries[picked].Global);
+                }
+            }
+
+            if (await RunPostgresWizardAsync(draft, cancellationToken).ConfigureAwait(false) is { } changed)
+            {
+                return changed;
+            }
+
+            if (entries.Count == 0)
+            {
+                Sink.Notice(SqlWizardCancelledNotice);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>An edit's draft (2026-10-05): the entry copied, its file and name kept as the original, its stored password read.</summary>
+    private PostgresDraft PostgresWizardDraftFrom(PostgresNamedConnection named, bool global)
+    {
+        var c = named.Config;
+        var draft = new PostgresDraft
+        {
+            Global = global,
+            Name = named.Name,
+            Original = named.Name,
+            OriginalTarget = c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            Config = CloneEntry(c, PostgresJsonContext.Default.PostgresConnectionConfig, x => x.Password = null),
+        };
+        draft.Password = StoredPassword(PostgresSecrets.Resolve(named));
+        draft.PasswordKept = draft.Password.Length > 0;
+        return draft;
+    }
+
+    /// <summary>The wizard on <paramref name="draft"/>: null for ESC on its first page (the File page, or an edit's Name), else whether a setting changed.</summary>
+    private async Task<bool?> RunPostgresWizardAsync(PostgresDraft draft, CancellationToken cancellationToken)
+    {
+        // An edit opens on its summary (2026-10-05): Enter on a row changes that one; a stored password that could not be
+        // read asks first.
+        var step = draft.Original is null ? PostgresWizardStep.File : PostgresWizardMissing(draft) ?? PostgresWizardStep.Summary;
+        bool fromSummary = draft.Original is not null;
         while (true)
         {
             if (step == PostgresWizardStep.Summary)
@@ -140,6 +202,11 @@ internal sealed partial class SettingsMenu
                     step = target;
                     fromSummary = true;
                     continue;
+                }
+
+                if (draft.Original is not null)
+                {
+                    return null;   // an edit's ESC on its summary: back to the list
                 }
 
                 step = PostgresWizardStep.Description;
@@ -160,10 +227,9 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            if (step == PostgresWizardStep.File)
+            if (step == (draft.Original is null ? PostgresWizardStep.File : PostgresWizardStep.Name))
             {
-                Sink.Notice(SqlWizardCancelledNotice);
-                return false;
+                return null;
             }
 
             step--;
@@ -203,7 +269,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     string path = PostgresWizardPath(draft.Global);
-                    if (PostgresConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+                    if (PostgresConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) && !string.Equals(x.Name, draft.Original, StringComparison.OrdinalIgnoreCase)))
                     {
                         return SqlWizardNameTaken(name, path);
                     }
@@ -289,6 +355,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     draft.Password = text;
+                    draft.PasswordKept = false;
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -390,7 +457,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The summary: the save rows, the test, the cancel, then every row of the draft. Done with whether a setting changed; or the step a row picked; or neither for ESC (back).</summary>
     private async Task<(bool Done, bool Changed, PostgresWizardStep? Edit)> PostgresWizardSummaryAsync(PostgresDraft draft, CancellationToken cancellationToken)
     {
-        int cursor = 0;
+        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.PostgresConnectionsOffered);
         while (true)
         {
             // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
@@ -413,7 +480,13 @@ internal sealed partial class SettingsMenu
             cursor = picked;
             if (picked >= actions.Count)
             {
-                return (false, false, (PostgresWizardStep)(picked - actions.Count));
+                var edit = (PostgresWizardStep)(picked - actions.Count);
+                if (edit == PostgresWizardStep.File && draft.Original is not null)
+                {
+                    continue;   // an edit's file is fixed
+                }
+
+                return (false, false, edit);
             }
 
             if (picked == test)
@@ -424,7 +497,7 @@ internal sealed partial class SettingsMenu
 
             if (picked == test + 1)
             {
-                Sink.Notice(SqlWizardCancelledNotice);
+                Sink.Notice(draft.Original is null ? SqlWizardCancelledNotice : ConnectionWizardUnchangedNotice);
                 return (true, false, null);
             }
 
@@ -501,13 +574,13 @@ internal sealed partial class SettingsMenu
         }
 
         string path = PostgresWizardPath(draft.Global);
-        if (PostgresConfigFile.AddConnection(path, draft.Name, c) is { } error)
+        if ((draft.Original is { } original ? PostgresConfigFile.ReplaceConnection(path, original, draft.Name, c) : PostgresConfigFile.AddConnection(path, draft.Name, c)) is { } error)
         {
-            Sink.Error(Sql.SqlText.ConnectionAddFailed(draft.Name, error));
+            Sink.Error(draft.Original is null ? Sql.SqlText.ConnectionAddFailed(draft.Name, error) : Sql.SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
         }
 
-        Sink.Notice(Sql.SqlText.ConnectionAdded(draft.Name, path));
+        Sink.Notice(draft.Original is null ? Sql.SqlText.ConnectionAdded(draft.Name, path) : Sql.SqlText.ConnectionChanged(draft.Name, path));
         var (saved, notice) = PostgresSecrets.Save(new PostgresNamedConnection(draft.Name, c, path), draft.Password);
         if (saved)
         {
@@ -518,13 +591,7 @@ internal sealed partial class SettingsMenu
             Sink.Error(notice);
         }
 
-        if (!offer)
-        {
-            return false;
-        }
-
-        var offered = _settings.Current.PostgresConnectionsOffered ?? [];   // null offers none (2026-10-01)
-        Apply(SettingsField.PostgresConnectionsOffered, d => d.PostgresConnectionsOffered = [.. offered, draft.Name]);
-        return true;
+        ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        return ApplyOfferedAfterSave(SettingsField.PostgresConnectionsOffered, _settings.Current.PostgresConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.PostgresConnectionsOffered = next);
     }
 }

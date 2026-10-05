@@ -141,6 +141,9 @@ public static class Keys
     /// <c>/camera snap</c> and F10 <c>/screen</c>, no modifier held and no character (an F-key types none). Both came off the
     /// push-to-talk key's list that day (<c>SettingsMenu.PushToTalkKeys</c>), so a key means one thing everywhere. Neither runs
     /// in place: in a pane the pane closes and the screen runs it, and under a reply both wait for the idle line, as typed.
+    /// Later on 2026-10-05 (the user's ask): Ctrl+Alt+R the bare <c>/rename</c> (the rename box; the chord the NVIDIA overlay held until
+    /// the user freed it on 2026-10-04), Ctrl+Q <c>/queue</c> (the queue pane; the key that quit once, a plain key since) and
+    /// Ctrl+Alt+Q <c>/queue clear</c>. AltGr+Q (a German layout's <c>@</c>) brings its character, so it types as before.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -164,6 +167,7 @@ public static class Keys
                 (ConsoleKey.H, '\0' or '\x08') => "/help",
                 (ConsoleKey.M, '\0' or '\r') => "/model",
                 (ConsoleKey.P, '\0' or '\x10') => "/profile",
+                (ConsoleKey.Q, '\0' or '\x11') => "/queue",
                 (ConsoleKey.R, '\0' or '\x12') => "/reasoning",
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
                 (ConsoleKey.T, '\0' or '\x14') => "/toolbar",
@@ -188,6 +192,8 @@ public static class Keys
             (ConsoleKey.H, '\0' or '\x08') => "/header",
             (ConsoleKey.N, '\0' or '\x0e') => "/new",
             (ConsoleKey.P, '\0' or '\x10') => "/splash",
+            (ConsoleKey.Q, '\0' or '\x11') => "/queue clear",
+            (ConsoleKey.R, '\0' or '\x12') => "/rename",
             (ConsoleKey.T, '\0' or '\x14') => "/tools",
             (ConsoleKey.S, '\0' or '\x13') => "/skills",
             (ConsoleKey.M, '\0' or '\r') => "/memory",

@@ -6,13 +6,13 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// <c>MySQL add connection</c> (2026-09-30), the <c>Oracle add connection</c> wizard's shape over <c>mysql.json</c>: one page per
+/// <c>MySQL add/edit connection</c> (2026-09-30), the <c>Oracle add connection</c> wizard's shape over <c>mysql.json</c>: one page per
 /// choice — which file, the name, the host, the port, the database, the user, where its password is kept, the password (masked),
 /// the TLS mode, the connect timeout, the access (2026-10-05: read, or readwrite for <c>mysql_execute</c>), the description — then a summary that tests the unsaved draft (who it signs in as, the
 /// server and its version, and a warning when <c>SHOW GRANTS</c> says the account could change data: the tools never will, but a
 /// SELECT-only account is the real guard) and saves it (<see cref="MySqlConfigFile.AddConnection"/>, the password after it through
 /// <see cref="MySqlSecrets.Save"/>). ESC steps back, and on the first page ends the visit with nothing written; Enter on a summary
-/// row changes that choice and comes back. Adds only: an existing entry is edited in the file.
+/// row changes that choice and comes back. It edits an entry too since 2026-10-05 (the user's ask): a first page of the entries, a pick prefilled (the ConnectionEdit part).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -75,7 +75,16 @@ internal sealed partial class SettingsMenu
 
         public string Password { get; set; } = "";
 
-        public MySqlConnectionConfig Config { get; } = new() { PasswordStore = MySqlConnectionConfig.FileStore };
+        /// <summary>An edit's entry name in its file (2026-10-05); null for a new connection.</summary>
+        public string? Original { get; init; }
+
+        /// <summary>An edit's Credential Manager target under its old name's default, removed when the save moves the password.</summary>
+        public string? OriginalTarget { get; init; }
+
+        /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
+        public bool PasswordKept { get; set; }
+
+        public MySqlConnectionConfig Config { get; init; } = new() { PasswordStore = MySqlConnectionConfig.FileStore };
     }
 
     private string MySqlWizardPath(bool global) =>
@@ -103,7 +112,7 @@ internal sealed partial class SettingsMenu
             MySqlWizardStep.Database => string.IsNullOrWhiteSpace(c.Database) ? "(every database)" : c.Database.Trim(),
             MySqlWizardStep.User => OrUnset(c.User),
             MySqlWizardStep.Store => c.InCredentialManager ? MySqlConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : MySqlConnectionConfig.FileStore,
-            MySqlWizardStep.Password => draft.Password.Length > 0 ? SqlWizardMasked : SqlWizardUnset,
+            MySqlWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
             MySqlWizardStep.Tls => c.SslMode ?? MySqlConnectionConfig.SslModeWords[0],
             MySqlWizardStep.Timeout => Invariant(c.ConnectTimeoutSeconds ?? MySqlConnectionConfig.DefaultConnectTimeoutSeconds),
             MySqlWizardStep.Access => DatabaseWizardAccessValue(c.IsReadWrite),
@@ -122,9 +131,62 @@ internal sealed partial class SettingsMenu
     /// <summary>The wizard: its steps in order, ESC one back (before the first: nothing written), a change from the summary back to it. True when a setting changed.</summary>
     private async Task<bool> AddMySqlConnectionAsync(CancellationToken cancellationToken)
     {
-        var draft = new MySqlDraft();
-        var step = MySqlWizardStep.File;
-        bool fromSummary = false;
+        // The first page of the entries when there are any (2026-10-05, the user's ask), as the SQL wizard's.
+        while (true)
+        {
+            var entries = ConnectionWizardEntries(MySqlWizardPath(false), MySqlWizardPath(true), path => MySqlConfigFile.Load(path).Connections);
+            var draft = new MySqlDraft();
+            if (entries.Count > 0)
+            {
+                if (await ConnectionWizardPickAsync(MySqlWizardTitle, "connection", entries.Select(e => (e.Named.Name, e.Global)).ToList(), MySqlWizardPath, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    Sink.Notice(SqlWizardCancelledNotice);
+                    return false;
+                }
+
+                if (picked >= 0)
+                {
+                    draft = MySqlWizardDraftFrom(entries[picked].Named, entries[picked].Global);
+                }
+            }
+
+            if (await RunMySqlWizardAsync(draft, cancellationToken).ConfigureAwait(false) is { } changed)
+            {
+                return changed;
+            }
+
+            if (entries.Count == 0)
+            {
+                Sink.Notice(SqlWizardCancelledNotice);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>An edit's draft (2026-10-05): the entry copied, its file and name kept as the original, its stored password read.</summary>
+    private MySqlDraft MySqlWizardDraftFrom(MySqlNamedConnection named, bool global)
+    {
+        var c = named.Config;
+        var draft = new MySqlDraft
+        {
+            Global = global,
+            Name = named.Name,
+            Original = named.Name,
+            OriginalTarget = c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            Config = CloneEntry(c, MySqlJsonContext.Default.MySqlConnectionConfig, x => x.Password = null),
+        };
+        draft.Password = StoredPassword(MySqlSecrets.Resolve(named));
+        draft.PasswordKept = draft.Password.Length > 0;
+        return draft;
+    }
+
+    /// <summary>The wizard on <paramref name="draft"/>: null for ESC on its first page (the File page, or an edit's Name), else whether a setting changed.</summary>
+    private async Task<bool?> RunMySqlWizardAsync(MySqlDraft draft, CancellationToken cancellationToken)
+    {
+        // An edit opens on its summary (2026-10-05): Enter on a row changes that one; a stored password that could not be
+        // read asks first.
+        var step = draft.Original is null ? MySqlWizardStep.File : MySqlWizardMissing(draft) ?? MySqlWizardStep.Summary;
+        bool fromSummary = draft.Original is not null;
         while (true)
         {
             if (step == MySqlWizardStep.Summary)
@@ -140,6 +202,11 @@ internal sealed partial class SettingsMenu
                     step = target;
                     fromSummary = true;
                     continue;
+                }
+
+                if (draft.Original is not null)
+                {
+                    return null;   // an edit's ESC on its summary: back to the list
                 }
 
                 step = MySqlWizardStep.Description;
@@ -160,10 +227,9 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            if (step == MySqlWizardStep.File)
+            if (step == (draft.Original is null ? MySqlWizardStep.File : MySqlWizardStep.Name))
             {
-                Sink.Notice(SqlWizardCancelledNotice);
-                return false;
+                return null;
             }
 
             step--;
@@ -203,7 +269,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     string path = MySqlWizardPath(draft.Global);
-                    if (MySqlConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+                    if (MySqlConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) && !string.Equals(x.Name, draft.Original, StringComparison.OrdinalIgnoreCase)))
                     {
                         return SqlWizardNameTaken(name, path);
                     }
@@ -289,6 +355,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     draft.Password = text;
+                    draft.PasswordKept = false;
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -390,7 +457,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The summary: the save rows, the test, the cancel, then every row of the draft. Done with whether a setting changed; or the step a row picked; or neither for ESC (back).</summary>
     private async Task<(bool Done, bool Changed, MySqlWizardStep? Edit)> MySqlWizardSummaryAsync(MySqlDraft draft, CancellationToken cancellationToken)
     {
-        int cursor = 0;
+        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.MySqlConnectionsOffered);
         while (true)
         {
             // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
@@ -413,7 +480,13 @@ internal sealed partial class SettingsMenu
             cursor = picked;
             if (picked >= actions.Count)
             {
-                return (false, false, (MySqlWizardStep)(picked - actions.Count));
+                var edit = (MySqlWizardStep)(picked - actions.Count);
+                if (edit == MySqlWizardStep.File && draft.Original is not null)
+                {
+                    continue;   // an edit's file is fixed
+                }
+
+                return (false, false, edit);
             }
 
             if (picked == test)
@@ -424,7 +497,7 @@ internal sealed partial class SettingsMenu
 
             if (picked == test + 1)
             {
-                Sink.Notice(SqlWizardCancelledNotice);
+                Sink.Notice(draft.Original is null ? SqlWizardCancelledNotice : ConnectionWizardUnchangedNotice);
                 return (true, false, null);
             }
 
@@ -497,13 +570,13 @@ internal sealed partial class SettingsMenu
         }
 
         string path = MySqlWizardPath(draft.Global);
-        if (MySqlConfigFile.AddConnection(path, draft.Name, c) is { } error)
+        if ((draft.Original is { } original ? MySqlConfigFile.ReplaceConnection(path, original, draft.Name, c) : MySqlConfigFile.AddConnection(path, draft.Name, c)) is { } error)
         {
-            Sink.Error(Sql.SqlText.ConnectionAddFailed(draft.Name, error));
+            Sink.Error(draft.Original is null ? Sql.SqlText.ConnectionAddFailed(draft.Name, error) : Sql.SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
         }
 
-        Sink.Notice(Sql.SqlText.ConnectionAdded(draft.Name, path));
+        Sink.Notice(draft.Original is null ? Sql.SqlText.ConnectionAdded(draft.Name, path) : Sql.SqlText.ConnectionChanged(draft.Name, path));
         var (saved, notice) = MySqlSecrets.Save(new MySqlNamedConnection(draft.Name, c, path), draft.Password);
         if (saved)
         {
@@ -514,13 +587,7 @@ internal sealed partial class SettingsMenu
             Sink.Error(notice);
         }
 
-        if (!offer)
-        {
-            return false;
-        }
-
-        var offered = _settings.Current.MySqlConnectionsOffered ?? [];   // null offers none (2026-10-01)
-        Apply(SettingsField.MySqlConnectionsOffered, d => d.MySqlConnectionsOffered = [.. offered, draft.Name]);
-        return true;
+        ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        return ApplyOfferedAfterSave(SettingsField.MySqlConnectionsOffered, _settings.Current.MySqlConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.MySqlConnectionsOffered = next);
     }
 }

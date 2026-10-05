@@ -51,6 +51,8 @@ public static class SqlText
     public static string SectionNotAnObject(string section) => $"\"{section}\" in the file is not an object";
     public static string ConnectionAdded(string name, string path) => $"Added '{name}' to {path}.";
     public static string ConnectionAddFailed(string name, string detail) => $"Could not add '{name}': {detail}.";
+    public static string ConnectionChanged(string name, string path) => $"Saved '{name}' in {path}.";   // 2026-10-05, the wizards' edit
+    public static string ConnectionChangeFailed(string name, string detail) => $"Could not save '{name}': {detail}.";
     public const string NoPasswordConnections ="No connection in sql.json takes a password (sql or runas); add one first.";
     public static string BadEncrypt(string word) => $"\"encrypt\" is '{word}'; it must be strict, mandatory or optional";
     public static string BadConnectTimeout(int seconds, int max) => $"\"connectTimeoutSeconds\" is {Invariant(seconds)}; it must be 1 to {Invariant(max)}";

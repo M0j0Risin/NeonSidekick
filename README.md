@@ -174,6 +174,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+L | cancels the background learning (🧠) | at once |
 | Ctrl+M | `/model` | waits for the reply |
 | Ctrl+P | `/profile` | waits for the reply |
+| Ctrl+Q | `/queue` | opens over the reply |
 | Ctrl+R | `/reasoning` | opens over the reply |
 | Ctrl+S | `/server` | waits for the reply |
 | Ctrl+T | `/toolbar` (toolbar on/off) | at once |
@@ -183,12 +184,14 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+Alt+C | `/clear` | stops the reply first |
 | Ctrl+Alt+N | `/new` | stops the reply first |
 | Ctrl+Alt+P | `/splash` | stops the reply first |
+| Ctrl+Alt+Q | `/queue clear` | at once |
 | Ctrl+Alt+D | `/mcp` | opens over the reply |
 | Ctrl+Alt+E | `/sessions` | opens over the reply |
 | Ctrl+Alt+H | `/header` | at once |
 | Ctrl+Alt+L | `/cmdlist` | opens over the reply |
 | Ctrl+Alt+M | `/memory` | opens over the reply |
 | Ctrl+Alt+O | `/police` | opens over the reply |
+| Ctrl+Alt+R | `/rename`: the rename box | opens over the reply |
 | Ctrl+Alt+S | `/skills` | opens over the reply |
 | Ctrl+Alt+T | `/tools` | opens over the reply |
 | Ctrl+Alt+G | `/log`: opens or closes the log window | at once |
@@ -211,7 +214,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/process`, `/persona`, `/operata`, `/vocalia` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/cmdcopy`, `/keycopy`, `/keycheck`, `/process`, `/persona`, `/operata`, `/vocalia` |
 | Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
@@ -276,7 +279,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Working directory (cwd) | The folder the file and GitLib tools work in; empty is the profile's `files\` folder. The row opens the `/cwd browse` folder picker; `/cwd <path>` sets one by hand. | profile's `files\` |
 | Memory mode | `read-write` offers `save_memory` / `recall_memory` and opens every conversation with what is remembered; `read-only` offers `recall_memory` alone, so the model reads but never saves (your `/remember` still does); `disabled` turns memory off and refuses `/remember`. | read-write |
 | Queue messages | Lists messages sent during a reply (a count, and `/queue`). Off, they are still sent when the reply ends, just not listed. | on |
-| Queue cancel mode | What a cancelled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next one at once, `empty` drops them all. | `empty` |
+| Queue cancel mode | What a cancelled reply does with the queue: `hold` keeps it until your next message (or `➤ send` on `/queue`), `drain` sends the next one at once, `empty` drops them all. | `empty` |
 | Keep command history | Saves the ↑/↓ history (newest 1,000 lines, no collapsed pastes or pictures) in `sessions.db`. Off deletes it at the next profile load; `/cmdclear` empties it either way. | on |
 | Command typo intercept | A command name without its slash (`clear`) or with extra ones (`//profile work`) asks *Did you mean /clear?* first. A bare `//` is still `/settings`. | on |
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` list; typing it in full still works. | on |
@@ -864,7 +867,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). **A** / **N** tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. A ticked name no longer in the files is dropped when the checklist opens, and the status line names it; not while a file can't be read, nor a name an entry with a problem still holds. | none |
 | SQL default connection | The connection a call uses when it names none: an offered one, or the first. | (the first connection) |
 | SQL set password | Pick a `sql` or `runas` connection and type its password, masked; it goes to that connection's store. | — |
-| SQL add connection | A wizard for a new connection, which can **test** it (`SELECT @@VERSION`) before saving. See Managing connections. | — |
+| SQL add/edit connection | A wizard for a new connection, or to edit a saved one, which can **test** it (`SELECT @@VERSION`) before saving. See Managing connections. | — |
 | SQL %-mention enabled | `%` and part of a name lists the connections; a pick writes `%name`. | on |
 | SQL max rows | Rows `sql_query` returns unless the call says otherwise (1–100000). | 100 |
 | SQL query timeout (s) | How long one batch may run on the server (1–600). | 30 |
@@ -884,7 +887,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Oracle connections offered | As *SQL connections offered*. | none |
 | Oracle default connection | As *SQL default connection*; `schema` works in another schema. | (the first connection) |
 | Oracle set password | As *SQL set password*. | — |
-| Oracle add connection | The wizard; its test shows who it signs in as, the version, and a warning when the account could change data. See Oracle. | — |
+| Oracle add/edit connection | The wizard (new or edit); its test shows who it signs in as, the version, and a warning when the account could change data. See Oracle. | — |
 | Oracle %-mention enabled | Lists the Oracle connections in the `%` list too, marked `Oracle ·`. | on |
 | Oracle max rows | As *SQL max rows*, for `oracle_query`. | 100 |
 | Oracle query timeout (s) | How long one statement may run on the server (1–600). | 30 |
@@ -901,7 +904,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | MySQL connections offered | As *SQL connections offered*. | none |
 | MySQL default connection | As *SQL default connection*. | (the first connection) |
 | MySQL set password | As *SQL set password*. | — |
-| MySQL add connection | The wizard; its test shows who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. See MySQL. | — |
+| MySQL add/edit connection | The wizard (new or edit); its test shows who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. See MySQL. | — |
 | MySQL %-mention enabled | Lists the MySQL connections in the `%` list too, marked `MySQL ·`. | on |
 | MySQL max rows | As *SQL max rows*, for `mysql_query`. | 100 |
 | MySQL query timeout (s) | How long one statement may run (1–600), enforced by the server and the driver. | 30 |
@@ -918,7 +921,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. Otherwise as *SQL connections offered*. | none |
 | SQLite default database | The database a call uses when it names none. | (the first database) |
 | SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`), and `sqlite_execute`'s `create` may make one there. | off |
-| SQLite add database | The wizard: the file to save in, the name, the database file, a description; its test opens the file read-only and counts the tables. | — |
+| SQLite add/edit database | The wizard (new or edit): the file to save in, the name, the database file, a description; its test opens the file read-only and counts the tables. | — |
 | SQLite %-mention enabled | Lists the SQLite databases in the `%` list too, marked `SQLite ·`. | on |
 | SQLite max rows | As *SQL max rows*, for `sqlite_query`. | 100 |
 | SQLite query timeout (s) | How long one statement may run before it is interrupted (1–600). | 30 |
@@ -935,7 +938,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | PostgreSQL connections offered | As *SQL connections offered*. | none |
 | PostgreSQL default connection | As *SQL default connection*; `database` works in another database on the same server. | (the first connection) |
 | PostgreSQL set password | As *SQL set password*. | — |
-| PostgreSQL add connection | The wizard; its test shows who it signs in as, the version, and a warning when the role could change data (a superuser is warned of, not refused). See PostgreSQL. | — |
+| PostgreSQL add/edit connection | The wizard (new or edit); its test shows who it signs in as, the version, and a warning when the role could change data (a superuser is warned of, not refused). See PostgreSQL. | — |
 | PostgreSQL %-mention enabled | Lists the PostgreSQL connections in the `%` list too, marked `PostgreSQL ·`. | on |
 | PostgreSQL max rows | As *SQL max rows*, for `postgres_query`. | 100 |
 | PostgreSQL query timeout (s) | How long one statement may run (1–600): the server's own `statement_timeout`. | 30 |
@@ -951,7 +954,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | UNC shares offered | As *SQL connections offered*. | none |
 | UNC default share | The share a call uses when it names none and gives no full path. | (the first share) |
 | UNC set password | As *SQL set password*, for runas shares. | — |
-| UNC add share | The wizard; its test lists the share's root under its account. | — |
+| UNC add/edit share | The wizard (new or edit); its test lists the share's root under its account. | — |
 | UNC *-mention enabled | `*` and part of a name lists the offered shares; a pick writes `*name`. | on |
 | UNC shares (profile) | As *SQL connections (profile)*. | (none) |
 | UNC shares (global) | As *SQL connections (global)*. | (none) |
@@ -1103,10 +1106,11 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or **K**) stops the highlighted one after a yes/no. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). Another id switches the window. |
 | `/profile [name \| add <name> \| delete <name> \| rename <name> <new> \| reset [name] [--all] \| push <name> \| pull <name> \| edit \| reload]` | Switches, creates, deletes, renames or resets a profile, or copies its settings to (`push`) or from (`pull`) another. `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. See Profiles. |
-| `/queue [clear]` | Lists and prunes the queued messages (`⊠ clear all` or `c` drops them); `/queue clear` drops them without the pane. |
+| `/queue [clear]` | Lists and prunes the queued messages (`⊠ clear all` or `c` drops them). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. `/queue clear` drops them without the pane. |
 | `/reasoning [level]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/rewind [n]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
 | `/remember <text>` | Adds a memory. |
+| `/rename [name]` | Renames the current session, as `/sessions title` does; on its own it opens the rename box with the current name. |
 | `/sampling [field value]` | Edits the per-model sampling on a pane, or the connected model's directly with `<field> <value>`, `<field> clear`, `extra <json>` or `clear`. See Sampling per model. |
 | `/server [url \| embedded \| claude-cli \| docker \| docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. The argument list offers each of those words while it applies. |
 | `/sessions [id \| purge <id> \| purge older <age> \| purge all \| title [<text>]]` | Lists, restores, renames and purges stored sessions. An age is days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). `title` alone opens a box with the current name. |
@@ -1595,7 +1599,7 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 
 #### Managing connections
 
-* **SQL add connection** (the SQL tab of `/tools`) walks through a new connection one page per choice. Its summary can **test** the draft (`SELECT @@VERSION`, nothing written) and saves it with the file's comments kept, offered or hidden until ticked. It asks for the access too (`read` or `readwrite`). ESC steps back. It only adds; edit the file to change one.
+* **SQL add/edit connection** (the SQL tab of `/tools`) walks through a new connection one page per choice. With connections already saved, its first page lists them: **+ New connection**, or one to edit, which opens on its summary, prefilled: Enter on a row changes it (its file stays; the stored password is kept unless you type another; a rename carries its place in the offered list). Its summary can **test** the draft (`SELECT @@VERSION`, nothing written) and saves it with the file's comments kept, offered or hidden until ticked. It asks for the access too (`read` or `readwrite`). ESC steps back (on its first page, back to the list).
 * **SQL set password** updates a password.
 * Or edit `%USERPROFILE%\.neonsidekick\sql.json` (global) or `…\profiles\<profile>\sql.json` directly (comments and trailing commas allowed).
 
@@ -1696,7 +1700,7 @@ The SQL tools' twin for Oracle, through ODP.NET Core (fully managed; no Oracle C
 
 #### Managing connections
 
-**Oracle add connection** (the Oracle tab of `/tools`) walks through a new connection. Its test (nothing written) shows who it signed in as, the container and the version, and warns when the account could change data: the tools only write through `oracle_execute` on a `readwrite` connection, and a read-only account is the real guard. It asks for the access too (`read` or `readwrite`). **Oracle set password** updates a password; or edit `oracle.json` directly.
+**Oracle add/edit connection** (the Oracle tab of `/tools`) walks through a new connection, or edits a saved one as SQL's does. Its test (nothing written) shows who it signed in as, the container and the version, and warns when the account could change data: the tools only write through `oracle_execute` on a `readwrite` connection, and a read-only account is the real guard. It asks for the access too (`read` or `readwrite`). **Oracle set password** updates a password; or edit `oracle.json` directly.
 
 ```json
 {
@@ -1807,7 +1811,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 }
 ```
 
-**MySQL add connection** (the MySQL tab of `/tools`) walks through a new one and can **test** it: who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
+**MySQL add/edit connection** (the MySQL tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
 
 #### Safety
 
@@ -1870,7 +1874,7 @@ SQLite database files, through the same Microsoft.Data.Sqlite the sessions use: 
 }
 ```
 
-**SQLite add database** (the SQLite tab of `/tools`) walks through a new one and can **test** it: it opens the file read-only and counts its tables.
+**SQLite add/edit database** (the SQLite tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: it opens the file read-only and counts its tables.
 
 #### Safety
 
@@ -1946,7 +1950,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 }
 ```
 
-**PostgreSQL add connection** (the Postgres tab of `/tools`) walks through a new one and can **test** it: who it signs in as, the version, and a warning when the role is a superuser or holds write grants. It asks for the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
+**PostgreSQL add/edit connection** (the Postgres tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, and a warning when the role is a superuser or holds write grants. It asks for the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
 
 #### Safety
 
@@ -2024,7 +2028,7 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 }
 ```
 
-**UNC add share** (the UNC tab of `/tools`) walks through a new one and can **test** it by listing its root under its account. **UNC set password** updates a runas password.
+**UNC add/edit share** (the UNC tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it by listing its root under its account. **UNC set password** updates a runas password.
 
 #### How it signs in
 

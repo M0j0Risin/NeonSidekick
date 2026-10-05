@@ -4478,7 +4478,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
-        Assert.Contains("\n▸ SQL tools                   on\n  SQL mode                    read-only\n  SQL statements allowed      changing data, creating, reading (used under read-write)\n  SQL connections offered     none of 0\n  SQL default connection      (the first connection)\n  SQL set password            Enter to set password for a connection\n  SQL add connection          Enter to start connection wizard\n  SQL %-mention enabled       on\n  SQL max rows                100 rows\n  SQL query timeout (s)       30\n  SQL query result max chars  32,000 chars\n  SQL connections (profile)   (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
+        Assert.Contains("\n▸ SQL tools                   on\n  SQL mode                    read-only\n  SQL statements allowed      changing data, creating, reading (used under read-write)\n  SQL connections offered     none of 0\n  SQL default connection      (the first connection)\n  SQL set password            Enter to set password for a connection\n  SQL add/edit connection     Enter to start connection wizard\n  SQL %-mention enabled       on\n  SQL max rows                100 rows\n  SQL query timeout (s)       30\n  SQL query result max chars  32,000 chars\n  SQL connections (profile)   (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Empty(_chat.Requests);
     }
@@ -6241,6 +6241,78 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.QueueDroppedNotice(2), output);
         Assert.Contains("› /queue clear", output);
         Assert.DoesNotContain(Titled(QueueStrip), output);
+    }
+
+    /// <summary>
+    /// The queue pane's send button (2026-10-05, the user's ask): over a queue held after a cancelled reply, <c>s</c> sends the
+    /// front message at once, as if typed; its normal end releases the hold and the rest drains in order.
+    /// </summary>
+    [Fact]
+    public async Task Idle_QueueSend_UnderHold_SendsTheFrontMessageNow_ThenTheRestDrains()
+    {
+        CancelledWithAQueuedLineFixture("hold", 1, "later", "and later");
+        _chat.EnqueueText("Later.");
+        _chat.EnqueueText("And later.");
+        StepsWhenIdle(Line("hi"), Line("/queue"), Key(Keys.Char('s')), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(Titled(QueueMenu.Title + "   " + QueueMenu.SendButton + "    " + QueueMenu.ClearAllButton + " "), output);
+        Assert.Contains(QueueMenu.KeysWithSend, output);
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal("later", _chat.Requests[1][^1].Text);
+        Assert.Equal("and later", _chat.Requests[2][^1].Text);
+        Assert.Contains("› later", output);
+        Assert.Contains("And later.", output);
+    }
+
+    /// <summary>Ctrl+Q (2026-10-05, the user's ask) is the bare <c>/queue</c>: the pane, no transcript row.</summary>
+    [Fact]
+    public async Task CtrlQ_OpensTheQueuePane_AsSlashQueue()
+    {
+        CancelledWithAQueuedLineFixture("hold");
+        StepsWhenIdle(Line("hi"), Key(Keys.Ctrl(ConsoleKey.Q)), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("\n▸ 1  later\n", output);
+        Assert.Contains(QueueMenu.SendButton, output);
+        Assert.DoesNotContain("› /queue", output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>Ctrl+Alt+Q (2026-10-05, the user's ask) is <c>/queue clear</c>: a held queue dropped with the notice, nothing sent.</summary>
+    [Fact]
+    public async Task CtrlAltQ_DropsAHeldQueue_WithTheNotice()
+    {
+        CancelledWithAQueuedLineFixture("hold", 1, "later", "and later");
+        StepsWhenIdle(Line("hi"), Key(Keys.CtrlAlt(ConsoleKey.Q)), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.QueueDroppedNotice(2), output);
+        Assert.DoesNotContain("› /queue clear", output);
+    }
+
+    [Fact]
+    public async Task MidTurn_CtrlAltQ_DropsTheQueue_AndTheReplyRunsOn()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("later");
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.Q));
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + ChatScreen.QueueDroppedNotice(1), output);
+        Assert.Contains("three.", output);
+        Assert.DoesNotContain("› later", output);
     }
 
     /// <summary>/queue clear under a reply (2026-09-21) is a quick act: the queued message goes with the notice, the reply runs on, nothing is sent after it.</summary>
@@ -10448,9 +10520,9 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 48)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05
-    [InlineData(true, false, 49)]
-    [InlineData(true, true, 50)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 51)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(true, false, 52)]
+    [InlineData(true, true, 53)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
@@ -10469,13 +10541,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("PgUp / PgDn", "scroll the transcript a page at a time"), rows[9]);
         Assert.DoesNotContain(rows, r => r.Key is "Mouse" or "Drag" or "Drop" or "@" or "#" or "$");
         // The bare F-key chords after the talk keys (2026-10-05, the user's pick), each naming its command.
-        Assert.Equal(("F9", "take a photo with the camera and attach it (/camera snap)"), rows[^38]);
-        Assert.Equal(("F10", "capture the screen and attach it (/screen)"), rows[^37]);
+        Assert.Equal(("F9", "take a photo with the camera and attach it (/camera snap)"), rows[^41]);
+        Assert.Equal(("F10", "capture the screen and attach it (/screen)"), rows[^40]);
         Assert.Equal("/camera snap", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.F9, false, false, false)));
         Assert.Equal("/screen", Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.F10, false, false, false)));
-        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^36]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
-        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^35]);
-        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^34]);
+        Assert.Equal(("Alt+V", "paste content (text or images)"), rows[^39]);   // ahead of Ctrl+Home since 2026-09-27 (the user's order)
+        Assert.Equal(("Ctrl+Home", "scroll to top of the chat pane"), rows[^38]);
+        Assert.Equal(("Ctrl+End", "scroll to bottom of the chat pane"), rows[^37]);
         // The Ctrl+letter rows A to Z by the letter since 2026-10-01 (the user's ask), Ctrl+. and Ctrl+/ ahead of them.
         Assert.Equal(
         [
@@ -10490,6 +10562,7 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+M", "open the model picker (/model)"),   // later still on 2026-10-01, the user's wording
             ("Ctrl+O", "expand or collapse the tool calls, code blocks, diffs and thinking (or click a summary line)"),   // 2026-09-22; diffs 2026-10-04
             ("Ctrl+P", "open the profile pane (/profile)"),   // from Ctrl+Alt+P
+            ("Ctrl+Q", "open the queue pane (/queue)"),   // 2026-10-05, the user's ask and wording
             ("Ctrl+R", "open the reasoning picker (/reasoning)"),
             ("Ctrl+S", "open the server picker (/server)"),
             ("Ctrl+T", "show or hide the toolbar (/toolbar)"),   // from Ctrl+Alt+B
@@ -10497,10 +10570,10 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+X", "cut the selected text"),   // 2026-09-25
             ("Ctrl+Y", "open the system prompt pane (/sys)"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             ("Ctrl+Z", "open the theme picker (/theme)"),   // 2026-10-04, the user's ask and wording
-        ], rows[^33..^15]);
+        ], rows[^36..^17]);
         // Each plain-Ctrl chord's row names its command; Ctrl+L (the learning's cancel, 2026-10-04) has none.
         Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
-        foreach (var (row, key) in new[] { (rows[^33], Keys.CtrlPeriod), (rows[^32], Keys.CtrlSlash), (rows[^29], Keys.CtrlE), (rows[^28], Keys.CtrlF), (rows[^27], Keys.CtrlH), (rows[^25], Keys.CtrlM), (rows[^23], Keys.CtrlP), (rows[^22], Keys.CtrlR), (rows[^21], Keys.CtrlS), (rows[^20], Keys.CtrlT), (rows[^19], Keys.CtrlU), (rows[^17], Keys.Ctrl(ConsoleKey.Y)), (rows[^16], Keys.Ctrl(ConsoleKey.Z)) })
+        foreach (var (row, key) in new[] { (rows[^36], Keys.CtrlPeriod), (rows[^35], Keys.CtrlSlash), (rows[^32], Keys.CtrlE), (rows[^31], Keys.CtrlF), (rows[^30], Keys.CtrlH), (rows[^28], Keys.CtrlM), (rows[^26], Keys.CtrlP), (rows[^25], Keys.Ctrl(ConsoleKey.Q)), (rows[^24], Keys.CtrlR), (rows[^23], Keys.CtrlS), (rows[^22], Keys.CtrlT), (rows[^21], Keys.CtrlU), (rows[^19], Keys.Ctrl(ConsoleKey.Y)), (rows[^18], Keys.Ctrl(ConsoleKey.Z)) })
         {
             Assert.Equal(Keys.ShortcutLine(key), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]);
         }
@@ -10519,14 +10592,16 @@ public partial class ChatScreenTests : IDisposable
             ("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"),
             ("Ctrl+Alt+O", "open the shell police setting (/police)"),
             ("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"),   // from Ctrl+Alt+S, later still on 2026-10-01
+            ("Ctrl+Alt+Q", "clear the message queue (/queue clear)"),   // 2026-10-05, the user's ask and wording
+            ("Ctrl+Alt+R", "rename the current session (/rename)"),   // 2026-10-05, the user's ask and wording
             ("Ctrl+Alt+S", "open the skills pane (/skills)"),   // from Ctrl+Alt+K
             ("Ctrl+Alt+T", "open the tools pane (/tools)"),
             ("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"),   // 2026-10-02, the user's ask
             ("Ctrl+Alt+V", "open or close the camera live view (/camera live)"),      // 2026-10-02, the user's ask
             ("Ctrl+Alt+X", "kill switch to immediately unload an embedded model (press twice)"),   // 2026-10-01, the user's place and wording
-        ], rows[^15..]);
+        ], rows[^17..]);
         // Each row names its chord's command; the kill switch has none (2026-10-01).
-        Assert.All(rows[^15..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
+        Assert.All(rows[^17..].Where(row => row.Key != "Ctrl+Alt+X"), row => Assert.Equal(Keys.ShortcutLine(Keys.CtrlAlt(Enum.Parse<ConsoleKey>(row.Key[^1..]))), row.Meaning[(row.Meaning.LastIndexOf('(') + 1)..^1]));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.Equal(voiceOn, rows.Any(r => r.Key == "F8"));
         if (voiceOn)
@@ -10539,7 +10614,7 @@ public partial class ChatScreenTests : IDisposable
         {
             Assert.Equal(("say \"hey neon\"", "talk without a key; during a spoken reply, cut it short (/interrupt)"), rows[11]);
         }
-        Assert.DoesNotContain(rows, r => r.Key.Contains("Ctrl+Q") || r.Meaning.Contains("Ctrl+Q"));
+        Assert.DoesNotContain(rows, r => r.Meaning.Contains("quit", StringComparison.OrdinalIgnoreCase));   // Ctrl+Q quit once; /queue's since 2026-10-05
     }
 
     [Fact]
@@ -10551,7 +10626,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(30, basicEntries.Length);   // seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(31, basicEntries.Length);   // /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         Assert.Equal(basicEntries.Length, basic.Length);
         Assert.Equal(advancedEntries.Length, advanced.Length);
@@ -10568,13 +10643,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(
         [
             "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perfbar", "/profile",
-            "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
+            "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
             "/wake",
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
         Assert.StartsWith(HelpRow("/about", "show general information about the app and profile"), basic[0]);   // advanced[0] until 2026-10-03
-        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[20]);   // sorted by the command, not the label
+        Assert.StartsWith(HelpRow("/settings, //", "edit and save settings"), basic[21]);   // sorted by the command, not the label
         Assert.StartsWith(HelpRow("/botchat", "let the profiles talk to each other, each in its own persona, until ESC: /botchat [profile ...] [[--] topic]"), advanced[0]);
         Assert.StartsWith(HelpRow(NeonSidekick.Camera.CameraText.Word, NeonSidekick.Camera.CameraText.HelpSummary), advanced[1]);   // /camera 2026-10-02
         Assert.StartsWith(HelpRow("/claude", "send a message to Claude Code and add its reply to the conversation"), advanced[2]);
@@ -12976,7 +13051,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(QueueStrip) + "\n \n▸ 1  later\n", output);
+        // The queue is held at idle, so the send button leads the strip (2026-10-05).
+        Assert.Contains("\n" + Titled(QueueMenu.Title + "   " + QueueMenu.SendButton + "    " + QueueMenu.ClearAllButton + " ") + "\n \n▸ 1  later\n", output);
         Assert.DoesNotContain("› /queue", output);
         Assert.Single(_chat.Requests);
         Assert.Contains("\n" + ChatScreen.QueuedHintPart(1), output);
@@ -18772,6 +18848,86 @@ public partial class ChatScreenTests : IDisposable
         using var store = OpenSessions();
         var summary = store.Load(id)!.Summary;
         Assert.Equal(("Wiring notes", TitleSource.User), (summary.Title, summary.TitleSource));
+        Assert.Equal("ok", _chat.Requests[^1].Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    /// <summary><c>/rename</c> (2026-10-05, the user's ask) is <c>/sessions title</c>'s two forms under a shorter word: the parse, and the class under a reply.</summary>
+    [Fact]
+    public void Rename_IsSessionsTitle_ItsArgumentAndItsClassUnderAReply()
+    {
+        Assert.Equal((SlashCommand.Rename, "Wiring notes"), SlashCommands.Parse("/rename  Wiring notes "));
+        Assert.Equal("/rename", SlashCommands.RenameWord);
+        Assert.Equal("title Wiring notes", ChatScreen.RenameAsSessionArgs(" Wiring notes "));
+        Assert.Equal("title", ChatScreen.RenameAsSessionArgs(""));
+        Assert.Equal(SessionActionKind.TitlePane, ChatScreen.ParseSessionArgs(ChatScreen.RenameAsSessionArgs("")).Kind);
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Rename, ""));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Rename, "Wiring notes"));
+        Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Session, "title"), ChatScreen.MidTurnPolicy(SlashCommand.Rename, ""));
+        Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Session, "title x"), ChatScreen.MidTurnPolicy(SlashCommand.Rename, "x"));
+    }
+
+    [Fact]
+    public async Task Rename_WithAName_RetitlesTheSessionOnScreen_AsTheUsers()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        long id = SeedSession();
+        StepsWhenIdle(Line("/sessions " + id), Line("/rename Wiring notes"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + SessionsMenu.RenamedNotice("Wiring notes"), output);
+        Assert.Contains(TitledRule("Wiring notes") + "\n" + InputLine.PromptGlyph, output);
+        using var store = OpenSessions();
+        var summary = store.Load(id)!.Summary;
+        Assert.Equal(("Wiring notes", TitleSource.User), (summary.Title, summary.TitleSource));
+    }
+
+    [Fact]
+    public async Task Rename_BeforeTheFirstTurn_SaysThereIsNoSessionYet()
+    {
+        LinesWhenIdle("/rename Wiring notes", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.SessionNoneYetNotice, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>Ctrl+Alt+R (2026-10-05, the user's ask): the bare <c>/rename</c>, the rename box with the title in it; no transcript row, the draft back after.</summary>
+    [Fact]
+    public async Task CtrlAltR_OpensTheRenameBox_AndTheTypedTitleReplacesIt_TheDraftKept()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        long id = SeedSession();
+        using (var seeded = OpenSessions())
+        {
+            Assert.True(seeded.SetTitle(id, "vosk-model-wiring", TitleSource.Model));
+        }
+
+        _chat.EnqueueText("Fine.");
+        StepsWhenIdle(
+            Line("/sessions " + id),
+            input =>
+            {
+                PushText(input, "ok");
+                input.Push(Keys.CtrlAlt(ConsoleKey.R));
+                PushBackspaces(input, "vosk-model-wiring".Length);
+                PushText(input, "Wiring notes");
+                input.Push(Keys.Enter);   // the box's
+                input.Push(Keys.Enter);   // the draft's: "ok" sent
+            },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + SessionsMenu.RenamedNotice("Wiring notes"), output);
+        Assert.DoesNotContain("› /rename", output);
+        using var store = OpenSessions();
+        Assert.Equal(("Wiring notes", TitleSource.User), (store.Load(id)!.Summary.Title, store.Load(id)!.Summary.TitleSource));
         Assert.Equal("ok", _chat.Requests[^1].Last(m => m.Role == ChatRole.User).Text);
     }
 

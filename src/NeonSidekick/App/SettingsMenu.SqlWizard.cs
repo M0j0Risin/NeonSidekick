@@ -6,20 +6,21 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// <c>SQL add connection</c> (2026-09-23, the user's ask: "a kind of wizard to step the user through all the choices
+/// <c>SQL add/edit connection</c> (2026-09-23, the user's ask: "a kind of wizard to step the user through all the choices
 /// before updating whichever sql.json"): one page per choice — which file, the name, the server, the database, the
 /// sign-in, the account, where its password is kept, the password (masked), the TLS pair, the connect timeout, the access
 /// (2026-10-05: read, or readwrite for <c>sql_execute</c>), the description — every row of the draft on each page, the current one marked, the question in the caption; then a
 /// summary that tests the unsaved draft (<c>SELECT @@VERSION</c>, nothing written) and saves it
 /// (<see cref="SqlConfigFile.AddConnection"/>, the password after it through <see cref="SqlSecrets.Save"/>). ESC steps
 /// back, and on the first page ends the visit with nothing written; Enter on a summary row changes that choice and comes
-/// back. Adds only: an existing entry is still edited in the file (the user's call, the same day).
+/// back. It added only until 2026-10-05, when it took to editing an entry too (the user's ask; <c>SQL add connection</c> until
+/// then): a first page of the entries, a pick prefilled (<see cref="SettingsMenu"/>'s ConnectionEdit part).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
     // ── Pinned statics ──────────────────────────────────────────────────────
 
-    /// <summary>The value column of the <c>SQL add connection</c> action row. Pinned.</summary>
+    /// <summary>The value column of the <c>SQL add/edit connection</c> action row. Pinned.</summary>
     public const string SqlAddConnectionLabel = "Enter to start connection wizard";
 
     /// <summary>The query the summary's test runs: one row, any login may read it.</summary>
@@ -115,7 +116,16 @@ internal sealed partial class SettingsMenu
 
         public string Password { get; set; } = "";
 
-        public SqlConnectionConfig Config { get; } = new()
+        /// <summary>An edit's entry name in its file (2026-10-05); null for a new connection.</summary>
+        public string? Original { get; init; }
+
+        /// <summary>An edit's Credential Manager target under its old name's default, removed when the save moves the password.</summary>
+        public string? OriginalTarget { get; init; }
+
+        /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
+        public bool PasswordKept { get; set; }
+
+        public SqlConnectionConfig Config { get; init; } = new()
         {
             Auth = SqlConnectionConfig.SqlAuth,
             PasswordStore = SqlConnectionConfig.FileStore,
@@ -128,9 +138,10 @@ internal sealed partial class SettingsMenu
     private string SqlWizardPath(bool global) =>
         global ? SqlConfigFile.GlobalPath(_settings.StorageDirectory) : SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
 
-    /// <summary>Whether <paramref name="step"/> is asked for the draft: the account, store and password only when it signs in with a password.</summary>
+    /// <summary>Whether <paramref name="step"/> is asked for the draft: the account, store and password only when it signs in with a password; the file never for an edit.</summary>
     private static bool SqlWizardAsks(SqlWizardStep step, SqlDraft draft) =>
-        step is not (SqlWizardStep.User or SqlWizardStep.Store or SqlWizardStep.Password) || draft.Config.NeedsPassword;
+        step == SqlWizardStep.File ? draft.Original is null
+            : step is not (SqlWizardStep.User or SqlWizardStep.Store or SqlWizardStep.Password) || draft.Config.NeedsPassword;
 
     /// <summary>The first step the draft still lacks (a name, a server, and the account and password when it needs them), or null.</summary>
     private static SqlWizardStep? SqlWizardMissing(SqlDraft draft)
@@ -157,7 +168,7 @@ internal sealed partial class SettingsMenu
     private string SqlWizardValue(SqlWizardStep step, SqlDraft draft)
     {
         var c = draft.Config;
-        if (!SqlWizardAsks(step, draft))
+        if (step != SqlWizardStep.File && !SqlWizardAsks(step, draft))
         {
             return SqlWizardNotNeeded;
         }
@@ -172,7 +183,7 @@ internal sealed partial class SettingsMenu
             SqlWizardStep.Auth => c.Auth ?? SqlConnectionConfig.SqlAuth,
             SqlWizardStep.User => OrUnset(c.User),
             SqlWizardStep.Store => c.InCredentialManager ? SqlConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : SqlConnectionConfig.FileStore,
-            SqlWizardStep.Password => draft.Password.Length > 0 ? SqlWizardMasked : SqlWizardUnset,
+            SqlWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
             SqlWizardStep.Encrypt => c.Encrypt ?? SqlWizardEncryptWords[0],
             SqlWizardStep.Trust => c.TrustServerCertificate ? "yes" : "no",
             SqlWizardStep.Timeout => Invariant(c.ConnectTimeoutSeconds ?? SqlConnectionConfig.DefaultConnectTimeoutSeconds),
@@ -191,15 +202,75 @@ internal sealed partial class SettingsMenu
     private string SqlWizardTitle => Crumb(FieldName(SettingsField.SqlAddConnection));
 
     /// <summary>
-    /// The wizard: its steps in order, ESC one back (before the first: nothing written), a change from the summary back
-    /// to it (by the step the draft still lacks, when the change asks for one — a sign-in that now takes a password).
-    /// True when a setting changed: the offered list, for a connection saved and offered.
+    /// The visit: the first page of the entries when there are any (new, or one to edit), then the wizard on its draft; ESC on
+    /// the wizard's first page back to that list, ESC there (or on the File page with no entries) the end with nothing written.
+    /// True when a setting changed: the offered list.
     /// </summary>
     private async Task<bool> AddSqlConnectionAsync(CancellationToken cancellationToken)
     {
-        var draft = new SqlDraft();
-        var step = SqlWizardStep.File;
-        bool fromSummary = false;
+        while (true)
+        {
+            var entries = ConnectionWizardEntries(SqlWizardPath(false), SqlWizardPath(true), path => SqlConfigFile.Load(path).Connections);
+            var draft = new SqlDraft();
+            if (entries.Count > 0)
+            {
+                if (await ConnectionWizardPickAsync(SqlWizardTitle, "connection", entries.Select(e => (e.Named.Name, e.Global)).ToList(), SqlWizardPath, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    Sink.Notice(SqlWizardCancelledNotice);
+                    return false;
+                }
+
+                if (picked >= 0)
+                {
+                    draft = SqlWizardDraftFrom(entries[picked].Named, entries[picked].Global);
+                }
+            }
+
+            if (await RunSqlWizardAsync(draft, cancellationToken).ConfigureAwait(false) is { } changed)
+            {
+                return changed;
+            }
+
+            if (entries.Count == 0)
+            {
+                Sink.Notice(SqlWizardCancelledNotice);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>An edit's draft (2026-10-05): the entry copied, its file and name kept as the original, its stored password read.</summary>
+    private SqlDraft SqlWizardDraftFrom(SqlNamedConnection named, bool global)
+    {
+        var c = named.Config;
+        var draft = new SqlDraft
+        {
+            Global = global,
+            Name = named.Name,
+            Original = named.Name,
+            OriginalTarget = c.NeedsPassword && c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            Config = CloneEntry(c, SqlJsonContext.Default.SqlConnectionConfig, x => x.Password = null),
+        };
+        if (c.NeedsPassword)
+        {
+            draft.Password = StoredPassword(SqlSecrets.Resolve(named));
+            draft.PasswordKept = draft.Password.Length > 0;
+        }
+
+        return draft;
+    }
+
+    /// <summary>
+    /// The wizard: its steps in order, ESC one back (before the first: null, nothing written), a change from the summary back
+    /// to it (by the step the draft still lacks, when the change asks for one — a sign-in that now takes a password).
+    /// True when a setting changed: the offered list.
+    /// </summary>
+    private async Task<bool?> RunSqlWizardAsync(SqlDraft draft, CancellationToken cancellationToken)
+    {
+        // An edit opens on its summary (2026-10-05): Enter on a row changes that one; a stored password that could not be
+        // read asks first.
+        var step = draft.Original is null ? SqlWizardStep.File : SqlWizardMissing(draft) ?? SqlWizardStep.Summary;
+        bool fromSummary = draft.Original is not null;
         while (true)
         {
             if (step == SqlWizardStep.Summary)
@@ -215,6 +286,11 @@ internal sealed partial class SettingsMenu
                     step = target;
                     fromSummary = true;
                     continue;
+                }
+
+                if (draft.Original is not null)
+                {
+                    return null;   // an edit's ESC on its summary: back to the list
                 }
 
                 step = SqlWizardStep.Description;
@@ -250,8 +326,7 @@ internal sealed partial class SettingsMenu
 
             if (step < SqlWizardStep.File)
             {
-                Sink.Notice(SqlWizardCancelledNotice);
-                return false;
+                return null;
             }
         }
     }
@@ -289,7 +364,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     string path = SqlWizardPath(draft.Global);
-                    if (SqlConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+                    if (SqlConfigFile.Load(path).Connections.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) && !string.Equals(x.Name, draft.Original, StringComparison.OrdinalIgnoreCase)))
                     {
                         return SqlWizardNameTaken(name, path);
                     }
@@ -382,6 +457,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     draft.Password = text;
+                    draft.PasswordKept = false;
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -502,7 +578,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<(bool Done, bool Changed, SqlWizardStep? Edit)> SqlWizardSummaryAsync(SqlDraft draft, CancellationToken cancellationToken)
     {
-        int cursor = 0;
+        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.SqlConnectionsOffered);
         while (true)
         {
             // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
@@ -542,7 +618,7 @@ internal sealed partial class SettingsMenu
 
             if (picked == test + 1)
             {
-                Sink.Notice(SqlWizardCancelledNotice);
+                Sink.Notice(draft.Original is null ? SqlWizardCancelledNotice : ConnectionWizardUnchangedNotice);
                 return (true, false, null);
             }
 
@@ -598,8 +674,8 @@ internal sealed partial class SettingsMenu
             .RunAsync(connection.Name, null, null, SqlTestQuery, [], 1, _settings.Current.SqlQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>
-    /// Writes the draft: the entry (<see cref="SqlConfigFile.AddConnection"/>), then its password to its store, then — when
-    /// <paramref name="offer"/> — its name added there. Whether a setting changed;
+    /// Writes the draft: the entry (<see cref="SqlConfigFile.AddConnection"/>, or for an edit <see cref="SqlConfigFile.ReplaceConnection"/>),
+    /// then its password to its store, then the offered list (<see cref="ConnectionOfferedAfterSave"/>). Whether a setting changed;
     /// null when nothing was written (the status line says why), the summary shown again.
     /// </summary>
     private bool? SqlWizardSave(SqlDraft draft, bool offer)
@@ -611,20 +687,28 @@ internal sealed partial class SettingsMenu
             c.PasswordStore = null;
         }
 
+        if (SqlWizardMissing(draft) is { } missing)
+        {
+            // An edit opens on its summary, so a page it still lacks (a stored password that could not be read) is caught here.
+            string unset = SqlWizardLabels[(int)missing] + " is not set";
+            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, unset) : SqlText.ConnectionChangeFailed(draft.Name, unset));
+            return null;
+        }
+
         if (c.Problem is { } problem)
         {
-            Sink.Error(SqlText.ConnectionAddFailed(draft.Name, problem));
+            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, problem) : SqlText.ConnectionChangeFailed(draft.Name, problem));
             return null;
         }
 
         string path = SqlWizardPath(draft.Global);
-        if (SqlConfigFile.AddConnection(path, draft.Name, c) is { } error)
+        if ((draft.Original is { } original ? SqlConfigFile.ReplaceConnection(path, original, draft.Name, c) : SqlConfigFile.AddConnection(path, draft.Name, c)) is { } error)
         {
-            Sink.Error(SqlText.ConnectionAddFailed(draft.Name, error));
+            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, error) : SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
         }
 
-        Sink.Notice(SqlText.ConnectionAdded(draft.Name, path));
+        Sink.Notice(draft.Original is null ? SqlText.ConnectionAdded(draft.Name, path) : SqlText.ConnectionChanged(draft.Name, path));
         if (c.NeedsPassword)
         {
             var (saved, notice) = SqlSecrets.Save(new SqlNamedConnection(draft.Name, c, path), draft.Password);
@@ -638,13 +722,7 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        if (!offer)
-        {
-            return false;
-        }
-
-        var offered = _settings.Current.SqlConnectionsOffered ?? [];   // null offers none (2026-10-01)
-        Apply(SettingsField.SqlConnectionsOffered, d => d.SqlConnectionsOffered = [.. offered, draft.Name]);
-        return true;
+        ForgetOldCredential(draft.OriginalTarget, c.NeedsPassword && c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        return ApplyOfferedAfterSave(SettingsField.SqlConnectionsOffered, _settings.Current.SqlConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.SqlConnectionsOffered = next);
     }
 }

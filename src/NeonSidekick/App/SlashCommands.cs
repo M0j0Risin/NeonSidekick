@@ -253,6 +253,13 @@ public enum SlashCommand
     Session,
 
     /// <summary>
+    /// <c>/rename [name]</c> (2026-10-05, the user's ask): the session on screen renamed from the draft line — a front door onto
+    /// <c>/sessions title</c>, the name the title (waits for a reply as that does) and the bare word the rename box (a pane under
+    /// a reply as that is). Ctrl+Alt+R sends the bare word.
+    /// </summary>
+    Rename,
+
+    /// <summary>
     /// <c>/claude &lt;message&gt;</c> (2026-09-27, the user's ask): the message sent to Claude Code, run headless as a child
     /// (<see cref="Claude.ClaudeProcess"/>), the reply streamed into the transcript under Claude's name, spoken when speech
     /// is on, and the pair added to the local model's history, tagged. One Claude conversation per session, resumed by the id
@@ -352,6 +359,7 @@ public static class SlashCommands
             new("/queue", "list and prune the messages queued while a reply runs, or /queue clear"),
             new("/reasoning", "pick the LLM reasoning effort, or /reasoning <level>"),
             new("/remember", "add a memory: /remember <text>"),
+            new("/rename", "rename the current session: /rename <name>, or /rename alone for the rename box"),
             new("/sampling", "edit the LLM sampling overrides per model on a pane (temperature, top_p, top_k, min_p, penalties, extra body), or /sampling <field> <value|clear> | extra <json> | clear for the connected model"),
             new("/server", "pick an LLM server found on the usual ports, or /server <url>"),
             new("/sessions", "list, restore, rename and purge sessions: /sessions [<id> | purge <id> | purge older <age> | purge all | title [<text>]]"),
@@ -387,7 +395,7 @@ public static class SlashCommands
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
         "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perfbar", "/profile",
-        "/queue", "/reasoning", "/remember", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
+        "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
         "/wake",
     };
 
@@ -444,7 +452,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -459,6 +467,7 @@ public static class SlashCommands
     public const string McpWord = "/mcp";
     public const string SysWord = "/sys";
     public const string SessionsWord = "/sessions";   // later on 2026-09-21, the sixth glyph
+    public const string RenameWord = "/rename";       // 2026-10-05, what Ctrl+Alt+R sends: the rename box
     public const string CmdListWord = "/cmdlist";     // later still on 2026-09-21, the seventh: the lock, whichever way the policy turns it
     public const string PoliceWord = "/police";       // 2026-09-22, the officer last of all, while Shell police is on
     public const string MemoryWord = "/memory";       // 2026-09-22, the disk between the balloon and the lock, while Memory is on
@@ -543,6 +552,7 @@ public static class SlashCommands
             "/echo" => SlashCommand.Echo,
             "/queue" => SlashCommand.Queue,
             "/sessions" => SlashCommand.Session,
+            "/rename" => SlashCommand.Rename,
             "/copy" => SlashCommand.Copy,
             "/draft" => SlashCommand.Draft,
             "/loop" => SlashCommand.Loop,
@@ -582,7 +592,7 @@ public static class SlashCommands
         or SlashCommand.Learn
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Profile or SlashCommand.Timer
-        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Copy or SlashCommand.Session or SlashCommand.GitUser
+        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings;

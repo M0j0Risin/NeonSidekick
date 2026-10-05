@@ -162,7 +162,7 @@ public class MenuPaneTests : IDisposable
 
         // A repeated hotkey, a stranger, a control chord and one whose row is off the page leave the cursor where it is.
         highlighted.Clear();
-        Push(Keys.Char('y'), Keys.Char('y'), Keys.Char('x'), Keys.Ctrl(ConsoleKey.Q), Keys.Char('q'), Keys.Enter);
+        Push(Keys.Char('y'), Keys.Char('y'), Keys.Char('x'), Keys.Ctrl(ConsoleKey.B), Keys.Char('q'), Keys.Enter);
         Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(page, 1, CancellationToken.None, highlighted.Add));
         Assert.Empty(highlighted);
 

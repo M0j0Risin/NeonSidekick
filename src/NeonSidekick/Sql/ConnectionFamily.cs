@@ -241,6 +241,26 @@ public sealed class ConnectionFamily<TConfig, TNamed>
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(config);
+        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText);
+    }
+
+    /// <summary>
+    /// Replaces connection <paramref name="oldName"/> in <paramref name="path"/> with <paramref name="newName"/> and
+    /// <paramref name="config"/> (2026-10-05, the tab's wizard editing an entry; <see cref="ConnectionsFileEdit.ReplaceConnection"/>),
+    /// the <c>password</c> left out as for an add. Null on success, else why not.
+    /// </summary>
+    public string? ReplaceConnection(string path, string oldName, string newName, TConfig config)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        ArgumentNullException.ThrowIfNull(config);
+        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config));
+    }
+
+    /// <summary>One entry as the file holds it: <see cref="EntryInfo"/>'s keys, indented, no <c>password</c>, the relaxed escaping.</summary>
+    private string EntryText(TConfig config)
+    {
         string? password = config.Password;
         config.Password = null;
         try
@@ -251,7 +271,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
                 JsonSerializer.Serialize(writer, config, EntryInfo);
             }
 
-            return ConnectionsFileEdit.AddConnection(path, name, Encoding.UTF8.GetString(stream.ToArray()), EmptyText);
+            return Encoding.UTF8.GetString(stream.ToArray());
         }
         finally
         {

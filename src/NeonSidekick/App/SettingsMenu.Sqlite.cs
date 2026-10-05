@@ -222,7 +222,7 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    // ── SQLite add database ────────────────────────────────────────────────
+    // ── SQLite add/edit database ───────────────────────────────────────────
 
     /// <summary>The wizard's rows, one per <see cref="SqliteWizardStep"/> before the summary. Pinned.</summary>
     public static readonly IReadOnlyList<string> SqliteWizardLabels = ["File", "Name", "Database file", "Description"];
@@ -244,6 +244,10 @@ internal sealed partial class SettingsMenu
 
     public static string SqliteWizardAddFailed(string name, string reason) => $"Could not add '{name}': {reason}.";
 
+    public static string SqliteWizardChanged(string name, string path) => $"Saved '{name}' in {path}.";   // 2026-10-05, the wizard's edit
+
+    public static string SqliteWizardChangeFailed(string name, string reason) => $"Could not save '{name}': {reason}.";
+
     internal enum SqliteWizardStep
     {
         File,
@@ -259,7 +263,10 @@ internal sealed partial class SettingsMenu
 
         public string Name { get; set; } = "";
 
-        public SqliteDatabaseConfig Config { get; } = new();
+        /// <summary>An edit's entry name in its file (2026-10-05); null for a new database.</summary>
+        public string? Original { get; init; }
+
+        public SqliteDatabaseConfig Config { get; init; } = new();
     }
 
     private string SqliteWizardPath(bool global) =>
@@ -281,12 +288,49 @@ internal sealed partial class SettingsMenu
         return SqliteWizardLabels.Select((label, i) => Markup.Escape(label.PadRight(width) + SqliteWizardValue((SqliteWizardStep)i, draft))).ToList();
     }
 
-    /// <summary>The wizard: its steps in order, ESC one back (before the first: nothing written), a change from the summary back to it. True when a setting changed.</summary>
+    /// <summary>
+    /// The visit (<c>SQLite add/edit database</c>, an edit since 2026-10-05, the user's ask): the first page of the entries when
+    /// there are any, then the wizard on its draft; ESC on its first page back to that list. True when a setting changed.
+    /// </summary>
     private async Task<bool> AddSqliteDatabaseAsync(CancellationToken cancellationToken)
     {
-        var draft = new SqliteDraft();
-        var step = SqliteWizardStep.File;
-        bool fromSummary = false;
+        while (true)
+        {
+            var entries = ConnectionWizardEntries(SqliteWizardPath(false), SqliteWizardPath(true), path => SqliteConfigFile.Load(path).Databases);
+            var draft = new SqliteDraft();
+            if (entries.Count > 0)
+            {
+                if (await ConnectionWizardPickAsync(SqliteWizardTitle, "database", entries.Select(e => (e.Named.Name, e.Global)).ToList(), SqliteWizardPath, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    Sink.Notice(SqliteWizardCancelledNotice);
+                    return false;
+                }
+
+                if (picked >= 0)
+                {
+                    var (named, global) = entries[picked];
+                    draft = new SqliteDraft { Global = global, Name = named.Name, Original = named.Name, Config = CloneEntry(named.Config, SqliteJsonContext.Default.SqliteDatabaseConfig, _ => { }) };
+                }
+            }
+
+            if (await RunSqliteWizardAsync(draft, cancellationToken).ConfigureAwait(false) is { } changed)
+            {
+                return changed;
+            }
+
+            if (entries.Count == 0)
+            {
+                Sink.Notice(SqliteWizardCancelledNotice);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>The wizard: its steps in order, ESC one back (before the first — the File page, or an edit's Name: null), a change from the summary back to it. True when a setting changed.</summary>
+    private async Task<bool?> RunSqliteWizardAsync(SqliteDraft draft, CancellationToken cancellationToken)
+    {
+        var step = draft.Original is null ? SqliteWizardStep.File : SqliteWizardStep.Summary;   // an edit opens on its summary (2026-10-05)
+        bool fromSummary = draft.Original is not null;
         while (true)
         {
             if (step == SqliteWizardStep.Summary)
@@ -295,6 +339,11 @@ internal sealed partial class SettingsMenu
                 if (done)
                 {
                     return changed;
+                }
+
+                if (edit is null && draft.Original is not null)
+                {
+                    return null;   // an edit's ESC on its summary: back to the list
                 }
 
                 step = edit ?? SqliteWizardStep.Description;
@@ -316,10 +365,9 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            if (step == SqliteWizardStep.File)
+            if (step == (draft.Original is null ? SqliteWizardStep.File : SqliteWizardStep.Name))
             {
-                Sink.Notice(SqliteWizardCancelledNotice);
-                return false;
+                return null;
             }
 
             step--;
@@ -362,7 +410,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     string path = SqliteWizardPath(draft.Global);
-                    if (SqliteConfigFile.Load(path).Named(name) is not null)
+                    if (SqliteConfigFile.Load(path).Named(name) is { } taken && !string.Equals(taken.Name, draft.Original, StringComparison.OrdinalIgnoreCase))
                     {
                         return SqlWizardNameTaken(name, path);
                     }
@@ -425,7 +473,7 @@ internal sealed partial class SettingsMenu
 
     private async Task<(bool Done, bool Changed, SqliteWizardStep? Edit)> SqliteWizardSummaryAsync(SqliteDraft draft, CancellationToken cancellationToken)
     {
-        int cursor = 0;
+        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.SqliteDatabasesOffered);
         while (true)
         {
             string[] actions = [SqlWizardSaveOfferedRow, SqliteWizardSaveHiddenRow, SqliteWizardTestRow, SqlWizardCancelRow];
@@ -444,7 +492,13 @@ internal sealed partial class SettingsMenu
             cursor = picked;
             if (picked >= actions.Length)
             {
-                return (false, false, (SqliteWizardStep)(picked - actions.Length));
+                var edit = (SqliteWizardStep)(picked - actions.Length);
+                if (edit == SqliteWizardStep.File && draft.Original is not null)
+                {
+                    continue;   // an edit's file is fixed
+                }
+
+                return (false, false, edit);
             }
 
             if (picked == 2)
@@ -455,7 +509,7 @@ internal sealed partial class SettingsMenu
 
             if (picked == 3)
             {
-                Sink.Notice(SqliteWizardCancelledNotice);
+                Sink.Notice(draft.Original is null ? SqliteWizardCancelledNotice : ConnectionWizardUnchangedNotice);
                 return (true, false, null);
             }
 
@@ -487,30 +541,24 @@ internal sealed partial class SettingsMenu
         Sink.Notice(SqliteWizardTestOk(named.Name, count));
     }
 
-    /// <summary>Writes the draft, then — when <paramref name="offer"/> — its name into the offered list. Null when nothing was written.</summary>
+    /// <summary>Writes the draft (an add, or an edit's replace), then the offered list (<see cref="ConnectionOfferedAfterSave"/>). Null when nothing was written.</summary>
     private bool? SqliteWizardSave(SqliteDraft draft, bool offer)
     {
+        Func<string, string, string> failed = draft.Original is null ? SqliteWizardAddFailed : SqliteWizardChangeFailed;
         if (draft.Name.Length == 0 || draft.Config.Problem is not null)
         {
-            Sink.Error(SqliteWizardAddFailed(draft.Name, (draft.Name.Length == 0 ? SqliteWizardLabels[1] : SqliteWizardLabels[2]) + " is not set"));
+            Sink.Error(failed(draft.Name, (draft.Name.Length == 0 ? SqliteWizardLabels[1] : SqliteWizardLabels[2]) + " is not set"));
             return null;
         }
 
         string path = SqliteWizardPath(draft.Global);
-        if (SqliteConfigFile.AddDatabase(path, draft.Name, draft.Config) is { } error)
+        if ((draft.Original is { } original ? SqliteConfigFile.ReplaceDatabase(path, original, draft.Name, draft.Config) : SqliteConfigFile.AddDatabase(path, draft.Name, draft.Config)) is { } error)
         {
-            Sink.Error(SqliteWizardAddFailed(draft.Name, error));
+            Sink.Error(failed(draft.Name, error));
             return null;
         }
 
-        Sink.Notice(SqliteWizardAdded(draft.Name, path));
-        if (!offer)
-        {
-            return false;
-        }
-
-        var offered = _settings.Current.SqliteDatabasesOffered ?? [];
-        Apply(SettingsField.SqliteDatabasesOffered, d => d.SqliteDatabasesOffered = [.. offered, draft.Name]);
-        return true;
+        Sink.Notice(draft.Original is null ? SqliteWizardAdded(draft.Name, path) : SqliteWizardChanged(draft.Name, path));
+        return ApplyOfferedAfterSave(SettingsField.SqliteDatabasesOffered, _settings.Current.SqliteDatabasesOffered, draft.Original, draft.Name, offer, (d, next) => d.SqliteDatabasesOffered = next);
     }
 }

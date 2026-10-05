@@ -115,6 +115,9 @@ public sealed class MySqlConfigFile
     /// <summary>Adds connection <paramref name="name"/> to <paramref name="path"/> (the MySQL tab's wizard), its <c>password</c> left out (<see cref="ConnectionFamily{TConfig, TNamed}.AddConnection"/>). Null on success, else why not.</summary>
     public static string? AddConnection(string path, string name, MySqlConnectionConfig config) => Family.AddConnection(path, name, config);
 
+    /// <summary>Replaces connection <paramref name="oldName"/> with <paramref name="newName"/> and <paramref name="config"/> (2026-10-05, the wizard's edit; <see cref="Sql.ConnectionFamily{TConfig, TNamed}.ReplaceConnection"/>).</summary>
+    public static string? ReplaceConnection(string path, string oldName, string newName, MySqlConnectionConfig config) => Family.ReplaceConnection(path, oldName, newName, config);
+
     /// <summary>Every <c>mysql.json</c> under <paramref name="home"/> read once, so a plain password is encrypted at startup (<see cref="ConnectionFamily{TConfig, TNamed}.EncryptAll"/>). The files read. Never throws.</summary>
     public static IReadOnlyList<string> EncryptAll(string home) => Family.EncryptAll(home);
 

@@ -170,6 +170,7 @@ internal sealed partial class ChatScreen
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
+        SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Process => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
@@ -479,8 +480,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Queue:
                 await _queueMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Rename:
             case SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane:
-                // The rename box (2026-09-28): the upper rule's session name double-clicked, or the bare /sessions title typed.
+                // The rename box (2026-09-28): the upper rule's session name double-clicked, or the bare /sessions title typed
+                // (the bare /rename and Ctrl+Alt+R since 2026-10-05; /rename with a name waits, as /sessions title's does).
                 await RenameSessionAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Session:

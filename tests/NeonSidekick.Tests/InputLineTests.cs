@@ -572,7 +572,7 @@ public class InputLineTests : IDisposable
         Assert.Equal(2, asked);
     }
 
-    /// <summary>Ctrl+Q used to quit from the line; now it is a control key the editor ignores.</summary>
+    /// <summary>Ctrl+Q used to quit from the line; on a line without chords it is a control key the editor ignores (the chat line's <c>/queue</c> chord since 2026-10-05).</summary>
     [Fact]
     public async Task CtrlQ_DoesNotQuit_TheLineGoesOn()
     {

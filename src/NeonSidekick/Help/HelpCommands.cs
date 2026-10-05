@@ -222,7 +222,7 @@ public static class HelpCommands
         ]),
         new("/queue",
         [
-            new("/queue [clear]", "List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all). `/queue clear` drops them without opening the pane."),
+            new("/queue [clear]", "List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now; its reply's end releases the hold. `/queue clear` drops them without opening the pane. Ctrl+Q runs `/queue`, Ctrl+Alt+Q `/queue clear`."),
         ]),
         new("/reasoning",
         [
@@ -231,6 +231,10 @@ public static class HelpCommands
         new("/remember",
         [
             new("/remember <text>", "Add a memory."),
+        ]),
+        new("/rename",
+        [
+            new("/rename [name]", "Rename the current session, as `/sessions title` does: with a name it is set at once (after the reply, under one); on its own it opens the rename box with the current name in it, and works while a reply runs. Nothing to rename before the first reply. Ctrl+Alt+R runs it too."),
         ]),
         new("/rewind",
         [

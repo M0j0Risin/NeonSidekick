@@ -8,7 +8,7 @@ namespace NeonSidekick.Sql;
 /// <summary>
 /// The byte-level edits of a <c>{ "connections": { "&lt;name&gt;": { … } } }</c> file that keep its comments and layout
 /// (2026-09-30, out of <see cref="SqlConfigFile"/> when <c>oracle.json</c> (<see cref="Oracle.OracleConfigFile"/>) took the
-/// same shape): a connection's <c>password</c> written over or inserted, and a whole connection added. Each finds its
+/// same shape): a connection's <c>password</c> written over or inserted, a whole connection added, and (2026-10-05, the wizards' edit) one replaced. Each finds its
 /// spot with a comment-tolerant <see cref="Utf8JsonReader"/>, splices the bytes, writes a temp file and moves it over the
 /// original. The engine-specific parts — the file's <c>EmptyText</c>, the entry's serialisation — stay with the caller.
 /// The entries sit under <c>connections</c> unless a caller names another key: <c>unc.json</c>'s are <c>shares</c>
@@ -95,6 +95,110 @@ public static class ConnectionsFileEdit
         {
             return LogText.Excerpt(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Replaces connection <paramref name="oldName"/> in <paramref name="path"/> with <paramref name="newName"/> and
+    /// <paramref name="entryJson"/> (2026-10-05, the user's ask: the add-connection wizards edit too): the bytes from the entry's
+    /// name to the end of its object spliced, the entry's own indent kept, every comment and other entry untouched. The password
+    /// is the caller's to write after (<c>WritePassword</c>), as for an add. Refused when <paramref name="oldName"/> is not an
+    /// entry, or <paramref name="newName"/> is another one (trimmed, case-insensitive). Null on success, else why not.
+    /// </summary>
+    public static string? ReplaceConnection(string path, string oldName, string newName, string entryJson, string section = DefaultSection, string noun = DefaultNoun)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        ArgumentNullException.ThrowIfNull(entryJson);
+        oldName = oldName.Trim();
+        newName = newName.Trim();
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return SqlText.ConnectionNotInFile(oldName, noun);
+            }
+
+            byte[] bytes = File.ReadAllBytes(path);
+            int bom = Bom(bytes);
+            var json = bytes.AsSpan(bom);
+            var spot = LocateEntry(json, oldName, newName, section, noun);
+            if (spot.Error is { } refused)
+            {
+                return refused;
+            }
+
+            int lineStart = json[..spot.Start].LastIndexOfAny((byte)'\n', (byte)'\r') + 1;
+            int indent = 0;
+            while (lineStart + indent < spot.Start && json[lineStart + indent] is (byte)' ' or (byte)'\t')
+            {
+                indent++;
+            }
+
+            string newline = json.IndexOf("\r\n"u8) >= 0 ? "\r\n" : "\n";
+            string pad = Encoding.UTF8.GetString(json.Slice(lineStart, indent));
+            string entry = "\"" + JsonEncodedText.Encode(newName, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\": "
+                + string.Join(newline + pad, entryJson.ReplaceLineEndings("\n").Split('\n'));
+            Splice(path, bytes, bom + spot.Start, bom + spot.End, entry);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return LogText.Excerpt(ex.Message);
+        }
+    }
+
+    /// <summary>Where <see cref="ReplaceConnection"/> splices: the entry's name token to the end of its value, or why not.</summary>
+    private readonly record struct EntrySpot(int Start, int End, string? Error);
+
+    /// <summary>
+    /// The byte range of <c>&lt;section&gt;.&lt;oldName&gt;</c> in <paramref name="json"/> (its name's quote to its value's end), refused
+    /// when the root or the section is not an object, the entry is missing, or another entry is called <paramref name="newName"/>.
+    /// </summary>
+    private static EntrySpot LocateEntry(ReadOnlySpan<byte> json, string oldName, string newName, string section, string noun)
+    {
+        var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+        {
+            return new EntrySpot(0, 0, SqlText.FileNotAnObject);
+        }
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            bool isSection = reader.GetString()!.Equals(section, StringComparison.OrdinalIgnoreCase);
+            reader.Read();
+            if (!isSection)
+            {
+                reader.Skip();
+                continue;
+            }
+
+            if (reader.TokenType != JsonTokenType.StartObject)
+            {
+                return new EntrySpot(0, 0, section == DefaultSection ? SqlText.ConnectionsNotAnObject : SqlText.SectionNotAnObject(section));
+            }
+
+            EntrySpot? found = null;
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                string name = reader.GetString()!.Trim();
+                int start = (int)reader.TokenStartIndex;
+                reader.Read();
+                reader.Skip();
+                if (found is null && string.Equals(name, oldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    found = new EntrySpot(start, (int)reader.BytesConsumed, null);
+                }
+                else if (string.Equals(name, newName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new EntrySpot(0, 0, SqlText.ConnectionAlreadyInFile(newName, noun));
+                }
+            }
+
+            return found ?? new EntrySpot(0, 0, SqlText.ConnectionNotInFile(oldName, noun));
+        }
+
+        return new EntrySpot(0, 0, SqlText.ConnectionNotInFile(oldName, noun));
     }
 
     /// <summary>Writes <paramref name="emptyText"/> to <paramref name="path"/> when no file is there (the folder made first); true when it wrote. Throws on an IO failure — the caller's notice.</summary>

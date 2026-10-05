@@ -73,6 +73,7 @@ public class KeysTests
     [InlineData(ConsoleKey.O, '\x0f', "/police")]
     [InlineData(ConsoleKey.H, '\x08', "/header")]   // later still on 2026-10-01 (the user's ask), free since /help moved to Ctrl+H
     [InlineData(ConsoleKey.E, '\x05', "/sessions")]   // later on 2026-10-03 (the user's ask), free since /perfbar moved to Ctrl+F
+    [InlineData(ConsoleKey.R, '\x12', "/rename")]   // 2026-10-05 (the user's ask): the rename box
     public void ShortcutLine_ThePaneChords_AreTheirBareCommands(ConsoleKey key, char control, string line)
     {
         // Later on 2026-09-30 (the user's ask): the test factory's '\0' and the console's control character count; Shift,
@@ -109,6 +110,7 @@ public class KeysTests
     [InlineData(ConsoleKey.H, '\x08', "/help")]   // moved from Ctrl+Alt+H later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.M, '\r', "/model")]
     [InlineData(ConsoleKey.P, '\x10', "/profile")]   // from Ctrl+Alt+P
+    [InlineData(ConsoleKey.Q, '\x11', "/queue")]     // 2026-10-05 (the user's ask); the key quit once
     [InlineData(ConsoleKey.R, '\x12', "/reasoning")]
     [InlineData(ConsoleKey.S, '\x13', "/server")]
     [InlineData(ConsoleKey.T, '\x14', "/toolbar")]       // from Ctrl+Alt+B
@@ -157,6 +159,17 @@ public class KeysTests
     public void ShortcutLine_TheOtherFKeys_AreNoChord(ConsoleKey key) =>
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: false, control: false)));
 
+    /// <summary>Ctrl+Alt+Q (2026-10-05, the user's ask): <c>/queue clear</c>, the console's DC1 and the factory's '\0'; AltGr+Q (a German layout's @) types its character.</summary>
+    [Fact]
+    public void ShortcutLine_CtrlAltQ_ClearsTheQueue_AndAltGrQStaysAnAt()
+    {
+        Assert.Equal("/queue clear", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Q)));
+        Assert.Equal("/queue clear", Keys.ShortcutLine(new ConsoleKeyInfo('\x11', ConsoleKey.Q, shift: false, alt: true, control: true)));
+        Assert.Equal(NeonSidekick.App.QueueAction.Clear, NeonSidekick.App.ChatScreen.ParseQueueArgs("clear"));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('@', ConsoleKey.Q, shift: false, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.Q, shift: true, alt: true, control: true)));
+    }
+
     [Fact]
     public void ShortcutLine_ATypedCharacter_IsNoChord() =>
         Assert.Null(Keys.ShortcutLine(Keys.Char('a')));
@@ -173,7 +186,7 @@ public class KeysTests
         Assert.Equal("/memory", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.M)));
         Assert.Equal("/skills", Keys.ShortcutLine(Keys.CtrlAltS));
         Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.P)));
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.R)));
+        Assert.Equal("/rename", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.R)));   // 2026-10-05 (the user's ask)
 
         Assert.Equal("/help", Keys.ShortcutLine(Keys.CtrlH));
         Assert.Equal("/profile", Keys.ShortcutLine(Keys.CtrlP));

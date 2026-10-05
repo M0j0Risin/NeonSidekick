@@ -6,12 +6,12 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// <c>UNC add share</c> (2026-09-30, the SQL wizard's walk for <c>unc.json</c>): one page per choice — which file, the name, the
+/// <c>UNC add/edit share</c> (2026-09-30, the SQL wizard's walk for <c>unc.json</c>): one page per choice — which file, the name, the
 /// path, the sign-in, the account, where its password is kept, the password (masked), the access, the description — every row
 /// of the draft on each page, the current one marked, the question in the caption; then a summary that tests the unsaved draft
 /// (its root listed under its account, nothing written there or here) and saves it (<see cref="UncConfigFile.AddShare"/>, the
 /// password after it through <see cref="UncSecrets.Save"/>). ESC steps back, and on the first page ends the visit with nothing
-/// written; Enter on a summary row changes that choice and comes back. Adds only: an existing entry is edited in the file.
+/// written; Enter on a summary row changes that choice and comes back. It edits an entry too since 2026-10-05 (the user's ask): a first page of the entries, a pick prefilled (the ConnectionEdit part).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -77,7 +77,16 @@ internal sealed partial class SettingsMenu
 
         public string Password { get; set; } = "";
 
-        public UncShareConfig Config { get; } = new()
+        /// <summary>An edit's entry name in its file (2026-10-05); null for a new share.</summary>
+        public string? Original { get; init; }
+
+        /// <summary>An edit's Credential Manager target under its old name's default, removed when the save moves the password.</summary>
+        public string? OriginalTarget { get; init; }
+
+        /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
+        public bool PasswordKept { get; set; }
+
+        public UncShareConfig Config { get; init; } = new()
         {
             Auth = UncShareConfig.WindowsAuth,
             PasswordStore = UncShareConfig.FileStore,
@@ -88,9 +97,10 @@ internal sealed partial class SettingsMenu
     private string UncWizardPath(bool global) =>
         global ? UncConfigFile.GlobalPath(_settings.StorageDirectory) : UncConfigFile.ProfilePath(_settings.ProfileDirectory);
 
-    /// <summary>Whether <paramref name="step"/> is asked for the draft: the account, store and password only under runas.</summary>
+    /// <summary>Whether <paramref name="step"/> is asked for the draft: the account, store and password only under runas; the file never for an edit.</summary>
     private static bool UncWizardAsks(UncWizardStep step, UncDraft draft) =>
-        step is not (UncWizardStep.User or UncWizardStep.Store or UncWizardStep.Password) || draft.Config.NeedsPassword;
+        step == UncWizardStep.File ? draft.Original is null
+            : step is not (UncWizardStep.User or UncWizardStep.Store or UncWizardStep.Password) || draft.Config.NeedsPassword;
 
     /// <summary>The first step the draft still lacks (a name, a path, and under runas the account and password), or null.</summary>
     private static UncWizardStep? UncWizardMissing(UncDraft draft)
@@ -117,7 +127,7 @@ internal sealed partial class SettingsMenu
     private string UncWizardValue(UncWizardStep step, UncDraft draft)
     {
         var c = draft.Config;
-        if (!UncWizardAsks(step, draft))
+        if (step != UncWizardStep.File && !UncWizardAsks(step, draft))
         {
             return SqlWizardNotNeeded;
         }
@@ -131,7 +141,7 @@ internal sealed partial class SettingsMenu
             UncWizardStep.Auth => c.Auth ?? UncShareConfig.WindowsAuth,
             UncWizardStep.User => OrUnset(c.User),
             UncWizardStep.Store => c.InCredentialManager ? UncShareConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : UncShareConfig.FileStore,
-            UncWizardStep.Password => draft.Password.Length > 0 ? SqlWizardMasked : SqlWizardUnset,
+            UncWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
             UncWizardStep.Access => c.Access ?? UncShareConfig.ReadAccess,
             _ => OrUnset(c.Description),
         };
@@ -153,9 +163,66 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<bool> AddUncShareAsync(CancellationToken cancellationToken)
     {
-        var draft = new UncDraft();
-        var step = UncWizardStep.File;
-        bool fromSummary = false;
+        // The first page of the entries when there are any (2026-10-05, the user's ask), as the SQL wizard's.
+        while (true)
+        {
+            var entries = ConnectionWizardEntries(UncWizardPath(false), UncWizardPath(true), path => UncConfigFile.Load(path).Shares);
+            var draft = new UncDraft();
+            if (entries.Count > 0)
+            {
+                if (await ConnectionWizardPickAsync(UncWizardTitle, "share", entries.Select(e => (e.Named.Name, e.Global)).ToList(), UncWizardPath, cancellationToken).ConfigureAwait(false) is not { } picked)
+                {
+                    Sink.Notice(UncWizardCancelledNotice);
+                    return false;
+                }
+
+                if (picked >= 0)
+                {
+                    draft = UncWizardDraftFrom(entries[picked].Named, entries[picked].Global);
+                }
+            }
+
+            if (await RunUncWizardAsync(draft, cancellationToken).ConfigureAwait(false) is { } changed)
+            {
+                return changed;
+            }
+
+            if (entries.Count == 0)
+            {
+                Sink.Notice(UncWizardCancelledNotice);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>An edit's draft (2026-10-05): the entry copied, its file and name kept as the original, under runas its stored password read.</summary>
+    private UncDraft UncWizardDraftFrom(UncNamedShare named, bool global)
+    {
+        var c = named.Config;
+        var draft = new UncDraft
+        {
+            Global = global,
+            Name = named.Name,
+            Original = named.Name,
+            OriginalTarget = c.NeedsPassword && c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            Config = CloneEntry(c, UncJsonContext.Default.UncShareConfig, x => x.Password = null),
+        };
+        if (c.NeedsPassword)
+        {
+            draft.Password = StoredPassword(UncSecrets.Resolve(named));
+            draft.PasswordKept = draft.Password.Length > 0;
+        }
+
+        return draft;
+    }
+
+    /// <summary>The wizard on <paramref name="draft"/>: null for ESC on its first page (the File page, or an edit's Name), else whether a setting changed.</summary>
+    private async Task<bool?> RunUncWizardAsync(UncDraft draft, CancellationToken cancellationToken)
+    {
+        // An edit opens on its summary (2026-10-05): Enter on a row changes that one; a stored password that could not be
+        // read asks first.
+        var step = draft.Original is null ? UncWizardStep.File : UncWizardMissing(draft) ?? UncWizardStep.Summary;
+        bool fromSummary = draft.Original is not null;
         while (true)
         {
             if (step == UncWizardStep.Summary)
@@ -171,6 +238,11 @@ internal sealed partial class SettingsMenu
                     step = target;
                     fromSummary = true;
                     continue;
+                }
+
+                if (draft.Original is not null)
+                {
+                    return null;   // an edit's ESC on its summary: back to the list
                 }
 
                 step = UncWizardStep.Description;
@@ -206,8 +278,7 @@ internal sealed partial class SettingsMenu
 
             if (step < UncWizardStep.File)
             {
-                Sink.Notice(UncWizardCancelledNotice);
-                return false;
+                return null;
             }
         }
     }
@@ -245,7 +316,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     string path = UncWizardPath(draft.Global);
-                    if (UncConfigFile.Load(path).Shares.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)))
+                    if (UncConfigFile.Load(path).Shares.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase) && !string.Equals(x.Name, draft.Original, StringComparison.OrdinalIgnoreCase)))
                     {
                         return SqlWizardNameTaken(name, path);
                     }
@@ -336,6 +407,7 @@ internal sealed partial class SettingsMenu
                     }
 
                     draft.Password = text;
+                    draft.PasswordKept = false;
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -414,7 +486,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<(bool Done, bool Changed, UncWizardStep? Edit)> UncWizardSummaryAsync(UncDraft draft, CancellationToken cancellationToken)
     {
-        int cursor = 0;
+        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.UncSharesOffered);
         while (true)
         {
             // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
@@ -454,7 +526,7 @@ internal sealed partial class SettingsMenu
 
             if (picked == test + 1)
             {
-                Sink.Notice(UncWizardCancelledNotice);
+                Sink.Notice(draft.Original is null ? UncWizardCancelledNotice : ConnectionWizardUnchangedNotice);
                 return (true, false, null);
             }
 
@@ -508,8 +580,8 @@ internal sealed partial class SettingsMenu
             .RunAsync(share, write: false, files => files.List("", Files.WorkingDirectory.ProbeListLimit).Entries.Count, cancellationToken);
 
     /// <summary>
-    /// Writes the draft: the entry (<see cref="UncConfigFile.AddShare"/>), then under runas its password to its store, then — when
-    /// <paramref name="offer"/> — its name added there. Whether a setting changed; null
+    /// Writes the draft: the entry (<see cref="UncConfigFile.AddShare"/>, or for an edit <see cref="UncConfigFile.ReplaceShare"/>), then
+    /// under runas its password to its store, then the offered list (<see cref="ConnectionOfferedAfterSave"/>). Whether a setting changed; null
     /// when nothing was written (the status line says why), the summary shown again.
     /// </summary>
     private bool? UncWizardSave(UncDraft draft, bool offer)
@@ -527,20 +599,28 @@ internal sealed partial class SettingsMenu
             c.Access = null;   // read is the default
         }
 
+        if (UncWizardMissing(draft) is { } missing)
+        {
+            // An edit opens on its summary, so a page it still lacks (a stored password that could not be read) is caught here.
+            string unset = UncWizardLabels[(int)missing] + " is not set";
+            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, unset) : SqlText.ConnectionChangeFailed(draft.Name, unset));
+            return null;
+        }
+
         if (c.Problem is { } problem)
         {
-            Sink.Error(SqlText.ConnectionAddFailed(draft.Name, problem));
+            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, problem) : SqlText.ConnectionChangeFailed(draft.Name, problem));
             return null;
         }
 
         string path = UncWizardPath(draft.Global);
-        if (UncConfigFile.AddShare(path, draft.Name, c) is { } error)
+        if ((draft.Original is { } original ? UncConfigFile.ReplaceShare(path, original, draft.Name, c) : UncConfigFile.AddShare(path, draft.Name, c)) is { } error)
         {
-            Sink.Error(SqlText.ConnectionAddFailed(draft.Name, error));
+            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, error) : SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
         }
 
-        Sink.Notice(SqlText.ConnectionAdded(draft.Name, path));
+        Sink.Notice(draft.Original is null ? SqlText.ConnectionAdded(draft.Name, path) : SqlText.ConnectionChanged(draft.Name, path));
         if (c.NeedsPassword)
         {
             var (saved, notice) = UncSecrets.Save(new UncNamedShare(draft.Name, c, path), draft.Password);
@@ -554,13 +634,7 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        if (!offer)
-        {
-            return false;
-        }
-
-        var offered = _settings.Current.UncSharesOffered ?? [];   // null offers none (2026-10-01)
-        Apply(SettingsField.UncSharesOffered, d => d.UncSharesOffered = [.. offered, draft.Name]);
-        return true;
+        ForgetOldCredential(draft.OriginalTarget, c.NeedsPassword && c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        return ApplyOfferedAfterSave(SettingsField.UncSharesOffered, _settings.Current.UncSharesOffered, draft.Original, draft.Name, offer, (d, next) => d.UncSharesOffered = next);
     }
 }

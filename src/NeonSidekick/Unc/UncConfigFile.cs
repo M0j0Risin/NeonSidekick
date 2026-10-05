@@ -233,6 +233,26 @@ public sealed class UncConfigFile
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(config);
+        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText, Section, Noun);
+    }
+
+    /// <summary>
+    /// Replaces share <paramref name="oldName"/> in <paramref name="path"/> with <paramref name="newName"/> and <paramref name="config"/>
+    /// (2026-10-05, the user's ask: <c>UNC add/edit share</c> edits an entry too; <see cref="ConnectionsFileEdit.ReplaceConnection"/>
+    /// under <see cref="Section"/>), its <c>password</c> left out as for an add. Null on success, else why not.
+    /// </summary>
+    public static string? ReplaceShare(string path, string oldName, string newName, UncShareConfig config)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        ArgumentNullException.ThrowIfNull(config);
+        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config), Section, Noun);
+    }
+
+    /// <summary>One share as the file holds it: <see cref="UncJsonContext"/>'s keys, indented, no <c>password</c>, the relaxed escaping.</summary>
+    private static string EntryText(UncShareConfig config)
+    {
         string? password = config.Password;
         config.Password = null;
         try
@@ -243,7 +263,7 @@ public sealed class UncConfigFile
                 JsonSerializer.Serialize(writer, config, UncJsonContext.Default.UncShareConfig);
             }
 
-            return ConnectionsFileEdit.AddConnection(path, name, Encoding.UTF8.GetString(stream.ToArray()), EmptyText, Section, Noun);
+            return Encoding.UTF8.GetString(stream.ToArray());
         }
         finally
         {

@@ -339,10 +339,11 @@ public class KeySourceTests
     }
 
     [Fact]
-    public async Task Watch_CtrlQ_IsJustAnotherKey()
+    public async Task Watch_AnUnboundCtrlKey_IsJustAnotherKey()
     {
+        // Ctrl+B (Ctrl+Q until 2026-10-05, when it became the /queue chord).
         var input = new TestConsoleInput();
-        input.PushKey(Keys.Ctrl(ConsoleKey.Q));
+        input.PushKey(Keys.Ctrl(ConsoleKey.B));
         var keys = new KeySource(input, FastPoll);
         using var turn = new CancellationTokenSource();
         using var stop = new CancellationTokenSource(50);

@@ -75,6 +75,9 @@ public class QueueMenuTests : IDisposable
     {
         Assert.Equal('c', QueueMenu.ClearAllKey);
         Assert.Equal(new MenuButton("⊠ clear all", 'c'), Assert.Single(QueueMenu.Buttons));
+        Assert.Equal('s', QueueMenu.SendKey);
+        Assert.Equal([new MenuButton("➤ send", 's'), new MenuButton("⊠ clear all", 'c')], QueueMenu.ButtonsWithSend);
+        Assert.Equal("Enter = remove · s = send · c = clear all · ESC = back", QueueMenu.KeysWithSend);
         Assert.Equal("(⏳ nothing queued)", QueueMenu.EmptyNotice);
         Assert.Equal("(⏳ removed: and then?)", QueueMenu.RemovedNotice("and then?"));
         Assert.Equal("[#9A8BB8]1[/]  a [[b]]", QueueMenu.RowMarkup(0, "a [b]"));
@@ -251,6 +254,70 @@ public class QueueMenuTests : IDisposable
         Assert.Contains("\n▸ " + Row(0, "two") + "\n", _console.Output);   // the re-shown list, renumbered
         Assert.Equal(new[] { "two" }, Labels());
         Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>The title row with the send button (2026-10-05): the label, then send and clear all as dim tabs.</summary>
+    private const string SendStrip = QueueMenu.Title + "   ➤ send    ⊠ clear all ";
+
+    /// <summary>
+    /// The send button (2026-10-05, the user's ask): over a held queue at the idle line, <c>s</c> takes the front message off the
+    /// queue and hands its line back, the pane closed and nothing said on the transcript (the line's own › row is the caller's).
+    /// </summary>
+    [Fact]
+    public async Task OnAHeldQueue_TheSendKey_ReturnsTheFrontLine_TakesItOffTheQueue_AndClosesThePane()
+    {
+        Seed("one", "two");
+        _queue.Held = true;
+        var (menu, pane) = PaneMenu();
+        int flow = pane.FlowRow;
+        Push(Keys.Char('s'));
+
+        var sent = await menu.ShowAsync(CancellationToken.None, offerSend: true);
+
+        Assert.Equal("one", sent?.Text);
+        Assert.Contains(Titled(SendStrip) + "\n \n▸ " + Row(0, "one") + "\n", _console.Output);
+        Assert.Contains("\n" + QueueMenu.KeysWithSend + "\n", _console.Output);
+        Assert.Equal(new[] { "two" }, Labels());
+        Assert.True(_queue.Held);   // the hold is the reply's to release, as for a typed message
+        Assert.False(pane.OverlayOpen);
+        Assert.Equal(flow, pane.FlowRow);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnAHeldQueue_AClickOnTheSendButton_IsTheKey()
+    {
+        Seed("one", "two");
+        _queue.Held = true;
+        var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
+        input.PushClick(12, 100);                        // the strip row: the label, the gap, the send button from column 10
+
+        var sent = await menu.ShowAsync(CancellationToken.None, offerSend: true);
+
+        Assert.Equal("one", sent?.Text);
+        Assert.Equal(new[] { "two" }, Labels());
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>No send over a queue that drains by itself, nor under a reply (not offered): the old strip, and <c>s</c> is nothing.</summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task WithoutAHold_OrUnderAReply_NoSendButton_AndTheKeyIsNothing(bool held, bool offerSend)
+    {
+        Seed("one", "two");
+        _queue.Held = held;
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('s'), Keys.Escape);
+
+        var sent = await menu.ShowAsync(CancellationToken.None, offerSend);
+
+        Assert.Null(sent);
+        Assert.Contains(Titled(Strip) + "\n", _console.Output);
+        Assert.DoesNotContain(QueueMenu.SendButton, _console.Output);
+        Assert.Equal(new[] { "one", "two" }, Labels());
         pane.Dispose();
     }
 }

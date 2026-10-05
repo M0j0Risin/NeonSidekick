@@ -232,6 +232,21 @@ public sealed class SqlConfigFile
     }
 
     /// <summary>
+    /// Replaces connection <paramref name="oldName"/> in <paramref name="path"/> with <paramref name="newName"/> and
+    /// <paramref name="config"/> (2026-10-05, the user's ask: <c>SQL add/edit connection</c> edits an entry too), comments and
+    /// layout kept (<see cref="ConnectionsFileEdit.ReplaceConnection"/>), its <c>password</c> left out as for an add. Null on
+    /// success, else why not.
+    /// </summary>
+    public static string? ReplaceConnection(string path, string oldName, string newName, SqlConnectionConfig config)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        ArgumentNullException.ThrowIfNull(config);
+        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config));
+    }
+
+    /// <summary>
     /// One connection object as <see cref="AddConnection"/> writes it: <see cref="SqlJsonContext"/>'s keys in its order,
     /// indented two spaces a level, no <c>password</c>, the relaxed escaping (a <c>DOMAIN\name</c> reads as typed, the
     /// backslash doubled); the splice indents it under the entry's name and puts in the file's line ends.

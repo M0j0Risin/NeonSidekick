@@ -304,6 +304,73 @@ public sealed class SqlConfigFileTests : IDisposable
         Assert.NotNull(SqlConfigFile.AddConnection(path, "me", windows));
     }
 
+    /// <summary>
+    /// <see cref="SqlConfigFile.ReplaceConnection"/> (2026-10-05, the wizard's edit): the entry's bytes swapped where they stood, its
+    /// indent kept, renamed, its password left out; the comments and the other entries untouched; another entry's name, a missing
+    /// entry, a missing file and a file that is no object refused with the file as it was.
+    /// </summary>
+    [Fact]
+    public void ReplaceConnection_SwapsTheEntryInPlace_KeepsTheComments_AndRefusesWhatItCannot()
+    {
+        string path = SqlConfigFile.ProfilePath(_profile);
+        var windows = new SqlConnectionConfig { Server = "y", Auth = "windows" };
+        Assert.Equal(SqlText.ConnectionNotInFile("aw"), SqlConfigFile.ReplaceConnection(path, "aw", "aw", windows));   // no file
+
+        Profile("{\n  // mine\n  \"connections\": {\n    \"aw\": { \"server\": \"old\", \"auth\": \"windows\" }, // the sample\n    \"other\": { \"server\": \"o\", \"auth\": \"windows\" }\n  }\n}\n");
+        Assert.Null(SqlConfigFile.ReplaceConnection(path, " AW ", "adventure", new SqlConnectionConfig { Server = "new", Auth = "windows", Password = "never-written", Description = "d" }));
+
+        string text = File.ReadAllText(path);
+        Assert.StartsWith("{\n  // mine\n  \"connections\": {\n    \"adventure\": {\n      \"server\": \"new\",\n", text);
+        Assert.Contains("\n    }, // the sample\n    \"other\": { \"server\": \"o\", \"auth\": \"windows\" }\n  }\n}\n", text);
+        Assert.DoesNotContain("never-written", text);
+        var loaded = SqlConfigFile.Load(path);
+        Assert.Empty(loaded.Problems);
+        Assert.Equal(["adventure", "other"], loaded.Connections.Select(c => c.Name));
+        Assert.Equal(("new", "d"), (loaded.Connections[0].Config.Server, loaded.Connections[0].Config.Description));
+
+        Assert.Equal(SqlText.ConnectionAlreadyInFile("OTHER"), SqlConfigFile.ReplaceConnection(path, "adventure", "OTHER", windows));
+        Assert.Equal(SqlText.ConnectionNotInFile("gone"), SqlConfigFile.ReplaceConnection(path, "gone", "x", windows));
+        Assert.Equal(text, File.ReadAllText(path));
+        Assert.Null(SqlConfigFile.ReplaceConnection(path, "adventure", "Adventure", windows));   // its own name in another case
+        Assert.Equal(["Adventure", "other"], SqlConfigFile.Load(path).Connections.Select(c => c.Name));
+
+        File.WriteAllBytes(path, [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("{\r\n  \"connections\": {\r\n    \"me\": { \"server\": \"x\", \"auth\": \"windows\" }\r\n  }\r\n}\r\n")]);
+        Assert.Null(SqlConfigFile.ReplaceConnection(path, "me", "me", windows));
+        byte[] bytes = File.ReadAllBytes(path);
+        Assert.Equal([0xEF, 0xBB, 0xBF], bytes[..3]);
+        string crlf = System.Text.Encoding.UTF8.GetString(bytes[3..]);
+        Assert.Contains("    \"me\": {\r\n      \"server\": \"y\",\r\n", crlf);
+        Assert.DoesNotContain("\n", crlf.Replace("\r\n", "", StringComparison.Ordinal));
+
+        Profile("[]");
+        Assert.Equal(SqlText.FileNotAnObject, SqlConfigFile.ReplaceConnection(path, "me", "me", windows));
+        Profile("""{ "connections": [] }""");
+        Assert.Equal(SqlText.ConnectionsNotAnObject, SqlConfigFile.ReplaceConnection(path, "me", "me", windows));
+    }
+
+    /// <summary>The other families' replace (2026-10-05): the share and database nouns in a refusal, a family's entry renamed.</summary>
+    [Fact]
+    public void TheOtherFamilies_ReplaceTheirEntries_WithTheirNouns()
+    {
+        string unc = NeonSidekick.Unc.UncConfigFile.ProfilePath(_profile);
+        File.WriteAllText(unc, """{ "shares": { "eng": { "path": "//fs01/eng" } } }""");
+        Assert.Null(NeonSidekick.Unc.UncConfigFile.ReplaceShare(unc, "eng", "docs", new NeonSidekick.Unc.UncShareConfig { Path = "//fs01/docs" }));
+        Assert.Equal(["docs"], NeonSidekick.Unc.UncConfigFile.Load(unc).Shares.Select(s => s.Name));
+        Assert.Equal(SqlText.ConnectionNotInFile("eng", "share"), NeonSidekick.Unc.UncConfigFile.ReplaceShare(unc, "eng", "x", new NeonSidekick.Unc.UncShareConfig { Path = "//fs01/x" }));
+
+        string sqlite = NeonSidekick.Sqlite.SqliteConfigFile.ProfilePath(_profile);
+        File.WriteAllText(sqlite, """{ "databases": { "notes": { "path": "notes.db" } } }""");
+        Assert.Null(NeonSidekick.Sqlite.SqliteConfigFile.ReplaceDatabase(sqlite, "notes", "journal", new NeonSidekick.Sqlite.SqliteDatabaseConfig { Path = "journal.db" }));
+        Assert.Equal(["journal"], NeonSidekick.Sqlite.SqliteConfigFile.Load(sqlite).Databases.Select(d => d.Name));
+        Assert.Equal(SqlText.ConnectionNotInFile("notes", "database"), NeonSidekick.Sqlite.SqliteConfigFile.ReplaceDatabase(sqlite, "notes", "x", new NeonSidekick.Sqlite.SqliteDatabaseConfig { Path = "x.db" }));
+
+        string oracle = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_profile);
+        File.WriteAllText(oracle, """{ "connections": { "free": { "dataSource": "localhost:1521/FREEPDB1", "user": "neon" } } }""");
+        Assert.Null(NeonSidekick.Oracle.OracleConfigFile.ReplaceConnection(oracle, "free", "pdb", new NeonSidekick.Oracle.OracleConnectionConfig { DataSource = "localhost:1521/FREEPDB1", User = "reader" }));
+        var pdb = Assert.Single(NeonSidekick.Oracle.OracleConfigFile.Load(oracle).Connections);
+        Assert.Equal(("pdb", "reader"), (pdb.Name, pdb.Config.User));
+    }
+
     [Fact]
     public void TheListing_NamesEveryConnection_TheDefaultMarked_AndNeverThePassword()
     {

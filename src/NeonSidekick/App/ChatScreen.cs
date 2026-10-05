@@ -2078,6 +2078,8 @@ internal sealed partial class ChatScreen
     /// the same day, ahead of Ctrl+/.
     /// Ctrl+L (the background learning's cancel, <see cref="Keys.IsLearnCancel"/>) on 2026-10-04, the user's ask and wording, in its
     /// letter's place; a chord with no command, as the kill switch's, so its row names none.
+    /// Ctrl+Q (<c>/queue</c>), Ctrl+Alt+Q (<c>/queue clear</c>) and Ctrl+Alt+R (<c>/rename</c>) on 2026-10-05, the user's ask and
+    /// wording, each in its letter's place.
     /// </summary>
     public static (string Key, string Meaning)[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
     {
@@ -2121,6 +2123,7 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+M", "open the model picker (/model)"));
         rows.Add(("Ctrl+O", "expand or collapse the tool calls, code blocks, diffs and thinking (or click a summary line)"));
         rows.Add(("Ctrl+P", "open the profile pane (/profile)"));
+        rows.Add(("Ctrl+Q", "open the queue pane (/queue)"));
         rows.Add(("Ctrl+R", "open the reasoning picker (/reasoning)"));
         rows.Add(("Ctrl+S", "open the server picker (/server)"));
         rows.Add(("Ctrl+T", "show or hide the toolbar (/toolbar)"));
@@ -2138,6 +2141,8 @@ internal sealed partial class ChatScreen
         rows.Add(("Ctrl+Alt+N", "start a new conversation but do not clear the screen (/new)"));
         rows.Add(("Ctrl+Alt+O", "open the shell police setting (/police)"));
         rows.Add(("Ctrl+Alt+P", "start a new conversation and show the splash screen (/splash)"));
+        rows.Add(("Ctrl+Alt+Q", "clear the message queue (/queue clear)"));
+        rows.Add(("Ctrl+Alt+R", "rename the current session (/rename)"));
         rows.Add(("Ctrl+Alt+S", "open the skills pane (/skills)"));
         rows.Add(("Ctrl+Alt+T", "open the tools pane (/tools)"));
         rows.Add(("Ctrl+Alt+U", "open or close the ComfyUI image viewer (/comfy view)"));
@@ -2651,7 +2656,13 @@ internal sealed partial class ChatScreen
         switch (ParseQueueArgs(args))
         {
             case QueueAction.List:
-                await _queueMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                // The send button (2026-10-05, the user's ask): the front message of a held queue, left for the idle loop's
+                // top, which takes a pending line ahead of the hold — sent as if typed, hold's rule after it.
+                if (await _queueMenu.ShowAsync(cancellationToken, offerSend: true).ConfigureAwait(false) is { } send)
+                {
+                    Pend(send);
+                }
+
                 break;
             default:
                 HandleQueueArgs(args);
@@ -6400,6 +6411,16 @@ internal sealed partial class ChatScreen
         int purged = _sessions.PurgeAll();
         ForgetSession();
         _transcript.Notice(SessionsPurgedNotice(purged));
+    }
+
+    /// <summary>
+    /// <c>/rename [name]</c>'s argument as <c>/sessions</c>' (2026-10-05): <c>title &lt;name&gt;</c>, or the bare <c>title</c> for the
+    /// rename box, so the two commands share one parse and one path. Pure; pinned.
+    /// </summary>
+    public static string RenameAsSessionArgs(string args)
+    {
+        string name = (args ?? "").Trim();
+        return name.Length == 0 ? SessionTitleWord : SessionTitleWord + " " + name;
     }
 
     /// <summary><c>/sessions title &lt;text&gt;</c>: the session on screen renamed by the user (never overwritten by the model's title afterwards); nothing to rename before its first turn.</summary>
@@ -10673,6 +10694,10 @@ internal sealed partial class ChatScreen
                 return false;
             case SlashCommand.Session:
                 await HandleSessionAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+            case SlashCommand.Rename:
+                // /rename (2026-10-05): /sessions title's two forms under a shorter word.
+                await HandleSessionAsync(RenameAsSessionArgs(args), cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Persona:

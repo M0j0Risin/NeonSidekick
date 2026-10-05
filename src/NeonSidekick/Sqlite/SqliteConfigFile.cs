@@ -171,13 +171,32 @@ public sealed class SqliteConfigFile
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(config);
+        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText, Section, Noun);
+    }
+
+    /// <summary>Replaces database <paramref name="oldName"/> in <paramref name="path"/> with <paramref name="newName"/> and <paramref name="config"/> (2026-10-05, the user's ask: <c>SQLite add/edit database</c> edits an entry too), comments and layout kept. Null on success, else why not.</summary>
+    public static string? ReplaceDatabase(string path, string oldName, string newName, SqliteDatabaseConfig config)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        ArgumentNullException.ThrowIfNull(config);
+        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config), Section, Noun);
+    }
+
+    /// <summary>What a database is called in a refusal.</summary>
+    private const string Noun = "database";
+
+    /// <summary>One database as the file holds it: <see cref="SqliteJsonContext"/>'s keys, indented, the relaxed escaping.</summary>
+    private static string EntryText(SqliteDatabaseConfig config)
+    {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
             JsonSerializer.Serialize(writer, config, SqliteJsonContext.Default.SqliteDatabaseConfig);
         }
 
-        return ConnectionsFileEdit.AddConnection(path, name, Encoding.UTF8.GetString(stream.ToArray()), EmptyText, Section, "database");
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>Writes <see cref="EmptyText"/> to <paramref name="path"/> when no file is there; true when it wrote. Throws on an IO failure.</summary>
