@@ -240,7 +240,7 @@ public static class HelpCommands
         ]),
         new("/profile",
         [
-            new("/profile [<name>]", "Switch profiles: a picker on its own, or straight to the one named. Profiles whose name starts with `_` are left off the picker and the name list (unless loaded); `/profile _name` still switches to one. See Profiles. Ctrl+P runs the bare `/profile` too."),
+            new("/profile [<name>]", "Switch profiles: a picker on its own (a typed letter jumps to the next profile starting with it), or straight to the one named. Profiles whose name starts with `_` are left off the picker and the name list (unless loaded); `/profile _name` still switches to one. See Profiles. Ctrl+P runs the bare `/profile` too."),
             new("/profile add|delete <name>", "Create or delete a profile."),
             new("/profile rename <name> <new-name>", "Rename a profile."),
             new("/profile reset [<name>] [--all]", "Reset a profile to the defaults (the loaded one when no name is given), keeping its URLs, paths and keys; `--all` resets those too."),

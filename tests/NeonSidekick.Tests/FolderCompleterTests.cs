@@ -80,4 +80,42 @@ public sealed class FolderCompleterTests : IDisposable
         Assert.True(found.Truncated);
         Assert.Equal(many + @"\f000\", found.Paths[0]);
     }
+
+    /// <summary>A link's target that could stall a keystroke's read (2026-10-06, the code review's catch): a share in any spelling.</summary>
+    [Theory]
+    [InlineData(@"\\server\share", true)]
+    [InlineData(@"\\server\share\folder", true)]
+    [InlineData(@"//server/share", true)]
+    [InlineData(@"\\?\UNC\server\share", true)]
+    [InlineData(@"\??\UNC\server\share", true)]
+    [InlineData(@"UNC\server\share", true)]
+    [InlineData(@"C:\Windows", false)]
+    [InlineData(@"\??\C:\Windows", false)]
+    [InlineData(@"\\?\C:\Windows", false)]
+    public void IsSlowTarget_IsAShare(string target, bool slow)
+    {
+        Assert.Equal(slow, FolderCompleter.IsSlowTarget(target));
+    }
+
+    /// <summary>
+    /// A symbolic link under a local folder that points at a share lists nothing, and nothing past it is read. Making a symbolic
+    /// link needs Developer Mode or an elevated process; without either the test has nothing to prove and passes.
+    /// </summary>
+    [Fact]
+    public void ALinkToAShare_ListsNothing()
+    {
+        string link = Path.Combine(_dir, "share-link");
+        try
+        {
+            Directory.CreateSymbolicLink(link, @"\\neonsidekick-no-such-host.invalid\share");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        Assert.Empty(FolderCompleter.Complete(link + @"\").Paths);
+        Assert.Empty(FolderCompleter.Complete(link + @"\sub\").Paths);
+        Assert.Contains(_dir + @"\share-link\", FolderCompleter.Complete(_dir + @"\sh").Paths);   // the link itself still lists in its folder
+    }
 }

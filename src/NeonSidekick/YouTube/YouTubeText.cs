@@ -21,6 +21,14 @@ public static class YouTubeText
     /// <summary><c>/youtube &lt;words&gt;</c> with no key: the user's own sentence (the tool's says "the user can").</summary>
     public const string NoKeyForUser = "Searching YouTube needs a YouTube Data API key: add one as YouTube API key on the YouTube tab of /tools. To make one, " + KeySteps + ". Playing a video by its id or link needs none.";
 
+    /// <summary>youtube_search with nothing to look for.</summary>
+    public const string EmptyQuery = "Error: \"query\" is empty; say what to look for.";
+
+    /// <summary>youtube_search's <c>max</c> out of the setting's own range (2026-10-06: here, from the bounds, rather than inline as "1 to 20").</summary>
+    public static readonly string BadMax =
+        "Error: \"max\" must be " + Settings.AppSettingsData.MinYouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture) + " to " +
+        Settings.AppSettingsData.MaxYouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture) + ".";
+
     /// <summary>The spinner's label while <c>/youtube</c> searches.</summary>
     public const string Searching = "Searching YouTube…";
 

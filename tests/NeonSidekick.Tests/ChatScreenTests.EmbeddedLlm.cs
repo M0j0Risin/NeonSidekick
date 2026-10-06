@@ -493,7 +493,8 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// The Connect a model page's Docker row (2026-10-05, the user's ask), after the embedded one: the Docker tab of /settings on its
-    /// container checklist; with containers chosen, Docker servers is switched on and the page says how /server starts one.
+    /// container checklist; with containers chosen, Docker servers is switched on, the page says how /server starts one and
+    /// leaves the input row to the user (2026-10-06, the code review's catch: it showed the page again over the hint).
     /// </summary>
     [Fact]
     public async Task Startup_TheDockerRow_OpensTheContainerChecklist_AndSwitchesDockerServersOn()
@@ -504,14 +505,14 @@ public partial class ChatScreenTests
         var input = new ScriptedInput();
         input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the fourth row: Docker
         input.Push(Keys.Escape, Keys.Escape);                     // out of the checklist (or its refusal) and /settings
-        input.Push(Keys.Escape);                                  // the page again: not now
-        PushLine(input, "/exit");
+        PushLine(input, "/exit");                                 // the input row next, not the page again
 
         string output = await RunAsync(input);
 
         Assert.Contains("▸ " + SettingsMenu.RowName(SettingsField.DockerServerContainers, SettingsMenu.DockerTabTitle), output);   // the Docker tab, on its row
         Assert.True(_settings.Current.DockerServers);
         Assert.Contains(DockerServerText.ConnectHint, output);
+        Assert.DoesNotContain(ChatScreen.ConnectTitle, output[output.IndexOf(DockerServerText.ConnectHint, StringComparison.Ordinal)..]);   // the page not shown again after the hint
         Assert.Null(_session.Endpoint);
     }
 

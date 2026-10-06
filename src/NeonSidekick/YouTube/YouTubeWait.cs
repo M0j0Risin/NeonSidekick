@@ -18,15 +18,17 @@ public static class YouTubeWait
 
     /// <summary>
     /// The first snapshot after <paramref name="after"/> (a <see cref="VideoSnapshot.Version"/>; -1 for any) that <paramref name="done"/>
-    /// accepts, or null as the window closes; at <paramref name="timeout"/>, the newest there is.
+    /// accepts, or null as the window closes; at <paramref name="timeout"/>, the newest there is. A window's failure ends the wait
+    /// whatever it was for; YouTube's error only when it is for <paramref name="video"/> (when one is named; 2026-10-06, the code
+    /// review's catch: a late error for the video before ended a new play's wait as that video's refusal).
     /// </summary>
-    public static async Task<VideoSnapshot?> UntilAsync(IVideoPlayer player, long after, Func<VideoSnapshot, bool> done, TimeSpan timeout, TimeProvider time, CancellationToken cancellationToken)
+    public static async Task<VideoSnapshot?> UntilAsync(IVideoPlayer player, long after, Func<VideoSnapshot, bool> done, TimeSpan timeout, TimeProvider time, CancellationToken cancellationToken, string? video = null)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(done);
         ArgumentNullException.ThrowIfNull(time);
         var arrived = new TaskCompletionSource<VideoSnapshot?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        bool Accepts(VideoSnapshot? s) => s is null || (s.Version > after && (done(s) || s.State == VideoState.Failed || s.Error is not null));
+        bool Accepts(VideoSnapshot? s) => s is null || (s.Version > after && (done(s) || s.State == VideoState.Failed || (s.Error is not null && (video is null || s.VideoId == video))));
         void OnChanged(VideoSnapshot? s)
         {
             if (Accepts(s))

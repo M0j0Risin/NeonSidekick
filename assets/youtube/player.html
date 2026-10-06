@@ -10,6 +10,9 @@
                  {ev: "error", code, id} (YouTube's onError: 2 a bad id, 5 HTML5, 100 not found, 101/150 not here),
                  {ev: "echo", value}
   The player is made at the first load, with that video, because a player made empty has nothing to be ready with.
+  From a load until the player's next change no tick is sent (2026-10-06): the player reports its state late, so a tick in
+  between still reads the video before it, and on a replay of the same video that read as the new one at the old position.
+  An error names the video last asked for when the player cannot say (a missing video has no data).
 -->
 <html>
 <head>
@@ -30,6 +33,8 @@ let api = false;
 let player = null;
 let ready = false;
 let pending = null;
+let current = null;
+let settled = true;
 
 function videoData() {
   try { return player.getVideoData() || {}; } catch { return {}; }
@@ -56,15 +61,17 @@ function create(m) {
         if (m.autoplay !== false) player.playVideo();
         report('ready');
       },
-      onStateChange: () => report('change'),
-      onError: e => send({ ev: 'error', code: e.data, id: videoData().video_id || m.id })
+      onStateChange: () => { settled = true; report('change'); },
+      onError: e => { settled = true; send({ ev: 'error', code: e.data, id: videoData().video_id || current }); }
     }
   });
 }
 
 function load(m) {
+  current = m.id;
   if (!api) { pending = m; return; }
   if (!player) { create(m); return; }
+  settled = false;
   const args = { videoId: m.id, startSeconds: m.start || 0 };
   if (m.autoplay === false) player.cueVideoById(args); else player.loadVideoById(args);
 }
@@ -74,7 +81,7 @@ function onYouTubeIframeAPIReady() {
   if (pending) { const m = pending; pending = null; load(m); }
 }
 
-setInterval(() => { if (ready && player.getPlayerState() === YT.PlayerState.PLAYING) report('tick'); }, 1000);
+setInterval(() => { if (ready && settled && player.getPlayerState() === YT.PlayerState.PLAYING) report('tick'); }, 1000);
 
 chrome.webview.addEventListener('message', e => {
   const m = e.data || {};

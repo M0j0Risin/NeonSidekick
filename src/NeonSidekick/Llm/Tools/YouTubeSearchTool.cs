@@ -58,14 +58,14 @@ public sealed class YouTubeSearchTool : AIFunction
         string query = ToolArguments.ReadString(arguments, QueryArgument).Trim();
         if (query.Length == 0)
         {
-            return "Error: \"query\" is empty; say what to look for.";
+            return YouTubeText.EmptyQuery;
         }
 
         var effective = _effective();
         int count = max ?? Math.Clamp(effective.YouTubeSearchMaxResults, AppSettingsData.MinYouTubeSearchMaxResults, AppSettingsData.MaxYouTubeSearchMaxResults);
         if (count < AppSettingsData.MinYouTubeSearchMaxResults || count > AppSettingsData.MaxYouTubeSearchMaxResults)
         {
-            return "Error: \"max\" must be 1 to 20.";
+            return YouTubeText.BadMax;
         }
 
         var outcome = await _search.SearchAsync(query, count, YouTubeDataApi.Key(effective) ?? "", cancellationToken).ConfigureAwait(false);

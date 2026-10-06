@@ -3008,6 +3008,24 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · " + SettingsMenu.UnchangedNotice, _console.Output);
     }
 
+    /// <summary>A typed letter jumps to the next profile starting with it, a second press to the one after (2026-10-06, the user's ask: as the theme picker).</summary>
+    [Fact]
+    public async Task PickProfile_ATypedLetter_JumpsToTheNextProfileStartingWithIt()
+    {
+        Profiles.Create(_dir, "admin", new AppSettingsData());
+        Profiles.Create(_dir, "web", new AppSettingsData());
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('W'), Keys.Char('w'), Keys.Enter);   // opened on default: web, then work
+
+        Assert.True(await menu.PickProfileAsync(CancellationToken.None));
+
+        Assert.Equal("work", _settings.ProfileName);
+        Assert.Contains(SettingsMenu.ProfileKeys, _console.Output);
+        Assert.Contains("A–Z = jump", SettingsMenu.SwitchKeys);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task PickProfile_WithoutMenus_ListsThem_AndSwitchesNothing()
     {

@@ -21520,7 +21520,9 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// /cwd (2026-10-05, the user's ask): a full path from a drive lists that folder's subfolders on any drive; ~ and browse
-    /// stay the word list; a trailing space or the one folder typed in full closes the list.
+    /// stay the word list; a trailing space closes the list. The fake answers as FolderCompleter does (2026-10-06, the code
+    /// review's catch: it mapped D:\Repo\ to itself, which the real completer never lists): a folder typed in full lists its
+    /// subfolders, and one with none lists nothing.
     /// </summary>
     [Fact]
     public void ArgumentPaths_Cwd_ListsAnyDrivesFolders_OnceTheArgumentIsADrivePath()
@@ -21530,14 +21532,15 @@ public partial class ChatScreenTests : IDisposable
             ["D:"] = [@"D:\"],
             [@"D:\"] = [@"D:\Repo\", @"D:\Temp\"],
             [@"D:\Re"] = [@"D:\Repo\"],
-            [@"D:\Repo\"] = [@"D:\Repo\"],
+            [@"D:\Repo\"] = [@"D:\Repo\src\"],
         };
         var sources = Sources() with { MachineFolders = typed => new MentionResult(FileOutcome.Ok, folders.TryGetValue(typed, out var paths) ? paths : [], false) };
 
         Assert.Equal([@"D:\"], ChatScreen.ArgumentPaths("/cwd", "D:", sources)!.Paths);
         Assert.Equal([@"D:\Repo\", @"D:\Temp\"], ChatScreen.ArgumentPaths("/CWD", @"D:\", sources)!.Paths);
         Assert.Equal([@"D:\Repo\"], ChatScreen.ArgumentPaths("/cwd", @"D:\Re", sources)!.Paths);
-        Assert.Empty(ChatScreen.ArgumentPaths("/cwd", @"D:\Repo\", sources)!.Paths);    // the one folder, typed in full
+        Assert.Equal([@"D:\Repo\src\"], ChatScreen.ArgumentPaths("/cwd", @"D:\Repo\", sources)!.Paths);   // a folder typed in full: its subfolders
+        Assert.Empty(ChatScreen.ArgumentPaths("/cwd", @"D:\Temp\", sources)!.Paths);                        // none: the list closes
         Assert.Empty(ChatScreen.ArgumentPaths("/cwd", @"D:\Repo\ ", sources)!.Paths);   // applied under Apply
         // Not a drive path: the word list (~, browse).
         Assert.Null(ChatScreen.ArgumentPaths("/cwd", "", sources));

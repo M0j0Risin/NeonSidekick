@@ -122,6 +122,8 @@ internal sealed partial class ChatScreen
 
                 case ConnectChoice.Docker:
                     // The Docker tab's checklist; the containers chosen count only with the switch on, and /server starts one.
+                    // With some chosen the page is left (2026-10-06, the code review's catch): no connect was tried, so the loop
+                    // would show the page again over the hint, and /server, which the hint names, is typed on the input row.
                     await OpenSettingsAsync(cancellationToken, SettingsField.DockerServerContainers).ConfigureAwait(false);
                     if (_settings.Current.DockerServerContainers is { Count: > 0 })
                     {
@@ -131,6 +133,7 @@ internal sealed partial class ChatScreen
                         }
 
                         _transcript.Notice(DockerServerText.ConnectHint);
+                        return;
                     }
 
                     break;

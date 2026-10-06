@@ -82,8 +82,10 @@ public sealed class YouTubePlayTool : AIFunction
             return "Error: " + e.Message;
         }
 
-        // Started, cued, ended at once or refused: anything but the window's own opening, and on the video asked for.
-        var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.VideoId == id && s.State is VideoState.Playing or VideoState.Paused or VideoState.Cued or VideoState.Ended, YouTubeWait.Play, _time, cancellationToken).ConfigureAwait(false);
+        // Started, cued, ended at once or refused: anything but the window's own opening, and on the video asked for (its error
+        // too, not a late one for the video before). The page holds its every-second report from a load until the player's next
+        // change (player.html), so a replay of the same video at another time is not answered with the old position.
+        var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.VideoId == id && s.State is VideoState.Playing or VideoState.Paused or VideoState.Cued or VideoState.Ended, YouTubeWait.Play, _time, cancellationToken, video: id).ConfigureAwait(false);
         return snapshot is null ? YouTubeText.ClosedMeanwhile : YouTubeText.Status(snapshot);
     }
 }

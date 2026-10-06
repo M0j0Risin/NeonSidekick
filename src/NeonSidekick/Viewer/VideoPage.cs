@@ -48,6 +48,17 @@ internal static class VideoPage
         && parsed.Scheme == Uri.UriSchemeHttps
         && string.Equals(parsed.Host, HostName, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Whether a new window the page asks for may go to the default browser: an absolute http or https address with a host,
+    /// nothing else (2026-10-06, the code review's catch). The address goes to the shell's open, which runs whatever handler
+    /// Windows has for its scheme, so a <c>window.open</c> of <c>file:</c>, <c>ms-msdt:</c>, <c>search-ms:</c> or any
+    /// registered protocol would start a program on the user's machine with no prompt; YouTube's own links are all https.
+    /// </summary>
+    public static bool IsWebLink(string? uri) =>
+        Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
+        && (parsed.Scheme == Uri.UriSchemeHttps || parsed.Scheme == Uri.UriSchemeHttp)
+        && parsed.Host.Length > 0;
+
     /// <summary>The embedded page's text.</summary>
     public static string Text()
     {

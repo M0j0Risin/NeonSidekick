@@ -109,7 +109,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/pdf reply [<options>]` | Makes a PDF of the last reply as formatted Markdown. |
 | `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or **K**) stops the highlighted one after a yes/no. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). Another id switches the window. |
-| `/profile [<name>]` | Switches profiles: a picker alone, or straight to the one named. See Profiles. |
+| `/profile [<name>]` | Switches profiles: a picker alone (a typed letter jumps to the next profile starting with it), or straight to the one named. See Profiles. |
 | `/profile add\|delete <name>` | Creates or deletes a profile. |
 | `/profile rename <name> <new-name>` | Renames a profile. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths and keys unless `--all`. |

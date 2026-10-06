@@ -4430,7 +4430,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/cwd</c>'s path list (2026-10-05): null — the word list — until the argument starts as a drive path; empty once it
-    /// ends in whitespace (a folder applied under folder-apply) or names the one folder listed. Pure over <paramref name="sources"/>.
+    /// ends in whitespace (a folder applied under folder-apply). A folder typed in full lists its subfolders: the completer never
+    /// lists the folder itself, so there is no "one folder typed in full" to close on as a file list has (2026-10-06, the code
+    /// review's catch: that check was here and could never match). Under folder-remain Enter goes on into them as the @ list's
+    /// folders do (ESC then Enter sends), and a folder with none closes the list. Pure over <paramref name="sources"/>.
     /// </summary>
     private static MentionResult? CwdPaths(string argText, ArgumentSources sources)
     {
@@ -4444,10 +4447,7 @@ internal sealed partial class ChatScreen
             return new MentionResult(FileOutcome.Ok, [], false);
         }
 
-        var found = folders(argText);
-        return found.Paths.Count == 1 && string.Equals(found.Paths[0], argText, StringComparison.OrdinalIgnoreCase)
-            ? new MentionResult(FileOutcome.Ok, [], false)
-            : found;
+        return folders(argText);
     }
 
     /// <summary>

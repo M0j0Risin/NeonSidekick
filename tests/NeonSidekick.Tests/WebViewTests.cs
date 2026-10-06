@@ -43,6 +43,26 @@ public unsafe class WebViewTests : IDisposable
         Assert.Equal(ours, VideoPage.IsOurs(uri));
     }
 
+    /// <summary>A new window the page asks for reaches the shell's open only as a web address (2026-10-06, the code review's catch).</summary>
+    [Theory]
+    [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ", true)]
+    [InlineData("http://youtube.com/", true)]
+    [InlineData("HTTPS://YOUTU.BE/aqz-KE-bpKQ", true)]
+    [InlineData("file:///C:/Windows/System32/calc.exe", false)]
+    [InlineData(@"C:\Windows\System32\calc.exe", false)]
+    [InlineData(@"\\server\share\run.exe", false)]
+    [InlineData("ms-msdt:/id PCWDiagnostic", false)]
+    [InlineData("search-ms:query=x&crumb=location:\\\\server\\share", false)]
+    [InlineData("javascript:alert(1)", false)]
+    [InlineData("mailto:someone@example.com", false)]
+    [InlineData("www.youtube.com/watch", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsWebLink_IsHttpOrHttps_Only(string? uri, bool web)
+    {
+        Assert.Equal(web, VideoPage.IsWebLink(uri));
+    }
+
     [Fact]
     public void Url_AndFolders_SitUnderTheHome()
     {

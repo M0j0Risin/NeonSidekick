@@ -1098,7 +1098,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The hint of a picker with a <c>(none)</c> row (<c>TTS voice 2</c>): Backspace moves the cursor to it.</summary>
     public const string NoneKeys = "Enter = choose · Backspace = none · ESC = back";
-    public const string SwitchKeys = "Enter = switch · ESC = back";
+    public const string SwitchKeys = "Enter = switch · A–Z = jump · ESC = back";
     public const string KeepKeys = "Enter = choose · ESC = keep";
 
     /// <summary>The model picker's hint on the pane (2026-10-03, the user's ask): <see cref="KeepKeys"/> with the type-to-filter. Pinned.</summary>
@@ -1298,7 +1298,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>/profile</c>'s picker label; ESC keeps the loaded profile. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/> (no glyph under the crumb) + <see cref="SwitchKeys"/>.</summary>
     public const string ProfileTitle = ChatScreen.ProfileToolGlyph + " Profile";   // the glyph the toolbar wears for the picker (later on 2026-09-29)
-    public const string ProfileKeys = "Enter = switch · ESC = keep";
+    public const string ProfileKeys = "Enter = switch · A–Z = jump · ESC = keep";
 
     /// <summary>The <c>/server</c> picker's label; ESC keeps the server in use.</summary>
     public const string ServerTitle = "🖥️ LLM server";
@@ -4108,7 +4108,9 @@ internal sealed partial class SettingsMenu
     /// (<see cref="AppSettings.SwitchProfileAsync"/>) and returns true. The caller rebinds what
     /// depends on the profile. Without menus the list is printed and nothing switches.
     /// A temporary profile (<see cref="Profiles.IsTemporary"/>, a <c>_</c> name) is left off unless it is the loaded one
-    /// (2026-10-02, the user's ask); <c>/profile _name</c> still switches to it (<see cref="PickerNames"/>).
+    /// (2026-10-02, the user's ask); <c>/profile _name</c> still switches to it (<see cref="PickerNames"/>). A typed letter or
+    /// digit jumps to the next profile starting with it (2026-10-06, the user's ask: as the theme picker does,
+    /// <see cref="MenuPage.JumpNames"/>).
     /// </summary>
     public Task<bool> PickProfileAsync(CancellationToken cancellationToken) =>
         PickProfileAsync(ProfileTitle, ProfileKeys, close: true, cancellationToken);
@@ -4124,7 +4126,7 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var page = new MenuPage(label, names.Select(Markup.Escape).ToList(), keys);
+        var page = new MenuPage(label, names.Select(Markup.Escape).ToList(), keys) { JumpNames = names };
         int cursor = names.ToList().IndexOf(current);
         int? picked = close
             ? await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false)

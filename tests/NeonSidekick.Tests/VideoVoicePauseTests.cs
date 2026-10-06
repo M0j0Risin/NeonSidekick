@@ -80,6 +80,43 @@ public class VideoVoicePauseTests
         Assert.Equal([VideoCommand.Pause, VideoCommand.Play], _player.Commands);
     }
 
+    /// <summary>
+    /// A hold that ends before the page shows its pause (a push-to-talk tap; 2026-10-06, the code review's catch) still plays it
+    /// on: the pause is on its way and lands first. A video that ended meanwhile is not started again.
+    /// </summary>
+    [Fact]
+    public void AHoldEndedBeforeThePauseShows_StillPlaysItOn()
+    {
+        _player.Behave = false;
+        var pause = Pause();
+        Playing();
+
+        pause.Hold().Dispose();                                                    // no report in between
+
+        Assert.Equal([VideoCommand.Pause, VideoCommand.Play], _player.Commands);
+
+        var ended = Pause();
+        _player.Commands.Clear();
+        var hold = ended.Hold();
+        _player.Report(_player.Snapshot! with { State = VideoState.Ended });       // it ran out before the pause showed
+        hold.Dispose();
+
+        Assert.Equal([VideoCommand.Pause], _player.Commands);
+    }
+
+    [Fact]
+    public void Duck_EndedBeforeTheVolumeShows_StillTurnsItBackUp()
+    {
+        _mode = YouTubeVoiceMode.Duck;
+        _player.Behave = false;
+        var pause = Pause();
+        Playing(volume: 60);
+
+        pause.Hold().Dispose();
+
+        Assert.Equal([VideoCommand.Volume(VideoVoicePause.DuckVolume), VideoCommand.Volume(60)], _player.Commands);
+    }
+
     [Fact]
     public void Duck_TurnsItDown_AndBackToItsVolume()
     {

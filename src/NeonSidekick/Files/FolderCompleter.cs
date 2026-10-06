@@ -10,8 +10,10 @@ namespace NeonSidekick.Files;
 /// <c>X:</c> offers <c>X:\</c> when that drive is there. What is hidden follows the folder picker's
 /// <see cref="FileBrowserVisibility"/> (<see cref="FileSystemFolders.IsShown(DirectoryInfo)"/>), so the list and
 /// <c>/cwd browse</c> show the same folders. A UNC path and a mapped network drive list nothing: the list is read on the
-/// input row's thread at each keystroke, and a slow share would stall typing. A folder that is missing, a file or
-/// unreadable lists nothing.
+/// input row's thread at each keystroke, and a slow share would stall typing. The same holds for an optical drive (a disc
+/// spinning up takes seconds) and a path that passes through a symbolic link to a share or one of those drives (2026-10-06,
+/// the code review's catch: the drive letter's type alone let both through); each folder of the typed path is looked at
+/// from the root down, so nothing past such a link is read. A folder that is missing, a file or unreadable lists nothing.
 /// </summary>
 public static class FolderCompleter
 {
@@ -25,7 +27,7 @@ public static class FolderCompleter
         }
 
         string root = char.ToUpperInvariant(text[0]) + @":\";
-        if (IsNetworkDrive(root))
+        if (IsSlowDrive(root))
         {
             return Nothing;
         }
@@ -41,6 +43,11 @@ public static class FolderCompleter
         char separator = text[cut];
         try
         {
+            if (PassesSlowLink(folder))
+            {
+                return Nothing;
+            }
+
             var directory = new DirectoryInfo(folder);
             if (!directory.Exists)
             {
@@ -89,11 +96,65 @@ public static class FolderCompleter
 
     private static readonly MentionResult Nothing = new(FileOutcome.Ok, [], false);
 
-    private static bool IsNetworkDrive(string root)
+    /// <summary>
+    /// Whether a link's target is somewhere a read could stall: a UNC path (<c>\\server\share</c>, <c>\\?\UNC\…</c>,
+    /// <c>UNC\…</c> as a link's substitute name has it), or a path on a network or optical drive. <c>\\?\</c> and <c>\??\</c>
+    /// before a drive path are looked through. Relative targets are the caller's to make full.
+    /// </summary>
+    public static bool IsSlowTarget(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        string t = target;
+        foreach (string prefix in new[] { @"\\?\", @"\??\", @"\\.\" })
+        {
+            if (t.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                t = t[prefix.Length..];
+                break;
+            }
+        }
+
+        if (t.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase) || t.StartsWith(@"\\", StringComparison.Ordinal) || t.StartsWith("//", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return t.Length >= 2 && char.IsAsciiLetter(t[0]) && t[1] == ':' && IsSlowDrive(char.ToUpperInvariant(t[0]) + @":\");
+    }
+
+    // Each folder of the path from the root down: a link whose target is slow ends the walk before anything under it is read.
+    private static bool PassesSlowLink(string folder)
+    {
+        string root = Path.GetPathRoot(folder) ?? "";
+        string[] parts = folder[root.Length..].Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+        string path = root;
+        foreach (string part in parts)
+        {
+            path = Path.Combine(path, part);
+            var info = new DirectoryInfo(path);
+            if (!info.Exists)
+            {
+                return false;   // nothing to list below a missing folder
+            }
+
+            if ((info.Attributes & FileAttributes.ReparsePoint) != 0 && info.LinkTarget is { Length: > 0 } target)
+            {
+                string full = Path.IsPathFullyQualified(target) || target.StartsWith(@"\??\", StringComparison.Ordinal) ? target : Path.GetFullPath(target, Path.GetDirectoryName(path) ?? root);
+                if (IsSlowTarget(full))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsSlowDrive(string root)
     {
         try
         {
-            return new DriveInfo(root).DriveType == DriveType.Network;
+            return new DriveInfo(root).DriveType is DriveType.Network or DriveType.CDRom;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
         {

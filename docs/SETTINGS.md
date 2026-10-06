@@ -146,7 +146,7 @@ Settings that an environment variable or flag can override for one launch are li
 
 | Setting | What it does | Default |
 |---|---|---|
-| Profile | Switches profile (each has its own settings, persona, memory, skills and sessions). | `default` |
+| Profile | Switches profile (each has its own settings, persona, memory, skills and sessions); a typed letter jumps to the next profile starting with it. | `default` |
 | New profile mode | What `/profile add` copies: `basic` the settings and memories; `advanced` also the persona, operating-rules and voice-directive files. | `basic` |
 | Working directory (cwd) | The folder the file and GitLib tools work in; empty is the profile's `files\` folder. The row opens the `/cwd browse` folder picker; `/cwd <path>` sets one by hand. | profile's `files\` |
 | Memory mode | `read-write` offers `save_memory` / `recall_memory` and opens every conversation with what is remembered; `read-only` offers `recall_memory` alone, so the model reads but never saves (your `/remember` still does); `disabled` turns memory off and refuses `/remember`. | read-write |

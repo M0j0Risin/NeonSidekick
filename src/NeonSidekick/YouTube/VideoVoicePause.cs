@@ -127,8 +127,12 @@ public sealed class VideoVoicePause
             }
 
             _holds = 0;
-            resume = _paused && _player.Snapshot is { State: VideoState.Paused };
-            restore = _duckedFrom is { } volume && _player.Snapshot is { Volume: DuckVolume } ? volume : null;
+            // A hold that ends before the page has shown its pause (a push-to-talk tap) still sets it back (2026-10-06, the code
+            // review's catch: the pause landed after and the video stayed paused): the page takes messages in order, so Play goes
+            // after the Pause still on its way. Once the pause has shown, only a video still paused is resumed; an ended one never.
+            var now = _player.Snapshot;
+            resume = _paused && (_sawPaused ? now is { State: VideoState.Paused } : now is { State: VideoState.Playing or VideoState.Buffering or VideoState.Paused });
+            restore = _duckedFrom is { } volume && (_sawDucked ? now is { Volume: DuckVolume } : now is not null) ? volume : null;
             _paused = false;
             _duckedFrom = null;
         }

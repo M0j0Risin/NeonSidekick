@@ -108,6 +108,34 @@ public class YouTubeToolsTests
         Assert.Contains("embedding off, or it is private, age-restricted or unavailable", result);
     }
 
+    /// <summary>
+    /// A late error for the video before (2026-10-06, the code review's catch) does not end the new play's wait as its refusal:
+    /// the play waits on for the video it asked for.
+    /// </summary>
+    [Fact]
+    public async Task Play_ALateErrorForTheVideoBefore_IsNotThisVideosRefusal()
+    {
+        const string Before = "bbbbbbbbbbb";
+        _player.Behave = false;
+        bool once = false;
+        _player.Changed += s =>
+        {
+            if (!once && s is { State: VideoState.Opening, VideoId: Bunny })
+            {
+                once = true;
+                _player.Report(s with { VideoId = Before, Error = 150 });                      // the old video's error, late
+            }
+        };
+
+        var call = Call(Play(), ("video", Bunny));
+        Assert.False(call.IsCompleted);                                                         // still waiting for its own video
+        _player.Report(new VideoSnapshot(VideoState.Playing, Bunny, "Bunny", "Blender", 0, 635));
+        string result = await call;
+
+        Assert.StartsWith("Playing", result, StringComparison.Ordinal);
+        Assert.DoesNotContain(Before, result);
+    }
+
     /// <summary>A player that never starts: at the cap the newest report answers (still opening, so status says to look later).</summary>
     [Fact]
     public async Task Play_AWindowThatNeverStarts_AnswersAtTheCap()

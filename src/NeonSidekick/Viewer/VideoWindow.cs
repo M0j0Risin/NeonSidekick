@@ -14,12 +14,21 @@ namespace NeonSidekick.Viewer;
 /// page's reports go both ways as JSON (<see cref="VideoMessages"/>); what it last reported is <see cref="Snapshot"/>, read
 /// from any thread without waiting on the window. <see cref="Player"/> is all of it as an <see cref="IVideoPlayer"/>. Windows-only, so
 /// <c>Program</c> reaches it behind <c>OperatingSystem.IsWindows()</c> and passes null elsewhere (the camera's shape).
+///
+/// <para>Two locks (2026-10-06, the code review's catch): <c>s_gate</c> guards only which window is open and is never held while
+/// anything waits, so <see cref="Snapshot"/> and <see cref="Send"/> never block; <c>s_playGate</c> lines up the plays across a
+/// new window's start (up to 10 s). Until then one lock did both, so a play opening a window blocked every snapshot read, and
+/// the voice pause, which reads one under its own lock, could wait on a window thread that was waiting on it. Versions come
+/// from one count for the process (<see cref="NextVersion"/>), so a new window's reports are newer than any old one's, and a
+/// window another has replaced reports nothing more, its close included.</para>
 /// </summary>
 [SupportedOSPlatform("windows")]
 public static class VideoWindow
 {
     private static readonly Lock s_gate = new();
+    private static readonly Lock s_playGate = new();
     private static VideoWindowThread? s_open;
+    private static long s_version;
 
     /// <summary>Where the window was when it last closed (<c>Program</c>: the profile's <c>VideoWindowLeft</c> / <c>VideoWindowTop</c>); null is Windows' own place.</summary>
     public static Func<(int X, int Y)?>? Position { get; set; }
@@ -50,9 +59,15 @@ public static class VideoWindow
     public static void Play(VideoRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        lock (s_gate)
+        lock (s_playGate)
         {
-            if (s_open is { Alive: true } open && open.Play(request))
+            VideoWindowThread? open;
+            lock (s_gate)
+            {
+                open = s_open;
+            }
+
+            if (open is { Alive: true } && open.Play(request))
             {
                 return;
             }
@@ -60,10 +75,17 @@ public static class VideoWindow
             CheckRuntime();
             string home = Home ?? Path.Combine(Path.GetTempPath(), "NeonSidekick");
             var window = new VideoWindowThread(request, VideoPage.UserDataFolder(home), VideoPage.SiteFolder(home));
-            s_open = window;
-            window.Start();
+            lock (s_gate)
+            {
+                s_open = window;
+            }
+
+            window.Start();   // outside s_gate: a snapshot read or a command never waits on a window starting
         }
     }
+
+    /// <summary>The next report's <see cref="VideoSnapshot.Version"/>: one count for every window of the process.</summary>
+    internal static long NextVersion() => Interlocked.Increment(ref s_version);
 
     /// <summary>A command for the open video; false when none is open.</summary>
     public static bool Send(VideoCommand command)
@@ -110,7 +132,26 @@ public static class VideoWindow
         return alive;
     }
 
-    internal static void Raise(VideoSnapshot? snapshot)
+    /// <summary>
+    /// <paramref name="from"/>'s report (null as it closes) raised, unless another window has replaced it: a closing window that
+    /// was swapped out under a play (ESC as the model played) would otherwise end that play's wait as "closed", and reset the
+    /// voice pause, with a video opening.
+    /// </summary>
+    internal static void Report(VideoWindowThread from, VideoSnapshot? snapshot)
+    {
+        bool current;
+        lock (s_gate)
+        {
+            current = s_open == from || (snapshot is null && s_open is null or { Alive: false });
+        }
+
+        if (current)
+        {
+            Raise(snapshot);
+        }
+    }
+
+    private static void Raise(VideoSnapshot? snapshot)
     {
         try
         {
@@ -197,7 +238,7 @@ internal sealed unsafe class VideoWindowThread
     public VideoWindowThread(VideoRequest first, string userDataFolder, string siteFolder)
     {
         _pending = first;
-        _snapshot = VideoSnapshot.Opening(first.VideoId);
+        _snapshot = VideoSnapshot.Opening(first.VideoId) with { Version = VideoWindow.NextVersion() };
         _userDataFolder = userDataFolder;
         _siteFolder = siteFolder;
     }
@@ -227,16 +268,19 @@ internal sealed unsafe class VideoWindowThread
         }
     }
 
-    /// <summary>Switches the open window to <paramref name="request"/> (the newest wins); false when the window is gone.</summary>
+    /// <summary>
+    /// Switches the open window to <paramref name="request"/> (the newest wins); false when the window is gone. While the window
+    /// is still starting (no handle yet) the request only waits: the page's first flush takes the newest.
+    /// </summary>
     public bool Play(VideoRequest request)
     {
         lock (_gate)
         {
             _pending = request;
-            _snapshot = VideoSnapshot.Opening(request.VideoId) with { Version = _snapshot.Version + 1 };
+            _snapshot = VideoSnapshot.Opening(request.VideoId) with { Version = VideoWindow.NextVersion() };
         }
 
-        return _alive && PostMessageW(_hwnd, PlayMessage, IntPtr.Zero, IntPtr.Zero);
+        return Post(PlayMessage);
     }
 
     /// <summary>A command's message for the page, sent once the page can hear it; false when the window is gone.</summary>
@@ -247,17 +291,23 @@ internal sealed unsafe class VideoWindowThread
             _outbox.Enqueue(json);
         }
 
-        return _alive && PostMessageW(_hwnd, CommandMessage, IntPtr.Zero, IntPtr.Zero);
+        return Post(CommandMessage);
     }
 
-    /// <summary>The window asked to close, and its thread waited for a moment.</summary>
+    /// <summary>The window asked to close (once it has started, if it is starting), and its thread waited for a moment.</summary>
     public void Close()
     {
+        _ready.Wait(TimeSpan.FromSeconds(10));
         if (_alive && PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero))
         {
             _thread?.Join(TimeSpan.FromSeconds(2));
         }
     }
+
+    // A wake-up for the window's procedure. Before the window is up there is no handle to post to (a null one would post to
+    // the caller's own thread): what was queued waits for the page's first flush, which comes after the window is made.
+    private bool Post(uint message) =>
+        _alive && (!_ready.IsSet || PostMessageW(_hwnd, message, IntPtr.Zero, IntPtr.Zero));
 
     // The window class, registered once per process: the procedure below, the app's icon, black behind the view.
     private static bool EnsureClass(IntPtr instance, out string? failure)
@@ -398,7 +448,7 @@ internal sealed unsafe class VideoWindowThread
             _ready.Set();
             if (_started)
             {
-                VideoWindow.Raise(null);
+                VideoWindow.Report(this, null);
                 DiagnosticLog.Info("Video", "Video window closed.");
             }
         }
@@ -488,6 +538,11 @@ internal sealed unsafe class VideoWindowThread
         lock (_gate)
         {
             (kind, snapshot) = VideoMessages.Apply(_snapshot, text);
+            if (kind is VideoPageEvent.State or VideoPageEvent.Error)
+            {
+                snapshot = snapshot with { Version = VideoWindow.NextVersion() };
+            }
+
             _snapshot = snapshot;
         }
 
@@ -499,17 +554,23 @@ internal sealed unsafe class VideoWindowThread
                 break;
             case VideoPageEvent.State:
                 ShowTitle(snapshot.Title);
-                VideoWindow.Raise(snapshot);
+                VideoWindow.Report(this, snapshot);
                 break;
             case VideoPageEvent.Error:
                 DiagnosticLog.Info("Video", $"YouTube refused video {snapshot.VideoId} in the player (error {snapshot.Error}).");
-                VideoWindow.Raise(snapshot);
+                VideoWindow.Report(this, snapshot);
                 break;
         }
     }
 
     private void OnPopup(string url)
     {
+        if (!VideoPage.IsWebLink(url))
+        {
+            DiagnosticLog.Warn("Video", $"The video page asked to open {url}, which is not a web address; refused.");
+            return;
+        }
+
         try
         {
             VideoWindow.OpenLink(url);
@@ -526,10 +587,10 @@ internal sealed unsafe class VideoWindowThread
         VideoSnapshot snapshot;
         lock (_gate)
         {
-            _snapshot = snapshot = _snapshot with { State = VideoState.Failed, Failure = VideoText.Failed(step.ToString(), hr), Version = _snapshot.Version + 1 };
+            _snapshot = snapshot = _snapshot with { State = VideoState.Failed, Failure = VideoText.Failed(step.ToString(), hr), Version = VideoWindow.NextVersion() };
         }
 
-        VideoWindow.Raise(snapshot);
+        VideoWindow.Report(this, snapshot);
         PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
     }
 
