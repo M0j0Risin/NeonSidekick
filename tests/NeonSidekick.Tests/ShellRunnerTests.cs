@@ -31,7 +31,7 @@ public sealed class ShellRunnerTests : IDisposable
 
     private static async Task<int> ExitAsync(ProcessSession session) => await session.Exited.WaitAsync(TimeSpan.FromSeconds(60));
 
-    [Fact]
+    [WindowsFact]
     public async Task Cmd_Echo_ExitsZero_WithTheLineOnStdout()
     {
         using var session = _runner.Start(Cmd("echo hi"), "run_000001");
@@ -48,7 +48,7 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.False(session.Killed);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Cmd_ExitCode_Stderr_AndUtf8_ComeThrough()
     {
         using var session = _runner.Start(Cmd("echo ü & echo err 1>&2 & exit /b 3"), "run_000002");
@@ -61,7 +61,7 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.True(await session.WaitAsync(TimeSpan.FromSeconds(1), CancellationToken.None));   // already exited: true at once
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Cmd_ReadsStdin_UntilItIsClosed()
     {
         using var session = _runner.Start(Cmd("set /p name=&& call echo hello %name%"), "run_000003");   // call: %name% is expanded when the line is parsed, before set ran
@@ -73,7 +73,7 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.False(await session.WriteAsync("late\n", CancellationToken.None));   // closed
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Kill_EndsAWaitingChild_AndTheSessionSaysSo()
     {
         using var session = _runner.Start(Cmd("ping -n 30 127.0.0.1 >nul"), "run_000004");
@@ -90,7 +90,7 @@ public sealed class ShellRunnerTests : IDisposable
         session.Kill();   // a second kill is a no-op
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WaitAsync_TheTurnToken_Throws()
     {
         using var session = _runner.Start(Cmd("ping -n 30 127.0.0.1 >nul"), "run_000005");
@@ -103,7 +103,7 @@ public sealed class ShellRunnerTests : IDisposable
         await ExitAsync(session);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Dispose_KillsARunningChild()
     {
         var session = _runner.Start(Cmd("ping -n 30 127.0.0.1 >nul"), "run_000006");
@@ -123,7 +123,7 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.StartsWith("Error: could not start nope.exe (", ex.Message);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task PowerShell_Runs_WithTheWrapper_NativeExitCodePropagates_AndUtf8Out()
     {
         using var ok = _runner.Start(PowerShell("Write-Output 'héllo'; cmd /c exit 7"), "run_000008");

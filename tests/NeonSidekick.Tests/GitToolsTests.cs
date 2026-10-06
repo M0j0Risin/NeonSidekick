@@ -144,7 +144,7 @@ public sealed class GitToolsTests : IDisposable
 
     // ---- status / log / show ----
 
-    [Fact]
+    [WindowsFact]
     public async Task Status_SaysNoRepository_ThenTheState_AsOneHeaderAndSections()
     {
         Assert.Equal($"Error: '{_root}' is not inside a git repository; /cwd into one, or ask the user to git init it", await Invoke(Tool<GitStatusTool>()));
@@ -158,6 +158,24 @@ public sealed class GitToolsTests : IDisposable
         Write("b.txt", "b\n");
         Assert.Equal("On branch main: 1 modified, 1 untracked\nunstaged:\nM  a.txt\nuntracked:\n?  b.txt\n" + GitText.Legend, await Invoke(Tool<GitStatusTool>()));
         Assert.Equal("Error: '..\\out' is outside the working directory", await Invoke(Tool<GitStatusTool>(), ("path", "..\\out")));
+        Assert.True(GitText.Note(await Invoke(Tool<GitStatusTool>())).Length <= 200);
+    }
+
+    /// <summary>The Unix twin of <see cref="Status_SaysNoRepository_ThenTheState_AsOneHeaderAndSections"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task Status_SaysNoRepository_ThenTheState_AsOneHeaderAndSections_Unix()
+    {
+        Assert.Equal($"Error: '{_root}' is not inside a git repository; /cwd into one, or ask the user to git init it", await Invoke(Tool<GitStatusTool>()));
+
+        Repo();
+        Write("a.txt", "one\n");
+        Assert.Equal("On branch main (no commits yet): 1 untracked\nuntracked:\n?  a.txt\n" + GitText.Legend, await Invoke(Tool<GitStatusTool>()));
+        Commit("a.txt", "one\n", "first");
+        Assert.Equal("On branch main: clean", await Invoke(Tool<GitStatusTool>()));
+        Write("a.txt", "two\n");
+        Write("b.txt", "b\n");
+        Assert.Equal("On branch main: 1 modified, 1 untracked\nunstaged:\nM  a.txt\nuntracked:\n?  b.txt\n" + GitText.Legend, await Invoke(Tool<GitStatusTool>()));
+        Assert.Equal("Error: '../out' is outside the working directory", await Invoke(Tool<GitStatusTool>(), ("path", "../out")));
         Assert.True(GitText.Note(await Invoke(Tool<GitStatusTool>())).Length <= 200);
     }
 
@@ -181,7 +199,7 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(200, GitLogTool.DefaultCount(new AppSettingsData { GitLibLogMaxCommits = 9999 }));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Show_ACommit_AFile_AFolder_AndTheRefusals()
     {
         Repo();
@@ -193,6 +211,24 @@ public sealed class GitToolsTests : IDisposable
         Assert.EndsWith(": second\nsecond\n\nBody.\nFiles changed (1, +2 −0):\nA src\\b.txt (+2 −0)", show);
         Assert.Equal($"a.txt at {second[..7]} (1 line):\none\n", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "a.txt")));
         Assert.Equal($"src\\ at {second[..7]} (1 entry):\nb.txt", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "src")));
+        Assert.Equal("Error: give the commit to show (a sha, a branch, a tag, HEAD~1)", await Invoke(Tool<GitShowTool>()));
+        Assert.Equal("Error: 'zzz.txt' is not there", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "zzz.txt")));
+        Assert.Equal("Error: 'nope' names no commit, branch or tag", await Invoke(Tool<GitShowTool>(), ("ref", "nope")));
+    }
+
+    /// <summary>The Unix twin of <see cref="Show_ACommit_AFile_AFolder_AndTheRefusals"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task Show_ACommit_AFile_AFolder_AndTheRefusals_Unix()
+    {
+        Repo();
+        Commit("a.txt", "one\n", "first");
+        string second = Commit(Path.Combine("src", "b.txt"), "b1\nb2\n", "second\n\nBody.\n");
+
+        string show = await Invoke(Tool<GitShowTool>(), ("ref", second[..7]));
+        Assert.StartsWith($"Commit {second[..7]} by Test User at 2026-09-01 ", show);
+        Assert.EndsWith(": second\nsecond\n\nBody.\nFiles changed (1, +2 −0):\nA src/b.txt (+2 −0)", show);
+        Assert.Equal($"a.txt at {second[..7]} (1 line):\none\n", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "a.txt")));
+        Assert.Equal($"src/ at {second[..7]} (1 entry):\nb.txt", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "src")));
         Assert.Equal("Error: give the commit to show (a sha, a branch, a tag, HEAD~1)", await Invoke(Tool<GitShowTool>()));
         Assert.Equal("Error: 'zzz.txt' is not there", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "zzz.txt")));
         Assert.Equal("Error: 'nope' names no commit, branch or tag", await Invoke(Tool<GitShowTool>(), ("ref", "nope")));
@@ -300,7 +336,7 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal($"Created branch third at {first[..7]}, but the switch failed: Error: that would overwrite local changes; commit or stash them first", await Invoke(Tool<GitBranchTool>(), ("action", "create"), ("name", "third"), ("start_point", "main"), ("switch_to", true)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Stage_Commit_AndTheirRefusals()
     {
         Repo();
@@ -316,6 +352,30 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal("Unstaged 1 path: src\\b.txt", await Invoke(Tool<GitStageTool>(), ("action", "unstage"), ("paths", new[] { "src/b.txt" })));
         Assert.Equal("Staged 1 path: src\\b.txt", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "." }), ("path", "src")));
         Assert.Equal("Nothing to stage under src\\", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "." }), ("path", "src")));
+        Assert.Equal("Error: 'nope.txt' is not there", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "nope.txt" })));
+        Assert.Matches(@"^Committed [0-9a-f]{7} on main: first \(2 files, \+2 −0\)$", await Invoke(Tool<GitCommitTool>(), ("message", "first")));
+        Assert.Matches(@"^Amended [0-9a-f]{7} on main: first, again \(2 files, \+2 −0\)$", await Invoke(Tool<GitCommitTool>(), ("message", "first, again"), ("amend", true)));
+        Assert.Equal("Error: 'yes' is not true or false for 'amend'", await Invoke(Tool<GitCommitTool>(), ("message", "x"), ("amend", "yes")));
+        Assert.Matches(@"^Committed [0-9a-f]{7} on main: empty \(0 files, \+0 −0\)$", await Invoke(Tool<GitCommitTool>(), ("message", "empty"), ("allow_empty", true)));
+    }
+
+    /// <summary>The Unix twin of <see cref="Stage_Commit_AndTheirRefusals"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task Stage_Commit_AndTheirRefusals_Unix()
+    {
+        Repo();
+        Assert.Equal("Error: give the paths to act on (\".\" for everything changed under \"path\")", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", Array.Empty<string>())));
+        Assert.Equal("Error: '42' is not a list of paths for 'paths'", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", 42)));
+        Assert.Equal("Error: 'add' is not an action here", await Invoke(Tool<GitStageTool>(), ("action", "add"), ("paths", new[] { "a.txt" })));
+        Assert.Equal("Error: give the commit message", await Invoke(Tool<GitCommitTool>(), ("message", " ")));
+        Assert.Equal("Error: nothing is staged; stage the changes with gitlib_stage first", await Invoke(Tool<GitCommitTool>(), ("message", "x")));
+
+        Write("a.txt", "one\n");
+        Write(Path.Combine("src", "b.txt"), "b\n");
+        Assert.Equal("Staged 2 paths: a.txt, src/b.txt", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "." })));
+        Assert.Equal("Unstaged 1 path: src/b.txt", await Invoke(Tool<GitStageTool>(), ("action", "unstage"), ("paths", new[] { "src/b.txt" })));
+        Assert.Equal("Staged 1 path: src/b.txt", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "." }), ("path", "src")));
+        Assert.Equal("Nothing to stage under src/", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "." }), ("path", "src")));
         Assert.Equal("Error: 'nope.txt' is not there", await Invoke(Tool<GitStageTool>(), ("action", "stage"), ("paths", new[] { "nope.txt" })));
         Assert.Matches(@"^Committed [0-9a-f]{7} on main: first \(2 files, \+2 −0\)$", await Invoke(Tool<GitCommitTool>(), ("message", "first")));
         Assert.Matches(@"^Amended [0-9a-f]{7} on main: first, again \(2 files, \+2 −0\)$", await Invoke(Tool<GitCommitTool>(), ("message", "first, again"), ("amend", true)));

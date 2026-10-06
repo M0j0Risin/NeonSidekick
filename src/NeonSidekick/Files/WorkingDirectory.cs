@@ -798,6 +798,7 @@ public sealed class WorkingDirectory
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
                 if ((hideDotEntries && info.Name.StartsWith('.'))
+                    || (!showHidden && IsHiddenOffWindows(info.Attributes, info.Name))
                     || (hideGitFolders && isDirectory && string.Equals(info.Name, GitFolderName, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
@@ -2125,7 +2126,7 @@ public sealed class WorkingDirectory
             if (isDirectory)
             {
                 files = 0;
-                foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: true)))
+                foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: true)).Where(f => !IsHiddenOffWindows(f.Attributes, f.Name)))
                 {
                     files++;
                     bytes += file.Length;
@@ -2633,9 +2634,22 @@ public sealed class WorkingDirectory
     {
         RecurseSubdirectories = recurse,
         IgnoreInaccessible = true,
-        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
+        AttributesToSkip = OperatingSystem.IsWindows() ? FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint : FileAttributes.ReparsePoint,
         ReturnSpecialDirectories = false,
     };
+
+    /// <summary>
+    /// Whether a walk leaves an entry out as hidden off Windows (2026-10-06, the macOS build). .NET reads every dot-name as
+    /// <see cref="FileAttributes.Hidden"/> on Unix, so the Windows skip in <see cref="WalkOptions"/> hid <c>.gitignore</c>,
+    /// <c>.github</c> and <c>.env</c> from every listing, search and count and left them out of a folder's copy — on Windows a
+    /// dot-name is a name like any other. Off Windows the options skip no Hidden and this skips what Hidden means without the dot:
+    /// the macOS hidden flag (<c>chflags hidden</c>), as Windows skips its Hidden attribute; and <c>.git</c>, which Git for
+    /// Windows marks Hidden (<c>core.hideDotFiles = dotGitOnly</c>), so a search never reads a repository's objects there
+    /// either. Always false on Windows.
+    /// </summary>
+    private static bool IsHiddenOffWindows(FileAttributes attributes, ReadOnlySpan<char> name) =>
+        !OperatingSystem.IsWindows()
+        && ((attributes & FileAttributes.Hidden) != 0 && !name.StartsWith('.') || name.Equals(GitFolderName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// One enumeration for every walk: files matching <paramref name="namePattern"/> (a Win32
@@ -2659,8 +2673,9 @@ public sealed class WorkingDirectory
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>
                 (includeDirectories || !entry.IsDirectory)
+                && !IsHiddenOffWindows(entry.Attributes, entry.FileName)
                 && (alternatives is null || entry.IsDirectory || MatchesAny(alternatives, ref entry, directory, root)),
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => DepthUnder(entry.Directory, directory) < maxDepth,
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => DepthUnder(entry.Directory, directory) < maxDepth && !IsHiddenOffWindows(entry.Attributes, entry.FileName),
         };
     }
 
@@ -2763,12 +2778,12 @@ public sealed class WorkingDirectory
     private static void CopyDirectory(string source, string destination)
     {
         Directory.CreateDirectory(destination);
-        foreach (var file in Directory.EnumerateFiles(source, "*", WalkOptions(recurse: false)))
+        foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: false)).Where(f => !IsHiddenOffWindows(f.Attributes, f.Name)).Select(f => f.FullName))
         {
             File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
         }
 
-        foreach (var folder in Directory.EnumerateDirectories(source, "*", WalkOptions(recurse: false)))
+        foreach (var folder in new DirectoryInfo(source).EnumerateDirectories("*", WalkOptions(recurse: false)).Where(d => !IsHiddenOffWindows(d.Attributes, d.Name)).Select(d => d.FullName))
         {
             CopyDirectory(folder, Path.Combine(destination, Path.GetFileName(folder)));
         }

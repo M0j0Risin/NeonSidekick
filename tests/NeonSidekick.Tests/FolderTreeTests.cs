@@ -240,7 +240,7 @@ public class FolderTreeTests
     }
 
     /// <summary>A shortcut (later on 2026-09-21): a named root ahead of the drives, its folder read like any other; the path under it opens there, not under the drive, and only at a separator (files2 is not under files).</summary>
-    [Fact]
+    [WindowsFact]
     public void AShortcut_HeadsTheTree_AndThePathUnderIt_OpensThere()
     {
         string files = P(C, "Users", "alice", ".neonsidekick", "profiles", "default", "files");
@@ -276,6 +276,45 @@ public class FolderTreeTests
         Assert.Equal(1, tree.CollapseAll(other));   // the drive's row is 1 with the shortcut ahead of it
         Assert.Equal(["profile", .. Roots], Names(tree));
         Assert.Equal(0, tree.JumpFrom(2, 'p'));
+    }
+
+    /// <summary>The Unix twin of <see cref="AShortcut_HeadsTheTree_AndThePathUnderIt_OpensThere"/> (2026-10-06, the macOS build): one root off Windows.</summary>
+    [UnixFact]
+    public void AShortcut_HeadsTheTree_AndThePathUnderIt_OpensThere_Unix()
+    {
+        string files = P(C, "Users", "alice", ".neonsidekick", "profiles", "default", "files");
+        var folders = Disks(hidden: true)
+            .Add(P(C, "Users", "alice", ".neonsidekick"), "profiles")
+            .Add(P(C, "Users", "alice", ".neonsidekick", "profiles"), "default")
+            .Add(P(C, "Users", "alice", ".neonsidekick", "profiles", "default"), "files", "files2")
+            .Add(files, "docs")
+            .Add(files + "2", "other");
+        var tree = new FolderTree(folders, [new FolderShortcut("profile", files, FolderText.ShortcutGlyph)]);
+
+        Assert.Equal(["profile", .. Roots], Names(tree));
+        Assert.True(tree.Visible[0].IsShortcut);
+        Assert.False(tree.Visible[1].IsShortcut);
+        Assert.Equal(files, tree.Visible[0].Path);
+        Assert.Equal(FolderText.CollapsedGlyph + " " + FolderText.ShortcutGlyph + " profile", FolderText.RowMarkup(tree.Visible[0]));
+
+        Assert.Equal(0, tree.ExpandTo(files));
+        Assert.False(tree.Visible[0].Expanded);
+        Assert.Equal(1, tree.ExpandTo(P(files, "docs")));
+        Assert.Equal(["profile", "docs", .. Roots], Names(tree));
+        Assert.Equal(1, tree.Visible[1].Depth);
+        Assert.Equal(0, tree.ParentOf(1));
+        Assert.Equal(0, tree.RootOf(1));
+
+        // files2 lives beside the shortcut's folder: it opens under the drive, the shortcut left as it was.
+        int other = tree.ExpandTo(P(files + "2", "other"));
+        Assert.Equal("other", tree.Visible[other].Name);
+        Assert.Equal(7, tree.Visible[other].Depth);   // C:\, Users, alice, .neonsidekick, profiles, default, files2, other
+        Assert.Equal(C, tree.Visible[tree.RootOf(other)].Path);
+        Assert.Equal(["profile", "docs"], Names(tree).Take(2));
+
+        Assert.Equal(1, tree.CollapseAll(other));   // the drive's row is 1 with the shortcut ahead of it
+        Assert.Equal(["profile", .. Roots], Names(tree));
+        Assert.Equal(0, tree.JumpFrom(1, 'p'));   // one root off Windows: it is row 1
     }
 
     /// <summary>Two shortcuts (2026-09-24): profile then splash, each behind its own glyph; a path in splash opens under the splash row, not under the drive.</summary>

@@ -63,7 +63,7 @@ public sealed class SqlitePoliceTests : IDisposable
     [InlineData("print('hello')")]
     public void Find_InAScript_AnAttributeIsNoFile(string text) => Assert.Null(SqlitePolice.Find(text, script: true, DatabaseGuard.ByExtension));
 
-    [Fact]
+    [WindowsFact]
     public void Find_ANamedDatabase_ByItsPath_OrItsName()
     {
         var guard = new DatabaseGuard([@"D:\data\shop.data"]);
@@ -73,7 +73,18 @@ public sealed class SqlitePoliceTests : IDisposable
         Assert.Null(SqlitePolice.Find("cat myshop.data2", script: false, guard));
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="Find_ANamedDatabase_ByItsPath_OrItsName"/> (2026-10-06, the macOS build): a <c>/</c> path.</summary>
+    [UnixFact]
+    public void Find_ANamedDatabase_ByItsUnixPath_OrItsName()
+    {
+        var guard = new DatabaseGuard(["/Users/me/data/shop.data"]);
+        Assert.Equal("shop.data", SqlitePolice.Find("cat /Users/me/data/shop.data", script: false, guard));
+        Assert.Equal("shop.data", SqlitePolice.Find("open('/Users/me/data/shop.data', 'rb')", script: true, guard));
+        Assert.Equal("shop.data", SqlitePolice.Find("cat shop.data", script: false, guard));
+        Assert.Null(SqlitePolice.Find("cat myshop.data2", script: false, guard));
+    }
+
+    [WindowsFact]
     public void Judge_ReadsTheScriptFilesALineRuns()
     {
         string work = Path.Combine(_dir, "work");
@@ -90,6 +101,26 @@ public sealed class SqlitePoliceTests : IDisposable
 
         File.WriteAllText(Path.Combine(work, "big.py"), "import sqlite3\n" + new string('#', (int)SqlitePolice.MaxScriptBytes));
         Assert.Null(SqlitePolice.Judge("python big.py", work, work, DatabaseGuard.ByExtension));   // past the cap, passed over
+    }
+
+    /// <summary>
+    /// The Unix twin of <see cref="Judge_ReadsTheScriptFilesALineRuns"/> (2026-10-06, the macOS build): <c>python3</c> and
+    /// <c>./</c> spellings, a <c>../</c> path left to the outside-paths police.
+    /// </summary>
+    [UnixFact]
+    public void Judge_ReadsTheScriptFilesALineRuns_WithUnixSpellings()
+    {
+        string work = Path.Combine(_dir, "work");
+        Directory.CreateDirectory(work);
+        File.WriteAllText(Path.Combine(work, "insert.py"), "import sqlite3\nsqlite3.connect('shop.db').execute('INSERT INTO t VALUES (1)')\n");
+        File.WriteAllText(Path.Combine(work, "fine.py"), "print('hello')\n");
+        File.WriteAllText(Path.Combine(_dir, "outside.py"), "import sqlite3\n");
+
+        Assert.Equal(("sqlite3", "insert.py"), SqlitePolice.Judge("python insert.py", work, work, DatabaseGuard.ByExtension));
+        Assert.Equal(("sqlite3", "insert.py"), SqlitePolice.Judge("python3 \"./insert.py\" --go", work, work, DatabaseGuard.ByExtension));
+        Assert.Null(SqlitePolice.Judge("python3 fine.py", work, work, DatabaseGuard.ByExtension));
+        Assert.Null(SqlitePolice.Judge("python3 missing.py", work, work, DatabaseGuard.ByExtension));
+        Assert.Null(SqlitePolice.Judge("python3 ../outside.py", work, work, DatabaseGuard.ByExtension));
     }
 
     [Fact]

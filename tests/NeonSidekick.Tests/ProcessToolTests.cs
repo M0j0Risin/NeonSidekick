@@ -69,7 +69,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal(new Dictionary<string, object?> { ["action"] = "poll", ["session_id"] = "proc_1" }, ProcessTool.PollArguments("proc_1"));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task List_Poll_AndClose_FollowAChild()
     {
         Assert.Equal("0 processes", await Invoke(("action", "list")));
@@ -89,7 +89,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Empty(_registry.List());
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Log_IsANumberedWindow_AndSaysWhenTheOldestAreGone()
     {
         var session = Start("for /l %i in (1,1,6000) do @echo line %i");
@@ -107,7 +107,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal("Error: offset must be 1 or more", await Invoke(("action", "log"), ("session_id", session.Id), ("offset", 0)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Poll_OverTheCap_KeepsHeadAndTail_WithoutASpill()
     {
         _settings.ShellOutputMaxChars = 2000;
@@ -122,7 +122,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_dir, ".shell")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Wait_Kill_Write_AndSubmit_OverARunningChild()
     {
         // A write and a submit split one line, so the child must read a whole line (2026-09-22, the v0.3.2 release run): cmd's set /p takes
@@ -189,7 +189,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Contains("5 processes (0 running)", await Invoke(("action", "list")));   // the two typed-at ones above too (2026-09-22), and the forbidden string's (2026-10-03)
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Refusals_ArePinned()
     {
         Assert.Equal("Error: 'dance' is not one of list, poll, log, wait, kill, write, submit, close for 'action'", await Invoke(("action", "dance")));
@@ -202,7 +202,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal("Error: 'proc_' matches 2 processes: " + a.Id + ", " + b.Id, await Invoke(("action", "poll"), ("session_id", "proc_")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Notify_QueuesAnAlertAndANote_OncePerExit_AndTheCapsHold()
     {
         var quiet = Start("echo q");
@@ -237,7 +237,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal(5, ProcessRegistry.MaxNotesPerTurn);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Eviction_KeepsTheNewestFinished()
     {
         var first = Start("echo first");
@@ -252,7 +252,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal(FindOutcome.None, _registry.Find(first.Id, out _, out _));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task TooManyRunning_IsRefused_AndDisposeKillsThemAll()
     {
         var sleepers = new List<ProcessSession>();

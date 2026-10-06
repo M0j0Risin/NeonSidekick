@@ -120,7 +120,7 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal(6, state.NextSeq);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Feed_RaisesOnALine_AndAtTheExit_AndItsTitleFollowsTheState()
     {
         var session = Start("ping -n 30 127.0.0.1 >nul");
@@ -146,7 +146,7 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal(before, Volatile.Read(ref raised));   // disposed: no more news
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Feed_TitleSaysExitedN_OrStoppedByYou()
     {
         var done = Start("exit /b 4");
@@ -163,7 +163,7 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal(stopped.Id + " · ping -n 30 127.0.0.1 >nul — stopped by you", stoppedFeed.Title(following: true));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Feed_CtrlKTwice_Stops_TheFirstArmsTheTitle_AndItLapses()
     {
         var session = Start("ping -n 30 127.0.0.1 >nul");
@@ -196,7 +196,7 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.DoesNotContain("Press Ctrl+K", feed.Title(following: true), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Feed_HeldCtrlK_IsOnePress_TheRepeatTakenButNeverFiring()
     {
         var session = Start("ping -n 30 127.0.0.1 >nul");
@@ -220,7 +220,7 @@ public sealed class ProcessWindowTests : IDisposable
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Feed_DisposedTwice_IsHarmless()
     {
         var session = Start("ping -n 30 127.0.0.1 >nul");
@@ -282,7 +282,7 @@ public sealed class ProcessWindowTests : IDisposable
 
     // ── ProcessRegistry.StopByUser ──────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public async Task StopByUser_AlertsAndNotes_WithoutNotify_InTheUsersWords()
     {
         var session = Start("ping -n 30 127.0.0.1 >nul");   // started without notify
@@ -304,7 +304,7 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.False(_registry.StopByUser(session));   // exited already
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task StopByUser_AChildGoneWhileItsOutputDrains_IsNotStopped_NorNotified()
     {
         // cmd exits at once while the ping it started holds the output pipe open: the session is not HasExited until the ping ends,
@@ -341,7 +341,7 @@ public sealed class ProcessWindowTests : IDisposable
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task StopByUser_RefusesAnotherRegistrysSession_AndAnOwnExitIsNoUserStop()
     {
         using var other = new ProcessRegistry(new ShellRunner(_time), new Random(3), () => { });
@@ -359,7 +359,7 @@ public sealed class ProcessWindowTests : IDisposable
 
     // ── ProcessWindowText ───────────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public async Task Words_ArePinned()
     {
         var session = Start("echo one");

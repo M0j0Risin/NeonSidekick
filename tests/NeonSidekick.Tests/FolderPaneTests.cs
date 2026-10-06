@@ -166,7 +166,7 @@ public class FolderPaneTests : IDisposable
         Assert.Contains("\n" + P(C, "Users") + "\n" + Open(false, 0, C) + "\n" + Closed(true, 1, "Users") + "\n" + Leaf(false, 1, "Windows") + "\n", Output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ATreeTallerThanTheWindow_ScrollsWithTheCursor_UnderTheMoreRow()
     {
         var (picker, screen, input) = Picker();
@@ -194,6 +194,24 @@ public class FolderPaneTests : IDisposable
         {
             Assert.Equal(P(C, "Windows", "System32"), picked);
         }
+    }
+
+    /// <summary>The Unix twin of <see cref="ATreeTallerThanTheWindow_ScrollsWithTheCursor_UnderTheMoreRow"/> (2026-10-06, the macOS build): one root off Windows.</summary>
+    [UnixFact]
+    public async Task ATreeTallerThanTheWindow_ScrollsWithTheCursor_UnderTheMoreRow_Unix()
+    {
+        var (picker, screen, input) = Picker();
+        using var _ = screen;
+        var tree = new FolderTree(Disks());
+        tree.ExpandTo(P(C, "Users", "bob"));
+        tree.Expand(4);                                  // Windows, under the one root: /, Users, alice, bob, Windows, System32, Repo
+        input.Push(Keys.End, Keys.Enter);
+
+        string? picked = await picker.PickAsync(tree, 0, CancellationToken.None);
+
+        // The fakes' second drive is the same / off Windows, so its Repo is the root's last folder: End lands on it, past the more row.
+        Assert.Equal(P(C, "Repo"), picked);
+        Assert.Contains(MenuPane.MoreHint(2, 5, 7), Output);
     }
 
     /// <summary>A shortcut root (later on 2026-09-21) draws as the house and its label above the drives, opens like a drive, and Enter on it answers its folder.</summary>

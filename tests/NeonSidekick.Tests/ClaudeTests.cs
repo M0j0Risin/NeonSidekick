@@ -163,7 +163,7 @@ public class ClaudeTests
 
     // ── the lookup ──────────────────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public void Locate_TheSetting_ThenThePath_ThenTheShim_ThenTheInstallersFolder()
     {
         var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { @"D:\tools\claude.exe", @"C:\npm\claude.cmd", @"C:\Users\u\.local\bin\claude.exe", @"C:\bin\claude.exe" };
@@ -174,6 +174,23 @@ public class ClaudeTests
         Assert.Equal(@"C:\bin\claude.exe", ClaudeExecutable.Locate("", Env(@"C:\npm;C:\bin"), files.Contains));   // the native exe first
         Assert.Equal(@"C:\npm\claude.cmd", ClaudeExecutable.Locate("", Env(@"C:\npm"), files.Contains));
         Assert.Equal(@"C:\Users\u\.local\bin\claude.exe", ClaudeExecutable.Locate(null, Env(@"C:\nothing"), files.Contains));
+        Assert.Null(ClaudeExecutable.Locate(null, _ => null, files.Contains));
+    }
+
+    /// <summary>
+    /// The Unix twin of <see cref="Locate_TheSetting_ThenThePath_ThenTheShim_ThenTheInstallersFolder"/> (2026-10-06, the macOS build):
+    /// <c>claude</c> on the PATH (colons, no extensions), else <c>~/.local/bin/claude</c>.
+    /// </summary>
+    [UnixFact]
+    public void Locate_TheSetting_ThenThePath_ThenTheInstallersFolder_OnUnix()
+    {
+        var files = new HashSet<string>(StringComparer.Ordinal) { "/opt/tools/claude", "/usr/local/bin/claude", "/Users/u/.local/bin/claude" };
+        Func<string, string?> Env(string path) => name => name switch { "PATH" => path, "HOME" => "/Users/u", _ => null };
+
+        Assert.Equal("/opt/tools/claude", ClaudeExecutable.Locate("\"/opt/tools/claude\"", Env("/usr/local/bin"), files.Contains));
+        Assert.Null(ClaudeExecutable.Locate("/missing/claude", Env("/usr/local/bin"), files.Contains));
+        Assert.Equal("/usr/local/bin/claude", ClaudeExecutable.Locate("", Env("/nothing:/usr/local/bin"), files.Contains));
+        Assert.Equal("/Users/u/.local/bin/claude", ClaudeExecutable.Locate(null, Env("/nothing"), files.Contains));
         Assert.Null(ClaudeExecutable.Locate(null, _ => null, files.Contains));
     }
 
@@ -205,7 +222,7 @@ public class ClaudeTests
         Assert.Equal(ClaudeText.ConfiguredNotFound(@"D:\nope.exe"), ex.Message);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Process_AChildThatWritesNoResult_IsAnErrorResult_WithItsExitCode()
     {
         // cmd.exe stands in for the CLI: it ignores the flags it does not know, reads stdin and exits without a result line.
@@ -221,6 +238,25 @@ public class ClaudeTests
         var result = Assert.IsType<ClaudeEvent.Result>(Assert.Single(events));
         Assert.True(result.IsError);
         Assert.StartsWith("exit code ", result.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The Unix twin of <see cref="Process_AChildThatWritesNoResult_IsAnErrorResult_WithItsExitCode"/> (2026-10-06, the macOS build):
+    /// <c>/usr/bin/true</c> stands in for the CLI — it ignores the flags and exits without a result line.
+    /// </summary>
+    [UnixFact]
+    public async Task Process_AChildThatWritesNoResult_IsAnErrorResult_OnUnix()
+    {
+        var cli = new ClaudeProcess(_ => null);
+        var events = new List<ClaudeEvent>();
+
+        await foreach (var evt in cli.RunAsync(new ClaudeRequest("exit 3", "id", false, Path.GetTempPath(), ClaudePermissionLevel.ReadOnly, Executable: "/usr/bin/true"), CancellationToken.None))
+        {
+            events.Add(evt);
+        }
+
+        var result = Assert.IsType<ClaudeEvent.Result>(Assert.Single(events));
+        Assert.True(result.IsError);
     }
 
     // ── the settings words ──────────────────────────────────────────────────

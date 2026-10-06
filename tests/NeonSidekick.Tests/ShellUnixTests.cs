@@ -50,4 +50,13 @@ public sealed class ShellUnixTests
         Assert.Equal("pwsh", ShellKinds.FileName(ShellKind.PowerShell));
         Assert.Equal("python3", CodeLanguages.FileName(CodeLanguage.Python));
     }
+
+    /// <summary>The Unix side of <c>ShellTests.ShellText_Errors_LogLines_AndThePane_ArePinned</c>' file names (2026-10-06): no <c>.exe</c>.</summary>
+    [UnixFact]
+    public void TheNotInstalledSentences_NameTheUnixFiles()
+    {
+        Assert.Equal("Error: bash is not installed (no bash found)", ShellText.ShellNotInstalled(ShellKind.Bash));
+        Assert.Equal("Error: powershell is not installed (no pwsh found)", ShellText.ShellNotInstalled(ShellKind.PowerShell));
+        Assert.Equal("Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it", ShellText.OutsidePath("/etc/hosts"));
+    }
 }

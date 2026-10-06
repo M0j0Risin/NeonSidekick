@@ -178,10 +178,21 @@ public sealed class GitAccessTests : IDisposable
         Assert.Equal(path, Files.WorkingDirectory.InRootSpelling(root, path, _ => null));   // no real path (Windows): as libgit2 gave it
     }
 
-    [Fact]
+    [WindowsFact]
     public void Locate_RefusesAPathOutsideTheSandbox_AndABareRepository()
     {
         Assert.Equal(GitOutcome.OutsideRoot, _git.Locate("..\\other", out _, out _, out _));
+        Assert.Equal(GitOutcome.NoRepository, _git.Locate("", out _, out _, out _));
+        Repository.Init(Path.Combine(_root, "bare.git"), isBare: true);
+        Assert.Equal(GitOutcome.Bare, _git.Locate("bare.git", out _, out _, out string detail));
+        Assert.Equal(Path.Combine(_root, "bare.git"), detail);
+    }
+
+    /// <summary>The Unix twin of <see cref="Locate_RefusesAPathOutsideTheSandbox_AndABareRepository"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void Locate_RefusesAPathOutsideTheSandbox_AndABareRepository_Unix()
+    {
+        Assert.Equal(GitOutcome.OutsideRoot, _git.Locate("../other", out _, out _, out _));
         Assert.Equal(GitOutcome.NoRepository, _git.Locate("", out _, out _, out _));
         Repository.Init(Path.Combine(_root, "bare.git"), isBare: true);
         Assert.Equal(GitOutcome.Bare, _git.Locate("bare.git", out _, out _, out string detail));

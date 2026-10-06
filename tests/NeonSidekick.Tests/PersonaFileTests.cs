@@ -228,7 +228,7 @@ public class PersonaFileTests : IDisposable
         Assert.Equal(PersonaFile.MaxLength, exact.Length);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task EditAndWaitAsync_RunsAConfiguredCommandThroughCmd_AndWaitsForIt()
     {
         // /draft's configured-editor leg (2026-09-19) without an editor: a command that writes the
@@ -242,7 +242,7 @@ public class PersonaFileTests : IDisposable
         Assert.Equal("drafted\r\n", File.ReadAllText(path));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task EditAndWaitAsync_TheToken_EndsTheWait_AndLeavesTheProcess()
     {
         Directory.CreateDirectory(_dir);
@@ -252,6 +252,25 @@ public class PersonaFileTests : IDisposable
 
         // ping as a sleep (a couple of seconds); the token fires first and the wait throws, the process runs on.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => PersonaFile.EditAndWaitAsync(path, "cmd /c ping -n 3 127.0.0.1 >nul & rem", cts.Token));
+    }
+
+    /// <summary>
+    /// The Unix twins of the <c>cmd</c> editor tests above (2026-10-06, the macOS build): the configured command runs through
+    /// <c>/bin/sh</c> with the path as <c>$1</c> (<c>DraftFile.UnixStart</c>); the wait ends with it, and the token ends the wait.
+    /// </summary>
+    [UnixFact]
+    public async Task EditAndWaitAsync_RunsAConfiguredCommandThroughSh_AndWaitsForIt()
+    {
+        Directory.CreateDirectory(_dir);
+        string path = Path.Combine(_dir, "draft it.txt");
+        File.WriteAllText(path, "");
+
+        await PersonaFile.EditAndWaitAsync(path, "echo drafted >", CancellationToken.None);
+
+        Assert.Equal("drafted\n", File.ReadAllText(path));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => PersonaFile.EditAndWaitAsync(path, "sleep 3; :", cts.Token));
     }
 
     [Fact]

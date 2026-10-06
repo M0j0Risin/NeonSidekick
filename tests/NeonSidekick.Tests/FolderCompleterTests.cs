@@ -24,7 +24,7 @@ public sealed class FolderCompleterTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
-    [Fact]
+    [WindowsFact]
     public void AFolder_ListsItsSubfolders_OneLevel_ByName_AFileAndTheHiddenLeftOut()
     {
         string folder = _dir + @"\";
@@ -36,13 +36,37 @@ public sealed class FolderCompleterTests : IDisposable
         Assert.Equal([folder + @".git\", folder + @"Repo\", folder + @"reports\", folder + @"Secret\", folder + @"Temp\"], FolderCompleter.Complete(folder, FileBrowserVisibility.ShowHidden).Paths);
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="AFolder_ListsItsSubfolders_OneLevel_ByName_AFileAndTheHiddenLeftOut"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void AFolder_ListsItsSubfolders_OneLevel_ByName_AFileAndTheHiddenLeftOut_Unix()
+    {
+        string folder = _dir + @"/";
+        var found = FolderCompleter.Complete(folder);
+        Assert.Equal(FileOutcome.Ok, found.Outcome);
+        Assert.Equal([folder + @"Repo/", folder + @"reports/", folder + @"Temp/"], found.Paths);   // no deep\, no readme.txt
+        Assert.False(found.Truncated);
+        // The folder picker's Show hidden: the dot-folder and the hidden one too.
+        Assert.Equal([folder + @".git/", folder + @"Repo/", folder + @"reports/", folder + @"Secret/", folder + @"Temp/"], FolderCompleter.Complete(folder, FileBrowserVisibility.ShowHidden).Paths);
+    }
+
+    [WindowsFact]
     public void APrefix_Narrows_IgnoringCase_AndTheSeparatorTypedIsKept()
     {
         string folder = _dir + @"\";
         Assert.Equal([folder + @"Repo\", folder + @"reports\"], FolderCompleter.Complete(folder + "RE").Paths);
         Assert.Equal([folder + @"Temp\deep\"], FolderCompleter.Complete(folder + @"Temp\").Paths);
         string slashed = _dir.Replace('\\', '/') + "/";
+        Assert.Equal([slashed + "Temp/"], FolderCompleter.Complete(slashed + "te").Paths);
+    }
+
+    /// <summary>The Unix twin of <see cref="APrefix_Narrows_IgnoringCase_AndTheSeparatorTypedIsKept"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void APrefix_Narrows_IgnoringCase_AndTheSeparatorTypedIsKept_Unix()
+    {
+        string folder = _dir + @"/";
+        Assert.Equal([folder + @"Repo/", folder + @"reports/"], FolderCompleter.Complete(folder + "RE").Paths);
+        Assert.Equal([folder + @"Temp/deep/"], FolderCompleter.Complete(folder + @"Temp/").Paths);
+        string slashed = _dir + "/";
         Assert.Equal([slashed + "Temp/"], FolderCompleter.Complete(slashed + "te").Paths);
     }
 
@@ -57,7 +81,7 @@ public sealed class FolderCompleterTests : IDisposable
         Assert.Empty(FolderCompleter.Complete("").Paths);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ABareDrive_OffersItsRoot()
     {
         string drive = Path.GetPathRoot(_dir)![..2];   // C:
@@ -96,7 +120,7 @@ public sealed class FolderCompleterTests : IDisposable
         Assert.Empty(FolderCompleter.Complete("/net/").Paths);
     }
 
-    [Fact]
+    [WindowsFact]
     public void TheCap_CutsTheList_AndSaysSo()
     {
         string many = Path.Combine(_dir, "many");
@@ -109,6 +133,22 @@ public sealed class FolderCompleterTests : IDisposable
         Assert.Equal(WorkingDirectory.MaxMentionMatches, found.Paths.Count);
         Assert.True(found.Truncated);
         Assert.Equal(many + @"\f000\", found.Paths[0]);
+    }
+
+    /// <summary>The Unix twin of <see cref="TheCap_CutsTheList_AndSaysSo"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void TheCap_CutsTheList_AndSaysSo_Unix()
+    {
+        string many = Path.Combine(_dir, "many");
+        for (int i = 0; i < WorkingDirectory.MaxMentionMatches + 5; i++)
+        {
+            Directory.CreateDirectory(Path.Combine(many, "f" + i.ToString("D3", System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        var found = FolderCompleter.Complete(many + @"/");
+        Assert.Equal(WorkingDirectory.MaxMentionMatches, found.Paths.Count);
+        Assert.True(found.Truncated);
+        Assert.Equal(many + @"/f000/", found.Paths[0]);
     }
 
     /// <summary>A link's target that could stall a keystroke's read (2026-10-06, the code review's catch): a share in any spelling.</summary>
@@ -131,7 +171,7 @@ public sealed class FolderCompleterTests : IDisposable
     /// A symbolic link under a local folder that points at a share lists nothing, and nothing past it is read. Making a symbolic
     /// link needs Developer Mode or an elevated process; without either the test has nothing to prove and passes.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public void ALinkToAShare_ListsNothing()
     {
         string link = Path.Combine(_dir, "share-link");

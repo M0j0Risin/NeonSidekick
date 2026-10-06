@@ -35,7 +35,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- the root ----
 
-    [Fact]
+    [WindowsFact]
     public void Resolve_BlankIsTheProfilesFilesFolder_ElseTheFullPath()
     {
         Assert.Equal(Path.Combine(@"D:\home\profiles\default", "files"), WorkingDirectory.Resolve("", @"D:\home\profiles\default"));
@@ -69,7 +69,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         _ => null,
     };
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"D:\r\out", @"D:\r\out")]
     [InlineData(@"D:\r\out\a\b.txt", @"D:\r\out")]
     [InlineData(@"D:\r\hop\a", @"D:\r\out")]   // followed into the root, then out
@@ -86,7 +86,7 @@ public sealed class WorkingDirectoryTests : IDisposable
     public void LinkEscape_IsNull_WhenNoLinkLeadsOutside(string candidate) =>
         Assert.Null(WorkingDirectory.LinkEscape(@"D:\r", candidate, Links));
 
-    [Fact]
+    [WindowsFact]
     public void LinkEscape_GivesUpOnALoop()
     {
         Assert.Equal(@"D:\r\loop", WorkingDirectory.LinkEscape(@"D:\r", @"D:\r\loop\a", Links));
@@ -102,7 +102,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Null(WorkingDirectory.RealLinkTarget(Full("missing")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Resolve_RefusesAJunctionThatLeadsOutside_AndFollowsOneThatStaysIn()
     {
         string outside = Path.Combine(_dir, "outside");
@@ -148,7 +148,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(0, thrown);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ALinkLeadingOutside_CanBeDeletedAndMoved_ItsTargetUntouched()
     {
         string outside = Path.Combine(_dir, "outside");
@@ -210,7 +210,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(Path.Combine(Path.GetDirectoryName(real)!, "elsewhere.txt"), forWrite: false, out _));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("", "")]
     [InlineData(".", "")]
     [InlineData("notes.txt", "notes.txt")]
@@ -233,7 +233,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(inside, full);
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("..")]
     [InlineData(@"..\profile.json")]
     [InlineData(@"docs\..\..\profile.json")]
@@ -253,7 +253,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(_root + "2", forWrite: false, out _));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Resolve_ADotTrash_IsAFolderLikeAnyOther()
     {
         // Written by nothing since File safe edits went (2026-10-01, the user's call): a .trash left from before reads and writes as any folder.
@@ -263,7 +263,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.Ok, _files.Resolve(".trash", forWrite: true, out _));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Relative_IsTheDisplayForm()
     {
         Assert.Equal("", _files.Relative(_root));
@@ -274,7 +274,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- listing ----
 
-    [Fact]
+    [WindowsFact]
     public void List_FoldersFirstThenFiles_ByName()
     {
         Put("b.txt", "bb");
@@ -296,7 +296,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(new[] { ".trash", "alpha", "zed", "A.txt", "b.txt" }, _files.List("").Entries.Select(e => e.Name));
     }
 
-    [Fact]
+    [WindowsFact]
     public void List_ASubfolder_Empty_Missing_AndAFile()
     {
         Directory.CreateDirectory(Full("empty"));
@@ -325,7 +325,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- tree ----
 
-    [Fact]
+    [WindowsFact]
     public void FileTree_MaxDepth_StopsTheDescent()
     {
         // list_directory's depth (2026-09-18): the walk stops that many levels down, files and folders alike; the default is every level.
@@ -358,7 +358,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- /tree ----
 
-    [Fact]
+    [WindowsFact]
     public void FileTree_FoldersFirstThenFiles_DepthFirst_WithSizesAndIsLast()
     {
         Put(@"b\deep\bottom.txt", "12345");
@@ -399,7 +399,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.OutsideRoot, _files.FileTree(@"..\outside", 10).Outcome);
     }
 
-    [Fact]
+    [WindowsFact]
     public void FileTree_HideDotEntries_LeavesOutEveryDotName_AtEveryDepth()
     {
         // /vault (2026-09-22): .obsidian, .trash, .git and any dot-file, at the root or deeper, as the vault tools leave them.
@@ -420,7 +420,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Contains(_files.FileTree("", WorkingDirectory.DefaultTreeLength).Entries, e => e.Name == ".trash");
     }
 
-    [Fact]
+    [WindowsFact]
     public void FileTree_ShowHidden_ListsHiddenAndDotEntries()
     {
         // /tree under File browser/tree mode show-hidden (2026-09-23, the user's call): the Hidden .git and a hidden folder too; the
@@ -437,7 +437,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(new[] { ".config", "a.txt" }, _files.FileTree("", WorkingDirectory.DefaultTreeLength).Entries.Select(e => e.Name));   // the model's listing, untouched
     }
 
-    [Fact]
+    [WindowsFact]
     public void FileTree_HideGitFolders_LeavesOutEveryDotGitFolder_EvenUnderShowHidden_ButWalksOneAskedFor()
     {
         // /tree (2026-09-30, the user's ask: "in the same way it ignores .trash", as it did then): the root's .git and a nested repository's,
@@ -465,7 +465,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(result.Truncated);
     }
 
-    [Fact]
+    [WindowsFact]
     public void FileTree_StopsAtTheCap_AndClampsIt()
     {
         Put(@"a\one.txt", "");
@@ -488,7 +488,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- find ----
 
-    [Fact]
+    [WindowsFact]
     public void Find_ByGlob_Recursive_Sorted()
     {
         Put("readme.md", "");
@@ -524,7 +524,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Single(_files.Find("*.txt", "", limit: -5).Paths);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Walks_HonourMaxDepth()
     {
         Put("top.txt", "needle");
@@ -543,7 +543,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- complete (@-mentions) ----
 
-    [Fact]
+    [WindowsFact]
     public void Complete_EmptyPrefix_ListsOneLevel_FoldersFirst_ForwardSlashes()
     {
         Put(@"test\thing.txt", "");
@@ -562,7 +562,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(new[] { "test/bling.txt", "test/thing.txt" }, _files.Complete(@"test\").Paths);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Complete_NamePrefix_WalksTheSubtree_IgnoringCase()
     {
         Put(@"test\thing.txt", "");
@@ -593,7 +593,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.IsAFile, _files.Complete("a.txt/").Outcome);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Complete_TextFilesOnly_DropsBinaries_KeepsFoldersEmptyAndExtensionlessFiles()
     {
         Put("notes.md", "# Notes");
@@ -653,7 +653,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(0, result.TimedOut);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Search_FilesPattern_Subfolder_Empty_AndNoHits()
     {
         Put("a.md", "word");
@@ -811,7 +811,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- recent ----
 
-    [Fact]
+    [WindowsFact]
     public void Recent_NewestFirst_Capped()
     {
         var t0 = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
@@ -862,7 +862,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.OutsideRoot, _files.Info("..").Outcome);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Info_AFolder_CountsFilesFoldersAndBytes()
     {
         Put(@"docs\a.txt", "12345");
@@ -913,7 +913,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(1, farTail.FromLine);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ReadText_Empty_Missing_Directory_Binary_TooBig_Outside()
     {
         Put("empty.txt", "");
@@ -976,7 +976,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- write ----
 
-    [Fact]
+    [WindowsFact]
     public void WriteText_Creates_RefusesToReplace_ThenReplacesWithOverwrite()
     {
         var first = _files.WriteText(@"docs\notes.txt", "hello", overwrite: false);
@@ -998,7 +998,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Empty(Directory.GetFiles(Full("docs"), "*.tmp"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void WriteText_Refusals()
     {
         Directory.CreateDirectory(Full("dir"));
@@ -1008,7 +1008,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(File.Exists(Full("x.txt")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void WriteBytes_Creates_RefusesToReplace_ThenReplacesWithOverwrite_AndIsExistingDirectoryAnswers()
     {
         // 2026-09-18: the download's sink — WriteText's guards over bytes as they are, no length cap of its own.
@@ -1042,7 +1042,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(_files.IsExistingDirectory(".."));
     }
 
-    [Fact]
+    [WindowsFact]
     public void BeginWrite_GuardsAsWriteBytes_WritesASibling_CommitsInPlace_OrLeavesNothing()
     {
         // 2026-10-01, download_file streamed to disk: WriteBytes' guards up front, the bytes in a temporary sibling, the target only at the commit.
@@ -1241,7 +1241,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal("  b\n  b\n", File.ReadAllText(Full("loose.txt")));   // every new line takes the first matched line's indentation
     }
 
-    [Fact]
+    [WindowsFact]
     public void CreateDirectory_New_Exists_IsAFile_Parents()
     {
         var created = _files.CreateDirectory(@"a\b\c");
@@ -1256,7 +1256,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- move / copy ----
 
-    [Fact]
+    [WindowsFact]
     public void Move_RenamesAFile_MovesAFile_AndSaysWhich()
     {
         Put("a.txt", "a");
@@ -1274,7 +1274,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.True(File.Exists(Full(@"docs\b.txt")));   // the parent was created
     }
 
-    [Fact]
+    [WindowsFact]
     public void Move_RenamesAFolder_RefusesIntoItself_AndTheRoot()
     {
         Put(@"drafts\x.txt", "");
@@ -1292,7 +1292,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.Exists, _files.Move("poems", "poems", false).Outcome);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Move_RefusesAnOccupiedDestination_UnlessOverwrite_AFileReplacedInPlace_AFolderRefused()
     {
         Put("a.txt", "a");
@@ -1327,7 +1327,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(Directory.Exists(Full(".trash")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Copy_WithOverwrite_FollowsTheMoveRule_ButAFolderOverAFolderMerges()
     {
         Put("a.txt", "a");
@@ -1348,7 +1348,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(Directory.Exists(Full(".trash")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Copy_AFile_AndAFolderRecursively()
     {
         Put(@"src\a.txt", "a");
@@ -1373,7 +1373,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- delete ----
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(false)]
     [InlineData(true)]
     public void Delete_NeverTouchesGit_ItsContents_OrAFolderHoldingIt(bool nested)
@@ -1405,7 +1405,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(WorkingDirectory.IsGitPath(".gitignore"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Delete_RemovesForGood_AFolderWithEverythingInIt_TheGuardsStand()
     {
         // A file goes for good, a folder with everything in it — the one recursive delete in the sandbox (in place under File safe edits
@@ -1442,7 +1442,7 @@ public sealed class WorkingDirectoryTests : IDisposable
     // ---- purge ----
 
     /// <summary>PurgeFolder (later still on 2026-09-24, <c>/comfy purge</c>): everything under the folder, dot-folders included, the folder kept, nothing beside it touched.</summary>
-    [Fact]
+    [WindowsFact]
     public void PurgeFolder_RemovesEverythingUnderTheFolder_KeepsTheFolder()
     {
         Put("keep.txt", "stays");
@@ -1459,7 +1459,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void PurgeFolder_RefusesTheRoot_OutsideAndAFile_MissingIsOk()
     {
         Put("keep.txt", "stays");
@@ -1485,7 +1485,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.False(Directory.Exists(Full("out")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void PurgeFolder_ReadOnlyAndHiddenFiles_GoToo()
     {
         string locked = Put(@"out\locked.txt", "ro");
@@ -1504,7 +1504,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- zip / unzip ----
 
-    [Fact]
+    [WindowsFact]
     public void Zip_AFolder_ThenUnzip_RoundTrips()
     {
         Put(@"docs\a.txt", "alpha");
@@ -1538,7 +1538,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.True(File.Exists(Full(@"docs\docs\a.txt")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Zip_AFile_IntoItself_AndTheRoot()
     {
         Put("a.txt", "x");
@@ -1554,7 +1554,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.Missing, _files.Zip("nope", null, false).Outcome);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Unzip_AllOrNothing_OnAClash_AndOnZipSlip()
     {
         Put(@"src\a.txt", "a");
@@ -1591,7 +1591,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.IsAFile, _files.Unzip("src.zip", "f.txt", false).Outcome);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Unzip_RefusesAnEntryThatWouldLandThroughALinkLeadingOutside()
     {
         string outside = Path.Combine(_dir, "outside");
@@ -1623,7 +1623,7 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     // ---- open ----
 
-    [Fact]
+    [WindowsFact]
     public void Open_HandsTheFullPathToTheOpener_FilesFoldersAndTheRoot()
     {
         Put(@"docs\a.txt", "");
@@ -1652,7 +1652,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal("no app", failed.Detail);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Open_FoldersOnly_RefusesAFileBeforeTheOpener_AndOpensAFolder()
     {
         Put(@"docs\a.txt", "");
@@ -1708,7 +1708,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Throws<IOException>(() => _files.EnsureExists());
     }
 
-    [Fact]
+    [WindowsFact]
     public void ReadImage_Ok_Missing_Directory_NotAnImage_TooBig_Outside_DotFolder()
     {
         Directory.CreateDirectory(Full("shots"));

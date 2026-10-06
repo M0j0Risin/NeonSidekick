@@ -111,7 +111,7 @@ public class FileTextTests
         Assert.Throws<ArgumentNullException>(() => FileText.Image(null!));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Listing_HeaderThenEntries()
     {
         var entries = new List<DirectoryEntry> { new("docs", true, 0), new("a.txt", false, 1234), new("b.txt", false, 5) };
@@ -122,13 +122,37 @@ public class FileTextTests
         Assert.Equal("Error: could not list 'the working directory': boom", FileText.Listing(new ListResult(FileOutcome.Failed, "", [], false, "boom")));
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="Listing_HeaderThenEntries"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void Listing_HeaderThenEntries_Unix()
+    {
+        var entries = new List<DirectoryEntry> { new("docs", true, 0), new("a.txt", false, 1234), new("b.txt", false, 5) };
+        Assert.Equal("the working directory (3 entries):\ndocs/\na.txt  1.2 KB\nb.txt  5 B", FileText.Listing(new ListResult(FileOutcome.Ok, "", entries, false)));
+        Assert.Equal("docs/ (0 entries): (empty)", FileText.Listing(new ListResult(FileOutcome.Ok, @"docs/", [], false)));
+        Assert.EndsWith("\n… only the first 3 entries are shown", FileText.Listing(new ListResult(FileOutcome.Ok, "", entries, true)));
+        Assert.Equal(FileText.Missing(@"nope/"), FileText.Listing(new ListResult(FileOutcome.Missing, @"nope/", [], false)));
+        Assert.Equal("Error: could not list 'the working directory': boom", FileText.Listing(new ListResult(FileOutcome.Failed, "", [], false, "boom")));
+    }
+
+    [WindowsFact]
     public void Listing_WithDepth_NestsByLevel()
     {
         // list_directory's depth (2026-09-18): the flat rows, indented two spaces per level under the first.
         var entries = new List<FileTreeEntry> { new("a", 1, true, 0, false), new("sub", 2, true, 0, false), new("deep.txt", 3, false, 5, true), new("b.txt", 1, false, 1234, true) };
         Assert.Equal("the working directory (4 entries, 3 levels):\na\\\n  sub\\\n    deep.txt  5 B\nb.txt  1.2 KB", FileText.Listing(new FileTreeResult(FileOutcome.Ok, "", "", entries, false), 3));
         Assert.Equal("docs\\ (0 entries, 2 levels): (empty)", FileText.Listing(new FileTreeResult(FileOutcome.Ok, @"docs\", "", [], false), 2));
+        Assert.EndsWith("\n… only the first 4 entries are shown", FileText.Listing(new FileTreeResult(FileOutcome.Ok, "", "", entries, true), 4));
+        Assert.Equal(FileText.IsAFile("a.txt"), FileText.Listing(new FileTreeResult(FileOutcome.IsAFile, "a.txt", "", [], false), 2));
+    }
+
+    /// <summary>The Unix twin of <see cref="Listing_WithDepth_NestsByLevel"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void Listing_WithDepth_NestsByLevel_Unix()
+    {
+        // list_directory's depth (2026-09-18): the flat rows, indented two spaces per level under the first.
+        var entries = new List<FileTreeEntry> { new("a", 1, true, 0, false), new("sub", 2, true, 0, false), new("deep.txt", 3, false, 5, true), new("b.txt", 1, false, 1234, true) };
+        Assert.Equal("the working directory (4 entries, 3 levels):\na/\n  sub/\n    deep.txt  5 B\nb.txt  1.2 KB", FileText.Listing(new FileTreeResult(FileOutcome.Ok, "", "", entries, false), 3));
+        Assert.Equal("docs/ (0 entries, 2 levels): (empty)", FileText.Listing(new FileTreeResult(FileOutcome.Ok, @"docs/", "", [], false), 2));
         Assert.EndsWith("\n… only the first 4 entries are shown", FileText.Listing(new FileTreeResult(FileOutcome.Ok, "", "", entries, true), 4));
         Assert.Equal(FileText.IsAFile("a.txt"), FileText.Listing(new FileTreeResult(FileOutcome.IsAFile, "a.txt", "", [], false), 2));
     }
