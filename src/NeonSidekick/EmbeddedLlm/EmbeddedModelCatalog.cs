@@ -141,6 +141,10 @@ public sealed record EmbeddedModel(
 /// stock build loads them but generates garbage; they come in with a llama.cpp pin past the fix, with a projector and
 /// drafter from another repository (theirs carries neither).</para>
 ///
+/// <para>On 2026-10-05 (the user's picks) Unsloth's Gemma 4 E2B and E4B joined in four more builds each — UD-Q5_K_XL,
+/// UD-Q6_K_XL, UD-Q8_K_XL and BF16 — from the commits already pinned (neither repository's <c>main</c> had moved), so each
+/// name's five builds share the one F16 projector and MTP drafter, as the 12B's do.</para>
+///
 /// <para>Sampling, from each card: Google's Gemma 4 temperature 1.0, top-p 0.95, top-k 64 (HauhauCS's E2B/E4B and 26B A4B
 /// Balanced the same); HauhauCS's 12B/26B/31B QAT Balanced 0.6, 0.9, 64 (their min-p 0.05 is llama.cpp's default; their
 /// repeat penalty 1.1 is not carried); Qwen's "thinking, general" line 1.0, 0.95, 20 (its presence penalty is not
@@ -168,6 +172,10 @@ public static class EmbeddedModelCatalog
     private static readonly EmbeddedFile Hauhau38Mmproj = new("mmproj-Qwen3.8-27B-Uncensored-HauhauCS-Aggressive-BF16.gguf", 931_146_624, "5681b690bcb8eb10cd28d62d078cb4e01521a3ea4880a3fc7d54de72de2dd142");
     private static readonly EmbeddedFile MuseMmproj = new("mmproj-Muse-Glimmer-30B-Q8_0.gguf", 2_051_685_088, "01ff73c95108e1754a4c145176c6d3ba44338942285cb87dcac7f4f193192ea2");
     private static readonly EmbeddedFile MuseDrafter = new("dflash-kquant.gguf", 1_631_205_312, "27d9a805fa29b943cfb6ad4843367cd4eaaaf06bd452d8cc3e00a2cd18a677bc");
+    private static readonly EmbeddedFile GemmaE2bMmproj = new("mmproj-F16.gguf", 985_654_080, "140be8d7849741f88c50757d529b84373ee8e27052cc2236855b537f4a8215fa");
+    private static readonly EmbeddedFile GemmaE2bDrafter = new("mtp-gemma-4-E2B-it.gguf", 97_817_664, "9eba819938efccfd6044f8af84e3bbfddc639a2bcf32ebc36420e6a649191919");
+    private static readonly EmbeddedFile GemmaE4bMmproj = new("mmproj-F16.gguf", 990_372_672, "ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51");
+    private static readonly EmbeddedFile GemmaE4bDrafter = new("mtp-gemma-4-E4B-it.gguf", 98_653_248, "b6a723115efa510d3b3215db1e26790dae84cd08c2134a764f3d194f1f0c3376");
 
     public static readonly IReadOnlyList<EmbeddedModel> Models =
     [
@@ -355,9 +363,49 @@ public static class EmbeddedModelCatalog
             "unsloth/gemma-4-E2B-it-GGUF",
             "0314792d7f1f7e229411f620751375812bb9faf2",
             new EmbeddedFile("gemma-4-E2B-it-UD-Q4_K_XL.gguf", 3_184_496_736, "b52f438017efaec5debf1c0d8be690571e212a07c312f1102bbce927258cfc32"),
-            new EmbeddedFile("mmproj-F16.gguf", 985_654_080, "140be8d7849741f88c50757d529b84373ee8e27052cc2236855b537f4a8215fa"),
+            GemmaE2bMmproj,
             Gemma4,
-            new EmbeddedFile("mtp-gemma-4-E2B-it.gguf", 97_817_664, "9eba819938efccfd6044f8af84e3bbfddc639a2bcf32ebc36420e6a649191919")),
+            GemmaE2bDrafter),
+        new(
+            "gemma-4-e2b-q5",
+            "Gemma 4 E2B",
+            "UD-Q5_K_XL",
+            "unsloth/gemma-4-E2B-it-GGUF",
+            "0314792d7f1f7e229411f620751375812bb9faf2",
+            new EmbeddedFile("gemma-4-E2B-it-UD-Q5_K_XL.gguf", 4_294_176_864, "47c7dd43f7223dd4cf8bfa5fe73b4eaaa9e91f286d7b29e7a60e9b747e7a2b63"),
+            GemmaE2bMmproj,
+            Gemma4,
+            GemmaE2bDrafter),
+        new(
+            "gemma-4-e2b-q6",
+            "Gemma 4 E2B",
+            "UD-Q6_K_XL",
+            "unsloth/gemma-4-E2B-it-GGUF",
+            "0314792d7f1f7e229411f620751375812bb9faf2",
+            new EmbeddedFile("gemma-4-E2B-it-UD-Q6_K_XL.gguf", 4_710_088_800, "ae15474bc78f68c6a44bd17cad32f672b9501d90c4a0eed2fceeb6878ed530c5"),
+            GemmaE2bMmproj,
+            Gemma4,
+            GemmaE2bDrafter),
+        new(
+            "gemma-4-e2b-q8",
+            "Gemma 4 E2B",
+            "UD-Q8_K_XL",
+            "unsloth/gemma-4-E2B-it-GGUF",
+            "0314792d7f1f7e229411f620751375812bb9faf2",
+            new EmbeddedFile("gemma-4-E2B-it-UD-Q8_K_XL.gguf", 5_282_807_904, "ea689103802cf7edb3b3e7d606f96ee649d7e693d1bfb23a9ab507005dae4b8b"),
+            GemmaE2bMmproj,
+            Gemma4,
+            GemmaE2bDrafter),
+        new(
+            "gemma-4-e2b-bf16",
+            "Gemma 4 E2B",
+            "BF16",
+            "unsloth/gemma-4-E2B-it-GGUF",
+            "0314792d7f1f7e229411f620751375812bb9faf2",
+            new EmbeddedFile("gemma-4-E2B-it-BF16.gguf", 9_311_305_568, "1eafd61d010ce8ca09db38f370aadd64c6d792db269c365ad0d9ea2709701890"),
+            GemmaE2bMmproj,
+            Gemma4,
+            GemmaE2bDrafter),
         new(
             "gemma-4-e2b-uncensored",
             "Gemma 4 E2B Uncensored",
@@ -374,9 +422,49 @@ public static class EmbeddedModelCatalog
             "unsloth/gemma-4-E4B-it-GGUF",
             "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
             new EmbeddedFile("gemma-4-E4B-it-UD-Q4_K_XL.gguf", 5_126_306_944, "3cf61de12daa015ee0f7b68e7b7c541405bf220e1e942bad8b47cab827d7df80"),
-            new EmbeddedFile("mmproj-F16.gguf", 990_372_672, "ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51"),
+            GemmaE4bMmproj,
             Gemma4,
-            new EmbeddedFile("mtp-gemma-4-E4B-it.gguf", 98_653_248, "b6a723115efa510d3b3215db1e26790dae84cd08c2134a764f3d194f1f0c3376")),
+            GemmaE4bDrafter),
+        new(
+            "gemma-4-e4b-q5",
+            "Gemma 4 E4B",
+            "UD-Q5_K_XL",
+            "unsloth/gemma-4-E4B-it-GGUF",
+            "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+            new EmbeddedFile("gemma-4-E4B-it-UD-Q5_K_XL.gguf", 6_656_154_752, "9940a3eedd3dca186b09b1586006dafb1cc408c3fc53e73c313e48c0e3267825"),
+            GemmaE4bMmproj,
+            Gemma4,
+            GemmaE4bDrafter),
+        new(
+            "gemma-4-e4b-q6",
+            "Gemma 4 E4B",
+            "UD-Q6_K_XL",
+            "unsloth/gemma-4-E4B-it-GGUF",
+            "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+            new EmbeddedFile("gemma-4-E4B-it-UD-Q6_K_XL.gguf", 7_457_762_432, "17b9c459b28b420ce20d75bcfc329db4fac1343792a964c3ae2e2680ce768932"),
+            GemmaE4bMmproj,
+            Gemma4,
+            GemmaE4bDrafter),
+        new(
+            "gemma-4-e4b-q8",
+            "Gemma 4 E4B",
+            "UD-Q8_K_XL",
+            "unsloth/gemma-4-E4B-it-GGUF",
+            "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+            new EmbeddedFile("gemma-4-E4B-it-UD-Q8_K_XL.gguf", 8_711_507_072, "21a5e0f214eb1055bc34602e62fe46254756ee3f3698abab6fe0607203359dff"),
+            GemmaE4bMmproj,
+            Gemma4,
+            GemmaE4bDrafter),
+        new(
+            "gemma-4-e4b-bf16",
+            "Gemma 4 E4B",
+            "BF16",
+            "unsloth/gemma-4-E4B-it-GGUF",
+            "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+            new EmbeddedFile("gemma-4-E4B-it-BF16.gguf", 15_053_097_856, "38e0dba6818d18e2b41062c7b3b9083dcfddc44767078c415ff7e13661911ba5"),
+            GemmaE4bMmproj,
+            Gemma4,
+            GemmaE4bDrafter),
         new(
             "gemma-4-e4b-qat",
             "Gemma 4 E4B QAT",

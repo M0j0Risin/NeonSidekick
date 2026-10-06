@@ -59,17 +59,19 @@ public class EmbeddedLlmCoreTests
     // ── The catalog ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheCatalog_IsTheUsersFortyOne_InOrder_PinnedToACommit()
+    public void TheCatalog_IsTheUsersFortyNine_InOrder_PinnedToACommit()
     {
         // Alphabetical by name, so each model's builds sit together (2026-09-29, the user's call); one name's builds by size.
         // The eleven of the morning, then the 26B A4B and 31B builds and the Qwens of later that day (the user's picks), then
-        // esatapedico's NVFP4 tiers, in their size order (which is their tiers' order); Unsloth's Muse Glimmer 30B pair on 2026-09-30.
+        // esatapedico's NVFP4 tiers, in their size order (which is their tiers' order); Unsloth's Muse Glimmer 30B pair on 2026-09-30;
+        // the E2B's and E4B's Q5/Q6/Q8/BF16 builds on 2026-10-05.
         Assert.Equal(
             ["gemma-4-12b", "gemma-4-12b-q5", "gemma-4-12b-q6", "gemma-4-12b-bf16", "gemma-4-12b-qat", "gemma-4-12b-qat-uncensored",
              "gemma-4-26b-a4b", "gemma-4-26b-a4b-q5", "gemma-4-26b-a4b-q6", "gemma-4-26b-a4b-qat", "gemma-4-26b-a4b-qat-uncensored",
              "gemma-4-26b-a4b-uncensored", "gemma-4-26b-a4b-uncensored-q5", "gemma-4-26b-a4b-uncensored-q6",
              "gemma-4-31b", "gemma-4-31b-q5", "gemma-4-31b-qat", "gemma-4-31b-qat-uncensored",
-             "gemma-4-e2b", "gemma-4-e2b-uncensored", "gemma-4-e4b", "gemma-4-e4b-qat", "gemma-4-e4b-uncensored",
+             "gemma-4-e2b", "gemma-4-e2b-q5", "gemma-4-e2b-q6", "gemma-4-e2b-q8", "gemma-4-e2b-bf16", "gemma-4-e2b-uncensored",
+             "gemma-4-e4b", "gemma-4-e4b-q5", "gemma-4-e4b-q6", "gemma-4-e4b-q8", "gemma-4-e4b-bf16", "gemma-4-e4b-qat", "gemma-4-e4b-uncensored",
              "muse-glimmer-30b", "muse-glimmer-30b-q5",
              "qwen3.6-35b-a3b", "qwen3.6-35b-a3b-q5", "qwen3.6-35b-a3b-uncensored",
              "qwen3.8-27b", "qwen3.8-27b-q5", "qwen3.8-27b-q6",
@@ -183,6 +185,21 @@ public class EmbeddedLlmCoreTests
             new[] { "muse-glimmer-30b", "muse-glimmer-30b-q5" }.Select(id => ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(EmbeddedModelCatalog.Find(id)!))));
         Assert.Equal(("Muse Glimmer 30B", "UD-Q5_K_XL"), (EmbeddedModelCatalog.Find("muse-glimmer-30b-q5")!.Display, EmbeddedModelCatalog.Find("muse-glimmer-30b-q5")!.Quant));
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository == muse.Repository), m => Assert.Equal((muse.Mmproj, muse.Drafter), (m.Mmproj, m.Drafter)));   // one repository, one projector and drafter
+
+        // The E2B's and E4B's four more builds (2026-10-05): the pinned commits, each name's projector and drafter shared.
+        Assert.Equal(["5.4 GB", "5.8 GB", "6.4 GB", "10.4 GB", "7.7 GB", "8.5 GB", "9.8 GB", "16.1 GB"],
+            new[] { "gemma-4-e2b-q5", "gemma-4-e2b-q6", "gemma-4-e2b-q8", "gemma-4-e2b-bf16", "gemma-4-e4b-q5", "gemma-4-e4b-q6", "gemma-4-e4b-q8", "gemma-4-e4b-bf16" }.Select(id => ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(EmbeddedModelCatalog.Find(id)!))));
+        var e2bQ8 = EmbeddedModelCatalog.Find("gemma-4-e2b-q8")!;
+        Assert.Equal(("Gemma 4 E2B", "UD-Q8_K_XL"), (e2bQ8.Display, e2bQ8.Quant));
+        Assert.Equal("https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/0314792d7f1f7e229411f620751375812bb9faf2/gemma-4-E2B-it-UD-Q8_K_XL.gguf", EmbeddedModelCatalog.Url(e2bQ8, e2bQ8.Model).AbsoluteUri);
+        var e4bBf16 = EmbeddedModelCatalog.Find("gemma-4-e4b-bf16")!;
+        Assert.Equal("https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/bfc15c382204943c3a8fff0c750b94ae2364d7a3/gemma-4-E4B-it-BF16.gguf", EmbeddedModelCatalog.Url(e4bBf16, e4bBf16.Model).AbsoluteUri);
+        foreach (string id in new[] { "gemma-4-e2b", "gemma-4-e4b" })
+        {
+            var first = EmbeddedModelCatalog.Find(id)!;
+            Assert.Equal(5, EmbeddedModelCatalog.Models.Count(m => m.Repository == first.Repository));
+            Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository == first.Repository), m => Assert.Equal((first.Revision, first.Mmproj, first.Drafter), (m.Revision, m.Mmproj, m.Drafter)));
+        }
     }
 
     [Fact]
@@ -190,7 +207,7 @@ public class EmbeddedLlmCoreTests
     {
         string dir = Path.Combine("C:", "home", "models", "llm");
         var paths = EmbeddedModelCatalog.Models.SelectMany(m => new[] { EmbeddedModelCatalog.WeightsSpec(dir, m).Path, EmbeddedModelCatalog.MmprojSpec(dir, m).Path, EmbeddedModelCatalog.DrafterSpec(dir, m)?.Path }).OfType<string>().ToList();
-        Assert.Equal(41 + 41 + 20, paths.Count);   // weights, projectors and the twenty drafters (Muse Glimmer's two DFlash ones since 2026-09-30) (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
+        Assert.Equal(49 + 49 + 28, paths.Count);   // weights, projectors and the 28 drafters (Muse Glimmer's two DFlash ones since 2026-09-30, the E2B's and E4B's eight more builds' since 2026-10-05) (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
         Assert.Equal(paths.Count, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
 
         var e2b = EmbeddedModelCatalog.Find("gemma-4-e2b")!;

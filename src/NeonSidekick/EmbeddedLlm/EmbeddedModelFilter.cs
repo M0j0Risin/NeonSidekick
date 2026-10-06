@@ -4,8 +4,9 @@ namespace NeonSidekick.EmbeddedLlm;
 
 /// <summary>
 /// The embedded model lists' filters (later on 2026-09-29, the user's ask): the buttons on the title row of Settings ›
-/// Embedded models, <c>/server</c>'s LLM server pane and the startup picker — <c>8GB</c>, <c>16GB</c> and <c>32GB</c> as
-/// radio buttons (one at a time; the lit one pressed again goes dark), <c>uncensored</c> on its own. A size keeps the models
+/// Embedded models, <c>/server</c>'s LLM server pane and the startup picker — <c>8GB</c> and <c>16GB</c> as radio
+/// buttons (<c>32GB</c> too until 2026-10-05, when the user took it out: every model in the catalog is under 32 GB, so it
+/// thinned nothing) (one at a time; the lit one pressed again goes dark), <c>uncensored</c> on its own. A size keeps the models
 /// at most that big by the size their row shows (<see cref="Bytes"/>; the weights alone were a choice, the setting
 /// <c>Embedded filter type</c>, from later on 2026-09-29 until 2026-10-02, the user's call), uncensored the <see cref="EmbeddedModel.Uncensored"/>
 /// ones; both together, both. Nothing is saved: every visit to a pane starts at <see cref="None"/> (or <see cref="For"/>).
@@ -46,8 +47,8 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
 
     public const char UninstalledKey = 'u';
 
-    /// <summary>The size buttons' gigabytes, in button order. Pinned.</summary>
-    public static readonly int[] Sizes = [8, 16, 32];
+    /// <summary>The size buttons' gigabytes, in button order (32 went on 2026-10-05: every catalog model is under it). Pinned.</summary>
+    public static readonly int[] Sizes = [8, 16];
 
     /// <summary>The uncensored button's title. Pinned.</summary>
     public const string UncensoredButton = "◌ uncensored";
@@ -84,12 +85,13 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
 
     /// <summary>
     /// The filters' part of <c>/server</c>'s hint row. Pinned. Shortened later on 2026-09-30 (the user's ask): the sizes are
-    /// on their buttons, so <c>1 / 2 / 3 = GB</c>, and sort size is <c>S = sort</c>; uncensored, last on X, is <c>X = unc</c>.
+    /// on their buttons, so <c>1 / 2 = GB</c> (<c>1 / 2 / 3</c> until the 32GB button went on 2026-10-05), and sort size is
+    /// <c>S = sort</c>; uncensored, last on X, is <c>X = unc</c>.
     /// </summary>
-    public const string Keys = "1 / 2 / 3 = GB · D = drafter · S = sort · X = unc";
+    public const string Keys = "1 / 2 = GB · D = drafter · S = sort · X = unc";
 
     /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29; <c>I / U = inst / uninst</c> later on 2026-09-30). Pinned.</summary>
-    public const string CatalogKeys = "1 / 2 / 3 = GB · I / U = inst / uninst · D = drafter · S = sort · X = unc";
+    public const string CatalogKeys = "1 / 2 = GB · I / U = inst / uninst · D = drafter · S = sort · X = unc";
 
     /// <summary>A size button's title: <c>8GB</c>. Pinned.</summary>
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";
@@ -98,7 +100,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     public bool Active => MaxGb is not null || Uncensored || Installed is not null || Drafter;
 
     /// <summary>
-    /// The buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1, 2 and 3, then — <paramref name="withInstalled"/>,
+    /// The buttons, the lit ones <see cref="MenuButton.On"/>: the sizes on the keys 1 and 2, then — <paramref name="withInstalled"/>,
     /// the catalog's — installed on I and uninstalled on U, then drafter on D, sort size on S, and uncensored on X last
     /// (later on 2026-09-30). <see cref="Press"/> reads the same layout.
     /// </summary>

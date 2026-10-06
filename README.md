@@ -403,8 +403,16 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 | Gemma 4 31B QAT (`gemma-4-31b-qat`, Unsloth) | UD-Q4_K_XL | 18.8 GB | MTP (file) |
 | Gemma 4 31B QAT Uncensored (`gemma-4-31b-qat-uncensored`, HauhauCS Balanced) | Q4_K_M | 20.2 GB | MTP (file) |
 | Gemma 4 E2B (`gemma-4-e2b`, Unsloth) | UD-Q4_K_XL | 4.3 GB | MTP (file) |
+| Gemma 4 E2B (`gemma-4-e2b-q5`, Unsloth) | UD-Q5_K_XL | 5.4 GB | MTP (file) |
+| Gemma 4 E2B (`gemma-4-e2b-q6`, Unsloth) | UD-Q6_K_XL | 5.8 GB | MTP (file) |
+| Gemma 4 E2B (`gemma-4-e2b-q8`, Unsloth) | UD-Q8_K_XL | 6.4 GB | MTP (file) |
+| Gemma 4 E2B (`gemma-4-e2b-bf16`, Unsloth) | BF16 | 10.4 GB | MTP (file) |
 | Gemma 4 E2B Uncensored (`gemma-4-e2b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 4.4 GB | — |
 | Gemma 4 E4B (`gemma-4-e4b`, Unsloth) | UD-Q4_K_XL | 6.2 GB | MTP (file) |
+| Gemma 4 E4B (`gemma-4-e4b-q5`, Unsloth) | UD-Q5_K_XL | 7.7 GB | MTP (file) |
+| Gemma 4 E4B (`gemma-4-e4b-q6`, Unsloth) | UD-Q6_K_XL | 8.5 GB | MTP (file) |
+| Gemma 4 E4B (`gemma-4-e4b-q8`, Unsloth) | UD-Q8_K_XL | 9.8 GB | MTP (file) |
+| Gemma 4 E4B (`gemma-4-e4b-bf16`, Unsloth) | BF16 | 16.1 GB | MTP (file) |
 | Gemma 4 E4B QAT (`gemma-4-e4b-qat`, Unsloth) | UD-Q4_K_XL | 5.3 GB | MTP (file) |
 | Gemma 4 E4B Uncensored (`gemma-4-e4b-uncensored`, HauhauCS Aggressive) | Q4_K_P | 6.4 GB | — |
 | Muse Glimmer 30B (`muse-glimmer-30b`, Unsloth) | UD-Q4_K_XL | 19.6 GB | DFlash (file) |
@@ -442,7 +450,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 | Embedded drafter | Speeds up replies with multi-token prediction: the model drafts tokens ahead and checks them, so the text is the same, just faster (see the Drafter column). Off, no drafter is loaded or downloaded. Turn it off if a model misbehaves with it. | on |
 
 **Catalog buttons** (on the title row of *Embedded models*; each group combines with the others and starts cleared at each visit):
-* **8GB**, **16GB**, **32GB** (1, 2, 3): models up to that size (weights, projector and drafter). One at a time; press the lit one to clear it.
+* **8GB**, **16GB** (1, 2): models up to that size (weights, projector and drafter). One at a time; press the lit one to clear it.
 * **installed** (I) / **uninstalled** (U): one at a time; a paused download counts as uninstalled.
 * **drafter** (D): models with a drafter.
 * **sort** (S): name order or size order (smallest first).

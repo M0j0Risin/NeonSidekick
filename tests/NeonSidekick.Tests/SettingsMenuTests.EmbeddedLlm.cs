@@ -125,7 +125,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("1 of 41 installed (4.3 GB)", _console.Output);
+        Assert.Contains("1 of 49 installed (4.3 GB)", _console.Output);
         Assert.Contains("auto (cuda: fake driver)", _console.Output);
         pane.Dispose();
     }
@@ -169,7 +169,7 @@ public partial class SettingsMenuTests
         var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m));
         Assert.True(first.Uncensored);
         Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" 8GB    16GB    32GB    ✓ installed    ⤓ uninstalled    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
+        Assert.Contains(" 8GB    16GB    ✓ installed    ⤓ uninstalled    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
         Assert.Contains(EmbeddedModelFilter.CatalogKeys, _console.Output);
         pane.Dispose();
     }

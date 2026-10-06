@@ -2826,7 +2826,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB    16GB    32GB    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03
+        Assert.Contains(" 8GB    16GB    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03; 32GB gone since 2026-10-05
         Assert.Contains("ESC = the first listed", _console.Output);
 
         Push(Keys.Char('x'), Keys.Enter);       // uncensored (X since later on 2026-09-30): no embedded row passes, LM Studio is still there to pick
