@@ -107,24 +107,45 @@ Good to know on a Mac:
 * **Editors.** `/persona` and friends open the file in its default app. For `/draft`, set *Draft editor* to a command that waits, such as `code --wait` or `open -W -t`; a terminal editor like vim can't share the terminal with the app.
 * **Terminals.** Terminal.app and iTerm2 both work. Turn on *Use Option as Meta key* for Alt shortcuts, and hold Fn (Terminal.app) or Option (iTerm2) to select text with the mouse while the app has it.
 
-### SQL Server with integrated sign-in (Kerberos)
+### SQL Server with Windows Authentication (Kerberos)
 
-A connection with `"auth": "windows"` in `sql.json` has no password. On a Mac it signs in with a Kerberos ticket for your Active Directory account, and `kinit`, which comes with macOS, gets you one. It can't work against a SQL Server that isn't in a domain, such as one in a Docker container: use a SQL login (`"auth": "sql"`) there. Integrated sign-in from the Mac build is untested so far.
+A connection with `"auth": "windows"` in `sql.json` uses Windows Authentication, also called integrated security: an Active Directory account and no password in the file. On Windows that sign-in is Kerberos, falling back to NTLM when Kerberos fails. On a Mac it is **Kerberos only**: SqlClient has no NTLM fallback there, so the Mac needs a Kerberos ticket from `kinit`, which comes with macOS. It can't work against a SQL Server that isn't in a domain, such as one in a Docker container; use a SQL login (`"auth": "sql"`) there. It has been checked from the Mac build against SQL Server 2022 (`--sql-check`, all checks passed).
 
-1. **Find your realm**, your AD domain in capitals (e.g. `AD.EXAMPLE.EDU`): `echo %USERDNSDOMAIN%` on a Windows PC on the domain, `dsconfigad -show` (*Active Directory Domain*) on a Mac bound to AD, or ask IT.
-2. **Get a ticket**, on the campus network or VPN: `kinit yourusername@AD.EXAMPLE.EDU` asks for your domain password and prints nothing when it works. `kinit --keychain …` keeps the password in your Keychain, so later runs don't ask.
+1. **Find the realm of the domain the server is in**, in capitals (e.g. `AD.EXAMPLE.EDU`). For your own account: `$env:USERDNSDOMAIN` in PowerShell (`echo %USERDNSDOMAIN%` in cmd) on a Windows PC on the domain, `dsconfigad -show` (*Active Directory Domain*) on a Mac bound to AD, or ask IT. Your sign-in name (`whoami /upn`, e.g. `jdoe@example.edu`) can carry a different suffix from the realm: the realm is the domain's own name. If the server is in another domain, see [A server in another domain](#a-server-in-another-domain).
+2. **Get a ticket**, on the organization's network or VPN: `kinit jdoe@AD.EXAMPLE.EDU` asks for the domain password and prints nothing when it works. Type the realm in capitals: with it in lowercase, `kinit` may still succeed but leave a ticket (`krbtgt/ad.example.edu@AD.EXAMPLE.EDU`) the Kerberos library won't use, and the connection fails with `Matching credential … not found`. `kinit --keychain …` keeps the password in your Keychain, so later runs don't ask. A plain `kinit` with no name fails with `Configuration file does not specify default realm` until `/etc/krb5.conf` names one (`[libdefaults]` / `default_realm = AD.EXAMPLE.EDU`).
 3. **Check it:** `klist` shows `krbtgt/AD.EXAMPLE.EDU@AD.EXAMPLE.EDU` and its expiry, usually about 10 hours away.
-4. **Try the connection:** `./publish/output/NeonSidekick --sql-check <connection>`. Afterwards `klist` also lists `MSSQLSvc/<server>:1433`, which shows the server's Kerberos name is set up.
+4. **Try the connection:** `./publish/output/NeonSidekick --sql-check <connection>`. It reports the account it signed in as (`AD\jdoe`). Afterwards `klist` also lists the server's ticket, `MSSQLSvc/<server>:<port>`.
+
+The server goes in `sql.json` by its full name, as `host`, `host,port` or `host\instance,port` (the instance before the port; with the port given, SqlClient connects to it directly). SqlClient asks for the server's ticket under its name and port, `MSSQLSvc/sqlhost.ad.example.edu:1451`, so use the name the server is registered under, never an IP address or an alias.
+
+#### A server in another domain
+
+An organization can have more than one AD domain: a production one for people's accounts and a separate one for test servers, say. A ticket from your account's domain only reaches servers in that domain or in one that trusts it. Against a server in a domain with no trust, the connection fails with `The target principal name is incorrect. Cannot generate SSPI context.`, even though `kinit` worked. A Windows PC may still connect to the same server, because it falls back to NTLM.
+
+To see which domain a server is in, and whether a ticket for it can be had:
+
+```sh
+dig +short SRV _kerberos._tcp.test.example.edu                               # that domain's domain controllers, if it is one
+kgetcred MSSQLSvc/sqlhost.test.example.edu:1451@AD.EXAMPLE.EDU               # a ticket from your own domain
+kgetcred MSSQLSvc/sqlhost.test.example.edu:1451@TEST.EXAMPLE.EDU             # a ticket from the server's domain
+```
+
+`kgetcred` prints nothing when the ticket is issued (`klist` then lists it). `Server (…) unknown` means that domain has no such name; `Server (krbtgt/TEST.EXAMPLE.EDU@AD.EXAMPLE.EDU) unknown` means your domain has no trust with the server's. Then sign in with an account in the server's domain, if you have one (`kinit jdoe-test@TEST.EXAMPLE.EDU`), or ask the server's DBA for a SQL login.
+
+macOS keeps a ticket cache per account, side by side; the newest `kinit` becomes the default, and SqlClient uses the default. `klist -A` lists them all, and `kswitch -p jdoe@AD.EXAMPLE.EDU` makes another the default.
 
 Day to day:
 * Tickets expire, and the connection fails until you run `kinit` again; `kinit -R` renews a ticket that's still valid without the password, if the domain allows it.
-* `kdestroy` throws your tickets away.
+* `kdestroy` throws the default cache's tickets away (`kdestroy -p <principal>` one account's, `kdestroy -A` all).
 * The **Ticket Viewer** app (`/System/Library/CoreServices/Ticket Viewer.app`) does the same as `kinit`, `klist` and `kdestroy`.
 
 If it fails:
-* **`Cannot find KDC for realm`:** the Mac can't reach a domain controller. Check the network or VPN, and that the realm is spelled right and in capitals; if it still fails, IT can give you an `/etc/krb5.conf` naming the domain controllers.
+* **`Cannot find KDC for realm`:** the Mac can't reach a domain controller. Check the network or VPN, and that the realm is spelled right and in capitals. `dig +short SRV _kerberos._tcp.ad.example.edu` should list the domain controllers; if it lists none, the realm is wrong or the domain's DNS is only reachable on its network, and IT can give you an `/etc/krb5.conf` naming the domain controllers.
 * **`Clock skew too great`:** the clock is more than 5 minutes off. Turn on *Set time and date automatically* (System Settings → General → Date & Time).
-* **`kinit` works but `--sql-check` fails with an SSPI or GSSAPI error:** the server's Kerberos name (its SPN) is probably not registered for that host and port, which the server's admin fixes. Use the server's full name in `sql.json` (`sqlhost.ad.example.edu`), not an IP address or an alias: the ticket is tied to the name.
+* **`Matching credential … not found`:** the ticket was taken with the realm in lowercase. `kdestroy -p <principal>`, then `kinit` again with it in capitals.
+* **`The target principal name is incorrect. Cannot generate SSPI context.`:** no ticket could be had for the server's name. Either the server is in a domain your ticket's doesn't trust ([A server in another domain](#a-server-in-another-domain)), or its Kerberos name (SPN) isn't registered for that host and port, which the server's admin fixes. `kgetcred` above tells the two apart.
+
+When writing it down for others, "Windows Authentication (Kerberos)" says both what the server sees (a Windows login) and what the Mac needs (a Kerberos ticket). On the server, `sys.dm_exec_connections.auth_scheme` shows `KERBEROS` for such a connection (`NTLM` for a Windows client that fell back).
 
 ### Status of the Mac port
 
