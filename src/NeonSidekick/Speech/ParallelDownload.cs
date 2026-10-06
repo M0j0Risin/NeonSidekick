@@ -256,9 +256,12 @@ internal sealed class ParallelDownload
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException)
             {
+                // Info, not a warning (2026-10-05, the user's report): warnings reach the transcript, and a dropped connection
+                // that the next try recovers from (Windows' TLS "The decryption operation failed" from the CDN, a few times in a
+                // 9 GB install) read there as a failed download. A part that runs out of tries still fails the download aloud.
                 failures++;
                 lastError = Assistant.Explain(ex);
-                DiagnosticLog.Warn(_category, string.Create(CultureInfo.InvariantCulture, $"Part {index + 1} of {Count} of {_display}: {lastError} (try {failures} of {MaxAttempts})."));
+                DiagnosticLog.Info(_category,string.Create(CultureInfo.InvariantCulture, $"Part {index + 1} of {Count} of {_display}: {lastError} (try {failures} of {MaxAttempts})."));
             }
             catch (Exception ex)
             {

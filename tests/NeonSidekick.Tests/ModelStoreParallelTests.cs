@@ -220,6 +220,37 @@ public class ModelStoreParallelTests : IDisposable
     }
 
     [Fact]
+    public async Task Parallel_ADroppedConnection_IsTriedAgain_AndLoggedBelowTheTranscript()
+    {
+        // 2026-10-05 (the user's report): a retried part is logged as Info, so a recovered TLS error never reads as a failure.
+        var body = Body(100_003);
+        long third = Split(body).Start(2);
+        int failed = 0;
+        Serve(body, intercept: from => from == third && Interlocked.Exchange(ref failed, 1) == 0
+            ? throw new IOException("The decryption operation failed, see inner exception.")
+            : null);
+        var events = new List<NeonSidekick.Diagnostics.DiagnosticEvent>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == "EmbeddedLlm") { lock (events) { events.Add(e); } } };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        ModelResult result;
+        try
+        {
+            result = await _store.EnsureAsync(Spec(body), null, CancellationToken.None);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.True(result.Ok, result.Detail);
+        Assert.Equal(body, File.ReadAllBytes(ModelPath));
+        Assert.Equal(2, _ranges.Count(r => r.From == third));
+        var retry = Assert.Single(events, e => e.Message.Contains("(try 1 of 3)", StringComparison.Ordinal));
+        Assert.Equal(NeonSidekick.Diagnostics.DiagnosticLevel.Info, retry.Level);
+        Assert.DoesNotContain(events, e => e.Level >= NeonSidekick.Diagnostics.DiagnosticLevel.Warning);
+    }
+
+    [Fact]
     public async Task Parallel_AServerErrorEveryTime_GivesUp_AndKeepsWhatArrived()
     {
         var body = Body(100_003);
