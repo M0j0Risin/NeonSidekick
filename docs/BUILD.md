@@ -96,7 +96,7 @@ pwsh ./build.ps1 -Package      # publish/package/NeonSidekick-v<version>-osx-arm
 
 The publish prints trim and AOT warnings from Oracle, SqlClient, NumSharp and Whisper.net, and `ILC: Method … will always throw` lines for Oracle's optional cloud assemblies. The Windows publish prints them too; they don't fail the build.
 
-`-Runtime` defaults to `osx-arm64` on a Mac. The script marks the bundled `espeak-ng` executable as runnable and gives it and the app an ad-hoc signature. The package is a `.tar.gz` so the executable bits survive.
+`-Runtime` defaults to `osx-arm64` on a Mac. The script marks the bundled `espeak-ng` executable as runnable and gives it and the app an ad-hoc signature. The package is a `.tar.gz` so the executable bits survive. It leaves out what a Mac never runs: the debug symbols (`NeonSidekick.dSYM`, kept in `publish/output` for reading a crash report), the Windows ONNX Runtime dlls and the other platforms' espeak-ng.
 
 A downloaded build isn't notarized, so macOS quarantines it. Clear that once after unpacking: `xattr -dr com.apple.quarantine NeonSidekick-v<version>-osx-arm64`.
 
@@ -165,6 +165,7 @@ The first build and run on a Mac was on 2026-10-06 (Apple Silicon, Terminal.app)
 
 **Open:**
 * **About 635 of the 10,091 tests fail on a Mac.** Nearly all were written for Windows: expected strings with `\` paths or drive letters, or Windows-only APIs (WinMM, the clipboard, WebView2, `cmd.exe`). They need marking as Windows-only or making path-neutral. `-Publish` skips the tests, so this doesn't block a build.
+* **The tests use a Keychain key of their own** on a Mac (`NeonSidekick.Tests` / `master-key`), so a test run never makes or reads the app's (`NeonSidekick` / `master-key`). Before that change a run made the app's key when there was none, trusting `dotnet`; the app still reads such a key after its Keychain prompt. The tests' item can be deleted in Keychain Access at any time.
 * **Sound.** Speech and the microphone need Windows for now (`AudioSupport.Available`: WinMM is the only backend), so Kokoro never speaks on a Mac. When a macOS sound backend comes, check that quitting after Kokoro has spoken still exits cleanly: the exit-crash fix releases ONNX Runtime's environment, but has only been seen with no session alive.
 
 **Checking a change in Terminal.app or iTerm2.** A small pseudo-terminal relay can run the app in a terminal window, type and click into it from a script (an SGR mouse report is just bytes), and log every write and the terminal's answers with timestamps; `screencapture -l <window id>` (or `-R` with the window's bounds) then shows what the terminal actually drew. That is how the blank-screen bug was found: the timestamps showed the cursor question leaving 500 ms late. A glyph's width is measured the same way: print it, ask for the cursor (`ESC[6n`) and compare columns — on the alternate screen (`ESC[?1049h`) when it is the app's width that matters, since iTerm2 answers differently there. The capture needs the screen-recording permission for the terminal running the script.

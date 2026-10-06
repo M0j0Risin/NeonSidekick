@@ -272,6 +272,20 @@ if ($Package) {
     if (Test-Path $PackageRoot) { Remove-Item -Recurse -Force $PackageRoot }
     New-Item -ItemType Directory -Path $stage | Out-Null
     Copy-Item -Path (Join-Path $PublishDir "*") -Destination $stage -Recurse
+    if (-not $OnWindows) {
+        # What a Mac never runs stays out of the tarball (2026-10-06, the first Mac package: 566 MB unpacked): NativeAOT's
+        # debug symbols (NeonSidekick.dSYM, 247 MB; kept in publish/output for reading a crash), the Windows ONNX Runtime
+        # dlls the package brings along, and espeak-ng for every platform but this one. The smoke ran on publish/output.
+        $espeakOwn = if ($Runtime -eq "osx-arm64") { "espeak-ng-macos-arm64.dll" } else { "espeak-ng-macos-amd64.dll" }
+        $leftOut = @(Get-ChildItem -Path $stage -Filter "*.dSYM" -Directory) +
+            @(Get-ChildItem -Path $stage -Filter "onnxruntime*.dll" -File) +
+            @(Get-ChildItem -Path (Join-Path $stage "espeak") -Filter "espeak-ng-*.dll" -File | Where-Object { $_.Name -ne $espeakOwn })
+        foreach ($item in $leftOut) {
+            Remove-Item -Recurse -Force $item.FullName
+        }
+        Write-Host "  left out of the package: $(($leftOut | ForEach-Object { $_.Name }) -join ', ')"
+        if (-not (Test-Path (Join-Path (Join-Path $stage "espeak") $espeakOwn))) { Fail "The package lost $espeakOwn." }
+    }
     Copy-Item -Path (Join-Path $ProjectRoot "LICENSE") -Destination $stage
     Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination $stage
     # README links into docs\ (the full references and HEADLESS.md, moved there on 2026-10-05), so the zip keeps that layout.

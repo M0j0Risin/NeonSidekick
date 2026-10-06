@@ -33,6 +33,13 @@ internal static unsafe class MacKeychain
     /// <summary>The service of the app's own key in the Keychain.</summary>
     public const string Service = "NeonSidekick";
 
+    /// <summary>
+    /// The service the app's key is read and made under: <see cref="Service"/>, or the test suite's own (later on 2026-10-06: the
+    /// tests encrypt and decrypt through here, and on a developer's Mac they made the app's key in the login Keychain before the
+    /// app ever ran, trusting <c>dotnet</c>). Set once, before the key is first read.
+    /// </summary>
+    internal static string KeyService { get; set; } = Service;
+
     /// <summary>The account of the app's own key in the Keychain.</summary>
     public const string MasterAccount = "master-key";
 
@@ -199,7 +206,7 @@ internal static unsafe class MacKeychain
             key = [];
             for (int attempt = 0; attempt < 2; attempt++)
             {
-                int status = Find(Service, MasterAccount, out byte[]? stored, out IntPtr item);
+                int status = Find(KeyService, MasterAccount, out byte[]? stored, out IntPtr item);
                 Release(item);
                 if (status == ErrSecSuccess)
                 {
@@ -231,7 +238,7 @@ internal static unsafe class MacKeychain
 
                 byte[] fresh = RandomNumberGenerator.GetBytes(KeyBytes);
                 byte[] encoded = Encoding.ASCII.GetBytes(Convert.ToBase64String(fresh));
-                int added = Add(Service, MasterAccount, encoded);
+                int added = Add(KeyService, MasterAccount, encoded);
                 Array.Clear(encoded);
                 if (added == ErrSecSuccess)
                 {

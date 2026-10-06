@@ -109,4 +109,18 @@ public sealed class SqlSecretsTests : IDisposable
         Assert.False(saved);
         Assert.Equal(SqlText.PasswordSaveFailed("gone", SqlText.ConnectionNotInFile("gone")), notice);
     }
+
+    [UnixFact]
+    public void OnAMac_TheTestsKey_IsTheirOwn_NeverTheAppsKeychainItem()
+    {
+        // Later on 2026-10-06: the suite made the app's real key (NeonSidekick / master-key) in the login Keychain.
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        Assert.Equal("NeonSidekick", MacKeychain.Service);
+        Assert.Equal(ModuleInit.TestKeychainService, MacKeychain.KeyService);
+        Assert.NotEqual(MacKeychain.Service, MacKeychain.KeyService);
+    }
 }
