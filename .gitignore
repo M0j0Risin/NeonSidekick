@@ -49,6 +49,8 @@ nunit-*.xml
 
 # NeonSidekick: build.ps1 publish output and logs
 publish/
+# --log files written to the folder the app was started in (e.g. --log neon-{ts}.log from the repo)
+neon-*.log
 
 # temp notes folder
 .notes/

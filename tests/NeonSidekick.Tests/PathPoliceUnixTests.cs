@@ -85,4 +85,35 @@ public sealed class PathPoliceUnixTests
         Assert.Equal("a\\b", PathPolice.Unescape("a\\\\b"));
         Assert.Equal("ab", PathPolice.Unescape("ab\\"));
     }
+
+    // A fake realpath for a Mac (2026-10-06): /tmp and /var lead into /private, so a root of /tmp/work is /private/tmp/work too.
+    private const string TmpRoot = "/tmp/work";
+
+    private static string? MacRealPath(string folder) =>
+        folder == "/tmp" || folder.StartsWith("/tmp/", StringComparison.Ordinal) || folder == "/var" || folder.StartsWith("/var/", StringComparison.Ordinal)
+            ? "/private" + folder
+            : folder;
+
+    private static string? TmpCommand(string text) =>
+        PathPolice.FirstOutside(text, TmpRoot, TmpRoot, isScript: false, _ => false, NoLinks, ShellKind.Zsh, MacRealPath);
+
+    [UnixTheory]
+    [InlineData("cat /private/tmp/work/poem.md")]
+    [InlineData("ls /private/tmp/work")]
+    [InlineData("cd /private/tmp/work/sub && cat x.txt")]
+    [InlineData("cat /tmp/work/poem.md")]
+    public void ThePrivateSpellingOfTheRoot_IsTheRoot(string command) =>
+        Assert.Null(TmpCommand(command));
+
+    [UnixTheory]
+    [InlineData("cat /private/tmp/other.txt", "/private/tmp/other.txt")]
+    [InlineData("cat /private/tmp/workmore/x", "/private/tmp/workmore/x")]
+    [InlineData("cd /private/tmp/work && cat ../x", "../x")]
+    [InlineData("ls /private/var/folders", "/private/var/folders")]
+    public void ThePrivateSpelling_OfAnythingElse_IsStillOutside(string command, string token) =>
+        Assert.Equal(token, TmpCommand(command));
+
+    [UnixFact]
+    public void WithoutARealPath_ThePrivateSpellingIsJudgedAsSpelled() =>
+        Assert.Equal("/private/tmp/work/poem.md", PathPolice.FirstOutside("cat /private/tmp/work/poem.md", TmpRoot, TmpRoot, isScript: false, _ => false, NoLinks, ShellKind.Zsh));
 }

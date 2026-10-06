@@ -78,7 +78,7 @@ public partial class ChatScreenTests
         // The model: the tool after the git tools with its rule, the result under the call id.
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToList();
         Assert.Equal(offered.IndexOf(GitDeleteTool.ToolName) + 1, offered.IndexOf(RunCommandTool.ToolName));
-        Assert.Contains(Assistant.ShellRuleWithoutBridge, _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true), _chat.Requests[1][0].Text);
         Assert.Equal("exit 0 in 0.0 s (cmd): echo hi\nhi", ToolResult(_chat.Requests[1], "c1"));
         Assert.Empty(_settings.Current.ShellCommandAllowed);
@@ -111,7 +111,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);   // the pane never opened
         Assert.Contains("Staying inside.", output);
         Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", ToolResult(_chat.Requests[1], "c1"));
-        Assert.Contains(Assistant.ShellRuleWithoutBridge, _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
@@ -145,7 +145,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(@"✗  Error: the command was denied by the user: type C:\Windows\win.ini; do not retry it or work around the refusal" + "\n", output);
         Assert.DoesNotContain("👮", output);
-        Assert.Contains(Assistant.ShellRuleWithoutBridgeUnpoliced, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: false), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("may only name paths under it", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
@@ -342,7 +342,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("seen: True\n", output);
         Assert.Contains(ExecuteCodeTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.Empty(_settings.Current.ShellCommandAllowed);
-        Assert.Contains(Assistant.ShellRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge on: the rule promises neon_tools
+        Assert.Contains(Assistant.ShellRuleFor(bridge: true, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge on: the rule promises neon_tools
     }
 
     /// <summary>Shell tool bridge off (later on 2026-09-21, the default): the script runs on its own, the header has no tool-call clause, the rules and the tool never name neon_tools.</summary>
@@ -361,7 +361,7 @@ public partial class ChatScreenTests
         var code = _chat.Options[0]!.Tools!.Cast<AIFunction>().Single(t => t.Name == ExecuteCodeTool.ToolName);
         Assert.Equal(ExecuteCodeTool.DescriptionWithoutBridge, code.Description);
         Assert.DoesNotContain("neon_tools", code.JsonSchema.GetRawText());
-        Assert.Contains(Assistant.ShellRuleWithoutBridge, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("neon_tools", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
@@ -385,7 +385,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(RunCommandTool.ToolName, offered);
         Assert.Contains(GitStatusTool.ToolName, offered);
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true, shell: false), _chat.Requests[0][0].Text);
-        Assert.DoesNotContain(Assistant.ShellRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.DoesNotContain(Assistant.ShellRuleFor(bridge: true, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("Shell tools — ", output);   // no Shell tools heading on the Prompt tab since 2026-09-26
         Assert.DoesNotMatch(GroupHeading("Shell"), output);   // not offered: left out of the Tools tab (2026-09-26)
     }
@@ -404,7 +404,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(RunCommandTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.DoesNotContain(ProcessTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.DoesNotContain(ExecuteCodeTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
-        Assert.DoesNotContain(Assistant.ShellRule, _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.DoesNotContain(Assistant.ShellRuleFor(bridge: true, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -419,7 +419,7 @@ public partial class ChatScreenTests
 
         Assert.DoesNotContain(RunCommandTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.Contains(ProcessTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
-        Assert.Contains(Assistant.ShellRuleWithoutBridge, _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
     }
 
     /// <summary>Without the pane nothing can ask: under ask the tool answers the no-screen sentence, the allow list still lets a prefix through.</summary>

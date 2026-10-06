@@ -21518,13 +21518,36 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ArgumentPaths("/bogus", "", sources));
     }
 
+    [UnixFact]
+    public void ArgumentPaths_Cwd_OnAMac_ListsFolders_OnceTheArgumentStartsWithASlash()
+    {
+        // 2026-10-06, the user's report: no Mac path starts as a drive, so /cwd's list never opened.
+        var folders = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["/"] = ["/Users/", "/tmp/"],
+            ["/Us"] = ["/Users/"],
+            ["/Users/me/"] = ["/Users/me/Repo/"],
+        };
+        var sources = Sources() with { MachineFolders = typed => new MentionResult(FileOutcome.Ok, folders.TryGetValue(typed, out var paths) ? paths : [], false) };
+
+        Assert.Equal(["/Users/", "/tmp/"], ChatScreen.ArgumentPaths("/cwd", "/", sources)!.Paths);
+        Assert.Equal(["/Users/"], ChatScreen.ArgumentPaths("/cwd", "/Us", sources)!.Paths);
+        Assert.Equal(["/Users/me/Repo/"], ChatScreen.ArgumentPaths("/cwd", "/Users/me/", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/cwd", "/Users/me/ ", sources)!.Paths);   // applied under Apply
+        // Not a path: the word list (~ is the default folder, browse).
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "", sources));
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "~", sources));
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "br", sources));
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "/", Sources()));   // no source: the word list
+    }
+
     /// <summary>
     /// /cwd (2026-10-05, the user's ask): a full path from a drive lists that folder's subfolders on any drive; ~ and browse
     /// stay the word list; a trailing space closes the list. The fake answers as FolderCompleter does (2026-10-06, the code
     /// review's catch: it mapped D:\Repo\ to itself, which the real completer never lists): a folder typed in full lists its
     /// subfolders, and one with none lists nothing.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public void ArgumentPaths_Cwd_ListsAnyDrivesFolders_OnceTheArgumentIsADrivePath()
     {
         var folders = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)

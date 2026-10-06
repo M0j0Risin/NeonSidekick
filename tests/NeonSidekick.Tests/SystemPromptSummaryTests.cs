@@ -677,19 +677,19 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.DoesNotContain(Headings(Facts(shellTools: 1)), h => h.StartsWith("Shell", StringComparison.Ordinal));
         Assert.DoesNotContain(Headings(Facts() with { ShellEnabled = false }), h => h.StartsWith("Shell", StringComparison.Ordinal));
         // The rule rides the defaults only while the tool is offered, after the git sentence; which rule follows the setting Shell tool bridge (later on 2026-09-21).
-        Assert.Contains(Assistant.ShellRule, SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellBridge: true))[1].Body);
-        Assert.Contains(Assistant.ShellRuleWithoutBridge, SystemPromptSummary.PromptSections(Facts(shellTools: 1))[1].Body);
+        Assert.Contains(Assistant.ShellRuleFor(bridge: true, police: true), SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellBridge: true))[1].Body);
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), SystemPromptSummary.PromptSections(Facts(shellTools: 1))[1].Body);
         Assert.DoesNotContain("neon_tools", SystemPromptSummary.PromptSections(Facts(shellTools: 1))[1].Body);
-        Assert.DoesNotContain(Assistant.ShellRuleWithoutBridge, SystemPromptSummary.PromptSections(Facts())[1].Body);
-        Assert.DoesNotContain(Assistant.ShellRuleWithoutBridge, SystemPromptSummary.PromptSections(Facts(shellTools: 1) with { ShellEnabled = false })[1].Body);
+        Assert.DoesNotContain(Assistant.ShellRuleFor(bridge: false, police: true), SystemPromptSummary.PromptSections(Facts())[1].Body);
+        Assert.DoesNotContain(Assistant.ShellRuleFor(bridge: false, police: true), SystemPromptSummary.PromptSections(Facts(shellTools: 1) with { ShellEnabled = false })[1].Body);
         Assert.DoesNotContain("neon_tools", SystemPromptSummary.PromptSections(Facts(shellBridge: true))[1].Body);   // the bridge alone, no shell tool: nothing
         Assert.Equal(Assistant.DefaultRules(false, true, git: true, shell: true), SystemPromptSummary.PromptSections(Facts(gitTools: 11, shellTools: 1))[1].Body);
         Assert.Equal(Assistant.DefaultRules(false, true, git: true, shell: true, bridge: true), SystemPromptSummary.PromptSections(Facts(gitTools: 11, shellTools: 1, shellBridge: true))[1].Body);
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], shell: true), SystemPromptSummary.SystemPrompt(Facts(shellTools: 1)));
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], shell: true, bridge: true), SystemPromptSummary.SystemPrompt(Facts(shellTools: 1, shellBridge: true)));
         // The head follows the setting Shell police (2026-09-22): off, the …Unpoliced variant, which says nothing about where a command may reach.
-        Assert.Contains(Assistant.ShellRuleWithoutBridgeUnpoliced, SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellPolice: false))[1].Body);
-        Assert.Contains(Assistant.ShellRuleUnpoliced, SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellBridge: true, shellPolice: false))[1].Body);
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: false), SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellPolice: false))[1].Body);
+        Assert.Contains(Assistant.ShellRuleFor(bridge: true, police: false), SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellBridge: true, shellPolice: false))[1].Body);
         Assert.DoesNotContain("under it", SystemPromptSummary.PromptSections(Facts(shellTools: 1, shellPolice: false))[1].Body);
         Assert.Equal(Assistant.DefaultRules(false, true, git: true, shell: true, police: false), SystemPromptSummary.PromptSections(Facts(gitTools: 11, shellTools: 1, shellPolice: false))[1].Body);
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], shell: true, police: false), SystemPromptSummary.SystemPrompt(Facts(shellTools: 1, shellPolice: false)));

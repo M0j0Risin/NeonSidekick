@@ -197,6 +197,19 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve("secret.txt", forWrite: true, out _));
     }
 
+    [UnixFact]
+    public void Resolve_TakesTheRootsRealSpelling_AsTheRoot()
+    {
+        // The temp folder on a Mac is under /var, a link into /private (2026-10-06): the real spelling names the same place.
+        _files.EnsureExists();
+        File.WriteAllText(Full("a.txt"), "x");
+        string real = Files.RealPath.Of(_root)!;
+        Assert.NotNull(real);
+        Assert.Equal(FileOutcome.Ok, _files.Resolve(Path.Combine(real, "a.txt"), forWrite: true, out string full));
+        Assert.Equal(Full("a.txt"), full);   // in the root's spelling
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(Path.Combine(Path.GetDirectoryName(real)!, "elsewhere.txt"), forWrite: false, out _));
+    }
+
     [Theory]
     [InlineData("", "")]
     [InlineData(".", "")]

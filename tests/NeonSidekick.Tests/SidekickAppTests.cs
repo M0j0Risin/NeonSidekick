@@ -483,7 +483,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("[tool] run_command -> " + NeonSidekick.Shell.ShellText.NotAskable([]), output);
         Assert.EndsWith("[notice] " + NeonSidekick.Shell.ShellText.RefusedSummary(["echo hi"]) + Environment.NewLine, output);
         Assert.Equal(3, SidekickApp.HeadlessRefusedExitCode);
-        Assert.Contains(Assistant.ShellRuleWithoutBridge, _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToList();
         Assert.Equal(offered.IndexOf("gitlib_delete") + 1, offered.IndexOf("run_command"));
     }

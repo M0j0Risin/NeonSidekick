@@ -286,7 +286,7 @@ public class AssistantTests
         Assert.All(Fakes.ObsidianToolNames.WithoutDelete, name => Assert.Contains(name, Assistant.ObsidianRule, StringComparison.Ordinal));
         Assert.DoesNotContain("vault_delete", Assistant.ObsidianRule, StringComparison.Ordinal);   // its own sentence, only while it is offered (later on 2026-09-22)
         Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ObsidianRule, Assistant.SystemPrompt(false, null, obsidian: true));
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRule + " " + Assistant.ObsidianRule + " " + Assistant.AskRule(AskLimits.Default), Assistant.SystemPrompt(false, null, shell: true, bridge: true, ask: AskLimits.Default, obsidian: true));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleFor(bridge: true, police: true) + " " + Assistant.ObsidianRule + " " + Assistant.AskRule(AskLimits.Default), Assistant.SystemPrompt(false, null, shell: true, bridge: true, ask: AskLimits.Default, obsidian: true));
         Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, obsidian: true));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", obsidian: true));
     }
@@ -316,14 +316,14 @@ public class AssistantTests
             "For a task with several steps or many tool calls, execute_code runs a python, node or powershell script that can call these same tools through its neon_tools module and returns what it printed.",
             Assistant.ShellRule);
         // The bridge rule rides with bridge: true (the setting Shell tool bridge, later on 2026-09-21); the shell tools alone carry the rule without it.
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRule, Assistant.SystemPrompt(false, null, shell: true, bridge: true));
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRule, Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: true));
-        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRule + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true, shell: true, bridge: true));
-        Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.OperatingRulesWithoutFiles + " " + Assistant.ShellRule, Assistant.SystemPrompt(false, null, files: false, shell: true, bridge: true));   // its own switch: the file tools off leave it
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleFor(bridge: true, police: true), Assistant.SystemPrompt(false, null, shell: true, bridge: true));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRuleFor(bridge: true, police: true), Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: true));
+        Assert.Equal(DefaultWebSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRuleFor(bridge: true, police: true) + " " + Assistant.AskRule(AskLimits.Default) + " " + Assistant.SessionRule + " " + Assistant.McpRule, Assistant.SystemPrompt(false, null, web: true, ask: AskLimits.Default, sessions: true, mcp: true, git: true, shell: true, bridge: true));
+        Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.OperatingRulesWithoutFiles + " " + Assistant.ShellRuleFor(bridge: true, police: true), Assistant.SystemPrompt(false, null, files: false, shell: true, bridge: true));   // its own switch: the file tools off leave it
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null));
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", shell: true, bridge: true));
         Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.PlainTextRule, Assistant.SystemPrompt(false, null, tools: false, shell: true, bridge: true));
-        Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.ShellRule, Assistant.DefaultRules(false, true, shell: true, bridge: true));
+        Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.ShellRuleFor(bridge: true, police: true), Assistant.DefaultRules(false, true, shell: true, bridge: true));
     }
 
     [Fact]
@@ -340,9 +340,9 @@ public class AssistantTests
             "For a task with several steps, execute_code runs a python, node or powershell script and returns what it printed.",
             Assistant.ShellRuleWithoutBridge);
         Assert.DoesNotContain("neon_tools", Assistant.ShellRuleWithoutBridge);
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleWithoutBridge, Assistant.SystemPrompt(false, null, shell: true));
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRuleWithoutBridge, Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: false));
-        Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.ShellRuleWithoutBridge, Assistant.DefaultRules(false, true, shell: true));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleFor(bridge: false, police: true), Assistant.SystemPrompt(false, null, shell: true));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRuleFor(bridge: false, police: true), Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: false));
+        Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.ShellRuleFor(bridge: false, police: true), Assistant.DefaultRules(false, true, shell: true));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, bridge: true));   // the bridge rides the shell rule alone
     }
 
@@ -367,13 +367,25 @@ public class AssistantTests
 
         Assert.DoesNotContain("under it", Assistant.ShellRuleUnpoliced);
         Assert.DoesNotContain("under it", Assistant.ShellRuleWithoutBridgeUnpoliced);
-        Assert.Equal(Assistant.ShellRule, Assistant.ShellRuleFor(bridge: true, police: true));
-        Assert.Equal(Assistant.ShellRuleWithoutBridge, Assistant.ShellRuleFor(bridge: false, police: true));
-        Assert.Equal(Assistant.ShellRuleUnpoliced, Assistant.ShellRuleFor(bridge: true, police: false));
-        Assert.Equal(Assistant.ShellRuleWithoutBridgeUnpoliced, Assistant.ShellRuleFor(bridge: false, police: false));
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleWithoutBridgeUnpoliced, Assistant.SystemPrompt(false, null, shell: true, police: false));
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleUnpoliced, Assistant.SystemPrompt(false, null, shell: true, bridge: true, police: false));
-        Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.ShellRuleWithoutBridgeUnpoliced, Assistant.DefaultRules(false, true, shell: true, police: false));
+        Assert.Equal(Assistant.ShellRule, Assistant.ShellRuleFor(bridge: true, police: true, mac: false));
+        Assert.Equal(Assistant.ShellRuleWithoutBridge, Assistant.ShellRuleFor(bridge: false, police: true, mac: false));
+        Assert.Equal(Assistant.ShellRuleUnpoliced, Assistant.ShellRuleFor(bridge: true, police: false, mac: false));
+        Assert.Equal(Assistant.ShellRuleWithoutBridgeUnpoliced, Assistant.ShellRuleFor(bridge: false, police: false, mac: false));
+
+        // On a Mac (2026-10-06) each rule names the Mac and its shells in place of Windows', and changes nothing else.
+        Assert.Equal("picks zsh, bash or pwsh when the user's default will not do (this computer is a Mac: there is no cmd, PowerShell is pwsh, and Windows commands do not run)", Assistant.ShellPickMac);
+        foreach (var (bridge, police, windows) in new[] { (true, true, Assistant.ShellRule), (false, true, Assistant.ShellRuleWithoutBridge), (true, false, Assistant.ShellRuleUnpoliced), (false, false, Assistant.ShellRuleWithoutBridgeUnpoliced) })
+        {
+            string mac = Assistant.ShellRuleFor(bridge, police, mac: true);
+            Assert.Contains("shell " + Assistant.ShellPickMac + ";", mac, StringComparison.Ordinal);
+            Assert.DoesNotContain("cmd or bash", mac, StringComparison.Ordinal);
+            Assert.Equal(windows, mac.Replace(Assistant.ShellPickMac, Assistant.ShellPickWindows, StringComparison.Ordinal));
+        }
+
+        Assert.Equal(OperatingSystem.IsMacOS() ? Assistant.ForMac(Assistant.ShellRule) : Assistant.ShellRule, Assistant.ShellRuleFor(bridge: true, police: true));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleFor(bridge: false, police: false), Assistant.SystemPrompt(false, null, shell: true, police: false));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleFor(bridge: true, police: false), Assistant.SystemPrompt(false, null, shell: true, bridge: true, police: false));
+        Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.ShellRuleFor(bridge: false, police: false), Assistant.DefaultRules(false, true, shell: true, police: false));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, police: false));   // the police rides the shell rule alone
     }
 
@@ -389,11 +401,11 @@ public class AssistantTests
         Assert.Equal("", Assistant.ShellNativeRule(false, false, false, false));
 
         string files = Assistant.ShellNativeRule(files: true, git: false, web: false, sql: false);
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleWithoutBridge + " " + files, Assistant.SystemPrompt(false, null, shell: true, native: true));
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRule + " " + Assistant.ShellNativeRule(true, true, false, true) + " " + Assistant.SqlRule, Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: true, sql: true, native: true));   // before the SQL sentence, naming it
-        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleWithoutBridge, Assistant.SystemPrompt(false, null, shell: true, native: false));   // the setting off
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleFor(bridge: false, police: true) + " " + files, Assistant.SystemPrompt(false, null, shell: true, native: true));
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.GitRule + " " + Assistant.ShellRuleFor(bridge: true, police: true) + " " + Assistant.ShellNativeRule(true, true, false, true) + " " + Assistant.SqlRule, Assistant.SystemPrompt(false, null, git: true, shell: true, bridge: true, sql: true, native: true));   // before the SQL sentence, naming it
+        Assert.Equal(Assistant.DefaultSystemPrompt + " " + Assistant.ShellRuleFor(bridge: false, police: true), Assistant.SystemPrompt(false, null, shell: true, native: false));   // the setting off
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, native: true));   // no shell, nothing to prefer over
-        Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.OperatingRulesWithoutFiles + " " + Assistant.ShellRuleWithoutBridge, Assistant.SystemPrompt(false, null, files: false, shell: true, native: true));   // no group: no sentence
+        Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.OperatingRulesWithoutFiles + " " + Assistant.ShellRuleFor(bridge: false, police: true), Assistant.SystemPrompt(false, null, files: false, shell: true, native: true));   // no group: no sentence
         Assert.Equal(Assistant.DefaultPersona + "\n\nAnswer in haiku.", Assistant.SystemPrompt(false, null, operatingRules: "Answer in haiku.", shell: true, native: true));   // a custom operata.md stands verbatim
     }
 

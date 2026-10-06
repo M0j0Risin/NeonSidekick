@@ -537,6 +537,8 @@ public sealed class WorkingDirectory
             return FileOutcome.OutsideRoot;
         }
 
+        // The root's real spelling (/private/tmp/x for /tmp/x on a Mac) is the root too.
+        candidate = InRootSpelling(root, candidate, RealPath.Of);
         string walked = linkItself ? Path.GetDirectoryName(candidate) ?? candidate : candidate;
         if (!IsInside(root, candidate) || LinkEscape(root, walked, RealLinkTarget) is not null)
         {
@@ -2712,6 +2714,44 @@ public sealed class WorkingDirectory
     private static bool MatchesPath(string pattern, string fullPath, string directory, string root) =>
         PathGlob.IsMatch(pattern, Path.GetRelativePath(directory, fullPath))
         || (!string.Equals(directory, root, StringComparison.OrdinalIgnoreCase) && PathGlob.IsMatch(pattern, Path.GetRelativePath(root, fullPath)));
+
+    /// <summary>
+    /// <paramref name="path"/>, a full path, spelled the way <paramref name="root"/> is (2026-10-06, the first Mac run): on macOS
+    /// <c>/var</c>, <c>/tmp</c> and <c>/etc</c> are links into <c>/private</c>, and libgit2, <c>pwd</c> and the like answer the real
+    /// path, so <c>/private/tmp/x/a.txt</c> under a root of <c>/tmp/x</c> was refused as outside it — by the git tools (above the
+    /// sandbox), the file tools (<see cref="Resolve(string, bool, out string)"/>) and the shell police alike. The same place, only
+    /// spelled another way: the mapping never moves a path, so the link rules still judge it after. The root and each folder above it are resolved in turn
+    /// (<paramref name="realPath"/>: <see cref="RealPath.Of"/> in the app, a fake in the tests); the first whose real path holds
+    /// <paramref name="path"/> has that prefix swapped back for its own spelling, so a repository above the root is named the
+    /// user's way too. A path already inside the root by spelling, or under none of them, comes back as it was. Pure but for
+    /// <paramref name="realPath"/>.
+    /// </summary>
+    internal static string InRootSpelling(string root, string path, Func<string, string?> realPath)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(realPath);
+        if (WorkingDirectory.IsInside(root, path))
+        {
+            return path;
+        }
+
+        for (string? folder = root; folder is not null; folder = Path.GetDirectoryName(folder))
+        {
+            if (realPath(folder) is not { Length: > 0 } resolved)
+            {
+                continue;
+            }
+
+            string real = Path.TrimEndingDirectorySeparator(resolved);
+            if (!string.Equals(real, folder, StringComparison.Ordinal) && WorkingDirectory.IsInside(real, path))
+            {
+                return folder + path[real.Length..];
+            }
+        }
+
+        return path;
+    }
 
     /// <summary><paramref name="path"/> equals <paramref name="root"/> or lies under it, by spelling.</summary>
     internal static bool IsInside(string root, string path) =>

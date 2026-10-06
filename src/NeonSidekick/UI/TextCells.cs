@@ -15,6 +15,53 @@ namespace NeonSidekick.UI;
 /// </summary>
 public static class TextCells
 {
+    /// <summary>
+    /// Whether the terminal draws an emoji-presentation sequence of a text-default character — a character and its U+FE0F, such
+    /// as <c>⚙️</c>, <c>🛠️</c>, <c>🖥️</c>, <c>✂️</c>, <c>🗑️</c> — one cell wide, as macOS's Terminal.app does (and iTerm2 on its alternate screen) (2026-10-06, measured
+    /// there with cursor reports: 1 cell each, where every emoji-presentation character such as <c>🎓</c> is 2). Off, the default,
+    /// such a sequence is two cells, as Windows Terminal, iTerm2 and the rest draw it. Set once at start-up
+    /// (<see cref="ForTerminal"/>), before anything is measured; the toolbar's clicks landed two cells off per such glyph without it.
+    /// </summary>
+    public static bool NarrowSelectorSequences { get; set; }
+
+    /// <summary>
+    /// <paramref name="text"/> with a space after every selector sequence the terminal draws one cell wide (<paramref name="narrow"/>:
+    /// Terminal.app), where it paints the picture over the cell after it (2026-10-06, the user's ask: the toolbar's ⚙️ 🛠️ 🎓 ran
+    /// together there) — so the gap after it is a real cell again, as after a two-cell emoji. Unchanged when not narrow. Pure.
+    /// </summary>
+    public static string SpaceSelectorSequences(string text, bool narrow)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (!narrow || text.IndexOf('\uFE0F') < 0)
+        {
+            return text;
+        }
+
+        var spaced = new System.Text.StringBuilder(text.Length + 4);
+        for (int i = 0; i < text.Length; i++)
+        {
+            int width = ElementWidth(text, i, out int length, narrow: true);
+            spaced.Append(text, i, length);
+            int end = i + length;
+            if (width == 1 && end < text.Length && text[end] == '\uFE0F')
+            {
+                spaced.Append('\uFE0F').Append(' ');
+                end++;
+            }
+
+            i = end - 1;
+        }
+
+        return spaced.ToString();
+    }
+
+    /// <summary>
+    /// Whether the terminal named by <c>TERM_PROGRAM</c> draws a selector sequence one cell wide on the alternate screen, where the
+    /// app runs (<see cref="NarrowSelectorSequences"/>): Terminal.app's <c>Apple_Terminal</c>, and iTerm2's <c>iTerm.app</c> (later on
+    /// 2026-10-06, the user's report and a measurement: two cells on iTerm2's main screen, one on its alternate screen). Pure.
+    /// </summary>
+    public static bool ForTerminal(string? termProgram) => termProgram is "Apple_Terminal" or "iTerm.app";
+
     /// <summary>Cells occupied by one UTF-16 unit. A lone surrogate half counts one; see <see cref="Width(string)"/> for pairs.</summary>
     public static int Width(char c)
     {
@@ -136,13 +183,21 @@ public static class TextCells
     /// rules never change), one cell wide after a one-cell character and zero after a wide one. An element right after a
     /// U+200D is zero wide: the joiner makes it part of the glyph before (later on 2026-09-29).
     /// </summary>
-    public static int ElementWidth(string text, int index, out int length)
+    public static int ElementWidth(string text, int index, out int length) => ElementWidth(text, index, out length, NarrowSelectorSequences);
+
+    /// <summary>
+    /// <see cref="ElementWidth(string, int, out int)"/> for a terminal that draws a selector sequence one cell wide or two
+    /// (<paramref name="narrow"/>, <see cref="NarrowSelectorSequences"/>): narrow, a surrogate pair followed by a U+FE0F is one
+    /// cell (<c>🛠️</c>) and a U+FE0F after a one-cell character adds none (<c>⚙️</c>). Pure; the tests pass both.
+    /// </summary>
+    public static int ElementWidth(string text, int index, out int length, bool narrow)
     {
+        ArgumentNullException.ThrowIfNull(text);
         bool joined = index > 0 && text[index - 1] == '\u200D';
         if (char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
         {
             length = 2;
-            return joined ? 0 : 2;
+            return joined ? 0 : narrow && index + 2 < text.Length && text[index + 2] == '\uFE0F' ? 1 : 2;
         }
 
         if (joined)
@@ -152,10 +207,10 @@ public static class TextCells
         }
 
         length = 1;
-        if (text[index] == '️' && index > 0)
+        if (text[index] == '\uFE0F' && index > 0)
         {
             char before = text[index - 1];
-            return !char.IsLowSurrogate(before) && before is not ('︎' or '️') && Width(before) == 1 ? 1 : 0;
+            return !narrow && !char.IsLowSurrogate(before) && before is not ('\uFE0E' or '\uFE0F') && Width(before) == 1 ? 1 : 0;
         }
 
         return Width(text[index]);

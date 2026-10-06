@@ -173,8 +173,8 @@ public sealed class GitAccessTests : IDisposable
         // A fake realpath for a Mac: /var is a link to /private/var, nothing else is a link.
         static string? Real(string folder) => folder == "/var" || folder.StartsWith("/var/", StringComparison.Ordinal) ? "/private" + folder : folder;
 
-        Assert.Equal(expected, GitAccess.InRootSpelling(root, path, Real));
-        Assert.Equal(path, GitAccess.InRootSpelling(root, path, _ => null));   // no real path (Windows): as libgit2 gave it
+        Assert.Equal(expected, Files.WorkingDirectory.InRootSpelling(root, path, Real));
+        Assert.Equal(path, Files.WorkingDirectory.InRootSpelling(root, path, _ => null));   // no real path (Windows): as libgit2 gave it
     }
 
     [Fact]

@@ -59,6 +59,10 @@ catch
 // every turn's end): it flushes every write as the console's own writer did, and the pane holds each synchronized frame
 // and lets it go as one write. Installed with SetOut before the Spectre console, which takes Console.Out and asks whether
 // its writer is stdout's for its width and terminal detection.
+// Terminal.app (and iTerm2 on the alternate screen) draws ⚙️, 🛠️ and the other text-default emoji with U+FE0F one cell wide where other terminals draw two
+// (2026-10-06, measured there): the cell arithmetic follows the terminal, or the toolbar's clicks land on the wrong button.
+NeonSidekick.UI.TextCells.NarrowSelectorSequences = NeonSidekick.UI.TextCells.ForTerminal(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
+
 var frames = new FrameWriter(Console.OpenStandardOutput());
 Console.SetOut(frames);
 

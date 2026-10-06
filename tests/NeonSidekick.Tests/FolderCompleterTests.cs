@@ -66,6 +66,36 @@ public sealed class FolderCompleterTests : IDisposable
         Assert.False(FolderCompleter.IsDrivePath("D") || FolderCompleter.IsDrivePath("Dx") || FolderCompleter.IsDrivePath("D:x") || FolderCompleter.IsDrivePath("~") || FolderCompleter.IsDrivePath(@"\\s\x"));
     }
 
+    [UnixFact]
+    public void OnAMac_AnAbsolutePath_ListsItsSubfolders_ANamePrefixNarrows()
+    {
+        // 2026-10-06, the user's report: /cwd listed nothing on a Mac, where no path starts with a drive.
+        string folder = _dir + "/";
+        Assert.Equal([folder + "Repo/", folder + "reports/", folder + "Temp/"], FolderCompleter.Complete(folder).Paths);
+        Assert.Equal([folder + "Repo/", folder + "reports/"], FolderCompleter.Complete(folder + "re").Paths);
+        Assert.Equal([folder + "Temp/deep/"], FolderCompleter.Complete(folder + "Temp/").Paths);
+        Assert.Contains("/Users/", FolderCompleter.Complete("/Us").Paths);
+    }
+
+    [UnixFact]
+    public void OnAMac_ARelativePath_TheHomeWord_AndAMissingFolder_ListNothing()
+    {
+        Assert.Empty(FolderCompleter.Complete("docs/").Paths);
+        Assert.Empty(FolderCompleter.Complete("~").Paths);   // /cwd ~ is the default folder, not a path
+        Assert.Empty(FolderCompleter.Complete("~/").Paths);
+        Assert.Empty(FolderCompleter.Complete(_dir + "/nowhere/").Paths);
+        Assert.True(FolderCompleter.IsMachinePath("/") && FolderCompleter.IsMachinePath("/Users"));
+        Assert.False(FolderCompleter.IsMachinePath("~") || FolderCompleter.IsMachinePath("docs") || FolderCompleter.IsMachinePath("C:"));
+    }
+
+    [UnixFact]
+    public void OnAMac_TheAutomounter_IsSlow_ALocalFolderIsNot()
+    {
+        Assert.True(FolderCompleter.IsSlowUnixPath("/net/server/share") && FolderCompleter.IsSlowUnixPath("/Network/x") && FolderCompleter.IsSlowUnixPath("/net"));
+        Assert.False(FolderCompleter.IsSlowUnixPath(_dir) || FolderCompleter.IsSlowUnixPath("/") || FolderCompleter.IsSlowUnixPath("/netflix") || FolderCompleter.IsSlowUnixPath(_dir + "/missing/deeper"));
+        Assert.Empty(FolderCompleter.Complete("/net/").Paths);
+    }
+
     [Fact]
     public void TheCap_CutsTheList_AndSaysSo()
     {

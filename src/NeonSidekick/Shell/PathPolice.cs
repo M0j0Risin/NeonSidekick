@@ -98,16 +98,18 @@ public static partial class PathPolice
     /// answers whether a full path names a file or a folder (the single-segment rule); <paramref name="linkTarget"/>
     /// answers where a link leads (a full path), null for anything that is not one (rule 12); <paramref name="shell"/> is the
     /// shell a command line runs in: cmd's bare <c>cd</c> only prints the folder and its <c>&amp;</c> runs the next command in
-    /// turn (rules 9 and 11), and Git Bash reads <c>/c</c> as the C drive (rule 3).
+    /// turn (rules 9 and 11), and Git Bash reads <c>/c</c> as the C drive (rule 3). <paramref name="realPath"/> answers a folder's
+    /// real path (<see cref="Files.RealPath.Of"/> in the app; null, the default, judges every path as spelled): a path under the
+    /// real path of the root counts as under the root (on a Mac <c>/private/tmp/x/a</c> for a root of <c>/tmp/x</c>, 2026-10-06).
     /// </summary>
-    public static string? FirstOutside(string text, string root, string baseFolder, bool isScript, Func<string, bool> exists, Func<string, string?> linkTarget, ShellKind shell = ShellKind.PowerShell)
+    public static string? FirstOutside(string text, string root, string baseFolder, bool isScript, Func<string, bool> exists, Func<string, string?> linkTarget, ShellKind shell = ShellKind.PowerShell, Func<string, string?>? realPath = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(baseFolder);
         ArgumentNullException.ThrowIfNull(exists);
         ArgumentNullException.ThrowIfNull(linkTarget);
-        var judging = new Judging(root, isScript, shell, exists, linkTarget);
+        var judging = new Judging(root, isScript, shell, exists, linkTarget, realPath ?? NoRealPath);
         var variable = FolderVariablePattern().Match(text);
         if (variable.Success)
         {
@@ -157,14 +159,14 @@ public static partial class PathPolice
     }
 
     /// <summary>What a judgement holds for every token of one text: the root, the kind of text, the shell, and the disk's two answers.</summary>
-    private sealed record Judging(string Root, bool IsScript, ShellKind Shell, Func<string, bool> Exists, Func<string, string?> LinkTarget);
+    private sealed record Judging(string Root, bool IsScript, ShellKind Shell, Func<string, bool> Exists, Func<string, string?> LinkTarget, Func<string, string?> RealPath);
 
     /// <summary>The app's entry: <see cref="FirstOutside"/> over the sandbox's root with the real file system answering <c>exists</c> and <c>linkTarget</c>; <paramref name="shell"/> is the shell's name (<see cref="ShellKinds.Name"/>), cmd's bare <c>cd</c> printing rather than going home.</summary>
     public static string? Judge(string text, WorkingDirectory files, string baseFolder, bool isScript, string? shell = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         ShellKinds.TryParse(shell, out var kind);
-        return FirstOutside(text, files.Root, baseFolder, isScript, static path => Directory.Exists(path) || File.Exists(path), WorkingDirectory.RealLinkTarget, kind);
+        return FirstOutside(text, files.Root, baseFolder, isScript, static path => Directory.Exists(path) || File.Exists(path), WorkingDirectory.RealLinkTarget, kind, Files.RealPath.Of);
     }
 
     /// <summary>
@@ -177,7 +179,6 @@ public static partial class PathPolice
     {
         string root = judging.Root;
         bool isScript = judging.IsScript;
-        var linkTarget = judging.LinkTarget;
         // Off Windows a command line's backslash escapes the next character, as the shell reads an unquoted word: \/etc/passwd
         // is /etc/passwd there (2026-10-06, the macOS build). Undone first, so every rule reads the word the shell will.
         if (!isScript && !OperatingSystem.IsWindows() && token.Contains('\\'))
@@ -206,7 +207,7 @@ public static partial class PathPolice
         // 1. A drive-absolute path: under the root or not.
         if (IsDriveAbsolute(token))
         {
-            return !Under(root, Located(token, baseFolder, judging)!, linkTarget);
+            return !Under(judging, Located(token, baseFolder, judging)!);
         }
 
         // 8. A file: URL is the path it holds (file:///C:/x, file:///etc/x, file://server/share/x).
@@ -240,7 +241,7 @@ public static partial class PathPolice
         // 2. A UNC path is never under a local root; a UNC root would be spelled the same, so the judge still runs.
         if (UncPattern().IsMatch(token))
         {
-            return !Under(root, token, linkTarget);
+            return !Under(judging, token);
         }
 
         if (token[0] == '/' || token[0] == '\\')
@@ -248,7 +249,7 @@ public static partial class PathPolice
             // 3. Git Bash's drive form (/d/Repo, and in bash /d itself).
             if (IsBashDrive(token, judging))
             {
-                return !Under(root, Located(token, baseFolder, judging)!, linkTarget);
+                return !Under(judging, Located(token, baseFolder, judging)!);
             }
 
             // Comments, not paths: // and /*; two backslashes without a share (\\d+, a regex) are not a UNC path either.
@@ -266,19 +267,19 @@ public static partial class PathPolice
             // One segment: a switch (dir /s, msbuild /t:Build) names nothing on the disk; /Users does. A cd's is a folder (cd /etc).
             bool oneSegment = token.IndexOfAny(Separators, 1) < 0;
             return oneSegment && !folderArgument
-                ? Full(rooted) is { } full && !Under(root, full, linkTarget) && judging.Exists(full)
-                : !Under(root, rooted, linkTarget);
+                ? Full(rooted) is { } full && !Under(judging, full) && judging.Exists(full)
+                : !Under(judging, rooted);
         }
 
         // 5. A .. segment: resolved from where the text runs.
         if (HasParentSegment(token))
         {
-            return !Under(root, Located(token, baseFolder, judging) ?? Path.Combine(baseFolder, Collapse(token)), linkTarget);
+            return !Under(judging, Located(token, baseFolder, judging) ?? Path.Combine(baseFolder, Collapse(token)));
         }
 
         // 12. A plain relative name is under the root by its spelling; a link on its way may still lead out (dir link, type link\x).
         // Not one with a colon: a:b is a slice or a key far more often than a drive-relative path, and Combine would root it.
-        return Located(token, baseFolder, judging) is { } located && !Under(root, located, linkTarget);
+        return Located(token, baseFolder, judging) is { } located && !Under(judging, located);
     }
 
     /// <summary>
@@ -430,7 +431,7 @@ public static partial class PathPolice
                 return folders;
             }
 
-            targets.Add(full);
+            targets.Add(WorkingDirectory.InRootSpelling(judging.Root, full, judging.RealPath));
         }
 
         bool runsNext = join is "&&" or ";" or "\n" || (join == "&" && judging.Shell == ShellKind.Cmd);
@@ -539,7 +540,7 @@ public static partial class PathPolice
     {
         var words = content.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         bool firstStays = Located(words[0], folder, judging) is not { } located || Full(located) is not { } full
-            || !WorkingDirectory.IsInside(judging.Root, full) || WorkingDirectory.LinkEscape(judging.Root, full, judging.LinkTarget) is null;
+            || InRoot(judging, full) is not { } spelled || WorkingDirectory.LinkEscape(judging.Root, spelled, judging.LinkTarget) is null;
         return firstStays && words.Skip(1).All(word => !IsOutside(word, judging, folder, firstArgument: false));
     }
 
@@ -662,8 +663,22 @@ public static partial class PathPolice
     /// Whether <paramref name="path"/>, made full, lies under <paramref name="root"/> — by its spelling and by every link on its
     /// way (<see cref="WorkingDirectory.LinkEscape"/>, rule 12); a path that cannot be made full is not.
     /// </summary>
-    private static bool Under(string root, string path, Func<string, string?> linkTarget) =>
-        Full(path) is { } full && WorkingDirectory.IsInside(root, full) && WorkingDirectory.LinkEscape(root, full, linkTarget) is null;
+    private static bool Under(Judging judging, string path) =>
+        Full(path) is { } full && InRoot(judging, full) is { } spelled && WorkingDirectory.LinkEscape(judging.Root, spelled, judging.LinkTarget) is null;
+
+    /// <summary>
+    /// <paramref name="full"/> in the root's spelling when it lies under the root by spelling or by the real path of the root or
+    /// a folder above it (<see cref="WorkingDirectory.InRootSpelling"/>: on a Mac <c>/private/tmp/x/a</c> is under <c>/tmp/x</c>,
+    /// 2026-10-06); null when it does not.
+    /// </summary>
+    private static string? InRoot(Judging judging, string full)
+    {
+        string spelled = WorkingDirectory.InRootSpelling(judging.Root, full, judging.RealPath);
+        return WorkingDirectory.IsInside(judging.Root, spelled) ? spelled : null;
+    }
+
+    /// <summary>No real paths (Windows, and the tests that pass none): every path is judged as spelled.</summary>
+    private static string? NoRealPath(string path) => null;
 
     private static string? Full(string path)
     {

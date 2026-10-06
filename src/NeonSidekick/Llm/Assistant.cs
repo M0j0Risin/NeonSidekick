@@ -382,7 +382,23 @@ public sealed class Assistant
     /// <summary>What every shell rule opens with: <c>run_command</c> and its two picks.</summary>
     private const string ShellRuleOpening =
         "To run a program, a build, a test or a script the user asks for, call " + NeonSidekick.Llm.Tools.RunCommandTool.ToolName + " with the command line " +
-        "(" + NeonSidekick.Llm.Tools.RunCommandTool.ShellArgument + " picks powershell, cmd or bash when the user's default will not do; " + NeonSidekick.Llm.Tools.RunCommandTool.WorkdirArgument + " a folder under the working directory); ";
+        "(" + NeonSidekick.Llm.Tools.RunCommandTool.ShellArgument + " " + ShellPickWindows + "; " + NeonSidekick.Llm.Tools.RunCommandTool.WorkdirArgument + " a folder under the working directory); ";
+
+    /// <summary>The shells the rule names, as Windows has them. Pinned.</summary>
+    public const string ShellPickWindows = "picks powershell, cmd or bash when the user's default will not do";
+
+    /// <summary>
+    /// The same words on a Mac (2026-10-06, the first Mac run: told "powershell, cmd or bash" and never which computer it was on,
+    /// the model ran <c>powershell -Command "Get-Acl …"</c> in zsh): the platform named, its shells, and that PowerShell is <c>pwsh</c>. Pinned.
+    /// </summary>
+    public const string ShellPickMac = "picks zsh, bash or pwsh when the user's default will not do (this computer is a Mac: there is no cmd, PowerShell is pwsh, and Windows commands do not run)";
+
+    /// <summary>A shell rule as a Mac reads it: <see cref="ShellPickWindows"/> swapped for <see cref="ShellPickMac"/>, nothing else changed. Pure; pinned.</summary>
+    public static string ForMac(string rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        return rule.Replace(ShellPickWindows, ShellPickMac, StringComparison.Ordinal);
+    }
 
     /// <summary>The head with the police on: the shell stays under the working directory, and a refused path is final like a denied command.</summary>
     private const string ShellRuleHeadPoliced = ShellRuleOpening +
@@ -407,14 +423,21 @@ public sealed class Assistant
     private const string ShellRulePlainTail =
         "For a task with several steps, " + NeonSidekick.Llm.Tools.ExecuteCodeTool.ToolName + " runs a python, node or powershell script and returns what it printed.";
 
-    /// <summary>The shell rule for a turn: the bridge picks the <c>execute_code</c> sentence, the police (2026-09-22) the head.</summary>
-    public static string ShellRuleFor(bool bridge, bool police) => (bridge, police) switch
+    /// <summary>The shell rule for a turn: the bridge picks the <c>execute_code</c> sentence, the police (2026-09-22) the head; on a Mac its shells are the Mac's (<see cref="ForMac"/>).</summary>
+    public static string ShellRuleFor(bool bridge, bool police) => ShellRuleFor(bridge, police, OperatingSystem.IsMacOS());
+
+    /// <summary><see cref="ShellRuleFor(bool, bool)"/> with the platform given (tests).</summary>
+    public static string ShellRuleFor(bool bridge, bool police, bool mac)
     {
-        (true, true) => ShellRule,
-        (false, true) => ShellRuleWithoutBridge,
-        (true, false) => ShellRuleUnpoliced,
-        (false, false) => ShellRuleWithoutBridgeUnpoliced,
-    };
+        string rule = (bridge, police) switch
+        {
+            (true, true) => ShellRule,
+            (false, true) => ShellRuleWithoutBridge,
+            (true, false) => ShellRuleUnpoliced,
+            (false, false) => ShellRuleWithoutBridgeUnpoliced,
+        };
+        return mac ? ForMac(rule) : rule;
+    }
 
     /// <summary>
     /// The sentence the default rules gain after the shell rule while the setting <c>Shell prefer native tools</c> is on

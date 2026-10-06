@@ -4429,7 +4429,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/cwd</c>'s path list (2026-10-05): null — the word list — until the argument starts as a drive path; empty once it
+    /// <c>/cwd</c>'s path list (2026-10-05): null — the word list — until the argument starts as a drive path (on a Mac, a <c>/</c>:
+    /// <see cref="FolderCompleter.IsMachinePath"/>); empty once it
     /// ends in whitespace (a folder applied under folder-apply). A folder typed in full lists its subfolders: the completer never
     /// lists the folder itself, so there is no "one folder typed in full" to close on as a file list has (2026-10-06, the code
     /// review's catch: that check was here and could never match). Under folder-remain Enter goes on into them as the @ list's
@@ -4437,7 +4438,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private static MentionResult? CwdPaths(string argText, ArgumentSources sources)
     {
-        if (sources.MachineFolders is not { } folders || !FolderCompleter.IsDrivePath(argText))
+        if (sources.MachineFolders is not { } folders || !FolderCompleter.IsMachinePath(argText))
         {
             return null;
         }
