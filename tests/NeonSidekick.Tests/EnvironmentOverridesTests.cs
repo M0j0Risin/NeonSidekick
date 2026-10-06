@@ -68,7 +68,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ClaudeCliServerVariable, " ON "),
             (EnvironmentOverrides.DockerPipeVariable, " npipe:////./pipe/dockerDesktopLinuxEngine "),
             (EnvironmentOverrides.OpenAIApiVariable, " Yes "),
-            (EnvironmentOverrides.OpenAIApiKeyVariable, " sk-openai-env "));
+            (EnvironmentOverrides.OpenAIApiKeyVariable, " sk-openai-env "),
+            (EnvironmentOverrides.YouTubeApiKeyVariable, " AIza-yt-env "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -107,6 +108,7 @@ public class EnvironmentOverridesTests
         Assert.Equal("npipe:////./pipe/dockerDesktopLinuxEngine", e.DockerEnginePipe);   // trimmed, kept as given; the pipe's bare name is read where it is used (2026-10-02)
         Assert.True(e.OpenAIApi);   // a switch word (2026-10-03)
         Assert.Equal("sk-openai-env", e.OpenAIApiKey);   // trimmed (2026-10-03)
+        Assert.Equal("AIza-yt-env", e.YouTubeApiKey);   // trimmed (2026-10-05)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

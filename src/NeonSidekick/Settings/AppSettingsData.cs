@@ -147,6 +147,58 @@ public sealed class AppSettingsData
     public int? ProcessWindowTop { get; set; }
 
     /// <summary>
+    /// The video window's top-left corner as it last closed (2026-10-05, the YouTube plan's window): the <see cref="CameraWindowLeft"/>
+    /// pair's twin, set by the window itself (<see cref="Viewer.VideoWindow.Placed"/>). No menu row, so no help line; null opens it
+    /// where Windows puts it. Switching the window to another video keeps the place.
+    /// </summary>
+    public int? VideoWindowLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="VideoWindowLeft"/>.</summary>
+    public int? VideoWindowTop { get; set; }
+
+    /// <summary>
+    /// Whether a turn offers the YouTube tools (2026-10-05, the YouTube plan): <c>youtube_search</c> over the Data API with
+    /// <see cref="YouTubeApiKey"/>, and <c>youtube_play</c>, <c>youtube_control</c> and <c>youtube_status</c> over the video window
+    /// (a Windows window with WebView2; headless offers the search alone). Off by default, as every tool group that reaches
+    /// outside the machine on the model's word. The YouTube tab of <c>/tools</c>; read at each turn, no reconnect. No variable.
+    /// </summary>
+    public bool YouTubeTools { get; set; }
+
+    /// <summary>
+    /// The YouTube Data API v3 key (2026-10-05, the user's call: the official API, no keyless scraping): made in the Google Cloud
+    /// Console (a project, the API enabled, an API key restricted to it). Kept encrypted with DPAPI as <see cref="OpenAIApiKey"/>
+    /// is, sent only to www.googleapis.com, in the <c>X-Goog-Api-Key</c> header (never in a URL); empty means no search — playing
+    /// by id or link needs none. Copied by <c>/keycopy</c> and kept by a plain <c>/profile reset</c> (the user's ask, the other keys'
+    /// way). Never logged (<see cref="SettingsDiff.Secrets"/>). Variable <see cref="EnvironmentOverrides.YouTubeApiKeyVariable"/> (plain).
+    /// </summary>
+    public string YouTubeApiKey { get; set; } = "";
+
+    /// <summary>
+    /// How many videos a <c>youtube_search</c> without <c>max</c>, and <c>/youtube</c>'s picker, list (2026-10-05):
+    /// <see cref="MinYouTubeSearchMaxResults"/> to <see cref="MaxYouTubeSearchMaxResults"/>. A search costs the same quota whatever
+    /// the count. The YouTube tab; no reconnect.
+    /// </summary>
+    public int YouTubeSearchMaxResults { get; set; } = DefaultYouTubeSearchMaxResults;
+
+    public const int MinYouTubeSearchMaxResults = 1;
+    public const int MaxYouTubeSearchMaxResults = 20;
+    public const int DefaultYouTubeSearchMaxResults = 8;
+
+    /// <summary>
+    /// Whether a video played starts at once (2026-10-05, on by default) or waits cued for a play; <c>youtube_play</c>'s
+    /// <c>autoplay</c> and <c>/youtube play</c> as typed. The YouTube tab; no reconnect.
+    /// </summary>
+    public bool YouTubeAutoplay { get; set; } = true;
+
+    /// <summary>
+    /// What a playing video does while the app speaks a reply or listens to a request (2026-10-05, the YouTube plan's Phase 6):
+    /// one of <see cref="YouTube.YouTubeVoiceMode.Names"/> — <c>pause</c> (the default, the user's call: easier to manage, and speech
+    /// input still hears a ducked video), <c>duck</c> (turned down to <see cref="YouTube.VideoVoicePause.DuckVolume"/>%) or
+    /// <c>none</c>; anything else reads as the default. Only what the app did is set back after. The YouTube tab; no reconnect.
+    /// </summary>
+    public string YouTubeVoice { get; set; } = YouTube.YouTubeVoiceMode.Default;
+
+    /// <summary>
     /// The thumbnail browser's top-left corner as it last closed (2026-10-04, <c>/view --thumbs</c>' window, <c>/thumbs</c>' until later that day): the <see cref="ViewerLeft"/>
     /// pair's twin, set by the window itself (<see cref="Viewer.ThumbsWindow.Placed"/>). No menu row; null opens it where Windows puts it.
     /// </summary>

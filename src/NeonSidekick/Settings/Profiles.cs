@@ -418,7 +418,7 @@ public static class Profiles
     /// What a plain <c>/profile reset</c> keeps (2026-09-27, the user's call): the servers, paths and
     /// key that describe this machine rather than a taste — a reset that took the LLM's URL and model
     /// back to empty left the sidekick unable to answer (the LLM's API key joined them later that day,
-    /// the user's call; the Home Assistant server and its token on 2026-09-28, beside ComfyUI's). <c>--all</c> resets them too. The property
+    /// the user's call; the Home Assistant server and its token on 2026-09-28, beside ComfyUI's; the YouTube API key on 2026-10-05, the user's ask). <c>--all</c> resets them too. The property
     /// names, in <see cref="KeepOnReset"/>'s order.
     /// </summary>
     public static readonly string[] ResetKeptSettings =
@@ -437,6 +437,7 @@ public static class Profiles
         nameof(AppSettingsData.ComfyUrl),
         nameof(AppSettingsData.HomeAssistantUrl),
         nameof(AppSettingsData.HomeAssistantToken),
+        nameof(AppSettingsData.YouTubeApiKey),
     };
 
     /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The keys go as stored, protected or not.</summary>
@@ -456,6 +457,7 @@ public static class Profiles
         to.ComfyUrl = from.ComfyUrl;
         to.HomeAssistantUrl = from.HomeAssistantUrl;
         to.HomeAssistantToken = from.HomeAssistantToken;
+        to.YouTubeApiKey = from.YouTubeApiKey;   // 2026-10-05, the user's ask: a plain reset keeps it, as the other keys
     }
 
     /// <summary>

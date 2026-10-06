@@ -368,8 +368,15 @@ internal sealed class SpeechSession : IDisposable
 
         _currentCts = CancellationTokenSource.CreateLinkedTokenSource(appToken);
         _current = new SpeechOutput(synth, _playback, voice, speed, _currentCts.Token, MarkUnavailable);
+        Began?.Invoke(_current);
         return _current;
     }
+
+    /// <summary>
+    /// Told each speaker as it is made, a reply's, a bot's or a preview's (2026-10-05: the video window pauses from its first
+    /// audio, <c>VideoVoicePause</c>); on the caller's thread, before the speaker is fed. The screen sets it; null by default.
+    /// </summary>
+    public Action<SpeechOutput>? Began { get; set; }
 
     /// <summary>The speaker still owed audio — under its turn or as the tail under the input line — else null.</summary>
     public SpeechOutput? Playing => _current is { Completion.IsCompleted: false } ? _current : null;

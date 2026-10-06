@@ -57,6 +57,7 @@ public sealed class EnvironmentOverrides
     public const string EmbeddedBackendVariable = Prefix + "EMBEDDED_BACKEND";
     public const string EmbeddedContextVariable = Prefix + "EMBEDDED_CONTEXT";
     public const string DockerPipeVariable = Prefix + "DOCKER_PIPE";
+    public const string YouTubeApiKeyVariable = Prefix + "YOUTUBE_API_KEY";
 
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
@@ -69,7 +70,7 @@ public sealed class EnvironmentOverrides
         ShellNativeVariable, ClaudeCliExeVariable, ClaudeCliPermissionsVariable, ClaudeCliAdvisorVariable,
         AnthropicApiVariable, AnthropicApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
         HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCliServerVariable,
-        DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable,
+        DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -183,6 +184,9 @@ public sealed class EnvironmentOverrides
 
     /// <summary>The OpenAI API key for this launch, plain (2026-10-03); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
     public string? OpenAIApiKey => Read(OpenAIApiKeyVariable);
+
+    /// <summary>The YouTube Data API key for this launch, plain (2026-10-05); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
+    public string? YouTubeApiKey => Read(YouTubeApiKeyVariable);
 
     /// <summary>The Home Assistant server's URL, or null (2026-09-28). Checked where it is used (a non-http(s) value offers no Home Assistant tool), not here.</summary>
     public string? HomeAssistantUrl => Read(HomeAssistantUrlVariable);
@@ -314,7 +318,7 @@ public sealed class EnvironmentOverrides
         var parts = new List<string>(active.Count);
         foreach (var name in active)
         {
-            parts.Add(name + "=" + (name is LlmApiKeyVariable or AnthropicApiKeyVariable or OpenAIApiKeyVariable or HomeAssistantTokenVariable ? SecretSet : Read(name)));
+            parts.Add(name + "=" + (name is LlmApiKeyVariable or AnthropicApiKeyVariable or OpenAIApiKeyVariable or HomeAssistantTokenVariable or YouTubeApiKeyVariable ? SecretSet : Read(name)));
         }
 
         return string.Join(", ", parts);
@@ -359,6 +363,7 @@ public sealed class EnvironmentOverrides
         if (ClaudeCliServer is { } claudeCliServer) effective.ClaudeCliServer = claudeCliServer;
         if (OpenAIApi is { } openAIApi) effective.OpenAIApi = openAIApi;
         if (OpenAIApiKey is { } openAIApiKey) effective.OpenAIApiKey = openAIApiKey;
+        if (YouTubeApiKey is { } youTubeApiKey) effective.YouTubeApiKey = youTubeApiKey;
         if (HomeAssistantUrl is { } haUrl) effective.HomeAssistantUrl = haUrl;
         if (HomeAssistantToken is { } haToken) effective.HomeAssistantToken = haToken;
         if (DockerPipe is { } dockerPipe) effective.DockerEnginePipe = dockerPipe;

@@ -57,6 +57,8 @@ public static class PlanTools
         "postgres_relationships", "postgres_indexes", "postgres_query",
         // the advisor: Claude reads and answers, read-only whatever Claude CLI slash command permissions says (2026-09-27)
         "claude_advisor_cli",
+        // YouTube (2026-10-05): a search reads the Data API; the status reads the window's last report
+        "youtube_search", "youtube_status",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>
@@ -81,6 +83,8 @@ public static class PlanTools
         "oracle_execute",
         "sql_execute",
         "mysql_execute",
+        // YouTube (2026-10-05): a video opened and played on the user's screen, or its playback changed
+        "youtube_play", "youtube_control",
     };
 
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>

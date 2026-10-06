@@ -66,6 +66,8 @@ internal sealed record TurnToolInputs
     public bool CameraEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Screen { get; init; }
     public bool ScreenEnabled { get; init; }
+    public IReadOnlyList<AIFunction>? YouTube { get; init; }
+    public bool YouTubeEnabled { get; init; }
     public IReadOnlySet<string>? Disabled { get; init; }
     public PlanTurn? Plan { get; init; }
     public bool PlanReadOnly { get; init; }
@@ -122,6 +124,7 @@ internal sealed partial class ChatScreen
         var askTools = inputs.Ask;
         var cameraTools = inputs.Camera;
         var screenTools = inputs.Screen;
+        var youTubeTools = inputs.YouTube;
         var mcpTools = inputs.Mcp;
         var advisorTools = inputs.Advisor;
         var plan = inputs.Plan;
@@ -131,13 +134,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, advisorTools, homeTools, printTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -165,6 +168,7 @@ internal sealed partial class ChatScreen
             askTools = askTools is null ? null : Without(askTools, disabledTools);
             cameraTools = cameraTools is null ? null : Without(cameraTools, disabledTools);
             screenTools = screenTools is null ? null : Without(screenTools, disabledTools);
+            youTubeTools = youTubeTools is null ? null : Without(youTubeTools, disabledTools);
             mcpTools = mcpTools is null ? null : Without(mcpTools, disabledTools);
             advisorTools = advisorTools is null ? null : Without(advisorTools, disabledTools);
         }
@@ -261,6 +265,9 @@ internal sealed partial class ChatScreen
         // screen_capture and screen_list (2026-10-04): Screen capture tool on, the pane and a model that reads pictures; after the camera.
         bool screen = inputs.ScreenEnabled && screenTools is { Count: > 0 };
         tools = screen ? [.. tools, .. screenTools!] : tools;
+        // The YouTube tools after the screen's (2026-10-05): YouTube tools on, the search with a key, the rest with a video window; no rule — the descriptions carry it.
+        bool youTube = inputs.YouTubeEnabled && youTubeTools is { Count: > 0 };
+        tools = youTube ? [.. tools, .. youTubeTools!] : tools;
         // present_plan while planning (2026-09-26): after everything else, ahead of the question tool, which stays last.
         tools = plan is not null ? [.. tools, plan.Tool] : tools;
         tools = ask is not null ? [.. tools, .. askTools!] : tools;

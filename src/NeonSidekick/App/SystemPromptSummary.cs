@@ -364,6 +364,12 @@ public static class SystemPromptSummary
     /// <summary>After the Screen heading while the screen tools are not offered (2026-10-04). Pinned.</summary>
     public const string ScreenOffSuffix = "Screen capture tool is off, there is no pane or screen capture support, or the model reads no pictures";
 
+    /// <summary>After the YouTube heading while its tools are not offered (2026-10-05). Pinned.</summary>
+    public const string YouTubeOffSuffix = "YouTube tools is off, or there is neither a YouTube API key nor a video window";
+
+    /// <summary>The note on <c>youtube_search</c> while no key is set (2026-10-05): playing still works. Pinned.</summary>
+    public const string NoYouTubeKeySuffix = "no YouTube API key is set";
+
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
     public const string NoInterpreterSuffix = "no interpreter found for the languages in Shell code languages";
 
@@ -650,7 +656,10 @@ public static class SystemPromptSummary
         bool sqliteEnabled = true,
         IReadOnlyList<AIFunction>? postgres = null,
         bool postgresEnabled = true,
-        bool memorySave = true)
+        bool memorySave = true,
+        IReadOnlyList<AIFunction>? youTube = null,
+        bool youTubeEnabled = true,
+        bool youTubeKey = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -778,6 +787,14 @@ public static class SystemPromptSummary
             // The screen (2026-10-04): after the camera; offered while Screen capture tool is on, with the pane and a model that reads pictures.
             string screenNote = !screenEnabled ? NotOffered(ScreenOffSuffix) : standing;
             groups.Add(Group(ToolsText.ScreenTabTitle, screen, screenNote, screenEnabled && toolsEnabled, SettingsField.ScreenTools, disabled));
+        }
+
+        if (youTube is not null)
+        {
+            // YouTube (2026-10-05): after the screen; offered while YouTube tools is on, the search only with a key set.
+            string youTubeNote = !youTubeEnabled ? NotOffered(YouTubeOffSuffix) : standing;
+            var youTubeNotes = !youTubeKey && youTube.Any(t => t is YouTubeSearchTool) ? new Dictionary<string, string>(StringComparer.Ordinal) { [YouTubeSearchTool.ToolName] = NotOffered(NoYouTubeKeySuffix) } : null;
+            groups.Add(Group(ToolsText.YouTubeTabTitle, youTube, youTubeNote, youTubeEnabled && toolsEnabled, SettingsField.YouTubeTools, disabled, youTubeNotes));
         }
 
         if (advisor is not null)

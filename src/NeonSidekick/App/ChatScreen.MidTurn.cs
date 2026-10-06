@@ -167,7 +167,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
             or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
-            or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck => MidTurnClass.Pane,
+            or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -529,6 +529,19 @@ internal sealed partial class ChatScreen
             case SlashCommand.HomeAssistant:
                 // /ha (2026-09-30): the call on the watcher, the reply streaming on; its lines through the flow sink.
                 await HandleHomeAssistantMidTurnAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.YouTube:
+                // /youtube (2026-10-05): /ha's way — a search (and its picker) or the wait for the player on the watcher, the
+                // reply streaming on, the lines through the flow sink; the turn's end dropping it as it drops a pane.
+                try
+                {
+                    await HandleYouTubeAsync(args, _flow, spinner: false, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    DiagnosticLog.Debug("YouTube", "/youtube under the reply was cancelled as the reply ended.");
+                }
+
                 break;
             case SlashCommand.Docker:
                 // /docker (2026-10-02, /ha's way): the engine call on the watcher, the reply streaming on; the bare word lists rather than opening the pane.

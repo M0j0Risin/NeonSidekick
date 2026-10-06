@@ -310,6 +310,7 @@ public class ProfilesTests : IDisposable
             ComfyUrl = "http://comfy:8188",
             HomeAssistantUrl = "http://localhost:8123",
             HomeAssistantToken = "dpapi:ha",
+            YouTubeApiKey = "dpapi:yt",
             LlmApiKey = "dpapi:llm",
             TtsOutput = !new AppSettingsData().TtsOutput,
             WorkingDirectory = @"C:\elsewhere",
@@ -329,7 +330,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal("", kept.WorkingDirectory);
         Assert.Equal("dpapi:ha", kept.HomeAssistantToken);   // the Home Assistant pair (2026-09-28)
         Assert.Equal("dpapi:oa", kept.OpenAIApiKey);   // the OpenAI API key (2026-10-03)
-        Assert.Equal(14, Profiles.ResetKeptSettings.Length);
+        Assert.Equal("dpapi:yt", kept.YouTubeApiKey);   // the YouTube API key (2026-10-05, the user's ask)
+        Assert.Equal(15, Profiles.ResetKeptSettings.Length);
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);

@@ -82,7 +82,7 @@ internal sealed class SpeechOutput
         _turnToken = turnToken;
         _onFailure = onFailure;
 
-        _queue = new SpeechQueue(SpeakChunkAsync, _ => Interlocked.Increment(ref _chunksStarted), StopAll, turnToken);
+        _queue = new SpeechQueue(SpeakChunkAsync, _ => OnChunkStarted(), StopAll, turnToken);
         Completion = WaitAsync();
     }
 
@@ -96,6 +96,28 @@ internal sealed class SpeechOutput
     public int ChunksQueued => Volatile.Read(ref _chunksQueued);
 
     public int ChunksStarted => Volatile.Read(ref _chunksStarted);
+
+    /// <summary>
+    /// Told once, as the first chunk starts playing (2026-10-05, the video window's pause while the app speaks): a reply that only
+    /// calls tools, or is cut off before a sentence, never says it. Called on the queue's thread; it must not block, and what it
+    /// throws is logged, never the queue's.
+    /// </summary>
+    public Action? FirstAudio { get; set; }
+
+    private void OnChunkStarted()
+    {
+        if (Interlocked.Increment(ref _chunksStarted) == 1 && FirstAudio is { } first)
+        {
+            try
+            {
+                first();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Diagnostics.DiagnosticLog.Warn("TTS", "A first-audio listener failed: " + ex.Message);
+            }
+        }
+    }
 
     /// <summary>Whether this turn's speech failed; the rest of the turn is skipped.</summary>
     public bool Failed => _failed;

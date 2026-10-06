@@ -148,6 +148,7 @@ public static class AboutText
         new("Silero VAD", "6.2.0", "MIT", "the voice-activity model, downloaded on first use"),
         new("PhotoSauce.MagicScaler", "0.15.0", "MIT", "image decode and downscale through Windows' WIC codecs"),
         new("Markdig", "1.3.2", "BSD-2-Clause", "the Markdown reader behind the styled transcript"),
+        new("Microsoft.Web.WebView2", "1.0.4258.31", "BSD-3-Clause", "the video window's WebView2 loader; the browser is Windows' WebView2 Runtime"),   // 2026-10-05
         new("llama.cpp (llama-server)", EmbeddedLlm.LlamaRelease.Tag, "MIT", "embedded LLM server, downloaded on first use"),   // 2026-09-29; the user's wording 2026-10-03
     ];   // the Gemma 4 (GGUF) row gone 2026-10-03, the user's call
 

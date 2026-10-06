@@ -86,6 +86,7 @@ public sealed class SidekickApp
 
     /// <summary>The screen for <c>screen_capture</c>, <c>screen_list</c> and <c>/screen</c> (2026-10-04); null off Windows.</summary>
     private readonly Screen.IScreenSystem? _screenSystem;
+    private readonly Viewer.IVideoPlayer? _videoPlayer;
 
     /// <summary>The <c>/keycheck</c> probe (2026-10-04): <see cref="Hotkeys.WindowsHotkeyProbe"/> on Windows, null elsewhere.</summary>
     private readonly Hotkeys.IHotkeyProbe? _hotkeyProbe;
@@ -216,9 +217,12 @@ public sealed class SidekickApp
         Action<string>? followThumbs = null,
         Action<string>? showInViewer = null,
         Func<bool>? closeThumbs = null,
-        Action<Shell.ProcessSession, Action<Shell.ProcessSession>>? openProcessWindow = null)
+        Action<Shell.ProcessSession, Action<Shell.ProcessSession>>? openProcessWindow = null,
+        Viewer.IVideoPlayer? videoPlayer = null)
     {
         _openProcessWindow = openProcessWindow;
+        // The video window (2026-10-05): VideoWindow.Player in the app on Windows, a fake in tests, none elsewhere.
+        _videoPlayer = videoPlayer;
         // The thumbnail browser (2026-10-04): ThumbsWindow and PictureWindow.ShowQuietly in the app on Windows, null in tests and
         // elsewhere; ThumbsWindow.Close for the toolbar's 🪟 a second time.
         _openThumbs = openThumbs;
@@ -721,6 +725,8 @@ public sealed class SidekickApp
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
         var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null);
+        // The YouTube search (2026-10-05): no window headless, so youtube_search alone.
+        var youTubeTools = ChatScreen.YouTubeTools(new YouTube.YouTubeDataApi(_web.Http), player: null, () => EffectiveSettings);
         // The Docker tools (2026-10-02): no pane to ask on, so every change is refused; the reads and /docker work.
         using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time);
         // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
@@ -997,6 +1003,34 @@ public sealed class SidekickApp
                     continue;
                 }
 
+                // /youtube (2026-10-05): a search lists what it finds, ahead of the server check (the API needs no LLM);
+                // every other verb wants the video window, which headless has none of.
+                if (SlashCommands.Parse(text) is (SlashCommand.YouTube, var youTubeArgs))
+                {
+                    var youTubeLine = YouTube.YouTubeCommand.Parse(youTubeArgs);
+                    if (youTubeLine.Verb != YouTube.YouTubeVerb.Search)
+                    {
+                        await HeadlessLineAsync("[error] " + (youTubeLine.Error ?? YouTube.YouTubeText.NeedsScreen)).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (YouTube.YouTubeDataApi.Key(EffectiveSettings) is not { } youTubeKey)
+                    {
+                        await HeadlessLineAsync("[error] " + YouTube.YouTubeText.NoKeyForUser).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    int youTubeCount = Math.Clamp(EffectiveSettings.YouTubeSearchMaxResults, AppSettingsData.MinYouTubeSearchMaxResults, AppSettingsData.MaxYouTubeSearchMaxResults);
+                    var youTubeFound = await new YouTube.YouTubeDataApi(_web.Http).SearchAsync(youTubeLine.Text, youTubeCount, youTubeKey, cancellationToken).ConfigureAwait(false);
+                    string youTubeText = youTubeFound.Ok ? YouTube.YouTubeText.Results(youTubeLine.Text, youTubeFound.Hits.Take(youTubeCount).ToList()) : "[error] " + YouTube.YouTubeText.Failure(youTubeFound.Failure, youTubeFound.Detail)["Error: ".Length..];
+                    foreach (string youTubeRow in youTubeText.Split('\n'))
+                    {
+                        await HeadlessLineAsync(youTubeRow).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
                 // /docker (2026-10-02): ahead of the server check too — the engine needs no LLM; the bare word lists.
                 if (SlashCommands.Parse(text) is (SlashCommand.Docker, var dockerArgs))
                 {
@@ -1091,7 +1125,7 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeCliAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeCliAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools));
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude CLI server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
@@ -1971,7 +2005,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as WindowsConsoleInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;
@@ -2150,6 +2184,7 @@ public sealed class SidekickApp
         SettingsField.ClaudeCliServer => _environment.ClaudeCliServer is not null ? EnvironmentOverrides.ClaudeCliServerVariable : null,
         SettingsField.OpenAIApi => _environment.OpenAIApi is not null ? EnvironmentOverrides.OpenAIApiVariable : null,
         SettingsField.OpenAIApiKey => _environment.OpenAIApiKey is not null ? EnvironmentOverrides.OpenAIApiKeyVariable : null,
+        SettingsField.YouTubeApiKey => _environment.YouTubeApiKey is not null ? EnvironmentOverrides.YouTubeApiKeyVariable : null,
         SettingsField.DockerEnginePipe => _environment.DockerPipe is not null ? EnvironmentOverrides.DockerPipeVariable : null,
         _ => null,
     };

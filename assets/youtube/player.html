@@ -1,0 +1,101 @@
+<!doctype html>
+<!--
+  The video window's page (Viewer/VideoPage, 2026-10-05). WebView2 serves it from https://player.neonsidekick.example/, a
+  page with an origin, so the embed YouTube's IFrame Player API makes is sent a Referer (without one, error 153). The app talks
+  to it in JSON over WebView2's web messages:
+    app to page: {cmd: "load", id, start, autoplay}, "play", "pause", "seek" {t}, "volume" {v}, "mute", "unmute", "stop",
+                 "echo" {value} (the smoke's round trip)
+    page to app: {ev: "page"} once the script runs (no network needed), {ev: "ready"} once the player is,
+                 {ev: "state", ...} on every change, after every command and every second while playing,
+                 {ev: "error", code, id} (YouTube's onError: 2 a bad id, 5 HTML5, 100 not found, 101/150 not here),
+                 {ev: "echo", value}
+  The player is made at the first load, with that video, because a player made empty has nothing to be ready with.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>NeonSidekick video</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #player { width: 100%; height: 100%; border: 0; }
+</style>
+</head>
+<body>
+<div id="player"></div>
+<script>
+'use strict';
+const send = message => chrome.webview.postMessage(JSON.stringify(message));
+let api = false;
+let player = null;
+let ready = false;
+let pending = null;
+
+function videoData() {
+  try { return player.getVideoData() || {}; } catch { return {}; }
+}
+
+function report(why) {
+  if (!ready) return;
+  const d = videoData();
+  send({
+    ev: 'state', why, id: d.video_id || null, title: d.title || null, author: d.author || null,
+    state: player.getPlayerState(), position: player.getCurrentTime(), duration: player.getDuration(),
+    volume: player.getVolume(), muted: player.isMuted()
+  });
+}
+
+function create(m) {
+  player = new YT.Player('player', {
+    videoId: m.id,
+    playerVars: { playsinline: 1, rel: 0, start: Math.floor(m.start || 0), origin: location.origin },
+    events: {
+      onReady: () => {
+        ready = true;
+        send({ ev: 'ready' });
+        if (m.autoplay !== false) player.playVideo();
+        report('ready');
+      },
+      onStateChange: () => report('change'),
+      onError: e => send({ ev: 'error', code: e.data, id: videoData().video_id || m.id })
+    }
+  });
+}
+
+function load(m) {
+  if (!api) { pending = m; return; }
+  if (!player) { create(m); return; }
+  const args = { videoId: m.id, startSeconds: m.start || 0 };
+  if (m.autoplay === false) player.cueVideoById(args); else player.loadVideoById(args);
+}
+
+function onYouTubeIframeAPIReady() {
+  api = true;
+  if (pending) { const m = pending; pending = null; load(m); }
+}
+
+setInterval(() => { if (ready && player.getPlayerState() === YT.PlayerState.PLAYING) report('tick'); }, 1000);
+
+chrome.webview.addEventListener('message', e => {
+  const m = e.data || {};
+  if (m.cmd === 'echo') { send({ ev: 'echo', value: m.value }); return; }
+  if (m.cmd === 'load') { load(m); return; }
+  if (!ready) return;
+  switch (m.cmd) {
+    case 'play': player.playVideo(); break;
+    case 'pause': player.pauseVideo(); break;
+    case 'stop': player.stopVideo(); break;
+    case 'seek': player.seekTo(m.t, true); break;
+    case 'volume': player.setVolume(m.v); if (m.v > 0) player.unMute(); break;
+    case 'mute': player.mute(); break;
+    case 'unmute': player.unMute(); break;
+    default: return;
+  }
+  report(m.cmd);
+});
+
+send({ ev: 'page' });
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

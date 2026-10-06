@@ -41,7 +41,8 @@ public static partial class SmokeChecks
     /// (Kokoro in-process, 2026-09-16) land at the root from the Microsoft.ML.OnnxRuntime package, and
     /// libgit2 (the git tools, 2026-09-20) from LibGit2Sharp.NativeBinaries — the file is named after the
     /// libgit2 commit it was built from, so the const follows a package bump; SqlClient's SNI (the SQL tools,
-    /// 2026-09-23) from Microsoft.Data.SqlClient.SNI.runtime.
+    /// 2026-09-23) from Microsoft.Data.SqlClient.SNI.runtime; WebView2's loader (the video window, 2026-10-05) copied by the csproj
+    /// from the Microsoft.Web.WebView2 package, whose managed assemblies are left out.
     /// </summary>
     public static readonly string[] RequiredNativeLibraries =
     {
@@ -58,6 +59,7 @@ public static partial class SmokeChecks
         "libwinpthread-1.dll",
         Git.GitAccess.NativeLibraryFileName,
         Sql.SqlAccess.NativeLibraryFileName,
+        Viewer.VideoPage.LoaderFileName,
     };
 
     /// <summary>
@@ -113,6 +115,7 @@ public static partial class SmokeChecks
         results.Add(ProbeLogWindow());
         results.Add(ProbeThumbsWindow());
         results.Add(ProbePictureMenu());
+        results.Add(ProbeVideoWebView2());
         results.Add(ProbeCameraMf());
         results.Add(ProbeCameraEncode());
         results.Add(ProbeScreenGdi());

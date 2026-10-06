@@ -156,7 +156,7 @@ public static class HelpCommands
         ]),
         new("/keycopy",
         [
-            new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that is not set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY` or `NEONSIDEKICK_HA_TOKEN` is not copied."),
+            new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that is not set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_HA_TOKEN` or `NEONSIDEKICK_YOUTUBE_API_KEY` is not copied."),
         ]),
         new("/learn",
         [
@@ -383,6 +383,20 @@ public static class HelpCommands
         new("/window",
         [
             new("/window", "Show the terminal window's width and height."),
+        ]),
+        new("/youtube",
+        [
+            new("/youtube", "Say what the video window is playing: the video, playing or paused, where it is and the volume."),
+            new("/youtube <words>", "Search YouTube for the words (it needs a *YouTube API key*; each search costs 100 of its 10,000 daily quota units) and pick a video on the pane; Enter plays it in the video window. Only videos that play embedded are listed. Words that start with a verb below search too, unless what follows fits the verb."),
+            new("/youtube search <words>", "Search for words whatever they start with."),
+            new("/youtube play <id>|<link> [<time>]", "Play a video by its id or a YouTube link, from the time (`90` or `1:30`) or the link's own. A link alone plays too. Needs no key. The window opens where it last closed without taking the keyboard; F11 is full screen, Esc leaves it and then closes the window."),
+            new("/youtube play|resume", "Carry on playing."),
+            new("/youtube pause", "Pause the video."),
+            new("/youtube seek <time>", "Go to a time in the video."),
+            new("/youtube volume <level>", "Set the volume, 0 to 100."),
+            new("/youtube mute|unmute", "Mute or unmute the video."),
+            new("/youtube close", "Close the video window."),
+            new("/youtube status", "The bare word's status line."),
         ]),
     ];
 }

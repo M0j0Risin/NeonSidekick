@@ -792,6 +792,16 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Screen capture output folder | Where screenshots are saved, under the working directory (empty = the working directory). | `screen_images` |
 | Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
 
+#### YouTube
+
+| Setting | What it does | Default |
+|---|---|---|
+| YouTube tools | Offers the YouTube tools: `youtube_search` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has). Playing by a video's id or link needs no key. Headless offers the search alone. | off |
+| YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI); sent only to www.googleapis.com, in a header, never in a URL. `/keycopy` copies it; a plain `/profile reset` keeps it. | (none) |
+| YouTube search max results | How many videos a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
+| YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
+| YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
+
 #### ClaudeCLI
 
 The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (the model asks it). The Anthropic API and the Claude CLI as servers are on `/settings` › Anthropic.
@@ -1049,7 +1059,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/cmdcopy <profile> [overwrite] [--history]` | Copies *Shell allowed commands* into another profile (added, or replacing with `overwrite`). `--history` copies the command history instead (refused when that profile has *Keep command history* off). |
 | `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey, the held ones first, in a pane. A held chord never reaches the app. Only hotkeys registered with Windows show; a keyboard hook (AutoHotkey, PowerToys Keyboard Manager) or a Windows Terminal key binding can still take a key. |
-| `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key* and *Home Assistant API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
+| `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix; the ask and yolo buttons (A, Y) switch *Shell command policy*. |
 | `/police` | Opens the on/off page for *Shell police*; its strings button (S) opens *Shell police forbidden strings*. |
@@ -1182,6 +1192,10 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/vocalia copy <profile> [force]` | Copies it to another profile (`force` replaces theirs). |
 | `/wake [on\|off]` | Toggles the wake word. |
 | `/window` | Shows the terminal window's size. |
+| `/youtube` | Says what the video window is playing. |
+| `/youtube <words>` | Searches YouTube (with a *YouTube API key*; 100 quota units a search) and opens a picker of the videos found; Enter plays one in the video window. Words that start with a verb below search too, unless what follows fits the verb; `/youtube search <words>` searches whatever they are. |
+| `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. |
+| `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: carry on, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
 
 </details>
 
@@ -1394,7 +1408,7 @@ A monitor, every monitor or one window, through Windows' own GDI; nothing to ins
 * A name is 1 to 32 letters, digits, `-` or `_`, and can't be `neon` or one of the verbs.
 * A name starting with `_` is temporary: left off the picker and the name list (unless loaded), and the next launch opens `default` (the profile is kept). `/profile _name` still switches to one.
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch without changing the next launch's. An unknown name exits with code 2; a headless run with neither opens `default`.
-* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude CLI executable, Obsidian vault, ComfyUI URL, Home Assistant URL and Home Assistant API key; `--all` resets those too. `default` can only be reset while loaded.
+* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude CLI executable, Obsidian vault, ComfyUI URL, Home Assistant URL, Home Assistant API key and YouTube API key; `--all` resets those too. `default` can only be reset while loaded.
 * `push <name>` copies the loaded profile's settings over another's; `pull <name>` the other way. Both ask first. Only `profile.json` is copied (the target keeps its working directory); a pull clears the conversation.
 * The API keys in `profile.json` are encrypted for your Windows account (DPAPI, `dpapi:…`); a key typed into the file by hand is encrypted at the next load. Only the same Windows user on the same machine can read them.
 
@@ -2397,6 +2411,17 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 | `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see Screen capture), after your yes under *Screen capture ask* `ask`. The screenshot is saved in *Screen capture output folder* and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
 | `screen_list` | (none) | Lists the monitors and the windows with the target that names each. Titles and sizes only. Allowed in plan mode. |
 
+### YouTube
+
+Under *YouTube tools*. Videos play in the app's own video window: a Windows window hosting the Microsoft Edge WebView2 Runtime (Windows 11 has it) on YouTube's embedded player. It opens where it last closed without taking the keyboard from the terminal; F11 is full screen, Esc leaves full screen and then closes it, and Ctrl and Alt chords go to the chat. YouTube's own keys (Space, ← →, M, F) work once you click into the video. One window: a new video replaces the one playing. A video whose uploader turned embedding off, or that is private, age-restricted or gone, is refused, and the answer points at `open_url`.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `youtube_search` | `query, max?` | Searches YouTube through the Data API with *YouTube API key* (100 quota units a search) and lists videos that play embedded: title, channel, length, views, year and id. Offered only with a key set, headless too. Allowed in plan mode. |
+| `youtube_play` | `video, start?` | Plays a video by its id or any YouTube link (a link's `t=` included), from `start` (`90` or `1:30`), and answers with what the player reports. Starts at once, or cued under *YouTube autoplay* off. Needs no key; not headless. |
+| `youtube_control` | `action, value?` | `play`, `pause`, `seek` (to a time), `forward` / `back` (by seconds, 10 by default), `volume` (0–100), `mute`, `unmute` or `close`, and answers with where the video then is. |
+| `youtube_status` | (none) | What the window is playing: the video and channel, the state, the position and length, the volume. Allowed in plan mode. |
+
 ### Questions
 
 | Tool | Arguments | What it does |
@@ -2509,6 +2534,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 | `NEONSIDEKICK_COMFY_URL` | ComfyUI URL | The server's URL (`http://gpu-box:8188`). |
 | `NEONSIDEKICK_HA_URL` | Home Assistant URL | The server's URL (`http://localhost:8123`). |
 | `NEONSIDEKICK_HA_TOKEN` | Home Assistant API key | A long-lived token as issued. Never logged. |
+| `NEONSIDEKICK_YOUTUBE_API_KEY` | YouTube API key | A YouTube Data API v3 key as issued. Never logged. |
 | `NEONSIDEKICK_DOCKER_PIPE` | Docker engine pipe | A bare name, `\\.\pipe\name` or `npipe:////./pipe/name` (what `DOCKER_HOST` holds on Windows). |
 
 ### Set by the app
@@ -2526,6 +2552,7 @@ Only for running the tests from source; each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe. Read only.
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`, a folder to keep the test photo in.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.
+* `NEONSIDEKICK_TEST_YOUTUBE_API_KEY`: a YouTube Data API key for the live search test (about 101 quota units a run).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model not under `%USERPROFILE%\.neonsidekick\models`.
 * `NEONSIDEKICK_TEST_CLAUDE=1`: the live Claude Code tests (Haiku, a few cents a run).
 * `NEONSIDEKICK_TEST_CLAUDE_API_KEY`: the live Anthropic API tests (Sonnet 5 and Opus 5.5, a few cents a run).

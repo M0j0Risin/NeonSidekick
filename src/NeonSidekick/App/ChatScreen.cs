@@ -968,7 +968,8 @@ internal sealed partial class ChatScreen
         Action<string>? followThumbs = null,
         Action<string>? showInViewer = null,
         Func<bool>? closeThumbs = null,
-        Action<ProcessSession, Action<ProcessSession>>? openProcessWindow = null)
+        Action<ProcessSession, Action<ProcessSession>>? openProcessWindow = null,
+        Viewer.IVideoPlayer? videoPlayer = null)
     {
         _logFile = logFile;
         _openProcessWindow = openProcessWindow;
@@ -1073,6 +1074,16 @@ internal sealed partial class ChatScreen
         _hotkeyProbe = hotkeyProbe;
         _screenCapture = screenSystem is null ? null : new Screen.ScreenCapture(screenSystem, () => _files, () => _effective().ScreenOutputFolder, _time);
         _screenTools = ScreenTools(CaptureForModelAsync, screenSystem);
+        // The YouTube tools (2026-10-05): the Data API over the web tools' client, the video window when there is one.
+        _videoPlayer = videoPlayer;
+        _youTubeSearch = new YouTube.YouTubeDataApi(_web.Http);
+        _youTubeTools = YouTubeTools(_youTubeSearch, videoPlayer, _effective, _time);
+        // A playing video pauses (YouTube while speaking) from a speaker's first audio to its last, and around a request's listen.
+        _videoPause = videoPlayer is null ? null : new YouTube.VideoVoicePause(videoPlayer, () => _effective().YouTubeVoice);
+        if (_videoPause is { } videoPause)
+        {
+            _speech.Began = speaker => speaker.FirstAudio = () => videoPause.HoldUntil(speaker.Completion);
+        }
         _printTools = PrintTools(_print, ConfirmPrintAsync);
         _printerNames = new PrinterNameCache(_print, _time);
         // The performance bar (2026-09-29): sampled on its own timer while the setting draws it (PerfRow).
@@ -3550,7 +3561,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null);
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -4263,6 +4274,10 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(sources.Planning ? PlanVerbs : PlanVerbsIdle, argText);
             }
 
+            case SlashCommand.YouTube:
+                // The verbs (2026-10-05); past the first word, a search's words or a video, free text.
+                return YouTube.YouTubeCommand.Complete(argText);
+
             case SlashCommand.Screen:
                 // The words, then the monitors after monitor: and the windows after window: (2026-10-04, the user's report).
                 return sources.Screen?.Invoke(argText) ?? NeonSidekick.Screen.ScreenTarget.Complete(argText, [], null, [], null);
@@ -4535,7 +4550,7 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()) : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()) : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()) : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()) : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null, youTube: YouTubeOffered(effective, _youTubeTools) ? YouTubeToolsFor(_youTubeTools, effective) : null)));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -4586,6 +4601,7 @@ internal sealed partial class ChatScreen
             SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
             SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,
             SettingsField.HomeAssistantTools => !effective.HomeAssistantTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoHomeAssistantReason,
+            SettingsField.YouTubeTools => !effective.YouTubeTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoYouTubeReason,
             _ => null,
         };
     }
@@ -4593,7 +4609,7 @@ internal sealed partial class ChatScreen
     /// <summary>Every tool group as <c>/tools</c> lists it, offered or not.</summary>
     private IReadOnlyList<ToolGroup> ToolsGroups(AppSettingsData effective, IReadOnlySet<string> disabled)
     {
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null);
         return groups;
     }
 
@@ -4607,7 +4623,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Refresh();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisor: _advisorTools, advisorEnabled: effective.ClaudeCliAdvisor, homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null);
         return groups.Where(g => g.Switch is not (SettingsField.MemoryMode or SettingsField.AgentSkills or SettingsField.ComfyTools)).ToList();
     }
 
@@ -5510,7 +5526,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false, IReadOnlyList<AIFunction>? screenTools = null, bool screenEnabled = false, IReadOnlyList<AIFunction>? sqliteTools = null, bool sqliteEnabled = false, IReadOnlyList<AIFunction>? postgresTools = null, bool postgresEnabled = false, bool memorySave = true)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, IReadOnlyList<AIFunction>? advisorTools = null, bool advisorEnabled = false, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false, IReadOnlyList<AIFunction>? screenTools = null, bool screenEnabled = false, IReadOnlyList<AIFunction>? sqliteTools = null, bool sqliteEnabled = false, IReadOnlyList<AIFunction>? postgresTools = null, bool postgresEnabled = false, bool memorySave = true, IReadOnlyList<AIFunction>? youTubeTools = null, bool youTubeEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(memoryTools);
         ArgumentNullException.ThrowIfNull(standingTools);
@@ -5566,6 +5582,8 @@ internal sealed partial class ChatScreen
             SqliteEnabled = sqliteEnabled,
             Postgres = postgresTools,
             PostgresEnabled = postgresEnabled,
+            YouTube = youTubeTools,
+            YouTubeEnabled = youTubeEnabled,
             Disabled = disabledTools,
             Plan = plan,
         };
@@ -5707,6 +5725,8 @@ internal sealed partial class ChatScreen
         SqliteEnabled = SqliteOffered(effective, _sqlite),
         Postgres = PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()),
         PostgresEnabled = PostgresOffered(effective, _postgres),
+        YouTube = YouTubeToolsFor(_youTubeTools, effective),
+        YouTubeEnabled = YouTubeOffered(effective, _youTubeTools),
         Unc = UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools),
         UncEnabled = UncOffered(effective, _unc),
         Docker = DockerToolsFor(_dockerTools, effective),
@@ -6748,13 +6768,14 @@ internal sealed partial class ChatScreen
     private const string AnthropicKeyName = "Anthropic API key";
     private const string OpenAIKeyName = "OpenAI API key";
     private const string HomeAssistantKeyName = "Home Assistant API key";
+    private const string YouTubeKeyName = "YouTube API key";   // 2026-10-05, the user's ask
 
     /// <summary><c>a</c>, <c>a and b</c>, <c>a, b and c</c>.</summary>
     private static string KeySeries(IReadOnlyList<string> items) =>
         items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
     /// <summary>The keys' names split by whether this profile has them set, in the settings pane's order.</summary>
-    private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool openAISet, bool haSet)
+    private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet)
     {
         var set = new List<string>();
         var unset = new List<string>();
@@ -6762,19 +6783,20 @@ internal sealed partial class ChatScreen
         (claudeSet ? set : unset).Add(AnthropicKeyName);
         (openAISet ? set : unset).Add(OpenAIKeyName);
         (haSet ? set : unset).Add(HomeAssistantKeyName);
+        (youTubeSet ? set : unset).Add(YouTubeKeyName);
         return (set, unset);
     }
 
     /// <summary>
     /// The question before a key copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
-    /// <c>Copy the LLM API key, the Anthropic API key, the OpenAI API key and the Home Assistant API key into "work"?</c>, and when a key is not set
+    /// <c>Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key into "work"?</c>, and when a key is not set
     /// here what the mirror does to the target's — <c> "work"'s Anthropic API key is cleared: none here.</c> — so the clearing
     /// is never a surprise. Pinned.
     /// </summary>
-    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet)
+    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet)
     {
-        string question = $"Copy the {KeySeries([LlmKeyName, "the " + AnthropicKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName])} into \"{profile}\"?";
-        var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet);
+        string question = $"Copy the {KeySeries([LlmKeyName, "the " + AnthropicKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName, "the " + YouTubeKeyName])} into \"{profile}\"?";
+        var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet);
         return unset.Count == 0
             ? question
             : $"{question} \"{profile}\"'s {KeySeries(unset)} {(unset.Count == 1 ? "is" : "are")} cleared: none here.";
@@ -6785,9 +6807,9 @@ internal sealed partial class ChatScreen
     /// <c>(copied the LLM API key and the Home Assistant API key into "work"; its Anthropic API key cleared)</c>, none
     /// <c>(cleared "work"'s LLM API key, Anthropic API key and Home Assistant API key)</c>. Pinned.
     /// </summary>
-    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet)
+    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet)
     {
-        var (set, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet);
+        var (set, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet);
         if (set.Count == 0)
         {
             return $"(cleared \"{profile}\"'s {KeySeries(unset)})";
@@ -6799,12 +6821,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Anthropic API
-    /// key</c>, <c>OpenAI API key</c> (2026-10-03) and <c>Home Assistant API key</c> (joined the same day, the user's ask) into another's, after a confirmation —
+    /// key</c>, <c>OpenAI API key</c> (2026-10-03), <c>Home Assistant API key</c> (joined the same day, the user's ask) and <c>YouTube API key</c>
+    /// (2026-10-05, the user's ask) into another's, after a confirmation —
     /// <c>/cmdcopy</c>'s read-edit-write of the target's <c>profile.json</c> (<see cref="Profiles.ReadProfileFile"/>: a corrupt
     /// one is an error, never overwritten) without its switches. All are mirrored (the user's call): a key not set here clears
     /// the target's, so it ends with exactly this profile's keys, and the question says so. The stored values
     /// (<c>_settings.Current</c>, not the effective ones: a key that comes only from <c>NEONSIDEKICK_LLM_API_KEY</c>/
-    /// <c>NEONSIDEKICK_ANTHROPIC_API_KEY</c>/<c>NEONSIDEKICK_OPENAI_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c> is a per-run override and stays out of the file),
+    /// <c>NEONSIDEKICK_ANTHROPIC_API_KEY</c>/<c>NEONSIDEKICK_OPENAI_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c>/<c>NEONSIDEKICK_YOUTUBE_API_KEY</c> is a per-run override and stays out of the file),
     /// copied as stored: a <c>dpapi:</c> key or token reads the same in any profile of this Windows user on this machine, as
     /// <see cref="Profiles.KeepOnReset"/> already relies on. The values are never shown or logged.
     /// </summary>
@@ -6835,11 +6858,13 @@ internal sealed partial class ChatScreen
         string claudeKey = current.AnthropicApiKey;
         string openAIKey = current.OpenAIApiKey;
         string haToken = current.HomeAssistantToken;
+        string youTubeKey = current.YouTubeApiKey;
         bool llmSet = !string.IsNullOrWhiteSpace(llmKey) && llmKey.Trim() != LlmEndpoint.DefaultApiKey;
         bool claudeSet = !string.IsNullOrWhiteSpace(claudeKey);
         bool openAISet = !string.IsNullOrWhiteSpace(openAIKey);
         bool haSet = !string.IsNullOrWhiteSpace(haToken);
-        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet, openAISet, haSet), cancellationToken).ConfigureAwait(false))
+        bool youTubeSet = !string.IsNullOrWhiteSpace(youTubeKey);
+        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet, openAISet, haSet, youTubeSet), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
@@ -6853,8 +6878,9 @@ internal sealed partial class ChatScreen
             data.AnthropicApiKey = claudeKey;
             data.OpenAIApiKey = openAIKey;
             data.HomeAssistantToken = haToken;
+            data.YouTubeApiKey = youTubeKey;
             Profiles.WriteProfileFile(path, data);
-            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet, openAISet, haSet));
+            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet, openAISet, haSet, youTubeSet));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
@@ -10922,6 +10948,10 @@ internal sealed partial class ChatScreen
                 await HandleScreenAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.YouTube:
+                await HandleYouTubeAsync(args, _transcript, spinner: true, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Print:
                 await HandlePrintAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
@@ -13455,6 +13485,7 @@ internal sealed partial class ChatScreen
         using var discard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var finish = new CancellationTokenSource();
         using var stop = new CancellationTokenSource();
+        using var videoHeld = _videoPause?.Hold();   // YouTube while speaking (2026-10-05): the microphone does not hear the video
         if (requestSpoken)
         {
             finish.Cancel();

@@ -1,0 +1,27 @@
+{
+  "kind": "youtube#videoListResponse",
+  "etag": "b0",
+  "items": [
+    {
+      "kind": "youtube#video",
+      "etag": "b1",
+      "id": "aqz-KE-bpKQ",
+      "contentDetails": { "duration": "PT10M35S", "dimension": "2d", "definition": "hd", "caption": "false", "licensedContent": false, "contentRating": {}, "projection": "rectangular" },
+      "statistics": { "viewCount": "21543678", "likeCount": "190000", "favoriteCount": "0", "commentCount": "12000" }
+    },
+    {
+      "kind": "youtube#video",
+      "etag": "b2",
+      "id": "jfKfPfyJRdk",
+      "contentDetails": { "duration": "P0D", "dimension": "2d", "definition": "hd", "caption": "false", "licensedContent": true, "contentRating": {}, "projection": "rectangular" },
+      "statistics": { "viewCount": "947", "favoriteCount": "0" }
+    },
+    {
+      "kind": "youtube#video",
+      "etag": "b3",
+      "id": "jNQXAC9IVRw",
+      "contentDetails": { "duration": "PT19S", "dimension": "2d", "definition": "sd", "caption": "true", "licensedContent": false, "contentRating": {}, "projection": "rectangular" },
+      "statistics": { "likeCount": "18000000", "favoriteCount": "0" }
+    }
+  ]
+}

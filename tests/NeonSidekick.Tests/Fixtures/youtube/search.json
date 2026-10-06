@@ -1,0 +1,58 @@
+{
+  "kind": "youtube#searchListResponse",
+  "etag": "q4ibjmYp1KA3RqMF4jFLl6PBwOA",
+  "nextPageToken": "CAMQAA",
+  "regionCode": "US",
+  "pageInfo": { "totalResults": 1000000, "resultsPerPage": 3 },
+  "items": [
+    {
+      "kind": "youtube#searchResult",
+      "etag": "a1",
+      "id": { "kind": "youtube#video", "videoId": "aqz-KE-bpKQ" },
+      "snippet": {
+        "publishedAt": "2014-11-10T14:05:55Z",
+        "channelId": "UCSMOQeBJ2RAnuFungnQOxLg",
+        "title": "Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film",
+        "description": "Big Buck Bunny tells the story of a giant rabbit...",
+        "thumbnails": { "default": { "url": "https://i.ytimg.com/vi/aqz-KE-bpKQ/default.jpg", "width": 120, "height": 90 } },
+        "channelTitle": "Blender",
+        "liveBroadcastContent": "none",
+        "publishTime": "2014-11-10T14:05:55Z"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "a2",
+      "id": { "kind": "youtube#video", "videoId": "jfKfPfyJRdk" },
+      "snippet": {
+        "publishedAt": "2022-07-12T12:12:29Z",
+        "channelId": "UCSJ4gkVC6NrvII8umztf0Ow",
+        "title": "lofi hip hop radio &#128218; beats to relax/study to",
+        "description": "",
+        "channelTitle": "Lofi Girl",
+        "liveBroadcastContent": "live",
+        "publishTime": "2022-07-12T12:12:29Z"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "a3",
+      "id": { "kind": "youtube#video", "videoId": "jNQXAC9IVRw" },
+      "snippet": {
+        "publishedAt": "2005-04-24T03:31:52Z",
+        "channelId": "UC4QobU6STFB0P71PMvOGN5A",
+        "title": "Me at the zoo &amp; the elephants&#39; &quot;trunks&quot;",
+        "description": "The first video on YouTube.",
+        "channelTitle": "jawed",
+        "liveBroadcastContent": "none",
+        "publishTime": "2005-04-24T03:31:52Z"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "a4",
+      "id": { "kind": "youtube#channel", "channelId": "UCSMOQeBJ2RAnuFungnQOxLg" },
+      "snippet": { "title": "Blender", "channelTitle": "Blender", "liveBroadcastContent": "none" }
+    }
+  ]
+}

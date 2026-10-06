@@ -7,6 +7,8 @@
     <IsPackable>false</IsPackable>
     <!-- Off since 2026-09-23 with the app's (SqlClient refuses invariant mode); ModuleInit pins the cultures as Program.cs does. -->
     <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- 2026-10-05: WebViewHandlerTests call the app-made COM objects through their vtables, as WebView2 does. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -57,6 +59,10 @@
          inspect with fake secrets in every place the redaction covers; stats under cgroup v2 and v1; the images, volumes,
          networks and disk use; a pull's progress lines and a refused pull. The Docker client and tools are pinned to them. -->
     <None Include="Fixtures\docker\*.*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- YouTube Data API v3 answers (2026-10-05): hand-made in the shapes the API documents and returns — a search.list with a
+         video, a live broadcast, HTML-escaped titles and a channel hit to skip; the videos.list details (a length, P0D for the
+         broadcast, a hidden view count); quotaExceeded, an invalid key, the API not enabled, a referrer-restricted key. -->
+    <None Include="Fixtures\youtube\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

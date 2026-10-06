@@ -164,6 +164,24 @@
       on the published binary.
     -->
     <PackageReference Include="Npgsql" Version="10.0.3" />
+    <!--
+      The video window's WebView2 (Viewer/WebView*, 2026-10-05): only WebView2Loader.dll is taken from the package, copied
+      beside the exe below. ExcludeAssets="all" keeps every managed assembly in it (Core, WinForms, WPF) out of the build:
+      their COM interop is built-in RCWs, which NativeAOT does not support, so the app calls WebView2 through raw vtables
+      instead (Viewer/WebViewNative.cs). GeneratePathProperty gives the package's folder as $(PkgMicrosoft_Web_WebView2).
+      The package (the loader with it) is BSD-3-Clause, GPL-compatible; /about's Components tab lists it. The browser itself is
+      the Evergreen WebView2 Runtime Windows 11 carries, nothing shipped. The smoke's native:WebView2Loader.dll and video:webview2 are the proof on
+      the published binary.
+    -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" ExcludeAssets="all" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll"
+          Link="WebView2Loader.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          Visible="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -227,6 +245,9 @@
     <!-- The default persona (2026-10-03, the user's ask): assets\prompts\persona.md is Assistant.DefaultPersona, what the
          prompt carries without a persona.md and what /persona seeds the file with. Edit the asset; the next build has it. -->
     <EmbeddedResource Include="..\..\assets\prompts\persona.md" LogicalName="prompts/persona.md" Visible="false" />
+    <!-- The video window's page (2026-10-05): the IFrame Player API host Viewer/VideoPage writes into <home>\webview2\site and
+         WebView2 serves from https://player.neonsidekick.example/ (a page with an origin, so YouTube's embeds get a Referer). -->
+    <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />
   </ItemGroup>
 
   <!--

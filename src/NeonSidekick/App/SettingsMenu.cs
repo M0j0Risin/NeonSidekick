@@ -973,6 +973,21 @@ public enum SettingsField
 
     /// <summary>How the transcript draws the user's sent line (<see cref="Settings.AppSettingsData.UserLineStyle"/>, 2026-10-04): a picker, no reconnect. Last, so the flat list's rows above keep their places.</summary>
     UserLineStyle,
+
+    /// <summary>A toggle: whether a turn offers the YouTube tools (<see cref="Settings.AppSettingsData.YouTubeTools"/>). The YouTube tab of <c>/tools</c>' first row (2026-10-05, the YouTube plan); no reconnect (read at each turn).</summary>
+    YouTubeTools,
+
+    /// <summary>Typed, masked: the YouTube Data API key, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.YouTubeApiKey"/>); empty clears it. The YouTube tab's second row (2026-10-05); no reconnect (read at each search).</summary>
+    YouTubeApiKey,
+
+    /// <summary>Typed: how many videos a search lists, 1 to 20 (<see cref="Settings.AppSettingsData.YouTubeSearchMaxResults"/>). The YouTube tab (2026-10-05); no reconnect.</summary>
+    YouTubeSearchMaxResults,
+
+    /// <summary>A toggle: whether a played video starts at once or waits cued (<see cref="Settings.AppSettingsData.YouTubeAutoplay"/>). The YouTube tab (2026-10-05); no reconnect.</summary>
+    YouTubeAutoplay,
+
+    /// <summary>A picker over pause, duck and none: what a playing video does while the app speaks or listens (<see cref="Settings.AppSettingsData.YouTubeVoice"/>). The YouTube tab's last row (2026-10-05); no reconnect. Last in the enum, as every newcomer.</summary>
+    YouTubeVoice,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1393,6 +1408,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
         [SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions],
+        [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
         [SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
         [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
@@ -1788,7 +1804,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera
             or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
-            or SettingsField.PostgresTools or SettingsField.PostgresPercentMention;
+            or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
+            or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1908,6 +1925,11 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlStatementsAllowed => "SQL statements allowed",
         SettingsField.ComfyTools => "ComfyUI tools",
         SettingsField.HomeAssistantTools => "Home Assistant tools",
+        SettingsField.YouTubeTools => "YouTube tools",
+        SettingsField.YouTubeApiKey => "YouTube API key",
+        SettingsField.YouTubeSearchMaxResults => "YouTube search max results",
+        SettingsField.YouTubeAutoplay => "YouTube autoplay",
+        SettingsField.YouTubeVoice => "YouTube while speaking",
         SettingsField.HomeAssistantUrl => "Home Assistant URL",
         SettingsField.HomeAssistantToken => "Home Assistant API key",
         SettingsField.HomeAssistantTest => "Home Assistant test connection",
@@ -2255,6 +2277,11 @@ internal sealed partial class SettingsMenu
             SettingsField.SqlStatementsAllowed => WriteStatementsValue(data.SqlStatementsAllowed, data.SqlMode),
             SettingsField.ComfyTools => OnOff(data.ComfyTools),
             SettingsField.HomeAssistantTools => OnOff(data.HomeAssistantTools),
+            SettingsField.YouTubeTools => OnOff(data.YouTubeTools),
+            SettingsField.YouTubeApiKey => ApiKeyLabel(data.YouTubeApiKey),
+            SettingsField.YouTubeSearchMaxResults => Results(data.YouTubeSearchMaxResults),
+            SettingsField.YouTubeAutoplay => OnOff(data.YouTubeAutoplay),
+            SettingsField.YouTubeVoice => YouTube.YouTubeVoiceMode.Resolve(data.YouTubeVoice),
             SettingsField.HomeAssistantUrl => string.IsNullOrWhiteSpace(data.HomeAssistantUrl) ? NoHomeAssistantUrlLabel : data.HomeAssistantUrl,
             SettingsField.HomeAssistantToken => ApiKeyLabel(data.HomeAssistantToken),
             SettingsField.HomeAssistantTest => HomeAssistantTestLabel,
@@ -2721,6 +2748,13 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The warning when DPAPI could not encrypt the token (2026-09-28): it is kept as typed. Pinned.</summary>
     public static string HomeAssistantTokenPlainWarning(string reason) => $"Home Assistant API key saved unencrypted: {reason}.";
+
+    /// <summary>The warning when DPAPI could not encrypt the YouTube API key (2026-10-05): it is kept as typed. Pinned.</summary>
+    public static string YouTubeApiKeyPlainWarning(string reason) => $"YouTube API key saved unencrypted: {reason}.";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.YouTubeSearchMaxResults"/>. Pinned.</summary>
+    public static readonly string YouTubeSearchMaxResultsRangeError =
+        "must be " + AppSettingsData.MinYouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxYouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture) + " results";
 
     /// <summary>A row of the action-policy picker: the name padded, what it does dim (2026-09-28).</summary>
     public static string HomeAssistantPolicyLabel(string name) =>
@@ -3313,6 +3347,7 @@ internal sealed partial class SettingsMenu
         SettingsField.AnthropicApiKey => "",
         SettingsField.OpenAIApiKey => "",
         SettingsField.HomeAssistantToken => "",
+        SettingsField.YouTubeApiKey => "",
         SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
         SettingsField.HomeAssistantAssistAgent => data.HomeAssistantAssistAgent,
         SettingsField.DockerEnginePipe => data.DockerEnginePipe,
@@ -3333,6 +3368,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageEditOutputFolder => data.ImageEditOutputFolder,
         SettingsField.McpConnectTimeoutSeconds => data.McpConnectTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebSearchMaxResults => data.WebSearchMaxResults.ToString(CultureInfo.InvariantCulture),
+        SettingsField.YouTubeSearchMaxResults => data.YouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebDownloadMaxMegabytes => data.WebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture),
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
@@ -4254,6 +4290,11 @@ internal sealed partial class SettingsMenu
             return await SetHomeAssistantTokenAsync(page, row, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.YouTubeApiKey)
+        {
+            return await SetYouTubeApiKeyAsync(page, row, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.LlmCompactType)
         {
             return await PickCompactTypeAsync(saved, cancellationToken).ConfigureAwait(false);
@@ -4357,6 +4398,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.QueueCancelMode)
         {
             return await PickQueueCancelModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.YouTubeVoice)
+        {
+            return await PickYouTubeVoiceAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.ShowPerformanceBar)
@@ -4921,6 +4967,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.WebSearchMaxResults = hits);
+                return true;
+
+            case SettingsField.YouTubeSearchMaxResults:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int videos) || videos < AppSettingsData.MinYouTubeSearchMaxResults || videos > AppSettingsData.MaxYouTubeSearchMaxResults)
+                {
+                    Sink.Error($"{FieldName(field)} {YouTubeSearchMaxResultsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.YouTubeSearchMaxResults = videos);
                 return true;
 
             case SettingsField.WebDownloadMaxMegabytes:
@@ -6093,6 +6149,38 @@ internal sealed partial class SettingsMenu
     /// never put back on the line — typing replaces it, empty clears it — then encrypted for this Windows user before it reaches
     /// the file (<see cref="HomeAssistant.HaSession.Protect"/>); where DPAPI fails, kept as typed and said so.
     /// </summary>
+    /// <summary>
+    /// The YouTube API key (2026-10-05): <see cref="SetHomeAssistantTokenAsync"/>'s masked field, typed or pasted, never put back
+    /// on the line; empty clears it. Saved DPAPI-encrypted, kept as typed (with a warning) when DPAPI refuses.
+    /// </summary>
+    private async Task<bool> SetYouTubeApiKeyAsync(MenuPage page, int row, CancellationToken cancellationToken)
+    {
+        InputResult result;
+        if (_pane.Enabled)
+        {
+            result = await _pane.EditAsync(page with { Hint = EditKeys }, row, _input, "", allowEmpty: true, cancellationToken, mask: true).ConfigureAwait(false);
+        }
+        else
+        {
+            Flow.Notice(PromptTitle(FieldName(SettingsField.YouTubeApiKey), EditKeys));
+            result = await _input.ReadAsync("", remember: false, allowEmpty: true, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
+        }
+
+        if (result is not InputResult.Submitted submitted)
+        {
+            return Unchanged();
+        }
+
+        string stored = SettingsSecrets.Protect(submitted.Text.Trim(), out string? protectError);
+        if (protectError is not null)
+        {
+            Sink.Warning(YouTubeApiKeyPlainWarning(protectError));
+        }
+
+        Apply(SettingsField.YouTubeApiKey, d => d.YouTubeApiKey = stored);
+        return true;
+    }
+
     private async Task<bool> SetHomeAssistantTokenAsync(MenuPage page, int row, CancellationToken cancellationToken)
     {
         InputResult result;
@@ -6563,6 +6651,8 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerServerStopOnExit => data.DockerServerStopOnExit,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
+            SettingsField.YouTubeTools => data.YouTubeTools,
+            SettingsField.YouTubeAutoplay => data.YouTubeAutoplay,
             SettingsField.PrintTools => data.PrintTools,
             SettingsField.ComfyReinforceNegatives => data.ComfyReinforceNegatives,
             SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
@@ -6667,6 +6757,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.DockerServerStopOnExit: data.DockerServerStopOnExit = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
+            case SettingsField.YouTubeTools: data.YouTubeTools = on; break;
+            case SettingsField.YouTubeAutoplay: data.YouTubeAutoplay = on; break;
             case SettingsField.PrintTools: data.PrintTools = on; break;
             case SettingsField.ComfyReinforceNegatives: data.ComfyReinforceNegatives = on; break;
             case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
@@ -6779,6 +6871,8 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerServerStopOnExit => on ? "the app's exit stops the container it was using" : "the container keeps running after the app exits",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "ha tools enabled" : "ha tools disabled",   // the user's wording, 2026-10-03
+        SettingsField.YouTubeTools => on ? "YouTube tools enabled" : "YouTube tools disabled",
+        SettingsField.YouTubeAutoplay => on ? "a played video starts at once" : "a played video waits, cued, for a play",
         SettingsField.PrintTools => on ? "print tool enabled" : "print tool disabled",   // the user's wording, 2026-10-03
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative" : "the workflow's negative as it is",
         SettingsField.ComfyShowPrompts => on ? "the prompts and params sent to ComfyUI under each picture's line" : "just the picture's line",
