@@ -15,14 +15,17 @@ public static class InterpreterProbe
     /// <summary>The PATHEXT a machine without one gets: enough for every interpreter this app runs.</summary>
     public const string DefaultPathExt = ".COM;.EXE;.BAT;.CMD";
 
-    public static string? Find(string fileName, string? path, string? pathExt, Func<string, bool> exists, Func<string, bool>? skip = null)
+    /// <param name="windows">Windows' PATH rules (<c>;</c> between folders, PATHEXT's extensions tried) or Unix's (<c>:</c>, the name as
+    /// it is); the running OS's when null (2026-10-06, the macOS build).</param>
+    public static string? Find(string fileName, string? path, string? pathExt, Func<string, bool> exists, Func<string, bool>? skip = null, bool? windows = null)
     {
         ArgumentNullException.ThrowIfNull(fileName);
         ArgumentNullException.ThrowIfNull(exists);
-        var extensions = Path.HasExtension(fileName)
+        bool onWindows = windows ?? OperatingSystem.IsWindows();
+        var extensions = Path.HasExtension(fileName) || !onWindows
             ? [""]
             : (string.IsNullOrWhiteSpace(pathExt) ? DefaultPathExt : pathExt).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        foreach (string folder in (path ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (string folder in (path ?? "").Split(onWindows ? ';' : ':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             string directory = folder.Trim('"');
             if (directory.Length == 0)
@@ -109,7 +112,7 @@ public sealed class Interpreters
         }
     }
 
-    /// <summary>The interpreter for <paramref name="language"/>, or null when it is not installed: PowerShell as the shell's, python from the PATH (the Store stub skipped) else <c>py.exe</c>, node from the PATH.</summary>
+    /// <summary>The interpreter for <paramref name="language"/>, or null when it is not installed: PowerShell as the shell's, python from the PATH (the Store stub skipped) else <c>py.exe</c>, node from the PATH; off Windows <c>python3</c> before <c>python</c>.</summary>
     public string? Locate(CodeLanguage language)
     {
         lock (_lock)
@@ -142,7 +145,9 @@ public sealed class Interpreters
         var found = new Dictionary<CodeLanguage, string?>
         {
             [CodeLanguage.PowerShell] = Locate(ShellKind.PowerShell),
-            [CodeLanguage.Python] = InterpreterProbe.Find("python", path, pathExt, _exists, InterpreterProbe.IsStoreStub) ?? InterpreterProbe.Find("py", path, pathExt, _exists),
+            [CodeLanguage.Python] = OperatingSystem.IsWindows()
+                ? InterpreterProbe.Find("python", path, pathExt, _exists, InterpreterProbe.IsStoreStub) ?? InterpreterProbe.Find("py", path, pathExt, _exists)
+                : InterpreterProbe.Find("python3", path, pathExt, _exists) ?? InterpreterProbe.Find("python", path, pathExt, _exists),
             [CodeLanguage.Node] = InterpreterProbe.Find("node", path, pathExt, _exists),
         };
         DiagnosticLog.Debug(ShellKinds.Category, "Interpreters: " + string.Join(", ", found.OrderBy(p => p.Key).Select(p => CodeLanguages.Name(p.Key) + "=" + (p.Value ?? "not found"))));
@@ -153,7 +158,7 @@ public sealed class Interpreters
     public IReadOnlyList<ShellKind> AvailableShells()
     {
         var available = new List<ShellKind>(3);
-        foreach (var kind in new[] { ShellKind.PowerShell, ShellKind.Cmd, ShellKind.Bash })
+        foreach (var kind in ShellKinds.Names.Select(name => ShellKinds.TryParse(name, out var k) ? k : ShellKind.PowerShell))
         {
             if (Locate(kind) is not null)
             {
@@ -168,6 +173,20 @@ public sealed class Interpreters
     {
         string? path = _environment("PATH");
         string? pathExt = _environment("PATHEXT");
+        if (!OperatingSystem.IsWindows())
+        {
+            // macOS (2026-10-06): zsh and bash from the PATH, else the system's own in /bin; pwsh only from the PATH; no cmd.
+            var unix = new Dictionary<ShellKind, string?>
+            {
+                [ShellKind.Zsh] = InterpreterProbe.Find("zsh", path, pathExt, _exists) ?? First("/bin/zsh"),
+                [ShellKind.Bash] = InterpreterProbe.Find("bash", path, pathExt, _exists) ?? First("/bin/bash"),
+                [ShellKind.PowerShell] = InterpreterProbe.Find("pwsh", path, pathExt, _exists),
+                [ShellKind.Cmd] = null,
+            };
+            DiagnosticLog.Debug(ShellKinds.Category, "Shells: " + string.Join(", ", unix.OrderBy(p => p.Key).Select(p => ShellKinds.Name(p.Key) + "=" + (p.Value ?? "not found"))));
+            return unix;
+        }
+
         string system = Environment.SystemDirectory;
         var found = new Dictionary<ShellKind, string?>
         {

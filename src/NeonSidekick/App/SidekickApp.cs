@@ -286,13 +286,13 @@ public sealed class SidekickApp
         _probe = probe ?? new LlmEndpointProbe(new HttpClient());
         _contextProbe = contextProbe ?? new ContextLengthProbe(new HttpClient());
         _chatClientFactory = chatClientFactory ?? DefaultChatClient;
-        _playbackFactory = playbackFactory ?? (format => new WinMmAudioPlayback(format));
+        _playbackFactory = playbackFactory ?? AudioSupport.DefaultPlayback;
         _synthesizerFactory = synthesizerFactory ?? (request => request.Engine == TtsEngine.InProcess ? new KokoroInProcessSynthesizer(request.ModelPath!) : new KokoroHttpSynthesizer(request.Url!));
-        _captureFactory = captureFactory ?? (format => new WinMmAudioCapture(format));
+        _captureFactory = captureFactory ?? AudioSupport.DefaultCapture;
         _recognizerFactory = recognizerFactory ?? (path => new WhisperNetTranscriber(path));
         _vadFactory = vadFactory ?? ((path, options) => new SileroVad(path, options));
         _modelHttpClient = modelHttpClient ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-        _inputDeviceCount = inputDeviceCount ?? WinMmAudioCapture.InputDeviceCount;
+        _inputDeviceCount = inputDeviceCount ?? AudioSupport.DefaultInputDeviceCount;
         _wakeDetectorFactory = wakeDetectorFactory ?? ((directory, phrase) => new VoskWakeWordDetector(directory, phrase));
         _time = time ?? TimeProvider.System;
         // The web tools' client and browser, one for the app: the screen and headless share the page cache.
@@ -418,6 +418,13 @@ public sealed class SidekickApp
         // The check modes keep the console echo, so the startup line prints ahead of the banner.
         LogStartup();
         RenderBanner();
+
+        // The check modes need a sound device (2026-10-06, the macOS build): without WinMM they say so and fail rather than throw.
+        if ((options.AudioCheck || options.VoiceCheck) && !AudioSupport.Available)
+        {
+            _console.MarkupLine("[red]" + Markup.Escape(AudioSupport.Unavailable) + "[/]");
+            return 1;
+        }
 
         if (options.AudioCheck)
         {
@@ -2004,7 +2011,7 @@ public sealed class SidekickApp
         // The real console's input also owns the mouse: the input line takes it while a draft is
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
-        var mouse = _input as WindowsConsoleInput;
+        var mouse = _input as IMouseInput;
         var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         if (mouse is not null)
         {

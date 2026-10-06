@@ -4886,7 +4886,6 @@ internal sealed partial class ChatScreen
             new SearchFilesTool(files, effective),
             new FileInfoTool(files),
             new ReadFileTool(files),
-            new ViewImageTool(files, effective),
             new WriteFileTool(files),
             new PatchFileTool(files),
             new CreateDirectoryTool(files),
@@ -4896,9 +4895,17 @@ internal sealed partial class ChatScreen
             new ZipTool(files),
             new UnzipTool(files),
             new OpenTool(files, openFile, unc, effective),
-            new ImageInfoTool(files, effective),
-            new ImageEditTool(files, effective),
         };
+
+        // The picture tools only where there are codecs (2026-10-06, the macOS build: ImageCodecs); view_image in its old
+        // place, fifth.
+        if (ImageCodecs.Available)
+        {
+            tools.Insert(4, new ViewImageTool(files, effective));
+            tools.Add(new ImageInfoTool(files, effective));
+            tools.Add(new ImageEditTool(files, effective));
+        }
+
         if (pdf is not null)
         {
             tools.Add(new ConvertToPdfTool(files, pdf, effective));

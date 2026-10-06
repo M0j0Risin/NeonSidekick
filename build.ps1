@@ -13,6 +13,14 @@
         .\build.ps1 -CoverageFloor 0           # report line coverage without gating (the default floor is 80%)
         .\build.ps1 -Package                   # ...and stage publish/package/NeonSidekick-v<ver>-win-x64.zip + .sha256
         .\build.ps1 -Package -Tag v0.2.0       # the same, refusing a tag that is not the csproj <Version> (release.yml)
+
+    On a Mac (2026-10-06, the macOS build; pwsh 7 and the Xcode command line tools), the same switches:
+
+        pwsh ./build.ps1 -TestOnly             # -Runtime defaults to osx-arm64 there
+        pwsh ./build.ps1 -Publish              # publish/output/NeonSidekick, espeak-ng marked executable, ad-hoc signed
+        pwsh ./build.ps1 -Package              # publish/package/NeonSidekick-v<ver>-osx-arm64.tar.gz (a tar keeps the exec bits)
+
+    NativeAOT cannot publish across operating systems, so -Runtime only picks between this OS's own RIDs.
 #>
 
 [CmdletBinding()]
@@ -22,15 +30,27 @@ param(
     [switch]$Clean,
     [double]$CoverageFloor = 80,
     [switch]$Package,
-    [string]$Tag
+    [string]$Tag,
+    [string]$Runtime
 )
 
 $ErrorActionPreference = "Stop"
+# Windows PowerShell 5.1 has no $IsWindows; it only ever runs on Windows.
+$OnWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
+if (-not $Runtime) {
+    if ($OnWindows) {
+        $Runtime = "win-x64"
+    } elseif ($IsMacOS) {
+        $Runtime = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { "osx-arm64" } else { "osx-x64" }
+    } else {
+        $Runtime = "linux-x64"
+    }
+}
 $ProjectRoot = $PSScriptRoot
 $AppProject = Join-Path $ProjectRoot "src/NeonSidekick/NeonSidekick.csproj"
 $TestProject = Join-Path $ProjectRoot "tests/NeonSidekick.Tests/NeonSidekick.Tests.csproj"
 $PublishDir = Join-Path $ProjectRoot "publish/output"
-$Exe = Join-Path $PublishDir "NeonSidekick.exe"
+$Exe = Join-Path $PublishDir $(if ($OnWindows) { "NeonSidekick.exe" } else { "NeonSidekick" })
 $CoverageDir = Join-Path $ProjectRoot "publish/coverage"
 $RunSettings = Join-Path $ProjectRoot "tests/coverage.runsettings"
 $PackageRoot = Join-Path $ProjectRoot "publish/package"
@@ -51,7 +71,7 @@ function Fail($text) {
 if ($Clean) {
     Write-Section "Clean"
     Get-ChildItem -Path $ProjectRoot -Recurse -Directory -Include bin, obj |
-        Where-Object { $_.FullName -notmatch '\\\.git\\' } |
+        Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' } |
         ForEach-Object { Remove-Item -Recurse -Force $_.FullName; Write-Host "  removed $($_.FullName)" }
     if (Test-Path (Join-Path $ProjectRoot "publish")) {
         Remove-Item -Recurse -Force (Join-Path $ProjectRoot "publish")
@@ -125,12 +145,13 @@ if ($TestOnly) {
     exit 0
 }
 
-Write-Section "Publish NativeAOT (win-x64)"
+Write-Section "Publish NativeAOT ($Runtime)"
 
 # The native link step shells out to vswhere.exe. In a shell with
 # NoDefaultCurrentDirectoryInExePath=1 (Git Bash, some terminals) that lookup fails with a
 # mangled MSB3073, so put the installer directory on PATH when vswhere is not already there.
-if (-not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)) {
+# Windows only: a Mac links with the Xcode command line tools' clang.
+if ($OnWindows -and -not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)) {
     $vswhereDir = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer"
     if (Test-Path (Join-Path $vswhereDir "vswhere.exe")) {
         $env:PATH = "$vswhereDir;$env:PATH"
@@ -139,7 +160,7 @@ if (-not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)) {
     }
 }
 
-$publishLog = @(dotnet publish $AppProject -c Release -r win-x64 --self-contained `
+$publishLog = @(dotnet publish $AppProject -c Release -r $Runtime --self-contained `
     /p:PublishAot=true /p:StripSymbols=true -o $PublishDir 2>&1)
 $publishLog | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { Fail "Publish FAILED" }
@@ -157,6 +178,23 @@ $aotWarnings | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
 Write-Host ""
 Write-Host "  AOT warnings: $($aotWarnings.Count) unique, $($ownWarnings.Count) in our code." -ForegroundColor $(if ($ownWarnings.Count -eq 0) { "Green" } else { "Red" })
 if ($ownWarnings.Count -gt 0) { Fail "AOT warnings in NeonSidekick code; fix them, do not suppress them." }
+
+# macOS (2026-10-06): NuGet unpacks packages without Unix modes, so KokoroSharp's espeak-ng executables (named .dll
+# whatever they are) land without the exec bit; and an arm64 Mac runs no unsigned code, so they and the exe get an
+# ad-hoc signature (the linker signs the exe already; signing again after the strip is harmless). The app sets the bit
+# itself too (KokoroInProcessSynthesizer.EnsureEspeakRunnable), for a copy that lost it.
+if ($IsMacOS) {
+    $espeakExes = @(Get-ChildItem -Path (Join-Path $PublishDir "espeak") -Filter "espeak-ng-macos-*.dll" -ErrorAction SilentlyContinue)
+    foreach ($file in $espeakExes) {
+        chmod +x $file.FullName
+        if ($LASTEXITCODE -ne 0) { Fail "chmod +x $($file.Name) FAILED" }
+    }
+    foreach ($path in @($Exe) + @($espeakExes | ForEach-Object { $_.FullName })) {
+        codesign --force --sign - $path 2>&1 | ForEach-Object { Write-Host "  $_" }
+        if ($LASTEXITCODE -ne 0) { Fail "codesign $path FAILED" }
+    }
+    Write-Host "  espeak-ng marked executable; $(1 + $espeakExes.Count) file(s) ad-hoc signed." -ForegroundColor Green
+}
 
 Write-Section "Smoke (published binary)"
 if (-not (Test-Path $Exe)) { Fail "No published binary at $Exe" }
@@ -229,7 +267,7 @@ if ($Package) {
         Fail "The published exe reports '$versionOut', expected 'NeonSidekick $version'."
     }
 
-    $stageName = "NeonSidekick-v$version-win-x64"
+    $stageName = "NeonSidekick-v$version-$Runtime"
     $stage = Join-Path $PackageRoot $stageName
     if (Test-Path $PackageRoot) { Remove-Item -Recurse -Force $PackageRoot }
     New-Item -ItemType Directory -Path $stage | Out-Null
@@ -239,36 +277,49 @@ if ($Package) {
     # README links into docs\ (the full references and HEADLESS.md, moved there on 2026-10-05), so the zip keeps that layout.
     $stageDocs = Join-Path $stage "docs"
     New-Item -ItemType Directory -Path $stageDocs | Out-Null
-    Copy-Item -Path (Join-Path $ProjectRoot "docs\*.md") -Destination $stageDocs
+    Copy-Item -Path (Join-Path $ProjectRoot "docs/*.md") -Destination $stageDocs
 
-    # Entries are written by hand with forward slashes. Compress-Archive, and ZipFile under
-    # Windows PowerShell 5.1 (.NET Framework), write backslash entry names, which some unzippers
-    # turn into files called "dir\file" instead of a directory; CI (pwsh 7) would then produce a
-    # different zip from a local run.
-    $zip = Join-Path $PackageRoot "$stageName.zip"
-    Add-Type -AssemblyName System.IO.Compression
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $base = (Get-Item $PackageRoot).FullName.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
-    $zipStream = [System.IO.File]::Open($zip, [System.IO.FileMode]::CreateNew)
-    try {
-        $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+    if (-not $OnWindows) {
+        # A tar.gz off Windows (2026-10-06, the macOS build): a zip written here keeps no Unix modes, and the exe and
+        # espeak-ng must stay executable. The system tar (bsdtar on macOS) keeps them.
+        $tarball = Join-Path $PackageRoot "$stageName.tar.gz"
+        tar -czf $tarball -C $PackageRoot $stageName
+        if ($LASTEXITCODE -ne 0) { Fail "tar FAILED" }
+        $hash = (Get-FileHash -Algorithm SHA256 -Path $tarball).Hash.ToLowerInvariant()
+        [System.IO.File]::WriteAllText("$tarball.sha256", "$hash *$stageName.tar.gz`n", [System.Text.Encoding]::ASCII)
+        $tarSize = [Math]::Round((Get-Item $tarball).Length / 1MB, 1)
+        Write-Host "  $tarball  ($tarSize MB)" -ForegroundColor Green
+        Write-Host "  sha256 $hash"
+    } else {
+        # Entries are written by hand with forward slashes. Compress-Archive, and ZipFile under
+        # Windows PowerShell 5.1 (.NET Framework), write backslash entry names, which some unzippers
+        # turn into files called "dir\file" instead of a directory; CI (pwsh 7) would then produce a
+        # different zip from a local run.
+        $zip = Join-Path $PackageRoot "$stageName.zip"
+        Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $base = (Get-Item $PackageRoot).FullName.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+        $zipStream = [System.IO.File]::Open($zip, [System.IO.FileMode]::CreateNew)
         try {
-            Get-ChildItem -Path $stage -Recurse -File | Sort-Object FullName | ForEach-Object {
-                $entryName = $_.FullName.Substring($base.Length).Replace('\', '/')
-                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $_.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+            $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+            try {
+                Get-ChildItem -Path $stage -Recurse -File | Sort-Object FullName | ForEach-Object {
+                    $entryName = $_.FullName.Substring($base.Length).Replace('\', '/')
+                    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $_.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+                }
+            } finally {
+                $archive.Dispose()
             }
         } finally {
-            $archive.Dispose()
+            $zipStream.Dispose()
         }
-    } finally {
-        $zipStream.Dispose()
-    }
-    $hash = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
-    [System.IO.File]::WriteAllText("$zip.sha256", "$hash *$stageName.zip`n", [System.Text.Encoding]::ASCII)
+        $hash = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
+        [System.IO.File]::WriteAllText("$zip.sha256", "$hash *$stageName.zip`n", [System.Text.Encoding]::ASCII)
 
-    $zipSize = [Math]::Round((Get-Item $zip).Length / 1MB, 1)
-    Write-Host "  $zip  ($zipSize MB)" -ForegroundColor Green
-    Write-Host "  sha256 $hash"
+        $zipSize = [Math]::Round((Get-Item $zip).Length / 1MB, 1)
+        Write-Host "  $zip  ($zipSize MB)" -ForegroundColor Green
+        Write-Host "  sha256 $hash"
+    }
 }
 
 Write-Section "Done"

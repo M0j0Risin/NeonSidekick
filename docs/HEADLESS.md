@@ -11,6 +11,7 @@ A fresh profile offers the model no tools and looks for no server: *File tools*,
 are off, *Shell command policy* is `off` and *LLM server scan mode* is `disabled`. The examples below assume a profile set up in
 the TUI beforehand (`/tools`, `/settings`) or its `profile.json` edited: a server saved or given with `--url`, and the
 tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` sets the shell policy for one run.
+On macOS (preview, [Building on a Mac](BUILD.md#building-on-a-mac)) `run_command` runs in `zsh` unless the profile names another shell.
 The SQL, Oracle, MySQL, UNC and ComfyUI tools also offer nothing until entries are ticked in their *… offered* lists (the
 `/tools` tabs, or an add wizard's offer row; in `profile.json`, `SqlConnectionsOffered`, `OracleConnectionsOffered`,
 `MySqlConnectionsOffered`, `UncSharesOffered`, `ComfyWorkflowsOffered`); headless has no way to tick them.

@@ -92,4 +92,18 @@ public class AudioCheckTests : IDisposable
         Assert.Equal(0, code);
         Assert.Contains(AudioCheck.DrainedLine, _console.Output);
     }
+
+    /// <summary>The macOS build (2026-10-06): the default devices are WinMM's on Windows; elsewhere a refusal with the one sentence and no microphone.</summary>
+    [Fact]
+    public void AudioSupport_IsWinMm_OnWindows_AndARefusalElsewhere()
+    {
+        Assert.Equal(OperatingSystem.IsWindows(), AudioSupport.Available);
+        if (!AudioSupport.Available)
+        {
+            var ex = Assert.Throws<PlatformNotSupportedException>(() => AudioSupport.DefaultPlayback(PcmFormat.Kokoro));
+            Assert.Equal(AudioSupport.Unavailable, ex.Message);
+            Assert.Throws<PlatformNotSupportedException>(() => AudioSupport.DefaultCapture(PcmFormat.Kokoro));
+            Assert.Equal(0, AudioSupport.DefaultInputDeviceCount());
+        }
+    }
 }

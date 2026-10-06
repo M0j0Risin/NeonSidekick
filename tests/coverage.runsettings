@@ -35,6 +35,12 @@
     and the reader over them; they need Windows' media stack and, past the list, a real camera, and prove themselves in the
     published-exe smoke (camera:mf, the slots that need no camera) and by camera-check on a real one, plus the live facts.
     CameraSession, CameraFormats, CameraPixels, CameraJpeg, FrameDiff and CameraWatch, where the decisions live, stay covered.
+  - NeonSidekick.UI.UnixConsoleInput and TermiosNative (2026-10-06, the macOS build): the terminal reader over libc's termios,
+    poll and read; they run only on macOS against a real terminal and prove themselves in the published-exe smoke there
+    (console:termios). VtInputParser, where every byte rule lives, stays covered on every OS.
+  - NeonSidekick.Sql.MacKeychain and KeychainNative (2026-10-06, the macOS build): the Keychain behind the secrets on macOS;
+    they need a Mac's login Keychain and prove themselves in the smoke there (keys:keychain).
+  - NeonSidekick.UI.MacClipboard (2026-10-06): pbcopy/pbpaste, which exist only on macOS.
   - Program: the composition root; the smoke run on the published exe covers it.
   - GeneratedCodeAttribute / ExcludeFromCodeCoverageAttribute: source-generated JSON contexts,
     LibraryImport stubs and GeneratedRegex bodies. CompilerGeneratedAttribute is deliberately
@@ -46,7 +52,7 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]NeonSidekick.Viewer.LogWindow*,[NeonSidekick]NeonSidekick.Viewer.WindowChrome*,[NeonSidekick]NeonSidekick.Viewer.ThumbsWindow*,[NeonSidekick]NeonSidekick.Viewer.ContextMenuWindow,[NeonSidekick]NeonSidekick.Viewer.WebViewNative,[NeonSidekick]NeonSidekick.Viewer.WebViewHost*,[NeonSidekick]NeonSidekick.Viewer.VideoWindow*,[NeonSidekick]NeonSidekick.Printing.WindowsPrintSpooler*,[NeonSidekick]NeonSidekick.Printing.PrintNative,[NeonSidekick]NeonSidekick.Perf.PerfNative,[NeonSidekick]NeonSidekick.Perf.WindowsPerfSource,[NeonSidekick]NeonSidekick.Perf.NvmlGpu,[NeonSidekick]NeonSidekick.Perf.PdhGpu,[NeonSidekick]NeonSidekick.Camera.CameraNative,[NeonSidekick]NeonSidekick.Camera.MediaFoundationCameraSystem*,[NeonSidekick]Program</Exclude>
+          <Exclude>[NeonSidekick]NeonSidekick.Audio.WinMm*,[NeonSidekick]NeonSidekick.Viewer.PictureWindow*,[NeonSidekick]NeonSidekick.Viewer.ViewerNative,[NeonSidekick]NeonSidekick.Viewer.LogWindow*,[NeonSidekick]NeonSidekick.Viewer.WindowChrome*,[NeonSidekick]NeonSidekick.Viewer.ThumbsWindow*,[NeonSidekick]NeonSidekick.Viewer.ContextMenuWindow,[NeonSidekick]NeonSidekick.Viewer.WebViewNative,[NeonSidekick]NeonSidekick.Viewer.WebViewHost*,[NeonSidekick]NeonSidekick.Viewer.VideoWindow*,[NeonSidekick]NeonSidekick.Printing.WindowsPrintSpooler*,[NeonSidekick]NeonSidekick.Printing.PrintNative,[NeonSidekick]NeonSidekick.Perf.PerfNative,[NeonSidekick]NeonSidekick.Perf.WindowsPerfSource,[NeonSidekick]NeonSidekick.Perf.NvmlGpu,[NeonSidekick]NeonSidekick.Perf.PdhGpu,[NeonSidekick]NeonSidekick.Camera.CameraNative,[NeonSidekick]NeonSidekick.Camera.MediaFoundationCameraSystem*,[NeonSidekick]NeonSidekick.UI.UnixConsoleInput,[NeonSidekick]NeonSidekick.UI.TermiosNative,[NeonSidekick]NeonSidekick.Sql.MacKeychain,[NeonSidekick]NeonSidekick.Sql.KeychainNative,[NeonSidekick]NeonSidekick.UI.MacClipboard,[NeonSidekick]Program</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
           <IncludeTestAssembly>false</IncludeTestAssembly>

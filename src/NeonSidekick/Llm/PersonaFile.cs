@@ -55,10 +55,13 @@ public sealed class PersonaFile : PromptFile
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            DiagnosticLog.Info(Category, $"Shell open of {Path.GetFileName(path)} failed ({ex.Message}); trying Notepad.");
+            DiagnosticLog.Info(Category, $"Shell open of {Path.GetFileName(path)} failed ({ex.Message}); trying {(OperatingSystem.IsWindows() ? "Notepad" : "the default text editor")}.");
         }
 
-        var notepadStart = new System.Diagnostics.ProcessStartInfo("notepad.exe") { UseShellExecute = false };
+        // macOS (2026-10-06): open -t, the default text editor (TextEdit unless the user chose another), Notepad's place.
+        var notepadStart = OperatingSystem.IsWindows()
+            ? new System.Diagnostics.ProcessStartInfo("notepad.exe") { UseShellExecute = false }
+            : new System.Diagnostics.ProcessStartInfo("/usr/bin/open") { UseShellExecute = false, ArgumentList = { "-t" } };
         notepadStart.ArgumentList.Add(path);   // quoted for us: a settings path with a space in it
         using var notepad = System.Diagnostics.Process.Start(notepadStart);
     }
@@ -160,7 +163,7 @@ public sealed class PersonaFile : PromptFile
         Environment.SetEnvironmentVariable(NoAttachConsoleVariable, "1");
         System.Diagnostics.ProcessStartInfo start = string.IsNullOrWhiteSpace(editorCommand)
             ? new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }
-            : new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, Arguments = App.DraftFile.CommandLine(editorCommand.Trim(), path) };
+            : App.DraftFile.EditorStart(editorCommand.Trim(), path);
         using var editor = System.Diagnostics.Process.Start(start);
         if (editor is null)
         {
@@ -188,7 +191,14 @@ public sealed class PersonaFile : PromptFile
         Environment.SetEnvironmentVariable(NoAttachConsoleVariable, "1");
         if (!string.IsNullOrWhiteSpace(editorCommand))
         {
-            using var editor = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, Arguments = App.DraftFile.CommandLine(editorCommand.Trim(), path) });
+            using var editor = System.Diagnostics.Process.Start(App.DraftFile.EditorStart(editorCommand.Trim(), path));
+            return;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            // No edit verb off Windows: the picture's default app.
+            ShellOpen(path);
             return;
         }
 

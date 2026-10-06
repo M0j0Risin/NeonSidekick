@@ -34,7 +34,14 @@ public sealed record SmokeCheck(string Name, bool Passed, string Detail);
 public static partial class SmokeChecks
 {
     /// <summary>
-    /// Native libraries, relative to the binary's directory. Whisper.net's own loader probes
+    /// Native libraries, relative to the binary's directory: <see cref="WindowsNativeLibraries"/> on Windows,
+    /// <see cref="MacNativeLibraries"/> on macOS (2026-10-06, the macOS build). NativeAOT cannot publish across operating
+    /// systems, so the list is the running OS's: the exe being smoked was built where it runs.
+    /// </summary>
+    public static readonly string[] RequiredNativeLibraries = OperatingSystem.IsWindows() ? WindowsNativeLibraries : MacNativeLibraries;
+
+    /// <summary>
+    /// The Windows list. Whisper.net's own loader probes
     /// <c>runtimes/win-x64/</c> (AVX build) and <c>runtimes/noavx/win-x64/</c>; the publish step
     /// keeps that layout. Vosk's <c>libvosk.dll</c> sits at the root with the three MinGW runtime
     /// libraries it links against; without any one of them it fails to load. ONNX Runtime's two
@@ -44,8 +51,8 @@ public static partial class SmokeChecks
     /// 2026-09-23) from Microsoft.Data.SqlClient.SNI.runtime; WebView2's loader (the video window, 2026-10-05) copied by the csproj
     /// from the Microsoft.Web.WebView2 package, whose managed assemblies are left out.
     /// </summary>
-    public static readonly string[] RequiredNativeLibraries =
-    {
+    public static string[] WindowsNativeLibraries =>
+    [
         "onnxruntime.dll",
         "onnxruntime_providers_shared.dll",
         Path.Combine("runtimes", "win-x64", "whisper.dll"),
@@ -60,19 +67,39 @@ public static partial class SmokeChecks
         Git.GitAccess.NativeLibraryFileName,
         Sql.SqlAccess.NativeLibraryFileName,
         Viewer.VideoPage.LoaderFileName,
-    };
+    ];
+
+    /// <summary>
+    /// The macOS (Apple Silicon) list (2026-10-06). Whisper.net's targets copy its dylibs to <c>runtimes/macos-arm64/</c>
+    /// (Metal and BLAS beside the CPU backend; no noavx build exists or is needed on arm64); Vosk's <c>Vosk.targets</c> picks the
+    /// universal <c>libvosk.dylib</c> by the build host, which is the target here; ONNX Runtime has no providers_shared on macOS;
+    /// libgit2 and e_sqlite3 come flat from their packages' <c>runtimes/osx-arm64/native</c>. SqlClient's SNI is managed on
+    /// Unix and WebView2 does not exist, so neither is named.
+    /// </summary>
+    public static string[] MacNativeLibraries =>
+    [
+        "libonnxruntime.dylib",
+        Path.Combine("runtimes", "macos-arm64", "libwhisper.dylib"),
+        Path.Combine("runtimes", "macos-arm64", "libggml-whisper.dylib"),
+        Path.Combine("runtimes", "macos-arm64", "libggml-base-whisper.dylib"),
+        Path.Combine("runtimes", "macos-arm64", "libggml-cpu-whisper.dylib"),
+        "libvosk.dylib",
+        Git.GitAccess.MacNativeLibraryFileName,
+        "libe_sqlite3.dylib",
+    ];
 
     /// <summary>
     /// KokoroSharp's content, relative to the binary's directory: one voice, the espeak-ng
     /// executable and one of its data files. The csproj republishes the package's <c>content\</c>
     /// with an explicit <c>Link</c>; without it MSBuild flattens the files into the root and the
     /// engine throws a parameterless <c>DirectoryNotFoundException</c> — so their presence at the
-    /// right depth is checked, not just their existence somewhere.
+    /// right depth is checked, not just their existence somewhere. The espeak-ng executable is the running OS's
+    /// (<see cref="KokoroInProcessSynthesizer.EspeakExecutable"/>; the package ships every OS's, named <c>.dll</c> whatever they are).
     /// </summary>
     public static readonly string[] RequiredContentFiles =
     {
         Path.Combine(KokoroInProcessSynthesizer.VoicesFolder, "af_heart" + KokoroInProcessSynthesizer.VoiceExtension),
-        Path.Combine(KokoroInProcessSynthesizer.EspeakFolder, "espeak-ng-win-amd64.dll"),
+        Path.Combine(KokoroInProcessSynthesizer.EspeakFolder, KokoroInProcessSynthesizer.EspeakExecutable),
         Path.Combine(KokoroInProcessSynthesizer.EspeakFolder, "espeak-ng-data", "phondata"),
     };
 
@@ -105,19 +132,20 @@ public static partial class SmokeChecks
         results.Add(ProbeWhisper());
         results.Add(ProbeWhisperVad());
         results.Add(ProbeOpenAiSdk());
-        results.Add(ProbeWinMm());
-        results.Add(ProbeWinMmIn());
-        results.Add(ProbeConsoleInput());
-        results.Add(ProbeImageResize());
-        results.Add(ProbeImageEdit());
-        results.Add(ProbeViewerWindow());
+        results.Add(OperatingSystem.IsWindows() ? ProbeWinMm() : NotWindows("audio:winmm"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeWinMmIn() : NotWindows("audio:winmm-in"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeConsoleInput() : NotWindows("console:input"));
+        results.Add(OperatingSystem.IsMacOS() ? ProbeTermios() : new SmokeCheck("console:termios", true, "skipped: not macOS"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeImageResize() : NotWindows("image:resize"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeImageEdit() : NotWindows("image:edit"));
+        results.Add(OperatingSystem.IsWindows() ? ProbeViewerWindow() : NotWindows("viewer:window"));
         results.Add(ProbeViewerDrag());
         results.Add(ProbeLogWindow());
         results.Add(ProbeThumbsWindow());
         results.Add(ProbePictureMenu());
         results.Add(ProbeVideoWebView2());
         results.Add(ProbeCameraMf());
-        results.Add(ProbeCameraEncode());
+        results.Add(OperatingSystem.IsWindows() ? ProbeCameraEncode() : NotWindows("camera:encode"));
         results.Add(ProbeScreenGdi());
         results.Add(ProbeScreenWindows());
         results.Add(ProbeHotkey());
@@ -126,7 +154,7 @@ public static partial class SmokeChecks
         results.Add(ProbePrintSpooler());
         results.Add(ProbePdfHtml());
         results.Add(ProbePdfBrowser());
-        results.Add(ProbeSplash());
+        results.Add(OperatingSystem.IsWindows() ? ProbeSplash() : NotWindows("splash:decode"));
         results.Add(ProbeWebMarkdown());
         results.Add(ProbeTranscriptMarkdown());
         results.Add(ProbeOnnxRuntime());
@@ -136,6 +164,7 @@ public static partial class SmokeChecks
         results.Add(ProbeGit());
         results.Add(ProbeSql());
         results.Add(OperatingSystem.IsWindows() ? ProbeCredentials() : new SmokeCheck("sql:credentials", true, "skipped: not Windows"));
+        results.Add(OperatingSystem.IsMacOS() ? ProbeKeychain() : new SmokeCheck("keys:keychain", true, "skipped: not macOS"));
         results.Add(ProbeOracle());
         results.Add(ProbeMySql());
         results.Add(OperatingSystem.IsWindows() ? ProbeUnc() : new SmokeCheck("unc:impersonation", true, "skipped: not Windows"));
@@ -152,6 +181,12 @@ public static partial class SmokeChecks
         results.Add(ProbeLlamaServer(modelsDirectory));
         return results;
     }
+
+    /// <summary>
+    /// A check that cannot apply off Windows (2026-10-06, the macOS build): WinMM audio, the console's input records, and
+    /// MagicScaler's WIC codecs behind every picture probe. Each feature is off on macOS until it has a backend of its own.
+    /// </summary>
+    private static SmokeCheck NotWindows(string name) => new(name, true, "skipped: not Windows");
 
     /// <summary>
     /// <c>mcp:roundtrip</c> (2026-09-20): the MCP SDK's JSON path on the published binary — an in-process

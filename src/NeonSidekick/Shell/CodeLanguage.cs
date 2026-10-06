@@ -53,22 +53,37 @@ public static class CodeLanguages
         _ => "powershell",
     };
 
-    /// <summary>The menu hint next to a language. Pinned.</summary>
-    public static string Describe(string name) => name switch
-    {
-        "powershell" => "a .ps1 through pwsh or Windows PowerShell; Invoke-NeonTool calls a tool",
-        "python" => "a .py through python.exe; from neon_tools import …",
-        "node" => "a .js through node.exe; require('neon_tools')",
-        _ => "",
-    };
+    /// <summary>The menu hint next to a language, the running OS's (2026-10-06, the macOS build). Pinned.</summary>
+    public static string Describe(string name) => OperatingSystem.IsWindows()
+        ? name switch
+        {
+            "powershell" => "a .ps1 through pwsh or Windows PowerShell; Invoke-NeonTool calls a tool",
+            "python" => "a .py through python.exe; from neon_tools import …",
+            "node" => "a .js through node.exe; require('neon_tools')",
+            _ => "",
+        }
+        : name switch
+        {
+            "powershell" => "a .ps1 through pwsh; Invoke-NeonTool calls a tool",
+            "python" => "a .py through python3; from neon_tools import …",
+            "node" => "a .js through node; require('neon_tools')",
+            _ => "",
+        };
 
-    /// <summary>The executable's file name, for the not-installed sentence: <c>python.exe</c>, <c>node.exe</c>, <c>powershell.exe</c>.</summary>
-    public static string FileName(CodeLanguage language) => language switch
-    {
-        CodeLanguage.Python => "python.exe",
-        CodeLanguage.Node => "node.exe",
-        _ => "powershell.exe",
-    };
+    /// <summary>The executable's file name, for the not-installed sentence: <c>python.exe</c>, <c>node.exe</c>, <c>powershell.exe</c>; off Windows <c>python3</c>, <c>node</c>, <c>pwsh</c>.</summary>
+    public static string FileName(CodeLanguage language) => OperatingSystem.IsWindows()
+        ? language switch
+        {
+            CodeLanguage.Python => "python.exe",
+            CodeLanguage.Node => "node.exe",
+            _ => "powershell.exe",
+        }
+        : language switch
+        {
+            CodeLanguage.Python => "python3",
+            CodeLanguage.Node => "node",
+            _ => "pwsh",
+        };
 
     /// <summary>The languages the saved list names, in <see cref="Names"/> order; an unknown word warns and is dropped, nothing usable falls back to <see cref="Default"/>.</summary>
     public static IReadOnlyList<CodeLanguage> Resolve(AppSettingsData effective)

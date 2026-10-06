@@ -95,6 +95,9 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal** is recommended (it comes with Windows 11); the app is designed for it.
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
+**On a Mac?** A preview build for Apple Silicon is on its way: chat, tools, MCP, git, the database tools, sessions and headless
+mode, without voice, pictures or the app's own windows yet. For now you build it yourself: [Building on a Mac](docs/BUILD.md#building-on-a-mac).
+
 Only for some features:
 * **Running a model inside the app:** an NVIDIA graphics card (driver 580 or newer) or any card that supports Vulkan. Without one it still works, but slowly.
 * **Reading web pages that need a real browser, and saving them as PDFs:** Edge, Chrome or Brave.

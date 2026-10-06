@@ -190,7 +190,7 @@ public sealed class SqlConfigFile
     private static void EncryptInPlace(string path, string name, SqlConnectionConfig config)
     {
         if (!config.NeedsPassword || config.InCredentialManager || string.IsNullOrEmpty(config.Password)
-            || WindowsCredentials.IsProtected(config.Password) || !OperatingSystem.IsWindows())
+            || WindowsCredentials.IsProtected(config.Password) || !WindowsCredentials.CanProtect)
         {
             return;
         }

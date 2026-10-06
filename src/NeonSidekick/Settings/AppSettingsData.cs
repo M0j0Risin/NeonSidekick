@@ -2232,8 +2232,10 @@ public sealed class AppSettingsData
     /// <see cref="Shell.ShellKinds.Names"/> — <c>powershell</c> (pwsh when installed, else Windows PowerShell),
     /// <c>cmd</c>, <c>bash</c> (Git Bash, when found). Anything else reads as <see cref="Shell.ShellKinds.Default"/>;
     /// a shell that is not installed refuses the call with a sentence, so the row dims one not found. No variable.
+    /// On macOS (2026-10-06) the words are <c>zsh</c>, <c>bash</c> and <c>powershell</c> and the default is <c>zsh</c>
+    /// (<see cref="Shell.ShellKinds.PlatformDefault"/>); a word that OS has not reads as its default.
     /// </summary>
-    public string ShellDefault { get; set; } = Shell.ShellKinds.Default;
+    public string ShellDefault { get; set; } = Shell.ShellKinds.PlatformDefault;
 
     /// <summary>
     /// How many seconds a foreground <c>run_command</c> without <c>timeout</c> waits before the child is

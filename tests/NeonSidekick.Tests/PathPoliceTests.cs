@@ -4,7 +4,8 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The outside-paths police (2026-09-22): pure over a made-up root, <c>exists</c> a fake that knows a
-/// few root folders — every rule of <see cref="PathPolice"/> with a token it refuses and one it lets by.
+/// few root folders — every rule of <see cref="PathPolice"/> with a token it refuses and one it lets by. Windows paths
+/// throughout, so Windows-only (2026-10-06, the macOS build); <c>PathPoliceUnixTests</c> holds the Unix rules.
 /// </summary>
 public sealed class PathPoliceTests
 {
@@ -27,7 +28,7 @@ public sealed class PathPoliceTests
 
     private static string? Script(string text) => PathPolice.FirstOutside(text, Root, Root, isScript: true, Exists, NoLinks);
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"type C:\Windows\win.ini", @"C:\Windows\win.ini")]
     [InlineData(@"type c:/windows/win.ini", @"c:/windows/win.ini")]
     [InlineData(@"copy x D:\Repo\Other\y", @"D:\Repo\Other\y")]
@@ -60,7 +61,7 @@ public sealed class PathPoliceTests
     public void ACommandLine_NamingAnOutsidePath_IsRefused_AndTheTokenIsNamed(string command, string token) =>
         Assert.Equal(token, Command(command));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"dir")]
     [InlineData(@"type D:\Repo\Project\notes.txt")]
     [InlineData(@"type d:/repo/project/sub/x")]
@@ -84,7 +85,7 @@ public sealed class PathPoliceTests
     public void ACommandLine_UnderTheRoot_Passes(string command) =>
         Assert.Null(Command(command));
 
-    [Fact]
+    [WindowsFact]
     public void ARelativePath_ResolvesFromTheWorkdir()
     {
         Assert.Equal("..", Command("cd ..", Root));
@@ -93,7 +94,7 @@ public sealed class PathPoliceTests
         Assert.Null(Command(@"type ..\notes.txt", Sub));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ACompoundLine_IsJudgedSegmentBySegment()
     {
         Assert.Equal("/", Command("dotnet build && cd / && dir"));   // the first argument of its own segment
@@ -101,7 +102,7 @@ public sealed class PathPoliceTests
         Assert.Equal(@"C:\x", Command("echo a; type C:\\x"));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("open(r'C:\\Users\\x.txt').read()", @"C:\Users\x.txt")]
     [InlineData("open(\"C:\\\\Users\\\\x.txt\")", @"C:\\Users\\x.txt")]
     [InlineData("fs.readFileSync('/etc/passwd')", "/etc/passwd")]
@@ -120,7 +121,7 @@ public sealed class PathPoliceTests
     public void AScript_NamingAnOutsidePath_IsRefused(string code, string token) =>
         Assert.Equal(token, Script(code));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("print('hi')")]
     [InlineData("open('notes.txt').read()")]
     [InlineData("open(r'D:\\Repo\\Project\\notes.txt')")]
@@ -141,14 +142,14 @@ public sealed class PathPoliceTests
     public void AScript_UnderTheRoot_Passes(string code) =>
         Assert.Null(Script(code));
 
-    [Fact]
+    [WindowsFact]
     public void TheFirstOffender_IsTheOneNamed()
     {
         Assert.Equal(@"C:\a", Command(@"type C:\a D:\b ~"));
         Assert.Equal("%TEMP%", Command(@"copy C:\a %TEMP%"));   // a folder variable anywhere in the text comes first: it is read over the whole line
     }
 
-    [Fact]
+    [WindowsFact]
     public void Tokens_CutOnWhitespaceQuotesAndPunctuation_AndTrimTrailingMarks()
     {
         Assert.Equal(["dir", @"C:\x", "y", "--out", @"C:\z", "a", "b", "."], PathPolice.Tokens(@"dir ""C:\x"" 'y' --out=C:\z (a, b)."));
@@ -160,7 +161,7 @@ public sealed class PathPoliceTests
 
     // ---- 2026-10-03: paths inside a token, bare drives, bare cd, quoted paths with a space, cd earlier in the line, links ----
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"csc -out:C:\x\a.exe a.cs", @"-out:C:\x\a.exe")]
     [InlineData(@"csc /out:C:\x\a.exe a.cs", @"/out:C:\x\a.exe")]
     [InlineData(@"cmd @C:\x\args.rsp", @"@C:\x\args.rsp")]
@@ -182,7 +183,7 @@ public sealed class PathPoliceTests
     public void ACommandLine_NamingAnOutsidePath_TheNewWays_IsRefused(string command, string token) =>
         Assert.Equal(token, Command(command));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"csc /out:D:\Repo\Project\bin\a.exe a.cs")]   // refused by the rooted rule until 2026-10-03
     [InlineData(@"csc -out:sub\a.exe a.cs")]
     [InlineData(@"curl file:///D:/Repo/Project/x")]
@@ -206,7 +207,7 @@ public sealed class PathPoliceTests
     public void ACommandLine_UnderTheRoot_TheNewWays_Passes(string command) =>
         Assert.Null(Command(command));
 
-    [Fact]
+    [WindowsFact]
     public void ABareCd_InCmd_OnlyPrintsTheFolder_AndPasses()
     {
         Assert.Null(In(ShellKind.Cmd, "cd"));
@@ -221,7 +222,7 @@ public sealed class PathPoliceTests
 
     // ---- 2026-10-03, the review of the day's rules: each way out it found, refused, and its near neighbour still passing ----
 
-    [Theory]
+    [WindowsTheory]
     // A cd that may not have moved what follows it: a pipe, ||, a subshell, bash's & (cmd's runs in turn), a folder that is not there.
     [InlineData(ShellKind.Cmd, @"cd sub | type ..\secret.txt", @"..\secret.txt")]
     [InlineData(ShellKind.Bash, @"cd sub || cat ../x", "../x")]
@@ -255,7 +256,7 @@ public sealed class PathPoliceTests
     public void TheReviewsWaysOut_AreRefused(ShellKind shell, string command, string token) =>
         Assert.Equal(token, In(shell, command));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(ShellKind.Bash, @"cd sub && cat ../notes.txt")]
     [InlineData(ShellKind.Bash, @"cd sub; cat ../notes.txt")]
     [InlineData(ShellKind.PowerShell, @"Set-Location sub; Get-Content ..\x")]
@@ -273,7 +274,7 @@ public sealed class PathPoliceTests
     public void TheReviewsNeighbours_StillPass(ShellKind shell, string command) =>
         Assert.Null(In(shell, command));
 
-    [Fact]
+    [WindowsFact]
     public void AQuotedStringWithASpace_IsNotJoined_WhenAWordOfItLeadsOutByALink()
     {
         // bash -c runs the words as separate arguments: link/secret on its own goes through the link, so the join may not hide it.
@@ -285,10 +286,11 @@ public sealed class PathPoliceTests
     public void TheDevices_ArePinned() =>
         Assert.Equal(
             ["nul", "con", "prn", "aux", "conin$", "conout$", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
-             "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9", "/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty"],
+             "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9", "/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty",
+             "/dev/zero", "/dev/random", "/dev/urandom"],
             PathPolice.Devices);
 
-    [Fact]
+    [WindowsFact]
     public void ACdEarlierInTheLine_MovesWhereLaterPathsResolveFrom_OnlyInsideTheRoot()
     {
         Assert.Equal(@"..\..\x", Command(@"cd sub && type ..\..\x"));   // sub\..\.. is the root's parent
@@ -298,7 +300,7 @@ public sealed class PathPoliceTests
         Assert.Null(Command(@"cd sub && type ..\x", Sub));   // from the workdir: sub\sub\..\x is sub\x
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"type ""D:\Repo\My Project\a.txt""")]
     [InlineData(@"type 'D:\Repo\My Project\sub dir\a.txt'")]
     [InlineData(@"cd ""D:\Repo\My Project\sub"" && type ..\a.txt")]   // joined, then followed by the cd
@@ -306,7 +308,7 @@ public sealed class PathPoliceTests
     public void AQuotedPathWithASpace_UnderARootWithASpace_Passes(string command) =>
         Assert.Null(PathPolice.FirstOutside(command, SpacedRoot, SpacedRoot, isScript: false, Exists, NoLinks));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"type ""D:\Repo\My Project 2\a.txt""", @"D:\Repo\My")]   // outside: cut as before, the first piece named
     [InlineData(@"type ""D:\Repo\My Project\a C:\x""", @"D:\Repo\My")]   // a later word that is a path is never hidden in a join: cut, as before
     [InlineData(@"type ""D:\Repo\My Project\a ..\..\..\x""", @"D:\Repo\My")]
@@ -314,7 +316,7 @@ public sealed class PathPoliceTests
     public void AQuotedPathWithASpace_Outside_IsStillRefused(string command, string token) =>
         Assert.Equal(token, PathPolice.FirstOutside(command, SpacedRoot, SpacedRoot, isScript: false, Exists, NoLinks));
 
-    [Fact]
+    [WindowsFact]
     public void AQuotedPathWithASpace_InAScript_Passes()
     {
         Assert.Null(PathPolice.FirstOutside("open(\"D:\\\\Repo\\\\My Project\\\\a.txt\").read()", SpacedRoot, SpacedRoot, isScript: true, Exists, NoLinks));
@@ -333,7 +335,7 @@ public sealed class PathPoliceTests
         _ => null,
     };
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"type out\x", @"out\x")]
     [InlineData(@"dir out", "out")]
     [InlineData(@"type D:\Repo\Project\out\x", @"D:\Repo\Project\out\x")]
@@ -343,7 +345,7 @@ public sealed class PathPoliceTests
     public void ALinkLeadingOutside_IsRefused(string command, string token) =>
         Assert.Equal(token, PathPolice.FirstOutside(command, Root, Root, isScript: false, Exists, Links));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"type in\x")]
     [InlineData(@"type in\..\notes.txt")]   // .. is spelling, as Win32 reads it: the root's notes.txt
     [InlineData(@"cd in && type ..\notes.txt")]
@@ -351,18 +353,18 @@ public sealed class PathPoliceTests
     public void ALinkLeadingInside_Passes(string command) =>
         Assert.Null(PathPolice.FirstOutside(command, Root, Root, isScript: false, Exists, Links));
 
-    [Fact]
+    [WindowsFact]
     public void ALinkLeadingOutside_InAScript_IsRefused() =>
         Assert.Equal(@"out/x.txt", PathPolice.FirstOutside("open('out/x.txt').read()", Root, Root, isScript: true, Exists, Links));
 
-    [Fact]
+    [WindowsFact]
     public void TheCdLists_ArePinned()
     {
         Assert.Equal(["cd", "chdir", "pushd", "Set-Location", "sl", "Push-Location"], PathPolice.CdCommands);
         Assert.Equal(["cd", "chdir", "Set-Location", "sl"], PathPolice.BareCdCommands);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Judge_SeesARealJunctionLeadingOutside()
     {
         string dir = Path.Combine(Path.GetTempPath(), "neon-police-" + Guid.NewGuid().ToString("N"));
@@ -390,7 +392,7 @@ public sealed class PathPoliceTests
     [Fact]
     public void TheLists_ArePinned()
     {
-        Assert.Equal(["USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PROGRAMDATA", "ALLUSERSPROFILE", "PUBLIC", "ONEDRIVE", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR"], PathPolice.FolderVariables);
+        Assert.Equal(["USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PROGRAMDATA", "ALLUSERSPROFILE", "PUBLIC", "ONEDRIVE", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "OLDPWD"], PathPolice.FolderVariables);
         Assert.Equal(["expanduser(", "Path.home(", "homedir(", "tmpdir(", "gettempdir(", "GetFolderPath(", "GetTempPath("], PathPolice.FolderCalls);
         foreach (string name in PathPolice.FolderVariables)
         {
@@ -403,7 +405,7 @@ public sealed class PathPoliceTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Judge_ReadsTheRealDisk()
     {
         string dir = Path.Combine(Path.GetTempPath(), "neon-police-" + Guid.NewGuid().ToString("N"));

@@ -19,7 +19,7 @@ public static class MySqlText
     public static string BadPort(int port) => $"\"port\" is {Invariant(port)}; it must be 1 to 65535";
     public static string BadSslMode(string word) => $"\"sslMode\" is '{word}'; it must be preferred, required, verify-ca, verify-full or none";
     public static string NoPassword(string name) => $"'{name}' has no password; set it on the MySQL tab of /tools (MySQL set password)";
-    public static string NoCredential(string target) => $"no password in Windows Credential Manager for {target}; set it on the MySQL tab of /tools, or: cmdkey /generic:{target} /user:<user> /pass";
+    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on the MySQL tab of /tools, or: {SqlText.CredentialCommand(target, "<user>")}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's mysql.json was checked for plain passwords: {detail}";
     public const string NoPasswordConnections = "No connection in mysql.json yet; add one first (MySQL add connection).";
 

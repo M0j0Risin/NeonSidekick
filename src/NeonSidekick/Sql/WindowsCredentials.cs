@@ -22,11 +22,18 @@ public readonly record struct CredentialResult(string? Value, string? Error, boo
 /// elsewhere, nothing throws on a refusal, and the interop is <c>LibraryImport</c> over typed pointers (nothing
 /// marshalled by value — the NAudio-under-AOT scar). The smoke check <c>sql:credentials</c> runs all three on the
 /// published binary.
+///
+/// <para>On macOS (2026-10-06, the macOS build) the first two hand over to <see cref="MacKeychain"/>: <see cref="Protect"/> writes a
+/// <c>keychain:</c> value, <see cref="Unprotect"/> reads one, and the generic credentials are Keychain generic passwords — so every
+/// caller stays as it is. The run-as logon has no twin there and still answers <see cref="NotWindows"/>.</para>
 /// </summary>
 public static unsafe partial class WindowsCredentials
 {
     /// <summary>What a DPAPI value in <c>sql.json</c> starts with; anything else in a <c>password</c> is plain text.</summary>
     public const string ProtectedPrefix = "dpapi:";
+
+    /// <summary>What a Keychain-encrypted value starts with (macOS, 2026-10-06: <see cref="MacKeychain"/>).</summary>
+    public const string KeychainPrefix = "keychain:";
 
     /// <summary>The entropy mixed into every DPAPI blob, so a value lifted from another app's store does not decrypt here.</summary>
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("NeonSidekick.sql");
@@ -40,8 +47,12 @@ public static unsafe partial class WindowsCredentials
     private const int Logon32LogonNewCredentials = 9;
     private const int Logon32ProviderWinnt50 = 3;
 
-    /// <summary>Whether <paramref name="value"/> is a DPAPI value this layer wrote.</summary>
-    public static bool IsProtected(string? value) => value is not null && value.StartsWith(ProtectedPrefix, StringComparison.Ordinal);
+    /// <summary>Whether <see cref="Protect"/> can encrypt here: Windows (DPAPI) and macOS (the Keychain, 2026-10-06).</summary>
+    public static bool CanProtect => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+
+    /// <summary>Whether <paramref name="value"/> is a value this layer wrote: DPAPI's, or the Keychain's on macOS.</summary>
+    public static bool IsProtected(string? value) =>
+        value is not null && (value.StartsWith(ProtectedPrefix, StringComparison.Ordinal) || value.StartsWith(KeychainPrefix, StringComparison.Ordinal));
 
     /// <summary><paramref name="secret"/> encrypted for this Windows user on this machine: <c>dpapi:</c> and the blob in base64.</summary>
     public static CredentialResult Protect(string secret)
@@ -49,7 +60,7 @@ public static unsafe partial class WindowsCredentials
         ArgumentNullException.ThrowIfNull(secret);
         if (!OperatingSystem.IsWindows())
         {
-            return CredentialResult.Failed(NotWindows);
+            return OperatingSystem.IsMacOS() ? MacKeychain.Protect(secret, Entropy) : CredentialResult.Failed(NotWindows);
         }
 
         byte[] plain = Encoding.UTF8.GetBytes(secret);
@@ -71,10 +82,10 @@ public static unsafe partial class WindowsCredentials
         ArgumentNullException.ThrowIfNull(value);
         if (!OperatingSystem.IsWindows())
         {
-            return CredentialResult.Failed(NotWindows);
+            return OperatingSystem.IsMacOS() ? MacKeychain.Unprotect(value, Entropy) : CredentialResult.Failed(NotWindows);
         }
 
-        if (!IsProtected(value))
+        if (!value.StartsWith(ProtectedPrefix, StringComparison.Ordinal))
         {
             return CredentialResult.Failed(SqlText.NotProtected);
         }
@@ -142,7 +153,7 @@ public static unsafe partial class WindowsCredentials
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         if (!OperatingSystem.IsWindows())
         {
-            return CredentialResult.Failed(NotWindows);
+            return OperatingSystem.IsMacOS() ? MacKeychain.ReadGeneric(target) : CredentialResult.Failed(NotWindows);
         }
 
         Credential* credential;
@@ -179,7 +190,7 @@ public static unsafe partial class WindowsCredentials
         ArgumentNullException.ThrowIfNull(secret);
         if (!OperatingSystem.IsWindows())
         {
-            return CredentialResult.Failed(NotWindows);
+            return OperatingSystem.IsMacOS() ? MacKeychain.WriteGeneric(target, user, secret) : CredentialResult.Failed(NotWindows);
         }
 
         byte[] blob = Encoding.Unicode.GetBytes(secret);
@@ -215,7 +226,7 @@ public static unsafe partial class WindowsCredentials
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         if (!OperatingSystem.IsWindows())
         {
-            return false;
+            return OperatingSystem.IsMacOS() && MacKeychain.DeleteGeneric(target);
         }
 
         fixed (char* targetPointer = target)

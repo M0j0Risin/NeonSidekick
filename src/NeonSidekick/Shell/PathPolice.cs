@@ -39,6 +39,13 @@ namespace NeonSidekick.Shell;
 /// <item>A link (2026-10-03): a path is under the root only if no junction or symlink on its way leads outside (<see cref="WorkingDirectory.LinkEscape"/>, the file tools' rule too), so <c>type link\x</c> with <c>link → C:\</c> is outside.</item>
 /// </list>
 /// A URL never trips a rule: <c>https://host/path</c> starts with its scheme, not a separator, and the letter before its colon is no drive.
+///
+/// <para>Off Windows (2026-10-06, the macOS build) the drive rules have nothing to read: there are no drives, so Git Bash's
+/// <c>/d/…</c> (rule 3) is the absolute path it spells and is judged by rule 4 like <c>/etc/hosts</c>, a bare <c>C:</c> (rule 9) is a
+/// name, a one-letter <c>/x</c> is a path and never a switch, and a backslash only escapes (a command line's token is read with
+/// its backslashes undone, as the shell reads it: <c>\/etc</c> is judged as <c>/etc</c>). Rule 4 resolves a rooted token from <c>/</c>, so every absolute path outside the root is outside and one
+/// under it passes. Rule 6 adds <c>~name</c> in a command line, another account's home in every Unix shell; rule 7 adds
+/// <c>OLDPWD</c> (<c>cd $OLDPWD</c>, <c>cd -</c>'s folder); the devices add <c>/dev/zero</c>, <c>/dev/random</c> and <c>/dev/urandom</c>.</para>
 /// </summary>
 public static partial class PathPolice
 {
@@ -57,7 +64,7 @@ public static partial class PathPolice
     [
         "USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR",
         "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PROGRAMDATA", "ALLUSERSPROFILE", "PUBLIC", "ONEDRIVE",
-        "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR",
+        "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "OLDPWD",
     ];
 
     /// <summary>The calls that read a folder variable for a script (<c>Path.home()</c>, <c>os.path.expanduser</c>, <c>[Environment]::GetFolderPath</c>, <c>tempfile.gettempdir()</c>…), matched without case.</summary>
@@ -76,7 +83,7 @@ public static partial class PathPolice
     private const char Joiner = '\u0001';
 
     // %NAME% | $env:NAME | ${env:NAME} | $NAME | ${NAME}, the name not continued by a word character ($HOMEPAGE is not $HOME).
-    [GeneratedRegex(@"(?:%(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR)%)|(?:\$\{?(?:env:)?(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR)(?![A-Za-z0-9_])\}?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?:%(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD)%)|(?:\$\{?(?:env:)?(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD)(?![A-Za-z0-9_])\}?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FolderVariablePattern();
 
     // \\server\share or //server/share: two separators, a server, a separator — the share is what makes it a path.
@@ -171,19 +178,27 @@ public static partial class PathPolice
         string root = judging.Root;
         bool isScript = judging.IsScript;
         var linkTarget = judging.LinkTarget;
+        // Off Windows a command line's backslash escapes the next character, as the shell reads an unquoted word: \/etc/passwd
+        // is /etc/passwd there (2026-10-06, the macOS build). Undone first, so every rule reads the word the shell will.
+        if (!isScript && !OperatingSystem.IsWindows() && token.Contains('\\'))
+        {
+            token = Unescape(token);
+        }
+
         if (token.Length == 0 || IsDevice(token))
         {
             return false;
         }
 
-        // 6. The home folder.
-        if (token == "~" || token.StartsWith("~/", StringComparison.Ordinal) || token.StartsWith("~\\", StringComparison.Ordinal))
+        // 6. The home folder; off Windows ~name in a command line too, that account's home.
+        if (token == "~" || token.StartsWith("~/", StringComparison.Ordinal) || token.StartsWith("~\\", StringComparison.Ordinal)
+            || (!isScript && !OperatingSystem.IsWindows() && token.Length > 1 && token[0] == '~' && (char.IsAsciiLetter(token[1]) || token[1] == '_')))
         {
             return true;
         }
 
-        // 9. A bare drive in a command line: that drive's own folder, the root's drive alone staying home.
-        if (!isScript && token.Length == 2 && char.IsAsciiLetter(token[0]) && token[1] == ':')
+        // 9. A bare drive in a command line: that drive's own folder, the root's drive alone staying home. Windows only: elsewhere C: is a name.
+        if (!isScript && OperatingSystem.IsWindows() && token.Length == 2 && char.IsAsciiLetter(token[0]) && token[1] == ':')
         {
             return !(root.Length >= 2 && root[1] == ':' && char.ToUpperInvariant(root[0]) == char.ToUpperInvariant(token[0]));
         }
@@ -299,7 +314,8 @@ public static partial class PathPolice
     /// where it is the D drive (2026-10-03, the review: <c>cd /c</c>); anywhere else a lone <c>/d</c> is a switch.
     /// </summary>
     private static bool IsBashDrive(string token, Judging judging) =>
-        token.Length >= 2 && token[0] == '/' && char.IsAsciiLetter(token[1])
+        OperatingSystem.IsWindows()
+        && token.Length >= 2 && token[0] == '/' && char.IsAsciiLetter(token[1])
         && (token.Length == 2 ? !judging.IsScript && judging.Shell == ShellKind.Bash : token[2] == '/');
 
     /// <summary>The tokens of <paramref name="text"/>: cut on whitespace and <see cref="Delimiters"/>, trailing punctuation off, the empty ones dropped.</summary>
@@ -337,7 +353,7 @@ public static partial class PathPolice
         "nul", "con", "prn", "aux", "conin$", "conout$",
         "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
         "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
-        "/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty",
+        "/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/zero", "/dev/random", "/dev/urandom",
     ];
 
     /// <summary>
@@ -375,10 +391,10 @@ public static partial class PathPolice
 
     /// <summary>
     /// An option: <c>-x</c> or <c>--x</c> (a lone <c>-</c> is an argument, <c>cd -</c>'s previous folder), and a one-letter
-    /// <c>/x</c> switch everywhere but bash, where <c>/c</c> is the C drive (rule 3).
+    /// <c>/x</c> switch everywhere but bash, where <c>/c</c> is the C drive (rule 3) — and only on Windows: elsewhere <c>/x</c> is a path.
     /// </summary>
     private static bool IsOption(string token, ShellKind shell) =>
-        (token.Length > 1 && token[0] == '-') || (shell != ShellKind.Bash && token.Length == 2 && token[0] == '/' && char.IsAsciiLetter(token[1]));
+        (token.Length > 1 && token[0] == '-') || (OperatingSystem.IsWindows() && shell != ShellKind.Bash && token.Length == 2 && token[0] == '/' && char.IsAsciiLetter(token[1]));
 
     // A redirect and its target (>x, 2>>x, &>x, >&2, <x, a dangling 2> when Segments cut 2>&1 at its &): no argument of the command's.
     [GeneratedRegex(@"(?:\d|&)?>>?(?:&\d+|\s*[^\s<>|&;]*)|\d?<\s*[^\s<>|&;]*", RegexOptions.CultureInvariant)]
@@ -475,6 +491,28 @@ public static partial class PathPolice
     }
 
     private static string Unjoin(string token) => token.Replace(Joiner, ' ');
+
+    /// <summary>A Unix shell's unquoted word with its backslashes undone: each escapes the character after it, a last one alone goes.</summary>
+    internal static string Unescape(string token)
+    {
+        var sb = new StringBuilder(token.Length);
+        for (int i = 0; i < token.Length; i++)
+        {
+            if (token[i] == '\\')
+            {
+                if (i + 1 < token.Length)
+                {
+                    sb.Append(token[++i]);
+                }
+            }
+            else
+            {
+                sb.Append(token[i]);
+            }
+        }
+
+        return sb.ToString();
+    }
 
     // A path, not a sentence: absolute, a file: URL, or a first word with a separator in it ("..\My Project\x").
     private static bool LooksLikePath(string content)

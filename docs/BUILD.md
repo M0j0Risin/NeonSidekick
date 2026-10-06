@@ -4,7 +4,7 @@ How to build, test and publish Neon Sidekick yourself. Back to the [README](../R
 
 ## What you need
 
-* **Windows x64.** The release build targets `win-x64` only.
+* **Windows x64.** Releases target `win-x64`. A macOS build for Apple Silicon is in preview; see [Building on a Mac](#building-on-a-mac).
 * **The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).**
 * **For the native build (NativeAOT):** Visual Studio 2022 or later, or its Build Tools, with the **Desktop development with C++** workload. A plain `dotnet build` doesn't need it.
 * **PowerShell** to run `build.ps1`, not Git Bash: the smoke step hangs under MSYS.
@@ -55,6 +55,33 @@ dotnet test tests/NeonSidekick.Tests -c Release --filter "FullyQualifiedName~Ass
 ## Checking the native exe
 
 Besides `--smoke`, the published exe has checks for real hardware and servers: `--audio-check`, `--voice-check`, `--camera-check`, and one per database family (`--sql-check`, `--postgres-check`…). [COMMANDLINE.md](COMMANDLINE.md) lists them all.
+
+## Building on a Mac
+
+A preview build for Apple Silicon Macs (`osx-arm64`). It leaves out the features that have no macOS backend yet: voice, pictures, the camera, screen capture, the viewer windows, YouTube playback, printing, the embedded LLM, Docker and UNC shares. The chat, the tools, MCP, git, the database tools, sessions and headless mode are all there.
+
+NativeAOT can't build a Mac binary from Windows, so build on the Mac itself. You need:
+
+* **The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** for macOS Arm64.
+* **The Xcode command line tools** (`xcode-select --install`) for the native link.
+* **PowerShell 7** (`brew install powershell`) to run `build.ps1`.
+
+```sh
+pwsh ./build.ps1 -TestOnly     # build and test; tests of Windows-only features are skipped
+pwsh ./build.ps1 -Publish      # publish/output/NeonSidekick, smoke-tested
+pwsh ./build.ps1 -Package      # publish/package/NeonSidekick-v<version>-osx-arm64.tar.gz
+```
+
+`-Runtime` defaults to `osx-arm64` on a Mac. The script marks the bundled `espeak-ng` executable as runnable and gives it and the app an ad-hoc signature. The package is a `.tar.gz` so the executable bits survive.
+
+A downloaded build isn't notarized, so macOS quarantines it. Clear that once after unpacking: `xattr -dr com.apple.quarantine NeonSidekick-v<version>-osx-arm64`.
+
+Good to know on a Mac:
+* **Secrets go in the Keychain.** API keys and database passwords are encrypted with a key the app keeps in your login Keychain (the *NeonSidekick* item), and a `passwordStore: credman` password is a Keychain item you make with `security add-generic-password -s <target> -a <user> -w`. After each new build macOS asks once whether it may use that key; choose **Always Allow**.
+* **The shell is `zsh`.** `run_command` runs in zsh unless you pick `bash` or `powershell` (pwsh) under *Shell default*. Scripts run with `python3`, `node` or `pwsh`.
+* **Copy and paste.** Cmd+V pastes through the terminal. `/copy` and the input line's copy use `pbcopy`.
+* **Editors.** `/persona` and friends open the file in its default app. For `/draft`, set *Draft editor* to a command that waits, such as `code --wait` or `open -W -t`; a terminal editor like vim can't share the terminal with the app.
+* **Terminals.** Terminal.app and iTerm2 both work. Turn on *Use Option as Meta key* for Alt shortcuts, and hold Fn (Terminal.app) or Option (iTerm2) to select text with the mouse while the app has it.
 
 ## Troubleshooting
 

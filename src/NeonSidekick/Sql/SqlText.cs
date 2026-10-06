@@ -33,7 +33,14 @@ public static class SqlText
 
     public const string NotProtected = "the value is not one the app encrypted (dpapi:…)";
     public static string CannotDecrypt(string detail) => $"the password cannot be decrypted — it was saved by another Windows user or on another machine ({detail}); set it again on the SQL tab of /tools";
-    public static string NoCredential(string target) => $"no password in Windows Credential Manager for {target}; set it on the SQL tab of /tools, or: cmdkey /generic:{target} /user:<account> /pass";
+    /// <summary>Where a <c>passwordStore: credman</c> password lives: Windows Credential Manager, or the macOS Keychain (2026-10-06, the macOS build). Pinned.</summary>
+    public static string CredentialStore => OperatingSystem.IsMacOS() ? "the macOS Keychain" : "Windows Credential Manager";
+
+    /// <summary>The command that stores one there by hand: <c>cmdkey</c> on Windows, <c>security add-generic-password</c> on macOS. Pinned.</summary>
+    public static string CredentialCommand(string target, string user) =>
+        OperatingSystem.IsMacOS() ? $"security add-generic-password -s {target} -a {user} -w" : $"cmdkey /generic:{target} /user:{user} /pass";
+
+    public static string NoCredential(string target) => $"no password in {CredentialStore} for {target}; set it on the SQL tab of /tools, or: {CredentialCommand(target, "<account>")}";
     public static string NoPassword(string name) => $"'{name}' has no password; set it on the SQL tab of /tools (SQL set password)";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's sql.json was checked for plain passwords: {detail}";
     public static string EncryptedLogLine(string name, string path) => $"encrypted the password of '{name}' in {path}";

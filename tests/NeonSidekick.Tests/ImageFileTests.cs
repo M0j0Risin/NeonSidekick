@@ -450,4 +450,18 @@ public class ImageFileTests : IDisposable
         Assert.Equal("clipboard-1.png", ImageFile.ClipboardName(1));
         Assert.Equal("clipboard-12.png", ImageFile.ClipboardName(12));
     }
+
+    /// <summary>The macOS build (2026-10-06): no codecs reads as its own failure with its own sentence, never "could not be read"; codecs on Windows.</summary>
+    [Fact]
+    public void Unsupported_HasItsOwnSentence_AndCodecsAreWindowsOnly()
+    {
+        Assert.Equal("(image not attached: a.png; pictures need Windows for now)", ImageFile.Notice(ImageLoadFailure.Unsupported, "a.png"));
+        Assert.Equal(OperatingSystem.IsWindows(), ImageCodecs.Available);
+        if (!ImageCodecs.Available)
+        {
+            Assert.False(ImageFile.TryLoad(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "a.png", out var image, out var failure));
+            Assert.Null(image);
+            Assert.Equal(ImageLoadFailure.Unsupported, failure);
+        }
+    }
 }

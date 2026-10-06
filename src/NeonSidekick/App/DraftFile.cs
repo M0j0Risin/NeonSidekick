@@ -46,6 +46,30 @@ public static class DraftFile
         return "/s /c \"" + editorCommand + " \"" + path + "\"\"";
     }
 
+    /// <summary>
+    /// The configured editor's start off Windows (2026-10-06, the macOS build): <c>/bin/sh -c '&lt;command&gt; "$1"' sh &lt;path&gt;</c>,
+    /// the command read by the shell as typed (<c>code --wait</c>, <c>open -W -t</c>) and the path handed over as <c>$1</c>, never
+    /// spliced into the text, so no character in it needs quoting. A terminal editor (vim, nano) is no good here: the app's own
+    /// reader keeps the terminal. Pure; pinned.
+    /// </summary>
+    public static System.Diagnostics.ProcessStartInfo UnixStart(string editorCommand, string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(editorCommand);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var start = new System.Diagnostics.ProcessStartInfo("/bin/sh") { UseShellExecute = false };
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add(editorCommand + " \"$1\"");
+        start.ArgumentList.Add("sh");
+        start.ArgumentList.Add(path);
+        return start;
+    }
+
+    /// <summary>The configured editor's start on this OS: <c>cmd.exe</c> with <see cref="CommandLine"/> on Windows, <see cref="UnixStart"/> elsewhere.</summary>
+    public static System.Diagnostics.ProcessStartInfo EditorStart(string editorCommand, string path) =>
+        OperatingSystem.IsWindows()
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = true, Arguments = CommandLine(editorCommand, path) }
+            : UnixStart(editorCommand, path);
+
     /// <summary>Nothing to send: the file was saved empty, with whitespace alone, or never saved.</summary>
     public static bool IsBlank(string text) => string.IsNullOrWhiteSpace(text);
 
