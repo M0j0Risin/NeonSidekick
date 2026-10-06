@@ -24,6 +24,12 @@ public interface IEmbeddedLlm : IAsyncDisposable
 
     EmbeddedModelState State(EmbeddedModel model);
 
+    /// <summary>What installing <paramref name="model"/> would download: its files not already on disk (2026-10-06: a shared projector or drafter counts nothing).</summary>
+    long BytesToDownload(EmbeddedModel model);
+
+    /// <summary>What removing <paramref name="model"/> frees: its weights and the shared files no other model holds.</summary>
+    long FreedBytes(EmbeddedModel model);
+
     /// <summary>The running server; null when none is up.</summary>
     EmbeddedServerInfo? Running { get; }
 
@@ -135,6 +141,10 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     public EmbeddedServerInfo? Running => _host.Running;
 
     public EmbeddedModelState State(EmbeddedModel model) => _files.State(model);
+
+    public long BytesToDownload(EmbeddedModel model) => _files.BytesToDownload(model);
+
+    public long FreedBytes(EmbeddedModel model) => _files.FreedBytes(model);
 
     public BackendChoice Backend(AppSettingsData effective)
     {

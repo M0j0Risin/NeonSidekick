@@ -87,6 +87,16 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 
     public EmbeddedModelState State(EmbeddedModel model) => _states.TryGetValue(model.Id, out var state) ? state : EmbeddedModelState.Absent;
 
+    /// <summary>What a download would take; the whole model unless a test says (2026-10-06).</summary>
+    public Func<EmbeddedModel, long> Download { get; set; } = EmbeddedModelCatalog.TotalBytes;
+
+    /// <summary>What a removal frees; the whole model unless a test says.</summary>
+    public Func<EmbeddedModel, long> Freed { get; set; } = EmbeddedModelCatalog.TotalBytes;
+
+    public long BytesToDownload(EmbeddedModel model) => Download(model);
+
+    public long FreedBytes(EmbeddedModel model) => Freed(model);
+
     public BackendChoice Backend(AppSettingsData effective) => new(LlamaBackend.Cuda, "fake driver");
 
     public long RuntimeBytesToDownload(AppSettingsData effective) => RuntimeBytes;

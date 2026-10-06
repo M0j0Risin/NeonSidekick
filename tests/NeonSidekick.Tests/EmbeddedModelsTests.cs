@@ -50,6 +50,8 @@ public class EmbeddedModelsTests : IDisposable
 
     private string LlamaDir => Path.Combine(_home, "llama");
 
+    private string SharedDir => EmbeddedModelCatalog.SharedFolder(ModelsDir);
+
     private ArchiveSetSpec Runtime(LlamaBackend backend)
     {
         var zip = backend == LlamaBackend.Vulkan ? _vulkanZip : _runtimeZip;
@@ -88,6 +90,7 @@ public class EmbeddedModelsTests : IDisposable
 
         File.WriteAllBytes(_files.WeightsPath(_model), _weights);
         File.Delete(partial);
+        Directory.CreateDirectory(SharedDir);
         File.WriteAllBytes(_files.MmprojPath(_model)!, _mmproj);
         Assert.Equal(EmbeddedModelState.Installed, _files.State(_model));
         Assert.Equal([_model], _files.Installed());
@@ -116,7 +119,8 @@ public class EmbeddedModelsTests : IDisposable
         Assert.True(result.Ok, result.Detail);
         Assert.Equal(EmbeddedLlmText.Installed(_model), result.Detail);
         Assert.Equal(_weights, File.ReadAllBytes(Path.Combine(ModelsDir, "tiny-model", "tiny.gguf")));
-        Assert.Equal(_mmproj, File.ReadAllBytes(Path.Combine(ModelsDir, "tiny-model", "mmproj-tiny.gguf")));
+        Assert.Equal(_mmproj, File.ReadAllBytes(EmbeddedModelCatalog.SharedPath(ModelsDir, _model.Mmproj)));   // in _shared since 2026-10-06
+        Assert.False(File.Exists(Path.Combine(ModelsDir, "tiny-model", "mmproj-tiny.gguf")));
         Assert.True(_files.State(_model).IsInstalled);
         Assert.Contains("verifying Tiny Model…", labels);
         Assert.Contains("verifying Tiny Model vision…", labels);
@@ -176,11 +180,210 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Equal(["b11258-cuda", "bx-cpu", "notes"], Directory.EnumerateDirectories(LlamaDir).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
+    // ── Shared projectors and drafters (2026-10-06) ──────────────────────────
+
+    /// <summary>
+    /// Two builds of one repository: their own weights, the same projector and drafter (the catalog's E2B and E4B builds'
+    /// shape), and an EmbeddedModels over both.
+    /// </summary>
+    private (EmbeddedModel A, EmbeddedModel B, EmbeddedModels Files, byte[] Drafter, byte[] WeightsB) TwoBuilds()
+    {
+        var (a, _, drafter) = WithDrafter();
+        byte[] weightsB = FakeModelFiles.GgufBytes(20_000);
+        var b = a with { Id = "tiny-model-q8", Quant = "Q8", Model = new EmbeddedFile("tiny-q8.gguf", weightsB.Length, FakeModelFiles.Sha256(weightsB)) };
+        Serve(EmbeddedModelCatalog.Url(b, b.Model).AbsoluteUri, weightsB);
+        return (a, b, new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [a, b], Runtime), drafter, weightsB);
+    }
+
+    private int Fetches(string name) => _http.Requests.Count(r => r.Uri.AbsolutePath.EndsWith("/" + name, StringComparison.Ordinal));
+
+    [Fact]
+    public async Task ASecondBuild_DownloadsItsWeightsAlone_TheSharedFilesOnce()
+    {
+        var (a, b, files, drafter, _) = TwoBuilds();
+        Assert.Equal(EmbeddedModelCatalog.TotalBytes(b), files.BytesToDownload(b));
+
+        Assert.True((await files.InstallAsync(a, null, CancellationToken.None)).Ok);
+        Assert.Equal(b.Model.Bytes, files.BytesToDownload(b));   // the projector and drafter are already there
+        Assert.True((await files.InstallAsync(b, null, CancellationToken.None)).Ok);
+
+        Assert.Equal((1, 1), (Fetches("mmproj-tiny.gguf"), Fetches("mtp-tiny.gguf")));
+        Assert.True(files.State(a).IsInstalled && files.State(b).IsInstalled);
+        Assert.Equal(files.MmprojPath(a), files.MmprojPath(b));
+        Assert.Equal(drafter, File.ReadAllBytes(files.DrafterPath(b)!));
+        Assert.Equal(2, Directory.GetFiles(SharedDir).Length);
+        Assert.Equal(["tiny-q8.gguf"], Directory.GetFiles(EmbeddedModelCatalog.Folder(ModelsDir, b)).Select(Path.GetFileName));
+        Assert.Equal(a.Model.Bytes + b.Model.Bytes + a.Mmproj.Bytes + a.Drafter!.Bytes, files.InstalledBytes());   // each shared file once
+        Assert.Equal(0, files.BytesToDownload(b));
+    }
+
+    [Fact]
+    public async Task Remove_KeepsTheSharedFiles_WhileAnotherBuildHoldsThem()
+    {
+        var (a, b, files, _, weightsB) = TwoBuilds();
+        Assert.True((await files.InstallAsync(a, null, CancellationToken.None)).Ok);
+        Directory.CreateDirectory(EmbeddedModelCatalog.Folder(ModelsDir, b));
+        File.WriteAllBytes(ModelStore.PartialPath(files.WeightsPath(b)), weightsB[..100]);   // B part-way down still holds them
+        Assert.Equal(a.Model.Bytes, files.FreedBytes(a));
+
+        Assert.Null(files.Remove(a));
+
+        Assert.False(Directory.Exists(EmbeddedModelCatalog.Folder(ModelsDir, a)));
+        Assert.True(File.Exists(EmbeddedModelCatalog.SharedPath(ModelsDir, a.Mmproj)));
+        Assert.True(File.Exists(EmbeddedModelCatalog.SharedPath(ModelsDir, a.Drafter!)));
+
+        // The last build to go takes them with it.
+        Assert.Equal(EmbeddedModelCatalog.TotalBytes(b), files.FreedBytes(b));
+        Assert.Null(files.Remove(b));
+        Assert.Empty(Directory.GetFiles(SharedDir));
+    }
+
+    /// <summary>The copies earlier installs kept in each folder: one moves into _shared, the other goes; both builds stay installed.</summary>
+    [Fact]
+    public void Merge_FoldsTheOldPerFolderCopies_IntoOne()
+    {
+        var (a, b, files, drafter, weightsB) = TwoBuilds();
+        foreach (var (model, weights) in new[] { (a, _weights), (b, weightsB) })
+        {
+            string folder = EmbeddedModelCatalog.Folder(ModelsDir, model);
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, model.Model.Name), weights);
+            File.WriteAllBytes(Path.Combine(folder, model.Mmproj.Name), _mmproj);
+            File.WriteAllBytes(Path.Combine(folder, model.Drafter!.Name), drafter);
+        }
+
+        Assert.True(files.State(a).IsInstalled);   // the first read merges
+
+        Assert.True(files.State(b).IsInstalled);
+        Assert.Equal(_mmproj, File.ReadAllBytes(EmbeddedModelCatalog.SharedPath(ModelsDir, a.Mmproj)));
+        Assert.Equal(drafter, File.ReadAllBytes(EmbeddedModelCatalog.SharedPath(ModelsDir, a.Drafter!)));
+        Assert.Equal(EmbeddedModelCatalog.SharedPath(ModelsDir, a.Mmproj), files.MmprojPath(b));
+        foreach (var model in new[] { a, b })
+        {
+            Assert.Equal([model.Model.Name], Directory.GetFiles(EmbeddedModelCatalog.Folder(ModelsDir, model)).Select(Path.GetFileName));
+        }
+    }
+
+    /// <summary>A copy a running server has open is left where it is and read there; a later merge folds it in.</summary>
+    [Fact]
+    public void Merge_LeavesACopyInUse_ReadWhereItIs_UntilTheNextMerge()
+    {
+        string folder = EmbeddedModelCatalog.Folder(ModelsDir, _model);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(_files.WeightsPath(_model), _weights);
+        string legacy = Path.Combine(folder, _model.Mmproj.Name);
+        File.WriteAllBytes(legacy, _mmproj);
+
+        using (new FileStream(legacy, FileMode.Open, FileAccess.Read, FileShare.Read))   // as llama-server maps it
+        {
+            Assert.True(_files.State(_model).IsInstalled);
+            Assert.Equal(legacy, _files.MmprojPath(_model));
+        }
+
+        _files.MergeShared();
+
+        Assert.False(File.Exists(legacy));
+        Assert.Equal(EmbeddedModelCatalog.SharedPath(ModelsDir, _model.Mmproj), _files.MmprojPath(_model));
+        Assert.True(_files.State(_model).IsInstalled);
+    }
+
+    /// <summary>An install while a copy is in use copies it into _shared rather than downloading it again.</summary>
+    [Fact]
+    public async Task Install_CopiesASharedFileInUse_RatherThanDownloadingIt()
+    {
+        var (a, b, files, drafter, _) = TwoBuilds();
+        string folder = EmbeddedModelCatalog.Folder(ModelsDir, a);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, a.Model.Name), _weights);
+        string legacy = Path.Combine(folder, a.Mmproj.Name);
+        File.WriteAllBytes(legacy, _mmproj);
+        File.WriteAllBytes(Path.Combine(folder, a.Drafter!.Name), drafter);
+
+        using (new FileStream(legacy, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            Assert.True((await files.InstallAsync(b, null, CancellationToken.None)).Ok);
+        }
+
+        Assert.Equal((0, 0), (Fetches("mmproj-tiny.gguf"), Fetches("mtp-tiny.gguf")));
+        Assert.True(files.State(b).IsInstalled);
+        Assert.Equal(_mmproj, File.ReadAllBytes(EmbeddedModelCatalog.SharedPath(ModelsDir, a.Mmproj)));
+    }
+
+    /// <summary>A part-way download in a model's folder moves to _shared with it, and the next install resumes it.</summary>
+    [Fact]
+    public async Task Merge_MovesAPartWayDownload_AndTheInstallResumesIt()
+    {
+        string folder = EmbeddedModelCatalog.Folder(ModelsDir, _model);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(_files.WeightsPath(_model), _weights);
+        File.WriteAllBytes(ModelStore.PartialPath(Path.Combine(folder, _model.Mmproj.Name)), _mmproj[..4_000]);
+
+        Assert.Equal(EmbeddedModelStateKind.Partial, _files.State(_model).Kind);
+        Assert.True(File.Exists(ModelStore.PartialPath(EmbeddedModelCatalog.SharedPath(ModelsDir, _model.Mmproj))));
+        Assert.True((await _files.InstallAsync(_model, null, CancellationToken.None)).Ok);
+
+        Assert.Contains(_http.Requests, r => r.Uri.AbsolutePath.EndsWith("/mmproj-tiny.gguf", StringComparison.Ordinal));
+        Assert.True(_files.State(_model).IsInstalled);
+        Assert.Empty(Directory.GetFiles(folder, "*.partial*"));
+    }
+
+    /// <summary>The background install and a start's drafter fetch at once: one download of the shared drafter.</summary>
+    [Fact]
+    public async Task TwoFetchesOfOneSharedFile_DownloadItOnce()
+    {
+        byte[] drafter = FakeModelFiles.GgufBytes(6_000);
+        byte[] weightsB = FakeModelFiles.GgufBytes(20_000);
+        var a = _model with { Drafter = new EmbeddedFile("mtp-slow.gguf", drafter.Length, FakeModelFiles.Sha256(drafter)) };
+        var b = a with { Id = "tiny-model-q8", Quant = "Q8", Model = new EmbeddedFile("tiny-q8.gguf", weightsB.Length, FakeModelFiles.Sha256(weightsB)) };
+        var release = new TaskCompletionSource();
+        _http.Map(EmbeddedModelCatalog.Url(a, a.Drafter!).AbsoluteUri, async (_, _) =>
+        {
+            await release.Task;
+            return StubHttpMessageHandler.Bytes(HttpStatusCode.OK, drafter, "application/octet-stream");
+        });
+        Serve(EmbeddedModelCatalog.Url(b, b.Model).AbsoluteUri, weightsB);
+        var files = new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [a, b], Runtime);
+        Directory.CreateDirectory(EmbeddedModelCatalog.Folder(ModelsDir, a));
+        File.WriteAllBytes(files.WeightsPath(a), _weights);
+
+        var fetch = files.EnsureDrafterAsync(a, null, CancellationToken.None);
+        var install = files.InstallAsync(b, null, CancellationToken.None);
+        for (int i = 0; i < 500 && Fetches("mtp-slow.gguf") == 0; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        await Task.Delay(100);   // the install's turn at the drafter, if the gate let it through
+        release.SetResult();
+        Assert.True((await install).Ok);
+        Assert.True((await fetch)!.Value.Ok);
+
+        Assert.Equal(1, Fetches("mtp-slow.gguf"));
+        Assert.Equal(drafter, File.ReadAllBytes(files.DrafterPath(a)!));
+        Assert.Equal(weightsB, File.ReadAllBytes(files.WeightsPath(b)));
+    }
+
+    [Fact]
+    public void TheSharedPath_IsDistinctPerFile_AndNoCatalogIdIsTheSharedFolder()
+    {
+        var one = new EmbeddedFile("mmproj-F16.gguf", 1, new string('a', 64));
+        var two = new EmbeddedFile("mmproj-F16.gguf", 1, new string('b', 64));
+        Assert.NotEqual(EmbeddedModelCatalog.SharedPath(ModelsDir, one), EmbeddedModelCatalog.SharedPath(ModelsDir, two));
+        Assert.Equal(Path.Combine(SharedDir, "aaaaaaaaaaaaaaaa-mmproj-F16.gguf"), EmbeddedModelCatalog.SharedPath(ModelsDir, one));
+        Assert.DoesNotContain(EmbeddedModelCatalog.Models, m => string.Equals(m.Id, EmbeddedModelCatalog.SharedFolderName, StringComparison.OrdinalIgnoreCase));
+
+        // The real catalog: the E2B builds share one projector and one drafter.
+        var e2b = EmbeddedModelCatalog.Models.Where(m => m.Id.StartsWith("gemma-4-e2b", StringComparison.Ordinal) && m.Repository.StartsWith("unsloth/", StringComparison.Ordinal)).ToList();
+        Assert.True(e2b.Count >= 5);
+        Assert.Single(e2b.Select(m => EmbeddedModelCatalog.SharedPath(ModelsDir, m.Mmproj)).Distinct());
+    }
+
     // ── EmbeddedLlmService ─────────────────────────────────────────────────────
 
     private void InstallByHand()
     {
         Directory.CreateDirectory(Path.Combine(ModelsDir, "tiny-model"));
+        Directory.CreateDirectory(SharedDir);
         File.WriteAllBytes(_files.WeightsPath(_model), _weights);
         File.WriteAllBytes(_files.MmprojPath(_model)!, _mmproj);
     }
@@ -361,6 +564,7 @@ public class EmbeddedModelsTests : IDisposable
     {
         var (model, files, drafter) = WithDrafter();
         Directory.CreateDirectory(EmbeddedModelCatalog.Folder(ModelsDir, model));
+        Directory.CreateDirectory(SharedDir);
         File.WriteAllBytes(files.WeightsPath(model), _weights);
         File.WriteAllBytes(files.MmprojPath(model), _mmproj);
         var host = new FakeLlamaServerHost();
@@ -383,6 +587,7 @@ public class EmbeddedModelsTests : IDisposable
         var broken = model with { Drafter = model.Drafter! with { Sha256 = new string('2', 64) } };
         files = new EmbeddedModels(ModelsDir, LlamaDir, new HttpClient(_http), [broken], Runtime);
         Directory.CreateDirectory(EmbeddedModelCatalog.Folder(ModelsDir, broken));
+        Directory.CreateDirectory(SharedDir);
         File.WriteAllBytes(files.WeightsPath(broken), _weights);
         File.WriteAllBytes(files.MmprojPath(broken), _mmproj);
         var host = new FakeLlamaServerHost();

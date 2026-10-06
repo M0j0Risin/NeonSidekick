@@ -202,13 +202,26 @@ public class EmbeddedLlmCoreTests
         }
     }
 
+    /// <summary>
+    /// Each model's weights in its own folder; its projector and drafter in _shared, one path per file (2026-10-06): the builds
+    /// of one repository share theirs, and the many mmproj-F16.gguf of different repositories never collide.
+    /// </summary>
     [Fact]
     public void EachModel_HasItsOwnFolder_SoTheTwoMmprojF16sNeverCollide()
     {
         string dir = Path.Combine("C:", "home", "models", "llm");
-        var paths = EmbeddedModelCatalog.Models.SelectMany(m => new[] { EmbeddedModelCatalog.WeightsSpec(dir, m).Path, EmbeddedModelCatalog.MmprojSpec(dir, m).Path, EmbeddedModelCatalog.DrafterSpec(dir, m)?.Path }).OfType<string>().ToList();
-        Assert.Equal(49 + 49 + 28, paths.Count);   // weights, projectors and the 28 drafters (Muse Glimmer's two DFlash ones since 2026-09-30, the E2B's and E4B's eight more builds' since 2026-10-05) (one repository's builds share one projector's and drafter's name and bytes, each in its own folder)
-        Assert.Equal(paths.Count, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        var weightsPaths = EmbeddedModelCatalog.Models.Select(m => EmbeddedModelCatalog.WeightsSpec(dir, m).Path).ToList();
+        Assert.Equal(49, weightsPaths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        var shared = EmbeddedModelCatalog.Models
+            .SelectMany(m => new[] { (m.Mmproj, EmbeddedModelCatalog.MmprojSpec(dir, m).Path), (m.Drafter, EmbeddedModelCatalog.DrafterSpec(dir, m)?.Path) })
+            .Where(f => f.Item1 is not null)
+            .Select(f => (Sha: f.Item1!.Sha256, Path: f.Item2!))
+            .ToList();
+        Assert.Equal(49 + 28, shared.Count);   // the projectors and the 28 drafters (Muse Glimmer's two DFlash ones since 2026-09-30, the E2B's and E4B's eight more builds' since 2026-10-05)
+        Assert.All(shared, f => Assert.StartsWith(EmbeddedModelCatalog.SharedFolder(dir) + Path.DirectorySeparatorChar, f.Path, StringComparison.Ordinal));
+        int files = shared.Select(f => f.Sha).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        Assert.Equal(files, shared.Select(f => f.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count());   // a path per file, and a file per path
+        Assert.True(files < shared.Count);
 
         var e2b = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
         var weights = EmbeddedModelCatalog.WeightsSpec(dir, e2b);
@@ -219,11 +232,13 @@ public class EmbeddedLlmCoreTests
         Assert.Equal(e2b.Model.Bytes, weights.ApproxBytes);
         Assert.Equal("Gemma 4 E2B vision", EmbeddedModelCatalog.MmprojSpec(dir, e2b)!.Display);
         var drafter = EmbeddedModelCatalog.DrafterSpec(dir, e2b)!;
-        Assert.Equal(Path.Combine(dir, "gemma-4-e2b", "mtp-gemma-4-E2B-it.gguf"), drafter.Path);
+        Assert.Equal(Path.Combine(dir, "_shared", e2b.Drafter!.Sha256[..16] + "-mtp-gemma-4-E2B-it.gguf"), drafter.Path);
         Assert.Equal(("Gemma 4 E2B MTP", e2b.Drafter!.Sha256, true), (drafter.Display, drafter.Sha256, drafter.Resumable));
         Assert.Null(EmbeddedModelCatalog.DrafterSpec(dir, EmbeddedModelCatalog.Find("qwen3.8-27b")!));   // its head is in the weights
-        var muse = EmbeddedModelCatalog.DrafterSpec(dir, EmbeddedModelCatalog.Find("muse-glimmer-30b")!)!;
-        Assert.Equal((Path.Combine(dir, "muse-glimmer-30b", "dflash-kquant.gguf"), "Muse Glimmer 30B DFlash"), (muse.Path, muse.Display));
+        var museModel = EmbeddedModelCatalog.Find("muse-glimmer-30b")!;
+        var muse = EmbeddedModelCatalog.DrafterSpec(dir, museModel)!;
+        Assert.Equal((EmbeddedModelCatalog.SharedPath(dir, museModel.Drafter!), "Muse Glimmer 30B DFlash"), (muse.Path, muse.Display));
+        Assert.EndsWith("-dflash-kquant.gguf", muse.Path, StringComparison.Ordinal);
     }
 
     // ── The llama.cpp pins ──────────────────────────────────────────────────

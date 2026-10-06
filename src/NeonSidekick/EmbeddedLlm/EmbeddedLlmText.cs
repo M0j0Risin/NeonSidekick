@@ -34,9 +34,13 @@ public static class EmbeddedLlmText
     /// <summary>The refusal when an image is sent to an embedded model running without its vision projector.</summary>
     public const string NoVisionError = "the embedded model is running without its vision projector; turn Embedded vision on in /settings › Embedded to send images";
 
-    /// <summary>A model's row detail in <c>/server</c> and the catalog: <see cref="RowDetail"/> over its download.</summary>
-    public static string ModelDetail(EmbeddedModel model, EmbeddedModelState state) =>
-        RowDetail(state, EmbeddedModelCatalog.TotalBytes(model));
+    /// <summary>
+    /// A model's row detail in <c>/server</c> and the catalog: <see cref="RowDetail"/> over its size when installed, else over
+    /// <paramref name="download"/>, what an install would still fetch (2026-10-06: less than the whole when another build
+    /// brought its shared projector and drafter); the whole model when not given.
+    /// </summary>
+    public static string ModelDetail(EmbeddedModel model, EmbeddedModelState state, long? download = null) =>
+        RowDetail(state, state.IsInstalled ? EmbeddedModelCatalog.TotalBytes(model) : download ?? EmbeddedModelCatalog.TotalBytes(model));
 
     /// <summary>
     /// The drafter column's mark (2026-09-29, the user's ask): the right-most column of the catalog and of <c>/server</c>'s
@@ -92,14 +96,18 @@ public static class EmbeddedLlmText
         static string Slot(bool on, string glyph) => "  " + (on ? glyph : "  ");
     }
 
-    /// <summary>What an install costs to download: the model and its vision projector, plus the llama.cpp runtime when that is missing too.</summary>
-    public static string InstallCost(EmbeddedModel model, long runtimeBytes) =>
-        runtimeBytes > 0
-            ? $"download {ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(model))} + llama.cpp runtime {ModelStore.SizeLabel(runtimeBytes)}"
-            : $"download {ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(model))}";
+    /// <summary>
+    /// What an install costs to download: the model's files not yet on disk (<paramref name="download"/>, the whole model when
+    /// not given), plus the llama.cpp runtime when that is missing too.
+    /// </summary>
+    public static string InstallCost(EmbeddedModel model, long runtimeBytes, long? download = null)
+    {
+        string files = ModelStore.SizeLabel(download ?? EmbeddedModelCatalog.TotalBytes(model));
+        return runtimeBytes > 0 ? $"download {files} + llama.cpp runtime {ModelStore.SizeLabel(runtimeBytes)}" : $"download {files}";
+    }
 
     /// <summary>The question before a download nobody picked in <c>/server</c> (the saved model is missing at connect).</summary>
-    public static string InstallQuestion(EmbeddedModel model, long runtimeBytes) => $"{model.Display} is not installed. Install it now ({InstallCost(model, runtimeBytes)})?";
+    public static string InstallQuestion(EmbeddedModel model, long runtimeBytes, long? download = null) => $"{model.Display} is not installed. Install it now ({InstallCost(model, runtimeBytes, download)})?";
 
     /// <summary>The llama.cpp runtime's display name: <c>llama.cpp b11258 (cuda)</c>.</summary>
     public static string RuntimeDisplay(LlamaBackend backend) => $"llama.cpp {LlamaRelease.Tag} ({LlamaRelease.Name(backend)})";
@@ -173,7 +181,8 @@ public static class EmbeddedLlmText
 
     public static string Removed(EmbeddedModel model) => $"{model.Display} removed";
 
-    public static string RemoveQuestion(EmbeddedModel model) => $"Remove {model.Display} ({ModelStore.SizeLabel(EmbeddedModelCatalog.TotalBytes(model))})?";
+    /// <summary>The question before a model goes, with what it frees (<paramref name="freed"/>; the whole model when not given).</summary>
+    public static string RemoveQuestion(EmbeddedModel model, long? freed = null) => $"Remove {model.Display} ({ModelStore.SizeLabel(freed ?? EmbeddedModelCatalog.TotalBytes(model))})?";
 
     /// <summary>The question before a partly downloaded model's files go (2026-09-29, the user's ask). Pinned.</summary>
     public static string RemovePartialQuestion(EmbeddedModel model) => $"Remove the partial download of {model.Display}?";

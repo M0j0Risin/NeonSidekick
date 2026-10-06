@@ -102,10 +102,13 @@ public sealed record EmbeddedModel(
 /// <c>gated</c> (it must not be: the download carries no token), <c>?expand[]=gguf</c> the architecture (the pinned
 /// llama.cpp must know it); <c>GET …/tree/&lt;commit&gt;</c> gives each file's <c>size</c> and <c>lfs.oid</c>.
 ///
-/// <para>Every file lives under <c>&lt;models&gt;/llm/&lt;id&gt;/</c>: the Unsloth repositories all name their
-/// projector <c>mmproj-F16.gguf</c>, different files under one name. The projector is the F16 one where there is a
-/// choice — half the size of F32 at no visible cost — and BF16 for HauhauCS's 12B, the only one it publishes. The
-/// 12B's four builds share the one repository, projector and drafter; each keeps a copy in its own folder.</para>
+/// <para>A model's weights live under <c>&lt;models&gt;/llm/&lt;id&gt;/</c>; its projector and drafter under
+/// <c>&lt;models&gt;/llm/_shared/</c> (<see cref="SharedPath"/>), named by the start of their SHA-256 and their own name,
+/// since the Unsloth repositories all call their projector <c>mmproj-F16.gguf</c>, different files under one name. The
+/// projector is the F16 one where there is a choice — half the size of F32 at no visible cost — and BF16 for HauhauCS's
+/// 12B, the only one it publishes. The builds of one repository share its projector and drafter, so one copy serves them
+/// all (2026-10-06, the code review's catch, the user's call: until then each build kept a copy in its own folder, five of
+/// a 985 MB projector for Gemma 4 E2B's five builds; <see cref="EmbeddedModels.MergeShared"/> folds those copies in).</para>
 ///
 /// <para>Later on 2026-09-29 (the user's picks) the big ones joined: Gemma 4 26B A4B (the MoE: 4B active of 26B) in
 /// UD-Q4/Q5/Q6_K_XL, its QAT build, HauhauCS's 26B A4B QAT Balanced and 26B A4B Balanced (Q4/Q5/Q6_K_P), Gemma 4 31B in
@@ -143,7 +146,7 @@ public sealed record EmbeddedModel(
 ///
 /// <para>On 2026-10-05 (the user's picks) Unsloth's Gemma 4 E2B and E4B joined in four more builds each — UD-Q5_K_XL,
 /// UD-Q6_K_XL, UD-Q8_K_XL and BF16 — from the commits already pinned (neither repository's <c>main</c> had moved), so each
-/// name's five builds share the one F16 projector and MTP drafter, as the 12B's do.</para>
+/// name's five builds share the one F16 projector and MTP drafter (one copy on disk since 2026-10-06), as the 12B's do.</para>
 ///
 /// <para>Sampling, from each card: Google's Gemma 4 temperature 1.0, top-p 0.95, top-k 64 (HauhauCS's E2B/E4B and 26B A4B
 /// Balanced the same); HauhauCS's 12B/26B/31B QAT Balanced 0.6, 0.9, 64 (their min-p 0.05 is llama.cpp's default; their
@@ -691,24 +694,64 @@ public static class EmbeddedModelCatalog
         return new Uri($"{HuggingFaceBase}{model.Repository}/resolve/{model.Revision}/{Uri.EscapeDataString(file.Name)}");
     }
 
-    /// <summary>The folder <paramref name="model"/>'s files live in: <c>&lt;embeddedModelsDirectory&gt;/&lt;id&gt;</c>.</summary>
+    /// <summary>The folder <paramref name="model"/>'s weights live in: <c>&lt;embeddedModelsDirectory&gt;/&lt;id&gt;</c>.</summary>
     public static string Folder(string embeddedModelsDirectory, EmbeddedModel model) => Path.Combine(embeddedModelsDirectory, model.Id);
+
+    /// <summary>The folder the projectors and drafters live in (2026-10-06), one copy each for every model that uses it. No catalog id is this.</summary>
+    public const string SharedFolderName = "_shared";
+
+    /// <summary><c>&lt;embeddedModelsDirectory&gt;/_shared</c>.</summary>
+    public static string SharedFolder(string embeddedModelsDirectory) => Path.Combine(embeddedModelsDirectory, SharedFolderName);
+
+    /// <summary>
+    /// Where a projector or drafter lives: <c>_shared/&lt;the first 16 hex of its SHA-256&gt;-&lt;its name&gt;</c>, readable and
+    /// distinct for the many <c>mmproj-F16.gguf</c>s of different repositories.
+    /// </summary>
+    public static string SharedPath(string embeddedModelsDirectory, EmbeddedFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        return Path.Combine(SharedFolder(embeddedModelsDirectory), file.Sha256[..16].ToLowerInvariant() + "-" + file.Name);
+    }
+
+    /// <summary>Where a projector or drafter lived before 2026-10-06, in the model's own folder: read as a fallback and folded into <c>_shared</c>.</summary>
+    public static string LegacyPath(string embeddedModelsDirectory, EmbeddedModel model, EmbeddedFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        return Path.Combine(Folder(embeddedModelsDirectory, model), file.Name);
+    }
+
+    /// <summary>The files of <paramref name="model"/> that live in <c>_shared</c>: its projector, then its drafter when it has one.</summary>
+    public static IEnumerable<EmbeddedFile> SharedFiles(EmbeddedModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        yield return model.Mmproj;
+        if (model.Drafter is { } drafter)
+        {
+            yield return drafter;
+        }
+    }
+
+    /// <summary>Whether <paramref name="model"/> uses <paramref name="file"/> (the same SHA-256) as its projector or drafter.</summary>
+    public static bool Uses(EmbeddedModel model, EmbeddedFile file) =>
+        SharedFiles(model).Any(f => string.Equals(f.Sha256, file.Sha256, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>What an install downloads: the weights, the vision projector and the drafter (MTP or DFlash) when there is one.</summary>
     public static long TotalBytes(EmbeddedModel model) => model.Model.Bytes + model.Mmproj.Bytes + (model.Drafter?.Bytes ?? 0);
 
     /// <summary>The weights as a <see cref="ModelStore"/> spec: pinned, resumable, GGUF.</summary>
-    public static ModelSpec WeightsSpec(string embeddedModelsDirectory, EmbeddedModel model) => Spec(embeddedModelsDirectory, model, model.Model, model.Display);
+    public static ModelSpec WeightsSpec(string embeddedModelsDirectory, EmbeddedModel model) =>
+        Spec(model, model.Model, model.Display, Path.Combine(Folder(embeddedModelsDirectory, model), model.Model.Name));
 
-    /// <summary>The vision projector as a <see cref="ModelStore"/> spec: pinned, resumable, GGUF.</summary>
-    public static ModelSpec MmprojSpec(string embeddedModelsDirectory, EmbeddedModel model) => Spec(embeddedModelsDirectory, model, model.Mmproj, model.Display + " vision");
+    /// <summary>The vision projector as a <see cref="ModelStore"/> spec: pinned, resumable, GGUF, into <c>_shared</c>.</summary>
+    public static ModelSpec MmprojSpec(string embeddedModelsDirectory, EmbeddedModel model) =>
+        Spec(model, model.Mmproj, model.Display + " vision", SharedPath(embeddedModelsDirectory, model.Mmproj));
 
-    /// <summary>The drafter as a <see cref="ModelStore"/> spec, named for its kind (MTP or DFlash), or null for a model without one.</summary>
+    /// <summary>The drafter as a <see cref="ModelStore"/> spec, named for its kind (MTP or DFlash), into <c>_shared</c>; null for a model without one.</summary>
     public static ModelSpec? DrafterSpec(string embeddedModelsDirectory, EmbeddedModel model) =>
         model.Drafter is { } drafter
-            ? Spec(embeddedModelsDirectory, model, drafter, model.Display + " " + EmbeddedLlmText.DraftName(model.Draft))
+            ? Spec(model, drafter, model.Display + " " + EmbeddedLlmText.DraftName(model.Draft), SharedPath(embeddedModelsDirectory, drafter))
             : null;
 
-    private static ModelSpec Spec(string embeddedModelsDirectory, EmbeddedModel model, EmbeddedFile file, string display) =>
-        new(display, Path.Combine(Folder(embeddedModelsDirectory, model), file.Name), Url(model, file), file.Bytes, ModelFormat.Gguf, file.Sha256, Resumable: true);
+    private static ModelSpec Spec(EmbeddedModel model, EmbeddedFile file, string display, string path) =>
+        new(display, path, Url(model, file), file.Bytes, ModelFormat.Gguf, file.Sha256, Resumable: true);
 }

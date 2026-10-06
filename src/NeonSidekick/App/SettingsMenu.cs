@@ -6992,7 +6992,7 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             // Every row laid out over the whole catalog, so a filter does not move the columns.
-            var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State);
+            var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State, embedded.BytesToDownload);
             var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], embedded.State(embedded.Catalog[i]).IsInstalled)).ToList(), i => embedded.Catalog[i]);
             var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys);
             if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons(withInstalled: true)).ConfigureAwait(false) is not { } pick)
@@ -7022,7 +7022,7 @@ internal sealed partial class SettingsMenu
             string crumb = Crumb(FieldName(SettingsField.EmbeddedModels)) + " › " + model.Display;
             if (state.IsInstalled)
             {
-                var actions = new[] { UseNowRow, RemoveRow(model), BackRow };
+                var actions = new[] { UseNowRow, RemoveRow(model, embedded.FreedBytes(model)), BackRow };
                 int? action = await PickAsync(new MenuPage(crumb, actions.Select(Markup.Escape).ToList(), PickKeys), 0, cancellationToken).ConfigureAwait(false);
                 if (action == 0)
                 {
@@ -7032,13 +7032,13 @@ internal sealed partial class SettingsMenu
 
                 if (action == 1)
                 {
-                    await RemoveEmbeddedModelAsync(embedded, model, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.RemoveQuestion(model), cancellationToken).ConfigureAwait(false);
+                    await RemoveEmbeddedModelAsync(embedded, model, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.RemoveQuestion(model, embedded.FreedBytes(model)), cancellationToken).ConfigureAwait(false);
                 }
 
                 continue;
             }
 
-            string install = InstallRow(model, embedded.RuntimeBytesToDownload(EffectiveNow()));
+            string install = InstallRow(model, embedded.RuntimeBytesToDownload(EffectiveNow()), embedded.BytesToDownload(model));
             bool partial = state.Kind == NeonSidekick.EmbeddedLlm.EmbeddedModelStateKind.Partial;
             var choices = partial ? new[] { Markup.Escape(install), Markup.Escape(RemovePartialRow), BackRow } : new[] { Markup.Escape(install), BackRow };
             int? choice = await PickAsync(new MenuPage(crumb, choices, PickKeys), 0, cancellationToken).ConfigureAwait(false);
@@ -7119,22 +7119,23 @@ internal sealed partial class SettingsMenu
     /// A catalog row whose state-and-size detail is padded to <paramref name="detailWidth"/> cells, so the capability columns
     /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns"/>: ⚡ 👁️ 🛠️, 2026-09-29, the user's asks) line up down the list. Pinned.
     /// </summary>
-    public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state, int detailWidth)
+    public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state, int detailWidth, long? download = null)
     {
         ArgumentNullException.ThrowIfNull(model);
-        string detail = NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(model, state);
+        string detail = NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(model, state, download);
         return Markup.Escape(model.Display.PadRight(EmbeddedModelNameWidth)) + Theme.DimMarkup(Markup.Escape(model.Quant.PadRight(EmbeddedModelQuantWidth) + detail))
             + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, detail, detailWidth));
     }
 
     /// <summary>The catalog's rows, the details as wide as the widest one so each capability column is one column.</summary>
-    public static IReadOnlyList<string> EmbeddedModelLabels(IReadOnlyList<NeonSidekick.EmbeddedLlm.EmbeddedModel> models, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.EmbeddedModelState> state)
+    public static IReadOnlyList<string> EmbeddedModelLabels(IReadOnlyList<NeonSidekick.EmbeddedLlm.EmbeddedModel> models, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.EmbeddedModelState> state, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, long>? download = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentNullException.ThrowIfNull(state);
         var states = models.Select(state).ToList();
-        int width = models.Count == 0 ? 0 : models.Select((m, i) => TextCells.Width(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(m, states[i]))).Max();
-        return models.Select((m, i) => EmbeddedModelLabel(m, states[i], width)).ToList();
+        var downloads = models.Select(m => download?.Invoke(m)).ToList();   // what an install would still fetch (2026-10-06)
+        int width = models.Count == 0 ? 0 : models.Select((m, i) => TextCells.Width(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(m, states[i], downloads[i]))).Max();
+        return models.Select((m, i) => EmbeddedModelLabel(m, states[i], width, downloads[i])).ToList();
     }
 
     /// <summary>
@@ -7150,11 +7151,11 @@ internal sealed partial class SettingsMenu
     /// <summary>The catalog picker's name column: "Gemma 4 26B A4B QAT Uncensored" (30) plus two (later on 2026-09-29, when the 26B A4B builds joined; 28 for "Gemma 4 12B QAT Uncensored" before, 24 while the longest was 22).</summary>
     public const int EmbeddedModelNameWidth = 32;
 
-    /// <summary>The installed model's removal row: <c>Remove (5.2 GB)</c>. Pinned.</summary>
-    public static string RemoveRow(NeonSidekick.EmbeddedLlm.EmbeddedModel model) => $"Remove ({Speech.ModelStore.SizeLabel(NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.TotalBytes(model))})";
+    /// <summary>The installed model's removal row: <c>Remove (5.2 GB)</c>, what the removal frees (<paramref name="freed"/>; the whole model when not given, 2026-10-06). Pinned.</summary>
+    public static string RemoveRow(NeonSidekick.EmbeddedLlm.EmbeddedModel model, long? freed = null) => $"Remove ({Speech.ModelStore.SizeLabel(freed ?? NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.TotalBytes(model))})";
 
-    /// <summary>The install row: <c>Install (download 5.2 GB + llama.cpp runtime 577 MB)</c>. Pinned.</summary>
-    public static string InstallRow(NeonSidekick.EmbeddedLlm.EmbeddedModel model, long runtimeBytes) => $"Install ({NeonSidekick.EmbeddedLlm.EmbeddedLlmText.InstallCost(model, runtimeBytes)})";
+    /// <summary>The install row: <c>Install (download 5.2 GB + llama.cpp runtime 577 MB)</c>, the files not yet on disk (<paramref name="download"/>). Pinned.</summary>
+    public static string InstallRow(NeonSidekick.EmbeddedLlm.EmbeddedModel model, long runtimeBytes, long? download = null) => $"Install ({NeonSidekick.EmbeddedLlm.EmbeddedLlmText.InstallCost(model, runtimeBytes, download)})";
 
     /// <summary>The scan-mode picker under the settings list: one <see cref="LlmScanModeLabel"/> row per <see cref="Llm.LlmScanMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickLlmScanModeAsync(AppSettingsData saved, CancellationToken cancellationToken)

@@ -9796,7 +9796,7 @@ internal sealed partial class ChatScreen
             && EmbeddedLlm.EmbeddedModelCatalog.Find(effective.LlmModel, embedded.Catalog) is { } named
             && !embedded.State(named).IsInstalled
             && _menu.CanShowMenus()
-            && await _menu.ConfirmAsync(EmbeddedLlm.EmbeddedLlmText.InstallQuestion(named, embedded.RuntimeBytesToDownload(effective)), cancellationToken).ConfigureAwait(false))
+            && await _menu.ConfirmAsync(EmbeddedLlm.EmbeddedLlmText.InstallQuestion(named, embedded.RuntimeBytesToDownload(effective), embedded.BytesToDownload(named)), cancellationToken).ConfigureAwait(false))
         {
             await StartEmbeddedDownloadAsync(named, () => ConnectLlmAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
             return;
