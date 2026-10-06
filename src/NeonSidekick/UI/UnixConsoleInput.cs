@@ -64,6 +64,9 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
 
     public Action? ModeChanged { get; set; }
 
+    /// <summary>The held stdout the pane draws through (<c>Program</c>'s <see cref="FrameWriter"/>; <see cref="Console.Out"/> is its synchronized wrapper), settled after each cursor query.</summary>
+    public IFrameHold? Frames { get; set; }
+
     /// <summary>
     /// The reader over the real terminal, or null when there is none to take: not macOS, stdin redirected or not a terminal, or
     /// a terminal whose attributes cannot be read or set (then Spectre's own input serves, keys only).
@@ -124,6 +127,11 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
             _cursor = waiting;
             _parser.AwaitingCursor = true;
             Write("\x1b[6n");
+
+            // The pane asks inside a held frame (FrameWriter): the query must reach the terminal now, the frame so far with it,
+            // or it waits behind the hold until after the timeout — every redraw blank for half a second in Terminal.app,
+            // which shows a frame as it arrives, and the late answer taken for the next query's (the first Mac run, 2026-10-06).
+            Frames?.Settle();
             bool answered = waiting.Task.Wait(CursorTimeout);
             _parser.AwaitingCursor = false;
             _cursor = null;

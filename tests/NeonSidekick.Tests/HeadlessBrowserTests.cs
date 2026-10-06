@@ -78,4 +78,33 @@ public class HeadlessBrowserTests
         Assert.Equal("[1234:5678:0915/120000.123:ERROR:x.cc(1)] boom", HeadlessBrowser.LastLine("first\r\n\r\n[1234:5678:0915/120000.123:ERROR:x.cc(1)] boom\r\n\r\n"));
         Assert.Equal("", HeadlessBrowser.LastLine("\n\n"));
     }
+
+    [Fact]
+    public void WholeDom_OnlyOnceTheClosingHtmlTagIsOut()
+    {
+        Assert.Null(HeadlessBrowser.WholeDom(""));
+        Assert.Null(HeadlessBrowser.WholeDom("<html><head></head><body><h1>hi"));
+        Assert.Equal(38, HeadlessBrowser.WholeDom("<html><body><h1>hi</h1>\n</body></HTML>"));
+        Assert.Equal(40, HeadlessBrowser.WholeDom("<html><body><h1>hi</h1>\n</body></html>\r\n"));
+    }
+
+    [Fact]
+    public void WholePdf_NeedsTheHeaderAndTheEndMarker()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "neon-wholepdf-" + Guid.NewGuid().ToString("N") + ".pdf");
+        try
+        {
+            Assert.Null(HeadlessBrowser.WholePdf(path));   // missing
+            File.WriteAllText(path, "%PDF-1.4\n1 0 obj\n");
+            Assert.Null(HeadlessBrowser.WholePdf(path));   // still being written
+            File.AppendAllText(path, "trailer\n%%EOF\n");
+            Assert.Equal(new FileInfo(path).Length, HeadlessBrowser.WholePdf(path));
+            File.WriteAllText(path, "<html>not a pdf %%EOF</html>");
+            Assert.Null(HeadlessBrowser.WholePdf(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

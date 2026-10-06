@@ -172,6 +172,7 @@ if (OperatingSystem.IsMacOS() && interactive && geometry is not null && windowsI
     unixInput = UnixConsoleInput.TryCreate();
     if (unixInput is { } reader)
     {
+        reader.Frames = frames;
         geometry = reader.Geometry();
     }
 }
@@ -338,4 +339,13 @@ if (OperatingSystem.IsWindows())
 
 // A change made in the last quarter-second before quitting must not be lost to the debounce.
 await settings.FlushAsync().ConfigureAwait(false);
+
+// ONNX Runtime 1.22 aborts the process at exit on macOS while its environment lives ("mutex lock failed: Invalid argument"
+// from its static destructors, exit code 134; the first Mac smoke, 2026-10-06, after kokoro:ort made one): released here, last,
+// only when something made one.
+if (!OperatingSystem.IsWindows() && Microsoft.ML.OnnxRuntime.OrtEnv.IsCreated)
+{
+    Microsoft.ML.OnnxRuntime.OrtEnv.Instance().Dispose();
+}
+
 return exitCode;

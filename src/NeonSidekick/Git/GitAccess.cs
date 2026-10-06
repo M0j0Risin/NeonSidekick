@@ -132,14 +132,14 @@ public sealed class GitAccess
                 return GitOutcome.Bare;
             }
 
-            string workTree = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.WorkingDirectory));
+            string workTree = InRootSpelling(root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.WorkingDirectory)), RealPath.Of);
             if (!WorkingDirectory.IsInside(root, workTree))
             {
                 detail = workTree;
                 return GitOutcome.AboveSandbox;
             }
 
-            location = new RepoLocation(Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.Path)), workTree, _files.Relative(workTree, isDirectory: true));
+            location = new RepoLocation(InRootSpelling(root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.Path)), RealPath.Of), workTree, _files.Relative(workTree, isDirectory: true));
             return GitOutcome.Ok;
         }
         catch (RepositoryNotFoundException)
@@ -155,6 +155,42 @@ public sealed class GitAccess
             detail = ex.Message;
             return GitOutcome.Failed;
         }
+    }
+
+    /// <summary>
+    /// <paramref name="path"/>, a path libgit2 answered, spelled the way <paramref name="root"/> is (2026-10-06, the first Mac
+    /// smoke): libgit2 resolves links, so a root under <c>/var/folders</c> (the temp folder) or <c>/tmp</c> comes back as
+    /// <c>/private/…</c> and was refused as above the sandbox. The root and each folder above it are resolved in turn
+    /// (<paramref name="realPath"/>: <see cref="RealPath.Of"/> in the app, a fake in the tests); the first whose real path holds
+    /// <paramref name="path"/> has that prefix swapped back for its own spelling, so a repository above the root is named the
+    /// user's way too. A path already inside the root by spelling, or under none of them, comes back as it was. Pure but for
+    /// <paramref name="realPath"/>.
+    /// </summary>
+    internal static string InRootSpelling(string root, string path, Func<string, string?> realPath)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(realPath);
+        if (WorkingDirectory.IsInside(root, path))
+        {
+            return path;
+        }
+
+        for (string? folder = root; folder is not null; folder = Path.GetDirectoryName(folder))
+        {
+            if (realPath(folder) is not { Length: > 0 } resolved)
+            {
+                continue;
+            }
+
+            string real = Path.TrimEndingDirectorySeparator(resolved);
+            if (!string.Equals(real, folder, StringComparison.Ordinal) && WorkingDirectory.IsInside(real, path))
+            {
+                return folder + path[real.Length..];
+            }
+        }
+
+        return path;
     }
 
     /// <summary>

@@ -32,7 +32,8 @@ public interface IHeadlessBrowser
 /// nothing else of the browser is used. <b>The second <c>Process.Start</c> site in the app</b> (the
 /// editor opener is the first): no shell, no window, a throwaway profile folder under the temp
 /// directory — without one a running Edge takes the URL over and this process exits with nothing —
-/// one run at a time, killed with its tree at <see cref="Timeout"/>.
+/// one run at a time, killed with its tree at <see cref="Timeout"/> — or once its output is whole, since Chrome on macOS
+/// never exits after it (<see cref="WaitForExitOrWholeAsync"/>).
 /// <para>
 /// Since 2026-10-03 it also prints pages to PDF (<c>convert_to_pdf</c>, <c>/pdf</c>): Chromium's <c>--print-to-pdf</c> on a page
 /// the app wrote to the temp folder or on a web page, with images on and the browser's own header and footer off, within
@@ -51,6 +52,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
     /// <summary>Virtual time the page's scripts get to settle before the DOM is dumped.</summary>
     public const int VirtualTimeBudgetMs = 5000;
+
+    /// <summary>How long the output must stay whole and unchanged before a browser that has not exited is stopped (<see cref="WaitForExitOrWholeAsync"/>).</summary>
+    public static readonly TimeSpan WholeGrace = TimeSpan.FromSeconds(1.5);
+
+    private static readonly TimeSpan WholePollInterval = TimeSpan.FromMilliseconds(250);
 
     /// <summary>The profile folder under the temp directory, so the user's own browser profile is never touched.</summary>
     public static string UserDataDirectory => Path.Combine(Path.GetTempPath(), "NeonSidekick", "browser");
@@ -200,7 +206,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var run = await RunProcessAsync(executable, url, userData => Arguments(url, userData), Timeout, cancellationToken).ConfigureAwait(false);
+            var run = await RunProcessAsync(executable, url, userData => Arguments(url, userData), Timeout, WholeDom, cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new BrowserDump(null, run.StartError);
@@ -234,7 +240,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         try
         {
             bool isWeb = page.Scheme is "http" or "https";
-            var run = await RunProcessAsync(executable, page, userData => PdfArguments(page, outputPath, userData, isWeb), PdfTimeout, cancellationToken).ConfigureAwait(false);
+            var run = await RunProcessAsync(executable, page, userData => PdfArguments(page, outputPath, userData, isWeb), PdfTimeout, _ => WholePdf(outputPath), cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new BrowserPdf(false, run.StartError);
@@ -277,7 +283,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// The one place the browser is started: the profile folder made, the process run with no window, stdout and stderr read,
     /// killed with its tree when <paramref name="timeout"/> runs out. The caller holds <c>_oneAtATime</c>.
     /// </summary>
-    private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, CancellationToken cancellationToken)
+    private static async Task<BrowserRun> RunProcessAsync(string executable, Uri page, Func<string, IReadOnlyList<string>> arguments, TimeSpan timeout, Func<string, long?> whole, CancellationToken cancellationToken)
     {
         string userData = UserDataDirectory;
         try
@@ -323,12 +329,14 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(timeout);
-            var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+            var stdoutText = new StringBuilder();
+            var stdout = PumpAsync(process.StandardOutput, stdoutText);
             var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
             bool timedOut = false;
+            bool stopped = false;
             try
             {
-                await process.WaitForExitAsync(budget.Token).ConfigureAwait(false);
+                stopped = await WaitForExitOrWholeAsync(process, () => whole(Snapshot(stdoutText)), budget.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -340,10 +348,119 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 }
             }
 
-            string output = await stdout.ConfigureAwait(false);
+            if (stopped)
+            {
+                TryKill(process);
+            }
+
+            if (stopped || timedOut)
+            {
+                using var reaped = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                try
+                {
+                    await process.WaitForExitAsync(reaped.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Not reaped in time: the run is over either way.
+                }
+            }
+
+            await stdout.ConfigureAwait(false);
+            string output = Snapshot(stdoutText);
             string errors = await stderr.ConfigureAwait(false);
-            string summary = $"{Path.GetFileName(executable)} {page}: exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)} after {watch.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
-            return new BrowserRun(null, process.ExitCode, output, errors, timedOut, summary);
+            string how = stopped ? "stopped once its output was whole" : process.HasExited ? $"exit {process.ExitCode.ToString(CultureInfo.InvariantCulture)}" : "still running";
+            string summary = $"{Path.GetFileName(executable)} {page}: {how} after {watch.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s";
+            return new BrowserRun(null, stopped || !process.HasExited ? 0 : process.ExitCode, output, errors, timedOut, summary);
+        }
+    }
+
+    /// <summary>
+    /// Waits for the browser to exit, or for its output to be whole and to stay so for <see cref="WholeGrace"/> — true then, and
+    /// the caller kills it (2026-10-06, the first Mac smoke: Chrome on macOS writes the PDF or prints the DOM and then never
+    /// exits, so every run waited out its timeout). <paramref name="whole"/> answers a key while the output is whole (its
+    /// length), null before; the key must not change across the grace, so a file still growing is never cut short. Where the
+    /// browser exits by itself (Windows) it exits inside the grace and nothing changes.
+    /// </summary>
+    private static async Task<bool> WaitForExitOrWholeAsync(Process process, Func<long?> whole, CancellationToken cancellationToken)
+    {
+        var exited = process.WaitForExitAsync(cancellationToken);
+        long? held = null;
+        long heldSince = 0;
+        while (true)
+        {
+            var tick = Task.Delay(WholePollInterval, cancellationToken);
+            await Task.WhenAny(exited, tick).ConfigureAwait(false);
+            if (exited.IsCompleted)
+            {
+                await exited.ConfigureAwait(false);
+                return false;
+            }
+
+            await tick.ConfigureAwait(false);
+            long? key = whole();
+            if (key is null || key != held)
+            {
+                held = key;
+                heldSince = Stopwatch.GetTimestamp();
+            }
+            else if (Stopwatch.GetElapsedTime(heldSince) >= WholeGrace)
+            {
+                return true;
+            }
+        }
+    }
+
+    /// <summary>Reads <paramref name="reader"/> to its end into <paramref name="text"/>, so the output can be looked at while the browser runs.</summary>
+    private static async Task PumpAsync(StreamReader reader, StringBuilder text)
+    {
+        var buffer = new char[8192];
+        int read;
+        while ((read = await reader.ReadAsync(buffer, CancellationToken.None).ConfigureAwait(false)) > 0)
+        {
+            lock (text)
+            {
+                text.Append(buffer, 0, read);
+            }
+        }
+    }
+
+    private static string Snapshot(StringBuilder text)
+    {
+        lock (text)
+        {
+            return text.ToString();
+        }
+    }
+
+    /// <summary>The DOM dump is whole once stdout ends with the closing <c>&lt;/html&gt;</c>: its length, else null. Pure; pinned.</summary>
+    public static long? WholeDom(string stdout)
+    {
+        ArgumentNullException.ThrowIfNull(stdout);
+        return stdout.AsSpan().TrimEnd().EndsWith("</html>", StringComparison.OrdinalIgnoreCase) ? stdout.Length : null;
+    }
+
+    /// <summary>The PDF is whole once the file starts <c>%PDF</c> and ends <c>%%EOF</c>: its length, else null.</summary>
+    public static long? WholePdf(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            long length = stream.Length;
+            if (length < 12 || !Printing.PrintToFile.IsPdf(path))
+            {
+                return null;
+            }
+
+            var tail = new byte[Math.Min(32, (int)length)];
+            stream.Seek(-tail.Length, SeekOrigin.End);
+            stream.ReadExactly(tail);
+            return Encoding.ASCII.GetString(tail).Contains("%%EOF", StringComparison.Ordinal) ? length : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
         }
     }
 

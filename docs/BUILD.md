@@ -62,15 +62,39 @@ A preview build for Apple Silicon Macs (`osx-arm64`). It leaves out the features
 
 NativeAOT can't build a Mac binary from Windows, so build on the Mac itself. You need:
 
-* **The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** for macOS Arm64.
+* **Microsoft's [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** for macOS Arm64, not Homebrew's (see below).
 * **The Xcode command line tools** (`xcode-select --install`) for the native link.
-* **PowerShell 7** (`brew install powershell`) to run `build.ps1`.
+* **PowerShell 7** to run `build.ps1`, installed as a .NET tool (see below).
+
+### Setting up the Mac
+
+Homebrew's `dotnet` formula is built from source. Its NativeAOT pack is marked non-portable, so the publish links against OpenSSL and fails at the very end with `ld: library 'ssl' not found`. Homebrew's `powershell` formula depends on that same `dotnet`, so both have to go:
 
 ```sh
-pwsh ./build.ps1 -TestOnly     # build and test; tests of Windows-only features are skipped
+brew uninstall powershell dotnet          # if they are installed
+brew install --cask dotnet-sdk            # Microsoft's SDK, in /usr/local/share/dotnet (asks for your password)
+dotnet tool install --global PowerShell   # pwsh, in ~/.dotnet/tools
+echo 'export PATH="$PATH:$HOME/.dotnet/tools"' >> ~/.zshrc
+```
+
+Homebrew no longer has a stable `powershell` cask, only `powershell@preview`. The SDK's installer also adds `~/.dotnet/tools` through `/etc/paths.d`, but as a literal `~`, which zsh doesn't expand; hence the `~/.zshrc` line. In a new shell, check:
+
+```sh
+which pwsh dotnet      # ~/.dotnet/tools/pwsh, and /usr/local/share/dotnet/dotnet (or a link to it)
+dotnet --list-sdks     # 10.0.x [/usr/local/share/dotnet/sdk]
+```
+
+Run `pwsh ./build.ps1 -Clean` once after switching SDKs, so nothing built by the old one is reused.
+
+### Building
+
+```sh
+pwsh ./build.ps1 -TestOnly     # build and test (many tests still fail on a Mac; see the status below)
 pwsh ./build.ps1 -Publish      # publish/output/NeonSidekick, smoke-tested
 pwsh ./build.ps1 -Package      # publish/package/NeonSidekick-v<version>-osx-arm64.tar.gz
 ```
+
+The publish prints trim and AOT warnings from Oracle, SqlClient, NumSharp and Whisper.net, and `ILC: Method … will always throw` lines for Oracle's optional cloud assemblies. The Windows publish prints them too; they don't fail the build.
 
 `-Runtime` defaults to `osx-arm64` on a Mac. The script marks the bundled `espeak-ng` executable as runnable and gives it and the app an ad-hoc signature. The package is a `.tar.gz` so the executable bits survive.
 
@@ -83,8 +107,28 @@ Good to know on a Mac:
 * **Editors.** `/persona` and friends open the file in its default app. For `/draft`, set *Draft editor* to a command that waits, such as `code --wait` or `open -W -t`; a terminal editor like vim can't share the terminal with the app.
 * **Terminals.** Terminal.app and iTerm2 both work. Turn on *Use Option as Meta key* for Alt shortcuts, and hold Fn (Terminal.app) or Option (iTerm2) to select text with the mouse while the app has it.
 
+### Status of the Mac port
+
+The first build and run on a Mac was on 2026-10-06 (Apple Silicon, Terminal.app). What came up, and where each item stands:
+
+**Fixed** (on the `macos-preview` branch):
+* **The publish failed to link** (`library 'ssl' not found`): Homebrew's SDK. Use Microsoft's; see [Setting up the Mac](#setting-up-the-mac).
+* **The smoke test crashed at exit** (exit code 134, `mutex lock failed: Invalid argument`, with a ggml backtrace). The ggml name is misleading: ggml installs the process-wide crash handler, but the crash is ONNX Runtime 1.22, which aborts at exit on macOS while its environment is still alive. `Program.cs` now releases that environment as its last step on macOS and Linux, when one was made.
+* **`git:roundtrip` failed with `AboveSandbox`.** On macOS `/var` and `/tmp` are links into `/private`, and libgit2 reports the resolved path (`/private/var/…`), so a repository in the working directory looked like one above it. Any project under `/tmp` hit the same thing. `GitAccess` now resolves the root's real path (`Files/RealPath.cs`, libc's `realpath`) and maps libgit2's paths back to the root's spelling.
+* **`pdf:browser` timed out after 60 s.** Chrome on macOS writes the PDF, or prints the page for `--dump-dom`, and then never exits; every browser-based web fetch would have waited out its timeout too. `HeadlessBrowser` now stops Chrome once the output is whole (the PDF ends with `%%EOF`, the page with `</html>`) and has stayed unchanged for 1.5 s. On Windows Chrome exits by itself within that time.
+* **The screen blanked while typing.** Each full redraw (opening the `/` menu, a draft wrapping) erases the pane, asks the terminal where the cursor is, and draws the pane again. The question went through the held frame writer (`FrameWriter`) and stayed in the buffer until the 500 ms timeout, so Terminal.app, which shows output as it arrives, showed a blank pane for half a second. The late answer could also be taken for the next question's, putting the screen out of step. `UnixConsoleInput.QueryCursor` now flushes the held frame with the question; a redraw takes milliseconds.
+
+**Open:**
+* **⚙️ and 🛠️ overlap the next character in Terminal.app.** Terminal.app draws these text-default symbols one cell wide even with the emoji selector; the app counts two, as Windows Terminal and iTerm2 draw them. Nothing else on screen shifts. The likely fix is substitute symbols when `TERM_PROGRAM` is `Apple_Terminal`; 🖥️ and ✂️ should be checked the same way.
+* **About 680 of the 10,050 tests fail on a Mac.** Nearly all were written for Windows: expected strings with `\` paths or drive letters, or Windows-only APIs (WinMM, the clipboard, WebView2, `cmd.exe`). They need marking as Windows-only or making path-neutral. `-Publish` skips the tests, so this doesn't block a build.
+* **Quitting after Kokoro has spoken** hasn't been checked yet against the exit-crash fix.
+
+**Checking a change in Terminal.app.** A small pseudo-terminal relay can run the app in a Terminal.app window, type into it from a script, and log every write and the terminal's answers with timestamps; `screencapture -l <window id>` then shows what Terminal.app actually drew. That is how the blank-screen bug was found: the timestamps showed the cursor question leaving 500 ms late. The capture needs the screen-recording permission for the terminal running the script.
+
 ## Troubleshooting
 
 * **"'vswhere.exe' is not recognized" during the publish:** the linker can't find Visual Studio. Add `C:\Program Files (x86)\Microsoft Visual Studio\Installer` to `PATH` and run it again.
 * **"The file is locked" during the publish:** `NeonSidekick.exe` is still running from `publish\output\`. Close it first.
 * **The build fails with a warning:** that's the zero-warning rule. Fix the warning; don't silence it project-wide.
+* **On a Mac, `ld: library 'ssl' not found` at the end of the publish:** the SDK is Homebrew's. See [Setting up the Mac](#setting-up-the-mac).
+* **On a Mac, `pwsh: command not found` after installing it as a .NET tool:** `~/.dotnet/tools` isn't on `PATH`. Add it in `~/.zshrc`.
