@@ -160,7 +160,8 @@ public sealed class GitAccessTests : IDisposable
         Assert.Equal(_dir, _git.Status("").Detail);
     }
 
-    [Theory]
+    // Unix paths through Unix path rules: on Windows Path reads them with its own separators, and RealPath is null there anyway.
+    [UnixTheory]
     [InlineData("/var/folders/x/files", "/private/var/folders/x/files/.git", "/var/folders/x/files/.git")]
     [InlineData("/var/folders/x/files", "/private/var/folders/x/files/proj", "/var/folders/x/files/proj")]
     [InlineData("/var/folders/x/files", "/private/var/folders/x", "/var/folders/x")]                                   // above the root: named the user's way for the refusal
