@@ -438,7 +438,12 @@ public partial class ChatScreenTests
     public async Task Watch_APicturesThumbnail_DoubleClicked_OpensFromCameraWatch_AndWatchOffClearsIt()
     {
         // The fixture's clock names the picture; an older build wrote it to the system temp folder, so a copy there would prove nothing.
-        File.Delete(Path.Combine(ChatScreen.PictureTempFolder, CameraWatch.PictureName(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone))));
+        // File.Delete throws on a missing folder, and a fresh machine (the v0.4.1 release run, 2026-10-06) has no temp pictures folder until a test makes one.
+        string stale = Path.Combine(ChatScreen.PictureTempFolder, CameraWatch.PictureName(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone)));
+        if (File.Exists(stale))
+        {
+            File.Delete(stale);
+        }
         _chat.EnqueueText("I see you.");
         string? seen = null;
         WatchFixture(input =>
