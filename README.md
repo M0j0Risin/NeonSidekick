@@ -792,16 +792,6 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Screen capture output folder | Where screenshots are saved, under the working directory (empty = the working directory). | `screen_images` |
 | Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
 
-#### YouTube
-
-| Setting | What it does | Default |
-|---|---|---|
-| YouTube tools | Offers the YouTube tools: `youtube_search` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has). Playing by a video's id or link needs no key. Headless offers the search alone. | off |
-| YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI); sent only to www.googleapis.com, in a header, never in a URL. `/keycopy` copies it; a plain `/profile reset` keeps it. | (none) |
-| YouTube search max results | How many videos a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
-| YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
-| YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
-
 #### ClaudeCLI
 
 The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (the model asks it). The Anthropic API and the Claude CLI as servers are on `/settings` › Anthropic.
@@ -976,6 +966,16 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 | Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See Docker. | off |
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
+
+#### YouTube
+
+| Setting | What it does | Default |
+|---|---|---|
+| YouTube tools | Offers the YouTube tools: `youtube_search` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has). Playing by a video's id or link needs no key. Headless offers the search alone. | off |
+| YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI); sent only to www.googleapis.com, in a header, never in a URL. `/keycopy` copies it; a plain `/profile reset` keeps it. | (none) |
+| YouTube search max results | How many videos a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
+| YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
+| YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
 
 #### GitLib
 

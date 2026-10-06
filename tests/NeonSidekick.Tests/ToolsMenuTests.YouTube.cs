@@ -5,7 +5,7 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The YouTube tab of <c>/tools</c> (2026-10-05, the YouTube plan): after Screen, the switch, the API key typed masked and saved
+/// The YouTube tab of <c>/tools</c> (2026-10-05, the YouTube plan): after ComfyUI, before GitLib, the switch, the API key typed masked and saved
 /// encrypted, the typed max results, autoplay; the key's other homes (the log's mask, the encryption at rest, the variable).
 /// </summary>
 public partial class ToolsMenuTests
@@ -13,11 +13,12 @@ public partial class ToolsMenuTests
     private void OpenYouTubeRow(int row) => Push([.. ToTab(ToolsText.YouTubeTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
-    public void TheYouTubeTab_SitsAfterScreen_WithItsFiveRows()
+    public void TheYouTubeTab_SitsAfterComfyUI_BeforeGitLib_WithItsFiveRows()
     {
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.YouTubeTabTitle);
 
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.ScreenTabTitle) + 1, tab);
+        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.ComfyTabTitle) + 1, tab);   // the user's place, later on 2026-10-05 (after Screen until then)
+        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.GitTabTitle) - 1, tab);
         Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube autoplay", "YouTube while speaking"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal([SettingsField.YouTubeTools, SettingsField.YouTubeAutoplay], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);

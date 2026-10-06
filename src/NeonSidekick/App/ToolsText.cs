@@ -116,7 +116,7 @@ public static class ToolsText
     /// <summary>The screen capture's tab and group (2026-10-04): <c>screen_capture</c> and <c>screen_list</c>, after Camera, before Obsidian.</summary>
     public const string ScreenTabTitle = "Screen";
 
-    /// <summary>The YouTube tab (2026-10-05, the YouTube plan): the search key and the video window's tools, after the Screen tab with the other media.</summary>
+    /// <summary>The YouTube tab (2026-10-05, the YouTube plan): the search key and the video window's tools; after ComfyUI, before GitLib (the user's place, later that day; after Screen until then).</summary>
     public const string YouTubeTabTitle = "YouTube";
 
     /// <summary>The Docker tools' tab and group (2026-10-02), after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
@@ -138,7 +138,7 @@ public static class ToolsText
     public const string PrintTabTitle = "Print";
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, YouTubeTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, ClaudeCliTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, GitTabTitle, OptionsTabTitle];
+    public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, ClaudeCliTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The Offered tab's hint row (<c>/mcp</c>'s Tools tab too); "type = filter" since 2026-10-03 (<see cref="MenuFilter"/>). Pinned.</summary>
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
