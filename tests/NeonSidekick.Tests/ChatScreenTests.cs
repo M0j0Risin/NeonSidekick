@@ -10564,7 +10564,7 @@ public partial class ChatScreenTests : IDisposable
             new("ESC ESC", "on an empty line, rewind to an earlier message", "/rewind"),   // 2026-09-30
             new("Up / Down", "recall earlier messages · move through a wrapped draft · move in menus"),
             new("Left / Right", "switch tabs in menus · hold Shift to select text"),
-            new("Home / End", "go to the start or end of the line, again for the whole message · hold Shift to select"),   // 2026-10-04: the line's ends
+            new("Home / End", "go to the start or end of the line · hold Shift to select"),   // 2026-10-04: the line's ends
             new("Ctrl+Left / Right", "move a word back or forward · hold Shift to select words"),   // 2026-10-04, the UI review
             new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
             new("Ctrl+A", "select all the text on the line"),
@@ -10602,7 +10602,7 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+H", "open the help", "/help"),   // from Ctrl+Alt+H, later still on 2026-10-01
             new("Ctrl+L", "cancel a background learning turn"),   // 2026-10-04, the user's ask
             new("Ctrl+M", "open the model picker", "/model"),   // later still on 2026-10-01
-            new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking · or click one"),   // 2026-09-22; diffs 2026-10-04
+            new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking"),   // 2026-09-22; diffs 2026-10-04
             new("Ctrl+P", "open the profile pane", "/profile"),   // from Ctrl+Alt+P
             new("Ctrl+Q", "open the queue pane", "/queue"),   // 2026-10-05, the user's ask
             new("Ctrl+R", "open the reasoning picker", "/reasoning"),

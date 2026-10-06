@@ -2107,7 +2107,7 @@ internal sealed partial class ChatScreen
             new(RewindText.KeyLabel, RewindText.KeyMeaning, "/rewind"),
             new("Up / Down", "recall earlier messages · move through a wrapped draft · move in menus"),
             new("Left / Right", "switch tabs in menus · hold Shift to select text"),
-            new("Home / End", "go to the start or end of the line, again for the whole message · hold Shift to select"),
+            new("Home / End", "go to the start or end of the line · hold Shift to select"),
             new("Ctrl+Left / Right", "move a word back or forward · hold Shift to select words"),   // 2026-10-04, the UI review
             new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
             // The editing chords beside the editing keys (2026-10-05, the user's pick), out of the Ctrl letters.
@@ -2140,7 +2140,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+H", "open the help", "/help"));
         rows.Add(new("Ctrl+L", "cancel a background learning turn"));
         rows.Add(new("Ctrl+M", "open the model picker", "/model"));
-        rows.Add(new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking · or click one"));
+        rows.Add(new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking"));
         rows.Add(new("Ctrl+P", "open the profile pane", "/profile"));
         rows.Add(new("Ctrl+Q", "open the queue pane", "/queue"));
         rows.Add(new("Ctrl+R", "open the reasoning picker", "/reasoning"));
