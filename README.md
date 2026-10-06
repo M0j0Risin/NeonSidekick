@@ -9,8 +9,13 @@ Neon Sidekick is an agentic terminal client built first and foremost for local L
 It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together the features I liked most in each, plus many they don't have. It's Windows-first, built on .NET 10, and meant as a stable base for building and testing new agentic tools.
 
 <p align="center">
-  <img src="assets/screenshots/screen_markdown.png" alt="A reply with folded tool calls, thinking and highlighted Rust code" width="49%">
-  <img src="assets/screenshots/screen_splash.png" alt="The welcome splash under the Neon Sidekick banner" width="49%">
+  <img src="assets/screenshots/screen_markdown.png" alt="The model writing and editing a Rust file: folded tool calls and thinking, the file's diffs, then the highlighted code" width="49%">
+  <img src="assets/screenshots/screen_vision.png" alt="A pasted picture described by an embedded Qwen3.8 model, with three good and three bad points" width="49%">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/screen_menus.png" alt="The settings pane on its General tab, above the toolbar and performance bar" width="49%">
+  <img src="assets/screenshots/screen_tools.png" alt="The tools pane's Offered tab: every tool by group, each switched on or off, with its description" width="49%">
 </p>
 
 <p align="center"><b><a href="https://github.com/M0j0Risin/NeonSidekick/releases/latest">Download the latest release</a></b> · Windows x64 · unzip and run</p>
@@ -37,13 +42,14 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **No installer:** unzip and run. NativeAOT compiles it to native code, so it starts fast and needs no .NET runtime.
 * **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, mouse support, and sixty colour themes (or your own).
 * **Pictures in:** paste or drag one onto the input line, take one with the webcam (`/camera`), or capture the screen (`/screen`).
+* **Windows of its own:** a picture viewer and thumbnail browser (`/view`, `/view --thumbs`), a live camera view (`/camera live`), a log window (`/log`), a background process's output live (`/process <id>`) and the YouTube video window. Each remembers where you left it.
 * **Auto-complete** for commands, files, folders, skills and tools.
 * **Message queue:** keep typing while the model works; your messages go out in order.
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network (LM Studio, Ollama, llama.cpp, vLLM…), or takes a URL.
-* **Embedded LLM:** no server? Install a Gemma, Qwen or Muse model from `/settings` › Embedded and the app runs it on its own llama.cpp (CUDA, Vulkan or CPU).
+* **Embedded LLM:** No server needed — install Gemma, Qwen or Muse models from `/settings` › Embedded and the app runs them on a built-in llama.cpp, backed by CUDA, Vulkan or CPU. Every model supports vision and tool-calling. Quants run Q4 and up, chosen to fit GPUs with 8–32 GB of VRAM. Several NVFP4 quants are included for Nvidia GPUs.
 * **Docker servers:** your vLLM or SGLang containers as `/server` choices, one running at a time.
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or your Claude Code install. All off until you turn them on.
 * **Context control:** automatic compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
@@ -80,7 +86,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
 
 ### Extras
-* `/loop` repeats a message, `/test` benchmarks the connected model, the performance bar shows CPU, RAM, GPU and network, and `/log` opens a live log window.
+* `/loop` repeats a message, `/test` benchmarks the connected model, and the performance bar shows CPU, RAM, GPU and network.
 
 ## Getting started
 
