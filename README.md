@@ -94,7 +94,7 @@ Neon Sidekick is an agentic terminal client built primarily for local LLMs, buil
 
 ### First launch
 * Settings live in `%USERPROFILE%\.neonsidekick` (or `NEONSIDEKICK_HOME`), under the profile `default`.
-* When no server answers, the app opens **Connect a model**: look for a server again, enter a server's URL, download an embedded model to run in-app, use the Anthropic or OpenAI API with your key, or use Claude Code. Each opens the setting it needs and connects; ESC (or *Not now*) skips, and `/server` opens the page again while nothing is connected.
+* When no server answers, the app opens **Connect a model**: scan for local servers, enter a server's URL, download an embedded model to run in-app, choose Docker containers as servers, use the Anthropic or OpenAI API with your key, or use Claude Code. Each opens the setting it needs and connects; ESC (or *Not now*) skips, and `/server` opens the page again while nothing is connected.
 * A failed request says what went wrong in one line with the next step (the server could not be reached, the key was refused, no such model, the rate limit); the full error stays in the log.
 * Already running LM Studio, Ollama or vLLM? Set *LLM server scan mode* to `local`, `remote` or `both`, or use `/server <url>`. The startup picker lists what it finds: Enter saves your pick; ESC uses the first server for this run only.
 * For Anthropic's models, turn on *Anthropic API* (or *Claude CLI server* for your Claude Code install) in `/settings` › Anthropic; for OpenAI's, *OpenAI API* in `/settings` › OpenAI.
@@ -237,7 +237,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 **⤡** at the left end of that rule appears when something can fold; a click does what Ctrl+O does (unfold all if anything is folded, else fold all).
 
-**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch, and 💾 while *Memory mode* is `disabled`, sits on a dark slab. By default it shows 🛠️, the lock, 👮, 🐚, 📁, 🌐 and the working directory. One click on a glyph says what it is on the hint row (`🐚 Shell: ask · double-click to open`); a double-click opens it. A strip too wide for the window ends in `+N` for the glyphs it leaves off, and the working directory shows your profile folder as `~` (`~\Repo\app`), cut from the front when it does not fit.
+**The toolbar** (*Show toolbar*) sits under the hint row. A glyph opens or closes its pane (or switches to it from another); a window glyph opens or closes its window. A tool switch, and 💾 while *Memory mode* is `disabled`, sits on a dark slab. By default it shows ⚙️, 🛠️, 🎓, 💾, the lock, 👮, 🐚, 📁, 🌐 and the working directory. One click on a glyph says what it is on the hint row (`🐚 Shell: ask · double-click to open`); a double-click opens it. A strip too wide for the window ends in `+N` for the glyphs it leaves off, and the working directory shows your profile folder as `~` (`~\Repo\app`), cut from the front when it does not fit.
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
@@ -295,7 +295,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it, shown at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). **A** / **N** / **D** pick all, none or the default seven; none hides the row. | Tools, Shell allowed commands, Shell police, Shell, Files, Web, path (7 of 35) |
+| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). **A** / **N** / **D** pick all, none or the default ten; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Web, path (10 of 35) |
 | Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates), **PROC** (background processes running). **A** / **N** / **D** pick all, none or the default four; none hides the bar. The title row picks the look: **text** (T), **gauge** (G), **spark** (S, the last ten seconds) or **led** (L). See Performance bar below. | CPU, RAM, GPU, VRAM, `led` |
 | Menus max height | How much of the window a menu or info pane may take: `half-screen`, `three-quarters` or `full-screen` (all but one row). Longer lists scroll; every tab keeps the tallest tab's height. | `full-screen` |
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…). Empty uses Windows' `.txt` editor. | (default .txt editor) |
@@ -1065,7 +1065,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/police` | Opens the on/off page for *Shell police*; its strings button (S) opens *Shell police forbidden strings*. |
 | `/compact [<focus>]` | Shrinks the context; a focus tells the summary what to concentrate on. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply (or the last *n*, or the whole transcript) as Markdown. `--thinking` includes the thinking, quoted under `💭 **Thinking**`. |
-| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
+| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory. A path that starts with a drive (`D:\`) completes its folders as you type. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
 | `/camera` | Opens the camera pane: Space takes the photo, R retakes, Enter puts it on the input line as `[Image #N]`, ESC drops it. Without the pane it snaps at once. See Camera. |
 | `/camera snap` | Takes a photo at once and puts it on the input line. |
 | `/camera list` | Lists the cameras in a pane, numbered, the chosen one marked. |
@@ -1169,7 +1169,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/theme export <name> [<new-name>]` | Writes a theme to the `themes` folder as a file to edit (see [Custom themes](#custom-themes)). |
 | `/timer [<duration> [<name>]]` | Lists timers, or starts one (`10m`, `90s`, `1h30m`). |
 | `/timer stop <name>\|all` | Stops one timer, or every one. |
-| `/toolbar [on\|off]` | Hides the toolbar, or brings it back with its last items (the default seven the first time). |
+| `/toolbar [on\|off]` | Hides the toolbar, or brings it back with its last items (the default ten the first time). |
 | `/tools` | Switches the model's tools on or off, and edits each tool group's settings on its own tab. On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
 | `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (D, H, C) for *Web browser mode*; `camera`'s has a **watch** button (W) that turns `/camera watch` on or off. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |

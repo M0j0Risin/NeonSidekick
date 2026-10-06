@@ -21377,6 +21377,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(ChatScreen.TakesPathArgument("/speak") && ChatScreen.TakesPathArgument("/view") && ChatScreen.TakesPathArgument("/PRINT"));
         Assert.True(ChatScreen.TakesPathArgument("/tree") && ChatScreen.TakesPathArgument("/explore") && ChatScreen.TakesPathArgument("/vault") && ChatScreen.TakesPathArgument("/terminal"));   // their folder lists
         Assert.False(ChatScreen.TakesPathArgument("/loop") || ChatScreen.TakesPathArgument("/plan") || ChatScreen.TakesPathArgument("/claude"));   // off and the looks (later on 2026-09-29)
+        Assert.True(ChatScreen.TakesPathArgument("/cwd"));   // any drive's folders (2026-10-05)
         Assert.Equal([new CompletionItem("gauge", PerfBarMode.Describe("gauge"))], ChatScreen.ArgumentItems("/perfbar", "g", sources));
 
         // /profile: the names (the loaded one marked) then the verbs; a verb typed opens the names behind it.
@@ -21515,6 +21516,35 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ArgumentPaths("/tree", "", sources));
         Assert.Null(ChatScreen.ArgumentPaths("/tts", "o", sources));
         Assert.Null(ChatScreen.ArgumentPaths("/bogus", "", sources));
+    }
+
+    /// <summary>
+    /// /cwd (2026-10-05, the user's ask): a full path from a drive lists that folder's subfolders on any drive; ~ and browse
+    /// stay the word list; a trailing space or the one folder typed in full closes the list.
+    /// </summary>
+    [Fact]
+    public void ArgumentPaths_Cwd_ListsAnyDrivesFolders_OnceTheArgumentIsADrivePath()
+    {
+        var folders = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["D:"] = [@"D:\"],
+            [@"D:\"] = [@"D:\Repo\", @"D:\Temp\"],
+            [@"D:\Re"] = [@"D:\Repo\"],
+            [@"D:\Repo\"] = [@"D:\Repo\"],
+        };
+        var sources = Sources() with { MachineFolders = typed => new MentionResult(FileOutcome.Ok, folders.TryGetValue(typed, out var paths) ? paths : [], false) };
+
+        Assert.Equal([@"D:\"], ChatScreen.ArgumentPaths("/cwd", "D:", sources)!.Paths);
+        Assert.Equal([@"D:\Repo\", @"D:\Temp\"], ChatScreen.ArgumentPaths("/CWD", @"D:\", sources)!.Paths);
+        Assert.Equal([@"D:\Repo\"], ChatScreen.ArgumentPaths("/cwd", @"D:\Re", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/cwd", @"D:\Repo\", sources)!.Paths);    // the one folder, typed in full
+        Assert.Empty(ChatScreen.ArgumentPaths("/cwd", @"D:\Repo\ ", sources)!.Paths);   // applied under Apply
+        // Not a drive path: the word list (~, browse).
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "", sources));
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "br", sources));
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "~", sources));
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", "D", sources));
+        Assert.Null(ChatScreen.ArgumentPaths("/cwd", @"D:\", Sources()));   // no source: the word list
     }
 
     [Fact]
@@ -21849,7 +21879,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ConnectRows_AreEveryWayToAModel()
     {
-        Assert.Equal([ConnectChoice.Scan, ConnectChoice.Url, ConnectChoice.Embedded, ConnectChoice.Anthropic, ConnectChoice.OpenAI, ConnectChoice.ClaudeCli, ConnectChoice.NotNow], ChatScreen.ConnectRows(embedded: true).Select(r => r.Choice));
+        Assert.Equal([ConnectChoice.Scan, ConnectChoice.Url, ConnectChoice.Embedded, ConnectChoice.Docker, ConnectChoice.Anthropic, ConnectChoice.OpenAI, ConnectChoice.ClaudeCli, ConnectChoice.NotNow], ChatScreen.ConnectRows(embedded: true).Select(r => r.Choice));
+        Assert.Contains(ChatScreen.ConnectRows(embedded: false), r => r.Choice == ConnectChoice.Docker);   // after Embedded (2026-10-05), wherever it can run
         Assert.DoesNotContain(ChatScreen.ConnectRows(embedded: false), r => r.Choice == ConnectChoice.Embedded);
         Assert.Equal("Not now", ChatScreen.ConnectRows(embedded: false)[^1].Label);
         Assert.Equal("ab   " + Theme.DimMarkup("note"), ChatScreen.ConnectRow("ab", "note", 5));

@@ -1,5 +1,6 @@
 using System.Net;
 using NeonSidekick.App;
+using NeonSidekick.Docker;
 using NeonSidekick.Llm;
 using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Tests.Fakes;
@@ -487,6 +488,30 @@ public partial class ChatScreenTests
         Assert.Equal(2, Count(output, "✗ " + LlmSession.NoEmbeddedLine));   // the launch, then /server
         Assert.Empty(embedded.Installs);
         Assert.Empty(embedded.Starts);
+        Assert.Null(_session.Endpoint);
+    }
+
+    /// <summary>
+    /// The Connect a model page's Docker row (2026-10-05, the user's ask), after the embedded one: the Docker tab of /settings on its
+    /// container checklist; with containers chosen, Docker servers is switched on and the page says how /server starts one.
+    /// </summary>
+    [Fact]
+    public async Task Startup_TheDockerRow_OpensTheContainerChecklist_AndSwitchesDockerServersOn()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; d.DockerServers = false; d.DockerServerContainers = ["vllm_b"]; });
+        UsePane();
+        UseEmbedded(new FakeEmbeddedLlm());
+        var input = new ScriptedInput();
+        input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the fourth row: Docker
+        input.Push(Keys.Escape, Keys.Escape);                     // out of the checklist (or its refusal) and /settings
+        input.Push(Keys.Escape);                                  // the page again: not now
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        Assert.Contains("▸ " + SettingsMenu.RowName(SettingsField.DockerServerContainers, SettingsMenu.DockerTabTitle), output);   // the Docker tab, on its row
+        Assert.True(_settings.Current.DockerServers);
+        Assert.Contains(DockerServerText.ConnectHint, output);
         Assert.Null(_session.Endpoint);
     }
 

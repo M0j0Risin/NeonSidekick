@@ -78,13 +78,14 @@ public static class ToolbarItems
     ];
 
     /// <summary>
-    /// What a profile that never chose shows (2026-10-03, the user's pick): Tools, Shell allowed commands, Shell police, the
-    /// Shell, Files and Web switches and the path — the lock and the officer still only under a policy other than off. Shell
+    /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, Tools, Skills, Memory, Shell allowed
+    /// commands, Shell police, the Shell, Files and Web switches and the path — the lock and the officer still only under a
+    /// policy other than off. Tools, Shell allowed commands, Shell police, the three switches and the path from 2026-10-03; Shell
     /// allowed commands, Shell police and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on
     /// 2026-09-29, every item before; a profile that saved the defaults as null follows. In <see cref="Names"/> order, which
     /// <see cref="Save"/> compares by. Pinned.
     /// </summary>
-    public static readonly string[] Defaults = [Tools, CmdList, Police, Shell, Files, Web, Path];
+    public static readonly string[] Defaults = [Settings, Tools, Skills, Memory, CmdList, Police, Shell, Files, Web, Path];
 
     /// <summary>
     /// The glyph an item draws on the checklist (the lock's closed one for <see cref="CmdList"/>; the folder for the path

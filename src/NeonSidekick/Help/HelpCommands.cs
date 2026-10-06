@@ -86,7 +86,7 @@ public static class HelpCommands
         ]),
         new("/cwd",
         [
-            new("/cwd [<path>|~|browse]", "Show or change the working directory. A path is a full one, unquoted, and a folder that does not exist is created. `~` returns to the profile's `files\\` folder; `browse` opens the folder picker."),
+            new("/cwd [<path>|~|browse]", "Show or change the working directory. A path is a full one, unquoted, and a folder that does not exist is created; once it starts with a drive (`D:\\`) the list completes that folder's subfolders. `~` returns to the profile's `files\\` folder; `browse` opens the folder picker."),
         ]),
         new("/docker",
         [
@@ -342,7 +342,7 @@ public static class HelpCommands
         ]),
         new("/toolbar",
         [
-            new("/toolbar [on|off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default seven the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
+            new("/toolbar [on|off]", "Show or hide the toolbar (*Show toolbar*). On its own it hides the toolbar, or shows it again with the items it last had (the default ten the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
         ]),
         new("/tools",
         [

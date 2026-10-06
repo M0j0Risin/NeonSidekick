@@ -3822,11 +3822,13 @@ internal sealed partial class ChatScreen
     /// <c>/explore</c>) and its <c>@</c>-mention walk over the text files alone
     /// (<c>Complete(query, WorkingDirectory.IsTextFile)</c>, for <c>/speak</c>) or the image files alone
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
-    /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog.
+    /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog. <see cref="MachineFolders"/> (2026-10-05) is
+    /// <c>/cwd</c>'s: any local drive's folders (<see cref="FolderCompleter.Complete"/>), not the sandbox's.
     /// </summary>
     public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null,
         Func<string, IReadOnlyList<CompletionItem>>? Screen = null, Func<string, IReadOnlyList<CompletionItem>>? Server = null,
-        Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false, Func<IReadOnlyList<CompletionItem>>? Processes = null);
+        Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false, Func<IReadOnlyList<CompletionItem>>? Processes = null,
+        Func<string, MentionResult>? MachineFolders = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -3928,9 +3930,9 @@ internal sealed partial class ChatScreen
     /// write, narrowed by <see cref="MentionCompleter.Matches"/> (a prefix; the argument typed in
     /// full closes the list). Finite arguments only: on | off for the four speech switches, the reasoning
     /// levels, the profile names and verbs (and <c>delete | rename | reset &lt;name&gt;</c> as a second
-    /// level), <c>stop</c> then <c>stop all | &lt;name&gt;</c> for the timers, <c>~</c> for
-    /// <c>/cwd</c> (a path is free text and resolves against the process directory, not the
-    /// sandbox), the sandbox's folders for <c>/tree</c> and <c>/explore</c>, the vault's for <c>/vault</c> (2026-09-23), <c>all</c> for <c>/copy</c>,
+    /// level), <c>stop</c> then <c>stop all | &lt;name&gt;</c> for the timers, <c>~</c> and <c>browse</c> for
+    /// <c>/cwd</c> (a full path is <see cref="ArgumentPaths"/>' list of any drive's folders since 2026-10-05, not the
+    /// sandbox's), the sandbox's folders for <c>/tree</c> and <c>/explore</c>, the vault's for <c>/vault</c> (2026-09-23), <c>all</c> for <c>/copy</c>,
     /// <c>reset</c> for the three prompt files. Free text (a URL, a
     /// memory, a focus, a new name, a duration, a message; <c>/loop</c> lists <c>infinite</c> alone and <c>/skills</c> <c>edit</c> then <c>edit &lt;name&gt;</c> over the catalog, 2026-09-21) and <c>/model</c>'s ids (a network probe,
     /// nothing cached; the picker lists them) get nothing — and so do <c>/speak</c> and <c>/view</c>
@@ -4355,11 +4357,12 @@ internal sealed partial class ChatScreen
     /// Whether <paramref name="command"/>'s argument is a path its own list completes: there a mention character stays the
     /// argument list's (2026-09-30), since the command takes a bare path. The file lists of <see cref="ArgumentPaths"/>
     /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c>, <c>/terminal</c> and <c>/vault</c>
-    /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>). Pinned.
+    /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>), and
+    /// <c>/cwd</c>'s list of any drive's folders (2026-10-05). Pinned.
     /// </summary>
     public static bool TakesPathArgument(string command) =>
         SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
-            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault;
+            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault or SlashCommand.Cwd;
 
     /// <summary>
     /// The path list for a command whose argument is a sandbox path — <c>/speak</c> (2026-09-17),
@@ -4372,7 +4375,9 @@ internal sealed partial class ChatScreen
     /// An argument ending in whitespace lists nothing — the argument is done: a folder applied
     /// under <c>Apply</c> (<c>docs/ </c>), a name followed by a space — and the next letter reopens
     /// it (a name with a space inside completes on); a path typed in full (one match, equal to
-    /// the text) closes it so Enter sends, as a word list closes. Pure.
+    /// the text) closes it so Enter sends, as a word list closes. <c>/cwd</c> (2026-10-05, the user's ask) lists the folders of
+    /// any local drive once its argument starts as one (<c>D:</c>, <c>D:\</c>…; <see cref="ArgumentSources.MachineFolders"/>),
+    /// the same closing rules; <c>~</c> and <c>browse</c> stay its word list. Pure.
     /// </summary>
     public static MentionResult? ArgumentPaths(string command, string argText, ArgumentSources sources)
     {
@@ -4388,6 +4393,11 @@ internal sealed partial class ChatScreen
         if (kind == SlashCommand.Pdf)
         {
             return PrintPaths(argText, sources, PdfVerbs);
+        }
+
+        if (kind == SlashCommand.Cwd)
+        {
+            return CwdPaths(argText, sources);
         }
 
         if (kind is not (SlashCommand.Speak or SlashCommand.View))
@@ -4416,6 +4426,28 @@ internal sealed partial class ChatScreen
         }
 
         return flag.Length == 0 ? found : found with { Paths = [.. found.Paths.Select(p => flag + p)] };
+    }
+
+    /// <summary>
+    /// <c>/cwd</c>'s path list (2026-10-05): null — the word list — until the argument starts as a drive path; empty once it
+    /// ends in whitespace (a folder applied under folder-apply) or names the one folder listed. Pure over <paramref name="sources"/>.
+    /// </summary>
+    private static MentionResult? CwdPaths(string argText, ArgumentSources sources)
+    {
+        if (sources.MachineFolders is not { } folders || !FolderCompleter.IsDrivePath(argText))
+        {
+            return null;
+        }
+
+        if (char.IsWhiteSpace(argText[^1]))
+        {
+            return new MentionResult(FileOutcome.Ok, [], false);
+        }
+
+        var found = folders(argText);
+        return found.Paths.Count == 1 && string.Equals(found.Paths[0], argText, StringComparison.OrdinalIgnoreCase)
+            ? new MentionResult(FileOutcome.Ok, [], false)
+            : found;
     }
 
     /// <summary>
@@ -4478,7 +4510,7 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<CompletionItem> ThemeChoices() =>
         ThemeCatalog.Scan(_settings.ThemesDirectory).Themes.Select(t => new CompletionItem(t.Name, t.Description)).ToList();
 
-    /// <summary>The argument list's live sources: the profiles on disk, the board's timers, the sandbox's folders, its text files and its image files.</summary>
+    /// <summary>The argument list's live sources: the profiles on disk, the board's timers, the sandbox's folders, its text files and its image files, and any drive's folders for <c>/cwd</c>.</summary>
     private ArgumentList ArgumentChoices(string command, string argText)
     {
         var sources = new ArgumentSources(
@@ -4503,7 +4535,8 @@ internal sealed partial class ChatScreen
             ServerChoices,
             EmbeddedModelChoices,
             _logFile is not null,
-            ProcessChoices);
+            ProcessChoices,
+            prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())));
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));

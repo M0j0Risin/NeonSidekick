@@ -1374,7 +1374,8 @@ public sealed partial class InputLine
         private void ApplyMention(MentionList open)
         {
             string pick = open.Matches[open.Cursor];
-            bool remain = !open.IsWordList && pick.EndsWith('/') && _o.Mentions == MentionFolderAction.Remain;
+            // A folder ends in '/', or in '\' on /cwd's list of any drive's folders (2026-10-05).
+            bool remain = !open.IsWordList && (pick.EndsWith('/') || pick.EndsWith('\\')) && _o.Mentions == MentionFolderAction.Remain;
             (string replaced, int at) = MentionCompleter.Apply(_text.ToString(), open.Start, open.End, open.Prefix + pick, !remain);
             _text.Clear().Append(replaced);
             _cursor = at;

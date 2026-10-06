@@ -1,3 +1,4 @@
+using NeonSidekick.Docker;
 using NeonSidekick.UI;
 using Spectre.Console;
 
@@ -6,7 +7,7 @@ namespace NeonSidekick.App;
 /// <summary>What the <c>Connect a model</c> page offers (2026-10-04, <see cref="ChatScreen.ConnectRows"/>).</summary>
 public enum ConnectChoice
 {
-    /// <summary>Look for a server again, as the start did.</summary>
+    /// <summary>Scan for local servers again, as the start did (the wording the user's, 2026-10-05).</summary>
     Scan,
 
     /// <summary>Type the server's URL (<c>Settings › LLM › URL</c>).</summary>
@@ -14,6 +15,12 @@ public enum ConnectChoice
 
     /// <summary>Download or pick an embedded model (<c>Settings › Embedded › Models</c>).</summary>
     Embedded,
+
+    /// <summary>
+    /// Choose Docker containers as servers (<c>Settings › Docker › Docker server containers</c>, 2026-10-05, the user's ask), and
+    /// Docker servers switched on when any is chosen.
+    /// </summary>
+    Docker,
 
     /// <summary>The Anthropic API: its key, then the API switched on.</summary>
     Anthropic,
@@ -40,19 +47,21 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The page's rows for this screen: every way to a model that is offered here — a scan, a URL, the embedded catalog (where the
-    /// embedded model can run), the two APIs, Claude Code — each with what it does, then <c>Not now</c>. Pinned.
+    /// embedded model can run), a Docker container (2026-10-05), the two APIs, Claude Code — each with what it does, then <c>Not now</c>. Pinned.
     /// </summary>
     public static IReadOnlyList<(ConnectChoice Choice, string Label, string Note)> ConnectRows(bool embedded)
     {
         var rows = new List<(ConnectChoice, string, string)>
         {
-            (ConnectChoice.Scan, "Look for a server again", "LM Studio, Ollama, llama.cpp, vLLM… on this machine or the network"),
+            (ConnectChoice.Scan, "Scan for local servers", "LM Studio, Ollama, llama.cpp, vLLM… on this machine or the network"),
             (ConnectChoice.Url, "Enter a server's URL", "any OpenAI-compatible server"),
         };
         if (embedded)
         {
-            rows.Add((ConnectChoice.Embedded, "Download an embedded model", "a Gemma GGUF the app runs itself on your GPU"));
+            rows.Add((ConnectChoice.Embedded, "Download an embedded model", "selected GGUF models from Hugging Face"));
         }
+
+        rows.Add((ConnectChoice.Docker, "Connect Docker container", "a vLLM or SGLang container in Docker Desktop"));
 
         rows.Add((ConnectChoice.Anthropic, "Use the Anthropic API", "your API key, billed per message"));
         rows.Add((ConnectChoice.OpenAI, "Use the OpenAI API", "your API key, billed per message"));
@@ -109,6 +118,21 @@ internal sealed partial class ChatScreen
 
                 case ConnectChoice.Embedded:
                     await OpenSettingsAsync(cancellationToken, SettingsField.EmbeddedModels).ConfigureAwait(false);
+                    break;
+
+                case ConnectChoice.Docker:
+                    // The Docker tab's checklist; the containers chosen count only with the switch on, and /server starts one.
+                    await OpenSettingsAsync(cancellationToken, SettingsField.DockerServerContainers).ConfigureAwait(false);
+                    if (_settings.Current.DockerServerContainers is { Count: > 0 })
+                    {
+                        if (!_settings.Current.DockerServers)
+                        {
+                            _settings.Update(d => d.DockerServers = true);
+                        }
+
+                        _transcript.Notice(DockerServerText.ConnectHint);
+                    }
+
                     break;
 
                 case ConnectChoice.Anthropic:

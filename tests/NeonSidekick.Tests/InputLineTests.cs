@@ -2859,6 +2859,17 @@ public class InputLineTests : IDisposable
     /// </summary>
     private static ArgumentList Arguments(string command, string argText)
     {
+        // /cwd (2026-10-05): any drive's folders, each ending in '\'.
+        if (command.Equals("/cwd", StringComparison.OrdinalIgnoreCase))
+        {
+            return argText switch
+            {
+                @"D:\" => new ArgumentList([], [@"D:\Repo\", @"D:\Temp\"]),
+                @"D:\Repo\" => new ArgumentList([], [@"D:\Repo\src\"]),
+                _ => new ArgumentList([], []),
+            };
+        }
+
         if (command.Equals("/speak", StringComparison.OrdinalIgnoreCase))
         {
             if (argText.Length > 0 && char.IsWhiteSpace(argText[^1]))
@@ -3752,6 +3763,60 @@ public class InputLineTests : IDisposable
         var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Remain));
 
         Assert.Equal("/speak test/thing.txt", submitted.Text);
+    }
+
+    /// <summary>/cwd's folders (2026-10-05) end in '\': under Remain a pick is a folder the list stays on, under Apply it takes a space.</summary>
+    [Fact]
+    public async Task Arguments_ABackslashFolder_RemainsUnderRemain()
+    {
+        var (line, keys, pane, _) = WordLine();
+        int waits = 0;
+        keys.Push(Chars(@"/cwd D:\"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    Assert.Contains(Highlighted(@"D:\Repo\"), _console.Output);
+                    keys.Push(Keys.Enter);   // D:\Repo\ applied without a space, the list on its folders
+                    break;
+                case 1:
+                    Assert.True(pane.OverlayOpen);
+                    Assert.Contains(Highlighted(@"D:\Repo\src\"), _console.Output);
+                    keys.Push(Keys.Escape);
+                    break;
+                case 2:
+                    Assert.False(pane.OverlayOpen);
+                    keys.Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Remain));
+
+        Assert.Equal(@"/cwd D:\Repo\", submitted.Text);
+    }
+
+    [Fact]
+    public async Task Arguments_ABackslashFolder_TakesASpaceUnderApply()
+    {
+        var (line, keys, pane, _) = WordLine();
+        int waits = 0;
+        keys.Push(Chars(@"/cwd D:\")).Push(Keys.Enter);
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    Assert.False(pane.OverlayOpen);   // "/cwd D:\Repo\ ": the trailing space ends the argument
+                    keys.Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal(@"/cwd D:\Repo\", submitted.Text.TrimEnd());
     }
 
     [Fact]

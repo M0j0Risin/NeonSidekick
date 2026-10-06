@@ -85,6 +85,9 @@ public static class DockerServerText
 
     public const string SwitchedOffError = "Docker servers is off; switch it on from the Docker tab of /settings.";
 
+    /// <summary>What the Connect a model page's Docker row says once containers are chosen (2026-10-05). Pinned.</summary>
+    public const string ConnectHint = "Docker servers is on: /server lists the chosen containers, and /server docker:<name> starts one.";
+
     public const string NoneChosenError = "No Docker server containers are chosen; tick some on the Docker tab of /settings.";
 
     public const string Unavailable = "Docker servers need Windows (Docker Desktop's engine pipe).";

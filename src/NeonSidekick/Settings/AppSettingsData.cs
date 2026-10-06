@@ -300,8 +300,9 @@ public sealed class AppSettingsData
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
     /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPolice"/>
     /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
-    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Tools, Shell allowed commands,
-    /// Shell police, the Shell, Files and Web switches and the path since 2026-10-03 (the user's pick; Shell allowed commands,
+    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, Tools, Skills, Memory, Shell
+    /// allowed commands, Shell police, the Shell, Files and Web switches and the path since 2026-10-05 (the user's pick; the last
+    /// seven alone from 2026-10-03; Shell allowed commands,
     /// Shell police and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on 2026-09-29,
     /// every item before); an empty list draws no row at all.
     /// Read on every pane draw and on its tick, so a change shows when the settings pane closes. No variable.
