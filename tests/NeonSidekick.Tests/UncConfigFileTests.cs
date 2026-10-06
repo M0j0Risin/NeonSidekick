@@ -31,7 +31,7 @@ public sealed class UncConfigFileTests : IDisposable
 
     private static UncNamedShare Named(string name, string path, string? access = null) => new(name, new UncShareConfig { Path = path, Access = access }, "test");
 
-    [Fact]
+    [WindowsFact]
     public void TheEmptyShapesExamples_AreEachAUsableShare_OnceUncommented()
     {
         Assert.True(UncConfigFile.EnsureExists(ProfilePath));
@@ -58,7 +58,7 @@ public sealed class UncConfigFileTests : IDisposable
         Assert.Contains("\"shares\": {}", UncConfigFile.EmptyText);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Shares_LoadInFileOrder_AndABadEntryIsAProblem_NotAThrow()
     {
         Profile("""
@@ -113,7 +113,7 @@ public sealed class UncConfigFileTests : IDisposable
         Assert.Same(UncCatalog.Empty, UncConfigFile.Load(Path.Combine(_home, "missing.json")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void TheProfilesFile_WinsByName_OverTheHomes_AndOfferedNarrowsIt()
     {
         Profile("""{ "shares": { "eng": { "path": "//profile/eng" } } }""");
@@ -132,7 +132,7 @@ public sealed class UncConfigFileTests : IDisposable
         Assert.Empty(catalog.Offered(null).Shares);   // null offers none (2026-10-01)
     }
 
-    [Fact]
+    [WindowsFact]
     public void Locate_IsTheLongestRootAPathLiesUnder_BySpelling()
     {
         var catalog = new UncCatalog([Named("eng", @"\\fs01\eng"), Named("specs", @"\\fs01\eng\specs"), Named("data", @"D:\Data")], []);
@@ -153,7 +153,7 @@ public sealed class UncConfigFileTests : IDisposable
         Assert.False(UncCatalog.IsAbsolute(@"\x"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void TheWarnings_NameARunAsOnALocalFolder_AndNothingForAUncPath()
     {
         Assert.Null(new UncShareConfig { Path = @"\\fs01\eng", Auth = "runas", User = @"CORP\me" }.Warning);
@@ -164,7 +164,7 @@ public sealed class UncConfigFileTests : IDisposable
         Assert.Equal(@"Z: is a mapped network drive; give its \\server\share path instead — a mapping belongs to a sign-in, and a runas token or an elevated app may not see it", UncText.MappedDriveWarning("Z:"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void AddShare_AndTheRunAsPasswordStores()
     {
         var config = new UncShareConfig { Path = "//fs02/finance", Auth = "runas", User = @"CORP\svc", Password = "never-written", Access = "readwrite", Description = "money" };
@@ -193,7 +193,7 @@ public sealed class UncConfigFileTests : IDisposable
         Assert.Equal(SqlText.ConnectionNotInFile("gone", "share"), UncConfigFile.WritePassword(ProfilePath, "gone", "x"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void APlainRunAsPassword_IsEncryptedInPlace_AtTheFirstRead_AndEncryptAllReadsEveryProfile()
     {
         Profile("""

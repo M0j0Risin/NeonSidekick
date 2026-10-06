@@ -261,7 +261,7 @@ public unsafe class WebViewTests : IDisposable
     /// The whole chain under the JIT, a hidden window and a temp profile: a real WebView2 where the runtime is installed
     /// (a few seconds, nothing shown, no network), skipped and passed where it is not.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public void Probe_RunsTheChain_OrSkipsWithoutARuntime()
     {
         var check = SmokeChecks.ProbeVideoWebView2();

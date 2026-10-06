@@ -113,7 +113,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Contains(UncDeleteTool.ToolName, new AppSettingsData().ToolsDisabled);   // opt-in even under UNC writes
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UncShares_ListsEachShare_AndCheckReachesThem()
     {
         _catalog = new UncCatalog([Share("eng", _eng, description: "specs"), Share("data", _data, "readwrite"), Share("gone", Path.Combine(_dir, "nowhere"))], []);
@@ -130,7 +130,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(FileText.BadBoolean("check", "yes"), await Invoke<UncSharesTool>(("check", "yes")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task TheReads_AreTheFileToolsShapes_ScopedToTheShare()
     {
         string listing = await Invoke<UncSearchTool>();
@@ -152,7 +152,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(FileText.BadBoolean("regex", "maybe"), await Invoke<UncSearchTool>(("regex", "maybe")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UncSearch_Limit_FollowsFileSearchMaxResults_AndTheSchemaQuotesIt()
     {
         // search_files' setting is unc_search's too (2026-10-01, the user's ask); the share's budgets stay fixed.
@@ -174,7 +174,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(250, Rows(await Invoke<UncSearchTool>(("files", "*.txt"), ("path", "bulk"), ("limit", 250))));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UncFetch_CopiesIntoTheWorkingDirectory_ReplacingOnlyWithOverwrite()
     {
         string fetched = await Invoke<UncFetchTool>(("share", "eng"), ("path", @"specs\a.md"));
@@ -204,7 +204,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_eng, @"specs\a.md")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task OnAReadWriteShare_ChangesArePermanent_NothingKept_AndEachIsAudited()
     {
         _settings.UncWrites = true;
@@ -248,7 +248,7 @@ public sealed class UncToolsTests : IDisposable
             audit);   // the refused create left no line
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task AMoveOrCopy_StaysWithinOneShare_AndPutCarriesFromTheWorkingDirectory()
     {
         _settings.UncWrites = true;
@@ -318,7 +318,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Contains(Assistant.UncWriteRule, assistant.History.SystemPrompt);
     }
 
-    [Fact]
+    [WindowsFact]
     public void TheMentionList_AndTheShareLines_ArePinned()
     {
         var choices = ChatScreen.UncChoices(_catalog);
@@ -340,7 +340,7 @@ public sealed class UncToolsTests : IDisposable
     /// network is refused unopened (the user's call); a share named while none is offered is refused; a relative path without one
     /// stays the working directory's.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Open_OnAShare_OpensThroughTheOpener_RefusesARunAsNetworkShare_AndTheSchemaFollowsTheGroup()
     {
         var opened = new List<string>();

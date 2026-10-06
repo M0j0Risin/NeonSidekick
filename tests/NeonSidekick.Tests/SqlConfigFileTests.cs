@@ -165,7 +165,7 @@ public sealed class SqlConfigFileTests : IDisposable
         Assert.Equal("p", new SqlConnectionConfig { Server = "x", User = "u", Password = "dpapi:…" }.Builder(password: "p").Password);   // the resolved password, never the stored value
     }
 
-    [Fact]
+    [WindowsFact]
     public void APlainPassword_IsEncryptedInPlace_TheRestOfTheFileUntouched()
     {
         string text = """
@@ -199,7 +199,46 @@ public sealed class SqlConfigFileTests : IDisposable
         Assert.Equal(again, File.ReadAllText(path));   // once: an encrypted value is left as it is
     }
 
-    [Fact]
+    /// <summary>
+    /// The macOS twin of <see cref="APlainPassword_IsEncryptedInPlace_TheRestOfTheFileUntouched"/> (2026-10-06, the macOS build): the
+    /// plain password becomes a <c>keychain:</c> value, everything before it byte for byte, and only once.
+    /// </summary>
+    [UnixFact]
+    public void APlainPassword_IsEncryptedInPlace_AsAKeychainValueOnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        string text = """
+            {
+              // the dev box — keep this comment
+              "connections": {
+                "a": { "server": "x", "user": "sa", "password": "hunter2" },   // trailing note
+                "c": { "server": "z", "user": "u", "passwordStore": "credman", "password": "left alone" },
+              }
+            }
+            """;
+        Profile(text);
+        string path = SqlConfigFile.ProfilePath(_profile);
+
+        var loaded = SqlConfigFile.Load(path);
+
+        string after = File.ReadAllText(path);
+        Assert.DoesNotContain("hunter2", after);
+        Assert.Contains("},   // trailing note", after);
+        Assert.Contains("\"password\": \"left alone\"", after);
+        int start = after.IndexOf("\"password\": \"keychain:", StringComparison.Ordinal);
+        Assert.True(start > 0);
+        Assert.Equal(text[..text.IndexOf("\"password\"", StringComparison.Ordinal)], after[..start]);
+        Assert.Equal("hunter2", SqlSecrets.Resolve(loaded.Connections[0]).Value);
+
+        SqlConfigFile.Load(path);
+        Assert.Equal(after, File.ReadAllText(path));
+    }
+
+    [WindowsFact]
     public void EncryptAll_ReadsTheHomesFile_AndEveryProfiles_NotOnlyTheLoadedOnes()
     {
         const string plain = """{ "connections": { "a": { "server": "x", "user": "u", "password": "hunter2" } } }""";
@@ -221,6 +260,33 @@ public sealed class SqlConfigFileTests : IDisposable
         }
 
         Assert.Empty(SqlConfigFile.EncryptAll(Path.Combine(_home, "nowhere")));   // no home yet: nothing to read
+    }
+
+    /// <summary>The macOS twin of <see cref="EncryptAll_ReadsTheHomesFile_AndEveryProfiles_NotOnlyTheLoadedOnes"/> (2026-10-06): <c>keychain:</c> values.</summary>
+    [UnixFact]
+    public void EncryptAll_ReadsTheHomesFile_AndEveryProfiles_AsKeychainValuesOnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        const string plain = """{ "connections": { "a": { "server": "x", "user": "u", "password": "hunter2" } } }""";
+        string work = Path.Combine(_home, "profiles", "work");
+        Directory.CreateDirectory(work);
+        Global(plain);
+        Profile(plain);
+        File.WriteAllText(SqlConfigFile.ProfilePath(work), plain);
+
+        var read = SqlConfigFile.EncryptAll(_home);
+
+        Assert.Equal([SqlConfigFile.GlobalPath(_home), SqlConfigFile.ProfilePath(_profile), SqlConfigFile.ProfilePath(work)], read);
+        foreach (string path in read)
+        {
+            string text = File.ReadAllText(path);
+            Assert.DoesNotContain("hunter2", text);
+            Assert.Contains("\"password\": \"keychain:", text);
+        }
     }
 
     [Fact]

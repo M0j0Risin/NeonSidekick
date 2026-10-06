@@ -32,7 +32,7 @@ public sealed class MySqlConfigFileTests : IDisposable
 
     private static MySqlNamedConnection Named(MySqlConnectionConfig config, string source = "test") => new("prod", config, source);
 
-    [Fact]
+    [WindowsFact]
     public void TheEmptyShapesExamples_AreEachAUsableConnection_OnceUncommented()
     {
         Assert.True(MySqlConfigFile.EnsureExists(ProfilePath));
@@ -51,6 +51,30 @@ public sealed class MySqlConfigFileTests : IDisposable
         Assert.StartsWith(WindowsCredentials.ProtectedPrefix, loaded.Connections[0].Config.Password);
         Assert.True(loaded.Connections[1].Config.InCredentialManager);
         Assert.Equal("verify-full", loaded.Connections[1].Config.SslMode);
+    }
+
+    /// <summary>The macOS twin of <see cref="TheEmptyShapesExamples_AreEachAUsableConnection_OnceUncommented"/> (2026-10-06): the plain example becomes a <c>keychain:</c> value.</summary>
+    [UnixFact]
+    public void TheEmptyShapesExamples_AreEachAUsableConnection_TheKeychainOnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        var example = MySqlConfigFile.EmptyText.Split('\n')
+            .Where(l => l.StartsWith("  // ", StringComparison.Ordinal))
+            .Select(l => l["  // ".Length..])
+            .Where(l => l.EndsWith('{') || l.EndsWith(',') || l.EndsWith('}') || l.EndsWith('"'))
+            .Where(l => l.StartsWith('"') || l.StartsWith("  ", StringComparison.Ordinal) || l.StartsWith('}'));
+        Profile("{ \"connections\": {\n" + string.Join("\n", example) + "\n} }");
+
+        var loaded = MySqlConfigFile.Load(ProfilePath);
+
+        Assert.Empty(loaded.Problems);
+        Assert.Equal(["shop", "billing"], loaded.Connections.Select(c => c.Name));
+        Assert.StartsWith(WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);
+        Assert.True(loaded.Connections[1].Config.InCredentialManager);
     }
 
     [Fact]

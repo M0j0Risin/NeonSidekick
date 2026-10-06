@@ -22,7 +22,7 @@ public sealed class SqlSecretsTests : IDisposable
 
     private static SqlNamedConnection Named(SqlConnectionConfig config, string source = "test") => new("prod", config, source);
 
-    [Fact]
+    [WindowsFact]
     public void Dpapi_RoundTrips_AndRefusesWhatItDidNotWrite()
     {
         var encrypted = WindowsCredentials.Protect("pä$$ wörd 🔑");
@@ -52,7 +52,7 @@ public sealed class SqlSecretsTests : IDisposable
         Assert.True(WindowsCredentials.DeleteGeneric(_target));   // gone already: still removed
     }
 
-    [Fact]
+    [WindowsFact]
     public void AnAccount_SplitsAsLogonUserTakesIt_AndANetOnlyLogon_KeepsTheLocalIdentity()
     {
         Assert.Equal(("CONTOSO", "svc-reader"), WindowsCredentials.SplitAccount(@" CONTOSO\svc-reader ")!.Value);
@@ -91,7 +91,7 @@ public sealed class SqlSecretsTests : IDisposable
         Assert.Equal("NeonSidekick/sql/prod", new SqlConnectionConfig().CredentialTarget("prod"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Save_WritesToTheConnectionsStore()
     {
         var credman = Named(new SqlConnectionConfig { Server = "x", Auth = "runas", User = @"CONTOSO\svc-test", PasswordStore = "credman", Credential = _target });
@@ -108,6 +108,31 @@ public sealed class SqlSecretsTests : IDisposable
         var (saved, notice) = SqlSecrets.Save(Named(new SqlConnectionConfig { Server = "x", User = "u" }, path) with { Name = "gone" }, "typed");
         Assert.False(saved);
         Assert.Equal(SqlText.PasswordSaveFailed("gone", SqlText.ConnectionNotInFile("gone")), notice);
+    }
+
+    /// <summary>
+    /// The macOS twin of <see cref="Save_WritesToTheConnectionsStore"/> (2026-10-06, the macOS build): a <c>credman</c> password is a
+    /// Keychain generic password and a file's is a <c>keychain:</c> value, each read back by <see cref="SqlSecrets.Resolve"/>.
+    /// </summary>
+    [UnixFact]
+    public void Save_WritesToTheConnectionsStore_TheKeychainOnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        var credman = Named(new SqlConnectionConfig { Server = "x", User = "u", PasswordStore = "credman", Credential = _target });
+        Assert.Equal((true, SqlText.PasswordSavedToCredman("prod", _target)), SqlSecrets.Save(credman, "typed"));
+        Assert.Equal("typed", WindowsCredentials.ReadGeneric(_target).Value);
+        Assert.Equal("typed", SqlSecrets.Resolve(credman).Value);
+
+        string path = Path.Combine(_dir, SqlConfigFile.FileName);
+        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "user": "u" } } }""");
+        Assert.Equal((true, SqlText.PasswordSavedToFile("prod", path)), SqlSecrets.Save(Named(new SqlConnectionConfig { Server = "x", User = "u" }, path), "typed"));
+        var loaded = SqlConfigFile.Load(path);
+        Assert.StartsWith(WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);
+        Assert.Equal("typed", SqlSecrets.Resolve(loaded.Connections[0]).Value);
     }
 
     [UnixFact]

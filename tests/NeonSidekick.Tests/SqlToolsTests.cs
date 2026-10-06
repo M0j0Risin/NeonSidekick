@@ -84,7 +84,7 @@ public sealed class SqlToolsTests
         Assert.Equal(SqlText.NoConnections, await Invoke<SqlQueryTool>(("sql", "SELECT 1")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task AnUnknownConnection_ListsTheNames_AndAnUnreachableOne_IsAConnectError()
     {
         _catalog = new SqlCatalog([Unreachable("down"), Unreachable("other")], []);
@@ -102,7 +102,25 @@ public sealed class SqlToolsTests
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlIndexesTool>(("schema", "Sales"), ("missing", true)));
     }
 
-    [Fact]
+    /// <summary>
+    /// The Unix twin of <see cref="AnUnknownConnection_ListsTheNames_AndAnUnreachableOne_IsAConnectError"/> (2026-10-06, the macOS
+    /// build): SqlClient has no named pipes off Windows, and such a server is a connect error like any other, not a throw out of
+    /// the tool (<c>SqlAccess.IsUnsupportedHere</c>); a closed loopback port is the unreachable server there.
+    /// </summary>
+    [UnixFact]
+    public async Task AnUnknownConnection_IsAConnectError_AndANamedPipeOffWindowsToo()
+    {
+        _catalog = new SqlCatalog([Unreachable("down"), new SqlNamedConnection("closed", new SqlConnectionConfig { Server = "tcp:127.0.0.1,1", Auth = "windows", ConnectTimeoutSeconds = 1, Encrypt = "optional" }, "test")], []);
+
+        Assert.Equal(SqlText.UnknownConnection("nope", "down, closed"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "nope")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlTablesTool>(("connection", "DOWN")));
+        Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "closed")));
+        _settings.SqlDefaultConnection = "closed";
+        Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlDatabasesTool>());
+    }
+
+    [WindowsFact]
     public async Task ARunAsConnection_SignsInUnderItsToken_AndAMissingPassword_NamesTheFix()
     {
         string target = "NeonSidekick.Tests/" + Guid.NewGuid().ToString("N");

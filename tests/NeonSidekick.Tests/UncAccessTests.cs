@@ -46,7 +46,7 @@ public sealed class UncAccessTests : IDisposable
     /// <summary>Whether this thread runs under an impersonation token (a netonly one keeps the local name, so the name cannot tell).</summary>
     private static bool Impersonating() => OperatingSystem.IsWindows() && WindowsIdentity.GetCurrent(ifImpersonating: true) is not null;
 
-    [Fact]
+    [WindowsFact]
     public void Resolve_ByName_ByFullPath_ByDefault_AndEachRefusal()
     {
         var access = Access();
@@ -90,7 +90,7 @@ public sealed class UncAccessTests : IDisposable
         Assert.Null(UncAccess.WriteRefusal(readWrite, writesOn: true));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task AWindowsShare_IsRead_AsTheUser_WithTheSharesOptions()
     {
         var result = await Access().RunAsync(_catalog.Shares[0], write: false, files => files.List(""), CancellationToken.None);
@@ -101,7 +101,7 @@ public sealed class UncAccessTests : IDisposable
         Assert.Same(WorkingDirectoryOptions.Share, Access().Files(_catalog.Shares[0]).Options);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ARunAsShare_RunsUnderANetOnlyToken_ThatReachesASearchsParallelReaders()
     {
         for (int i = 0; i < 40; i++)
@@ -127,7 +127,7 @@ public sealed class UncAccessTests : IDisposable
         Assert.False(Impersonating());   // the caller's thread never was
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ACancelledRead_IsAbandoned_ItsWorkFinishing_StillImpersonated()
     {
         using var gate = new ManualResetEventSlim();
@@ -147,7 +147,7 @@ public sealed class UncAccessTests : IDisposable
         Assert.True(await after.Task.WaitAsync(TimeSpan.FromSeconds(10)));   // the token was the worker's, not disposed under it
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ACancelledSearch_Throws_AndAWriteIsWaitedOut()
     {
         using var cancelled = new CancellationTokenSource();
@@ -160,7 +160,7 @@ public sealed class UncAccessTests : IDisposable
         Assert.Equal("beta", File.ReadAllText(Path.Combine(_root, "b.txt")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task AMissingRoot_AFileRoot_AndAMissingPassword_AreTheirSentences_NothingCreated()
     {
         string missing = Path.Combine(_dir, "nowhere");
