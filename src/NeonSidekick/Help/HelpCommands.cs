@@ -10,7 +10,7 @@ public sealed record CommandHelp(string Command, IReadOnlyList<CommandForm> Form
 /// Every slash command's forms (2026-10-02, for <c>neon_help</c>, <see cref="NeonHelp"/>), A to Z by command: seeded from README's
 /// Slash commands table, a subcommand a form of its own. <see cref="App.SlashCommands.HelpEntries"/> holds each command's short
 /// description; <c>NeonHelpCatalogTests</c> pins that the two name the same commands, so a new command needs its forms here (and
-/// its README row). Since 2026-10-05 (the user's ask: <c>/help</c>'s Commands tabs were too tight) these are also the forms
+/// its docs/COMMANDS.md row, README's until 2026-10-05). Since 2026-10-05 (the user's ask: <c>/help</c>'s Commands tabs were too tight) these are also the forms
 /// <c>/help</c> shows in its third column (<see cref="HelpSyntax.Forms"/>), so every syntax keeps <see cref="HelpSyntax"/>'s
 /// notation — the command, then subcommands, keywords and <c>--flags</c> as typed, <c>&lt;lowercase-hyphenated&gt;</c>
 /// placeholders, <c>[optional]</c> parts, <c>a|b</c> choices with no blanks, <c>...</c> for a repeat — one shape per form, and

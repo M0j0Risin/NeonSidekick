@@ -5,7 +5,7 @@ namespace NeonSidekick.Help;
 /// <summary>
 /// What each settings row does, in a sentence or a few (2026-10-02, the user's call: the descriptions live in code, not in an
 /// embedded README), for <c>neon_help</c> (<see cref="NeonHelp"/>). Seeded from README's "What it does" columns; a new
-/// <see cref="SettingsField"/> needs its line here as it needs its README row (<c>NeonHelpCatalogTests</c> fails on a field
+/// <see cref="SettingsField"/> needs its line here as it needs its docs/SETTINGS.md row, README's until 2026-10-05 (<c>NeonHelpCatalogTests</c> fails on a field
 /// without one). Where the row lives and its default are worked out from the menus' own lists (<see cref="HelpLocation"/>),
 /// never written here.
 /// </summary>

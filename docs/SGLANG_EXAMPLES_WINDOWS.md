@@ -18,7 +18,7 @@ the drafter, the GPU count and the context length.
 
 Each container can be a `/server` choice: tick it in *Docker server containers* on `/settings` › Docker and
 turn on *Docker servers enabled*. The app stops whichever one is running and starts the one you pick, so the
-shared port is never a problem. See [Docker servers](../README.md#docker-servers).
+shared port is never a problem. See [Docker servers](TOOLS.md#docker-servers).
 
 ## Models
 

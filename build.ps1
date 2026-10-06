@@ -236,6 +236,10 @@ if ($Package) {
     Copy-Item -Path (Join-Path $PublishDir "*") -Destination $stage -Recurse
     Copy-Item -Path (Join-Path $ProjectRoot "LICENSE") -Destination $stage
     Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination $stage
+    # README links into docs\ (the full references and HEADLESS.md, moved there on 2026-10-05), so the zip keeps that layout.
+    $stageDocs = Join-Path $stage "docs"
+    New-Item -ItemType Directory -Path $stageDocs | Out-Null
+    Copy-Item -Path (Join-Path $ProjectRoot "docs\*.md") -Destination $stageDocs
 
     # Entries are written by hand with forward slashes. Compress-Archive, and ZipFile under
     # Windows PowerShell 5.1 (.NET Framework), write backslash entry names, which some unzippers
