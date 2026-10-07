@@ -183,6 +183,7 @@ public static partial class SmokeChecks
         results.Add(ProbePerfMach());
         results.Add(ProbePerfIOKit());
         results.Add(ProbePerfNetwork());
+        results.Add(ProbePasteboard());
         results.Add(ProbeLlamaServer(modelsDirectory));
         results.Add(ProbeTarUnpack());
         results.Add(ProbeMetal());

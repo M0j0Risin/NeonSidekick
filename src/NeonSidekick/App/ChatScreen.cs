@@ -2122,7 +2122,7 @@ internal sealed partial class ChatScreen
             new("Ctrl+A", "select all the text on the line"),
             new("Ctrl+C", "copy the selection · stop the speech · cancel the reply · press twice to exit"),
             new("Ctrl+X", "cut the selection"),
-            new("Alt+V", "paste text or pictures"),
+            mac ? new("Ctrl+V / Alt+V", "paste text or pictures (Cmd+V is the terminal's: text only)") : new("Alt+V", "paste text or pictures"),
             // The transcript's scroll together (2026-10-05).
             new("PgUp / PgDn", "scroll the transcript a page at a time"),
             new("Ctrl+Home", "scroll to the top of the transcript"),

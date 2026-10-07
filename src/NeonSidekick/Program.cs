@@ -215,7 +215,7 @@ using var unixInputScope = unixInput;
 // since the windows are offered to it only when this is the main thread and a window server is there (none over SSH).
 bool appKit = OperatingSystem.IsMacOS() && (interactive || options.Smoke) && NeonSidekick.Viewer.AppKitHost.Enable();
 
-// The clipboard: Win32's on Windows, pbcopy/pbpaste on macOS (2026-10-06, the user's call), text only there.
+// The clipboard: Win32's on Windows, the general pasteboard on macOS (pbcopy/pbpaste from 2026-10-06; NSPasteboard, pictures too, since 2026-10-07).
 Func<string?> readClipboard = WindowsClipboard.TryReadText;
 Func<string, bool> copyToClipboard = WindowsClipboard.TrySetText;
 Func<byte[]?> readClipboardImage = WindowsClipboard.TryReadImage;

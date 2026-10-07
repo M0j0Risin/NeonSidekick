@@ -11069,8 +11069,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new KeyRow("Ctrl+D", "open the model picker", "/model"), mac.Single(r => r.Key == "Ctrl+D"));
         Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
         Assert.Equal("open the model picker (in the app's windows; Ctrl+D in the terminal)", mac.Single(r => r.Key == "Ctrl+M").Meaning);
-        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete")),
-            mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A")));
+        Assert.Equal(new KeyRow("Ctrl+V / Alt+V", "paste text or pictures (Cmd+V is the terminal's: text only)"), mac[12]);   // pictures off the pasteboard, 2026-10-07
+        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V")),
+            mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A" or "Ctrl+V / Alt+V")));
     }
 
     [Theory]

@@ -103,7 +103,7 @@ public sealed class PersonaFile : PromptFile
             // app and the folder as arguments (Viewer.TerminalPick.OpenTerminalArguments): Terminal or iTerm2, a window or a tab
             // in the folder. No new process-start site. All three streams redirected (the user's find, the same day: with them
             // inherited .NET hands the child the terminal, putting echo and line mode back until it exits, and the terminal's answer
-            // to the app's cursor query was echoed into the transcript as ^[[8;1R) — MacClipboard's rule; StartOpen.
+            // to the app's cursor query was echoed into the transcript as ^[[8;1R) — pbcopy's and pbpaste's rule while the clipboard used them; StartOpen.
             StartOpen(Viewer.MacTerminal.OpenArguments(folder));
             return;
         }
@@ -171,7 +171,7 @@ public sealed class PersonaFile : PromptFile
     /// <c>/usr/bin/open</c> with <paramref name="arguments"/> on a Mac (2026-10-07), not waited for: what .NET's shell execute runs
     /// there, but with all three streams redirected. With them inherited .NET hands the child the terminal, putting echo and line
     /// mode back until it exits, and whatever the terminal sent meanwhile was echoed onto the screen (the user's find: the answer to
-    /// the app's cursor query as <c>^[[8;1R</c> after <c>/terminal</c>) — <c>UI/MacClipboard</c>'s rule. open says nothing on success;
+    /// the app's cursor query as <c>^[[8;1R</c> after <c>/terminal</c>) — the rule pbcopy and pbpaste kept while the clipboard used them. open says nothing on success;
     /// its refusal (no app for the file, an app that is gone) is read off the thread and logged. Throws when open does not start.
     /// </summary>
     private static void StartOpen(IEnumerable<string> arguments)

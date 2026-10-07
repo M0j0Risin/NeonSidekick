@@ -21,6 +21,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
   - [Process window](#process-window)
   - [Camera](#camera)
   - [Screen capture](#screen-capture)
+  - [Pasting a picture](#pasting-a-picture)
   - [Profiles](#profiles)
   - [Custom themes](#custom-themes)
   - [Voice presets](#voice-presets)
@@ -377,6 +378,12 @@ A monitor, every monitor or one window, through Windows' own GDI; nothing to ins
 * **Screenshots** are JPEGs in *Screen capture output folder* (`screen_images` by default), named by time, scaled to 2048 pixels on the longer side at most.
 * **Asking:** under *Screen capture ask* `ask` the pane says what would be captured and the model's reason; a denial isn't retried that turn, and *Allow for this session* lasts until the session ends.
 * **Stored sessions** keep a line instead of the picture unless *Screen capture keep in sessions* is on: a screenshot can hold anything that was on the screen.
+
+### Pasting a picture
+
+A picture on the clipboard goes onto the input line as `[Image #n]` with the line's own paste: a right-click on the input line, Alt+V, or Ctrl+V where the terminal passes it (Windows Terminal keeps Ctrl+V and pastes text). The picture comes first; with none, the clipboard's text is pasted.
+
+**On a Mac** (2026-10-07) Cmd+V is the terminal's paste and pastes text only, so a copied picture pastes nothing with it. Use **Ctrl+V**, **Option+V** (with Option set to act as Meta) or a right-click. A screenshot copied with ⌃⇧⌘4 and a picture copied in Preview, Safari or another app all paste; Preview's copy, a TIFF that can hold the picture at more than one size, is sent at its largest as a PNG. A picture *file* copied in Finder pastes as its path and is attached by its name, as if dropped (Finder's copy also carries the file's icon, which is never the one attached).
 
 ### Profiles
 
