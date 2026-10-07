@@ -21995,7 +21995,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         using var store = OpenSessions();
         var summary = store.Load(id)!.Summary;
-        Assert.Contains(rule + "\n" + Titled(SessionsMenu.Title) + "\n \n▸ #" + id + "  " + SessionText.Moment(summary.UpdatedAt, _time.LocalTimeZone) + "  1 turn  How do I wire the Vosk model?\n" + rule + "\n" + Row(SessionsMenu.Keys) + "\n", output);
+        Assert.Contains(rule + "\n" + Titled(SessionsMenu.Title) + "\n \n▸ #" + id + "  " + SessionText.Moment(summary.UpdatedAt, _time.LocalTimeZone) + "  1 turn  How do I wire the Vosk model?\n" + MenuLayout.Footer(SessionsMenu.Footer(summary, current: false, _time.LocalTimeZone), 240) + rule + "\n" + Row(SessionsMenu.Keys) + "\n", output);   // the session whole under the list (2026-10-07)
         Assert.Contains("\n" + Titled(SessionsMenu.RowTitle(summary)) + "\n \n▸ restore  ", output);
         Assert.Contains("  · " + ChatScreen.SessionRestoredNotice(summary, _time.LocalTimeZone), output);
         Assert.Contains("Pass the folder to the detector.", output);

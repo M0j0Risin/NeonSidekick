@@ -40,7 +40,7 @@ internal sealed class RewindMenu
         {
             while (true)
             {
-                var page = new MenuPage(RewindText.Title, rows, RewindText.Keys) { Caption = RewindText.Caption };
+                var page = new MenuPage(RewindText.Title, rows, RewindText.Keys) { Caption = RewindText.Caption, Footer = (_, row) => row < turns.Count ? RewindText.Footer(turns[row]) : null };
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { Row: var row })
                 {
                     return null;

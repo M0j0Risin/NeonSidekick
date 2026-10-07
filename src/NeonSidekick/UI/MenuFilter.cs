@@ -99,6 +99,20 @@ public static class MenuFilter
         return keys;
     }
 
+    /// <summary>
+    /// A filtering list's hint built from a hint that knows nothing of the filter (2026-10-07: the server picker's <c>ESC = keep</c> and
+    /// <c>ESC = the first listed</c>): <see cref="TypeKeys"/> before its <c>ESC = …</c> part while nothing is typed, else
+    /// <see cref="FilteringKeys"/> in that part's place. A hint with no ESC part gets the piece at its end. Pure.
+    /// </summary>
+    public static string HintBeforeEsc(string keys, string filter)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(filter);
+        int esc = keys.LastIndexOf("ESC = ", StringComparison.Ordinal);
+        string head = esc > 0 ? keys[..esc] : keys + " · ";
+        return filter.Length > 0 ? head + FilteringKeys : head + TypeKeys + (esc > 0 ? " · " + keys[esc..] : "");
+    }
+
     /// <summary>The caption for a filtering tab: null while nothing is typed, else <see cref="Caption"/>.</summary>
     public static string? CaptionOrNull(string filter, int shown, int total) => filter.Length == 0 ? null : Caption(filter, shown, total);
 }

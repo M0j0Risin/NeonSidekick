@@ -20,7 +20,7 @@ internal sealed class DockerMenu
 {
     // The key hints. Pinned.
     public const string Title = DockerText.Glyph + " Docker";
-    public const string Keys = "Enter = open · r = refresh · ESC = close";
+    public const string Keys = "Enter = open · r = refresh · " + MenuFilter.TypeAndCloseKeys;   // type to filter since 2026-10-07
     public const string RowKeys = SettingsMenu.PickKeys;
 
     public const string EmptyNotice = "(" + DockerText.Glyph + " no containers)";
@@ -96,6 +96,40 @@ internal sealed class DockerMenu
         string tail = container.Image + (container.Project is { } project ? " · " + project : "");
         return Theme.ColorMarkup(color, Glyph(container)) + " " + Markup.Escape(container.Name.PadRight(nameWidth)) + "  " + Markup.Escape(state)
             + (ports.Length > 0 ? "  " + Markup.Escape(ports) : "") + "  " + Theme.DimMarkup(tail);
+    }
+
+    /// <summary>
+    /// The footer under the list for <paramref name="container"/> (2026-10-07, the user's ask: the image and project are the row's dim
+    /// end, cut first): <c>mysql_dev · mysql:8.4 · project shop · 0.0.0.0:3306→3306/tcp · networks shop_default</c>, then Docker's own
+    /// status (<c>Up 3 hours (healthy)</c>). Pinned.
+    /// </summary>
+    public static MenuFooter Footer(DockerContainer container)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        var parts = new List<string> { container.Name, container.Image };
+        if (container.Project is { } project)
+        {
+            parts.Add("project " + project);
+        }
+
+        if (DockerText.Ports(container.Ports) is { Length: > 0 } ports)
+        {
+            parts.Add(ports);
+        }
+
+        if (container.Networks.Count > 0)
+        {
+            parts.Add((container.Networks.Count == 1 ? "network " : "networks ") + string.Join(", ", container.Networks));
+        }
+
+        return new MenuFooter(string.Join(" · ", parts), container.Status.Length > 0 ? container.Status : container.State);
+    }
+
+    /// <summary>Whether <paramref name="container"/> stays under <paramref name="filter"/>: its name, image or project holds it (2026-10-07).</summary>
+    public static bool Matches(string filter, DockerContainer container)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        return MenuFilter.Matches(filter, container.Name, container.Image + " " + container.Project);
     }
 
     /// <summary>The container page's words for <paramref name="container"/>'s state, in order.</summary>
@@ -200,19 +234,42 @@ internal sealed class DockerMenu
         }
 
         int cursor = 0;
+        string filter = "";
         try
         {
             while (true)
             {
                 int width = containers.Max(c => c.Name.Length);
-                var page = new MenuPage(Title, containers.Select(c => RowMarkup(c, width)).ToList(), Keys) { Buttons = Buttons };
-                var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+                // The rows under the filter (2026-10-07): indices into the list.
+                var listed = containers;
+                var shown = Enumerable.Range(0, listed.Count).Where(i => Matches(filter, listed[i])).ToList();
+                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(listed[i], width)).ToList() : [MenuFilter.NoMatchRow(filter)];
+                var page = new MenuPage(Title, rows, MenuFilter.Hint(Keys, filter))
+                {
+                    Buttons = Buttons,
+                    Filter = filter,
+                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count),
+                    Footer = (_, row) => row < shown.Count ? Footer(listed[shown[row]]) : null,
+                };
+                var picked = await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
                 {
                     return;
                 }
 
-                cursor = Math.Clamp(pick.Row, 0, containers.Count - 1);
+                if (pick.Filter is { } typed)
+                {
+                    filter = typed;
+                    cursor = -1;   // the first row left
+                    continue;
+                }
+
+                if (pick.Button < 0 && (pick.Row < 0 || pick.Row >= shown.Count))
+                {
+                    continue;   // the no-match row
+                }
+
+                cursor = pick.Row >= 0 && pick.Row < shown.Count ? shown[pick.Row] : Math.Max(0, cursor);
                 if (pick.Button < 0)
                 {
                     if (midTurn)

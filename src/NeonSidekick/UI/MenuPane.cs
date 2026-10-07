@@ -737,7 +737,11 @@ public sealed class MenuPane : INoticeSink
                     continue;
                 }
 
-                if (page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceFlips) is { } typed)
+                // A button's key wins while nothing is typed (2026-10-07: a list with keyed buttons that filters too, /docker's r = refresh,
+                // /youtube saved's d = remove); once a filter is under way every character goes on it.
+                bool buttonKey = page.Filter is { Length: 0 } && page.Tabs is null && page.Buttons is { Count: > 0 } offered
+                    && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar) && ButtonFor(offered, k.KeyChar) is not null;
+                if (!buttonKey && page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceFlips) is { } typed)
                 {
                     // Typed into the filter (2026-10-03): the keys already waiting go on it too, so a fast typist's word is one rebuild.
                     while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && !Keys.IsCancel(q) && MenuFilter.Edit(typed, q, page.SpaceFlips) is not null) is InputEvent.Key { Info: var more })

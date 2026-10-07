@@ -2048,7 +2048,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.Contains(SettingsMenu.AllowedCommandsKeys, Output);
+        Assert.Contains(MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, ""), Output);   // type to filter since 2026-10-07
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n▸ git push\n", Output);
         Assert.False(pane.OverlayOpen);

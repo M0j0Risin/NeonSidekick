@@ -171,8 +171,8 @@ public static class YouTubeText
     /// <summary>The saved-videos pane's label. Pinned.</summary>
     public const string SavedLabel = "📺 Saved videos";
 
-    /// <summary>The saved-videos pane's hint row. Pinned.</summary>
-    public const string SavedKeys = "Enter = play · d = remove · ESC = close";
+    /// <summary>The saved-videos pane's hint row (type to filter since 2026-10-07). Pinned.</summary>
+    public const string SavedKeys = "Enter = play · d = remove · " + UI.MenuFilter.TypeAndCloseKeys;
 
     /// <summary>
     /// The saved-videos pane's title-row button: the highlighted video taken off the list after a yes/no. Two spaces after the
@@ -240,6 +240,43 @@ public static class YouTubeText
         ArgumentNullException.ThrowIfNull(video);
         string title = video.Title ?? "video " + video.Id;
         return title + (video.Author is { Length: > 0 } author ? " — " + author : "") + " · " + Place(video);
+    }
+
+    /// <summary>
+    /// The footer under the saved list for <paramref name="video"/> (2026-10-07, the user's ask: the place is the row's end, cut first):
+    /// the whole title and channel, then <c>at 12:34 of 45:00 · saved 2026-10-07 · last played 2026-10-07 21:45 · id …</c>. Pinned.
+    /// </summary>
+    public static UI.MenuFooter SavedFooter(YouTubeSaved video, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(video);
+        ArgumentNullException.ThrowIfNull(zone);
+        string title = (video.Title ?? "video " + video.Id) + (video.Author is { Length: > 0 } author ? " — " + author : "");
+        var facts = new List<string> { Place(video), "saved " + Sessions.SessionText.Moment(video.Added, zone) };
+        if (video.LastPlayed is { } played)
+        {
+            facts.Add("last played " + Sessions.SessionText.Moment(played, zone));
+        }
+
+        facts.Add("id " + video.Id);
+        return new UI.MenuFooter(title, string.Join(" · ", facts));
+    }
+
+    /// <summary>Whether <paramref name="video"/> stays under <paramref name="filter"/>: its title, channel or id holds it (2026-10-07).</summary>
+    public static bool SavedMatches(string filter, YouTubeSaved video)
+    {
+        ArgumentNullException.ThrowIfNull(video);
+        return UI.MenuFilter.Matches(filter, video.Title ?? "", (video.Author ?? "") + " " + video.Id);
+    }
+
+    /// <summary>
+    /// The footer under a search's picker for <paramref name="hit"/> (2026-10-07): the whole title, then
+    /// <c>Blender · 10:35 · 21M views · 2014 · id aqz-KE-bpKQ</c>. Pinned.
+    /// </summary>
+    public static UI.MenuFooter PickFooter(YouTubeHit hit)
+    {
+        ArgumentNullException.ThrowIfNull(hit);
+        var parts = new List<string> { hit.Channel, Length(hit), Views(hit.Views) is { Length: > 0 } views ? views + " views" : "", hit.Published?.Year.ToString(CultureInfo.InvariantCulture) ?? "", "id " + hit.Id };
+        return new UI.MenuFooter(hit.Title, string.Join(" · ", parts.Where(p => p.Length > 0)));
     }
 
     /// <summary>The count over the pane's rows and the printed list.</summary>

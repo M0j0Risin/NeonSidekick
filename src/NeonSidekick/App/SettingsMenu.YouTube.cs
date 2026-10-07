@@ -15,10 +15,14 @@ internal sealed partial class SettingsMenu
     /// <c>YouTubeText.SaveKey</c>, 2026-10-07) saves it instead. The row and whether it was the save, or null; without the pane (the
     /// Spectre prompt) there is no button.
     /// </summary>
-    public async Task<(int Row, bool Save)?> PickVideoAsync(string title, IReadOnlyList<string> rows, int cursor, CancellationToken cancellationToken)
+    public async Task<(int Row, bool Save)?> PickVideoAsync(string title, IReadOnlyList<string> rows, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuFooter>? footers = null)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), YouTube.YouTubeText.PickKeys);
+        // Each hit whole under the list (2026-10-07): its title, channel, length, views, year and id.
+        var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), YouTube.YouTubeText.PickKeys)
+        {
+            Footer = footers is null ? null : (_, row) => row < footers.Count ? footers[row] : null,
+        };
         if (!_pane.Enabled)
         {
             return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, false) : null;

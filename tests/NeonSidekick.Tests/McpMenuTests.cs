@@ -103,7 +103,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n" + MenuLayout.BlankFooter(100) + " \n" + Rule(100), Output);   // the footer's rule and blank slab (2026-10-04; the rule and slab 2026-10-05), then a blank row to the Tools tab's height
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n" + Rule(100) + "\n  " + McpText.StatusConnected(2) + ": ", Output);   // the cursor's server whole under the list (2026-10-07): its tools by name   // the footer's rule and blank slab (2026-10-04; the rule and slab 2026-10-05), then a blank row to the Tools tab's height
         Assert.Contains(McpText.ServersKeys, Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
         Assert.False(pane.OverlayOpen);
@@ -202,7 +202,8 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["docker"], _settings.Current.McpServersDisabled);
-        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n▸ docker      off  off  stdio: docker mcp gateway run\n  chrome      on   off  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n" + MenuLayout.BlankFooter(100) + Rule(100), Output);
+        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n▸ docker      off  off  stdio: docker mcp gateway run\n  chrome      on   off  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n" + Rule(100) + "\n  ", Output);
+        Assert.Contains(" · stdio: docker mcp gateway run", Output);   // the footer's last line: the scope and the transport (2026-10-07)
         Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n  docker      off  off  stdio: docker mcp gateway run\n", Output);   // Space's answer, then the cursor moved on under it
         Assert.DoesNotContain("docker: on", Output);
         Assert.DoesNotContain("connecting docker", Output);

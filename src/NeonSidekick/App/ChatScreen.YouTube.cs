@@ -187,7 +187,8 @@ internal sealed partial class ChatScreen
         // Enter plays the hit; s saves it (2026-10-07), the picker kept open with the answer on its status line.
         var rows = hits.Select(YouTubeText.PickRow).ToList();
         int cursor = 0;
-        while (await _menu.PickVideoAsync(YouTubeText.PickTitle(query), rows, cursor, cancellationToken).ConfigureAwait(false) is { } picked)
+        var footers = hits.Select(YouTubeText.PickFooter).ToList();
+        while (await _menu.PickVideoAsync(YouTubeText.PickTitle(query), rows, cursor, cancellationToken, footers).ConfigureAwait(false) is { } picked)
         {
             var hit = hits[picked.Row];
             if (!picked.Save)
@@ -212,7 +213,7 @@ internal sealed partial class ChatScreen
         if (_pane.Enabled)
         {
             Func<YouTubeSaved, CancellationToken, Task<string>>? play = _videoPlayer is { } player ? (video, ct) => PlayVideoAsync(player, video.Id, null, ct) : null;
-            return new YouTubeSavedMenu(YouTubeLibraryNow, sink, _menuPane, play).ShowAsync(cancellationToken);
+            return new YouTubeSavedMenu(YouTubeLibraryNow, sink, _menuPane, play, _time.LocalTimeZone).ShowAsync(cancellationToken);
         }
 
         var videos = YouTubeLibraryNow().List();

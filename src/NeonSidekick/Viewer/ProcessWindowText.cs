@@ -78,6 +78,18 @@ public static class ProcessWindowText
         return ShellText.SessionRow(session, State(session), 14, Label(session.Label));
     }
 
+    /// <summary>
+    /// The footer under <c>/process</c>'s list for <paramref name="session"/> (2026-10-07, the user's ask: the row cuts the command to
+    /// <see cref="LabelCells"/>): the whole command on one line, then <c>proc_3f2a1b · exited 0 · ran 1m 4s · pid 4120</c>. Pinned.
+    /// </summary>
+    public static NeonSidekick.UI.MenuFooter Footer(ProcessSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        string command = string.Join(' ', session.Label.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        string facts = $"{session.Id} · {State(session)} · ran {ShellText.Elapsed(session.Elapsed)} · pid {session.Pid.ToString(CultureInfo.InvariantCulture)}";
+        return new NeonSidekick.UI.MenuFooter(command, facts);
+    }
+
     /// <summary>The list's last line: how to open one. Pinned.</summary>
     public const string ListHint = "/process <id> opens one in the process window; Ctrl+K twice there stops it.";
 

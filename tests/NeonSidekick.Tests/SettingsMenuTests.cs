@@ -3740,7 +3740,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await menu.PickModelFromListAsync(listed, "a", CancellationToken.None));
 
         Assert.Equal("b", _settings.Current.LlmModel);
-        Assert.Contains(Rule(120) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + Rule(120) + "\n" + SettingsMenu.ModelKeys + "\n", Output);
+        Assert.Contains(Rule(120) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + MenuLayout.Footer(SettingsMenu.ModelFooter("a", inUse: true), 120) + Rule(120) + "\n" + SettingsMenu.ModelKeys + "\n", Output);   // the id whole under the list (2026-10-07)
         Assert.False(pane.OverlayOpen);
         Assert.Contains("  · 🖥️ LLM model: b\n", Output);
         Assert.Equal(1, pane.FlowRow);   // the notice is a transcript line, under no pane

@@ -23,13 +23,16 @@ internal sealed class YouTubeSavedMenu
     private readonly INoticeSink _transcript;
     private readonly MenuPane _pane;
     private readonly Func<YouTubeSaved, CancellationToken, Task<string>>? _play;
+    private readonly TimeZoneInfo _zone;
 
     /// <param name="library">The loaded profile's saved videos, read when the pane opens and after every act.</param>
     /// <param name="transcript">Where the lines outside the pane go.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
     /// <param name="play">What Enter hands a video to: the screen's play, answering as youtube_play does; null with no video window (Enter then says so).</param>
-    public YouTubeSavedMenu(Func<YouTubeLibrary> library, INoticeSink transcript, MenuPane pane, Func<YouTubeSaved, CancellationToken, Task<string>>? play)
+    /// <param name="zone">The zone the footer's dates are shown in.</param>
+    public YouTubeSavedMenu(Func<YouTubeLibrary> library, INoticeSink transcript, MenuPane pane, Func<YouTubeSaved, CancellationToken, Task<string>>? play, TimeZoneInfo? zone = null)
     {
+        _zone = zone ?? TimeZoneInfo.Local;
         _library = library ?? throw new ArgumentNullException(nameof(library));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
@@ -55,17 +58,40 @@ internal sealed class YouTubeSavedMenu
         }
 
         int cursor = 0;
+        string filter = "";
         try
         {
             while (true)
             {
-                var page = new MenuPage(YouTubeText.SavedLabel, videos.Select(RowMarkup).ToList(), YouTubeText.SavedKeys) { Buttons = Buttons, Caption = YouTubeText.SavedCaption(videos.Count) };
-                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                // The rows under the filter and the cursor's footer (2026-10-07): indices into the list.
+                var listed = videos;
+                var shown = Enumerable.Range(0, listed.Count).Where(i => YouTubeText.SavedMatches(filter, listed[i])).ToList();
+                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(listed[i])).ToList() : [MenuFilter.NoMatchRow(filter)];
+                var page = new MenuPage(YouTubeText.SavedLabel, rows, MenuFilter.Hint(YouTubeText.SavedKeys, filter))
+                {
+                    Buttons = Buttons,
+                    Filter = filter,
+                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count) ?? YouTubeText.SavedCaption(listed.Count),
+                    Footer = (_, row) => row < shown.Count ? YouTubeText.SavedFooter(listed[shown[row]], _zone) : null,
+                };
+                if (await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     return;
                 }
 
-                cursor = Math.Clamp(pick.Row, 0, videos.Count - 1);
+                if (pick.Filter is { } typed)
+                {
+                    filter = typed;
+                    cursor = -1;   // the first row left
+                    continue;
+                }
+
+                if (pick.Row < 0 || pick.Row >= shown.Count)
+                {
+                    continue;   // the no-match row
+                }
+
+                cursor = shown[pick.Row];
                 var video = videos[cursor];
                 if (pick.Button < 0)
                 {

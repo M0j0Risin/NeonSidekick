@@ -1727,6 +1727,34 @@ internal sealed partial class SettingsMenu
             + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, server.Result.Detail, detailWidth));
     }
 
+    /// <summary>
+    /// The footer under the server picker for <paramref name="server"/> (2026-10-07, the user's ask: the row is the widest of all and
+    /// its detail is cut first): <c>vLLM · http://10.0.0.5:8000/v1</c> (an embedded model's whole id after the sentinel), then the
+    /// probe's whole detail and how many models it lists. Pinned.
+    /// </summary>
+    public static MenuFooter ServerFooter(LlmServer server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        var ids = server.Result.ModelIds;
+        string where = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl) && ids.Count > 0
+            ? server.Name + " · " + ids[0]
+            : server.Name + " · " + server.BaseUrl;
+        string models = ids.Count switch
+        {
+            0 => "",
+            1 => " · 1 model",
+            _ => " · " + ids.Count.ToString(CultureInfo.InvariantCulture) + " models",
+        };
+        return new MenuFooter(where, server.Result.Detail + models);
+    }
+
+    /// <summary>Whether <paramref name="server"/> stays under the typed <paramref name="filter"/>: its name, URL, detail or models hold it (2026-10-07).</summary>
+    public static bool ServerMatches(string filter, LlmServer server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        return MenuFilter.Matches(filter, server.Name, server.BaseUrl + " " + server.Result.Detail + " " + string.Join(' ', server.Result.ModelIds));
+    }
+
     /// <summary>The picker's rows with the URL-or-model column as wide as its widest entry, and the details as wide as the widest one.</summary>
     public static IReadOnlyList<string> ServerLabels(IReadOnlyList<LlmServer> servers)
     {
@@ -2946,6 +2974,12 @@ internal sealed partial class SettingsMenu
     /// <summary>The allowed-commands list's hint: Enter removes, A and Y are the policy buttons (<see cref="CommandPolicyButtons"/>, 2026-10-02). Pinned.</summary>
     public const string AllowedCommandsKeys = "Enter = remove · A = ask · Y = yolo · ESC = back";
 
+    /// <summary>The allowed-commands footer's last line under a prefix (2026-10-07). Pinned.</summary>
+    public const string AllowedCommandNote = "saved for good: a command that starts with this runs without asking";
+
+    /// <summary>The forbidden strings' footer's last line under a string (2026-10-07). Pinned.</summary>
+    public const string ForbiddenStringNote = "a command that holds this is refused, whatever the policy says";
+
     /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy buttons still there (2026-10-02). Pinned.</summary>
     public const string AllowedCommandsEmptyKeys = "A = ask · Y = yolo · ESC = back";
 
@@ -3927,6 +3961,12 @@ internal sealed partial class SettingsMenu
         return picked is { } i ? SaveModel(ids[i]) : Unchanged();
     }
 
+    /// <summary>The footer under the model picker (2026-10-07, the user's ask: a long Hugging Face id is cut at the edge): the whole id, and whether it is the one in use. Pinned.</summary>
+    public static MenuFooter ModelFooter(string id, bool inUse) => new(id, inUse ? ModelInUseNote : null);
+
+    /// <summary>The model footer's last line on the model in use. Pinned.</summary>
+    public const string ModelInUseNote = "the model in use";
+
     /// <summary>The model picker's order (2026-10-03, the user's ask): A to Z, case folded, the exact spelling breaking a tie. Pure.</summary>
     public static List<string> ModelOrder(IEnumerable<string> ids)
     {
@@ -3944,6 +3984,7 @@ internal sealed partial class SettingsMenu
     private async Task<string?> PickFilteredModelAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken)
     {
         string filter = "";
+        int inUse = cursor;
         try
         {
             while (true)
@@ -3954,6 +3995,7 @@ internal sealed partial class SettingsMenu
                 {
                     Filter = filter,
                     Caption = MenuFilter.CaptionOrNull(filter, shown.Count, ids.Count),
+                    Footer = (_, row) => row < shown.Count ? ModelFooter(ids[shown[row]], shown[row] == inUse) : null,   // the whole id (2026-10-07)
                 };
                 if (await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
@@ -4009,7 +4051,7 @@ internal sealed partial class SettingsMenu
         }
 
         string keys = title == StartupServerTitle ? StartupServerKeys : KeepKeys;
-        LlmServer? chosen = servers.Any(s => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl)) && _pane.Enabled
+        LlmServer? chosen = _pane.Enabled
             ? await PickFilteredServerAsync(servers, title, keys, cursor, cancellationToken).ConfigureAwait(false)
             : await PickOnceAsync(new MenuPage(title, ServerLabels(servers).ToList(), keys), cursor, cancellationToken).ConfigureAwait(false) is { } index ? servers[index] : null;
         if (chosen is null && title == ServerTitle)
@@ -4032,17 +4074,32 @@ internal sealed partial class SettingsMenu
         // Uncensored lit when the row the pane opens on is an uncensored build (later on 2026-09-30, the user's pick), so it shows.
         var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.For(
             cursor >= 0 && cursor < servers.Count && NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[cursor].BaseUrl) ? EmbeddedRowModel(servers[cursor]) : null);
+        // The embedded filter buttons only while an embedded model is listed; the typed filter always (2026-10-07, the user's ask).
+        bool embedded = servers.Any(s => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl));
         var labels = ServerLabels(servers);
-        string hint = keys.Replace(" · ESC", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · ESC", StringComparison.Ordinal);
+        string baseHint = embedded ? keys.Replace(" · ESC", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · ESC", StringComparison.Ordinal) : keys;
+        string text = "";
         try
         {
             while (true)
             {
-                var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null);
-                var page = new MenuPage(title, FilteredRows(labels, shown), hint);
-                if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons()).ConfigureAwait(false) is not { } pick)
+                var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i]) && ServerMatches(text, servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null);
+                var page = new MenuPage(title, text.Length > 0 && shown.Count == 0 ? [MenuFilter.NoMatchRow(text)] : FilteredRows(labels, shown), MenuFilter.HintBeforeEsc(baseHint, text))
+                {
+                    Filter = text,
+                    Caption = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count),
+                    Footer = (_, row) => row < shown.Count ? ServerFooter(servers[shown[row]]) : null,
+                };
+                if (await _pane.PickAsync(page with { Buttons = embedded ? filter.Buttons() : null }, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     return null;
+                }
+
+                if (pick.Filter is { } typed)
+                {
+                    text = typed;
+                    cursor = -1;   // the first row left
+                    continue;
                 }
 
                 if (pick.Row >= 0 && pick.Row < shown.Count)
@@ -4056,7 +4113,7 @@ internal sealed partial class SettingsMenu
                     continue;
                 }
 
-                if (shown.Count > 0)
+                if (shown.Count > 0 && cursor >= 0)
                 {
                     return servers[cursor];
                 }
@@ -7429,13 +7486,34 @@ internal sealed partial class SettingsMenu
     {
         bool changed = false;
         int cursor = 0;
+        string filter = "";
         while (true)
         {
             var allowed = Shell.CommandAllowList.Merge(_settings.Current.ShellCommandAllowed, []);
-            IReadOnlyList<string> rows = allowed.Count == 0 ? [Markup.Escape(NoAllowedCommandsRow)] : allowed.Select(Markup.Escape).ToList();
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, allowed.Count == 0 ? AllowedCommandsEmptyKeys : AllowedCommandsKeys);
+            // Typed to filter, each prefix whole under the list (2026-10-07, the user's ask): the rows' indices into the list.
+            var shown = Enumerable.Range(0, allowed.Count).Where(i => MenuFilter.Matches(filter, allowed[i], null)).ToList();
+            IReadOnlyList<string> rows = allowed.Count == 0 ? [Markup.Escape(NoAllowedCommandsRow)]
+                : shown.Count == 0 ? [MenuFilter.NoMatchNameRow(filter)]
+                : shown.Select(i => Markup.Escape(allowed[i])).ToList();
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, allowed.Count == 0 ? AllowedCommandsEmptyKeys : MenuFilter.HintBeforeEsc(AllowedCommandsKeys, filter))
+            {
+                Filter = allowed.Count == 0 ? null : filter,
+                Caption = MenuFilter.CaptionOrNull(filter, shown.Count, allowed.Count),
+                Footer = (_, row) => row < shown.Count ? new MenuFooter(allowed[shown[row]], AllowedCommandNote) : null,
+            };
             string policy = _settings.Current.ShellCommandPolicy;
-            var picked = await PickChecklistAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, CommandPolicyButtons(policy)).ConfigureAwait(false);
+            int start = Math.Max(0, shown.IndexOf(cursor));
+            MenuPick? pick = _pane.Enabled
+                ? await _pane.PickAsync(page with { Buttons = CommandPolicyButtons(policy) }, start, cancellationToken).ConfigureAwait(false)
+                : await PickAsync(page, start, cancellationToken).ConfigureAwait(false) is { } plain ? new MenuPick(0, plain) : null;
+            if (pick?.Filter is { } typed)
+            {
+                filter = typed;
+                cursor = -1;   // the first row left
+                continue;
+            }
+
+            (int Row, int Button)? picked = pick is { } p ? (p.Row >= 0 && p.Row < shown.Count ? shown[p.Row] : -1, p.Button) : null;
             if (picked is { Button: PolicyAskIndex or PolicyYoloIndex } pressed)
             {
                 cursor = pressed.Row;
@@ -7470,6 +7548,11 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
+            if (index < 0)
+            {
+                continue;   // the no-match row
+            }
+
             string prefix = allowed[index];
             _settings.Update(d => d.ShellCommandAllowed = Shell.CommandAllowList.Without(d.ShellCommandAllowed, prefix));
             Sink.Notice(PrefixRemovedNotice(prefix));
@@ -7494,7 +7577,8 @@ internal sealed partial class SettingsMenu
         {
             var forbidden = Shell.ForbiddenStrings.Sorted(_settings.Current.ShellPoliceForbiddenStrings);
             IReadOnlyList<string> rows = [Markup.Escape(AddForbiddenRow), .. forbidden.Select(Markup.Escape)];
-            var page = new MenuPage(Crumb(title), rows, ForbiddenKeys);
+            // Each string whole under the list (2026-10-07, the user's ask: a long one was cut at the edge).
+            var page = new MenuPage(Crumb(title), rows, ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= forbidden.Count ? new MenuFooter(forbidden[row - 1], ForbiddenStringNote) : null };
             if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)
             {
                 if (!changed)

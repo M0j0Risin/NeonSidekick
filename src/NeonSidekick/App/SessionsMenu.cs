@@ -19,12 +19,16 @@ namespace NeonSidekick.App;
 /// <para>The rename box stands alone too (<see cref="RenameAsync"/>, 2026-09-28, the user's ask): a double-click on the
 /// session's name at the upper rule's right edge, or the bare <c>/sessions title</c>, opens the <c>rename</c> row on its
 /// own with the title in the slot — under a reply as at idle.</para>
+/// <para>Under the list (2026-10-07, the user's ask: a row cut at the edge lost the title's end and the mark of the conversation on
+/// screen), the cursor's session in full: its whole title, then when it started and last ran, its turns, its model and whether it
+/// is the one on screen (<see cref="Footer"/>). Typing narrows the list to the sessions whose title or model holds the text
+/// (<see cref="MenuFilter"/>), the first ESC clearing it.</para>
 /// </summary>
 internal sealed class SessionsMenu
 {
     // The key hints. Pinned.
     public const string Title = ChatScreen.SessionsToolGlyph + " Sessions";   // the glyph the toolbar wears for the pane too (later on 2026-09-21)
-    public const string Keys = "Enter = open · ESC = close";
+    public const string Keys = "Enter = open · " + MenuFilter.TypeAndCloseKeys;   // type to filter since 2026-10-07
     public const string RowKeys = SettingsMenu.PickKeys;
 
     public const string EmptyNotice = "(" + NoticeGlyphs.Session + "no sessions)";   // the balloon since 2026-09-22
@@ -100,6 +104,40 @@ internal sealed class SessionsMenu
         return sessions.Count == 0 ? (0, 0) : (sessions.Max(s => SessionText.Id(s.Id).Length), sessions.Max(s => SessionText.Turns(s.Turns).Length));
     }
 
+    /// <summary>
+    /// The footer under the list for <paramref name="session"/> (2026-10-07): its whole title, then
+    /// <c>started 2026-10-07 09:12 · last 2026-10-07 14:40 · 14 turns · qwen3 · this conversation</c>, the model left out when none
+    /// was stored. Pinned.
+    /// </summary>
+    public static MenuFooter Footer(SessionSummary session, bool current, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var facts = new List<string>
+        {
+            "started " + SessionText.Moment(session.StartedAt, zone),
+            "last " + SessionText.Moment(session.UpdatedAt, zone),
+            SessionText.Turns(session.Turns),
+        };
+        if (!string.IsNullOrWhiteSpace(session.Model))
+        {
+            facts.Add(session.Model);
+        }
+
+        if (current)
+        {
+            facts.Add(CurrentNote);
+        }
+
+        return new MenuFooter(SessionText.DisplayTitle(session), string.Join(" · ", facts));
+    }
+
+    /// <summary>Whether <paramref name="session"/> stays under <paramref name="filter"/>: its title or its model holds it (2026-10-07).</summary>
+    public static bool Matches(string filter, SessionSummary session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return MenuFilter.Matches(filter, SessionText.DisplayTitle(session), session.Model);
+    }
+
     /// <summary>The row page's rows: each word padded to nine, what it does dim after it.</summary>
     public static string RowPageRow(string word) => Markup.Escape(word.PadRight(9)) + Theme.DimMarkup(word switch
     {
@@ -166,20 +204,41 @@ internal sealed class SessionsMenu
         }
 
         int cursor = 0;
+        string filter = "";
         try
         {
             while (true)
             {
                 long? current = _current();
                 var (idWidth, turnsWidth) = Widths(sessions);
-                var page = new MenuPage(Title, sessions.Select(s => RowMarkup(s, s.Id == current, zone, idWidth, turnsWidth)).ToList(), Keys);
-                var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+                // The rows under the filter (2026-10-07): the indices into the list, the cursor kept on the same session when it stays.
+                var shown = Enumerable.Range(0, sessions.Count).Where(i => Matches(filter, sessions[i])).ToList();
+                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(sessions[i], sessions[i].Id == current, zone, idWidth, turnsWidth)).ToList() : [MenuFilter.NoMatchRow(filter)];
+                var page = new MenuPage(Title, rows, MenuFilter.Hint(Keys, filter))
+                {
+                    Filter = filter,
+                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, sessions.Count),
+                    Footer = (_, row) => row < shown.Count ? Footer(sessions[shown[row]], sessions[shown[row]].Id == current, zone) : null,
+                };
+                var picked = await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
                 {
                     return null;
                 }
 
-                cursor = Math.Clamp(pick.Row, 0, sessions.Count - 1);
+                if (pick.Filter is { } typed)
+                {
+                    filter = typed;
+                    cursor = -1;   // the first row left
+                    continue;
+                }
+
+                if (pick.Row < 0 || pick.Row >= shown.Count)
+                {
+                    continue;   // the no-match row
+                }
+
+                cursor = shown[pick.Row];
                 if (midTurn)
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);

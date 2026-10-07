@@ -124,6 +124,40 @@ public static class McpRows
     }
 
     /// <summary>
+    /// The footer under the Servers tab for <paramref name="row"/> (2026-10-07, the user's ask: a failed server's error was the row's
+    /// cut end, and the tab's band stood blank): a server's whole status — the error whole, or the tools it offers by name — then its
+    /// scope and transport (<c>profile · stdio: docker mcp gateway run</c>), shadowed said so; an edit row the file it opens; null for
+    /// the reload row and a line that does nothing. Pinned.
+    /// </summary>
+    public static MenuFooter? ServerFooter(McpFacts facts, McpRow? row)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        switch (row)
+        {
+            case McpRow.EditProfile:
+                return new MenuFooter(facts.ProfilePath);
+            case McpRow.EditGlobal:
+                return new MenuFooter(facts.GlobalPath);
+            case McpRow.Server { Name: var name } when facts.Servers.FirstOrDefault(s => s.Name == name) is { } server:
+            {
+                string status = server.ShadowedBy is not null ? McpText.StatusShadowed
+                    : server.State switch
+                    {
+                        McpState.Connected => McpText.StatusConnected(server.Tools.Count) + (server.Tools.Count > 0 ? ": " + string.Join(", ", server.Tools.Select(t => t.Name)) : ""),
+                        McpState.Connecting => McpText.StatusConnecting,
+                        McpState.Failed => McpText.StatusFailed(server.Detail ?? ""),
+                        _ => McpText.StatusOff,
+                    };
+                string scope = server.Scope == McpScope.Global ? "global" : "profile";
+                return new MenuFooter(status, scope + " · " + server.Transport);
+            }
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
     /// The Tools tab: a heading per connected server (<c>── docker · 14 ───…</c>, <c>── docker · 12 of 14 ───…</c>, a
     /// <see cref="SectionRule"/> with an empty row before every one but the first since 2026-10-03, the <c>/tools</c> look) in the
     /// section colour whatever the switches say (the <c>/tools</c> rule, later on 2026-09-20), then a row per tool in the <c>/tools</c> Offered shape — the prefixed name, <c>on</c> /

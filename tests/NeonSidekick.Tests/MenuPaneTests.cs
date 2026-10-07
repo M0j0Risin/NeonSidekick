@@ -41,6 +41,27 @@ public class MenuPaneTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A list that filters and has keyed buttons (2026-10-07: /docker's r = refresh, /youtube saved's d = remove): a button's key is the
+    /// button while nothing is typed, any other character starts the filter, and once a filter is under way every character goes on it.
+    /// </summary>
+    [Fact]
+    public async Task AButtonsKey_WinsWhileNothingIsTyped_ThenTheFilterTakesEveryCharacter()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var page = Page("one", "two") with { Buttons = [new MenuButton("⟳ refresh", 'r')], Filter = "" };
+
+        Push(Keys.Char('r'));
+        Assert.Equal(0, (await menu.PickAsync(page, 0, CancellationToken.None))!.Value.Button);
+        Push(Keys.Char('o'));
+        Assert.Equal("o", (await menu.PickAsync(page, 0, CancellationToken.None))!.Value.Filter);
+        Push(Keys.Char('r'));
+        Assert.Equal("or", (await menu.PickAsync(page with { Filter = "o" }, 0, CancellationToken.None))!.Value.Filter);
+        menu.Close();
+    }
+
     [Fact]
     public async Task Enter_ReturnsTheRow_UpAndDownWrap_AndThePaneStaysOpen()
     {

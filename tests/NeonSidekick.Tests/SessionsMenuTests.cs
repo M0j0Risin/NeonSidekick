@@ -105,6 +105,23 @@ public class SessionsMenuTests : IDisposable
         Assert.DoesNotContain(SessionsMenu.Keys, _console.Output);
     }
 
+    /// <summary>Typing narrows the list (2026-10-07): the caption counts what is left, the first ESC clears the text, the next closes.</summary>
+    [Fact]
+    public async Task OnThePane_TypingFilters_TheFirstEscClears_TheNextCloses()
+    {
+        Seed("first", 3);
+        Seed("second");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('f'), Keys.Char('i'), Keys.Escape, Keys.Escape);
+
+        Assert.Null(await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Contains(MenuFilter.Caption("fi", 1, 2), _console.Output);
+        Assert.Contains(MenuFilter.Hint(SessionsMenu.Keys, "fi"), _console.Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_TheListIsTheOverlay_NewestFirst_TheCurrentMarked_AndEscapeClosesIt()
     {
@@ -118,7 +135,7 @@ public class SessionsMenuTests : IDisposable
         Assert.Null(await menu.ShowAsync(CancellationToken.None));
 
         // The columns line up: `1 turn` padded to `3 turns`' width (2026-09-18, the user's ask).
-        Assert.Contains(Rule(100) + "\n" + Titled(SessionsMenu.Title) + "\n \n▸ " + Row(b, "2026-09-11 14:06", 1, "second", current: true, turnsWidth: 7) + "\n  " + Row(a, "2026-09-11 14:05", 3, "first") + "\n" + Rule(100) + "\n" + SessionsMenu.Keys + "\n", _console.Output);
+        Assert.Contains(Rule(100) + "\n" + Titled(SessionsMenu.Title) + "\n \n▸ " + Row(b, "2026-09-11 14:06", 1, "second", current: true, turnsWidth: 7) + "\n  " + Row(a, "2026-09-11 14:05", 3, "first") + "\n" + MenuLayout.Footer(SessionsMenu.Footer(_store.Summary(b)!, current: true, _time.LocalTimeZone), 100) + Rule(100) + "\n" + SessionsMenu.Keys + "\n", _console.Output);
         Assert.Contains("\n▸ #" + b + "  2026-09-11 14:06  1 turn   second  " + SessionsMenu.CurrentNote + "\n  #" + a + "  2026-09-11 14:05  3 turns  first\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.Equal(flow, pane.FlowRow);

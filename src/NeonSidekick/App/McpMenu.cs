@@ -62,7 +62,7 @@ internal sealed class McpMenu
     /// <paramref name="filter"/>, <paramref name="total"/> the tools there are, for the caption while a filter is typed.
     /// </summary>
     /// <remarks><paramref name="toolFooter"/> (2026-10-05) says under the list what the Tools tab's cursor tool does, whole (<see cref="McpRows.ToolFooter"/>).</remarks>
-    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null)
+    public static MenuPage Page(IReadOnlyList<(string Markup, McpRow? Row)> servers, IReadOnlyList<(string Markup, string? Tool, bool Heading)> tools, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int total = 0, Func<string, MenuFooter?>? toolFooter = null, Func<McpRow?, MenuFooter?>? serverFooter = null)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(tools);
@@ -85,9 +85,10 @@ internal sealed class McpMenu
         {
             SpaceToggles = true,
             TabCursors = [McpRows.FirstServerRow(servers), ToolsText.FirstToolRow(tools), 0],
-            // The Tools tab's band says the cursor's tool (2026-10-05, /tools' Offered shape); the Servers tab's stays blank.
+            // The Tools tab's band says the cursor's tool (2026-10-05, /tools' Offered shape); the Servers tab's the cursor's server whole (2026-10-07).
             Footer = (t, row) => t switch
             {
+                0 => row < servers.Count ? serverFooter?.Invoke(servers[row].Row) : null,
                 1 => row < tools.Count && tools[row].Tool is { } name ? toolFooter?.Invoke(name) : null,
                 2 => row < SettingsMenu.McpTabFields[0].Count ? menu.FieldFooter(SettingsMenu.McpTabFields[0][row], saved) : null,
                 _ => null,
@@ -147,7 +148,7 @@ internal sealed class McpMenu
                 var saved = _settings.Current;
                 var servers = McpRows.ServerRows(facts);
                 var tools = McpRows.ToolRows(facts, filter);
-                var page = Page(servers, tools, saved, _menu, tab, filter, facts.Servers.Where(s => s.State == McpState.Connected).Sum(s => s.Tools.Count), name => McpRows.ToolFooter(facts, name));
+                var page = Page(servers, tools, saved, _menu, tab, filter, facts.Servers.Where(s => s.State == McpState.Connected).Sum(s => s.Tools.Count), name => McpRows.ToolFooter(facts, name), row => McpRows.ServerFooter(facts, row));
                 if (cursor < 0)
                 {
                     cursor = tab == 1 ? ToolsText.FirstToolRow(tools) : McpRows.FirstServerRow(servers);

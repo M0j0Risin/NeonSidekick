@@ -127,7 +127,13 @@ internal sealed class ProcessMenu
         {
             while (true)
             {
-                var page = new MenuPage(Title, sessions.Select(RowMarkup).ToList(), Keys) { Buttons = Buttons, Caption = Caption(sessions) };
+                var shown = sessions;
+                var page = new MenuPage(Title, sessions.Select(RowMarkup).ToList(), Keys)
+                {
+                    Buttons = Buttons,
+                    Caption = Caption(sessions),
+                    Footer = (_, row) => row < shown.Count ? ProcessWindowText.Footer(shown[row]) : null,   // the whole command (2026-10-07)
+                };
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
                 {

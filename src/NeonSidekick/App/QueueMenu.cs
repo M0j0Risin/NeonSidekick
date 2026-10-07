@@ -71,6 +71,18 @@ internal sealed class QueueMenu
 
     public static string RemovedNotice(string text) => $"({NoticeGlyphs.Queue}removed: {text})";
 
+    /// <summary>
+    /// The footer under the list for the message at <paramref name="index"/> of <paramref name="count"/> (2026-10-07, the user's ask:
+    /// the row cut a long message at the edge): its whole label, then <c>2 of 5 · 1 picture</c>. Pinned.
+    /// </summary>
+    public static MenuFooter Footer(QueuedMessage entry, int index, int count)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        string place = (index + 1).ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture);
+        int pictures = entry.Line.Images.Count;
+        return new MenuFooter(entry.Label, pictures == 0 ? place : place + " · " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures"));
+    }
+
     /// <summary>One menu row as markup: the position (1-based) dimmed, two spaces, the text escaped; the pane cuts it at the edge.</summary>
     public static string RowMarkup(int index, string text) =>
         Theme.DimMarkup((index + 1).ToString(CultureInfo.InvariantCulture)) + "  " + Markup.Escape(text);
@@ -100,7 +112,12 @@ internal sealed class QueueMenu
             {
                 bool send = offerSend && _queue.Held;
                 var buttons = send ? ButtonsWithSend : Buttons;
-                var page = new MenuPage(Title, entries.Select((entry, i) => RowMarkup(i, entry.Label)).ToList(), send ? KeysWithSend : Keys) { Buttons = buttons };
+                var shownEntries = entries;
+                var page = new MenuPage(Title, entries.Select((entry, i) => RowMarkup(i, entry.Label)).ToList(), send ? KeysWithSend : Keys)
+                {
+                    Buttons = buttons,
+                    Footer = (_, row) => row < shownEntries.Count ? Footer(shownEntries[row], row, shownEntries.Count) : null,   // the whole message (2026-10-07)
+                };
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { Row: var row })
                 {

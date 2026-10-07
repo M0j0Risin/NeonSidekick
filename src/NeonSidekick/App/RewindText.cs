@@ -67,6 +67,23 @@ public static class RewindText
         return Theme.DimMarkup("#" + turn.Number.ToString(CultureInfo.InvariantCulture)) + "  " + Markup.Escape(FirstLine(turn.Text)) + calls;
     }
 
+    /// <summary>
+    /// The footer under the picker for <paramref name="turn"/> (2026-10-07, the user's ask: the row shows the first line, cut at the
+    /// edge): the whole message, its lines joined by a space, then <c>message #3 · 4 tool calls</c> (<c>no tools</c> for none). Pinned.
+    /// </summary>
+    public static MenuFooter Footer(RewindTurn turn)
+    {
+        ArgumentNullException.ThrowIfNull(turn);
+        string text = string.Join(' ', turn.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        string calls = turn.ToolCalls switch
+        {
+            0 => "no tools",
+            1 => "1 tool call",
+            _ => turn.ToolCalls.ToString(CultureInfo.InvariantCulture) + " tool calls",
+        };
+        return new MenuFooter(text, "message #" + turn.Number.ToString(CultureInfo.InvariantCulture) + " · " + calls);
+    }
+
     /// <summary>The confirmation's question: <c>↩️ Rewind to before #3? 2 messages will be removed.</c> Pinned.</summary>
     public static string ConfirmPrompt(RewindTurn turn, RewindCut cut)
     {
