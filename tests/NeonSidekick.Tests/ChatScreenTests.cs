@@ -5036,6 +5036,32 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// On a Mac the groups that need Windows say so on <c>/tools</c> (2026-10-06, the tidy-up before the first Mac release): UNC with
+    /// a share named and offered, Docker and printing, all three switched on, each heading <c>(off: it needs Windows)</c>.
+    /// </summary>
+    [UnixFact]
+    public async Task Tools_OnMacOS_TheWindowsOnlyGroups_SayTheyNeedWindows()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        File.WriteAllText(Path.Combine(_settings.ProfileDirectory, "unc.json"), "{ \"shares\": { \"eng\": { \"path\": \"" + _dir.Replace("\\", "/", StringComparison.Ordinal) + "\" } } }");
+        _settings.Update(d => { d.TtsOutput = false; d.UncTools = true; d.UncSharesOffered = ["eng"]; d.DockerTools = true; d.PrintTools = true; });
+        PushLine("/tools");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string reason = "(off: " + ToolsText.NeedsWindowsReason + ")\n";
+        Assert.Matches(@"·   UNC \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
+        Assert.Matches(@"·   Docker \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
+        Assert.Matches(@"·   Print \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
+        Assert.Empty(_chat.Requests);
+    }
+
     /// <summary>The Unix twin of <see cref="Tools_WithoutThePane_PrintsTheFiveTabs"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
     [UnixFact]
     public async Task Tools_WithoutThePane_PrintsTheFiveTabs_Unix()
@@ -14944,11 +14970,32 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x.png"), output);
     }
 
+    /// <summary><c>/print</c> on a Mac (2026-10-06, the tidy-up before the first Mac release): no spooler there yet, so every form says printing needs Windows, and nothing is printed.</summary>
+    [UnixFact]
+    public async Task Print_OnMacOS_SaysItNeedsWindows()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/print printers");
+        PushLine("/print reply");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, Count(output, NeonSidekick.Printing.PrintText.NeedsWindows));
+        Assert.Empty(_printSpooler.Jobs);
+        Assert.Empty(_chat.Requests);
+    }
+
     /// <summary>
     /// <c>/print</c> (2026-09-28): a file of the working directory to the default printer and to a named one sideways, the
     /// printers listed, and a missing file, a bad option and a reply not yet there as error lines; nothing reaches the model.
     /// </summary>
-    [Fact]
+    [WindowsFact]   // printing needs Windows: a Mac's /print says so (Print_OnMacOS_SaysItNeedsWindows, 2026-10-06)
     public async Task Print_SendsAFile_ListsThePrinters_AndSaysWhy()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15877,6 +15924,13 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>A solid picture per size as the splash seam hands them over (2026-09-19: a name list over the pictures, the walk's order), every load recorded by name.</summary>
     private void SplashOf(params (int Width, int Height)[] sizes)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            // No splash off Windows (2026-10-06): the pictures load through WIC, which a Mac has not, so a test that only needs the
+            // splash to stay away runs there with none; a test that needs a picture drawn stays [WindowsFact].
+            return;
+        }
+
         var images = new Dictionary<string, ImageAttachment>(StringComparer.Ordinal);
         for (int i = 0; i < sizes.Length; i++)
         {
@@ -15956,7 +16010,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› /cwd", output[wipe..]);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Startup_WelcomeSplashOff_OrNoPane_DrawsNothing_AndNeverAsksForAPicture()
     {
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
@@ -16268,7 +16322,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(ChatScreen.SplashHint, output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Startup_WelcomeSplash_TheSettingOff_ShowsNoPictureAndNoSlideshowHint()
     {
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
@@ -17517,7 +17571,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── /theme (2026-09-23, the user's ask; the splash as Welcome splash says since 2026-10-02) ──
 
-    [WindowsFact]
+    [Fact]
     public async Task Theme_Named_SplashDisabled_SavesIt_PutsItInForce_AndStartsOverLikeClear()
     {
         using var theme = new ThemeScope();
@@ -17832,7 +17886,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("again", UserText(_chat.Requests[1]));   // the fresh start forgot "hi"
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task MidTurn_Theme_WaitsForTheReply_ThenApplies()
     {
         // 2026-09-23, the user's call: a theme change waits for the reply to end, as its Settings row does.
@@ -19319,7 +19373,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
-        Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
+        Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
         Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
         Assert.DoesNotContain("Roots", output);
@@ -19352,7 +19406,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Roots", output);
         Assert.False(_settings.Current.ProjectFile);
         Assert.Contains("\n▸ Reflection (auto-learn)           off\n  Reflection reasoning              none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
-        Assert.Contains("\n▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n  Project file                          on\n", output);   // the Options tab, the rows padded to its own column
+        Assert.Contains("\n▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
         Assert.Contains("\n▸ haiku  profile  Writes haiku. Use when asked for one.\n", output);
         Assert.Contains("\n" + SkillsMenu.LoadedKeys, output);   // the trailer follows on the hint row

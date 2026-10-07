@@ -828,6 +828,9 @@ public static class FileText
         return "unzipped " + result.Relative + " into " + result.Archive + " (" + Count(result.Entries, "entry", "entries") + ")";
     }
 
+    /// <summary>Where <c>open</c> showed a folder: Explorer, or Finder on macOS (2026-10-06, the macOS build). Pinned.</summary>
+    public static string FolderBrowser => OperatingSystem.IsMacOS() ? " in Finder" : " in Explorer";
+
     public static string Opened(OpenResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -836,7 +839,7 @@ public static class FileText
             return Error(result.Outcome, result.Relative, "open", result.Detail);
         }
 
-        return "opened " + Name(result.Relative) + (result.IsDirectory ? " in Explorer" : " in the user's editor");
+        return "opened " + Name(result.Relative) + (result.IsDirectory ? FolderBrowser : " in the user's editor");
     }
 
     // ---- formats ----

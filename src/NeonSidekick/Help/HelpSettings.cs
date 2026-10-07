@@ -11,8 +11,12 @@ namespace NeonSidekick.Help;
 /// </summary>
 public static class HelpSettings
 {
-    /// <summary>The row's purpose, plain text (backticks and <c>*Setting*</c> names kept).</summary>
-    public static string Describe(SettingsField field) => field switch
+    /// <summary>The row's purpose, plain text (backticks and <c>*Setting*</c> names kept); on macOS <see cref="HelpMac.Settings"/>' text where it has one (2026-10-06).</summary>
+    public static string Describe(SettingsField field) =>
+        OperatingSystem.IsMacOS() && HelpMac.Setting(field) is { } mac ? mac : DescribeAsWritten(field);
+
+    /// <summary>The row's purpose as written here, every system's but where <see cref="HelpMac"/> has a Mac text.</summary>
+    internal static string DescribeAsWritten(SettingsField field) => field switch
     {
         SettingsField.Profile => "Switches to another profile (each has its own settings, persona, memory, skills and sessions).",
         SettingsField.UserLineStyle => "How the transcript draws your sent line: `quiet` (the › in the user colour, your words in the body's), `slab` (your line on a faint fill) or `bold` (the whole line bold in the user colour).",

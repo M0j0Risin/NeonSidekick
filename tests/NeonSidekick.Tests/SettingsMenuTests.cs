@@ -4274,7 +4274,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.ExternalSkills);
-        Assert.Contains(@"  · Use external skills (.agents\skills): on", _console.Output);
+        Assert.Contains("  · " + SettingsMenu.ExternalSkillsName + ": on", _console.Output);   // a Mac spells it with /, 2026-10-06
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4532,7 +4532,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("on  " + Theme.DimMarkup("replies are read aloud"), SettingsMenu.ToggleLabel(SettingsField.TtsOutput, true));
         Assert.Equal("off " + Theme.DimMarkup("replies are text only"), SettingsMenu.ToggleLabel(SettingsField.TtsOutput, false));
         Assert.Equal("no tools at all; a change starts a new conversation", SettingsMenu.ToggleDescribe(SettingsField.LlmOfferTools, false));
-        Assert.Equal("%USERPROFILE%\\.agents\\skills is read too", SettingsMenu.ToggleDescribe(SettingsField.ExternalSkills, true));
+        Assert.Equal(OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too", SettingsMenu.ToggleDescribe(SettingsField.ExternalSkills, true));   // the Mac's home, 2026-10-06
         Assert.Equal("use project file (NEON.md or AGENTS.md in the working directory)", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, true));   // the user's words, 2026-10-01
         Assert.Equal("project files in the working directory are ignored", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, false));
         // 2026-09-18: the user's own sentences for /copy, and the two new line switches.

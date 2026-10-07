@@ -47,7 +47,7 @@ internal sealed partial class SettingsMenu
     public static string UncPasswordRow(UncNamedShare share)
     {
         ArgumentNullException.ThrowIfNull(share);
-        string store = share.Config.InCredentialManager ? "Windows Credential Manager" : "encrypted in unc.json";
+        string store = share.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in unc.json";
         return $"{share.Name}  ({share.Config.Root}, runas {share.Config.User?.Trim()} · {store})";
     }
 

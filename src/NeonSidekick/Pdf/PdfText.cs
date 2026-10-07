@@ -41,11 +41,13 @@ public static class PdfText
 
     public const string NoBrowser = "Error: PDF engine is browser, and no Edge, Chrome or Brave was found; set Web browser path, or set PDF engine to auto";
 
-    public static string NoRoute(string printer) =>
-        $"Error: no browser was found and {printer} is not installed, so nothing can make the PDF; set Web browser path, or add {printer} in Windows' optional features";
+    public static string NoRoute(string printer) => OperatingSystem.IsMacOS()   // macOS, 2026-10-06: no printer route to offer there
+        ? "Error: no Edge, Chrome, Brave or Chromium was found in /Applications, so nothing can make the PDF; set Web browser path"
+        : $"Error: no browser was found and {printer} is not installed, so nothing can make the PDF; set Web browser path, or add {printer} in Windows' optional features";
 
-    public static string NoPrinter(string printer) =>
-        $"Error: PDF engine is printer, and {printer} is not installed; add it in Windows' optional features, or set PDF engine to auto";
+    public static string NoPrinter(string printer) => OperatingSystem.IsMacOS()
+        ? $"Error: PDF engine is printer, and {printer} needs Windows; set PDF engine to auto or browser"
+        : $"Error: PDF engine is printer, and {printer} is not installed; add it in Windows' optional features, or set PDF engine to auto";
 
     public const string PageLayoutFixed =
         "Error: a web page keeps its own page layout; leave out paper and landscape for a url";

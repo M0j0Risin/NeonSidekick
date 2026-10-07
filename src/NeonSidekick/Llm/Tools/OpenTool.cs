@@ -51,6 +51,11 @@ public sealed class OpenTool : FileTool
         "Opens a file in the user's own editor or viewer, or a folder in Explorer, on their screen; no path opens the working directory (the user's cwd / current directory) itself. " +
         "Use it when they ask to open, show or see something rather than to have it read out.";
 
+    /// <summary><see cref="BaseDescription"/> on macOS (2026-10-06, the macOS build): a folder opens in Finder there. Pinned.</summary>
+    private const string MacBaseDescription =
+        "Opens a file in the user's own editor or viewer, or a folder in Finder, on their screen; no path opens the working directory (the user's cwd / current directory) itself. " +
+        "Use it when they ask to open, show or see something rather than to have it read out.";
+
     private const string ShareDescription =
         " With share, or a full \\\\server\\share path, it opens the file or folder on that UNC share instead; a share signed in as another account cannot be opened this way (unc_fetch the file, then open the copy).";
 
@@ -71,7 +76,9 @@ public sealed class OpenTool : FileTool
 
     public override string Name => ToolName;
 
-    public override string Description => SharesOffered ? BaseDescription + ShareDescription : BaseDescription;
+    public override string Description => SharesOffered ? Base + ShareDescription : Base;
+
+    private static string Base => OperatingSystem.IsMacOS() ? MacBaseDescription : BaseDescription;
 
     public override JsonElement JsonSchema => SharesOffered ? ShareSchema : Schema;
 

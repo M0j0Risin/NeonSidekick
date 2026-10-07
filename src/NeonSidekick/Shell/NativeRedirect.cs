@@ -71,4 +71,17 @@ public static class NativeRedirect
         string prefix = CommandPrefix.Of(segments[0]);
         return Table.TryGetValue(prefix, out string? tool) && offered.Contains(tool) ? (prefix, tool) : null;
     }
+
+    /// <summary>
+    /// <see cref="For(string, IReadOnlySet{string})"/> for a line run in <paramref name="kind"/> (2026-10-06, the macOS build): on a Mac
+    /// <c>type</c> goes to <c>read_file</c> only in PowerShell (or cmd), where it prints a file; in zsh and bash it describes a
+    /// command (<c>type python3</c>), which no native tool does, so the shell keeps it. Windows is unchanged — every shell's
+    /// <c>type</c> is sent back there, Git Bash's too, as before.
+    /// </summary>
+    public static (string Prefix, string Tool)? For(string command, IReadOnlySet<string> offered, ShellKind kind) =>
+        For(command, offered) is { } native && !(OperatingSystem.IsMacOS() && DescribesCommand(native.Prefix, kind)) ? native : null;
+
+    /// <summary>Whether <paramref name="prefix"/> in <paramref name="kind"/> is the Unix shells' <c>type</c>, a command's description. Pure.</summary>
+    public static bool DescribesCommand(string prefix, ShellKind kind) =>
+        string.Equals(prefix, "type", StringComparison.Ordinal) && kind is not (ShellKind.PowerShell or ShellKind.Cmd);
 }

@@ -101,10 +101,10 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/perfbar [off\|text\|gauge\|spark\|led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
 | `/persona [reset]` | The same for `persona.md` (the personality; seeded with the built-in persona). |
 | `/persona copy <profile> [force]` | Copies it to another profile (`force` replaces theirs). |
-| `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file from the working directory (see [Printing](TOOLS.md#printing)). The printer matches by name or part of it; quote a name with spaces. *Print action policy* never applies. |
+| `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file from the working directory (see [Printing](TOOLS.md#printing)). The printer matches by name or part of it; quote a name with spaces. *Print action policy* never applies. Printing needs Windows: on a Mac every `/print` says so. |
 | `/print reply [<options>]` | Prints the last reply as formatted Markdown. |
 | `/print printers` | Lists the printers in a pane, marking the Windows default and *Print default printer*. `/print` alone shows its usage and the same list. |
-| `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). |
+| `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). On a Mac only the browser makes it. |
 | `/pdf <url> [to=<path>] [overwrite]` | Makes a PDF of a web page as the browser shows it; *Web browser network mode* still applies. |
 | `/pdf reply [<options>]` | Makes a PDF of the last reply as formatted Markdown. |
 | `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or **K**) stops the highlighted one after a yes/no. |
@@ -139,7 +139,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
-| `/terminal [<folder>]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. |
+| `/terminal [<folder>]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. On a Mac it needs Windows for now: open Terminal or iTerm2 yourself. |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
 | `/theme [<name>]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. |
 | `/theme export <name> [<new-name>]` | Writes a theme to the `themes` folder as a file to edit (see [Custom themes](#custom-themes)). |

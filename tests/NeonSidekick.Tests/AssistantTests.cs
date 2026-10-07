@@ -394,7 +394,7 @@ public class AssistantTests
     public void ShellNativeRule_NamesTheOfferedGroups_AfterTheShellRule()
     {
         Assert.Equal(
-            "Call run_command only for what no other tool does: read_file and search_files read, search and list files (not cat, type, Get-Content, dir, ls or grep) and the file tools write, copy, move and delete them; " +
+            "Call run_command only for what no other tool does: read_file and search_files read, search and list files " + (OperatingSystem.IsMacOS() ? "(not cat, Get-Content, ls or grep)" : "(not cat, type, Get-Content, dir, ls or grep)") + " and the file tools write, copy, move and delete them; " +
             "the gitlib_ tools look at and change the repository (not git status, log, diff, add or commit); web_search and web_fetch reach the web (not curl or Invoke-WebRequest); sql_query reads the databases (not sqlcmd).",
             Assistant.ShellNativeRule(files: true, git: true, web: true, sql: true));
         Assert.Equal("Call run_command only for what no other tool does: the gitlib_ tools look at and change the repository (not git status, log, diff, add or commit).", Assistant.ShellNativeRule(files: false, git: true, web: false, sql: false));

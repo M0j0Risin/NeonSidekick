@@ -53,13 +53,23 @@ public sealed class ConvertToPdfTool : FileTool
 
     public override string Name => ToolName;
 
-    public override string Description => DescriptionText;
+    public override string Description => DescriptionHere;
+
+    /// <summary>This system's description: <see cref="MacDescriptionText"/> on macOS (2026-10-06), else <see cref="DescriptionText"/>.</summary>
+    public static string DescriptionHere => OperatingSystem.IsMacOS() ? MacDescriptionText : DescriptionText;
 
     /// <summary>The description. Pinned.</summary>
     public const string DescriptionText =
         "Makes a PDF in the working directory from a file (Markdown, text or code, HTML, or a picture), a web page (url), or Markdown text you write (markdown). " +
         "Give exactly one of path, url or markdown. Markdown keeps its headings, tables, lists, links and coloured code; pictures in it come from the working directory. " +
         "It uses Edge, Chrome or Brave; without one, Microsoft Print to PDF, which takes Markdown, text and pictures only. " +
+        "This is the way to make a PDF: never write PDF bytes yourself or run a script to make one.";
+
+    /// <summary><see cref="DescriptionText"/> on macOS (2026-10-06): the browser alone makes PDFs there, Microsoft Print to PDF being Windows'. Pinned.</summary>
+    public const string MacDescriptionText =
+        "Makes a PDF in the working directory from a file (Markdown, text or code, HTML, or a picture), a web page (url), or Markdown text you write (markdown). " +
+        "Give exactly one of path, url or markdown. Markdown keeps its headings, tables, lists, links and coloured code; pictures in it come from the working directory. " +
+        "It uses Edge, Chrome, Brave or Chromium. " +
         "This is the way to make a PDF: never write PDF bytes yourself or run a script to make one.";
 
     public override JsonElement JsonSchema => Schema;

@@ -59,7 +59,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Profiles:** each has its own working directory, settings, persona, memory and sessions.
 * **Sessions:** resume, search and learn from past conversations.
 * **Memory** you can edit, added to every conversation.
-* **Skills** at four levels (global, profile, project, or `.agents\skills`), installed from [skills.sh](https://skills.sh) or GitHub with `/skills add`.
+* **Skills** at four levels (global, profile, project, or `.agents\skills`, `.agents/skills` on a Mac), installed from [skills.sh](https://skills.sh) or GitHub with `/skills add`.
 * **Self-learning:** a background reflection writes new skills and improves existing ones from your work.
 
 ### Tools & safety

@@ -33,7 +33,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The store picks, <c>file</c> then <c>credman</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> PostgresWizardStoreRows =
-        ["file     encrypted (DPAPI) in postgres.json", "credman  Windows Credential Manager"];
+        Sql.SqlText.StoreRows("postgres.json");
 
     /// <summary>The TLS picks, <see cref="PostgresConnectionConfig.SslModeWords"/>' order. Pinned.</summary>
     public static readonly IReadOnlyList<string> PostgresWizardTlsRows =

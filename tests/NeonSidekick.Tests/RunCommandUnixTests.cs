@@ -105,6 +105,37 @@ public sealed class RunCommandUnixTests : IDisposable
         Assert.Equal(["cat /etc/hosts", "cd ../..", "ls ~", "ls $HOME/Desktop", "ls " + _root, "cat /etc/hosts"], _gate.Refusals);
     }
 
+    /// <summary>
+    /// The Unix twin of <see cref="RunCommandToolTests.PreferNative_SendsALineBackToItsTool_OnceATurn_BeforeTheGate"/> (2026-10-06):
+    /// zsh's lines, and its <c>type</c> — which describes a command there — never sent to <c>read_file</c> on a Mac.
+    /// </summary>
+    [UnixFact]
+    public async Task PreferNative_SendsALineBackToItsTool_OnceATurn_BeforeTheGate_Unix()
+    {
+        _settings.ShellCommandPolicy = "ask";
+        _tool.BeginTurn([ReadFileTool.ToolName, SearchFilesTool.ToolName, GitStatusTool.ToolName, RunCommandTool.ToolName]);
+        string back = "Not run: 'cat' has a tool of its own — call read_file instead. If read_file cannot do this, say why and call run_command again with the same command; the user will be asked.";
+        Assert.Equal(back, await Invoke(("command", "cat notes.txt")));
+        Assert.Equal(ShellText.UseNative("ls", SearchFilesTool.ToolName), await Invoke(("command", "ls -R")));
+        Assert.Equal(ShellText.UseNative("git status", GitStatusTool.ToolName), await Invoke(("command", "git status --short")));
+        Assert.Empty(_asked);
+        Assert.Empty(_gate.Refusals);
+
+        // The same line again in the turn goes on to the gate.
+        Assert.StartsWith("Error: the command was denied by the user: cat notes.txt", await Invoke(("command", "cat notes.txt")));
+        Assert.Single(_asked);
+        // A compound line, a verb with no tool: the gate, as before.
+        await Invoke(("command", "cat a.txt | grep x"));
+        await Invoke(("command", "git push"));
+        Assert.Equal(3, _asked.Count);
+        if (OperatingSystem.IsMacOS())
+        {
+            // zsh's type describes a command: the shell's own, on to the gate.
+            Assert.StartsWith("Error: the command was denied by the user: type python3", await Invoke(("command", "type python3")));
+            Assert.Equal(4, _asked.Count);
+        }
+    }
+
     [UnixFact]
     public async Task PreferNative_Off_OrAnOutsidePathWithThePoliceOff_GoesToTheGate()
     {

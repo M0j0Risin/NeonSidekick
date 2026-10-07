@@ -128,11 +128,11 @@ public sealed class RunCommandTool : AIFunction
     }
 
     /// <summary>The native tool this line goes back to, or null: the first time this turn a line a tool offered this turn covers is seen.</summary>
-    private (string Prefix, string Tool)? Redirect(string command)
+    private (string Prefix, string Tool)? Redirect(string command, ShellKind kind)
     {
         lock (_turnLock)
         {
-            return NativeRedirect.For(command, _offered) is { } native && _redirected.Add(command) ? native : null;
+            return NativeRedirect.For(command, _offered, kind) is { } native && _redirected.Add(command) ? native : null;
         }
     }
 
@@ -295,7 +295,7 @@ public sealed class RunCommandTool : AIFunction
         // with the police off is the shell's alone, no native tool reaching there.
         if (effective.ShellPreferNative
             && (effective.ShellPolice || PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is null)
-            && Redirect(command) is { } native)
+            && Redirect(command, kind) is { } native)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.NativeLogLine(request, native.Prefix, native.Tool));
             return ShellText.UseNative(native.Prefix, native.Tool);

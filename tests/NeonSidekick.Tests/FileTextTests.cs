@@ -336,8 +336,9 @@ public class FileTextTests
         Assert.Equal(FileText.NotAnArchive("not.zip"), FileText.Unzipped(new ZipResult(FileOutcome.NotAnArchive, "not.zip", "", 0, 0)));
 
         Assert.Equal("opened notes.txt in the user's editor", FileText.Opened(new OpenResult(FileOutcome.Ok, "notes.txt", false)));
-        Assert.Equal("opened docs\\ in Explorer", FileText.Opened(new OpenResult(FileOutcome.Ok, @"docs\", true)));
-        Assert.Equal("opened the working directory in Explorer", FileText.Opened(new OpenResult(FileOutcome.Ok, "", true)));
+        string browser = OperatingSystem.IsMacOS() ? "Finder" : "Explorer";   // a Mac's, 2026-10-06
+        Assert.Equal("opened docs\\ in " + browser, FileText.Opened(new OpenResult(FileOutcome.Ok, @"docs\", true)));
+        Assert.Equal("opened the working directory in " + browser, FileText.Opened(new OpenResult(FileOutcome.Ok, "", true)));
         Assert.Equal("Error: could not open 'x': no app", FileText.Opened(new OpenResult(FileOutcome.Failed, "x", false, "no app")));
     }
 

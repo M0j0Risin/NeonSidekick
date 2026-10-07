@@ -41,7 +41,7 @@ internal sealed partial class SettingsMenu
     public static string PostgresPasswordRow(PostgresNamedConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        string store = connection.Config.InCredentialManager ? "Windows Credential Manager" : "encrypted in postgres.json";
+        string store = connection.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in postgres.json";
         return $"{connection.Name}  ({connection.Config.Endpoint}, user {connection.Config.User?.Trim()} · {store})";
     }
 

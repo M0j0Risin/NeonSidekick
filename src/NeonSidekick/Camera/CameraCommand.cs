@@ -32,7 +32,7 @@ public static class CameraCommand
     public static readonly IReadOnlyList<(string Word, string Note)> Words =
     [
         ("snap", "take a photo at once and put it on the input line"),
-        ("list", "the cameras Windows lists"),
+        ("list", OperatingSystem.IsMacOS() ? "the cameras (the camera needs Windows for now)" : "the cameras Windows lists"),   // the Mac's, 2026-10-06
         ("use", "choose a camera: /camera use <n|name>"),
         ("live", "the camera live in a window of its own"),
         ("watch", "watch the camera: a change rides your next message; /camera watch [seconds|off]"),

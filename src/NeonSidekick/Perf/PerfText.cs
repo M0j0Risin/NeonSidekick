@@ -44,7 +44,7 @@ public static class PerfText
     // The checklist's notes beside each meter (2026-09-30, App.PerfBarItems.Describe).
     public const string CpuNote = "processor load";
     public const string RamNote = "memory in use";
-    public const string GpuNote = "GPU load (NVIDIA, else Windows counters)";
+    public static string GpuNote => OperatingSystem.IsMacOS() ? "GPU load (needs Windows for now)" : "GPU load (NVIDIA, else Windows counters)";   // the Mac's, 2026-10-06
     public const string VramNote = "GPU memory in use";
     public const string NetNote = "network use, % of the link";
     public const string NetDownNote = "download rate (bits/s)";

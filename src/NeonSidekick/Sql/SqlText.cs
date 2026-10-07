@@ -32,13 +32,23 @@ public static class SqlText
     // ─── passwords (later on 2026-09-23) ───────────────────────────────────────
 
     public const string NotProtected = "the value is not one the app encrypted (dpapi:…)";
-    public static string CannotDecrypt(string detail) => $"the password cannot be decrypted — it was saved by another Windows user or on another machine ({detail}); set it again on the SQL tab of /tools";
+    /// <summary>A stored password that will not decrypt: saved by another Windows user or machine, or on a Mac by another user or Mac, whose Keychain key this one lacks (2026-10-06, the macOS build). Pinned.</summary>
+    public static string CannotDecrypt(string detail) => OperatingSystem.IsMacOS()
+        ? $"the password cannot be decrypted — it was saved by another user or on another Mac ({detail}); set it again on the SQL tab of /tools"
+        : $"the password cannot be decrypted — it was saved by another Windows user or on another machine ({detail}); set it again on the SQL tab of /tools";
     /// <summary>Where a <c>passwordStore: credman</c> password lives: Windows Credential Manager, or the macOS Keychain (2026-10-06, the macOS build). Pinned.</summary>
     public static string CredentialStore => OperatingSystem.IsMacOS() ? "the macOS Keychain" : "Windows Credential Manager";
 
     /// <summary>The command that stores one there by hand: <c>cmdkey</c> on Windows, <c>security add-generic-password</c> on macOS. Pinned.</summary>
     public static string CredentialCommand(string target, string user) =>
         OperatingSystem.IsMacOS() ? $"security add-generic-password -s {target} -a {user} -w" : $"cmdkey /generic:{target} /user:{user} /pass";
+
+    /// <summary>
+    /// The connection wizards' two store picks, <c>file</c> then <c>credman</c> (2026-10-06, the macOS build: one place for all five
+    /// wizards, so a Mac reads the Keychain where Windows reads DPAPI and Credential Manager; Windows' rows unchanged). Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> StoreRows(string file) =>
+        [OperatingSystem.IsMacOS() ? $"file     encrypted (Keychain key) in {file}" : $"file     encrypted (DPAPI) in {file}", "credman  " + CredentialStore];
 
     public static string NoCredential(string target) => $"no password in {CredentialStore} for {target}; set it on the SQL tab of /tools, or: {CredentialCommand(target, "<account>")}";
     public static string NoPassword(string name) => $"'{name}' has no password; set it on the SQL tab of /tools (SQL set password)";
@@ -47,7 +57,7 @@ public static class SqlText
     public static string EncryptFailedLogLine(string name, string path, string detail) => $"could not encrypt the password of '{name}' in {path}, so it stays plain text there: {detail}";
     public static string RunAsLogLine(string name, string account) => $"{name} signs in as {account} (runas)";
     public static string PasswordSavedToFile(string name, string path) => $"Saved the password of '{name}', encrypted, in {path}.";
-    public static string PasswordSavedToCredman(string name, string target) => $"Saved the password of '{name}' to Windows Credential Manager as {target}.";
+    public static string PasswordSavedToCredman(string name, string target) => $"Saved the password of '{name}' to {CredentialStore} as {target}.";
     public static string PasswordSaveFailed(string name, string detail) => $"Could not save the password of '{name}': {detail}.";
     public static string ConnectionNotInFile(string name, string noun = "connection") => $"no {noun} '{name}' was found in the file to write to";
     public static string ConnectionAlreadyInFile(string name, string noun = "connection") => $"a {noun} named '{name}' is already in the file";

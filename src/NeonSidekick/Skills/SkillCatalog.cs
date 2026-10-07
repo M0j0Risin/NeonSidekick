@@ -411,7 +411,10 @@ public sealed class SkillCatalog
         try
         {
             string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(skill.Directory));
-            string full = Path.GetFullPath(Path.Combine(root, relative.Trim()));
+            // Off Windows a backslash is a file-name character, so a skill written on Windows (`scripts\run.py`) named one file
+            // (2026-10-06, the macOS build); it is read as the separator, as Windows reads it. A `..\` that leaves the folder is still Outside.
+            string spelled = OperatingSystem.IsWindows() ? relative.Trim() : relative.Trim().Replace('\\', '/');
+            string full = Path.GetFullPath(Path.Combine(root, spelled));
             if (full.Length <= root.Length || !full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || (full[root.Length] != Path.DirectorySeparatorChar && full[root.Length] != Path.AltDirectorySeparatorChar))
             {
                 return new ReadResult(ReadOutcome.Outside, "", false);

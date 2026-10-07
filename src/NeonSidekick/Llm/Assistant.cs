@@ -452,7 +452,7 @@ public sealed class Assistant
         var parts = new List<string>(6);
         if (files)
         {
-            parts.Add(NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " and " + NeonSidekick.Llm.Tools.SearchFilesTool.ToolName + " read, search and list files (not cat, type, Get-Content, dir, ls or grep) and the file tools write, copy, move and delete them");
+            parts.Add(NeonSidekick.Llm.Tools.ReadFileTool.ToolName + " and " + NeonSidekick.Llm.Tools.SearchFilesTool.ToolName + " read, search and list files " + (OperatingSystem.IsMacOS() ? "(not cat, Get-Content, ls or grep)" : "(not cat, type, Get-Content, dir, ls or grep)") + " and the file tools write, copy, move and delete them");   // a Mac's zsh type describes a command, and dir is cmd's (2026-10-06)
         }
 
         if (git)

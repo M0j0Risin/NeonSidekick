@@ -93,7 +93,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.All(UncToolNames.All.Except(UncToolNames.Reads), name => Assert.Contains(name, NeonSidekick.Plans.PlanTools.Mutating));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ATurnOffers_TheReads_FetchAndPutWithTheFileTools_AndTheChangesOnlyUnderBothKeys()
     {
         IEnumerable<string> Offered(AppSettingsData effective, UncCatalog catalog, bool files) => ChatScreen.UncToolsFor(_tools, effective, catalog, files).Select(t => t.Name);
@@ -110,6 +110,19 @@ public sealed class UncToolsTests : IDisposable
         Assert.False(ChatScreen.UncOffered(new AppSettingsData(), new UncAccess(() => _catalog, _time)));   // off by default
         Assert.False(ChatScreen.UncOffered(_settings, new UncAccess(() => _catalog.Offered([]), _time)));
         Assert.False(new AppSettingsData().UncWrites);
+    }
+
+    /// <summary>No UNC on a Mac (2026-10-06, the tidy-up before the first Mac release): the switch on and a share named, the group is still not offered, and <c>/tools</c> says why.</summary>
+    [UnixFact]
+    public void OnMacOS_TheGroupIsNeverOffered()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        Assert.False(ChatScreen.UncOffered(_settings, new UncAccess(() => _catalog, _time)));
+        Assert.Equal("it needs Windows", ToolsText.NeedsWindowsReason);
         Assert.Contains(UncDeleteTool.ToolName, new AppSettingsData().ToolsDisabled);   // opt-in even under UNC writes
     }
 

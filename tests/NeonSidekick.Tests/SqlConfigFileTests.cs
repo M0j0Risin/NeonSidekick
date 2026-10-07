@@ -38,7 +38,7 @@ public sealed class SqlConfigFileTests : IDisposable
     }
 
     /// <summary>The fresh file's commented examples (later on 2026-09-23): one of each kind, and each a usable connection once its <c>//</c> are gone.</summary>
-    [Fact]
+    [WindowsFact]   // a Mac's template has no runas examples: MacTidyUpTests.OnMacOS_TheSqlTemplate_KeepsWindowsSignIn_DropsRunAs_AndEachExampleLoads (2026-10-06)
     public void TheEmptyShapesExamples_AreEachAUsableConnection_OnceUncommented()
     {
         var example = SqlConfigFile.EmptyText.Split('\n')

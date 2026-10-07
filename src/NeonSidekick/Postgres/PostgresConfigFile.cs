@@ -49,7 +49,22 @@ public sealed class PostgresConfigFile
     /// What a fresh file holds: no connections, and a commented example of each way to keep the password and to name the
     /// database — each one valid once its <c>//</c> are removed (pinned by a test). Pinned.
     /// </summary>
-    public const string EmptyText =
+    public static string EmptyText => OperatingSystem.IsMacOS() ? MacEmptyText : WindowsEmptyText;
+
+    /// <summary>
+    /// <see cref="EmptyText"/> on macOS (2026-10-06, the tidy-up before the first Mac release: a Mac user never reads Windows
+    /// wording): <see cref="WindowsEmptyText"/> with the Keychain where Credential Manager stood, <c>security add-generic-password</c>
+    /// for <c>cmdkey</c> (<see cref="Sql.SqlText.CredentialCommand"/>) and <c>keychain:</c> for <c>dpapi:</c>, the prefix
+    /// <see cref="Sql.MacKeychain"/> writes. Built on each read, so no static-field order can catch it unset. Pinned on a Mac.
+    /// </summary>
+    private static string MacEmptyText => WindowsEmptyText
+        .Replace("(\"dpapi:…\")", "(\"" + Sql.WindowsCredentials.KeychainPrefix + "…\")", StringComparison.Ordinal)
+        .Replace("Windows Credential Manager", Sql.SqlText.CredentialStore, StringComparison.Ordinal)
+        .Replace("cmdkey /generic:NeonSidekick/postgres/billing /user:billing_ro /pass", Sql.SqlText.CredentialCommand("NeonSidekick/postgres/billing", "billing_ro"), StringComparison.Ordinal)
+        .Replace("Credential Manager entry", "Keychain entry", StringComparison.Ordinal);
+
+    /// <summary>What a fresh file holds on Windows (and off macOS): <see cref="EmptyText"/>'s text before the macOS build. Pinned.</summary>
+    public const string WindowsEmptyText =
         "{\n" +
         "  // One entry per connection. Its name is what the model passes as \"connection\", and what %name picks on the input\n" +
         "  // line. \"host\" and \"user\" are required. Remove the leading // from an example to use it, and put it inside\n" +

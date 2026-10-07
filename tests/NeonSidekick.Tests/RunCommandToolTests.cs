@@ -203,7 +203,7 @@ public sealed class RunCommandToolTests : IDisposable
         _files.ServerDatabases = null;
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task PreferNative_SendsALineBackToItsTool_OnceATurn_BeforeTheGate()
     {
         // Shell prefer native tools (2026-09-26): under ask, a line a tool the turn offers covers comes back not run, and the asker is never called.

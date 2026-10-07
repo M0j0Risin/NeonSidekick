@@ -20,7 +20,8 @@ public sealed record CommandHelp(string Command, IReadOnlyList<CommandForm> Form
 /// </summary>
 public static class HelpCommands
 {
-    public static readonly IReadOnlyList<CommandHelp> Commands =
+    /// <summary>The forms as written here, every system's but where <see cref="HelpMac.Forms"/> has a Mac text.</summary>
+    internal static readonly IReadOnlyList<CommandHelp> AsWritten =
     [
         new("/about",
         [
@@ -399,4 +400,7 @@ public static class HelpCommands
             new("/youtube status", "The bare word's status line."),
         ]),
     ];
+
+    /// <summary>Every command's forms: <see cref="AsWritten"/>, with <see cref="HelpMac.Forms"/>' texts on macOS (2026-10-06). Declared after it, so it is set first.</summary>
+    public static readonly IReadOnlyList<CommandHelp> Commands = OperatingSystem.IsMacOS() ? HelpMac.Apply(AsWritten) : AsWritten;
 }
