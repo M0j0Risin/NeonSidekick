@@ -62,7 +62,7 @@ public sealed class ThemeFileTests : IDisposable
         Assert.Empty(scan.Problems);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ALooseFile_KeepsItsName_OverASubfoldersFile_WhichIsSkipped_NamedByItsPath()
     {
         Write("mine.json", ThemeJson.File(null, ("primary", "#112233")));
@@ -76,6 +76,23 @@ public sealed class ThemeFileTests : IDisposable
             [("a-first\\mine.json", ThemeText.Duplicate("mine", "mine.json")), ("solid\\mine.json", ThemeText.Duplicate("mine", "mine.json"))],
             scan.Problems.Select(p => (p.Shown!, p.Problem)));
         Assert.Equal("solid\\mine.json: skipped: mine.json already names a theme \"mine\"", ThemeText.Problem(scan.Problems[1].Shown!, scan.Problems[1].Problem));
+    }
+
+    /// <summary>The Unix twin of <see cref="ALooseFile_KeepsItsName_OverASubfoldersFile_WhichIsSkipped_NamedByItsPath"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void ALooseFile_KeepsItsName_OverASubfoldersFile_WhichIsSkipped_NamedByItsPath_Unix()
+    {
+        Write("mine.json", ThemeJson.File(null, ("primary", "#112233")));
+        WriteIn("solid", "mine.json", ThemeJson.File(null, ("primary", "#445566")));
+        WriteIn("a-first", "mine.json", ThemeJson.File());   // a subfolder sorting before the loose file's name changes nothing: the folder's own come first
+
+        var scan = Scan();
+
+        Assert.Equal(new Color(0x11, 0x22, 0x33), User("mine").Primary);
+        Assert.Equal(
+            [("a-first/mine.json", ThemeText.Duplicate("mine", "mine.json")), ("solid/mine.json", ThemeText.Duplicate("mine", "mine.json"))],
+            scan.Problems.Select(p => (p.Shown!, p.Problem)));
+        Assert.Equal("solid/mine.json: skipped: mine.json already names a theme \"mine\"", ThemeText.Problem(scan.Problems[1].Shown!, scan.Problems[1].Problem));
     }
 
     // ── The words ──────────────────────────────────────────────────────────

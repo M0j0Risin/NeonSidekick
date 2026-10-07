@@ -460,7 +460,7 @@ public class ScreenPaneTests : IDisposable
         Assert.EndsWith("\e[?25h\e[?2026l", written);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ALiveTick_PaintsOverTheOldFrame_NeverErasingItFirst()
     {
         // 2026-09-26, the user's report: the pane flickered under streaming thinking — each tick
@@ -486,6 +486,42 @@ public class ScreenPaneTests : IDisposable
         int erase = written.IndexOf("\e[J", StringComparison.Ordinal);
         Assert.True(erase > written.LastIndexOf(Rule(20), StringComparison.Ordinal), written);
         Assert.Matches(@"t8(\e\[[0-9;]*m)*\e\[K\r\n", written);
+        Assert.True(written.IndexOf("\e[J", StringComparison.Ordinal) > written.IndexOf("t8", StringComparison.Ordinal));
+        Assert.EndsWith("\e[?25h\e[?2026l", written);
+
+        // A flow write still lifts with the erase.
+        mark = Output.Length;
+        pane.Write(new Markup("b\n"));
+        Assert.Contains("\e[J", Output[mark..][..Output[mark..].IndexOf('b', StringComparison.Ordinal)]);
+    }
+
+    /// <summary>The Unix twin of <see cref="ALiveTick_PaintsOverTheOldFrame_NeverErasingItFirst"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
+    [UnixFact]
+    public void ALiveTick_PaintsOverTheOldFrame_NeverErasingItFirst_Unix()
+    {
+        // 2026-09-26, the user's report: the pane flickered under streaming thinking — each tick
+        // erased from the flow's end down, then drew. Now each row clears its own end, and the one
+        // erase down comes after the pane's last row.
+        _console.EmitAnsiSequences();
+        _console.Profile.Width = 20;
+        _console.Profile.Height = 12;
+        using var pane = Pane();
+        pane.Show();
+        pane.Write(new Markup("a\n"));
+        pane.SetLive(new ThinkingBlock("t1\nt2\nt3\nt4\nt5\nt6\nt7"));
+        _time.Advance(ScreenPane.Tick);
+
+        int mark = Output.Length;
+        pane.SetLive(new ThinkingBlock("t1\nt2\nt3\nt4\nt5\nt6\nt7\nt8"));
+        _time.Advance(ScreenPane.Tick);
+        string written = Output[mark..];
+
+        Assert.StartsWith("\e[?2026h\e[?25l", written);
+        Assert.Contains("    t8", Strip(written));
+        Assert.DoesNotContain("    t3", Strip(written));
+        int erase = written.IndexOf("\e[J", StringComparison.Ordinal);
+        Assert.True(erase > written.LastIndexOf(Rule(20), StringComparison.Ordinal), written);
+        Assert.Matches(@"t8(\e\[[0-9;]*m)*\e\[K\n", written);
         Assert.True(written.IndexOf("\e[J", StringComparison.Ordinal) > written.IndexOf("t8", StringComparison.Ordinal));
         Assert.EndsWith("\e[?25h\e[?2026l", written);
 
@@ -885,7 +921,7 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(1, pane.Padding);
     }
 
-    [Fact]
+    [WindowsFact]
     public void AnOverlay_OverAWrappedDraft_ComesBackToIt()
     {
         _console.EmitAnsiSequences();
@@ -910,7 +946,33 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal("\e[2B\r\n", Output[mark..]);
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="AnOverlay_OverAWrappedDraft_ComesBackToIt"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
+    [UnixFact]
+    public void AnOverlay_OverAWrappedDraft_ComesBackToIt_Unix()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Show();
+        pane.ShowInput(Long, Long.Length);
+        pane.ShowOverlay(new Markup("a\nb"), "hint");
+        Assert.Equal(2, pane.OverlayRows);
+
+        // Edited under the overlay: remembered only.
+        int mark = Output.Length;
+        pane.ShowInput(Long + "!", Long.Length + 1);
+        Assert.Equal(mark, Output.Length);
+
+        pane.CloseOverlay();
+        Assert.Equal(2, pane.InputRows);
+        Assert.EndsWith(Rule(40) + "\n" + InputLine.PromptGlyph + Row0 + "\n" + InputLine.ContinuationIndent + Row1 + "!\n" + Rule(40) + "\n", Strip(Output));
+
+        // Close from the second row: over the lower rule to the hint row.
+        mark = Output.Length;
+        pane.Close();
+        Assert.Equal("\e[2B\n", Output[mark..]);
+    }
+
+    [WindowsFact]
     public void Close_FromTheFirstOfTwoRows_StepsUnderTheHint()
     {
         _console.EmitAnsiSequences();
@@ -922,6 +984,21 @@ public class ScreenPaneTests : IDisposable
         pane.Close();
 
         Assert.Equal("\e[3B\r\n", Output[mark..]);
+    }
+
+    /// <summary>The Unix twin of <see cref="Close_FromTheFirstOfTwoRows_StepsUnderTheHint"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
+    [UnixFact]
+    public void Close_FromTheFirstOfTwoRows_StepsUnderTheHint_Unix()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Show();
+        pane.ShowInput(Long, 0);
+        int mark = Output.Length;
+
+        pane.Close();
+
+        Assert.Equal("\e[3B\n", Output[mark..]);
     }
 
     // ── Hint row ────────────────────────────────────────────────────────────
@@ -1830,7 +1907,7 @@ public class ScreenPaneTests : IDisposable
 
     // ── The alternate buffer and the scroll ─────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public void Open_EntersTheAlternateBuffer_Close_LeavesIt_Once()
     {
         _console.EmitAnsiSequences();
@@ -1845,6 +1922,29 @@ public class ScreenPaneTests : IDisposable
         pane.Close();
         Assert.EndsWith("\e[?1007h\e[?1049l", Output);
         Assert.Contains("\r\n", Output[mark..]);       // the cursor under the pane first, as before
+
+        mark = Output.Length;
+        pane.Close();
+        pane.Dispose();
+        Assert.Equal(mark, Output.Length);              // left once
+    }
+
+    /// <summary>The Unix twin of <see cref="Open_EntersTheAlternateBuffer_Close_LeavesIt_Once"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
+    [UnixFact]
+    public void Open_EntersTheAlternateBuffer_Close_LeavesIt_Once_Unix()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Open();
+        Assert.Equal("\e[?1049h\e[?1007l", Output);
+        pane.Open();
+        Assert.Equal("\e[?1049h\e[?1007l", Output);   // already in it
+
+        pane.Show();
+        int mark = Output.Length;
+        pane.Close();
+        Assert.EndsWith("\e[?1007h\e[?1049l", Output);
+        Assert.Contains("\n", Output[mark..]);       // the cursor under the pane first, as before
 
         mark = Output.Length;
         pane.Close();
@@ -2520,7 +2620,7 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(1, pane.OverlayRows);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Close_WhileOpen_StepsUnderTheHint_AndShowsTheCursor()
     {
         _console.EmitAnsiSequences();
@@ -2536,6 +2636,23 @@ public class ScreenPaneTests : IDisposable
         Assert.False(pane.OverlayOpen);
     }
 
+    /// <summary>The Unix twin of <see cref="Close_WhileOpen_StepsUnderTheHint_AndShowsTheCursor"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
+    [UnixFact]
+    public void Close_WhileOpen_StepsUnderTheHint_AndShowsTheCursor_Unix()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Show();
+        pane.ShowOverlay(new Markup("a\nb"), "hint");
+        int mark = Output.Length;
+
+        pane.Close();
+
+        // Over the two content rows and the lower rule to the hint row.
+        Assert.Equal("\e[3B\n\e[?25h", Output[mark..]);
+        Assert.False(pane.OverlayOpen);
+    }
+
     [Fact]
     public void ShowOverlay_Disabled_IsNothing()
     {
@@ -2548,7 +2665,7 @@ public class ScreenPaneTests : IDisposable
 
     // ── Close ───────────────────────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public void Close_LeavesThePane_AndPutsTheCursorUnderIt()
     {
         _console.EmitAnsiSequences();
@@ -2559,6 +2676,20 @@ public class ScreenPaneTests : IDisposable
 
         // Over the lower rule to the hint row, then under it.
         Assert.Equal("\e[2B\r\n", Output[mark..]);
+    }
+
+    /// <summary>The Unix twin of <see cref="Close_LeavesThePane_AndPutsTheCursorUnderIt"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
+    [UnixFact]
+    public void Close_LeavesThePane_AndPutsTheCursorUnderIt_Unix()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Show();
+        int mark = Output.Length;
+        pane.Close();
+
+        // Over the lower rule to the hint row, then under it.
+        Assert.Equal("\e[2B\n", Output[mark..]);
     }
 
     // ── Mouse ───────────────────────────────────────────────────────────────
@@ -3875,7 +4006,7 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(draws, Draws);
     }
 
-    [Fact]
+    [WindowsFact]
     public void SetLive_Again_LiftsOverTheLiveRows_AndLaysTheBlockOutAgain()
     {
         _console.EmitAnsiSequences();
@@ -3896,6 +4027,34 @@ public class ScreenPaneTests : IDisposable
         // Up over the padding row, the rule and the live row (3), both rows painted over the old frame
         // (each clearing its end, 2026-09-26), no padding, the pane.
         Assert.StartsWith("\e[?2026h\e[?25l\e[3A\e[20D\e[?25la\e[K\r\nb\e[K\r\n", written);
+        Assert.Contains("a\nb\n" + Rule(20) + "\n", Strip(written));
+        Assert.Equal(2, pane.LiveRows);
+        Assert.Equal(0, pane.Padding);
+        Assert.Equal(0, pane.FlowRow);
+    }
+
+    /// <summary>The Unix twin of <see cref="SetLive_Again_LiftsOverTheLiveRows_AndLaysTheBlockOutAgain"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
+    [UnixFact]
+    public void SetLive_Again_LiftsOverTheLiveRows_AndLaysTheBlockOutAgain_Unix()
+    {
+        _console.EmitAnsiSequences();
+        _console.Profile.Width = 20;
+        _console.Profile.Height = 6;
+        using var pane = Pane();
+        pane.Show();
+        pane.SetLive(new RawText("a"));
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(1, pane.LiveRows);
+        Assert.Equal(1, pane.Padding);
+
+        pane.SetLive(new RawText("a\nb"));
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        string written = Output[mark..];
+
+        // Up over the padding row, the rule and the live row (3), both rows painted over the old frame
+        // (each clearing its end, 2026-09-26), no padding, the pane.
+        Assert.StartsWith("\e[?2026h\e[?25l\e[3A\e[20D\e[?25la\e[K\nb\e[K\n", written);
         Assert.Contains("a\nb\n" + Rule(20) + "\n", Strip(written));
         Assert.Equal(2, pane.LiveRows);
         Assert.Equal(0, pane.Padding);

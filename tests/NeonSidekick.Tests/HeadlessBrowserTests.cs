@@ -6,7 +6,7 @@ public class HeadlessBrowserTests
 {
     private static readonly IReadOnlyList<string> Windows = HeadlessBrowser.WindowsCandidates(@"C:\Program Files", @"C:\Program Files (x86)", @"C:\Users\me\AppData\Local");
 
-    [Fact]
+    [WindowsFact]
     public void WindowsCandidates_AreEdgeChromeBrave_UnderTheThreeRoots()
     {
         Assert.Equal(
@@ -25,7 +25,7 @@ public class HeadlessBrowserTests
             Windows);
     }
 
-    [Fact]
+    [WindowsFact]
     public void WindowsCandidates_SkipAnEmptyOrRepeatedRoot()
     {
         var list = HeadlessBrowser.WindowsCandidates(@"C:\Program Files", @"C:\Program Files", "");

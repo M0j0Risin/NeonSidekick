@@ -604,7 +604,7 @@ public class VoiceSessionTests : IDisposable
         Assert.Empty(_phases);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task NoMicrophone_IsAWarning_WithNoHttp()
     {
         _microphones = 0;

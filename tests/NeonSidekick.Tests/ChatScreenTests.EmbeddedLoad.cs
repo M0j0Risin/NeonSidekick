@@ -36,7 +36,7 @@ public partial class ChatScreenTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ADoubleClickOnTheLoadSpinner_CancelsTheLoad_AsCtrlCDoes()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -57,7 +57,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(Titled(UsageText.Label), output);   // the reply's /usage there is the load's cancel
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ASingleClickOnTheLoadSpinner_CancelsNothing()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -76,7 +76,7 @@ public partial class ChatScreenTests
         Assert.NotNull(embedded.Running);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_CtrlH_OpensTheHelpPane_AndTheModelLoadsAfter()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -99,7 +99,7 @@ public partial class ChatScreenTests
         Assert.NotNull(embedded.Running);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_TheToolbarsRisingChart_TogglesTheBar_BeforeTheModelIsUp()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -123,7 +123,7 @@ public partial class ChatScreenTests
         Assert.NotNull(embedded.Running);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_Clear_CancelsTheLoad_AndRunsAtTheIdleLine()
     {
         // The reply's rule (the user's pick): /clear cancels what runs, then runs.
@@ -170,7 +170,7 @@ public partial class ChatScreenTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ADoubleClickOnTheTallyBesideTheLoadSpinner_OpensUsage_AndTheLoadGoesOn()
     {
         // The review's finding (2026-10-01): the whole usage zone was the load's cancel, the tally included.
@@ -205,7 +205,7 @@ public partial class ChatScreenTests
         Assert.NotNull(embedded.Running);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_AReasoningLevel_ThenCtrlC_CancelsTheLoad_AndStartsNoOther()
     {
         // The review's finding: the reconnect the level owed ran at the watch's end and started the load just cancelled.
@@ -233,7 +233,7 @@ public partial class ChatScreenTests
         Assert.Null(_session.Assistant);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_AReasoningLevel_ReconnectsOnceTheModelHasLoaded()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -256,7 +256,7 @@ public partial class ChatScreenTests
         Assert.NotNull(_session.Assistant);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_ACancel_FollowsQueueCancelMode_TheQueuedMessageIsDropped()
     {
         // The review's finding: the message queued for a model that never came was sent to none, and lost.
@@ -279,7 +279,7 @@ public partial class ChatScreenTests
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_ASwitch_SaysTheLoad_AndItsLineComesBeforeTheCancelledNotice()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -303,7 +303,7 @@ public partial class ChatScreenTests
         Assert.False(_settings.Current.SttInput);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_Sampling_WaitsForTheLoad_AndEditsTheLoadedModel()
     {
         // The review's finding: run at once, the edit went to the endpoint being swapped out.
@@ -325,7 +325,7 @@ public partial class ChatScreenTests
         Assert.Equal(0.2, entry.Value.Temperature);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task UnderTheLoad_Esc_IsSpent_TheDraftOnTheRowSurvivesIt()
     {
         // The review's finding: ESC is no cancel under the load, and kept as type-ahead it fired at the idle line after it

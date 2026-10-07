@@ -378,7 +378,7 @@ public class EmbeddedLlmCoreTests
         Assert.NotEqual(Launch() with { Mtp = true }, Launch() with { Mtp = true, Draft = DraftKind.DFlash });
     }
 
-    [Fact]
+    [WindowsFact]
     public void Arguments_WithoutVision_LeaveTheProjectorOut()
     {
         var args = LlamaArguments.Build(Launch(mmproj: null, context: 0, layers: "all"), 1, "k");

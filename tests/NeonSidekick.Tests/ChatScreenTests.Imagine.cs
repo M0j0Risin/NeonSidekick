@@ -53,7 +53,7 @@ public partial class ChatScreenTests
     /// A generation past the grace goes behind the line with the notice; a message sent meanwhile is answered at once and goes
     /// without the picture; the picture is drawn at the idle line when ComfyUI is done, and rides the next message.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Imagine_PastTheGrace_GoesBehindTheLine_AMessageRunsMeanwhile_AndThePictureIsDrawnWhenItEnds()
     {
         bool released = false;
@@ -106,7 +106,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>Two behind the line, the second done first: drawn in the order sent, the second held back until the first ends.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Imagine_TwoBehindTheLine_AreDrawnInTheOrderSent()
     {
         var done = new System.Collections.Concurrent.ConcurrentDictionary<string, bool>();
@@ -240,7 +240,7 @@ public partial class ChatScreenTests
     /// <c>/help</c> typed in a looped <c>/imagine</c>'s wait opens there (the reply's own watch, 2026-10-04; it waited for the
     /// loop's end until then), the next pass waits for the pane to close, and the ESC that closes it does not stop the loop.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Loop_Imagine_APaneTypedInTheWait_OpensThere_AndTheLoopGoesOnAfterIt()
     {
         UsePane();

@@ -77,7 +77,7 @@ public class VoiceCheckTests : IDisposable
         Assert.Contains(VoiceCheck.NoTranscriptLine, _console.Output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task NoMicrophone_ExitsOne_WithTheStatusLine()
     {
         var voice = new VoiceSession(_ => _capture, _ => _recognizer, (_, _) => _vad, new ModelStore(Path.Combine(_dir, "models"), new HttpClient(_http)), () => 0, (_, _) => _wake);

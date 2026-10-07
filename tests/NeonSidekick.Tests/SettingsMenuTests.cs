@@ -783,7 +783,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.MenusNeedTerminalError, plain.Output);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Labels_ArePinned()
     {
         // The eight switches that went off by default on 2026-09-29 as they were: the rows below were pinned with them on.
@@ -1725,6 +1725,22 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Null(Record.Exception(() => new Markup(SettingsMenu.FieldLabel(SettingsField.LlmUrl, new AppSettingsData { LlmUrl = "http://x/[v1]" }, _settings.ProfileDirectory, null))));
     }
 
+    /// <summary>
+    /// The Unix twin of the OS-worded lines of <see cref="Labels_ArePinned"/> (2026-10-06, the macOS build): the code languages and
+    /// shells as the macOS menu describes them, the auto browser by its Unix file name. The rest of that test is not OS-worded.
+    /// </summary>
+    [UnixFact]
+    public void Labels_TheShellsLanguagesAndBrowser_AreTheMacs()
+    {
+        var data = new AppSettingsData();
+        Assert.Equal("[[x]] python     [#9A8BB8]a .py through python3; from neon_tools import …[/]", SettingsMenu.CodeLanguageLabel("python", enabled: true, installed: true));
+        Assert.Equal("[[ ]] node       [#9A8BB8]a .js through node; require('neon_tools') — not found[/]", SettingsMenu.CodeLanguageLabel("node", enabled: false, installed: false));
+        Assert.Equal("bash       [#9A8BB8]bash from the PATH, else /bin/bash — not found[/]", SettingsMenu.ShellLabel("bash", installed: false));
+        Assert.Equal("zsh        [#9A8BB8]the macOS shell[/]", SettingsMenu.ShellLabel("zsh", installed: true));
+        Assert.Equal("(auto: Google Chrome)", SettingsMenu.FieldValue(SettingsField.WebBrowserPath, data, _settings.ProfileDirectory, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"));
+        Assert.Equal("/opt/tools/chrome", SettingsMenu.FieldValue(SettingsField.WebBrowserPath, new AppSettingsData { WebBrowserPath = "/opt/tools/chrome" }, _settings.ProfileDirectory, "/x/msedge"));
+    }
+
     // ── Botchat non-TTS delay ───────────────────────────────────────────────
 
     /// <summary>The Botchat tab's last row (2026-09-26): typed seconds, 0 to 30, a value outside refused and the saved one kept; no reconnect.</summary>
@@ -2315,7 +2331,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WebBrowserPath_IsRow43_Typed_AMissingFileIsRefused_AndEmptyMeansAuto()
     {
         _console.Profile.Width = 240;
@@ -2339,6 +2355,34 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("Web browser path " + SettingsMenu.BrowserPathError + "; keeping (auto: msedge.exe).", _console.Output);
         Assert.Contains("  · Web browser path: " + exe, _console.Output);
         Assert.Contains("  · Web browser path: (auto: msedge.exe)", _console.Output);
+    }
+
+    /// <summary>The Unix twin of <see cref="WebBrowserPath_IsRow43_Typed_AMissingFileIsRefused_AndEmptyMeansAuto"/> (2026-10-06, the macOS build): a Unix executable, and the auto label of the fixture's Windows path read as one name.</summary>
+    [UnixFact]
+    public async Task WebBrowserPath_IsRow43_Typed_AMissingFileIsRefused_AndEmptyMeansAuto_Unix()
+    {
+        _console.Profile.Width = 240;
+        string exe = Path.Combine(_dir, "chrome");
+        string auto = SettingsMenu.AutoBrowserLabel(FakeBrowserPath);   // the fixture's locator; a Windows path reads as one name off Windows
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(exe, "");
+        Down(42);
+        Push(Keys.Enter);                           // Browser path: empty
+        _console.Input.PushText(Path.Combine(_dir, "nope"));
+        Push(Keys.Enter);                           // refused, the row stays open
+        Push(Keys.Enter);
+        _console.Input.PushText(exe);
+        Push(Keys.Enter);                           // saved
+        Push(Keys.Enter);
+        Backspace(exe.Length);
+        Push(Keys.Enter, Keys.Escape);              // cleared: auto again
+
+        Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal("", _settings.Current.WebBrowserPath);
+        Assert.Contains("Web browser path " + SettingsMenu.BrowserPathError + "; keeping " + auto + ".", _console.Output);
+        Assert.Contains("  · Web browser path: " + exe, _console.Output);
+        Assert.Contains("  · Web browser path: " + auto, _console.Output);
     }
 
     [Fact]
@@ -3070,7 +3114,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("", _settings.Current.WorkingDirectory);
     }
 
-    [Fact]
+    [WindowsFact]
     public void TrySaveWorkingDirectory_IsTheOneSavePath()
     {
         _console.Profile.Width = 240;
@@ -3093,6 +3137,34 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("", _settings.Current.WorkingDirectory);
         Assert.True(SettingsMenu.IsWorkingDirectoryCandidate(""));
         Assert.True(SettingsMenu.IsWorkingDirectoryCandidate(@"C:\x"));
+        Assert.False(SettingsMenu.IsWorkingDirectoryCandidate("x"));
+        Assert.False(SettingsMenu.IsWorkingDirectoryCandidate(null));
+    }
+
+    /// <summary>The Unix twin of <see cref="TrySaveWorkingDirectory_IsTheOneSavePath"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void TrySaveWorkingDirectory_IsTheOneSavePath_Unix()
+    {
+        _console.Profile.Width = 240;
+        string elsewhere = Path.Combine(_dir, "made", "here") + "/";
+        Assert.True(_menu.TrySaveWorkingDirectory(" " + elsewhere + " "));
+        Assert.Equal(Path.Combine(_dir, "made", "here"), _settings.Current.WorkingDirectory);   // full, no trailing separator
+        Assert.True(Directory.Exists(elsewhere));
+
+        Assert.False(_menu.TrySaveWorkingDirectory("relative"));
+        Assert.Equal(Path.Combine(_dir, "made", "here"), _settings.Current.WorkingDirectory);
+
+        // A path that cannot be created: a file is in the way.
+        string blocked = Path.Combine(_dir, "file.txt");
+        File.WriteAllText(blocked, "x");
+        Assert.False(_menu.TrySaveWorkingDirectory(Path.Combine(blocked, "sub")));
+        Assert.Contains("  ✗ Could not create " + Path.Combine(blocked, "sub") + " (", _console.Output);
+        Assert.Contains("; keeping " + Path.Combine(_dir, "made", "here") + ".", _console.Output);
+
+        Assert.True(_menu.TrySaveWorkingDirectory(""));
+        Assert.Equal("", _settings.Current.WorkingDirectory);
+        Assert.True(SettingsMenu.IsWorkingDirectoryCandidate(""));
+        Assert.True(SettingsMenu.IsWorkingDirectoryCandidate("/x"));
         Assert.False(SettingsMenu.IsWorkingDirectoryCandidate("x"));
         Assert.False(SettingsMenu.IsWorkingDirectoryCandidate(null));
     }
@@ -3190,7 +3262,7 @@ public partial class SettingsMenuTests : IDisposable
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
     private const string Strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // LLM second since 2026-10-04   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
-    [Fact]
+    [WindowsFact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()
     {
         // Wide enough for the working directory row: the profile's files folder, spelt out (a temp path here).
@@ -3204,6 +3276,30 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", _console.Output);
+        Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
+        Assert.DoesNotContain("LLM URL", _console.Output);
+        Assert.False(pane.OverlayOpen);
+        Assert.EndsWith(Rule(240) + "\n› \n" + Rule(240) + "\nidle", _console.Output);
+        Assert.Equal(0, pane.FlowRow);   // nothing reached the transcript
+        pane.Dispose();
+    }
+
+    /// <summary>The Unix twin of <see cref="OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt_Unix()
+    {
+        // Wide enough for the working directory row: the profile's files folder, spelt out (a temp path here).
+        _console.Profile.Width = 240;
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        // General: its rows in their own order (five runs since 2026-10-01, the user's call: who and where, the input line, the transcript, the screen, the outside apps; Keep command history under Command typo intercept, 2026-09-25; Mouse in menus gone, 2026-09-21; Draft editor last, 2026-09-19; Show toolbar after Show working directory, 2026-09-21) (the six web rows moved to the Web tab and the two /tree rows to Files, 2026-09-15; Transcript markdown and Paste preview lines, 2026-09-16; the @-mention folder mode to Files, 2026-09-17; the two line switches, Welcome splash, then Show working directory last, and the queue's two rows under Working directory, 2026-09-18), padded to the tab's own column (25), nothing of the other tabs.
+        string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
+        Assert.StartsWith("(", cwd);
+        Assert.EndsWith(@"/profiles/default/files)", cwd);
         Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", _console.Output);
         Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", _console.Output);

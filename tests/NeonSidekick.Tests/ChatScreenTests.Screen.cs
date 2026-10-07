@@ -55,7 +55,7 @@ public partial class ChatScreenTests
         };
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ScreenTool_Ask_AllowOnce_SendsTheWindow_TheViewerShowsIt()
     {
         ScreenToolFixture([Keys.Char('o'), Keys.Enter], "It says: file not found.");
@@ -85,7 +85,7 @@ public partial class ChatScreenTests
         Assert.Empty(_screenSystem!.Captures);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ScreenTool_Ask_AllowForTheSession_TakesTwoWithoutAskingAgain()
     {
         ScreenToolFixture([Keys.Char('s'), Keys.Enter], "Two.", calls: 2);
@@ -128,7 +128,7 @@ public partial class ChatScreenTests
         Assert.Equal(offered, names.Contains(ScreenListTool.ToolName));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ScreenCommand_PutsTheShotOnTheLine_ListsTheTargets_AndABadTargetIsAnError()
     {
         _screenSystem = new FakeScreenSystem();
@@ -148,7 +148,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>F10 is <c>/screen</c> (2026-10-05, the user's pick): the app's monitor captured and put on the line, as typed.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task F10_CapturesTheScreen_ToTheLine()
     {
         _screenSystem = new FakeScreenSystem();

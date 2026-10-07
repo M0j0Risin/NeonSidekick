@@ -162,7 +162,7 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.Unknown("zoom"), output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Camera_OnThePane_SpaceTakesIt_EnterPutsItOnTheLine_AndTheMessageCarriesItMarked()
     {
         CameraPane();
@@ -188,7 +188,7 @@ public partial class ChatScreenTests
         Assert.Equal(1, _cameraSystem!.Opens);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task CameraSnap_SavesInTheCameraOutputFolder_EvenTheComfyOne()
     {
         _cameraSystem = new FakeCameraSystem();
@@ -203,7 +203,7 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultComfyOutputFolder, Path.GetFileName(file))), output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Camera_ARetakeDeletesTheFirst_AndEscDeletesTheSecond()
     {
         CameraPane();
@@ -236,7 +236,7 @@ public partial class ChatScreenTests
         Assert.Empty(CameraFiles());
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task CameraSnap_WithoutThePane_TakesItAtOnce_ToTheLine()
     {
         _cameraSystem = new FakeCameraSystem();
@@ -250,7 +250,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>F9 is <c>/camera snap</c> (2026-10-05, the user's pick): the photo taken and put on the line, as typed.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task F9_SnapsAPhoto_ToTheLine()
     {
         _cameraSystem = new FakeCameraSystem();
@@ -270,7 +270,7 @@ public partial class ChatScreenTests
     /// The Camera tool page's live and snap buttons (2026-10-05, the user's ask), from the toolbar's 📸: L opens the live window
     /// with the page kept, L again closes it, S closes the page and the photo lands on the line.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task TheCameraToolPage_LiveTogglesTheWindow_SnapClosesThePane_AndSnaps()
     {
         _cameraSystem = new FakeCameraSystem();
@@ -319,7 +319,7 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.Failure(CameraFailure.Unsupported, null), output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task CameraTool_UserShutter_SpaceThenEnter_SendsThePhoto_TheModelSeesIt()
     {
         CameraToolFixture([Keys.Char(' '), Keys.Enter], "It says MILK.");
@@ -352,7 +352,7 @@ public partial class ChatScreenTests
         Assert.Empty(CameraFiles());
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task CameraTool_ModelShutter_AllowForTheSession_TakesTwoWithoutAskingAgain()
     {
         CameraToolFixture([Keys.Char('s'), Keys.Enter], "Two photos.", calls: 2);
@@ -411,7 +411,7 @@ public partial class ChatScreenTests
         };
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Watch_TheChangedPicture_RidesTheNextMessage_WithItsCaption()
     {
         _chat.EnqueueText("I see you.");
@@ -434,7 +434,7 @@ public partial class ChatScreenTests
 
     private string WatchFolder => Path.Combine(CameraFolder, CameraWatch.FolderName);
 
-    [Fact]
+    [WindowsFact]
     public async Task Watch_APicturesThumbnail_DoubleClicked_OpensFromCameraWatch_AndWatchOffClearsIt()
     {
         // The fixture's clock names the picture; an older build wrote it to the system temp folder, so a copy there would prove nothing.
@@ -503,7 +503,7 @@ public partial class ChatScreenTests
         Assert.True(Directory.Exists(CameraFolder) || !Directory.Exists(CameraFolder));   // the camera folder itself is left alone
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Watch_SpeaksUp_WhenAllowed_TheModelShownTheChangeUnasked()
     {
         _chat.EnqueueText("You waved.");
@@ -542,7 +542,7 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.NoViewer, output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task BotChatCamera_EachBotsTurn_CarriesAFreshPictureOfTheUser_Last_WithItsCaption()
     {
         BotChatFixture();

@@ -66,7 +66,7 @@ public partial class ChatScreenTests
         OnThePaneOnly(output, "• pony-txt2img");
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task DockerLogs_AreOnThePane_ButAFailureIsItsErrorLine()
     {
         var engine = DockerEngine();

@@ -6,7 +6,7 @@ namespace NeonSidekick.Tests;
 
 public class SmokeChecksTests
 {
-    [Fact]
+    [WindowsFact]
     public void ProbeWinMm_Passes_WithOrWithoutADevice()
     {
         var check = SmokeChecks.ProbeWinMm();
@@ -25,7 +25,7 @@ public class SmokeChecksTests
         Assert.True(check.Passed, check.Detail);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ProbeImageResize_DownscalesABitmapToAPng()
     {
         var check = SmokeChecks.ProbeImageResize();
@@ -37,7 +37,7 @@ public class SmokeChecksTests
     }
 
     /// <summary><c>image:edit</c> (2026-10-04): crop, a quarter turn, grey, hue and a border into five encodes, each the right size and type.</summary>
-    [Fact]
+    [WindowsFact]
     public void ProbeImageEdit_EditsIntoEveryEncoder()
     {
         var check = SmokeChecks.ProbeImageEdit();
@@ -48,7 +48,7 @@ public class SmokeChecksTests
         Assert.Contains("; writes png, jpeg, gif, bmp, tiff", check.Detail);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ProbeSplash_DecodesEveryEmbeddedPicture()
     {
         var check = SmokeChecks.ProbeSplash();
@@ -261,7 +261,7 @@ public class SmokeChecksTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public void ProbeWinMmIn_Passes_WithOrWithoutADevice()
     {
         var check = SmokeChecks.ProbeWinMmIn();

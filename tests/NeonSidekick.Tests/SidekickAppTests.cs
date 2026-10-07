@@ -75,7 +75,7 @@ public partial class SidekickAppTests : IDisposable
         => new(
             _console,
             _settings,
-            env ?? EnvironmentOverrides.Empty,
+            env ?? new EnvironmentOverrides(TestPath.Read),   // a PATH off Windows, where the interpreters come from it (TestPath)
             stdin,
             stdout,
             smoke,
@@ -151,7 +151,7 @@ public partial class SidekickAppTests : IDisposable
     /// A plain password in any <c>sql.json</c> — here a profile that is not the loaded one — is encrypted when a session
     /// starts (later on 2026-09-23), and a diagnostic run (<c>--smoke</c>) leaves the file alone.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Startup_EncryptsThePlainSqlPasswords_OfEveryProfile_ButASmokeRunLeavesThem()
     {
         string other = Path.Combine(_dir, "profiles", "other");
@@ -167,6 +167,25 @@ public partial class SidekickAppTests : IDisposable
 
         Assert.DoesNotContain("hunter2", File.ReadAllText(path));
         Assert.Contains("\"password\": \"dpapi:", File.ReadAllText(path));
+    }
+
+    /// <summary>The Unix twin of <see cref="Startup_EncryptsThePlainSqlPasswords_OfEveryProfile_ButASmokeRunLeavesThem"/> (2026-10-06, the macOS build): a <c>keychain:</c> value, where Windows writes <c>dpapi:</c>.</summary>
+    [UnixFact]
+    public async Task Startup_EncryptsThePlainSqlPasswords_OfEveryProfile_ButASmokeRunLeavesThem_Unix()
+    {
+        string other = Path.Combine(_dir, "profiles", "other");
+        Directory.CreateDirectory(other);
+        string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(other);
+        File.WriteAllText(path, """{ "connections": { "a": { "server": "x", "user": "u", "password": "hunter2" } } }""");
+
+        Assert.Equal(0, await App(smoke: () => [new SmokeCheck("a", true, "ok")]).RunAsync(SidekickOptions.None with { Smoke = true }, CancellationToken.None));
+        Assert.Contains("hunter2", File.ReadAllText(path));
+
+        // Headless (the smoke run above wrote to the fixture's console, so not through Headless(), which pins it empty).
+        Assert.Equal(0, await App(stdin: new StringReader(""), stdout: new StringWriter()).RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+
+        Assert.DoesNotContain("hunter2", File.ReadAllText(path));
+        Assert.Contains("\"password\": \"keychain:", File.ReadAllText(path));
     }
 
     [Fact]
@@ -210,7 +229,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains(_console.Lines, line => line.Contains("native:long", StringComparison.Ordinal) && line.Contains(path + " (exit 0)", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task AudioCheck_UsesThePlaybackFactory_AndExitsWithItsCode()
     {
         var fake = new FakeAudioPlayback();
@@ -227,7 +246,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("N E O N   S I D E K I C K", _console.Output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task VoiceCheck_Heard_ExitsZero_ThroughTheFactories()
     {
         FakeModelsPresent();
@@ -246,7 +265,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(Path.Combine(_dir, "models"), app.ModelsDirectory);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task VoiceCheck_RecognizerFails_ExitsOne()
     {
         FakeModelsPresent();
@@ -260,7 +279,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains(VoiceCheck.NoTranscriptLine, _console.Output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task VoiceCheck_ModelDownloadRefused_ExitsOne_WithTheStatusLine()
     {
         int code = await App().RunAsync(SidekickOptions.None with { VoiceCheck = true }, CancellationToken.None);
@@ -313,7 +332,7 @@ public partial class SidekickAppTests : IDisposable
     }
 
     /// <summary><c>/docker</c> headless (2026-10-02): ahead of the server check — the engine needs no LLM; the bare word lists, a failure is an <c>[error]</c> line.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_Docker_ListsTheContainers_AndSaysWhenTheEngineIsAway()
     {
         string away = await Headless("/docker\n");
@@ -471,7 +490,7 @@ public partial class SidekickAppTests : IDisposable
     /// no-screen sentence; the tool and its rule are offered like the screen's. Since 2026-09-26 the run ends with the
     /// refused-commands notice and exit code 3.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_RunCommand_UnderAsk_IsRefusedWithoutAScreen_AndExitsWith3()
     {
         ServerOn1234("llama");
@@ -488,8 +507,26 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(offered.IndexOf("gitlib_delete") + 1, offered.IndexOf("run_command"));
     }
 
+    /// <summary>The Unix twin of <see cref="Headless_RunCommand_UnderAsk_IsRefusedWithoutAScreen_AndExitsWith3"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task Headless_RunCommand_UnderAsk_IsRefusedWithoutAScreen_AndExitsWith3_Unix()
+    {
+        ServerOn1234("llama");
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "echo hi", ["shell"] = "zsh" }));
+        _chat.EnqueueText("Then not.");
+
+        string output = await Headless("run it\n", exitCode: SidekickApp.HeadlessRefusedExitCode);
+
+        Assert.Contains("[tool] run_command -> " + NeonSidekick.Shell.ShellText.NotAskable([]), output);
+        Assert.EndsWith("[notice] " + NeonSidekick.Shell.ShellText.RefusedSummary(["echo hi"]) + Environment.NewLine, output);
+        Assert.Equal(3, SidekickApp.HeadlessRefusedExitCode);
+        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
+        var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToList();
+        Assert.Equal(offered.IndexOf("gitlib_delete") + 1, offered.IndexOf("run_command"));
+    }
+
     /// <summary>The variable says yolo (2026-09-21): the command runs headless, its result a generic tool line — the header, then the output flattened.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_RunCommand_UnderYoloFromTheVariable_Runs()
     {
         ServerOn1234("llama");
@@ -505,11 +542,28 @@ public partial class SidekickAppTests : IDisposable
         Assert.DoesNotContain("[notice] ", output);   // nothing refused: no summary, exit 0 (Headless' default)
     }
 
+    /// <summary>The Unix twin of <see cref="Headless_RunCommand_UnderYoloFromTheVariable_Runs"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task Headless_RunCommand_UnderYoloFromTheVariable_Runs_Unix()
+    {
+        ServerOn1234("llama");
+        var env = new EnvironmentOverrides(n => n == EnvironmentOverrides.CommandPolicyVariable ? "yolo" : null);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "echo hi", ["shell"] = "zsh" }));
+        _chat.EnqueueText("It said hi.");
+
+        string output = await Headless("run it\n", env);
+
+        Assert.Contains("[tool] run_command -> exit 0 in 0.0 s (zsh): echo hi", output);
+        Assert.Equal(EnvironmentOverrides.CommandPolicyVariable, App(env).OverriddenBy(SettingsField.ShellCommandPolicy));
+        Assert.Null(App().OverriddenBy(SettingsField.ShellCommandPolicy));
+        Assert.DoesNotContain("[notice] ", output);   // nothing refused: no summary, exit 0 (Headless' default)
+    }
+
     /// <summary>
     /// <c>--yolo</c> (2026-09-26): the same as the variable for this launch, outranking a variable that says ask; the
     /// settings row names the flag; nothing is saved.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_RunCommand_UnderTheYoloFlag_Runs_OverAVariableSayingAsk()
     {
         ServerOn1234("llama");
@@ -527,8 +581,27 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal("ask", _settings.Current.ShellCommandPolicy);   // never saved
     }
 
+    /// <summary>The Unix twin of <see cref="Headless_RunCommand_UnderTheYoloFlag_Runs_OverAVariableSayingAsk"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task Headless_RunCommand_UnderTheYoloFlag_Runs_OverAVariableSayingAsk_Unix()
+    {
+        ServerOn1234("llama");
+        var env = new EnvironmentOverrides(n => n == EnvironmentOverrides.CommandPolicyVariable ? "ask" : null);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "echo hi", ["shell"] = "zsh" }));
+        _chat.EnqueueText("It said hi.");
+        var yolo = SidekickOptions.None with { Yolo = true };
+
+        string output = await Headless("run it\n", env, options: yolo);
+
+        Assert.Contains("[tool] run_command -> exit 0 in 0.0 s (zsh): echo hi", output);
+        var app = App(env, new StringReader(""), new StringWriter());
+        Assert.Equal(0, await app.RunAsync(yolo with { Headless = true }, CancellationToken.None));
+        Assert.Equal(SidekickOptions.YoloFlag, app.OverriddenBy(SettingsField.ShellCommandPolicy));
+        Assert.Equal("ask", _settings.Current.ShellCommandPolicy);   // never saved
+    }
+
     /// <summary>The path police still stands under <c>--yolo</c> (the user's call, 2026-09-26), and what it refuses counts toward exit code 3.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_UnderTheYoloFlag_ThePoliceStillRefuses_AndExitsWith3()
     {
         ServerOn1234("llama");
@@ -542,11 +615,26 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("[notice] " + NeonSidekick.Shell.ShellText.RefusedSummary([@"type C:\Windows\win.ini"]), output);
     }
 
+    /// <summary>The Unix twin of <see cref="Headless_UnderTheYoloFlag_ThePoliceStillRefuses_AndExitsWith3"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task Headless_UnderTheYoloFlag_ThePoliceStillRefuses_AndExitsWith3_Unix()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.ShellPolice = true);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "cat /etc/hosts", ["shell"] = "zsh" }));
+        _chat.EnqueueText("Refused.");
+
+        string output = await Headless("read it\n", options: SidekickOptions.None with { Yolo = true }, exitCode: SidekickApp.HeadlessRefusedExitCode);
+
+        Assert.Contains("[tool] run_command -> " + NeonSidekick.Shell.ShellText.OutsideHead, output);
+        Assert.Contains("[notice] " + NeonSidekick.Shell.ShellText.RefusedSummary(["cat /etc/hosts"]), output);
+    }
+
     /// <summary>
     /// <c>--yolo --no-police</c> (2026-09-26): the line the police refuses above runs; nothing is saved; the settings row
     /// names the flag, else the variable, else nothing.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_UnderYoloAndNoPolice_AnOutsidePathRuns_AndNothingIsSaved()
     {
         ServerOn1234("llama");
@@ -575,8 +663,38 @@ public partial class SidekickAppTests : IDisposable
         Assert.Null(App().OverriddenBy(SettingsField.ShellPreferNative));
     }
 
+    /// <summary>The Unix twin of <see cref="Headless_UnderYoloAndNoPolice_AnOutsidePathRuns_AndNothingIsSaved"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task Headless_UnderYoloAndNoPolice_AnOutsidePathRuns_AndNothingIsSaved_Unix()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.ShellPolice = true);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "cat /etc/hosts", ["shell"] = "zsh" }));
+        _chat.EnqueueText("Read it.");
+        var loose = SidekickOptions.None with { Yolo = true, NoPolice = true };
+
+        string output = await Headless("read it\n", options: loose);
+
+        Assert.Contains(@"[tool] run_command -> exit 0 in 0.0 s (zsh): cat /etc/hosts", output);
+        Assert.DoesNotContain("[notice] ", output);
+        Assert.True(_settings.Current.ShellPolice);   // never saved
+
+        var flagged = App(null, new StringReader(""), new StringWriter());
+        Assert.Equal(0, await flagged.RunAsync(loose with { Headless = true }, CancellationToken.None));
+        Assert.Equal(SidekickOptions.NoPoliceFlag, flagged.OverriddenBy(SettingsField.ShellPolice));
+        var variable = App(new EnvironmentOverrides(n => n == EnvironmentOverrides.ShellPoliceVariable ? "off" : null), new StringReader(""), new StringWriter());
+        Assert.Equal(0, await variable.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+        Assert.Equal(EnvironmentOverrides.ShellPoliceVariable, variable.OverriddenBy(SettingsField.ShellPolice));
+        Assert.Null(App().OverriddenBy(SettingsField.ShellPolice));
+        // Shell prefer native tools has its variable too (later on 2026-09-26), no flag.
+        var native = App(new EnvironmentOverrides(n => n == EnvironmentOverrides.ShellNativeVariable ? "off" : null), new StringReader(""), new StringWriter());
+        Assert.Equal(0, await native.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+        Assert.Equal(EnvironmentOverrides.ShellNativeVariable, native.OverriddenBy(SettingsField.ShellPreferNative));
+        Assert.Null(App().OverriddenBy(SettingsField.ShellPreferNative));
+    }
+
     /// <summary>A background run headless (phase B): the start line, the exit as a <c>[notice]</c> at the loop top, and the seeded poll on the next turn.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_RunCommand_Background_NoticesTheExit_AndSeedsThePoll()
     {
         ServerOn1234("llama");
@@ -592,6 +710,30 @@ public partial class SidekickAppTests : IDisposable
         string output = stdout.ToString();
 
         Assert.Matches("\\[tool\\] run_command -> started proc_[0-9a-f]{6} \\(cmd, pid [0-9]+\\): echo bg", output);
+        Assert.Matches("\\[notice\\] proc_[0-9a-f]{6} exited 0 after [0-9.]+ s: echo bg", output);
+        var call = _chat.Requests[2].SelectMany(m => m.Contents.OfType<FunctionCallContent>()).Single(c => c.CallId.StartsWith(Assistant.PendingCallIdPrefix, StringComparison.Ordinal));
+        Assert.Equal("process", call.Name);
+        Assert.Contains("[tool] process -> proc_", output);
+        Assert.Contains("— 1 new line", output);
+    }
+
+    /// <summary>The Unix twin of <see cref="Headless_RunCommand_Background_NoticesTheExit_AndSeedsThePoll"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task Headless_RunCommand_Background_NoticesTheExit_AndSeedsThePoll_Unix()
+    {
+        ServerOn1234("llama");
+        var env = new EnvironmentOverrides(n => n == EnvironmentOverrides.CommandPolicyVariable ? "yolo" : null);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "echo bg", ["shell"] = "zsh", ["background"] = true, ["notify"] = true }));
+        _chat.EnqueueText("Started.");
+        _chat.EnqueueText("It ended.");
+        var reader = new WaitingReader(["start it\n", "and?\n"], () => _chat.Requests.Count >= 2 ? Task.Delay(500) : Task.CompletedTask);
+
+        var stdout = new StringWriter();
+        var app = App(env, reader, stdout);
+        Assert.Equal(0, await app.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+        string output = stdout.ToString();
+
+        Assert.Matches("\\[tool\\] run_command -> started proc_[0-9a-f]{6} \\(zsh, pid [0-9]+\\): echo bg", output);
         Assert.Matches("\\[notice\\] proc_[0-9a-f]{6} exited 0 after [0-9.]+ s: echo bg", output);
         var call = _chat.Requests[2].SelectMany(m => m.Contents.OfType<FunctionCallContent>()).Single(c => c.CallId.StartsWith(Assistant.PendingCallIdPrefix, StringComparison.Ordinal));
         Assert.Equal("process", call.Name);
@@ -619,7 +761,7 @@ public partial class SidekickAppTests : IDisposable
     }
 
     /// <summary>A prefix on the profile's list runs headless under <c>ask</c> (2026-09-21): the list is the only gate there.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_RunCommand_UnderAsk_RunsAnAllowedPrefix()
     {
         ServerOn1234("llama");
@@ -630,6 +772,20 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("run it\n");
 
         Assert.Contains("[tool] run_command -> exit 0 in 0.0 s (cmd): echo hi", output);
+    }
+
+    /// <summary>The Unix twin of <see cref="Headless_RunCommand_UnderAsk_RunsAnAllowedPrefix"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task Headless_RunCommand_UnderAsk_RunsAnAllowedPrefix_Unix()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.ShellCommandAllowed = ["echo"]);
+        _chat.Enqueue(FakeChatClient.Call("c1", "run_command", new Dictionary<string, object?> { ["command"] = "echo hi", ["shell"] = "zsh" }));
+        _chat.EnqueueText("It said hi.");
+
+        string output = await Headless("run it\n");
+
+        Assert.Contains("[tool] run_command -> exit 0 in 0.0 s (zsh): echo hi", output);
     }
 
     /// <summary>Headless connects the MCP servers after the LLM (2026-09-20): the status line, the tools offered like the screen's, a call printed as any tool's, the rule in the prompt.</summary>
@@ -940,7 +1096,7 @@ public partial class SidekickAppTests : IDisposable
     }
 
     /// <summary>The picture travels in the history, so headless has view_image like every file tool: the generic lines, and the carrier on the next request.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_ViewImage_PrintsTheGenericLines_AndTheCarrierFollowsTheResult()
     {
         ServerOn1234("llama");
@@ -1959,7 +2115,7 @@ public partial class SidekickAppTests : IDisposable
     /// <summary>The last banner's title line (the test console keeps every draw).</summary>
     private string TitleLine() => _console.Output.Split('\n').Last(l => l.Contains("N E O N   S I D E K I C K", StringComparison.Ordinal));
 
-    [Fact]
+    [WindowsFact]
     public void RenderBanner_ShowsTheWorkingDirectoryAtTheRightEdge_WithTheSwitchOn()
     {
         // The switch is off out of the box since 2026-09-21 (the toolbar carries the path); on, the banner's title line ends with it.
@@ -1974,7 +2130,23 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(100, TextCells.Width(title));            // flush with the right edge
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="RenderBanner_ShowsTheWorkingDirectoryAtTheRightEdge_WithTheSwitchOn"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void RenderBanner_ShowsTheWorkingDirectoryAtTheRightEdge_WithTheSwitchOn_Unix()
+    {
+        // The switch is off out of the box since 2026-09-21 (the toolbar carries the path); on, the banner's title line ends with it.
+        _settings.Update(d => d.ShowWorkingDirectory = true);
+        App().RenderBanner();
+
+        string title = TitleLine();
+        string expected = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
+        Assert.StartsWith("  N E O N   S I D E K I C K  v" + SidekickApp.Version + "  ", title);   // the version still shares the line, then the gap
+        Assert.EndsWith(SidekickApp.BannerPath(expected, 100 - TextCells.Width("  N E O N   S I D E K I C K  v" + SidekickApp.Version) - SidekickApp.BannerPathGap), title);
+        Assert.EndsWith(@"/profiles/default/files", title);   // the resolved path's tail (the fixture's temp home is long: the head may be cut)
+        Assert.Equal(100, TextCells.Width(title));            // flush with the right edge
+    }
+
+    [WindowsFact]
     public async Task RenderBanner_ShowsTheConfiguredDirectory_AndTheCwdFlagOverIt()
     {
         string configured = Path.Combine(_dir, "elsewhere");
@@ -1985,6 +2157,20 @@ public partial class SidekickAppTests : IDisposable
         // The flag is read at RunAsync: the smoke mode draws the same banner first.
         await App(smoke: () => []).RunAsync(SidekickOptions.None with { Smoke = true, WorkingDirectory = Path.Combine(_dir, "flagged") }, CancellationToken.None);
         Assert.EndsWith(@"\flagged", TitleLine());
+    }
+
+    /// <summary>The Unix twin of <see cref="RenderBanner_ShowsTheConfiguredDirectory_AndTheCwdFlagOverIt"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task RenderBanner_ShowsTheConfiguredDirectory_AndTheCwdFlagOverIt_Unix()
+    {
+        string configured = Path.Combine(_dir, "elsewhere");
+        _settings.Update(d => { d.WorkingDirectory = configured; d.ShowWorkingDirectory = true; });
+        App().RenderBanner();
+        Assert.EndsWith(@"/elsewhere", TitleLine());
+
+        // The flag is read at RunAsync: the smoke mode draws the same banner first.
+        await App(smoke: () => []).RunAsync(SidekickOptions.None with { Smoke = true, WorkingDirectory = Path.Combine(_dir, "flagged") }, CancellationToken.None);
+        Assert.EndsWith(@"/flagged", TitleLine());
     }
 
     [Fact]

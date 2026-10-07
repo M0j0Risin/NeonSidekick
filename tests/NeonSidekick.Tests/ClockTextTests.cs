@@ -126,6 +126,24 @@ public class ClockTextTests
         Assert.Equal(tokyo.Id, viaSegment.Id);
     }
 
+    /// <summary>
+    /// The city fallback off Windows (2026-10-06, the macOS build): IANA zones list no cities in their display names, so the city is
+    /// read from the id's last segment. The test exposed it: "Tokyo" resolved to nothing on a Mac.
+    /// </summary>
+    [UnixFact]
+    public void TryFindZone_ResolvesACity_ByTheIanaIdsLastSegment_OffWindows()
+    {
+        Assert.True(ClockText.TryFindZone("Tokyo", out var tokyo));
+        Assert.Equal(TimeSpan.FromHours(9), tokyo.BaseUtcOffset);
+        Assert.True(ClockText.TryFindZone("Nowhere/Tokyo", out var viaSegment));
+        Assert.Equal(tokyo.Id, viaSegment.Id);
+        Assert.True(ClockText.TryFindZone("port of spain", out var spain));
+        Assert.Equal("America/Port_of_Spain", spain.Id);
+        Assert.True(ClockText.NamesCity("America/Port_of_Spain", " Port of Spain "));
+        Assert.False(ClockText.NamesCity("Asia/Tokyo", "Osaka"));
+        Assert.False(ClockText.TryFindZone("Atlantis", out _));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

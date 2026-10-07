@@ -265,7 +265,7 @@ public class EmbeddedModelsTests : IDisposable
     }
 
     /// <summary>A copy a running server has open is left where it is and read there; a later merge folds it in.</summary>
-    [Fact]
+    [WindowsFact]
     public void Merge_LeavesACopyInUse_ReadWhereItIs_UntilTheNextMerge()
     {
         string folder = EmbeddedModelCatalog.Folder(ModelsDir, _model);

@@ -293,7 +293,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -473,7 +473,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, _recognizersBuilt);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Connect_VoiceOn_NoMicrophone_Warns()
     {
         VoiceOn();
@@ -3912,7 +3912,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRule, output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab()
     {
         _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
@@ -3927,6 +3927,28 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
         Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
+        Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
+        Assert.Contains("── Operating rules ── default ─", output);
+    }
+
+    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab_Unix()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _console.Profile.Height = 120;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/sys");
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
+        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
@@ -4062,7 +4084,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(request, m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen()
     {
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
@@ -4096,7 +4118,42 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen_Unix()
+    {
+        // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
+        // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
+        _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
+        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName], _settings.Current.ToolsDisabled);   // docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
+        _chat.EnqueueText("Hello.");
+        _console.Profile.Height = 90;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            Line("hi"),
+            Line("/sys"),
+            input => input.Push(Keys.Right, Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
+        Assert.Contains(DeleteTool.ToolName, offered);
+        Assert.Equal(StandingAndFileTools.Length + 3 - 3, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; zip, unzip and gitlib_delete gone
+        Assert.DoesNotContain(ZipTool.ToolName, offered);
+        Assert.DoesNotContain(UnzipTool.ToolName, offered);
+        Assert.Contains(GitDiscardTool.ToolName, offered);
+        Assert.DoesNotContain(GitDeleteTool.ToolName, offered);
+        Assert.Contains(GitCommitTool.ToolName, offered);
+        string prompt = _chat.Requests[0][0].Text!;
+        Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);   // the pane on: the Markdown rule and the ask rule ride too, so the rule alone is pinned here
+        Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
+        Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
+        Assert.Matches(ToolsHeading("Files (12)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03
+        Assert.Contains("── Operating rules ── default ─", output);
+    }
+
+    [WindowsFact]
     public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve()
     {
         // delete off by name on /tools (opt-out since later on 2026-09-21; the fresh-profile default from 2026-09-20 until then): the file rule
@@ -4122,6 +4179,37 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("delete removes", prompt);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
         Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03
+        Assert.DoesNotContain("delete removes", output);
+        // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
+    }
+
+    /// <summary>The Unix twin of <see cref="Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve_Unix()
+    {
+        // delete off by name on /tools (opt-out since later on 2026-09-21; the fresh-profile default from 2026-09-20 until then): the file rule
+        // drops its delete clause (the DownloadRule shape), the group and every other file tool stand.
+        _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled, DeleteTool.ToolName]; });
+        _chat.EnqueueText("Hello.");
+        _console.Profile.Height = 90;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            Line("hi"),
+            Line("/sys"),
+            input => input.Push(Keys.Right, Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
+        Assert.DoesNotContain(DeleteTool.ToolName, offered);
+        Assert.Equal(StandingAndFileTools.Length + 3 - 4, offered.Length);   // delete gone with the three (gitlib_discard on since 2026-09-23)
+        string prompt = _chat.Requests[0][0].Text!;
+        Assert.Contains(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("delete removes", prompt);
+        Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
+        Assert.Matches(ToolsHeading("Files (11)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03
         Assert.DoesNotContain("delete removes", output);
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
@@ -4198,7 +4286,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(AskUserTool.ToolName, _chat.Requests[0][0].Text!);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WithGeometry_SysPromptWithAToolOff_SaysSo_OnThePromptTab_AndTheToolsTabLeavesItOut()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = ["get_working_directory", "read_file", "recall_memory"]; });
@@ -4217,6 +4305,31 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Operating rules ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
         Assert.Matches(ToolsHeading("Files (15)", null, "search_files"), output);
+        Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
+        Assert.Matches(ToolsHeading("Memory (1)", null, "save_memory"), output);
+        Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
+    }
+
+    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptWithAToolOff_SaysSo_OnThePromptTab_AndTheToolsTabLeavesItOut"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task WithGeometry_SysPromptWithAToolOff_SaysSo_OnThePromptTab_AndTheToolsTabLeavesItOut_Unix()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = ["get_working_directory", "read_file", "recall_memory"]; });
+        _console.Profile.Height = 200;   // room for the whole tab
+        _console.Profile.Width = 400;    // the long descriptions and the note on one row
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/sys");
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("Opening working-directory call", output);   // the opening calls left the Prompt tab (2026-09-26)
+        Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
+        Assert.Contains("── Operating rules ── default ─", output);   // the group stands
+        // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
+        Assert.Matches(ToolsHeading("Files (12)", null, "search_files"), output);
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
         Assert.Matches(ToolsHeading("Memory (1)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
@@ -4442,7 +4555,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -4489,6 +4602,60 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ File tools                      on\n", output);
         Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
         Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
+        Assert.Contains("\n▸ Web tools                 on\n", output);
+        Assert.Contains("\n▸ SQL tools                   on\n  SQL mode                    read-only\n  SQL statements allowed      changing data, creating, reading (used under read-write)\n  SQL connections offered     none of 0\n  SQL default connection      (the first connection)\n  SQL set password            Enter to set password for a connection\n  SQL add/edit connection     Enter to start the connection wizard\n  SQL %-mention enabled       on\n  SQL max rows                100 rows\n  SQL query timeout (s)       30\n  SQL query result max chars  32,000 chars\n  SQL connections (profile)   (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
+        Assert.Contains("\n" + SettingsMenu.TabKeys, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>The Unix twin of <see cref="WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs_Unix()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 80;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/tools");
+        _console.Input.PushKey(Keys.Enter);     // camera_capture off: the first row (the groups alphabetical since 2026-10-04, Camera first)
+        _console.Input.PushKey(Keys.Right);     // Web
+        _console.Input.PushKey(Keys.Right);     // Files
+        _console.Input.PushKey(Keys.Right);     // Shell (2026-09-21)
+        _console.Input.PushKey(Keys.Right);     // Ask
+        _console.Input.PushKey(Keys.Right);     // Camera (2026-10-02)
+        _console.Input.PushKey(Keys.Right);     // Screen (2026-10-04)
+        _console.Input.PushKey(Keys.Right);     // Git (native) (2026-09-20; so named since later on 2026-09-21 — the user's order)
+        _console.Input.PushKey(Keys.Right);     // Obsidian (2026-09-22)
+        _console.Input.PushKey(Keys.Right);     // SQL (2026-09-23)
+        _console.Input.PushKey(Keys.Right);     // Oracle (2026-09-30)
+        _console.Input.PushKey(Keys.Right);     // MySQL (later on 2026-09-30)
+        _console.Input.PushKey(Keys.Right);     // SQLite (2026-10-04)
+        _console.Input.PushKey(Keys.Right);     // Postgres (2026-10-04)
+        _console.Input.PushKey(Keys.Right);     // UNC (later still on 2026-09-30)
+        _console.Input.PushKey(Keys.Right);     // Docker (2026-10-02)
+        _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
+        _console.Input.PushKey(Keys.Right);     // Claude (2026-09-27)
+        _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
+        _console.Input.PushKey(Keys.Right);     // Print (later on 2026-09-28)
+        _console.Input.PushKey(Keys.Right);     // YouTube (2026-10-05)
+        _console.Input.PushKey(Keys.Right);     // Options (second until later on 2026-09-22, last since — the user's ask)
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ", output);
+        Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
+        Assert.Contains("\n▸ Claude CLI executable                   (looked up)\n  Claude CLI slash command permissions    read-only\n  Claude CLI slash command model          (Claude Code's default)\n  Claude CLI slash command effort         (Claude Code's default)\n  Claude CLI advisor tool                 off\n  Claude CLI advisor tool context         brief\n  Claude CLI advisor tool calls per turn  2 calls\n  Claude CLI advisor tool model           (as Claude CLI slash command model)\n  Claude CLI advisor tool effort          (as Claude CLI slash command effort)\n  Claude CLI advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
+        Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
+        Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        off  ", output);
+        Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n  get_current_time      on   ", output);
+        Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
+        Assert.Contains("\n" + ToolsText.OfferedKeys, output);
+        Assert.Contains("\n▸ $-mention enabled    on\n  Tool collapse count  off\n  Code collapse count  off\n", output);   // the fixture's 0s (2026-09-22)
+        Assert.Contains("\n▸ Ask user                      on\n", output);
+        Assert.Contains("\n▸ File tools                      on\n", output);
+        Assert.Contains("\n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", output);
+        Assert.Contains("\n▸ Shell command policy            ask\n  Shell allowed commands          none\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", output);
         Assert.Contains("\n▸ Web tools                 on\n", output);
         Assert.Contains("\n▸ SQL tools                   on\n  SQL mode                    read-only\n  SQL statements allowed      changing data, creating, reading (used under read-write)\n  SQL connections offered     none of 0\n  SQL default connection      (the first connection)\n  SQL set password            Enter to set password for a connection\n  SQL add/edit connection     Enter to start the connection wizard\n  SQL %-mention enabled       on\n  SQL max rows                100 rows\n  SQL query timeout (s)       30\n  SQL query result max chars  32,000 chars\n  SQL connections (profile)   (none) · Enter edits sql.json\n", output);   // 2026-09-23; the query text cap under the timeout, 2026-10-01
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
@@ -4848,7 +5015,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Tools_WithoutThePane_PrintsTheFiveTabs()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = ["zip"]; });
@@ -4860,6 +5027,28 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Offered\n  ·   Camera (1)", output);   // the groups alphabetical since 2026-10-04
         Assert.Contains("  ·   Clock (3)\n  ·     get_current_time      on   ", output);
         Assert.Contains("  ·   Files (16 of 17)\n", output);
+        Assert.Contains("  ·     zip                   off  ", output);
+        Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
+        Assert.Contains("  · Options\n  ·   $-mention enabled: on\n", output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n", output);
+        Assert.Contains("  · Files\n  ·   File tools: on\n", output);
+        Assert.Contains("  · Web\n  ·   Web tools: on\n", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>The Unix twin of <see cref="Tools_WithoutThePane_PrintsTheFiveTabs"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task Tools_WithoutThePane_PrintsTheFiveTabs_Unix()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = ["zip"]; });
+        PushLine("/tools");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Offered\n  ·   Camera (1)", output);   // the groups alphabetical since 2026-10-04
+        Assert.Contains("  ·   Clock (3)\n  ·     get_current_time      on   ", output);
+        Assert.Contains("  ·   Files (13 of 14)\n", output);
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  · Options\n  ·   $-mention enabled: on\n", output);
@@ -6136,11 +6325,21 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Opening working-directory call", output);   // /sys shows the system message alone since 2026-09-26; the request above carries the new path
     }
 
-    [Fact]
+    [WindowsFact]
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
         string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
+        Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
+        Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
+    }
+
+    /// <summary>The Unix twin of <see cref="QuietTools_AreTheMemoryClockTimerAndFileTools"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public void QuietTools_AreTheMemoryClockTimerAndFileTools_Unix()
+    {
+        Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
@@ -7435,7 +7634,7 @@ public partial class ChatScreenTests : IDisposable
         }
     });
 
-    [Fact]
+    [WindowsFact]
     public async Task Loop_Imagine_RunsTheCommandCountTimes_WithoutTheModel()
     {
         var stub = ComfyServer();
@@ -7452,7 +7651,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>Only the last pass's picture rides with the next message; what /imagine queued before the loop stays.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Loop_Imagine_OnlyTheLastPassRidesWithTheNextMessage()
     {
         ComfyServer();
@@ -8869,7 +9068,7 @@ public partial class ChatScreenTests : IDisposable
     /// 24 since the chart moved behind the log, 2026-10-03, the tool switches after the officer; 27 again later that day, the disk
     /// drawn on its slab with Memory off).
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
@@ -8878,6 +9077,35 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         StepsWhenIdle(
             input => { input.PushClick(120, 103); input.PushClick(120, 103); },  // under off: the blanks, so /settings
+            Key(Keys.Escape),
+            Line("/tools"),
+            input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🔓: the list
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false), cwd, 239), output);
+        Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
+        Assert.True(settings > 0 && allowed > settings, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>The Unix twin of <see cref="TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo"/> (2026-10-06, the macOS build): the blank clicked left of the working directory, whose Unix temp path is long enough to reach column 120.</summary>
+    [UnixFact]
+    public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo_Unix()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; d.ShellCommandPolicy = "off"; d.MemoryMode = "disabled"; d.ShellPolice = false; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        StepsWhenIdle(
+            input => { input.PushClick(ToolbarBlank(), 103); input.PushClick(ToolbarBlank(), 103); },  // under off: the blanks, so /settings
             Key(Keys.Escape),
             Line("/tools"),
             input => input.Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
@@ -9615,7 +9843,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
@@ -9644,6 +9872,47 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
+        Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
+        Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, between the skills and the questions
+        Assert.Matches(ToolsHeading("Questions (1)", null, "ask_user"), output);
+        Assert.DoesNotContain("not offered", output);
+        // Nothing in the transcript; ESC brings the input row back.
+        Assert.DoesNotContain("  · Persona", output);
+        Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
+    }
+
+    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt_Unix()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
+        _console.Profile.Height = 117;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/sys");
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string rule = new(ScreenPane.RuleGlyph, 240);
+        // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
+        Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
+        Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
+        Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
+        Assert.DoesNotContain("Voice directive", output);
+        Assert.DoesNotContain("Also sent", output);
+        Assert.DoesNotContain("Opening clock call", output);
+        Assert.DoesNotContain("Request — ", output);
+        Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        // → the Tools tab: every group, the memory group offered.
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
+        Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
+        Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
+        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
@@ -9735,7 +10004,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotMatch(GroupHeading("Memory"), output);   // not offered: left out of the tab (2026-09-26)
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WithoutGeometry_SysPromptPrintsTheSummary()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -9752,6 +10021,29 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
         Assert.Contains("  · Files (17)", output);
+        Assert.Contains("  ·   " + "read_file".PadRight(22) + "Reads a text file", output);
+        Assert.DoesNotContain("Questions (1)", output);   // no pane, no ask_user: left out of the tool lines (2026-09-26)
+        Assert.DoesNotContain(InfoPane.HintText, output);
+    }
+
+    /// <summary>The Unix twin of <see cref="WithoutGeometry_SysPromptPrintsTheSummary"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    [UnixFact]
+    public async Task WithoutGeometry_SysPromptPrintsTheSummary_Unix()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/sys");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Persona — default", output);
+        Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[0] + "\n", output);   // a line per notice: the persona is lines since 2026-10-03
+        Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[^1] + "\n", output);
+        Assert.Contains("  · Operating rules — default", output);
+        Assert.Contains("  · Memory — read-write, directive (the list rides the opening recall_memory call)", output);
+        Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
+        Assert.DoesNotContain("Opening clock call", output);
+        Assert.Contains("  · Files (14)", output);
         Assert.Contains("  ·   " + "read_file".PadRight(22) + "Reads a text file", output);
         Assert.DoesNotContain("Questions (1)", output);   // no pane, no ask_user: left out of the tool lines (2026-09-26)
         Assert.DoesNotContain(InfoPane.HintText, output);
@@ -9954,7 +10246,7 @@ public partial class ChatScreenTests : IDisposable
     /// the officer's the police page (/police, later on 2026-09-22; nothing that morning), and one on the path is /cwd browse; the blanks
     /// between are the settings'.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
@@ -10027,6 +10319,80 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
 
+    /// <summary>The Unix twin of <see cref="ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack"/> (2026-10-06, the macOS build): the blank clicked left of the working directory, whose Unix temp path is long enough to reach column 120.</summary>
+    [UnixFact]
+    public async Task ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack_Unix()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102, the toolbar 103
+        SeedSession();                                           // the Sessions pane opens only over a stored session
+        _memory.Add("Their name is Chris.");                     // the Memory pane only over a stored item
+        StepsWhenIdle(
+            input =>
+            {
+                input.Push(Keys.Char('h'), Keys.Char('i'));
+                input.PushClick(0, 103);                         // ⚙️
+                input.PushClick(1, 103);
+            },
+            Key(Keys.Escape),                                    // the settings closed
+            input => { input.PushClick(9, 103); input.PushClick(9, 103); },      // 🛠️
+            Key(Keys.Escape),
+            input => { input.PushClick(12, 103); input.PushClick(12, 103); },      // 🔌
+            Key(Keys.Escape),
+            input => { input.PushClick(15, 103); input.PushClick(15, 103); },      // 🎓
+            Key(Keys.Escape),
+            input => { input.PushClick(18, 103); input.PushClick(18, 103); },    // 🎭
+            Key(Keys.Escape),
+            input => { input.PushClick(21, 103); input.PushClick(21, 103); },    // 💬 (later on 2026-09-21)
+            Key(Keys.Escape),
+            input => { input.PushClick(24, 103); input.PushClick(24, 103); },    // 📊 (2026-09-29): the Usage pane
+            Key(Keys.Escape),
+            input => { input.PushClick(27, 103); input.PushClick(27, 103); },    // 💾 (2026-09-22: Memory is on by default; at 27 right after the Usage chart since 2026-10-03, 🧮 ahead of it since 2026-10-04)
+            Key(Keys.Escape),
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },    // 🔒 (later still on 2026-09-21: the policy is ask by default; behind the disk since 2026-09-22)
+            Key(Keys.Escape),
+            input => { input.PushClick(33, 103); input.PushClick(33, 103); },    // 👮 (2026-09-22: the police are on by default): the police page (later that day)
+            Key(Keys.Escape),
+            input => { input.PushClick(ToolbarBlank(), 103); input.PushClick(ToolbarBlank(), 103); },  // the blanks: /settings (later on 2026-09-21; nothing before)
+            Key(Keys.Escape),
+            input =>
+            {
+                input.PushClick(238, 103);                       // the path ends on the last cell (239 cells)
+                input.PushClick(237, 103);
+            },
+            Key(Keys.Escape),                                    // the folder picker closed: the directory kept
+            input => input.Push(Keys.Char('!'), Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
+        Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ", StringComparison.Ordinal);
+        int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
+        int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
+        int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
+        int sessions = output.IndexOf("\n" + Titled(SessionsMenu.Title) + "\n", StringComparison.Ordinal);
+        int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
+        int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n", StringComparison.Ordinal);
+        int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
+        int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
+        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
+        Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
+        Assert.Equal(1, output.Split("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n").Length - 1);
+        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n").Length - 1);   // the gear and the blanks
+        Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
+        Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
+        Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.Contains("› hi!", output);
+        Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
+    }
+
     /// <summary>What a double-click off an open pane names (later on 2026-09-21): the toolbar's words, the path's browse line, the blanks' /settings; the hint row's model name, mark and blanks; nothing for a strip glyph, the queued count or the tally.</summary>
     [Fact]
     public void OffPaneLine_IsPinned()
@@ -10060,7 +10426,7 @@ public partial class ChatScreenTests : IDisposable
     /// settings'), closes it and opens that one — from a typed word or a toolbar pair alike. The
     /// officer's opens the police page (later on 2026-09-22; that morning it closed the pane and opened nothing).
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task UnderAPane_ADoubleClickOnItsOwnToolbarGlyph_ClosesIt_OnAnothers_SwitchesToThatPane()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
@@ -10076,6 +10442,93 @@ public partial class ChatScreenTests : IDisposable
             input => { input.PushClick(9, 103); input.PushClick(9, 103); },                               // 🛠️ at the idle line (the toolbar at 103 there): Tools
             input => { int y = ToolbarUnderPane(); input.PushClick(120, y); input.PushClick(120, y); },   // the blanks under it: Tools closed, Settings opened
             input => { int y = ToolbarUnderPane(); input.PushClick(120, y); input.PushClick(120, y); },   // the blanks under the Settings: closed
+            Line("/help"),
+            input => { int y = ToolbarUnderPane(); input.PushClick(18, y); input.PushClick(18, y); },     // 🎭 under Help: Help closed, the system prompt opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(9, y); input.PushClick(9, y); },       // 🛠️ under it: Tools
+            input => { int y = ToolbarUnderPane(); input.PushClick(9, y); input.PushClick(9, y); },       // 🛠️ again: closed
+            input => { input.PushClick(21, 103); input.PushClick(21, 103); },                             // 💬 at the idle line: Sessions (later on 2026-09-21)
+            input => { int y = ToolbarUnderPane(); input.PushClick(15, y); input.PushClick(15, y); },       // 🎓 under it: Sessions closed, Skills opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(21, y); input.PushClick(21, y); },     // 💬 under the Skills: closed, Sessions opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(21, y); input.PushClick(21, y); },     // 💬 again: closed
+            input => { input.PushClick(24, 103); input.PushClick(24, 103); },                             // 📊 at the idle line: Usage (2026-09-29)
+            input => { int y = ToolbarUnderPane(); input.PushClick(15, y); input.PushClick(15, y); },       // 🎓 under it: Usage closed, Skills opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(24, y); input.PushClick(25, y); },     // 📊 under the Skills (either cell): closed, Usage opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(24, y); input.PushClick(24, y); },     // 📊 again: closed
+            input => { input.PushClick(27, 103); input.PushClick(27, 103); },                             // 💾 at the idle line: Memory (2026-09-22; at 27 right after the Usage chart since 2026-10-03, 🧮 ahead of it since 2026-10-04)
+            input => { int y = ToolbarUnderPane(); input.PushClick(15, y); input.PushClick(15, y); },       // 🎓 under it: Memory closed, Skills opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(27, y); input.PushClick(27, y); },     // 💾 under the Skills: closed, Memory opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(27, y); input.PushClick(27, y); },     // 💾 again: closed
+            input => { input.PushClick(30, 103); input.PushClick(30, 103); },                             // 🔒 at the idle line: the allowed-commands list (later still on 2026-09-21; behind the disk since 2026-09-22)
+            input => { int y = ToolbarUnderPane(); input.PushClick(9, y); input.PushClick(9, y); },       // 🛠️ under it: the list closed, Tools opened (another command, though the list is its row)
+            input => { int y = ToolbarUnderPane(); input.PushClick(30, y); input.PushClick(30, y); },     // 🔒 under Tools: closed, the list opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(30, y); input.PushClick(30, y); },     // 🔒 again: closed
+            input => { input.PushClick(9, 103); input.PushClick(9, 103); },                               // 🛠️ at the idle line: Tools
+            input => { int y = ToolbarUnderPane(); input.PushClick(33, y); input.PushClick(33, y); },     // 👮 under it: Tools closed, the police page opened (later on 2026-09-22)
+            input => { int y = ToolbarUnderPane(); input.PushClick(33, y); input.PushClick(33, y); },     // 👮 again: closed
+            input => input.Push(Keys.Char('h'), Keys.Char('i'), Keys.Enter),      // the idle line again: a message
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ") + "\n";
+        string help = "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n";
+        string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
+        string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Options ") + "\n";
+        string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
+        string usage = "\n" + Titled(UsageText.Label) + "\n";
+        string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
+        string police = "\n" + Titled(PoliceTitle) + "\n";
+        int[] at = [output.IndexOf(tools, StringComparison.Ordinal), output.IndexOf(settings, StringComparison.Ordinal)];
+        Assert.True(at[0] > 0 && at[1] > at[0], output);
+        Assert.Equal(5, output.Split(tools).Length - 1);       // typed, the 🛠️ pair, under the system prompt, under the allowed-commands list (later still on 2026-09-21), the 🛠️ pair before the officer's (2026-09-22)
+        Assert.Equal(2, output.Split(allowed).Length - 1);     // the 🔒 pair at idle, then from under Tools; never from its own glyph
+        Assert.Equal(2, output.Split(memory).Length - 1);      // the 💾 pair at idle, then from under Skills; never from its own glyph
+        Assert.Equal(2, output.Split(usage).Length - 1);       // the 📊 pair at idle, then from under Skills; never from its own glyph (2026-09-29)
+        Assert.True(output.LastIndexOf(sessions, StringComparison.Ordinal) < output.IndexOf(usage, StringComparison.Ordinal), output);
+        Assert.True(output.LastIndexOf(usage, StringComparison.Ordinal) < output.IndexOf(memory, StringComparison.Ordinal), output);
+        int toolsUnderSys = output.IndexOf(tools, output.IndexOf(sys, StringComparison.Ordinal), StringComparison.Ordinal);
+        int toolsUnderAllowed = output.IndexOf(tools, output.IndexOf(allowed, StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.True(output.LastIndexOf(sessions, StringComparison.Ordinal) < output.IndexOf(memory, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(memory, StringComparison.Ordinal) < output.LastIndexOf(skills, StringComparison.Ordinal), output);
+        Assert.True(output.LastIndexOf(skills, StringComparison.Ordinal) < output.LastIndexOf(memory, StringComparison.Ordinal), output);
+        Assert.True(output.LastIndexOf(memory, StringComparison.Ordinal) < output.IndexOf(allowed, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(allowed, StringComparison.Ordinal) < toolsUnderAllowed, output);
+        Assert.True(toolsUnderAllowed < output.LastIndexOf(allowed, StringComparison.Ordinal), output);
+        Assert.True(output.LastIndexOf(allowed, StringComparison.Ordinal) < output.LastIndexOf(tools, StringComparison.Ordinal), output);   // the last Tools is the one the officer closed
+        Assert.Equal(1, output.Split(police).Length - 1);      // the 👮 pair under Tools; never from its own glyph
+        Assert.True(output.LastIndexOf(tools, StringComparison.Ordinal) < output.IndexOf(police, StringComparison.Ordinal), output);
+        Assert.Equal(2, output.Split(settings).Length - 1);    // from under Tools twice; never from its own glyph or blanks
+        Assert.True(output.IndexOf(help, StringComparison.Ordinal) < output.IndexOf(sys, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(sys, StringComparison.Ordinal) < toolsUnderSys, output);
+        Assert.Equal(2, output.Split(sessions).Length - 1);    // the 💬 pair at idle, then from under Skills; never from its own glyph
+        Assert.Equal(3, output.Split(skills).Length - 1);      // from under Sessions, from under Usage, from under Memory
+        Assert.True(toolsUnderSys < output.IndexOf(sessions, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(sessions, StringComparison.Ordinal) < output.IndexOf(skills, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(skills, StringComparison.Ordinal) < output.LastIndexOf(sessions, StringComparison.Ordinal), output);
+        Assert.All(new[] { "/settings", "/sys", "/sessions", "/skills", "/memory", "/usage", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.Contains("› hi", output);
+        Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    /// <summary>The Unix twin of <see cref="UnderAPane_ADoubleClickOnItsOwnToolbarGlyph_ClosesIt_OnAnothers_SwitchesToThatPane"/> (2026-10-06, the macOS build): the blank clicked left of the working directory, whose Unix temp path is long enough to reach column 120.</summary>
+    [UnixFact]
+    public async Task UnderAPane_ADoubleClickOnItsOwnToolbarGlyph_ClosesIt_OnAnothers_SwitchesToThatPane_Unix()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        SeedSession();
+        _memory.Add("Their name is Chris.");
+        StepsWhenIdle(
+            Line("/tools"),                                                       // typed: the Tools pane
+            input => { int y = ToolbarUnderPane(); input.PushClick(0, y); input.PushClick(1, y); },       // ⚙️ under it: Tools closed, Settings opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(0, y); input.PushClick(0, y); },       // ⚙️ under the Settings: closed, nothing more
+            input => { input.PushClick(9, 103); input.PushClick(9, 103); },                               // 🛠️ at the idle line (the toolbar at 103 there): Tools
+            input => { int y = ToolbarUnderPane(); input.PushClick(ToolbarBlank(), y); input.PushClick(ToolbarBlank(), y); },   // the blanks under it: Tools closed, Settings opened
+            input => { int y = ToolbarUnderPane(); input.PushClick(ToolbarBlank(), y); input.PushClick(ToolbarBlank(), y); },   // the blanks under the Settings: closed
             Line("/help"),
             input => { int y = ToolbarUnderPane(); input.PushClick(18, y); input.PushClick(18, y); },     // 🎭 under Help: Help closed, the system prompt opened
             input => { int y = ToolbarUnderPane(); input.PushClick(9, y); input.PushClick(9, y); },       // 🛠️ under it: Tools
@@ -12126,7 +12579,7 @@ public partial class ChatScreenTests : IDisposable
     /// pane's glyph as at idle; the path under it closes it alone (/cwd is refused mid-turn, and a
     /// click gets no refusal notice); the blanks are the settings'; the reply runs on.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task MidTurn_UnderAPane_ADoubleClickOnAnotherGlyph_Switches_OnThePath_ClosesAlone()
     {
         MidTurnFixture(i =>
@@ -12153,6 +12606,66 @@ public partial class ChatScreenTests : IDisposable
                 case 5:
                     Scripted().PushClick(120, 103);                  // the blanks at the busy row: the settings
                     Scripted().PushClick(120, 103);
+                    break;
+                case 6:
+                    Scripted().Push(Keys.Escape);
+                    break;
+            }
+        }, "One ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight.");
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        SeedSession();
+
+        string output = await RunAsync();
+
+        output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
+        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ") + "\n";
+        string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
+        string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
+        int at = output.IndexOf(tools, StringComparison.Ordinal);
+        Assert.True(at > 0, output);
+        Assert.True(output.IndexOf(sys, StringComparison.Ordinal) > at, output);
+        Assert.True(output.IndexOf(allowed, StringComparison.Ordinal) > output.IndexOf(sys, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(sessions, StringComparison.Ordinal) > output.IndexOf(allowed, StringComparison.Ordinal), output);
+        Assert.True(output.IndexOf(settings, StringComparison.Ordinal) > output.IndexOf(sessions, StringComparison.Ordinal), output);
+        Assert.DoesNotContain(FolderText.Title + "   ", output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/cwd"), output);
+        Assert.Contains("eight.", output);
+        Assert.All(new[] { "/tools", "/sys", "/sessions", "/cmdlist", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>The Unix twin of <see cref="MidTurn_UnderAPane_ADoubleClickOnAnotherGlyph_Switches_OnThePath_ClosesAlone"/> (2026-10-06, the macOS build): the blank clicked left of the working directory, whose Unix temp path is long enough to reach column 120.</summary>
+    [UnixFact]
+    public async Task MidTurn_UnderAPane_ADoubleClickOnAnotherGlyph_Switches_OnThePath_ClosesAlone_Unix()
+    {
+        MidTurnFixture(i =>
+        {
+            switch (i)
+            {
+                case 0:
+                    Scripted().PushClick(9, 103);                    // 🛠️: the Tools pane under the reply
+                    Scripted().PushClick(9, 103);
+                    break;
+                // Each row waits for the pane the step before opened (2026-09-26): the steps run off the stream, not the pane's draw.
+                case 1:
+                    PushDoubleClick(18, ToolbarUnder(ToolsText.Label));                // 🎭 under it: Tools closed, the system prompt opened
+                    break;
+                case 2:
+                    PushDoubleClick(30, ToolbarUnder(SystemPromptSummary.Label));      // 🔒 under it (later still on 2026-09-21; behind the disk since 2026-09-22; at 30 since 2026-10-04): closed, the allowed-commands list opened
+                    break;
+                case 3:
+                    PushDoubleClick(21, ToolbarUnder(AllowedCommandsTitle));           // 💬 under it (later on 2026-09-21): closed, the Sessions opened
+                    break;
+                case 4:
+                    PushDoubleClick(238, ToolbarUnder(SessionsMenu.Title));            // the path under it: closed, nothing opened
+                    break;
+                case 5:
+                    Scripted().PushClick(ToolbarBlank(), 103);                  // the blanks at the busy row: the settings
+                    Scripted().PushClick(ToolbarBlank(), 103);
                     break;
                 case 6:
                     Scripted().Push(Keys.Escape);
@@ -12612,7 +13125,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary><c>/docker</c> typed and under a reply (2026-10-02, /ha's way): its lines land in the reply, which runs on.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task MidTurn_Docker_RunsAtOnce_ItsLinesInTheReply()
     {
         DockerEngine();
@@ -13499,7 +14012,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› /exit", output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Tree_PrintsTheWorkingDirectoryAsNoticeLines_AndASubfolder_AndTheErrors()
     {
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -13529,7 +14042,38 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="Tree_PrintsTheWorkingDirectoryAsNoticeLines_AndASubfolder_AndTheErrors"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Tree_PrintsTheWorkingDirectoryAsNoticeLines_AndASubfolder_AndTheErrors_Unix()
+    {
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "docs", "a.md"), "12345");
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "1");
+        PushLine("/tree");
+        PushLine("/tree docs");
+        PushLine("/tree nope");
+        PushLine("/tree notes.txt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(
+            "  · " + files + @"/" + "\n"
+            + "  · ├── docs/\n"
+            + "  · │   └── a.md  5 B\n"
+            + "  · └── notes.txt  1 B\n",
+            output);
+        Assert.Contains(
+            "  · " + Path.Combine(files, "docs") + @"/" + "\n"
+            + "  · └── a.md  5 B\n",
+            output);
+        Assert.Contains("  ✗ " + FileText.Missing(@"nope/"), output);
+        Assert.Contains("  ✗ " + FileText.IsAFile("notes.txt"), output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [WindowsFact]
     public async Task Explore_OpensTheWorkingDirectory_AndASubfolder_AndRefusesTheRest()
     {
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -13554,9 +14098,35 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>The Unix twin of <see cref="Explore_OpensTheWorkingDirectory_AndASubfolder_AndRefusesTheRest"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Explore_OpensTheWorkingDirectory_AndASubfolder_AndRefusesTheRest_Unix()
+    {
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "1");
+        PushLine("/explore");
+        PushLine("/explore docs");
+        PushLine("/explore nope");
+        PushLine("/explore notes.txt");
+        PushLine("/explore ..");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(new[] { files, Path.Combine(files, "docs") }, _openedFiles);
+        Assert.Contains("  · " + ChatScreen.ExploreOpenedNotice(""), output);
+        Assert.Contains("  · (📂 opened the working directory in your file browser)", output);
+        Assert.Contains("  · " + ChatScreen.ExploreOpenedNotice(@"docs/"), output);
+        Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
+        Assert.Contains("  ✗ " + FileText.IsAFile("notes.txt"), output);
+        Assert.Contains("  ✗ " + FileText.OutsideRoot(".."), output);
+        Assert.Empty(_chat.Requests);
+    }
+
     // ── /terminal (2026-10-03) ──────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public async Task Terminal_OpensTheWorkingDirectory_AndASubfolder_AndRefusesTheRest()
     {
         // The user's ask: /explore's shape, a new Windows Terminal window in the folder; a file, a missing path and one outside refused.
@@ -13678,7 +14248,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.ObsidianRule + " " + Assistant.ObsidianDeleteRule, _chat.Requests[1][0].Text!, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Vault_PrintsTheVaultAsATree_WithoutTheDotFolders_HonouringTheTreeSettings()
     {
         string vault = Path.Combine(_dir, "Vault");
@@ -13713,8 +14283,44 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + TreeText.CutLine(1), output);
     }
 
+    /// <summary>The Unix twin of <see cref="Vault_PrintsTheVaultAsATree_WithoutTheDotFolders_HonouringTheTreeSettings"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Vault_PrintsTheVaultAsATree_WithoutTheDotFolders_HonouringTheTreeSettings_Unix()
+    {
+        string vault = Path.Combine(_dir, "Vault");
+        Directory.CreateDirectory(Path.Combine(vault, ".obsidian"));
+        File.WriteAllText(Path.Combine(vault, ".obsidian", "app.json"), "{}");
+        Directory.CreateDirectory(Path.Combine(vault, ".trash"));
+        File.WriteAllText(Path.Combine(vault, ".trash", "old.md"), "");
+        Directory.CreateDirectory(Path.Combine(vault, "Projects"));
+        File.WriteAllText(Path.Combine(vault, "Projects", "Plan.md"), "# Plan");
+        File.WriteAllText(Path.Combine(vault, "Home.md"), "hi");
+        _settings.Update(d => { d.ObsidianVault = vault; d.FileTreeShowSizes = false; });
+        PushLine("/vault");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(
+            "  · " + vault + @"/" + "\n"
+            + "  · ├── Projects/\n"
+            + "  · │   └── Plan.md\n"
+            + "  · └── Home.md\n",
+            output);
+        Assert.DoesNotContain(".obsidian", output);
+        Assert.DoesNotContain("old.md", output);
+        Assert.Empty(_chat.Requests);
+
+        // The cap is File /tree max length's, as /tree's.
+        _settings.Update(d => d.FileTreeMaxLength = 1);
+        PushLine("/vault");
+        PushLine("/exit");
+        output = await RunAsync();
+        Assert.Contains("  · " + TreeText.CutLine(1), output);
+    }
+
     /// <summary><c>/vault &lt;path&gt;</c> (2026-09-23, the user's ask: "work like /tree"): a folder under the vault alone; outside, missing or through a dot-folder is /tree's error line.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Vault_WithAPath_PrintsThatFolder_AndABadPathIsTheTreeError()
     {
         string vault = Path.Combine(_dir, "Vault");
@@ -13743,6 +14349,41 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.True(ChatScreen.NamesADotFolder(".trash/old"));
         Assert.True(ChatScreen.NamesADotFolder(@"Projects\.git"));
+        Assert.False(ChatScreen.NamesADotFolder("../x"));
+        Assert.False(ChatScreen.NamesADotFolder("./Projects"));
+        Assert.False(ChatScreen.NamesADotFolder(""));
+    }
+
+    /// <summary>The Unix twin of <see cref="Vault_WithAPath_PrintsThatFolder_AndABadPathIsTheTreeError"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Vault_WithAPath_PrintsThatFolder_AndABadPathIsTheTreeError_Unix()
+    {
+        string vault = Path.Combine(_dir, "Vault");
+        Directory.CreateDirectory(Path.Combine(vault, ".obsidian"));
+        Directory.CreateDirectory(Path.Combine(vault, "Projects", "Neon"));
+        File.WriteAllText(Path.Combine(vault, "Projects", "Neon", "Plan.md"), "# Plan");
+        File.WriteAllText(Path.Combine(vault, "Home.md"), "hi");
+        _settings.Update(d => { d.ObsidianVault = vault; d.FileTreeShowSizes = false; });
+        PushLine("/vault Projects");
+        PushLine("/vault ..");
+        PushLine("/vault Nope");
+        PushLine("/vault .obsidian");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(
+            "  · " + Path.Combine(vault, "Projects") + @"/" + "\n"
+            + "  · └── Neon/\n"
+            + "  ·     └── Plan.md\n",
+            output);
+        Assert.DoesNotContain("Home.md", output);
+        Assert.Equal(3, CountOf(output, "  ✗ "));   // outside, missing, a dot-folder: each /tree's error line
+        Assert.Contains("  ✗ " + TreeText.Error(new FileTreeResult(FileOutcome.Missing, ".obsidian", "", [], false)), output);
+        Assert.DoesNotContain("app.json", output);
+
+        Assert.True(ChatScreen.NamesADotFolder(".trash/old"));
+        Assert.True(ChatScreen.NamesADotFolder(@"Projects/.git"));
         Assert.False(ChatScreen.NamesADotFolder("../x"));
         Assert.False(ChatScreen.NamesADotFolder("./Projects"));
         Assert.False(ChatScreen.NamesADotFolder(""));
@@ -13927,7 +14568,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Speak_TheErrors_TheEmptyFile_AndTheCut()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -13951,6 +14592,40 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
         Assert.Contains("  ✗ " + FileText.IsDirectory(@"docs\"), output);
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x"), output);
+        Assert.Contains("  ✗ " + FileText.NotText("pic.bin"), output);
+        Assert.Contains("  ✗ " + ChatScreen.SpeakEmptyError("blank.txt"), output);   // an error since 2026-09-22
+        Assert.Contains("● " + new string('x', 50) + "\n", output);
+        Assert.Contains("  · " + ChatScreen.SpeakCutNotice(WorkingDirectory.MaxReadChars), output);
+        Assert.Equal("(cut at 32,000 characters)", ChatScreen.SpeakCutNotice(WorkingDirectory.MaxReadChars));
+        Assert.Equal("Usage: /speak <file> [n]; then /speak alone resumes it and /speak <n> starts at sentence n", ChatScreen.SpeakUsageError);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>The Unix twin of <see cref="Speak_TheErrors_TheEmptyFile_AndTheCut"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Speak_TheErrors_TheEmptyFile_AndTheCut_Unix()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllBytes(Path.Combine(files, "pic.bin"), [1, 2, 0, 3]);
+        File.WriteAllText(Path.Combine(files, "blank.txt"), " \n\t\n");
+        File.WriteAllText(Path.Combine(files, "big.txt"), string.Join("\n", Enumerable.Range(0, 700).Select(i => new string('x', 50))));   // 35,700 characters: cut at 32,000
+        PushLine("/speak");
+        PushLine("/speak nope");
+        PushLine("/speak docs");
+        PushLine(@"/speak ../x");
+        PushLine("/speak pic.bin");
+        PushLine("/speak blank.txt");
+        PushLine("/speak big.txt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.SpeakUsageError, output);
+        Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
+        Assert.Contains("  ✗ " + FileText.IsDirectory(@"docs/"), output);
+        Assert.Contains("  ✗ " + FileText.OutsideRoot(@"../x"), output);
         Assert.Contains("  ✗ " + FileText.NotText("pic.bin"), output);
         Assert.Contains("  ✗ " + ChatScreen.SpeakEmptyError("blank.txt"), output);   // an error since 2026-09-22
         Assert.Contains("● " + new string('x', 50) + "\n", output);
@@ -14009,7 +14684,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Speak_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -14028,6 +14703,33 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("● Three.\n", output);
         Assert.Contains("  ✗ " + ChatScreen.SpeakBeyondEndError(@"docs\notes.txt", 3, 9), output);
+        Assert.Contains("● Two. Three.\n", output);
+        Assert.Contains("● Whole. File.\n", output);
+        Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
+        Assert.DoesNotContain("● One. Two. Three.", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>The Unix twin of <see cref="Speak_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Speak_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole_Unix()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "docs", "notes.txt"), "One. Two. Three.");
+        File.WriteAllText(Path.Combine(files, "notes 5"), "Whole. File.");
+        PushLine("/speak docs/notes.txt 3");   // from the third sentence
+        PushLine("/speak docs/notes.txt 9");   // past the end — the file is remembered all the same
+        PushLine("/speak 2");                  // so a seek works on it
+        PushLine("/speak notes 5");            // a file named so: read whole, not `notes` from 5
+        PushLine("/speak nope 5");             // neither is there: the head's error
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("● Three.\n", output);
+        Assert.Contains("  ✗ " + ChatScreen.SpeakBeyondEndError(@"docs/notes.txt", 3, 9), output);
         Assert.Contains("● Two. Three.\n", output);
         Assert.Contains("● Whole. File.\n", output);
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
@@ -14174,7 +14876,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── /view (2026-09-17) ──────────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public async Task View_DrawsThePictureAlone_WhateverTheThumbnailToggleSays_AndTheErrors()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; });   // the command is the ask: the toggle is not consulted
@@ -14211,7 +14913,7 @@ public partial class ChatScreenTests : IDisposable
     /// <c>/view</c> without <c>--chat</c> (later on 2026-09-27): a picture opens the viewer held on it, a folder (the root too)
     /// opens the viewer on the folder, each with the notice; nothing is drawn, and a bad path is the same error line.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task View_OpensTheViewer_OnAPictureOrAFolder_AndTheErrors()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -14274,7 +14976,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>With no viewer (not Windows) a picture is drawn in the transcript as <c>--chat</c> draws it, and a folder is an error.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task View_WithoutAViewer_DrawsThePicture_AndAFolderIsAnError()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -14443,7 +15145,7 @@ public partial class ChatScreenTests : IDisposable
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Imagine_SendsThePromptAsTyped_DrawsThePicture_AndTheNextMessageCarriesIt()
     {
         var stub = ComfyServer();
@@ -14467,7 +15169,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>ComfyUI show prompts (later still on 2026-09-24, the user's ask): off, the picture's line alone; on, the prompt and negative sent, in full, under it — the model's pictures and /imagine alike.</summary>
-    [Theory]
+    [WindowsTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task ShowPrompts_PutsWhatWasSentUnderThePicturesLine_OnlyWhenOn(bool on)
@@ -14506,7 +15208,7 @@ public partial class ChatScreenTests : IDisposable
     private string ComfyPicture(string name) => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", name);
 
     /// <summary>The model's picture and an /imagine one gather in the strip, the newest leftmost: → takes the newest, → again the older, Enter opens it.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_GathersTheSessionsPictures_TheArrowsWalkIt_AndEnterOpensTheHighlighted()
     {
         ComfyServer();
@@ -14531,7 +15233,7 @@ public partial class ChatScreenTests : IDisposable
     /// The strip's keys under a reply (2026-09-28, the user's report: the arrows did nothing until the turn ended): → at the
     /// empty line highlights the picture and Enter opens it, the reply running on, and nothing is sent.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_TheArrowsAndEnter_WorkUnderAReply()
     {
         ComfyServer();
@@ -14562,7 +15264,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A double-click on a strip tile opens it, as one on a transcript picture does: the tile sits on the strip's bottom rows, over the upper rule.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_ATileDoubleClicked_Opens()
     {
         ComfyServer();
@@ -14580,7 +15282,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>
     /// One click on a strip tile highlights it (2026-09-28, the user's ask) and moves an open viewer to it; nothing opens.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_ATileClickedOnce_IsHighlighted_AndTheViewerFollows()
     {
         ComfyServer();
@@ -14599,7 +15301,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A double-click on a strip tile highlights it at the first click and opens it at the second (2026-09-28).</summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_ATileDoubleClicked_IsHighlighted_AndOpened()
     {
         ComfyServer();
@@ -14618,7 +15320,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>The same under a reply (2026-09-28): the watcher's click hook highlights the tile at the first click and opens it at the second, the reply running on.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_ATileDoubleClicked_UnderAReply_IsHighlighted_AndOpened()
     {
         ComfyServer();
@@ -14656,7 +15358,7 @@ public partial class ChatScreenTests : IDisposable
     /// as a dropped file does — an <c>[Image #1]</c> token, the picture beside the message — and the hint row said
     /// <see cref="InputLine.DropOnLineHint"/> while the drag lasted. The input row at 100, the tile at (1–4, 97–98).
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_ATileDraggedOntoTheLine_IsAttached()
     {
         ComfyServer();
@@ -14678,7 +15380,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A tile dragged and let go anywhere but the input rows is nothing: no token, only the /imagine note's picture; a press and a release in place is no drag either.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_ATileLetGoOffTheLine_IsNothing()
     {
         ComfyServer();
@@ -14704,7 +15406,7 @@ public partial class ChatScreenTests : IDisposable
     /// The same drag under a reply (2026-09-28): the live row takes the press, the drag and the drop, the picture waits on
     /// the draft, and the line sends it once the reply is done.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_ATileDraggedOntoTheLine_UnderAReply_IsAttached()
     {
         ComfyServer();
@@ -14769,7 +15471,7 @@ public partial class ChatScreenTests : IDisposable
     /// to the viewer. The input row at 100, the upper rule at 99, the strip's own rule with the
     /// button at its left edge (2026-09-28), <see cref="ScreenPane.StripPaneRows"/> over the upper rule.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_TheViewerButton_OneClick_OpensTheOutputFolder()
     {
         ComfyServer();
@@ -14787,7 +15489,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>With no viewer to open (not Windows) the strip's rule is bare, and a click there opens nothing.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_WithoutAViewer_HasNoButton()
     {
         ComfyServer();
@@ -14805,7 +15507,7 @@ public partial class ChatScreenTests : IDisposable
     /// The close × at the right of the strip's rule (2026-09-28, the user's ask): one click puts the strip away — the arrows
     /// and the Enter are the line's again, nothing opens — until the next picture, which brings it back with both.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_TheCloseX_OneClick_HidesItUntilTheNextPicture()
     {
         ComfyServer();
@@ -14833,7 +15535,7 @@ public partial class ChatScreenTests : IDisposable
     /// The 🎞️ the upper rule carries while the × has the strip put away (2026-10-03, the user's ask): one click brings the
     /// strip back with its pictures, so → and Enter open one again with no new picture made.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_TheUpperRulesFilm_OneClick_BringsAClosedStripBack()
     {
         ComfyServer();
@@ -14924,7 +15626,7 @@ public partial class ChatScreenTests : IDisposable
     /// the strip, then a picture the strip does not hold is ignored — the highlight stays, so → (which would take the newest
     /// from nothing) stays on the oldest. Always, since the strip sync setting went (later that day, the user's call).
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_TheViewersKeys_HighlightTheSamePicture()
     {
         ComfyServer();
@@ -14951,7 +15653,7 @@ public partial class ChatScreenTests : IDisposable
     /// The strip's arrows move an open viewer (2026-09-28; always since the strip sync setting went later that day): →
     /// hands the highlighted picture's full path over; ← off the newest lets go and hands nothing.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task PictureStrip_TheArrows_MoveTheViewer()
     {
         ComfyServer();
@@ -15193,7 +15895,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_FillsTheWidthUnderTheBanner_AndTheFirstSentLineWipesTheScreen()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15218,7 +15920,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("hi", UserText(Assert.Single(_chat.Requests)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_KeepsTheBannerAbove_ATallPictureFitsTheRowsLeft()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15235,7 +15937,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, Refreshes(output));   // /exit is a sent line like any other: the wipe, then the app ends
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_ACommandIsASentLineToo_AndClearNeverBringsItBack()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15254,7 +15956,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› /cwd", output[wipe..]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplashOff_OrNoPane_DrawsNothing_AndNeverAsksForAPicture()
     {
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
@@ -15280,7 +15982,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("▀", output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_ASpokenLineWipesItToo()
     {
         WakeOn();
@@ -15312,7 +16014,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("● It is noon.", output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_ADoubleClickOnTheHintRow_LeavesItStanding()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15337,7 +16039,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› hi", output[LastScreen(output)..]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_LeftAndRightAtAnEmptyLine_CycleThePictures_Wrapping()
     {
         // Left / Right over the splash (2026-09-19): the other picture in name order, the screen
@@ -15365,7 +16067,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_AHeldArrowsQueuedPresses_AreOneStep_DrawnOnce()
     {
         // 2026-10-05, the user's ask: a held arrow queued presses faster than the splash loaded and drew its pictures. The
@@ -15402,7 +16104,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("▀", output[screens[3]..]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_TheProfilesOwnFolder_ReplacesTheEmbeddedSet_AndTheArrowsWalkItsFiles()
     {
         // A splash folder under the loaded profile (later on 2026-09-19, the user's ask): its pictures instead of the
@@ -15443,7 +16145,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("▀", output[screens[3]..]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ProfileSwitch_ShowsTheWelcomeSplashAgain_FromTheNewProfilesFolder_AndTheArrowsWalkIt()
     {
         // A profile switch (later on 2026-09-19, the user's ask): the splash under the fresh banner and the switched
@@ -15483,7 +16185,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_AFolderWithNoPicture_LeavesTheEmbeddedSetInForce()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15501,7 +16203,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(5, Count(output, " " + new string('▀', 238) + " "));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_AnArrowWithTextOnTheLine_OrAfterTheFirstLine_OrWithTheSettingOff_CyclesNothing()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15519,7 +16221,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("x", UserText(Assert.Single(_chat.Requests)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_TheHintRowNamesTheSlideshow_WhileTheDraftIsEmpty()
     {
         // The hint row under the splash (2026-09-20, the user's ask): ← → slideshow while the picture
@@ -15551,7 +16253,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("hello", UserText(Assert.Single(_chat.Requests)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_OnePicture_ShowsNoSlideshowHint()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15566,7 +16268,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(ChatScreen.SplashHint, output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_TheSettingOff_ShowsNoPictureAndNoSlideshowHint()
     {
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
@@ -15594,7 +16296,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── Delete Delete removes a profile's splash picture (2026-09-24, the user's ask) ─────────────────
 
-    [Fact]
+    [WindowsFact]
     public async Task Splash_DeleteTwiceInARow_OverAProfilesPicture_DeletesTheFile_AndShowsTheNextPicture()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15647,7 +16349,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, Refreshes(output));                                            // the delete's redraw, then /exit's wipe
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Splash_DeleteThenAnotherKey_OrAfterTheWindow_DeletesNothing()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15683,7 +16385,7 @@ public partial class ChatScreenTests : IDisposable
 
     private static readonly string TileLine = new('▀', 48);
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_TiledSplash_ShowsAScreenfulOfThumbnails_AndLeftRightPage_Wrapping()
     {
         // Welcome splash tiled (2026-09-24, the user's ask): the pictures in name order at Image thumbnail size, only as
@@ -15707,7 +16409,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_TiledSplash_AHeldArrowsQueuedPresses_PageOnce_AndARunBackWhereItStoodDrawsNothing()
     {
         // 2026-10-05, the user's ask: the queued run is one page step, one redraw — three → over two pages is page 2 — and
@@ -15736,7 +16438,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("← → page 1 of 2", ChatScreen.SplashHintLine("", ChatScreen.SplashPageHint(0, 2)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_TiledSplash_OnePage_ShowsNoPageHint_AndTheArrowsAreTheLines()
     {
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
@@ -15751,7 +16453,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("← → page", output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_TiledSplash_DeleteTwice_OverTheProfilesPictures_TrashesNothing()
     {
         // No one picture stands on a page of tiles, so Delete is the line's key (2026-09-24, the user's call).
@@ -15775,7 +16477,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, Refreshes(output));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Splash_Command_ShowsTheTiledPages_WhenTheModeIsTiled_AndOnePictureWhenDisabled()
     {
         TiledSplashOfTen();
@@ -15798,7 +16500,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2 * 12, Count(output[screens[4]..screens[5]], TileLine));     // and the arrows page it
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Splash_DeleteTwice_OverAnEmbeddedPicture_IsNothing()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15813,7 +16515,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("DEL again", output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Splash_DeletingTheFoldersLastPicture_FallsBackToTheEmbeddedSet()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15837,7 +16539,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(5, Count(output[screens[1]..screens[2]], wide));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Startup_WelcomeSplash_TheSwitchOffMidSession_StopsTheWalk()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15868,7 +16570,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── /splash (later still on 2026-09-19, the user's ask) ─────────────────
 
-    [Fact]
+    [WindowsFact]
     public async Task Splash_ForgetsTheConversation_WipesTheScreen_AndShowsThePictureAgain()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15897,7 +16599,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("again", UserText(_chat.Requests[1]));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Splash_WithWelcomeSplashOff_ShowsThePictureAnyway_AndTheArrowsWalkIt()
     {
         // The setting gates the startup picture alone: /splash draws one whatever it says, and Left /
@@ -15929,7 +16631,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task MidTurn_Splash_CancelsTheReply_AndRunsAtTheIdleLine()
     {
         _settings.Update(d => d.WelcomeSplashMode = "disabled");
@@ -15989,7 +16691,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("b", UserText(_chat.Requests[1]));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task CtrlAltP_ShowsTheSplash_AsSlashSplash()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -16006,7 +16708,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("again", UserText(_chat.Requests[1]));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task MidTurn_CtrlAltP_CancelsTheReply_AndRunsAtTheIdleLine()
     {
         _settings.Update(d => d.WelcomeSplashMode = "disabled");
@@ -16815,7 +17517,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── /theme (2026-09-23, the user's ask; the splash as Welcome splash says since 2026-10-02) ──
 
-    [Fact]
+    [WindowsFact]
     public async Task Theme_Named_SplashDisabled_SavesIt_PutsItInForce_AndStartsOverLikeClear()
     {
         using var theme = new ThemeScope();
@@ -16843,7 +17545,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("again", UserText(_chat.Requests[1]));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Theme_Named_SplashOn_StartsOverWithThePicture()
     {
         using var theme = new ThemeScope();
@@ -17130,7 +17832,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("again", UserText(_chat.Requests[1]));   // the fresh start forgot "hi"
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task MidTurn_Theme_WaitsForTheReply_ThenApplies()
     {
         // 2026-09-23, the user's call: a theme change waits for the reply to end, as its Settings row does.
@@ -17258,7 +17960,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Tree_HonoursTheCapAndTheSizeToggle()
     {
         _settings.Update(d => { d.FileTreeMaxLength = 2; d.FileTreeShowSizes = false; });
@@ -17281,7 +17983,31 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(" B\n", output);
     }
 
-    [Theory]
+    /// <summary>The Unix twin of <see cref="Tree_HonoursTheCapAndTheSizeToggle"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Tree_HonoursTheCapAndTheSizeToggle_Unix()
+    {
+        _settings.Update(d => { d.FileTreeMaxLength = 2; d.FileTreeShowSizes = false; });
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "a.txt"), "1");
+        File.WriteAllText(Path.Combine(files, "b.txt"), "22");
+        File.WriteAllText(Path.Combine(files, "c.txt"), "333");
+        PushLine("/tree");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(
+            "  · " + files + @"/" + "\n"
+            + "  · ├── a.txt\n"
+            + "  · ├── b.txt\n"
+            + "  · " + TreeText.CutLine(2) + "\n",
+            output);
+        Assert.DoesNotContain(" B\n", output);
+    }
+
+    [WindowsTheory]
     [InlineData("default")]
     [InlineData("show-hidden")]
     public async Task Tree_FollowsTheFileBrowserTreeMode(string mode)
@@ -17301,6 +18027,30 @@ public partial class ChatScreenTests : IDisposable
         string expected = mode == "show-hidden"
             ? "  · " + files + @"\" + "\n" + "  · ├── .folder\\\n" + "  · │   └── x.txt\n" + "  · ├── .gitignore\n" + "  · └── a.txt\n"
             : "  · " + files + @"\" + "\n" + "  · └── a.txt\n";
+        Assert.Contains(expected, output);
+    }
+
+    /// <summary>The Unix twin of <see cref="Tree_FollowsTheFileBrowserTreeMode"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixTheory]
+    [InlineData("default")]
+    [InlineData("show-hidden")]
+    public async Task Tree_FollowsTheFileBrowserTreeMode_Unix(string mode)
+    {
+        // 2026-09-23, the user's call: /tree follows File browser/tree mode — default leaves dot-files and dot-folders out, show-hidden lists them.
+        _settings.Update(d => { d.FileTreeShowSizes = false; d.FileBrowserMode = mode; });
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, ".folder"));
+        File.WriteAllText(Path.Combine(files, ".folder", "x.txt"), "1");
+        File.WriteAllText(Path.Combine(files, ".gitignore"), "bin/");
+        File.WriteAllText(Path.Combine(files, "a.txt"), "1");
+        PushLine("/tree");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string expected = mode == "show-hidden"
+            ? "  · " + files + @"/" + "\n" + "  · ├── .folder/\n" + "  · │   └── x.txt\n" + "  · ├── .gitignore\n" + "  · └── a.txt\n"
+            : "  · " + files + @"/" + "\n" + "  · └── a.txt\n";
         Assert.Contains(expected, output);
     }
 
@@ -17438,7 +18188,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A dropped image goes to the model as an image part beside the text, stays in the history for the next turn, and /copy quotes its label.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task ADroppedImage_IsAnImagePart_ThatStaysInTheHistory()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -17473,7 +18223,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A picture pasted off the clipboard is the same image part, thumbnail and label as a dropped file, under its clipboard name.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task APastedClipboardPicture_IsAnImagePart_LikeADroppedFile()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -17501,7 +18251,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>Two pictures on one line are tiled side by side under it, a gap between.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task TwoDroppedImages_AreTiledUnderTheLine()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -17519,7 +18269,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>Several files dropped at once — one paste, a path per line — are a token each, sent as one part each, tiled under the line.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task SeveralImagesDroppedAtOnce_AreEachAPart_AndTiled()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -17538,7 +18288,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› [Image #1] [Image #2]\n  ▀▀▀▀  ▀▀▀▀\n  ▀▀▀▀  ▀▀▀▀\n", output);
     }
     /// <summary>With the General toggle off the picture is sent and labelled as ever, and nothing is drawn under the line.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task ADroppedImage_WithThumbnailsOff_DrawsNoBlock()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; });
@@ -17558,7 +18308,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("● A pink square.", output);
     }
     /// <summary>The thumbnail is scaled to the size setting's box: a wide picture fills its columns (64 at medium, 48 at small), one half-block row at 2 px tall.</summary>
-    [Theory]
+    [WindowsTheory]
     [InlineData("tiny", 32)]
     [InlineData("small", 48)]
     [InlineData("medium", 64)]
@@ -17585,7 +18335,7 @@ public partial class ChatScreenTests : IDisposable
     /// two-cell margin since 2026-10-03; a second one no longer fits beside it, so it wraps to a row of its own below the first
     /// rather than sharing the row.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task DroppedImages_AtFullSize_FillTheWindow_AndStackBelowEachOther()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageThumbnailSize = "fullsize"; });
@@ -17607,7 +18357,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A hand-edited size that is none of the four warns once and draws small.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task ADroppedImage_WithAnUnknownSizeSaved_WarnsAndDrawsSmall()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageThumbnailSize = "huge"; });
@@ -17624,7 +18374,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A /command sent with an image on the line runs as typed; the picture is dropped with a notice.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task AnImage_OnACommandLine_IsIgnoredWithANotice()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18019,7 +18769,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>LM Studio + Gemma 4 stream a newline content delta beside each generated tool call: none of them may become a blank row.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Turn_NewlineDeltasBesideToolCalls_LeaveNoBlankRows()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18045,7 +18795,34 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Moving.\n\n", output);
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="Turn_NewlineDeltasBesideToolCalls_LeaveNoBlankRows"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Turn_NewlineDeltasBesideToolCalls_LeaveNoBlankRows_Unix()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string folder = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "a.txt"), "a");
+        File.WriteAllText(Path.Combine(folder, "b.txt"), "b");
+        _chat.Enqueue(
+            FakeChatClient.Text("Moving."),
+            FakeChatClient.Text("\n"),
+            FakeChatClient.Call("c1", MoveTool.ToolName, new Dictionary<string, object?> { ["from"] = "a.txt", ["to"] = @"done/a.txt" }),
+            FakeChatClient.Text("\n"),
+            FakeChatClient.Call("c2", MoveTool.ToolName, new Dictionary<string, object?> { ["from"] = "b.txt", ["to"] = @"done/b.txt" }),
+            FakeChatClient.Text("\n"));
+        _chat.EnqueueText("Done.");
+        PushLine("tidy up");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("Moving.\n  🛠️ moved a.txt to done/a.txt\n  🛠️ moved b.txt to done/b.txt\n", output);
+        Assert.Contains("Done.", output);
+        Assert.DoesNotContain("Moving.\n\n", output);
+    }
+
+    [WindowsFact]
     public async Task Turn_ModelWritesAndReadsAFile_ShowsOneDimLineEach_InTheProfilesFolder()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18068,6 +18845,32 @@ public partial class ChatScreenTests : IDisposable
         var results = _chat.Requests[2][^1].Contents.OfType<FunctionResultContent>().ToList();
         Assert.Equal("c2", results.Single().CallId);
         Assert.Equal("drafts\\haiku.txt (2 lines):\nold pond\nfrog jumps in", results.Single().Result);
+    }
+
+    /// <summary>The Unix twin of <see cref="Turn_ModelWritesAndReadsAFile_ShowsOneDimLineEach_InTheProfilesFolder"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Turn_ModelWritesAndReadsAFile_ShowsOneDimLineEach_InTheProfilesFolder_Unix()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = @"drafts/haiku.txt", ["content"] = "old pond\nfrog jumps in" }));
+        _chat.Enqueue(FakeChatClient.Call("c2", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = @"drafts/haiku.txt" }));
+        _chat.EnqueueText("Saved and read back.");
+        PushLine("save a haiku");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string file = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "drafts", "haiku.txt");
+        Assert.Equal("old pond\nfrog jumps in", File.ReadAllText(file));
+        Assert.Contains("🛠️ wrote drafts/haiku.txt (22 bytes, 2 lines, 5 words)", output);
+        Assert.Contains("🛠️ drafts/haiku.txt (2 lines): old pond frog jumps in", output);   // the note flattens the lines (bare since 2026-09-19)
+        Assert.DoesNotContain(WriteFileTool.ToolName, output);
+        Assert.DoesNotContain(ReadFileTool.ToolName, output);
+        Assert.Contains("Saved and read back.", output);
+
+        var results = _chat.Requests[2][^1].Contents.OfType<FunctionResultContent>().ToList();
+        Assert.Equal("c2", results.Single().CallId);
+        Assert.Equal("drafts/haiku.txt (2 lines):\nold pond\nfrog jumps in", results.Single().Result);
     }
 
     [Fact]
@@ -18176,7 +18979,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>The model's own way to a picture: the 🛠️ note, the thumbnail under it, the carrier after the tool message, and the picture still there for a follow-up.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Turn_ModelViewsAnImage_ShowsTheNoteAndTheThumbnail_AndTheCarrierFollowsTheResult()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18211,7 +19014,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A batch in one call: one 🛠️ line per path, both thumbnails side by side, one carrier with two parts.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Turn_ModelViewsTwoImagesInOneCall_DrawsBothThumbnails_OneCarrier()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18234,7 +19037,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ConversationHistory.ImageCarrierText(["a.bmp", "b.bmp"]), carrier.Text);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Turn_ModelViewsAnImage_WithThumbnailsOff_DrawsNoBlock()
     {
         _settings.Update(d =>
@@ -18257,7 +19060,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests[1], ConversationHistory.IsImageCarrier);   // attached just the same
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Turn_ModelReachesOutsideTheWorkingDirectory_GetsTheRefusal_NothingElse()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18271,6 +19074,23 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("✗  " + FileText.OutsideRoot(@"..\profile.json"), output);   // a failed result wears its own mark (2026-10-04)
         var result = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
         Assert.Equal(FileText.OutsideRoot(@"..\profile.json"), result.Result);
+    }
+
+    /// <summary>The Unix twin of <see cref="Turn_ModelReachesOutsideTheWorkingDirectory_GetsTheRefusal_NothingElse"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
+    [UnixFact]
+    public async Task Turn_ModelReachesOutsideTheWorkingDirectory_GetsTheRefusal_NothingElse_Unix()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = @"../profile.json" }));
+        _chat.EnqueueText("I cannot reach that.");
+        PushLine("read the profile");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("✗  " + FileText.OutsideRoot(@"../profile.json"), output);   // a failed result wears its own mark (2026-10-04)
+        var result = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
+        Assert.Equal(FileText.OutsideRoot(@"../profile.json"), result.Result);
     }
 
     [Fact]
@@ -21752,7 +22572,7 @@ public partial class ChatScreenTests : IDisposable
         }
     };
 
-    [Fact]
+    [WindowsFact]
     public async Task APictureDoubleClicked_OpensInTheImageEditor_TheSettingsCommandPassed_AndNoLinePrinted()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = "mspaint"; });
@@ -21778,7 +22598,7 @@ public partial class ChatScreenTests : IDisposable
     /// setting empty and a viewer to open, the picture's full path goes to it and the registered app is not started;
     /// <c>system</c> sends it to the registered app (the old empty); a viewer that will not start falls back to that app.
     /// </summary>
-    [Theory]
+    [WindowsTheory]
     [InlineData("", false, true)]
     [InlineData("System", false, false)]
     [InlineData("", true, false)]
@@ -21825,7 +22645,7 @@ public partial class ChatScreenTests : IDisposable
     /// A <c>/loop</c> wait keeps the mouse (2026-09-24, the user's ask: the pictures froze while a loop
     /// waited): a picture double-clicked in the wait opens, and ESC after it still ends the loop.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task APictureDoubleClicked_DuringALoopWait_Opens_AndEscStillEndsTheLoop()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = "mspaint"; });
@@ -21859,7 +22679,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(ChatScreen.LoopTurnNotice(2, 2), output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task APictureWithNoFile_IsWrittenToTemp_AndAGoneFileIsAnError()
     {
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "disabled"; });
@@ -21886,7 +22706,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("🖼️ opened", output);   // a good open prints nothing, only the error above (2026-09-24)
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ATiledSplashPictureDoubleClicked_Opens_WithNoNoticeLine()
     {
         // The splash's pictures open without the "(🖼️ opened …)" line; only an error would print (2026-09-24, the user's call).

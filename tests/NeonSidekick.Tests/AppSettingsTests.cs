@@ -703,7 +703,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("af_bella", settings.Current.TtsVoice);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ProfileFile_MissingFields_LoadWithDefaults()
     {
         // A literal, not a round trip of the current type: round-tripping proves nothing about
@@ -714,6 +714,22 @@ public class AppSettingsTests : IDisposable
 
         using var settings = new AppSettings(_dir);
         AssertOldShapeLoaded(settings.Current);
+    }
+
+    /// <summary>
+    /// The Unix side of <see cref="ProfileFile_MissingFields_LoadWithDefaults"/> (2026-10-06, the macOS build): an old profile with no
+    /// shell loads the platform's default, zsh. The rest of that test's defaults are not OS-worded and are pinned there.
+    /// </summary>
+    [UnixFact]
+    public void ProfileFile_MissingFields_LoadTheMacsShellDefault()
+    {
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName), "{ \"SchemaVersion\": 1, \"LlmUrl\": \"http://old:1234/v1\" }");
+
+        using var settings = new AppSettings(_dir);
+        Assert.Equal("zsh", settings.Current.ShellDefault);
+        Assert.Equal(NeonSidekick.Shell.ShellKinds.PlatformDefault, settings.Current.ShellDefault);
+        Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
     }
 
     /// <summary>

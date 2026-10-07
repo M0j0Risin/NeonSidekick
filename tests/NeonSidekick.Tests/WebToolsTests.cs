@@ -376,7 +376,7 @@ public sealed class WebToolsTests : IDisposable
         Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Download_APath_IsTheFile_AFolder_TakesTheFilesName_WithTheHeadersNameFirst()
     {
         _http.Map("https://example.com/data.bin", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, [1, 2, 3], "application/octet-stream")));
@@ -391,6 +391,27 @@ public sealed class WebToolsTests : IDisposable
         Assert.Equal(@"downloaded out\blob.bin (3 B, application/octet-stream) from https://example.com/data.bin", await _download.DownloadAsync("https://example.com/data.bin", "out/blob.bin", false, CancellationToken.None));
         Assert.Equal(@"downloaded in\data.bin (3 B, application/octet-stream) from https://example.com/data.bin", await _download.DownloadAsync("https://example.com/data.bin", "in", false, CancellationToken.None));
         Assert.Equal(@"downloaded new\data.bin (3 B, application/octet-stream) from https://example.com/data.bin", await _download.DownloadAsync("https://example.com/data.bin", "new/", false, CancellationToken.None));
+        // The header's name wins over the URL's last segment, its path and the quotes stripped, the query never part of a name.
+        Assert.Equal("downloaded report (Q3).csv (2 B, text/csv) from https://example.com/export?id=7", await _download.DownloadAsync("https://example.com/export?id=7", null, false, CancellationToken.None));
+        Assert.Equal([9, 9], Saved("report (Q3).csv"));
+    }
+
+    /// <summary>The Unix twin of <see cref="Download_APath_IsTheFile_AFolder_TakesTheFilesName_WithTheHeadersNameFirst"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task Download_APath_IsTheFile_AFolder_TakesTheFilesName_WithTheHeadersNameFirst_Unix()
+    {
+        _http.Map("https://example.com/data.bin", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, [1, 2, 3], "application/octet-stream")));
+        _http.Map("https://example.com/export?id=7", (_, _) =>
+        {
+            var response = StubHttpMessageHandler.Bytes(HttpStatusCode.OK, [9, 9], "text/csv");
+            response.Content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment") { FileName = "\"../evil/report (Q3).csv\"" };
+            return Task.FromResult(response);
+        });
+        Directory.CreateDirectory(Path.Combine(_root, "in"));
+
+        Assert.Equal(@"downloaded out/blob.bin (3 B, application/octet-stream) from https://example.com/data.bin", await _download.DownloadAsync("https://example.com/data.bin", "out/blob.bin", false, CancellationToken.None));
+        Assert.Equal(@"downloaded in/data.bin (3 B, application/octet-stream) from https://example.com/data.bin", await _download.DownloadAsync("https://example.com/data.bin", "in", false, CancellationToken.None));
+        Assert.Equal(@"downloaded new/data.bin (3 B, application/octet-stream) from https://example.com/data.bin", await _download.DownloadAsync("https://example.com/data.bin", "new/", false, CancellationToken.None));
         // The header's name wins over the URL's last segment, its path and the quotes stripped, the query never part of a name.
         Assert.Equal("downloaded report (Q3).csv (2 B, text/csv) from https://example.com/export?id=7", await _download.DownloadAsync("https://example.com/export?id=7", null, false, CancellationToken.None));
         Assert.Equal([9, 9], Saved("report (Q3).csv"));
