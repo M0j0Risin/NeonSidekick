@@ -178,7 +178,6 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Equal(Claude.ClaudeText.MacNotFound, Claude.ClaudeText.NotFound);
         Assert.DoesNotContain("USERPROFILE", Claude.ClaudeText.NotFound);
         Assert.Equal("a\\b is not a path every system's folders can hold safely", SkillInstallText.UnsafePathRefusal("a\\b"));
-        Assert.Equal("/terminal needs Windows for now; open Terminal or iTerm2 yourself in the working directory.", ChatScreen.MacTerminalUnavailableError);
         Assert.Equal("(none: printing needs Windows)", SettingsMenu.WindowsDefaultPrinterLabel);
         Assert.Equal("GPU load", Perf.PerfText.GpuNote);   // read through IOKit since 2026-10-07
         Assert.Equal("GMEM", Perf.PerfText.VramLabel);
@@ -274,7 +273,8 @@ public sealed class MacTidyUpTests : IDisposable
 
         Assert.DoesNotContain("Explorer", forms["/view <image>|<folder>"]);
         Assert.Equal(Printing.PrintText.NeedsWindows, forms["/print printers"]);
-        Assert.Equal(ChatScreen.MacTerminalUnavailableError, forms["/terminal [<folder>]"]);
+        Assert.Equal(HelpMac.TerminalForm, forms["/terminal [<folder>]"]);   // an opener since 2026-10-07
+        Assert.Contains("Ctrl+]", forms["/terminal [<folder>]"]);
     }
 
     // ── the small differences ──

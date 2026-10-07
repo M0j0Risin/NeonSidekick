@@ -50,6 +50,13 @@ public static class HelpMac
         [SettingsField.PostgresSetPassword] = "Pick a connection and type its password (masked); it is saved encrypted in postgres.json or in the macOS Keychain, as the connection says.",
     };
 
+    /// <summary>
+    /// <c>/terminal</c> on a Mac (2026-10-07): <c>open</c> starts the terminal the app runs in when it is Terminal or iTerm2, else
+    /// Terminal; Terminal opens a window, iTerm2 a tab in its front window (iTerm2's own choice); Ctrl+] for Ctrl+., which a Mac
+    /// terminal sends as a bare ".". Pinned.
+    /// </summary>
+    public const string TerminalForm = "Open a new terminal in the working directory, or in a folder under it (Tab completes the folder): a new Terminal window, or a new tab in iTerm2's front window when the app runs in iTerm2 (iTerm2 decides; its settings can make it a window). Another terminal app opens Terminal. Ctrl+] runs it too (a Mac terminal sends Ctrl+. as a plain dot).";
+
     /// <summary>The command forms whose text differs on a Mac, by syntax as <see cref="HelpCommands"/> writes it.</summary>
     public static readonly IReadOnlyDictionary<string, string> Forms = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -64,7 +71,8 @@ public static class HelpMac
         ["/print reply [<options>]"] = Printing.PrintText.NeedsWindows,
         ["/print printers"] = Printing.PrintText.NeedsWindows,
         ["/pdf <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]"] = "Make a PDF in the working directory from a file: Markdown keeps its headings, tables, lists, links, coloured code and the pictures beside it; text and code become a coloured listing; HTML is printed as the page, its scripts and anything outside the working directory left out; a picture is fitted to one page. The PDF goes beside the file unless `to=` names a file or folder; an existing one is replaced only with `overwrite`. Options go anywhere. Edge, Chrome, Brave or Chromium makes it. On its own, `/pdf` shows how to use it. See Making PDFs.",
-        ["/terminal [<folder>]"] = ChatScreen.MacTerminalUnavailableError,
+        ["/terminal [<folder>]"] = TerminalForm,
+        ["/model [<id>]"] = "Pick a model from the server's list, or set one by its id (as typed; the server is not asked). The list is A to Z, the cursor on the model in use; type to narrow it to the ids that hold the text, Backspace erases, ESC clears it, the next ESC keeps the model. On the embedded LLM, this lists the installed embedded models. Ctrl+D runs it too (a Mac terminal sends Ctrl+M as Enter).",   // 2026-10-07
         ["/perfbar [off|text|gauge|spark|led]"] = "Show or hide the performance bar (*Show performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and GMEM the first time; GMEM is the GPU's share of the Mac's memory); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too.",   // 2026-10-07, GMEM
     };
 

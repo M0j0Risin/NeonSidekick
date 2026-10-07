@@ -231,4 +231,31 @@ public sealed class MacWindowsTests
         Assert.Equal(0, new PlaceRect(0, 0, 10, 10).Overlap(new PlaceRect(10, 0, 10, 10)));
         Assert.Equal(25, new PlaceRect(0, 0, 10, 10).Overlap(new PlaceRect(5, 5, 10, 10)));
     }
+
+    /// <summary>
+    /// <c>/terminal</c>'s <c>open</c> arguments on a Mac (2026-10-07): the first ancestor inside an app bundle by its path when it is
+    /// Terminal or iTerm2 (the chains measured that day: zsh → login → Terminal; zsh → login → iTermServer → iTerm2), Terminal for
+    /// any other app, then TERM_PROGRAM by bundle id, then Terminal; the folder always its own last argument, spaces and quotes as
+    /// they are.
+    /// </summary>
+    [Fact]
+    public void TerminalPick_OpensTheTerminalTheAppRunsIn_ElseTerminal()
+    {
+        const string folder = "/Users/me/odd dir/ä 'q\"; $x & (y)";
+        string?[] terminal = ["/bin/zsh", "/usr/bin/login", "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal", "/sbin/launchd"];
+        string?[] iterm = ["/bin/zsh", "/usr/bin/login", "/Users/me/Library/Application Support/iTerm2/iTermServer-3.7.3", "/Applications/iTerm.app/Contents/MacOS/iTerm2"];
+        string?[] vscode = ["/bin/zsh", "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper", "/Applications/Visual Studio Code.app/Contents/MacOS/Electron"];
+        string?[] tmux = ["/bin/zsh", "/opt/homebrew/bin/tmux", null];
+
+        Assert.Equal(["-a", "/System/Applications/Utilities/Terminal.app", folder], TerminalPick.OpenTerminalArguments(terminal, "iTerm.app", folder));
+        Assert.Equal(["-a", "/Applications/iTerm.app", folder], TerminalPick.OpenTerminalArguments(iterm, "Apple_Terminal", folder));
+        Assert.Equal(["-b", "com.apple.Terminal", folder], TerminalPick.OpenTerminalArguments(vscode, "vscode", folder));
+        Assert.Equal(["-b", "com.googlecode.iterm2", folder], TerminalPick.OpenTerminalArguments(tmux, "iTerm.app", folder));
+        Assert.Equal(["-b", "com.apple.Terminal", folder], TerminalPick.OpenTerminalArguments(tmux, "tmux", folder));
+        Assert.Equal(["-b", "com.apple.Terminal", folder], TerminalPick.OpenTerminalArguments([], null, folder));
+        Assert.Equal("/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app", TerminalPick.AppBundleOf(vscode[1]));
+        Assert.Null(TerminalPick.AppBundleOf("/usr/bin/login"));
+        Assert.Null(TerminalPick.AppBundleOf("Terminal.app/Contents/MacOS/Terminal"));   // not a full path
+        Assert.Null(TerminalPick.AppBundleOf(null));
+    }
 }

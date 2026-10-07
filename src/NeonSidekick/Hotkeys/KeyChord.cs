@@ -87,6 +87,7 @@ public readonly record struct KeyChord(bool Ctrl, bool Alt, bool Shift, ConsoleK
                 >= '0' and <= '9' => (ConsoleKey)c,
                 '.' => ConsoleKey.OemPeriod,
                 '/' => ConsoleKey.Oem2,
+                ']' => ConsoleKey.Oem6,   // Ctrl+], a Mac's /terminal (2026-10-07)
                 ',' => ConsoleKey.OemComma,
                 '-' => ConsoleKey.OemMinus,
                 _ => null,

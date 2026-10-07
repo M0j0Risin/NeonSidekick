@@ -187,7 +187,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 | Ctrl+Z | `/theme`: pick a colour theme |
 | Ctrl+Alt+N | `/new`: start a new conversation |
 
-`/help` › Keys lists them all; so does [SETTINGS.md](docs/SETTINGS.md#keyboard-shortcuts).
+On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help` › Keys lists them all; so does [SETTINGS.md](docs/SETTINGS.md#keyboard-shortcuts).
 
 ### Hint row and toolbar
 The hint row under the input line shows the model, the context used and anything running in the background; double-click the model name to switch. The toolbar under it has a glyph for each pane and tool group: click one to see what it is, double-click to open it. Ctrl+T hides or shows it.

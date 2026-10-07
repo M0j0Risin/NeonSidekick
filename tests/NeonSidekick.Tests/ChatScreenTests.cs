@@ -9818,16 +9818,19 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \nEnter", output);
-        // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04) + the gap of 2.
-        Assert.Contains("Ctrl+Home                scroll to the top of the transcript", output);
-        Assert.Contains("Ctrl+End                 scroll to the bottom of the transcript", output);
-        Assert.Contains("Ctrl+C                   copy the selection · stop the speech · cancel the reply · press twice to exit", output);
+        // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04; on a Mac, 2026-10-07,
+        // "Ctrl+Left / Right", Option+Delete standing for it) + the gap of 2.
+        int width = ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Max(r => r.Key.Length) + 2;
+        Assert.Equal(OperatingSystem.IsMacOS() ? 19 : 25, width);
+        Assert.Contains("Ctrl+Home".PadRight(width) + "scroll to the top of the transcript", output);
+        Assert.Contains("Ctrl+End".PadRight(width) + "scroll to the bottom of the transcript", output);
+        Assert.Contains("Ctrl+C".PadRight(width) + "copy the selection · stop the speech · cancel the reply · press twice to exit", output);
         // The command in a column of its own (2026-10-05, the user's pick), after the widest meaning and the gap; none for Ctrl+L.
         var keys = output[output.LastIndexOf("\n \nEnter", StringComparison.Ordinal)..];
         int column = keys.Split('\n').Single(l => l.StartsWith("Ctrl+H ", StringComparison.Ordinal)).IndexOf("/help", StringComparison.Ordinal);
-        Assert.Matches(@"\nCtrl\+H {19}open the help {2,}/help\s*\n", keys);
+        Assert.Matches(@"\nCtrl\+H {" + (width - 6) + @"}open the help {2,}/help\s*\n", keys);
         Assert.Equal(column, keys.Split('\n').Single(l => l.StartsWith("Ctrl+Alt+Q ", StringComparison.Ordinal)).IndexOf("/queue clear", StringComparison.Ordinal));
-        Assert.Matches(@"\nCtrl\+L {19}cancel a background learning turn\s*\n", keys);
+        Assert.Matches(@"\nCtrl\+L {" + (width - 6) + @"}cancel a background learning turn\s*\n", keys);
         Assert.DoesNotContain("F4", output[output.IndexOf("Help   Basic    Advanced    Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
@@ -11047,13 +11050,36 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.SwitchForGlyph("x"));
     }
 
+    /// <summary>
+    /// The Keys tab on a Mac (2026-10-07, the user's picks): Windows' list with Option+Delete for Ctrl+Backspace (its BS is Ctrl+H
+    /// there), and Ctrl+], Ctrl+D and Ctrl+Alt+A beside the chords a Mac terminal cannot send, whose rows say where they still work.
+    /// </summary>
+    [Fact]
+    public void KeyRows_OnAMac_AddTheStandIns()
+    {
+        var windows = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: false);
+        var mac = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: true);
+
+        Assert.Equal(windows.Length + 3, mac.Length);
+        Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[8]);
+        string[] keys = mac.Select(r => r.Key).ToArray();
+        Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
+        Assert.Equal("Ctrl+Alt+A", keys[Array.IndexOf(keys, "Ctrl+Alt+C") - 1]);
+        Assert.Equal(new KeyRow("Ctrl+]", "open a terminal in the working directory", "/terminal"), mac.Single(r => r.Key == "Ctrl+]"));
+        Assert.Equal(new KeyRow("Ctrl+D", "open the model picker", "/model"), mac.Single(r => r.Key == "Ctrl+D"));
+        Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
+        Assert.Equal("open the model picker (in the app's windows; Ctrl+D in the terminal)", mac.Single(r => r.Key == "Ctrl+M").Meaning);
+        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete")),
+            mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A")));
+    }
+
     [Theory]
     [InlineData(false, false, 51)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
     [InlineData(true, false, 52)]
     [InlineData(true, true, 53)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
-        var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
+        var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
 
         // The editing keys, then the transcript's scroll (2026-10-05, the user's picks: Ctrl+A, C and X and Alt+V moved up beside
         // the editing keys, Ctrl+Home and End beside PgUp / PgDn, the commands out of the meanings, every meaning verb first).

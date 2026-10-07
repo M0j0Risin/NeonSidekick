@@ -139,7 +139,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
-| `/terminal [<folder>]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. On a Mac it needs Windows for now: open Terminal or iTerm2 yourself. |
+| `/terminal [<folder>]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. On a Mac (2026-10-07) it opens a new Terminal window there, or a new tab in iTerm2's front window when the app runs in iTerm2 (iTerm2's own choice; its settings can make it a window); another terminal app opens Terminal. Ctrl+. runs it, Ctrl+] on a Mac. |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
 | `/theme [<name>]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. |
 | `/theme export <name> [<new-name>]` | Writes a theme to the `themes` folder as a file to edit (see [Custom themes](#custom-themes)). |

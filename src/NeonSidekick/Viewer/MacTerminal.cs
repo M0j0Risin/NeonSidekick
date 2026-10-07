@@ -20,20 +20,33 @@ internal static unsafe partial class MacTerminal
     private const int ParentOffset = 4;       // pbsi_ppid
     private const long RegularPolicy = 0;     // NSApplicationActivationPolicyRegular: an app with a Dock icon
 
+    private const int PathMax = 4096;         // PROC_PIDPATHINFO_MAXSIZE
+
     private static IReadOnlyList<int> s_ancestors = [];
+    private static IReadOnlyList<string?> s_ancestorPaths = [];
     private static string? s_termProgram;
     private static nint s_terminal;           // the NSRunningApplication chosen, retained (main thread)
 
     [LibraryImport("/usr/lib/libSystem.B.dylib")]
     private static partial int proc_pidinfo(int pid, int flavor, ulong arg, void* buffer, int size);
 
+    [LibraryImport("/usr/lib/libSystem.B.dylib")]
+    private static partial int proc_pidpath(int pid, void* buffer, uint size);
+
     /// <summary>The ancestors and the terminal's name kept (startup, any thread; no AppKit).</summary>
     public static void Remember(string? termProgram)
     {
         s_termProgram = termProgram;
         s_ancestors = TerminalPick.Ancestors(Environment.ProcessId, ParentOf);
+        s_ancestorPaths = s_ancestors.Select(PathOf).ToList();   // for /terminal (2026-10-07): no AppKit, any thread
         DiagnosticLog.Debug("Viewer", $"Ancestors: {string.Join(" → ", s_ancestors)}; TERM_PROGRAM {termProgram ?? "(none)"}.");
     }
+
+    /// <summary>
+    /// <c>/usr/bin/open</c>'s arguments for a new terminal in <paramref name="folder"/> (2026-10-07, <c>/terminal</c>): the pure
+    /// <see cref="TerminalPick.OpenTerminalArguments"/> over the ancestors' executables read at startup. Any thread, no AppKit.
+    /// </summary>
+    public static IReadOnlyList<string> OpenArguments(string folder) => TerminalPick.OpenTerminalArguments(s_ancestorPaths, s_termProgram, folder);
 
     /// <summary>The terminal brought forward (main thread); false when none was found.</summary>
     public static bool Focus()
@@ -98,6 +111,14 @@ internal static unsafe partial class MacTerminal
     {
         nint app = SendIndex(Class("NSRunningApplication"), Sel("runningApplicationWithProcessIdentifier:"), (nuint)pid);
         return app != 0 && SendLong(app, Sel("activationPolicy")) == RegularPolicy ? app : 0;
+    }
+
+    // A process's executable, or null when it cannot be read (root's login is readable: proc_pidpath needs no privilege).
+    private static string? PathOf(int pid)
+    {
+        byte* path = stackalloc byte[PathMax];
+        int length = proc_pidpath(pid, path, PathMax);
+        return length > 0 ? Marshal.PtrToStringUTF8((nint)path, length) : null;
     }
 
     private static int? ParentOf(int pid)

@@ -58,7 +58,14 @@ public sealed class PersonaFile : PromptFile
             DiagnosticLog.Info(Category, $"Shell open of {Path.GetFileName(path)} failed ({ex.Message}); trying {(OperatingSystem.IsWindows() ? "Notepad" : "the default text editor")}.");
         }
 
-        // macOS (2026-10-06): open -t, the default text editor (TextEdit unless the user chose another), Notepad's place.
+        // macOS (2026-10-06): open -t, the default text editor (TextEdit unless the user chose another), Notepad's place; through
+        // StartOpen since 2026-10-07, so it never has the terminal.
+        if (OperatingSystem.IsMacOS())
+        {
+            StartOpen(["-t", path]);
+            return;
+        }
+
         var notepadStart = OperatingSystem.IsWindows()
             ? new System.Diagnostics.ProcessStartInfo("notepad.exe") { UseShellExecute = false }
             : new System.Diagnostics.ProcessStartInfo("/usr/bin/open") { UseShellExecute = false, ArgumentList = { "-t" } };
@@ -84,11 +91,23 @@ public sealed class PersonaFile : PromptFile
     /// execute, which finds the app-execution alias, so the window runs Windows Terminal's default profile. Where there is no
     /// Windows Terminal the shell refuses, and <c>cmd.exe</c> is shell-executed in the folder instead: a console window of its own
     /// (Windows Terminal itself where it is the default terminal). Not waited for. Throws when neither launch worked; the screen
-    /// prints the detail. A deliberate launch at this process-start site, beside the editor and the shell open.
+    /// prints the detail. A deliberate launch at this process-start site, beside the editor and the shell open. On a Mac
+    /// (2026-10-07) <c>/usr/bin/open</c> starts Terminal or iTerm2 in the folder instead (<see cref="Viewer.TerminalPick.OpenTerminalArguments"/>).
     /// </summary>
     public static void OpenTerminal(string folder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        if (OperatingSystem.IsMacOS())
+        {
+            // A Mac (2026-10-07, the user's ask): /usr/bin/open by its path, as the text editor's fallback above, with the terminal
+            // app and the folder as arguments (Viewer.TerminalPick.OpenTerminalArguments): Terminal or iTerm2, a window or a tab
+            // in the folder. No new process-start site. All three streams redirected (the user's find, the same day: with them
+            // inherited .NET hands the child the terminal, putting echo and line mode back until it exits, and the terminal's answer
+            // to the app's cursor query was echoed into the transcript as ^[[8;1R) — MacClipboard's rule; StartOpen.
+            StartOpen(Viewer.MacTerminal.OpenArguments(folder));
+            return;
+        }
+
         try
         {
             using var terminal = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("wt.exe", TerminalArguments(folder)) { UseShellExecute = true });
@@ -139,7 +158,52 @@ public sealed class PersonaFile : PromptFile
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         Environment.SetEnvironmentVariable(NoAttachConsoleVariable, "1");
+        if (OperatingSystem.IsMacOS())
+        {
+            StartOpen([target]);   // what .NET's shell execute runs on a Mac, with the streams redirected (2026-10-07, StartOpen)
+            return;
+        }
+
         using var shell = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true });
+    }
+
+    /// <summary>
+    /// <c>/usr/bin/open</c> with <paramref name="arguments"/> on a Mac (2026-10-07), not waited for: what .NET's shell execute runs
+    /// there, but with all three streams redirected. With them inherited .NET hands the child the terminal, putting echo and line
+    /// mode back until it exits, and whatever the terminal sent meanwhile was echoed onto the screen (the user's find: the answer to
+    /// the app's cursor query as <c>^[[8;1R</c> after <c>/terminal</c>) — <c>UI/MacClipboard</c>'s rule. open says nothing on success;
+    /// its refusal (no app for the file, an app that is gone) is read off the thread and logged. Throws when open does not start.
+    /// </summary>
+    private static void StartOpen(IEnumerable<string> arguments)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/open")
+        {
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (string argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        var opened = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("open did not start.");
+        opened.StandardInput.Close();
+        _ = Task.Run(async () =>
+        {
+            using (opened)
+            {
+                var output = opened.StandardOutput.ReadToEndAsync();
+                string error = await opened.StandardError.ReadToEndAsync().ConfigureAwait(false);
+                await output.ConfigureAwait(false);
+                await opened.WaitForExitAsync().ConfigureAwait(false);
+                if (opened.ExitCode != 0)
+                {
+                    DiagnosticLog.Warn(Category, $"open refused (exit {opened.ExitCode}): {error.Trim()}");
+                }
+            }
+        });
     }
 
     /// <summary>
