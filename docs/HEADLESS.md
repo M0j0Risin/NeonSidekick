@@ -22,7 +22,7 @@ The SQLite, PostgreSQL, MySQL, SQL and Oracle tools only read headless: `sqlite_
 ## What the output looks like
 
 ```
-NeonSidekick 0.4.1
+NeonSidekick 0.5.0
 Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: Here is what I found…

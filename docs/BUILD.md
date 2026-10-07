@@ -4,7 +4,7 @@ How to build, test and publish Neon Sidekick yourself. Back to the [README](../R
 
 ## What you need
 
-* **Windows x64.** Releases target `win-x64`. A macOS build for Apple Silicon is in preview; see [Building on a Mac](#building-on-a-mac).
+* **Windows x64** for the Windows build. Each release also has a preview package for Apple Silicon Macs, built on a Mac; see [Building on a Mac](#building-on-a-mac).
 * **The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).**
 * **For the native build (NativeAOT):** Visual Studio 2022 or later, or its Build Tools, with the **Desktop development with C++** workload. A plain `dotnet build` doesn't need it.
 * **PowerShell** to run `build.ps1`, not Git Bash: the smoke step hangs under MSYS.
@@ -58,7 +58,7 @@ Besides `--smoke`, the published exe has checks for real hardware and servers: `
 
 ## Building on a Mac
 
-A preview build for Apple Silicon Macs (`osx-arm64`). It leaves out the features that have no macOS backend yet: voice, pictures, the camera, screen capture, the viewer windows, YouTube playback, printing, the embedded LLM, Docker and UNC shares. The chat, the tools, MCP, git, the database tools, sessions and headless mode are all there.
+A preview build for Apple Silicon Macs (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: voice, pictures, the camera, screen capture, the viewer windows, YouTube playback, printing, the embedded LLM, Docker and UNC shares. The chat, the tools, MCP, git, the database tools, sessions and headless mode are all there.
 
 NativeAOT can't build a Mac binary from Windows, so build on the Mac itself. You need:
 

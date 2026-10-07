@@ -95,8 +95,9 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal** is recommended (it comes with Windows 11); the app is designed for it.
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
-**On a Mac?** A preview build for Apple Silicon is on its way: chat, tools, MCP, git, the database tools, sessions and headless
-mode, without voice, pictures or the app's own windows yet. For now you build it yourself: [Building on a Mac](docs/BUILD.md#building-on-a-mac).
+**On a Mac?** There's a preview build for Apple Silicon Macs (M1 and later): chat, tools, MCP, git, the database tools, sessions
+and headless mode, without voice, pictures, the app's own windows or the embedded model yet. Download it as below, or
+[build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:
 * **Running a model inside the app:** an NVIDIA graphics card (driver 580 or newer) or any card that supports Vulkan. Without one it still works, but slowly.
@@ -109,7 +110,12 @@ Only for some features:
 1. Download `NeonSidekick-v<version>-win-x64.zip` from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases).
 2. Unzip it into any folder and run `NeonSidekick.exe`. Keep everything in the folder together.
 
-The `.sha256` file next to each download lets you check the zip arrived intact.
+On a Mac (preview):
+1. Download `NeonSidekick-v<version>-osx-arm64.tar.gz` from the same page and unpack it (double-click it, or `tar -xzf` in Terminal).
+2. The build isn't notarized, so clear macOS's quarantine once: `xattr -dr com.apple.quarantine NeonSidekick-v<version>-osx-arm64`.
+3. In Terminal (or iTerm2), go into that folder and run `./NeonSidekick`. Keep everything in the folder together.
+
+The `.sha256` file next to each download lets you check the package arrived intact.
 
 ### First launch
 If no model server answers when the app starts, it opens **Connect a model**:
