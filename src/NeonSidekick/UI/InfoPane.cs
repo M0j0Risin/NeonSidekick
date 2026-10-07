@@ -109,7 +109,7 @@ public sealed class InfoPane
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         ArgumentNullException.ThrowIfNull(active);
-        var parts = new List<string>(titles.Count + 1) { $"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]" };
+        var parts = new List<string>(titles.Count + 1) { $"[{Theme.Label.ToMarkup()}]{Markup.Escape(TextCells.Spaced(label))}[/]" };
         for (int i = 0; i < titles.Count; i++)
         {
             var style = active.Contains(i) ? Theme.MenuHighlight : Theme.DimText;
@@ -134,7 +134,7 @@ public sealed class InfoPane
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         int budget = width - 1 - ScreenPane.TrailerGap - TextCells.Width(ScreenPane.CloseGlyph);
-        int indent = TextCells.Width(label) + 2;
+        int indent = TextCells.Width(TextCells.Spaced(label)) + 2;
         var places = new (int Row, int Column)[titles.Count];
         int row = 0;
         int column = indent;
@@ -177,14 +177,14 @@ public sealed class InfoPane
             parts[r] = [];
         }
 
-        parts[0].Add($"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]");
+        parts[0].Add($"[{Theme.Label.ToMarkup()}]{Markup.Escape(TextCells.Spaced(label))}[/]");
         for (int i = 0; i < titles.Count; i++)
         {
             var style = active.Contains(i) ? Theme.MenuHighlight : Theme.DimText;
             parts[places[i].Row].Add($"[{style.ToMarkup()}] {Markup.Escape(titles[i])} [/]");
         }
 
-        string pad = new(' ', TextCells.Width(label));
+        string pad = new(' ', TextCells.Width(TextCells.Spaced(label)));
         var lines = new string[rows];
         for (int r = 0; r < rows; r++)
         {

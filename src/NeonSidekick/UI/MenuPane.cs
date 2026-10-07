@@ -413,7 +413,7 @@ public sealed class MenuPane : INoticeSink
 
     /// <summary>The title row: the label style, like the info pane's strip label. Escaped.</summary>
     public static string TitleMarkup(string title) =>
-        $"[{Theme.Label.ToMarkup()}]{Markup.Escape(title)}[/]";
+        $"[{Theme.Label.ToMarkup()}]{Markup.Escape(TextCells.Spaced(title))}[/]";
 
     /// <summary>A row: the pointer and the menu highlight on the cursor's row, an indent on the others. <paramref name="row"/> is markup already.</summary>
     public static string RowMarkup(string row, bool active) =>
