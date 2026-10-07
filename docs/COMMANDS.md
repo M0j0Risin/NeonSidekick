@@ -24,6 +24,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
   - [Profiles](#profiles)
   - [Custom themes](#custom-themes)
   - [Voice presets](#voice-presets)
+  - [Pane keys](#pane-keys)
 
 ## All commands
 
@@ -38,8 +39,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
 | `/srvcopy <profile>` | Copies the server settings into another profile after a confirmation, replacing theirs: *LLM server scan mode*, *LLM URL* and *LLM model*; *Embedded servers enabled*, *Embedded backend* and the embedded context size, GPU layers, VRAM budget, VRAM only, vision and drafter; *Docker servers enabled*, *Docker server containers* and the Docker server timings and stop on exit; *Anthropic API*, *OpenAI API* and *Claude CLI server*. The saved values are copied, not a `--url` or variable that only overrides this run. Installed embedded models are shared by every profile already; the keys are `/keycopy`'s. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
-| `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix; the ask and yolo buttons (A, Y) switch *Shell command policy*. |
-| `/police` | Opens the on/off page for *Shell police*; its strings button (S) opens *Shell police forbidden strings*. |
+| `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix after a yes; the ask and yolo buttons (`a`, `y`) switch *Shell command policy*; typing filters the list. |
+| `/police` | Opens the on/off page for *Shell police*; its strings button (`s`) opens *Shell police forbidden strings*. |
 | `/compact [<focus>]` | Shrinks the context; a focus tells the summary what to concentrate on. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply (or the last *n*, or the whole transcript) as Markdown. `--thinking` includes the thinking, quoted under `💭 **Thinking**`. |
 | `/cwd [<path>\|~\|browse]` | Shows or changes the working directory. A path that starts with a drive (`D:\`) completes its folders as you type. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
@@ -91,7 +92,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/expand` | Unfolds every tool run, code block, diff and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
-| `/memory` | Lists memories on a pane, one line each, with the highlighted one in full under the list (Enter removes it); **read-write** (W), **read-only** (R) and **disabled** (D) on its title row set *Memory mode*. |
+| `/memory` | Lists memories on a pane, one line each, with the highlighted one in full under the list (Enter forgets it after a yes); **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row set *Memory mode*. |
 | `/memory read-write\|read-only\|disabled\|on\|off` | Sets *Memory mode* (`on` is read-write, `off` disabled). |
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
 | `/memory copy <profile> [overwrite]` | Adds them to another profile's memory (or replaces it with `overwrite`), after a confirmation. |
@@ -108,7 +109,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory from Markdown, text or code, HTML or a picture, beside the file unless `to=` says (see [Making PDFs](TOOLS.md#making-pdfs)). On a Mac only the browser makes it. |
 | `/pdf <url> [to=<path>] [overwrite]` | Makes a PDF of a web page as the browser shows it; *Web browser network mode* still applies. |
 | `/pdf reply [<options>]` | Makes a PDF of the last reply as formatted Markdown. |
-| `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or **K**) stops the highlighted one after a yes/no. |
+| `/process` | Lists the background processes the model started (`run_command`'s `background`) in a pane: id, state, elapsed, shell and command. Enter or a double-click on a row opens it in the [process window](#process-window); the **✖ kill** button (or `k`) stops the highlighted one after a yes/no. With none started, the pane opens on that line. |
 | `/process <id>` | Shows one process's output live in the [process window](#process-window) (any unique start of the id; Tab completes it). Another id switches the window. |
 | `/profile [<name>]` | Switches profiles: a picker alone (a typed letter jumps to the next profile starting with it), or straight to the one named. See Profiles. |
 | `/profile add\|delete <name>` | Creates or deletes a profile. |
@@ -116,7 +117,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths and keys unless `--all`. |
 | `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another. |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
-| `/queue [clear]` | Lists and prunes the queued messages (`⊠ clear all` or `c` drops them). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. `/queue clear` drops them without the pane. |
+| `/queue [clear]` | Lists and prunes the queued messages (Enter removes one after a yes; `⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. `/queue clear` drops them without the pane. |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/rewind [<n>]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
 | `/remember <text>` | Adds a memory. |
@@ -148,7 +149,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/timer stop <name>\|all` | Stops one timer, or every one. |
 | `/toolbar [on\|off]` | Hides the toolbar, or brings it back with its last items (the default ten the first time). |
 | `/tools` | Switches the model's tools on or off, and edits each tool group's settings on its own tab. On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
-| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (D, H, C) for *Web browser mode*; `camera`'s has a **watch** button (W) that turns `/camera watch` on or off. |
+| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (`d`, `h`, `c`) for *Web browser mode*; `camera`'s has a **watch** button (`w`) that turns `/camera watch` on or off. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
 | `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
@@ -353,7 +354,7 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 `/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⚡) lists the processes, and Enter or a double-click on one there opens it here.
 
 * **One window:** `/process` with another id switches it to that process, in the same place on screen, without closing it.
-* **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. Once the process has ended, Ctrl+K goes on to the chat as any other key. The `/process` list's **✖ kill** button (or **K**) stops the highlighted one the same way, after a yes/no.
+* **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. Once the process has ended, Ctrl+K goes on to the chat as any other key. The `/process` list's **✖ kill** button (or `k`) stops the highlighted one the same way, after a yes/no.
 
 Otherwise it is read-only: scroll, follow, select and copy as in the log window, Tab back to the terminal. It reopens where it was closed and closes with the app.
 
@@ -490,3 +491,28 @@ Forty-one more presets come with the repo in [`assets/voices`](../assets/voices)
 | `accents` | amelie, arjun, beatriz, giulia, kenji, lucia, marco, mateo, mei, priya, yuki (an English voice leads, and a Spanish, French, Italian, Hindi, Portuguese, Japanese or Mandarin voice adds its accent) |
 
 `dotnet run tools/VoiceSamples.cs` regenerates the samples and the atlas (it needs the downloaded Kokoro model); rerun it after changing a preset in `assets/voices`.
+
+### Pane keys
+
+Every list pane works the same way (2026-10-07): ↑/↓ move, Enter picks the highlighted row, a double-click is Enter, and ESC closes the pane at its top level or goes back from a page opened under it. A key letter is lowercase and acts at once; on a pane that filters, the letters work until you start typing, and then every character goes on the filter (the hint drops them meanwhile). A remove always asks first, with **No** on the cursor. An empty list still opens its pane, on one dim line, so its buttons stay in reach.
+
+| Pane | Keys |
+|---|---|
+| `/memory` | Enter forgets (asks) · `w` read-write · `o` read-only · `x` disabled |
+| `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held) |
+| `/rewind` | Enter rewinds to before the message |
+| `/sessions` | Enter opens · type to filter |
+| `/process` | Enter opens the window · `k` kills (asks) |
+| `/docker` | Enter opens · `r` refresh · type to filter |
+| `/youtube saved` | Enter plays · `d` removes (asks) · type to filter |
+| `/cmdlist` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |
+| *Shell police forbidden strings* | the top row adds · Enter removes (asks) |
+| `/police` | `s` the forbidden strings |
+| `/tools web` | `d` default · `h` httpclient · `c` chromium |
+| `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
+| `/perfbar` | Enter or Space flips · `a` all · `n` none · `d` default · `t` / `g` / `s` / `l` the look |
+| *Embedded models* | `1` / `2` size · `i` / `u` installed or not · `d` drafter · `s` sort · `x` uncensored |
+| `/server`, `/model` | Enter chooses · type to filter |
+| The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |
+| A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · ESC denies |
+| Info panes (`/help`, `/sys`, a `v` view) | ↑/↓ PgUp/PgDn scroll · ←/→ or Tab switch tabs · ESC closes |

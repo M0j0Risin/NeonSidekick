@@ -25,7 +25,7 @@ public class EmbeddedModelFilterTests
         Assert.Equal(new char?[] { '1', '2', 'd', 's', 'x' }, buttons.Select(b => b.Key));
         Assert.All(buttons, b => Assert.False(b.On));
         Assert.False(EmbeddedModelFilter.None.Active);
-        Assert.Equal("1 / 2 = GB · D = drafter · S = sort · X = unc", EmbeddedModelFilter.Keys);   // shortened later on 2026-09-30
+        Assert.Equal("1 / 2 = GB · d = drafter · s = sort · x = unc", EmbeddedModelFilter.Keys);   // shortened later on 2026-09-30
         Assert.Equal("no model matches the filter", EmbeddedLlmText.NoFilterMatch);
     }
 
@@ -57,7 +57,7 @@ public class EmbeddedModelFilterTests
         Assert.Equal(["8GB", "16GB", "✓ installed", "⤓ uninstalled", "⇉ drafter", "⇅ sort (name)", "◌ uncensored"], buttons.Select(b => b.Title));
         Assert.Equal(new char?[] { '1', '2', 'i', 'u', 'd', 's', 'x' }, buttons.Select(b => b.Key));
         Assert.Equal(5, EmbeddedModelFilter.None.Buttons().Count);
-        Assert.Equal("1 / 2 = GB · I / U = inst / uninst · D = drafter · S = sort · X = unc", EmbeddedModelFilter.CatalogKeys);
+        Assert.Equal("1 / 2 = GB · i / u = inst / uninst · d = drafter · s = sort · x = unc", EmbeddedModelFilter.CatalogKeys);
 
         var installed = EmbeddedModelFilter.None.Press(2, withInstalled: true);
         Assert.Equal(new EmbeddedModelFilter(null, false, true), installed);

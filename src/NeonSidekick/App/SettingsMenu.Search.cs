@@ -22,7 +22,7 @@ internal sealed partial class SettingsMenu
     public const string ChangedLabel = "Changed";
 
     /// <summary>The changed settings page's hint row. Pinned.</summary>
-    public const string ChangedKeys = "Enter = edit · R = back to the default · ESC = close";
+    public const string ChangedKeys = "Enter = edit · r = back to the default · ESC = close";
 
     /// <summary>The changed settings page's reset button. Pinned.</summary>
     public const string ResetButton = "↺ default";

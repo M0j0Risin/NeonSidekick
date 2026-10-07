@@ -77,16 +77,19 @@ public class SessionsMenuTests : IDisposable
         ("#" + id).PadRight(idWidth) + "  " + moment + "  " + SessionText.Turns(turns).PadRight(turnsWidth) + "  " + title + (current ? "  " + SessionsMenu.CurrentNote : "");
 
     [Fact]
-    public async Task Empty_SaysSo_AndOpensNothing()
+    public async Task Empty_OpensThePane_OnItsOneDimRow_AndEscapeClosesIt()
     {
+        // The pane opens on no sessions too (2026-10-07, the consistency pass; it printed the notice and stayed shut before).
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
+        Push(Keys.Escape);
 
         Assert.Null(await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("  · " + SessionsMenu.EmptyNotice, _console.Output);
+        Assert.Contains("▸ " + SessionsMenu.EmptyNotice + "\n", _console.Output);
+        Assert.Contains("\n" + MenuPane.EmptyKeys + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
-        Assert.Equal(flow + 1, pane.FlowRow);
+        Assert.Equal(flow, pane.FlowRow);
         pane.Dispose();
     }
 

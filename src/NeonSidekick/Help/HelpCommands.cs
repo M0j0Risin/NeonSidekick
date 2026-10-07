@@ -62,7 +62,7 @@ public static class HelpCommands
         ]),
         new("/cmdlist",
         [
-            new("/cmdlist", "Open the *Shell allowed commands* list. Enter removes a prefix; the ask and yolo buttons at the top (A, Y) switch *Shell command policy*, yolo after a yes; ESC closes it."),
+            new("/cmdlist", "Open the *Shell allowed commands* list. Enter removes a prefix after a yes; the ask and yolo buttons at the top (`a`, `y`) switch *Shell command policy*, yolo after a yes; ESC closes it."),
         ]),
         new("/collapse",
         [
@@ -180,7 +180,7 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory", "List memories on a pane; Enter removes one, and **read-write** (W), **read-only** (R) and **disabled** (D) on its title row set *Memory mode*."),
+            new("/memory", "List memories on a pane; Enter forgets one after a yes, and **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row set *Memory mode*."),
             new("/memory read-write|read-only|disabled|on|off", "Set *Memory mode* (`on` is read-write, `off` disabled)."),
             new("/memory forget|edit", "`forget` forgets them all, after you confirm; `edit` opens `memory.json` in your editor (invalid JSON is ignored with a warning)."),
             new("/memory copy <profile> [overwrite]", "Add them to another profile's memory, skipping duplicates, or replace it with `overwrite`, after you confirm."),
@@ -236,7 +236,7 @@ public static class HelpCommands
         ]),
         new("/process",
         [
-            new("/process", "List the background processes the model started with `run_command`'s `background` option on a pane: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click on a row opens it in the process window; the *kill* button (or **K**) stops the highlighted one after a yes/no. The toolbar's ⚡ opens it too."),
+            new("/process", "List the background processes the model started with `run_command`'s `background` option on a pane: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click on a row opens it in the process window; the *kill* button (or `k`) stops the highlighted one after a yes/no. The toolbar's ⚡ opens it too."),
             new("/process <id>", "Open the process window on one (any unique start of its id; Tab completes it): its output live, following the newest line while at the bottom, stderr in the warning colour, the title its state. Scroll, select and copy as in the log window (`/log`); TAB brings the terminal forward. `/process` with another id switches the window to that process in the same place. Ctrl+K twice within 3 seconds stops the process: the chat says it was stopped by you, and the model hears of it on its next turn."),
         ]),
         new("/profile",
@@ -352,7 +352,7 @@ public static class HelpCommands
         new("/tools",
         [
             new("/tools", "Switch the model's tools on or off, and edit each tool group's settings on its own tab. On the Offered tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
-            new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude CLI advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page; `web`'s carries default, httpclient and chromium buttons (D, H, C) that switch *Web browser mode*). The toolbar's tool items run it."),
+            new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude CLI advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page; `web`'s carries default, httpclient and chromium buttons (`d`, `h`, `c`) that switch *Web browser mode*). The toolbar's tool items run it."),
         ]),
         new("/tree",
         [

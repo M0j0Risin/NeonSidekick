@@ -18,7 +18,7 @@ public static class RewindText
     public const string Title = NoticeGlyphs.Rewind + "Rewind";
 
     /// <summary>The picker's key hints. Pinned.</summary>
-    public const string Keys = "Enter = rewind to before this message · ESC = back";
+    public const string Keys = "Enter = rewind to before this message · ESC = close";   // close since 2026-10-07: the pane's top level
 
     /// <summary>
     /// The picker's caption over the rows (2026-10-03, the user's wording). What is not undone is the confirmation's to say

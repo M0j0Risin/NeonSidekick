@@ -886,6 +886,32 @@ public sealed class MenuPane : INoticeSink
     }
 
     /// <summary>The overlay closed and the status forgotten; nothing when no visit is open.</summary>
+    /// <summary>The hint row of an empty list's pane (<see cref="ShowEmptyAsync"/>). Pinned.</summary>
+    public const string EmptyKeys = "ESC = close";
+
+    /// <summary>
+    /// An empty list's pane (2026-10-07, the user's call in the consistency pass: <c>/sessions</c>, <c>/queue</c>, <c>/process</c> and
+    /// <c>/youtube saved</c> printed a line and never opened, while <c>/memory</c> opened on one dim row): <paramref name="title"/> over
+    /// <paramref name="line"/> dim, until ESC; Enter on the row does nothing. The pane closes as it ends.
+    /// </summary>
+    public async Task ShowEmptyAsync(string title, string line, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentNullException.ThrowIfNull(line);
+        try
+        {
+            var page = new MenuPage(title, [Theme.DimMarkup(line)], EmptyKeys);
+            while (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not null)
+            {
+                // Enter on the one row: nothing to do; the page again.
+            }
+        }
+        finally
+        {
+            Close();
+        }
+    }
+
     public void Close()
     {
         if (!_open)

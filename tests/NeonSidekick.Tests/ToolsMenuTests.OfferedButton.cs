@@ -19,7 +19,7 @@ public partial class ToolsMenuTests
         Assert.Equal([new MenuButton("☑  offered (none of 3)", 'o', false)], SettingsMenu.OfferedButtons("none of 3"));
         Assert.Equal(1, TextCells.Width(SettingsMenu.OfferedButton[..1]));
         Assert.Equal("  o", SettingsMenu.OfferedButton[1..4]);
-        Assert.Equal("Enter = choose · O = offered · ESC = back", SettingsMenu.OfferedToggleKeys);
+        Assert.Equal("Enter = choose · o = offered · ESC = back", SettingsMenu.OfferedToggleKeys);
     }
 
     /// <summary>Every offered switch's page carries the button with its row's value; with nothing defined, O says so and the page comes back.</summary>

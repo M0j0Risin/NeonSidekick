@@ -88,10 +88,10 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// on their buttons, so <c>1 / 2 = GB</c> (<c>1 / 2 / 3</c> until the 32GB button went on 2026-10-05), and sort size is
     /// <c>S = sort</c>; uncensored, last on X, is <c>X = unc</c>.
     /// </summary>
-    public const string Keys = "1 / 2 = GB · D = drafter · S = sort · X = unc";
+    public const string Keys = "1 / 2 = GB · d = drafter · s = sort · x = unc";
 
-    /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29; <c>I / U = inst / uninst</c> later on 2026-09-30). Pinned.</summary>
-    public const string CatalogKeys = "1 / 2 = GB · I / U = inst / uninst · D = drafter · S = sort · X = unc";
+    /// <summary>The filters' part of the catalog's hint row, with installed and uninstalled (later on 2026-09-29; <c>i / u = inst / uninst</c> later on 2026-09-30, lowercase since 2026-10-07). Pinned.</summary>
+    public const string CatalogKeys = "1 / 2 = GB · i / u = inst / uninst · d = drafter · s = sort · x = unc";
 
     /// <summary>A size button's title: <c>8GB</c>. Pinned.</summary>
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";

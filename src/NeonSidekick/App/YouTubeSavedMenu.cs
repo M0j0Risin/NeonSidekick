@@ -53,7 +53,8 @@ internal sealed class YouTubeSavedMenu
         var videos = _library().List();
         if (videos.Count == 0)
         {
-            _transcript.Notice(YouTubeText.NoneSaved);
+            // The pane opens on the empty list too (2026-10-07, the consistency pass).
+            await _pane.ShowEmptyAsync(YouTubeText.SavedLabel, YouTubeText.NoneSaved, cancellationToken).ConfigureAwait(false);
             return;
         }
 

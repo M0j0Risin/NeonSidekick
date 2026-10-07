@@ -118,7 +118,8 @@ internal sealed class ProcessMenu
         var sessions = _processes.List();
         if (sessions.Count == 0)
         {
-            _transcript.Notice(ProcessWindowText.NoneYet);
+            // The pane opens on the empty list too (2026-10-07, the consistency pass).
+            await _pane.ShowEmptyAsync(Title, ProcessWindowText.NoneYet, cancellationToken).ConfigureAwait(false);
             return;
         }
 

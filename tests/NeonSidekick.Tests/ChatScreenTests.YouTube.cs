@@ -111,6 +111,7 @@ public partial class ChatScreenTests
         _console.Input.PushKey(Keys.Escape);
         PushLine("/youtube unsave 1");
         PushLine("/youtube saved");
+        _console.Input.PushKey(Keys.Escape);               // the empty list opens its pane too (2026-10-07)
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -123,7 +124,7 @@ public partial class ChatScreenTests
         Assert.Contains("Removed \"Me at the zoo\" from the saved videos.", output);
         Assert.Contains(YouTubeText.SavedCaption(1), output);
         Assert.Contains("  · Removed \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\" from the saved videos.", output);
-        Assert.Contains("  · " + YouTubeText.NoneSaved, output);
+        Assert.Contains("▸ " + YouTubeText.NoneSaved + "\n", output);
         Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
     }
 

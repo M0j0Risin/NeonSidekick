@@ -103,7 +103,7 @@ public static class CameraText
     public const string DenyRow = "Deny";
     public const string AllowOnceRow = "Allow once";
     public const string AllowSessionRow = "Allow for this session";
-    public const string AllowHint = "d deny · o once · s session · Enter picks · ESC denies";
+    public const string AllowHint = "d / o / s = pick · Enter = choose · ESC = deny";   // the approval pane's form since 2026-10-07
 
     /// <summary>The live window's title while framing, and over a held shot.</summary>
     public static string LiveTitle(string? device) => $"📷 {device ?? UnnamedCamera} — live";

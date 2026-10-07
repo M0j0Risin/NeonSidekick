@@ -184,14 +184,18 @@ public sealed class ProcessMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task WithNone_ItIsTheNoneYetLine()
+    public async Task WithNone_ThePaneOpens_OnTheNoneYetLine()
     {
-        var (menu, pane, _) = PaneMenu();
+        // The pane opens with nothing started too (2026-10-07, the consistency pass), the line its one dim row.
+        var (menu, pane, input) = PaneMenu();
+        input.Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(ProcessWindowText.NoneYet, _console.Output);
-        Assert.DoesNotContain(ProcessMenu.Title, _console.Output);
+        Assert.Contains("▸ " + ProcessWindowText.NoneYet + "\n", _console.Output);
+        Assert.Contains(ProcessMenu.Title, _console.Output);
+        Assert.Contains("\n" + MenuPane.EmptyKeys + "\n", _console.Output);
+        Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
 }

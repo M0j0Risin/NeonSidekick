@@ -14,14 +14,15 @@ namespace NeonSidekick.App;
 /// the store after every removal so the rows are always what the file holds; what ends the visit
 /// (the last row removed, a failed removal) is said in the transcript once the pane has closed.
 ///
-/// <para>No confirmation per row: the row is visible and chosen deliberately, and the notice names
-/// what went. <c>/memory forget</c> keeps its confirmation because it is everything at once
-/// (2026-09-22: that wipe was <c>/forget</c>, its own command, until the word folded in here). A
-/// console that cannot show menus gets the numbered list instead, and removes nothing.</para>
+/// <para>A row's removal asks first (<see cref="RemovePrompt"/>, the cursor on No; 2026-10-07, the user's call in the consistency pass:
+/// every list's remove asks, where this one alone once went at Enter on the grounds that the row was chosen deliberately).
+/// <c>/memory forget</c> keeps its own confirmation, everything at once (2026-09-22: that wipe was <c>/forget</c>, its own command,
+/// until the word folded in here). A console that cannot show menus gets the numbered list instead, and removes nothing.</para>
 ///
 /// <para>On the pane the title row carries Memory's switch (2026-10-03, the user's ask: "actions at the top, similar to ...
 /// Tools › Shell allowed commands' ask and yolo"): since 2026-10-04 <c>Memory mode</c>'s three buttons, <see cref="ReadWriteButton"/>,
-/// <see cref="ReadOnlyButton"/> and <see cref="DisabledButton"/> (W, R, D: the old on was N, which meant none and No on other panes), the
+/// <see cref="ReadOnlyButton"/> and <see cref="DisabledButton"/> (w, o, x since 2026-10-07, off d and r, which are remove and refresh
+/// on the other lists; W, R, D until then, and the old on was N, which meant none and No on other panes), the
 /// lit one the mode in force, a press of another setting it (<see cref="SettingsMenu.SetMemoryMode"/>, the Memory mode row's own save and
 /// notice) and showing the list again. So the switch is always in reach, the pane opens with nothing remembered too, on one dim row, and
 /// stays open when the last row goes.</para>
@@ -35,20 +36,20 @@ internal sealed class MemoryMenu
     // The label and the key hints: the pane shows the label as its title and the keys in its hint
     // row; the prompt host joins them (SettingsMenu.PromptTitle). Pinned.
     public const string Title = ChatScreen.MemoryToolGlyph + " Memory";   // the glyph the toolbar wears for the pane too (2026-09-22)
-    public const string Keys = "Enter = remove · ESC = back";
+    public const string Keys = "Enter = remove · ESC = close";   // close since 2026-10-07: the pane's top level
     public const string EmptyNotice = "(" + NoticeGlyphs.Memory + "nothing remembered)";   // the disk since 2026-09-22
 
     /// <summary>The pane's hints with Memory mode's buttons on the title row (2026-10-03; three modes since 2026-10-04): the rows, then with nothing remembered. Pinned.</summary>
-    public const string SwitchKeys = "Enter = remove · W = read-write · R = read-only · D = disabled · ESC = back";
-    public const string EmptySwitchKeys = "W = read-write · R = read-only · D = disabled · ESC = back";
+    public const string SwitchKeys = "Enter = remove · w = read-write · o = read-only · x = disabled · ESC = close";
+    public const string EmptySwitchKeys = "w = read-write · o = read-only · x = disabled · ESC = close";
 
     /// <summary>Memory mode's buttons on the pane's title row (2026-10-04, the user's ask; on and off since 2026-10-03): the ask/yolo pair's shape, the lit one in force. Pinned.</summary>
     public const string ReadWriteButton = "read-write";
     public const char ReadWriteKey = 'w';
     public const string ReadOnlyButton = "read-only";
-    public const char ReadOnlyKey = 'r';
+    public const char ReadOnlyKey = 'o';   // r until 2026-10-07: r is refresh elsewhere (/docker)
     public const string DisabledButton = "disabled";
-    public const char DisabledKey = 'd';
+    public const char DisabledKey = 'x';   // d until 2026-10-07: d is remove elsewhere (/youtube saved)
 
     /// <summary>The button of each mode, in <see cref="MemoryAccess"/>'s order: its index is the enum's value.</summary>
     private static readonly (string Title, char Key)[] ModeButtons = [(ReadWriteButton, ReadWriteKey), (ReadOnlyButton, ReadOnlyKey), (DisabledButton, DisabledKey)];
@@ -90,6 +91,9 @@ internal sealed class MemoryMenu
     // ── Pinned statics ──────────────────────────────────────────────────────
 
     public static string RemovedNotice(string text) => $"({NoticeGlyphs.Memory}removed: {text})";
+
+    /// <summary>The question before a row's removal (2026-10-07): <c>💾 Forget "Their cat is named Willow."?</c> Pinned.</summary>
+    public static string RemovePrompt(string text) => $"{NoticeGlyphs.Memory}Forget \"{text}\"?";
 
     public static string RemoveFailedError(string detail) => $"Could not remove the memory: {detail}";
 
@@ -194,6 +198,12 @@ internal sealed class MemoryMenu
 
                 cursor = row;
                 string text = entries[row].Text;
+                if (!await ConfirmAsync(RemovePrompt(text), cancellationToken).ConfigureAwait(false))
+                {
+                    Sink.Notice(ChatScreen.KeptNotice);
+                    continue;
+                }
+
                 try
                 {
                     if (_store.Remove(text))
@@ -251,6 +261,13 @@ internal sealed class MemoryMenu
 
         var picked = await ScreenPane.ModalAsync(_console, () => prompt.ShowAsync(_console, cancellationToken)).ConfigureAwait(false);
         return picked.IsCanceled ? null : picked.Value;
+    }
+
+    /// <summary>The yes/no before a removal (2026-10-07): <see cref="SettingsMenu.ConfirmRows"/> with the cursor on No, through <see cref="PickAsync"/> so a console without the pane asks too; true for Yes alone.</summary>
+    private async Task<bool> ConfirmAsync(string question, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(question, SettingsMenu.ConfirmRows, SettingsMenu.ConfirmKeys) { Hotkeys = SettingsMenu.ConfirmHotkeys };
+        return await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) == 1;
     }
 
     private bool CanShowMenus() =>

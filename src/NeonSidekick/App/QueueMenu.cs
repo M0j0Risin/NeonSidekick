@@ -27,10 +27,10 @@ internal sealed class QueueMenu
 {
     // The label and the key hints: the pane shows the label as its title and the keys in its hint row. Pinned.
     public const string Title = "⏳ Queue";
-    public const string Keys = "Enter = remove · c = clear all · ESC = back";
+    public const string Keys = "Enter = remove · c = clear all · ESC = close";   // close since 2026-10-07: the pane's top level
 
     /// <summary>The key hints with the <see cref="SendButton"/> on the title row (2026-10-05). Pinned.</summary>
-    public const string KeysWithSend = "Enter = remove · s = send · c = clear all · ESC = back";
+    public const string KeysWithSend = "Enter = remove · s = send · c = clear all · ESC = close";
     public const string EmptyNotice = "(" + NoticeGlyphs.Queue + "nothing queued)";   // the hourglass since 2026-09-22
 
     /// <summary>The one button on the title row (2026-09-21), drawn as a dim tab: every queued message dropped.</summary>
@@ -71,6 +71,9 @@ internal sealed class QueueMenu
 
     public static string RemovedNotice(string text) => $"({NoticeGlyphs.Queue}removed: {text})";
 
+    /// <summary>The question before a message's removal (2026-10-07, every list's remove asks): <c>⏳ Remove "fix the tests" from the queue?</c> Pinned.</summary>
+    public static string RemovePrompt(string text) => $"{NoticeGlyphs.Queue}Remove \"{text}\" from the queue?";
+
     /// <summary>
     /// The footer under the list for the message at <paramref name="index"/> of <paramref name="count"/> (2026-10-07, the user's ask:
     /// the row cut a long message at the edge): its whole label, then <c>2 of 5 · 1 picture</c>. Pinned.
@@ -96,9 +99,16 @@ internal sealed class QueueMenu
     public async Task<SubmittedLine?> ShowAsync(CancellationToken cancellationToken, bool offerSend = false)
     {
         var entries = _queue.Snapshot();
-        if (entries.Count == 0 || !_pane.Enabled)
+        if (!_pane.Enabled)
         {
             _transcript.Notice(EmptyNotice);
+            return null;
+        }
+
+        if (entries.Count == 0)
+        {
+            // The pane opens on the empty queue too (2026-10-07, the consistency pass).
+            await _pane.ShowEmptyAsync(Title, EmptyNotice, cancellationToken).ConfigureAwait(false);
             return null;
         }
 
@@ -146,7 +156,28 @@ internal sealed class QueueMenu
                 }
 
                 string label = entries[row].Label;
-                if (_queue.Remove(row, label))
+                var now = _queue.Snapshot();
+                if (row >= now.Count || now[row].Label != label)
+                {
+                    // The loop sent it while the list was up: no question about a message already gone, the list re-shows.
+                    entries = now;
+                    if (entries.Count == 0)
+                    {
+                        closingNotice = EmptyNotice;
+                        return null;
+                    }
+
+                    cursor = Math.Min(row, entries.Count - 1);
+                    continue;
+                }
+
+                var question = new MenuPage(RemovePrompt(label), SettingsMenu.ConfirmRows, SettingsMenu.ConfirmKeys) { Hotkeys = SettingsMenu.ConfirmHotkeys };
+                if (await _pane.PickAsync(question, 0, cancellationToken).ConfigureAwait(false) is not { Row: 1 })
+                {
+                    // Kept; the list re-shows from a fresh snapshot all the same, since the loop may have sent meanwhile.
+                    Sink.Notice(ChatScreen.KeptNotice);
+                }
+                else if (_queue.Remove(row, label))
                 {
                     Sink.Notice(RemovedNotice(label));
                 }

@@ -6401,6 +6401,8 @@ public partial class ChatScreenTests : IDisposable
         _memory.Add("They live in Leeds.");
         PushLine("/memory");
         _console.Input.PushKey(Keys.Enter);     // the first row
+        _console.Input.PushKey(Keys.Down);      // Yes (asked since 2026-10-07)
+        _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);    // back from the re-shown list
         PushLine("/exit");
 
@@ -6424,6 +6426,8 @@ public partial class ChatScreenTests : IDisposable
         var rows = store.EntriesSnapshot().Select(e => MemoryMenu.DateLabel(e) + "  " + e.Text).ToList();
         PushLine("/memory");
         _console.Input.PushKey(Keys.Enter);     // the first row
+        _console.Input.PushKey(Keys.Down);      // Yes (asked since 2026-10-07)
+        _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);    // back from the re-shown list
         PushLine("/exit");
 
@@ -6713,9 +6717,9 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/memory");
-        _console.Input.PushKey(Keys.Char('d'));    // disabled
+        _console.Input.PushKey(Keys.Char('x'));    // disabled (x and o since 2026-10-07, d and r before)
         _console.Input.PushKey(Keys.Enter);        // the empty row: nothing
-        _console.Input.PushKey(Keys.Char('r'));    // read-only
+        _console.Input.PushKey(Keys.Char('o'));    // read-only
         _console.Input.PushKey(Keys.Char('w'));    // read-write again
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
@@ -9029,7 +9033,9 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         StepsWhenIdle(
             Line("/cmdlist"),
-            Key(Keys.Enter),                                       // dotnet build removed
+            Key(Keys.Enter),                                       // dotnet build asked about
+            Key(Keys.Down),                                        // Yes (asked since 2026-10-07): removed
+            Key(Keys.Enter),
             Key(Keys.Escape),                                      // the pane closed
             Line("/cmdlist"),
             Key(Keys.Escape),

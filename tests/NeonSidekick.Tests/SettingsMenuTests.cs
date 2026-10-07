@@ -3068,7 +3068,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("work", _settings.ProfileName);
         Assert.Contains(SettingsMenu.ProfileKeys, Output);
-        Assert.Contains("A–Z = jump", SettingsMenu.SwitchKeys);
+        Assert.Contains("a–z = jump", SettingsMenu.SwitchKeys);
         pane.Dispose();
     }
 

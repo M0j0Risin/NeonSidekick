@@ -29,7 +29,7 @@ internal sealed partial class ChatScreen
             }
         }
 
-        var allow = await RunCameraPaneAsync(token => _cameraMenu.AllowAsync(SqliteText.AllowCaption(target, sql, creating), token, SqliteText.AllowTitle), null, turnToken).ConfigureAwait(false);
+        var allow = await RunCameraPaneAsync(token => _cameraMenu.AllowAsync(SqliteText.AllowCaption(target, sql, creating), token, SqliteText.AllowTitle, SqliteText.AllowTitle, Shell.ShellText.WholeCommandLines(new Shell.CommandRequest("sql", sql, [], IsScript: true))), null, turnToken).ConfigureAwait(false);
         if (allow is not { } choice)
         {
             return null;

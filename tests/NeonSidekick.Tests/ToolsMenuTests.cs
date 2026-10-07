@@ -1259,7 +1259,7 @@ public partial class ToolsMenuTests : IDisposable
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Ask, Web, Shell
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // Shell command policy: the picker opens on ask, yolo picked and confirmed (2026-10-03)
-        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);               // Shell allowed commands: the list, dotnet build removed, back
+        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // Shell allowed commands: the list, dotnet build removed (Yes), back
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police (2026-09-22), its forbidden strings (2026-10-03) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
         Push(Keys.Down, Keys.Enter);                                        // Shell timeout (s): the typed slot, pre-filled with 180; 0 is out of range, kept
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);
@@ -1291,7 +1291,7 @@ public partial class ToolsMenuTests : IDisposable
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Ask, Web, Shell
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // Shell command policy: the picker opens on ask, yolo picked and confirmed (2026-10-03)
-        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);               // Shell allowed commands: the list, dotnet build removed, back
+        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // Shell allowed commands: the list, dotnet build removed (Yes), back
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);      // past Shell police (2026-09-22), its forbidden strings (2026-10-03) and Shell prefer native tools (2026-09-26); Shell default: the picker, cmd picked
         Push(Keys.Down, Keys.Enter);                                        // Shell timeout (s): the typed slot, pre-filled with 180; 0 is out of range, kept
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);
@@ -1496,7 +1496,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([false, true, false], SettingsMenu.WebModeButtons(" HttpClient ").Select(b => b.On));
         Assert.All(SettingsMenu.WebModeButtons("firefox"), b => Assert.False(b.On));
         Assert.All(SettingsMenu.WebModeButtons("default"), b => Assert.Equal(1, TextCells.Width(b.Title[..1])));
-        Assert.Equal("Enter = choose · D / H / C = browser mode · ESC = back", SettingsMenu.WebToggleKeys);
+        Assert.Equal("Enter = choose · d / h / c = browser mode · ESC = back", SettingsMenu.WebToggleKeys);
     }
 
     /// <summary>The shell's is the policy picker (2026-10-03): a move into yolo asks first, No keeps the policy; off asks nothing.</summary>
@@ -2020,7 +2020,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         _settings.Update(d => d.ShellCommandAllowed = ["git push", "dotnet build"]);
         var (menu, pane, settings) = PaneMenu();
-        Push(Keys.Enter, Keys.Escape);   // dotnet build removed, then the pane closed
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // dotnet build removed (Yes, asked since 2026-10-07), then the pane closed
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
@@ -2163,7 +2163,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);
         Push(Typed("RM -RF"));                               // already there
         Push(Keys.Enter, Keys.Escape);                       // the slot, ESC: back on the list
-        Push(Keys.Down, Keys.Down, Keys.Enter);              // rm -rf removed
+        Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // rm -rf removed (Yes)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);

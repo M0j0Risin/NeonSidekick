@@ -201,7 +201,7 @@ public partial class ToolsMenuTests
         Assert.False(off.On);
         Assert.True(Assert.Single(SettingsMenu.CameraWatchButtons(true)).On);
         Assert.Equal(1, TextCells.Width(off.Title[..1]));
-        Assert.Equal("Enter = choose · W = watch · ESC = back", SettingsMenu.CameraToggleKeys);
+        Assert.Equal("Enter = choose · w = watch · ESC = back", SettingsMenu.CameraToggleKeys);
     }
 
     /// <summary>
@@ -238,7 +238,7 @@ public partial class ToolsMenuTests
         Assert.True(live);
         string strip = " │ " + SettingsMenu.CameraWatchButtonTitle + " · " + SettingsMenu.CameraLiveButtonTitle + " · " + SettingsMenu.CameraSnapButtonTitle + " · " + SettingsMenu.CameraScreenButtonTitle + " ";
         Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + strip) + "\n", Output);
-        Assert.Contains("Enter = choose · W = watch · L = live · S = snap · C = screen · ESC = back", Output);
+        Assert.Contains("Enter = choose · w = watch · l = live · s = snap · c = screen · ESC = back", Output);
         Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         pane.Dispose();
     }

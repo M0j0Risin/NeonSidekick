@@ -77,7 +77,7 @@ public class QueueMenuTests : IDisposable
         Assert.Equal(new MenuButton("⊠ clear all", 'c'), Assert.Single(QueueMenu.Buttons));
         Assert.Equal('s', QueueMenu.SendKey);
         Assert.Equal([new MenuButton("➤ send", 's'), new MenuButton("⊠ clear all", 'c')], QueueMenu.ButtonsWithSend);
-        Assert.Equal("Enter = remove · s = send · c = clear all · ESC = back", QueueMenu.KeysWithSend);
+        Assert.Equal("Enter = remove · s = send · c = clear all · ESC = close", QueueMenu.KeysWithSend);
         Assert.Equal("(⏳ nothing queued)", QueueMenu.EmptyNotice);
         Assert.Equal("(⏳ removed: and then?)", QueueMenu.RemovedNotice("and then?"));
         Assert.Equal("[#9A8BB8]1[/]  a [[b]]", QueueMenu.RowMarkup(0, "a [b]"));
@@ -98,16 +98,20 @@ public class QueueMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task Empty_PrintsNothingQueued_ToTheTranscript_AndOpensNoPane()
+    public async Task Empty_OpensThePane_OnItsOneDimRow_AndEscapeClosesIt()
     {
+        // The pane opens on an empty queue too (2026-10-07, the consistency pass), its notice the one row.
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
+        Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
+        Assert.Contains(QueueMenu.Title, _console.Output);
+        Assert.Contains("\n" + MenuPane.EmptyKeys + "\n", _console.Output);
+        Assert.Contains("▸ " + QueueMenu.EmptyNotice + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
-        Assert.Contains("  · " + QueueMenu.EmptyNotice + "\n", _console.Output);
-        Assert.Equal(flow + 1, pane.FlowRow);
+        Assert.Equal(flow, pane.FlowRow);   // nothing said to the transcript
         pane.Dispose();
     }
 
@@ -134,7 +138,7 @@ public class QueueMenuTests : IDisposable
         Seed("one", "two", "three");
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
-        Push(Keys.Down, Keys.Enter, Keys.Escape);
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, then Yes (asked since 2026-10-07)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -147,12 +151,28 @@ public class QueueMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task OnThePane_TheRemoveAsks_AndNoKeepsTheMessage()
+    {
+        Seed("one", "two");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);   // the row, then No (the cursor starts on it), then close
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(QueueMenu.RemovePrompt("two"), _console.Output);
+        Assert.Contains(ChatScreen.KeptNotice, _console.Output);
+        Assert.Contains("\n▸ " + Row(1, "two") + "\n", _console.Output);   // the list again, the cursor kept
+        Assert.Equal(new[] { "one", "two" }, Labels());
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_RemovingTheLastRow_ClosesThePane_ThenTheEmptyNoticeGoesToTheTranscript()
     {
         Seed("only");
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
-        Push(Keys.Enter);
+        Push(Keys.Enter, Keys.Down, Keys.Enter);   // the row, then Yes
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -170,8 +190,8 @@ public class QueueMenuTests : IDisposable
         Seed("one", "two", "three");
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         input.PushClick(7, 104);                         // "three": the highlight moves (strip 100, spacer 101, one 102, two 103)
-        input.PushClick(9, 104);                         // again, within the interval: the pair removes it
-        input.Push(Keys.Escape);
+        input.PushClick(9, 104);                         // again, within the interval: the pair asks to remove it
+        input.Push(Keys.Down, Keys.Enter, Keys.Escape);  // Yes, then close
 
         await menu.ShowAsync(CancellationToken.None);
 

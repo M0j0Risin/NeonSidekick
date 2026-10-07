@@ -69,6 +69,26 @@ public partial class ChatScreenTests
         Assert.Equal(2L, command.ExecuteScalar());
     }
 
+    /// <summary>
+    /// The allow pane's whole-statement view (2026-10-07, the consistency pass): v on the question shows the statement's lines numbered in
+    /// the info pane under the pane's title, ESC there is back on the question, and its answer is still the model's.
+    /// </summary>
+    [Fact]
+    public async Task SqliteExecute_TheViewKey_ShowsTheWholeStatement_AndEscIsBackOnTheQuestion()
+    {
+        SqliteExecuteFixture([Keys.Char('v'), Keys.Escape, Keys.Enter], "Understood.",
+            new Dictionary<string, object?> { ["sql"] = "CREATE TABLE t (\n  a,\n  b\n)", ["database"] = "app.db", ["create"] = true });
+
+        string output = await RunAsync();
+
+        Assert.Contains(App.CameraMenu.AllowHintWithView, output);
+        Assert.Contains(Shell.ShellText.ViewButton, output);
+        Assert.Contains("1  CREATE TABLE t (\n", output);
+        Assert.Contains("4  )\n", output);
+        Assert.Equal(SqliteText.Declined, Assert.Single(Results(_chat.Requests[^1])).Result);   // Enter on the question's Deny row after the view
+        Assert.False(File.Exists(SqliteWorkFile("app.db")));
+    }
+
     [Fact]
     public async Task SqliteExecute_Deny_IsTheModelsAnswer_AndNothingIsMade()
     {

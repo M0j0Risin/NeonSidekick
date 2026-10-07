@@ -1098,7 +1098,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The hint of a picker with a <c>(none)</c> row (<c>TTS voice 2</c>): Backspace moves the cursor to it.</summary>
     public const string NoneKeys = "Enter = choose · Backspace = none · ESC = back";
-    public const string SwitchKeys = "Enter = switch · A–Z = jump · ESC = back";
+    public const string SwitchKeys = "Enter = switch · a–z = jump · ESC = back";
     public const string KeepKeys = "Enter = choose · ESC = keep";
 
     /// <summary>The model picker's hint on the pane (2026-10-03, the user's ask): <see cref="KeepKeys"/> with the type-to-filter. Pinned.</summary>
@@ -1108,8 +1108,8 @@ internal sealed partial class SettingsMenu
     /// The theme pickers' hints (2026-10-03, the user's ask): <see cref="KeepKeys"/> and <see cref="PickKeys"/> with the letter
     /// jump (<see cref="MenuPage.JumpNames"/>).
     /// </summary>
-    public const string ThemeKeepKeys = "Enter = choose · A–Z = jump · ESC = keep";
-    public const string ThemePickKeys = "Enter = choose · A–Z = jump · ESC = back";
+    public const string ThemeKeepKeys = "Enter = choose · a–z = jump · ESC = keep";
+    public const string ThemePickKeys = "Enter = choose · a–z = jump · ESC = back";
 
     /// <summary>The yes/no pane's hint (<see cref="ConfirmAsync"/>). Pinned.</summary>
     public const string ConfirmKeys = "y / n = pick · Enter = choose · ESC = no";
@@ -1298,7 +1298,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>/profile</c>'s picker label; ESC keeps the loaded profile. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/> (no glyph under the crumb) + <see cref="SwitchKeys"/>.</summary>
     public const string ProfileTitle = ChatScreen.ProfileToolGlyph + " Profile";   // the glyph the toolbar wears for the picker (later on 2026-09-29)
-    public const string ProfileKeys = "Enter = switch · A–Z = jump · ESC = keep";
+    public const string ProfileKeys = "Enter = switch · a–z = jump · ESC = keep";
 
     /// <summary>The <c>/server</c> picker's label; ESC keeps the server in use.</summary>
     public const string ServerTitle = "🖥️ LLM server";
@@ -2897,7 +2897,7 @@ internal sealed partial class SettingsMenu
         Markup.Escape((enabled ? "[x] " : "[ ] ") + name.PadRight(11)) + Theme.DimMarkup(Shell.CodeLanguages.Describe(name) + (installed ? "" : NotFoundSuffix));
 
     /// <summary>The checklists' hint (the code-languages list's first; A and N since 2026-09-29, <see cref="ChecklistButtons"/>). Pinned.</summary>
-    public const string ToggleKeys = "Enter / Space = on or off · A = all · N = none · ESC = back";
+    public const string ToggleKeys = "Enter / Space = on or off · a = all · n = none · ESC = back";
 
     /// <summary>
     /// The checklists' first title-row button (2026-09-29, the user's ask, the Folders pane's <c>collapse all</c> its
@@ -2937,7 +2937,7 @@ internal sealed partial class SettingsMenu
     private const int DefaultsIndex = 2;
 
     /// <summary>The hint of a checklist with a default: <see cref="ToggleKeys"/> with D (2026-09-29, Show toolbar's; SQLite statements allowed's since 2026-10-05). Pinned.</summary>
-    public const string DefaultToggleKeys = "Enter / Space = on or off · A = all · N = none · D = default · ESC = back";
+    public const string DefaultToggleKeys = "Enter / Space = on or off · a = all · n = none · d = default · ESC = back";
 
     /// <summary>
     /// Show performance bar's buttons (2026-09-30, the user's ask: the look on the checklist's own screen):
@@ -2952,7 +2952,7 @@ internal sealed partial class SettingsMenu
     private static readonly int PerfBarLookIndex = DefaultsIndex + 1;
 
     /// <summary>Show performance bar's hint: <see cref="ToggleKeys"/> with D (2026-10-02) and the looks' keys (2026-09-30). Pinned.</summary>
-    public const string PerfBarToggleKeys = "Enter / Space = on or off · A = all · N = none · D = default · T / G / S / L = look · ESC = back";
+    public const string PerfBarToggleKeys = "Enter / Space = on or off · a = all · n = none · d = default · t / g / s / l = look · ESC = back";
 
     /// <summary>The status line when the last language would go: at least one stays (the user's rule, 2026-09-21). Pinned.</summary>
     public const string LastLanguageError = "At least one language stays on.";
@@ -2972,7 +2972,13 @@ internal sealed partial class SettingsMenu
     public const string NoAllowedCommandsRow = "(none)";
 
     /// <summary>The allowed-commands list's hint: Enter removes, A and Y are the policy buttons (<see cref="CommandPolicyButtons"/>, 2026-10-02). Pinned.</summary>
-    public const string AllowedCommandsKeys = "Enter = remove · A = ask · Y = yolo · ESC = back";
+    public const string AllowedCommandsKeys = "Enter = remove · a = ask · y = yolo · ESC = back";
+
+    /// <summary>The question before an allowed prefix goes (2026-10-07, every list's remove asks). Pinned.</summary>
+    public static string RemovePrefixQuestion(string prefix) => $"Remove \"{prefix}\" from the allowed commands? It will ask again.";
+
+    /// <summary>The question before a forbidden string goes (2026-10-07). Pinned.</summary>
+    public static string RemoveForbiddenQuestion(string entry) => $"Remove \"{entry}\" from the forbidden strings? Commands holding it are no longer refused for it.";
 
     /// <summary>The allowed-commands footer's last line under a prefix (2026-10-07). Pinned.</summary>
     public const string AllowedCommandNote = "saved for good: a command that starts with this runs without asking";
@@ -2981,7 +2987,7 @@ internal sealed partial class SettingsMenu
     public const string ForbiddenStringNote = "a command that holds this is refused, whatever the policy says";
 
     /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy buttons still there (2026-10-02). Pinned.</summary>
-    public const string AllowedCommandsEmptyKeys = "A = ask · Y = yolo · ESC = back";
+    public const string AllowedCommandsEmptyKeys = "a = ask · y = yolo · ESC = back";
 
     /// <summary>
     /// The allowed-commands list's first title-row button (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
@@ -3060,7 +3066,7 @@ internal sealed partial class SettingsMenu
     public const char PoliceStringsKey = 's';
 
     /// <summary>The police's on/off page's hint: <see cref="PickKeys"/> with the strings button's key. Pinned.</summary>
-    public const string PoliceToggleKeys = "Enter = choose · S = strings · ESC = back";
+    public const string PoliceToggleKeys = "Enter = choose · s = strings · ESC = back";
 
     /// <summary>
     /// The police's on/off page's one button (2026-10-03): <see cref="PoliceStringsTitle"/> for <paramref name="count"/> strings,
@@ -3088,7 +3094,7 @@ internal sealed partial class SettingsMenu
     public const char OfferedKey = 'o';
 
     /// <summary>The offered tool pages' hint: <see cref="PickKeys"/> with the offered button's key (2026-10-05). Pinned.</summary>
-    public const string OfferedToggleKeys = "Enter = choose · O = offered · ESC = back";
+    public const string OfferedToggleKeys = "Enter = choose · o = offered · ESC = back";
 
     /// <summary>
     /// The offered tool pages' one button (2026-10-05): <see cref="OfferedTitle"/> for the offered row's <paramref name="value"/>,
@@ -3141,7 +3147,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The Web tools page's hint: <see cref="PickKeys"/> with the browser-mode buttons' keys (2026-10-04). Pinned.</summary>
-    public const string WebToggleKeys = "Enter = choose · D / H / C = browser mode · ESC = back";
+    public const string WebToggleKeys = "Enter = choose · d / h / c = browser mode · ESC = back";
 
     /// <summary>The notice after a prefix is removed from the allowed list: <c>Shell allowed commands: git push removed</c>. Pinned.</summary>
     public static string PrefixRemovedNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " removed";
@@ -7554,6 +7560,15 @@ internal sealed partial class SettingsMenu
             }
 
             string prefix = allowed[index];
+            cursor = index;
+            // Asked first (2026-10-07, every list's remove asks).
+            var removing = new MenuPage(RemovePrefixQuestion(prefix), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+            if (await PickAsync(removing, 0, cancellationToken).ConfigureAwait(false) != 1)
+            {
+                Sink.Notice(ChatScreen.KeptNotice);
+                continue;
+            }
+
             _settings.Update(d => d.ShellCommandAllowed = Shell.CommandAllowList.Without(d.ShellCommandAllowed, prefix));
             Sink.Notice(PrefixRemovedNotice(prefix));
             changed = true;
@@ -7593,6 +7608,14 @@ internal sealed partial class SettingsMenu
             if (index > 0)
             {
                 string entry = forbidden[index - 1];
+                // Asked first (2026-10-07, every list's remove asks).
+                var removing = new MenuPage(RemoveForbiddenQuestion(entry), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+                if (await PickAsync(removing, 0, cancellationToken).ConfigureAwait(false) != 1)
+                {
+                    Sink.Notice(ChatScreen.KeptNotice);
+                    continue;
+                }
+
                 _settings.Update(d => d.ShellPoliceForbiddenStrings = Shell.ForbiddenStrings.Without(d.ShellPoliceForbiddenStrings, entry));
                 Sink.Notice(ForbiddenRemovedNotice(entry));
                 changed = true;

@@ -189,7 +189,16 @@ internal sealed class SessionsMenu
         var sessions = _store.List(0);
         if (sessions.Count == 0)
         {
-            _transcript.Notice(EmptyNotice);
+            // The pane opens on the empty list too (2026-10-07, the consistency pass); without one, the line.
+            if (_pane.Enabled)
+            {
+                await _pane.ShowEmptyAsync(Title, EmptyNotice, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                _transcript.Notice(EmptyNotice);
+            }
+
             return null;
         }
 

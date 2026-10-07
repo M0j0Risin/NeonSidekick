@@ -248,11 +248,11 @@ public partial class ChatScreenTests
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Process]; });
         _geometry = new ScreenGeometry(() => null, () => 100);   // the toolbar at 103, ⚡ at 0
-        StepsWhenIdle(input => input.PushClick(0, 103), input => input.PushClick(1, 103), Line("/exit"));
+        StepsWhenIdle(input => input.PushClick(0, 103), input => input.PushClick(1, 103), Key(Keys.Escape), Line("/exit"));   // none yet is the pane's one row (2026-10-07)
 
         string output = await RunAsync();
 
-        Assert.Contains(ProcessWindowText.NoneYet, output);
+        Assert.Contains("▸ " + ProcessWindowText.NoneYet + "\n", output);
     }
 
     [WindowsFact]

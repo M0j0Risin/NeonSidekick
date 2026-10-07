@@ -1234,7 +1234,8 @@ internal sealed partial class ChatScreen
         _questionMenu = new QuestionMenu(_menuPane, _input);
         // The approval's whole-command view (2026-10-07): the info pane over the question, which comes back on ESC.
         _approvalMenu = new CommandApprovalMenu(_menuPane, (label, lines, ct) => _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(string.Join('\n', lines)))], 0, ct));
-        _cameraMenu = new CameraMenu(_menuPane);
+        // The allow pane's whole-statement view (2026-10-07): the info pane over the question, as the shell approval's.
+        _cameraMenu = new CameraMenu(_menuPane, (label, lines, ct) => _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(string.Join('\n', lines)))], 0, ct));
         _askTools = AskTools(AskUserAsync, _effective);
         _planMenu = new PlanApprovalMenu(_menuPane, _input);
         // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.

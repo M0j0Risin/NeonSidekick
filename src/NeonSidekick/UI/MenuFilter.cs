@@ -91,7 +91,7 @@ public static class MenuFilter
             {
                 if (keys.EndsWith(end, StringComparison.Ordinal))
                 {
-                    return keys[..^end.Length] + FilteringKeys;
+                    return WithoutLetterKeys(keys[..^end.Length]) + FilteringKeys;
                 }
             }
         }
@@ -110,7 +110,24 @@ public static class MenuFilter
         ArgumentNullException.ThrowIfNull(filter);
         int esc = keys.LastIndexOf("ESC = ", StringComparison.Ordinal);
         string head = esc > 0 ? keys[..esc] : keys + " · ";
-        return filter.Length > 0 ? head + FilteringKeys : head + TypeKeys + (esc > 0 ? " · " + keys[esc..] : "");
+        return filter.Length > 0 ? WithoutLetterKeys(head) + FilteringKeys : head + TypeKeys + (esc > 0 ? " · " + keys[esc..] : "");
+    }
+
+    /// <summary>
+    /// A hint's head (its pieces each ending in <c> · </c>) without the pieces a typed character works (2026-10-07, the consistency pass:
+    /// <c>d = remove</c> went on showing while a <c>d</c> went on the filter): a key of one character, or several joined by <c> / </c>
+    /// (<c>w = watch</c>, <c>d / h / c = browser mode</c>). <c>Enter</c>, <c>Space</c> and the arrows stay. Pure.
+    /// </summary>
+    private static string WithoutLetterKeys(string head)
+    {
+        const string Separator = " · ";
+        var kept = head.Split(Separator, StringSplitOptions.RemoveEmptyEntries).Where(piece =>
+        {
+            int equals = piece.IndexOf(" = ", StringComparison.Ordinal);
+            return equals < 0 || !piece[..equals].Split(" / ").All(key => key.Length == 1);
+        });
+        string joined = string.Join(Separator, kept);
+        return joined.Length == 0 ? "" : joined + Separator;
     }
 
     /// <summary>The caption for a filtering tab: null while nothing is typed, else <see cref="Caption"/>.</summary>

@@ -21,6 +21,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **What a row does:** under the list, the highlighted setting's description and its default. On the Offered tabs of `/tools` and `/skills`, and `/mcp`'s Tools tab, it is the highlighted tool's or skill's whole description, with why it isn't offered (a tool's) or its warning (a skill's) on the last line. A long tab is split into sections (General, LLM, Botchat), and a tab whose rows all start with its name drops the name (the Botchat tab's *Botchat LLM mode* reads *LLM mode*; notices and this file keep the full name).
 * **Under a list:** the other list panes show the highlighted row whole under the list too, with what the row has no room for: `/sessions` (when it started and last ran, its turns and model), `/queue` and `/rewind` (the whole message), `/process` (the whole command, its state and run time), `/docker` (image, project, ports, networks, status), `/youtube saved` and a YouTube search's results, the `/server` and `/model` pickers (the URL, the probe's detail, the whole model id), `/mcp`'s Servers tab (a failed server's whole error, a connected one's tools, the file an edit row opens), and the allowed commands and police strings.
 * **Typing to filter:** on `/sessions`, `/server`, `/docker`, `/youtube saved` and the allowed commands, as on `/model` and the Offered tabs, typing narrows the list (the caption counts what is left); Backspace erases, the first ESC clears it. A pane's own key letters (`/docker`'s `r`, `/youtube saved`'s `d`) still work until you start typing.
+* **Keys:** the hint row names each key in lowercase (`w = watch`), and ESC reads *close* on a pane's top level and *back* on a page opened from it. Removing anything from a list asks first, with No on the cursor, and an empty list opens its pane on one dim line. Every pane's keys are listed under [Pane keys](COMMANDS.md#pane-keys).
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
@@ -118,11 +119,11 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Toolbar item | Shown | Opens |
 |---|---|---|
 | ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/theme` (the theme picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
-| 💾 | always; on the slab while *Memory mode* is `disabled` | `/memory`: the memories, with **read-write** (W), **read-only** (R) and **disabled** (D) on its title row |
+| 💾 | always; on the slab while *Memory mode* is `disabled` | `/memory`: the memories, with **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
-| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (O) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (W, `/camera watch` on or off), **live** (L, the camera's window), **snap** (S, `/camera snap`) and **screen** (C, `/screen`); snap and screen close the pane first |
+| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (W, `/camera watch` on or off), **live** (`l`, the camera's window), **snap** (S, `/camera snap`) and **screen** (C, `/screen`); snap and screen close the pane first |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 📺 | always | `/camera live`, the camera's window (Ctrl+Alt+V) |
@@ -170,8 +171,8 @@ Settings that an environment variable or flag can override for one launch are li
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See Welcome splash below. | `fullsize` |
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it, shown at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). **A** / **N** / **D** pick all, none or the default ten; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Web, path (10 of 35) |
-| Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates), **PROC** (background processes running). **A** / **N** / **D** pick all, none or the default four; none hides the bar. The title row picks the look: **text** (T), **gauge** (G), **spark** (S, the last ten seconds) or **led** (L). See Performance bar below. | CPU, RAM, GPU, VRAM, `led` |
+| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). `a` / `n` / `d` pick all, none or the default ten; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Web, path (10 of 35) |
+| Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates), **PROC** (background processes running). `a` / `n` / `d` pick all, none or the default four; none hides the bar. The title row picks the look: **text** (`t`), **gauge** (`g`), **spark** (`s`, the last ten seconds) or **led** (`l`). See Performance bar below. | CPU, RAM, GPU, VRAM, `led` |
 | Menus max height | How much of the window a menu or info pane may take: `half-screen`, `three-quarters` or `full-screen` (all but one row). Longer lists scroll; every tab keeps the tallest tab's height. | `full-screen` |
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…). Empty uses Windows' `.txt` editor. | (default .txt editor) |
 | Image viewer | Where a double-clicked picture opens: empty for the built-in viewer, `system` for Windows' app for the file type, or a command the path is appended to (`mspaint`, `"C:\Program Files\GIMP 3\bin\gimp-3.exe"`). | (built-in viewer) |
@@ -325,11 +326,11 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 | Embedded drafter | Speeds up replies with multi-token prediction: the model drafts tokens ahead and checks them, so the text is the same, just faster (see the Drafter column). Off, no drafter is loaded or downloaded. Turn it off if a model misbehaves with it. | on |
 
 **Catalog buttons** (on the title row of *Embedded models*; each group combines with the others and starts cleared at each visit):
-* **8GB**, **16GB** (1, 2): models up to that size (weights, projector and drafter). One at a time; press the lit one to clear it.
-* **installed** (I) / **uninstalled** (U): one at a time; a paused download counts as uninstalled.
-* **drafter** (D): models with a drafter.
-* **sort** (S): name order or size order (smallest first).
-* **uncensored** (X): shows only the uncensored builds, which are hidden otherwise. It starts lit when the model in use is one.
+* **8GB**, **16GB** (`1`, `2`): models up to that size (weights, projector and drafter). One at a time; press the lit one to clear it.
+* **installed** (`i`) / **uninstalled** (`u`): one at a time; a paused download counts as uninstalled.
+* **drafter** (`d`): models with a drafter.
+* **sort** (`s`): name order or size order (smallest first).
+* **uncensored** (`x`): shows only the uncensored builds, which are hidden otherwise. It starts lit when the model in use is one.
 * `/server` and the startup picker have the size, drafter, sort and uncensored buttons for their embedded rows.
 
 **Notes**
@@ -458,15 +459,15 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 | Botchat multi-embedded | Under `multi`, for bots wanting a different embedded model from the one running. `parent-server`: they share the running model, with a warning. `multi-server`: one extra `llama-server` per model, started in turn under that bot's profile's Embedded settings so each fits in what's left. Bots on one model share its server. | `parent-server` |
 | Botchat multi-embedded kill | Stops `multi-server`'s extra servers when the chat ends. Off, they run until `/botchat --kill` or you quit, and a later chat reuses them. | on |
 | Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Off, *Botchat ComfyUI limited workflows* says; with neither, the chat is talk alone. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
-| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get: tick them (**A** / **N**), any installed workflow, offered to this chat or not. None ticked: no pictures. A ticked workflow no longer installed is dropped when the checklist opens. | (none) |
+| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get: tick them (`a` / `n`), any installed workflow, offered to this chat or not. None ticked: no pictures. A ticked workflow no longer installed is dropped when the checklist opens. | (none) |
 | Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` over the botchat workflows and draw when they choose. See Botchat pictures. | `automatic` |
 | Botchat img2img mode | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). Only with an image → image workflow among the botchat workflows. | `latest` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture and appears with it. | on |
 | Botchat non-TTS delay | A reading pause after each reply when *TTS output* is off (0–30 s). A line you send meanwhile, or one queued while the bot was replying, ends the pause and goes to the bots at once; ESC ends the chat. | 5 |
 | Botchat tools enabled | Offers every bot the tools a turn of this chat would get: the same switches, `/tools` list and panes (the shell's approval, the Docker, Home Assistant and print confirms, `ask_user`, the camera's shutter); while you plan, only plan mode's read-only tools. Not memory, skills or the ComfyUI tools, which have their own rows. Off, *Botchat limited tools* says. | off |
-| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (**A** / **N**). Each is offered only while this chat would offer it. None ticked: no tools. The ComfyUI tools aren't listed. A ticked tool not listed now (an MCP server not connected) shows at the end under *Not available now*; untick it there, or **N** clears it. | (none) |
+| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get: tick them, grouped as on `/tools` (`a` / `n`). Each is offered only while this chat would offer it. None ticked: no tools. The ComfyUI tools aren't listed. A ticked tool not listed now (an MCP server not connected) shows at the end under *Not available now*; untick it there, or `n` clears it. | (none) |
 | Botchat skills enabled | Offers every bot `load_skill` over the starting profile's, the global and (with *Use external skills*) the external skills, never a bot's own profile's. The `automatic` prompt writer gets them too. Needs *Agent skills*; switching `load_skill` off in `/tools` turns this off. Off, *Botchat limited skills* says. | off |
-| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (**A** / **N**), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. A ticked skill not listed now shows after the others as *not available now*; untick it there, or **N** clears it. | (none) |
+| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots (and the `automatic` prompt writer) may load: tick them (`a` / `n`), and `load_skill` is offered for those alone. None ticked: no skill tool. Needs *Agent skills*. A ticked skill not listed now shows after the others as *not available now*; untick it there, or `n` clears it. | (none) |
 | Botchat memory enabled | Gives every bot memories: the list in its prompt, plus `save_memory` and `recall_memory`. Inside `/botchat` this alone decides, over every profile's *Memory mode*. | on |
 | Botchat memory mode | Whose memories: `shared-parent` (every bot uses the starting profile's) or `independent` (each bot its own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot, on its turn, the newest 4 pictures since it last spoke (not its own), captioned with whose they are. Needs models that read images. Not kept for `--resume` or the session. | off |
@@ -593,15 +594,15 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list goes to the approval pane; refused with no pane) or `yolo` (everything runs). See Shell guards. | `off` |
-| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter removes one; the pane's *Allow … always* adds one. The ask and yolo buttons (A, Y) switch the policy. `/cmdlist` opens it; `/cmdcopy` copies it to another profile. | none |
+| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter removes one after a yes; the pane's *Allow … always* adds one. The ask and yolo buttons (`a`, `y`) switch the policy. `/cmdlist` opens it; `/cmdcopy` copies it to another profile. | none |
 | Shell police | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first, and also stops the forbidden strings and the SQLite rule; `/police` opens it. See Shell guards. | on |
-| Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police* is on. The top row adds one, Enter removes one; `/police`'s strings button (S) opens it too. See Shell guards. | none |
+| Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police* is on. The top row adds one, Enter removes one after a yes; `/police`'s strings button (`s`) opens it too. See Shell guards. | none |
 | Shell prefer native tools | Steers the model to the app's own tools: a lone shell command one of them covers is sent back (once a turn). See Shell guards. | on |
 | Shell default | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd`, or `bash` (Git Bash). On macOS: `zsh`, `bash` or `powershell` (pwsh, if installed). | `powershell` (`zsh` on macOS) |
 | Shell timeout (s) | How long a foreground command without its own `timeout` may run (1–3600). | 180 |
 | Shell foreground cap (s) | The longest any foreground command may run (10–3600). | 600 |
 | Shell output max chars | Output one result carries (2000–500000). Past that, the start and end are kept and the whole text goes to `.shell\<id>.log` in the working directory. | 30000 |
-| Shell code languages | What `execute_code` may run: `powershell`, `python`, `node` (each only when its interpreter is found). **A** turns all on; the last one can't be turned off. | all three |
+| Shell code languages | What `execute_code` may run: `powershell`, `python`, `node` (each only when its interpreter is found). `a` turns all on; the last one can't be turned off. | all three |
 | Shell code timeout (s) | How long a script without its own `timeout` may run (1–3600). | 300 |
 | Shell tool bridge | Lets an `execute_code` script call the app's other tools through its `neon_tools` module (a loopback socket with a per-run token). | off |
 | Shell tool bridge max calls | Tool calls one script may make through the bridge (1–500). | 50 |
@@ -647,7 +648,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. Its on/off page (the toolbar's 📸) has a **watch** button (W) that starts or stops `/camera watch`, **live** (L) that opens or closes the camera's window, and **snap** (S) and **screen** (C), which close the pane and run `/camera snap` or `/screen`. | off |
+| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. Its on/off page (the toolbar's 📸) has a **watch** button (`w`) that starts or stops `/camera watch`, **live** (`l`) that opens or closes the camera's window, and **snap** (`s`) and **screen** (`c`), which close the pane and run `/camera snap` or `/screen`. | off |
 | Camera shutter | `user`: the camera pane shows the request; Space takes the photo, R retakes, Enter sends, ESC declines. `model`: a pane asks Deny / Allow once / Allow for this session, and on a yes the app takes it. | `user` |
 | Camera preview | `live`: a camera window of its own shows the camera mirrored while you frame, then the photo. `post`: the picture viewer opens on the photo. `disabled`: no window. Neither takes the keyboard. | `live` |
 | Camera device | The camera, by its Windows name. `(first camera)`, or a camera that isn't connected, uses the first. | (first camera) |
@@ -724,7 +725,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 |---|---|---|
 | ComfyUI tools | Offers `generate_image` and `set_splash_image` once *ComfyUI URL* is set and a workflow is installed. | off |
 | ComfyUI URL | The ComfyUI server, often on your LAN (`http://gpu-box:8188`). The web tools' network mode never blocks it. | (not set) |
-| ComfyUI workflows offered | A checklist of the workflows the model is offered; nothing until ticked (here or in the wizard). **A** / **N** tick all or none. With one ticked, every plain request and plain `/imagine` uses it. `/imagine <name>` can still use a hidden one. A ticked workflow no longer installed is dropped when the checklist opens (not one whose file failed to load). The checklist lines up family, shape and size in columns. | none |
+| ComfyUI workflows offered | A checklist of the workflows the model is offered; nothing until ticked (here or in the wizard). `a` / `n` tick all or none. With one ticked, every plain request and plain `/imagine` uses it. `/imagine <name>` can still use a hidden one. A ticked workflow no longer installed is dropped when the checklist opens (not one whose file failed to load). The checklist lines up family, shape and size in columns. | none |
 | ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** a ComfyUI export. See Adding a workflow. | — |
 | ComfyUI ^-mention enabled | `^` and part of a name lists the offered workflows; a pick writes `^name`, which `generate_image` uses. | on |
 | ComfyUI timeout (s) | How long to wait for one generation, queue included (10–3600). | 300 |
@@ -741,7 +742,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | SQL tools | Offers the SQL tools (connections, databases, tables, columns, describe, relationships, indexes, query) over `sql.json`'s connections. | off |
 | SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See SQL › Changes. | read-only |
 | SQL statements allowed | Under `read-write`: the kinds of statement `sql_execute` may run (a checklist; A all, N none, D the default). See SQL › Changes. | changing data, creating, reading |
-| SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). **A** / **N** tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. A ticked name no longer in the files is dropped when the checklist opens, and the status line names it; not while a file can't be read, nor a name an entry with a problem still holds. | none |
+| SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). `a` / `n` tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. A ticked name no longer in the files is dropped when the checklist opens, and the status line names it; not while a file can't be read, nor a name an entry with a problem still holds. | none |
 | SQL default connection | The connection a call uses when it names none: an offered one, or the first. | (the first connection) |
 | SQL set password | Pick a `sql` or `runas` connection and type its password, masked; it goes to that connection's store. | — |
 | SQL add/edit connection | A wizard for a new connection, or to edit a saved one, which can **test** it (`SELECT @@VERSION`) before saving. See Managing connections. | — |
@@ -794,7 +795,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 |---|---|---|
 | SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases named in `sqlite.json` and, below, the working directory's files. While on, the shell police and the file tools keep out of SQLite databases (see *SQLite* › *Shell and files*). | off |
 | SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` is offered too, one change per call of the kinds below, or a new database file in the working directory, each allowed on a pane (Deny, Allow once, Allow for this session). See *SQLite* › *Changes*. | read-only |
-| SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run, as a checklist: changing data, deleting, creating, changing structure, dropping, upkeep, settings, reading (see *SQLite* › *Changes*). **A** / **N** / **D** pick all, none or the default. With none ticked, `sqlite_execute` isn't offered. | changing data, creating, reading |
+| SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run, as a checklist: changing data, deleting, creating, changing structure, dropping, upkeep, settings, reading (see *SQLite* › *Changes*). `a` / `n` / `d` pick all, none or the default. With none ticked, `sqlite_execute` isn't offered. | changing data, creating, reading |
 | SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. Otherwise as *SQL connections offered*. | none |
 | SQLite default database | The database a call uses when it names none. | (the first database) |
 | SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`), and `sqlite_execute`'s `create` may make one there. | off |

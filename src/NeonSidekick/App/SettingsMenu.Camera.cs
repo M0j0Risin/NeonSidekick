@@ -82,7 +82,7 @@ internal sealed partial class SettingsMenu
     public const string ScreenLine = "/screen";
 
     /// <summary>The Camera tool page's hint with the watch button alone (2026-10-04). Pinned.</summary>
-    public const string CameraToggleKeys = "Enter = choose · W = watch · ESC = back";
+    public const string CameraToggleKeys = "Enter = choose · w = watch · ESC = back";
 
     /// <summary>
     /// The Camera tool page's hint (2026-10-05): <see cref="PickKeys"/> with the keys of the buttons <see cref="CameraButtons"/> gives,
@@ -91,7 +91,7 @@ internal sealed partial class SettingsMenu
     public static string CameraButtonKeys(IReadOnlyList<MenuButton> buttons)
     {
         ArgumentNullException.ThrowIfNull(buttons);
-        var keys = buttons.Select(b => char.ToUpperInvariant(b.Key ?? ' ') + " = " + b.Title[(b.Title.IndexOf(' ', StringComparison.Ordinal) + 1)..]);
+        var keys = buttons.Select(b => (b.Key ?? ' ') + " = " + b.Title[(b.Title.IndexOf(' ', StringComparison.Ordinal) + 1)..]);
         return "Enter = choose · " + string.Join(" · ", keys) + " · ESC = back";
     }
 

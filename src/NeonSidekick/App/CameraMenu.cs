@@ -38,11 +38,20 @@ public sealed record CameraPaneView(string Title, string Prompt, string Status, 
 public sealed class CameraMenu
 {
     private readonly MenuPane _pane;
+    private readonly Func<string, IReadOnlyList<string>, CancellationToken, Task>? _view;
 
-    public CameraMenu(MenuPane pane)
+    /// <param name="view">Shows lines in a scrolling view under a label (the screen's info pane), for an allow page's whole text; null offers none.</param>
+    public CameraMenu(MenuPane pane, Func<string, IReadOnlyList<string>, CancellationToken, Task>? view = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
+        _view = view;
     }
+
+    /// <summary>
+    /// The allow page's hint with the whole-text view (2026-10-07, the consistency pass: a database write's statement is cut at the
+    /// caption's three rows, as the shell approval's command was). Pinned.
+    /// </summary>
+    public const string AllowHintWithView = "d / o / s = pick · v = view · Enter = choose · ESC = deny";
 
     public bool Enabled => _pane.Enabled;
 
@@ -121,8 +130,13 @@ public sealed class CameraMenu
             Hotkeys = AllowHotkeys,
         };
 
-    /// <summary>The allow question: the row's answer, Deny for ESC or the token, null with no pane to draw on. The pane closes with the answer.</summary>
-    public async Task<CameraAllow?> AllowAsync(string prompt, CancellationToken cancellationToken, string? title = null)
+    /// <summary>
+    /// The allow question: the row's answer, Deny for ESC or the token, null with no pane to draw on. The pane closes with the answer.
+    /// With <paramref name="whole"/> (2026-10-07: a database write's statement) the title row carries the
+    /// <see cref="Shell.ShellText.ViewButton"/> (<c>v</c>), which shows those lines under <paramref name="wholeLabel"/> in a scrolling view
+    /// and comes back to the question with the cursor where it was.
+    /// </summary>
+    public async Task<CameraAllow?> AllowAsync(string prompt, CancellationToken cancellationToken, string? title = null, string? wholeLabel = null, IReadOnlyList<string>? whole = null)
     {
         ArgumentNullException.ThrowIfNull(prompt);
         if (!_pane.Enabled)
@@ -132,8 +146,25 @@ public sealed class CameraMenu
 
         try
         {
-            var pick = await _pane.PickAsync(AllowPage(prompt, title), 0, cancellationToken).ConfigureAwait(false);
-            return pick is { } picked && picked.Row >= 0 && picked.Row < AllowChoices.Count ? AllowChoices[picked.Row] : CameraAllow.Deny;
+            var page = AllowPage(prompt, title);
+            if (whole is not null && _view is not null)
+            {
+                page = page with { Hint = AllowHintWithView, Buttons = CommandApprovalMenu.Buttons };
+            }
+
+            int cursor = 0;
+            while (true)
+            {
+                var pick = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+                if (pick is { Button: >= 0 } viewing && whole is not null && _view is not null)
+                {
+                    cursor = viewing.Row;
+                    await _view(wholeLabel ?? page.Title, whole, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                return pick is { } picked && picked.Row >= 0 && picked.Row < AllowChoices.Count ? AllowChoices[picked.Row] : CameraAllow.Deny;
+            }
         }
         finally
         {

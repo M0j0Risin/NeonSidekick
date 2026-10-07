@@ -68,7 +68,7 @@ public class MemoryMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(MemoryMenu.Title + "   Enter = remove · ESC = back", _console.Output);
+        Assert.Contains(MemoryMenu.Title + "   Enter = remove · ESC = close", _console.Output);
         Assert.Contains("one", _console.Output);
         Assert.Contains("two", _console.Output);
         Assert.Equal(new[] { "one", "two" }, _store.Snapshot());
@@ -79,7 +79,7 @@ public class MemoryMenuTests : IDisposable
     public async Task Enter_RemovesTheHighlightedRow_AndShowsTheListAgain()
     {
         Seed("one", "two", "three");
-        Push(Keys.Down, Keys.Enter, Keys.Escape);
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, then Yes (asked since 2026-10-07)
 
         await _menu.ShowAsync(CancellationToken.None);
 
@@ -90,11 +90,25 @@ public class MemoryMenuTests : IDisposable
         Assert.True(_console.Output.Split(PromptTitle).Length - 1 >= 2);
     }
 
+    /// <summary>The removal asks (2026-10-07, the consistency pass), No on the cursor: Enter there keeps the memory.</summary>
+    [Fact]
+    public async Task TheRemovalAsks_AndNoKeepsTheMemory()
+    {
+        Seed("one", "two");
+        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);   // the row, No, then close
+
+        await _menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.RemovePrompt("two"), _console.Output);
+        Assert.Contains(ChatScreen.KeptNotice, _console.Output);
+        Assert.Equal(new[] { "one", "two" }, new MemoryStore(_dir).Snapshot());
+    }
+
     [Fact]
     public async Task RemovingTheLastRow_EndsWithTheEmptyNotice()
     {
         Seed("only");
-        Push(Keys.Enter);
+        Push(Keys.Enter, Keys.Down, Keys.Enter);   // the row, then Yes (asked since 2026-10-07)
 
         await _menu.ShowAsync(CancellationToken.None);
 
@@ -107,7 +121,7 @@ public class MemoryMenuTests : IDisposable
     public async Task TwoRemovals_KeepTheCursorWhereItWas()
     {
         Seed("one", "two", "three");
-        Push(Keys.Down, Keys.Enter, Keys.Enter, Keys.Escape);   // remove "two", then the row now under the cursor: "three"
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // remove "two", then the row now under the cursor: "three"; each asked
 
         await _menu.ShowAsync(CancellationToken.None);
 
@@ -204,7 +218,7 @@ public class MemoryMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         var rows = _store.EntriesSnapshot().Select(Row).ToList();
         int flow = pane.FlowRow;
-        Push(Keys.Down, Keys.Enter, Keys.Escape);
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, then Yes (asked since 2026-10-07)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -222,7 +236,7 @@ public class MemoryMenuTests : IDisposable
         Seed("only");
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
-        Push(Keys.Enter);
+        Push(Keys.Enter, Keys.Down, Keys.Enter);   // the row, then Yes (asked since 2026-10-07)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -258,7 +272,7 @@ public class MemoryMenuTests : IDisposable
     {
         Seed("one");
         var (menu, pane, switched) = SwitchMenu(MemoryAccess.ReadWrite);
-        Push(Keys.Char('d'), Keys.Char('d'), Keys.Char('r'), Keys.Char('w'), Keys.Escape);
+        Push(Keys.Char('x'), Keys.Char('x'), Keys.Char('o'), Keys.Char('w'), Keys.Escape);   // x and o since 2026-10-07 (d and r before)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -278,7 +292,7 @@ public class MemoryMenuTests : IDisposable
         Seed("only");
         var (menu, pane, switched) = SwitchMenu(MemoryAccess.Disabled);
         int flow = pane.FlowRow;
-        Push(Keys.Enter, Keys.Enter, Keys.Char('w'), Keys.Escape);   // remove it, Enter on the empty row, read-write, close
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Enter, Keys.Char('w'), Keys.Escape);   // remove it (Yes), Enter on the empty row, read-write, close
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -308,15 +322,15 @@ public class MemoryMenuTests : IDisposable
         var undated = new MemoryEntry { Text = "z" };
 
         Assert.Equal("💾 Memory", MemoryMenu.Title);
-        Assert.Equal(MemoryMenu.Title + "   Enter = remove · ESC = back", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));
+        Assert.Equal(MemoryMenu.Title + "   Enter = remove · ESC = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));
         Assert.Equal("(💾 nothing remembered)", MemoryMenu.EmptyNotice);
-        Assert.Equal("Enter = remove · W = read-write · R = read-only · D = disabled · ESC = back", MemoryMenu.SwitchKeys);   // 2026-10-03; Memory mode's three since 2026-10-04
-        Assert.Equal("W = read-write · R = read-only · D = disabled · ESC = back", MemoryMenu.EmptySwitchKeys);
+        Assert.Equal("Enter = remove · w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.SwitchKeys);   // 2026-10-03; Memory mode's three since 2026-10-04
+        Assert.Equal("w = read-write · o = read-only · x = disabled · ESC = close", MemoryMenu.EmptySwitchKeys);
         Assert.Equal(["● read-write", "○ read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
         Assert.Equal(["○ read-write", "● read-only", "○ disabled"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
         Assert.Equal([true, false, false], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.On));
         Assert.Equal([false, false, true], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.On));
-        Assert.Equal(['w', 'r', 'd'], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Key!.Value));
+        Assert.Equal(['w', 'o', 'x'], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Key!.Value));
         Assert.Equal("(💾 removed: x)", MemoryMenu.RemovedNotice("x"));
         Assert.Equal("Could not remove the memory: locked", MemoryMenu.RemoveFailedError("locked"));
         Assert.Equal("2026-09-11", MemoryMenu.DateLabel(dated));
