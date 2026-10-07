@@ -56,7 +56,7 @@ public class PerfBarTests
     public void TheMeters_ArePinned_TheFourByDefault()
     {
         Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup", "proc"], PerfBarItems.Names);   // PROC last, 2026-10-05
-        Assert.Equal(["CPU", "RAM", "GPU", "VRAM", "NET", "NET↓", "NET↑", "PROC"], PerfBarItems.Names.Select(PerfBarItems.Title));
+        Assert.Equal(["CPU", "RAM", "GPU", OperatingSystem.IsMacOS() ? "GMEM" : "VRAM", "NET", "NET↓", "NET↑", "PROC"], PerfBarItems.Names.Select(PerfBarItems.Title));   // GMEM on a Mac, 2026-10-07
         Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Defaults);
         Assert.Null(new AppSettingsData().PerformanceBarItems);
         Assert.Equal(PerfBarItems.Defaults, PerfBarItems.Names.Where(PerfBarItems.Resolve(null).Contains));   // null: the four (2026-10-02; none before)
@@ -68,7 +68,7 @@ public class PerfBarTests
         Assert.Equal(PerfBarItems.Defaults, PerfBarItems.Save(Only("vram", "gpu", "ram", "cpu")));   // the four as the list
         Assert.Equal(["cpu", "netdown"], PerfBarItems.Save(Only("netdown", "cpu")));   // the bar's order
         Assert.Equal("off", PerfBarItems.Value([], "gauge"));
-        Assert.Equal("CPU, RAM, GPU, VRAM · gauge", PerfBarItems.Value(null, "gauge"));
+        Assert.Equal("CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · gauge", PerfBarItems.Value(null, "gauge"));
         Assert.Equal("CPU, RAM, NET↓ · gauge", PerfBarItems.Value(["netdown", "ram", "cpu"], "gauge"));
         Assert.Equal("all · led", PerfBarItems.Value([.. PerfBarItems.Names], "bars"));   // an unknown look reads as the default, led since 2026-10-02
         Assert.Equal("[[x]] CPU     " + Theme.DimMarkup("processor load"), PerfBarItems.Label("cpu", true));   // markup: the brackets escaped
@@ -148,6 +148,72 @@ public class PerfBarTests
         Assert.Equal(40, PerfMath.NetPercent(10e6, 40e6, 100e6));   // the busier direction
         Assert.Null(PerfMath.NetPercent(null, null, 100e6));
         Assert.Null(PerfMath.NetPercent(10e6, 1e6, null));
+    }
+
+    // ── The Mac's readings (2026-10-07) ────────────────────────────────────
+
+    /// <summary>
+    /// Mach's CPU ticks: busy is user + system + nice over all four states, and each 32-bit counter's delta is taken modulo
+    /// 2³², so a counter that wrapped between two readings is a delta, not a gap (Windows' <see cref="PerfMath.CpuPercent"/>
+    /// reads a 64-bit counter going back as no reading).
+    /// </summary>
+    [Fact]
+    public void MachCpu_IsBusyOverAllFourStates_AcrossAWrap()
+    {
+        Assert.Equal(25, PerfMath.MachCpuPercent(100, 50, 1_000, 0, 120, 60, 1_090, 0));          // 30 busy of 120
+        Assert.Equal(50, PerfMath.MachCpuPercent(0, 0, 0, 0, 10, 0, 20, 10));                     // nice counts as busy
+        Assert.Equal(100, PerfMath.MachCpuPercent(0, 0, 0, 0, 40, 0, 0, 0));
+        Assert.Null(PerfMath.MachCpuPercent(5, 5, 5, 5, 5, 5, 5, 5));                             // no tick passed
+        Assert.Equal(10, PerfMath.MachCpuPercent(uint.MaxValue - 4, 0, uint.MaxValue - 44, 0, 5, 0, 45, 0));   // both wrapped: 10 busy of 100
+        Assert.Equal(10, PerfMath.MachCpuPercent(100, 0, uint.MaxValue - 9, 0, 110, 0, 80, 0));   // idle alone wrapped: 90 idle
+    }
+
+    /// <summary>
+    /// Activity Monitor's Memory Used: app memory (anonymous less purgeable) + wired + compressed, in pages of the machine's size —
+    /// the figures an M4 with 16 GiB gave on 2026-10-07 (vm_stat: 304707 anonymous, 4 purgeable, 166937 wired, 430249 in the
+    /// compressor; 16 KiB pages) make 14.78 GB, 86 %.
+    /// </summary>
+    [Fact]
+    public void MacMemoryUsed_IsAppPlusWiredPlusCompressed()
+    {
+        double used = PerfMath.MacMemoryUsedBytes(304_707, 4, 166_937, 430_249, 16_384);
+        Assert.Equal((304_703.0 + 166_937 + 430_249) * 16_384, used);
+        Assert.Equal(86, Math.Round(PerfMath.Percent(used, 17_179_869_184)!.Value));
+        Assert.Equal(16_384 * 2, PerfMath.MacMemoryUsedBytes(1, 9, 1, 1, 16_384));   // more purgeable than anonymous: no app memory, never less
+        Assert.Equal(4_096 * 6, PerfMath.MacMemoryUsedBytes(3, 1, 2, 2, 4_096));     // an Intel Mac's 4 KiB pages
+    }
+
+    /// <summary>
+    /// The 64-bit byte counts in a packed <c>ifmibdata</c> (received at 116, sent at 124, little-endian), past the 4 GiB a
+    /// 32-bit counter wraps at; a buffer cut short reads nothing.
+    /// </summary>
+    [Fact]
+    public void IfMibBytes_ReadsTheSixtyFourBitCounts()
+    {
+        var data = new byte[180];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PerfMath.IfMibReceivedAt), 90_729_830_043);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(PerfMath.IfMibSentAt), 9_342_673_269);
+        Assert.Equal((90_729_830_043L, 9_342_673_269L), PerfMath.IfMibBytes(data));
+        Assert.Equal((116, 124), (PerfMath.IfMibReceivedAt, PerfMath.IfMibSentAt));
+        Assert.Null(PerfMath.IfMibBytes(data.AsSpan(0, 131)));
+        Assert.NotNull(PerfMath.IfMibBytes(data.AsSpan(0, 132)));
+    }
+
+    /// <summary>The Mac's own source (2026-10-07): the factory picks it on a Mac, and a sample reads every meter but the first CPU.</summary>
+    [MacFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void MacSource_IsTheDefault_AndReadsTheMachine()
+    {
+        using var source = PerfSources.CreateDefault();
+        Assert.IsType<MacPerfSource>(source);
+        var first = source.Sample(PerfReads.All);
+        Assert.Null(first.Cpu);                                         // no previous reading yet
+        Assert.InRange(first.Ram!.Value, 1, 100);
+        Thread.Sleep(50);
+        var second = source.Sample(PerfReads.Cpu | PerfReads.Ram);
+        Assert.InRange(second.Cpu!.Value, 0, 100);
+        Assert.Null(second.Gpu);                                        // not asked for
+        Assert.Null(second.NetDown);
     }
 
     [Theory]
@@ -286,7 +352,7 @@ public class PerfBarTests
     public void OnlyTheCheckedMeters_Draw_InTheBarsOrder()
     {
         var row = PerfBar.Render(PerfBarStyle.Text, Only("vram", "cpu"), Reading, [], 120)!;
-        Assert.Equal(Centered("CPU  34% · VRAM  91%", 120), row.Text);
+        Assert.Equal(Centered("CPU  34% · " + Perf.PerfText.VramLabel + "  91%", 120), row.Text);
     }
 
     // ── The arithmetic ──────────────────────────────────────────────────────
@@ -496,7 +562,7 @@ public class PerfBarTests
     public void Text_IsTheLabelsAndValues_TheValuesInTheLoadsColour()
     {
         var row = PerfBar.Render(PerfBarStyle.Text, Four, Reading, [], 120)!;
-        Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 120), row.Text);
+        Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · " + Perf.PerfText.VramLabel + "  91%", 120), row.Text);
         Assert.Equal(new Style(Theme.Good), row.Segments.Single(s => s.Text == " 34%").Style);
         Assert.Equal(new Style(Theme.Warn), row.Segments.Single(s => s.Text == " 62%").Style);
         Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == " 91%").Style);
@@ -521,7 +587,7 @@ public class PerfBarTests
         Assert.Equal(("╸", "─────────"), PerfBar.Gauge(5, 10));
 
         var row = PerfBar.Render(PerfBarStyle.Gauge, Four, Reading, [], 120)!;
-        Assert.Equal(Centered("CPU ━━━╸──────  34%   RAM ━━━━━━────  62%   GPU ━━────────  18%   VRAM ━━━━━━━━━─  91%", 120), row.Text);
+        Assert.Equal(Centered("CPU ━━━╸──────  34%   RAM ━━━━━━────  62%   GPU ━━────────  18%   " + Perf.PerfText.VramLabel + " ━━━━━━━━━─  91%", 120), row.Text);
         Assert.Equal(new Style(Theme.Bad), row.Segments.Single(s => s.Text == "━━━━━━━━━").Style);
         Assert.Equal(Theme.DimText, row.Segments.Single(s => s.Text == "──────").Style);
     }
@@ -565,7 +631,7 @@ public class PerfBarTests
         Assert.Equal(meter * 4, row.Text.Count(c => c is '▰' or '▱'));
 
         var text = PerfBar.Render(PerfBarStyle.Gauge, Four, Reading, [], 45)!;
-        Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · VRAM  91%", 45), text.Text);   // no meter width fits: the text look
+        Assert.Equal(Centered("CPU  34% · RAM  62% · GPU  18% · " + Perf.PerfText.VramLabel + "  91%", 45), text.Text);   // no meter width fits: the text look
     }
 
     [Fact]

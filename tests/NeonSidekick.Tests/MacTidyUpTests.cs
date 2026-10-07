@@ -180,7 +180,9 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Equal("a\\b is not a path every system's folders can hold safely", SkillInstallText.UnsafePathRefusal("a\\b"));
         Assert.Equal("/terminal needs Windows for now; open Terminal or iTerm2 yourself in the working directory.", ChatScreen.MacTerminalUnavailableError);
         Assert.Equal("(none: printing needs Windows)", SettingsMenu.WindowsDefaultPrinterLabel);
-        Assert.Equal("GPU load (needs Windows for now)", Perf.PerfText.GpuNote);
+        Assert.Equal("GPU load", Perf.PerfText.GpuNote);   // read through IOKit since 2026-10-07
+        Assert.Equal("GMEM", Perf.PerfText.VramLabel);
+        Assert.Equal("GPU's share of unified memory", Perf.PerfText.VramNote);
         Assert.DoesNotContain(Camera.CameraCommand.Words, w => w.Note.Contains("Windows lists", StringComparison.Ordinal));
         // MagicScaler works on a Mac since 2026-10-07, over ImageIO: its line names that, not "Windows only".
         Assert.Contains(AboutText.Components, c => c.Name == "PhotoSauce.MagicScaler" && c.Role == "image decode, edit and downscale through Apple's ImageIO codecs");

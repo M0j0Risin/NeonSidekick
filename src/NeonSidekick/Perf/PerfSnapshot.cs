@@ -28,7 +28,7 @@ public enum PerfReads
     All = Cpu | Ram | Gpu | Net,
 }
 
-/// <summary>Where the sampler reads the machine: <see cref="WindowsPerfSource"/> on Windows, <see cref="NullPerfSource"/> elsewhere, a fake in the tests.</summary>
+/// <summary>Where the sampler reads the machine: <see cref="WindowsPerfSource"/> on Windows, <see cref="MacPerfSource"/> on a Mac (2026-10-07), <see cref="NullPerfSource"/> elsewhere, a fake in the tests.</summary>
 public interface IPerfSource : IDisposable
 {
     /// <summary>The meters <paramref name="reads"/> asks for now, the rest null. Called on the sampler's timer thread, never two at once.</summary>
@@ -45,9 +45,12 @@ public sealed class NullPerfSource : IPerfSource
     }
 }
 
-/// <summary>The machine's own source: <see cref="WindowsPerfSource"/> on Windows, else <see cref="NullPerfSource"/>.</summary>
+/// <summary>The machine's own source: <see cref="WindowsPerfSource"/> on Windows, <see cref="MacPerfSource"/> on a Mac, else <see cref="NullPerfSource"/>.</summary>
 public static class PerfSources
 {
     /// <summary>A new source for this machine; the sampler owns and disposes it.</summary>
-    public static IPerfSource CreateDefault() => OperatingSystem.IsWindows() ? new WindowsPerfSource() : new NullPerfSource();
+    public static IPerfSource CreateDefault() =>
+        OperatingSystem.IsWindows() ? new WindowsPerfSource()
+        : OperatingSystem.IsMacOS() ? new MacPerfSource()
+        : new NullPerfSource();
 }
