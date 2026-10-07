@@ -30,7 +30,7 @@ public sealed class ViewerTests : IDisposable
         return state;
     }
 
-    [Fact]
+    [WindowsFact]
     public void Reset_SortsOldestFirst_AndIsLive_OnTheNewest()
     {
         var state = ThreePictures();
@@ -73,7 +73,7 @@ public sealed class ViewerTests : IDisposable
         Assert.True(state.Live);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Add_WhileHeld_OnlyCountsIt()
     {
         var state = ThreePictures();
@@ -166,7 +166,7 @@ public sealed class ViewerTests : IDisposable
     }
 
     /// <summary>Newest at the left since 2026-10-03 (the user's ask, the strip's way): → older, ← newer, End the oldest, Home the newest and live.</summary>
-    [Fact]
+    [WindowsFact]
     public void Browse_WalksAndClamps_AndTheNewestFollowsAgain()
     {
         var state = ThreePictures();
@@ -378,7 +378,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(ViewerAction.ToggleSlideShow, ViewerState.ActionFor(ViewerState.VkF9, fullScreen, slideShow: true));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Slides_F10Toggles_UpDownStepAndClamp_OnlyWhileRunning()
     {
         var state = ThreePictures();
@@ -415,7 +415,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal("c.png — 1/3 (live) · NeonSidekick pictures", state.Title());
     }
 
-    [Fact]
+    [WindowsFact]
     public void Slides_TheDelHint_WinsOverTheSlideShowTail()
     {
         var state = ThreePictures();
@@ -546,7 +546,7 @@ public sealed class ViewerTests : IDisposable
         Assert.True(ViewerState.IsAutoRepeat(unchecked((long)0xFFFFFFFFC0530001)));  // as a sign-extended IntPtr carries it
     }
 
-    [Fact]
+    [WindowsFact]
     public void PressDelete_FirstArms_TheSecondInTimeGivesThePath()
     {
         var state = ThreePictures();
@@ -642,7 +642,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal("▶ 5 s · random", ViewerText.SlideShowTail(5, true));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Decode_ABmp_IsBgrx_TopRowFirst()
     {
         var bitmap = ViewerImage.Decode(SmokeChecks.SolidBmp(8, 2), "x.bmp");
@@ -653,7 +653,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal([0xC8, 0x40, 0xFF], bitmap.Bgrx[..3]);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Decode_OverTheMaxSide_IsDownscaled()
     {
         var bitmap = ViewerImage.Decode(SmokeChecks.SolidBmp(ViewerImage.MaxSide * 2, 4), "wide.bmp");
@@ -674,7 +674,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal([100, 50, 0, 0, 0, 0, 0, 0], ViewerImage.ToBgrx([200, 100, 0, 128, 255, 255, 255, 0], 4));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task LoadAsync_ReadsAPicture()
     {
         string path = Path.Combine(_dir, "a.bmp");
@@ -698,7 +698,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(ViewerImage.Attempts - 1, waits);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task LoadAsync_OfAFileThatFinishesBetweenTries_ShowsIt()
     {
         string path = Path.Combine(_dir, "late.bmp");
@@ -722,7 +722,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Null(await ViewerImage.LoadAsync(path, new CancellationToken(canceled: true)));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Probe_MakesAHiddenWindow_ThatAnswers()
     {
         var check = SmokeChecks.ProbeViewerWindow();

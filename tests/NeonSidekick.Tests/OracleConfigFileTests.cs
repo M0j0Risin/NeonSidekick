@@ -46,7 +46,7 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.Empty(loaded.Problems);
     }
 
-    [Fact]
+    [WindowsFact]
     public void TheEmptyShapesExamples_AreEachAUsableConnection_OnceUncommented()
     {
         var example = OracleConfigFile.EmptyText.Split('\n')
@@ -64,6 +64,30 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.True(loaded.Connections[1].Config.InCredentialManager);
         Assert.StartsWith("(DESCRIPTION=", loaded.Connections[1].Config.DataSource);
         Assert.Contains("cmdkey /generic:NeonSidekick/oracle/ledger /user:ledger_ro /pass", OracleConfigFile.EmptyText);
+    }
+
+    /// <summary>The macOS twin of <see cref="TheEmptyShapesExamples_AreEachAUsableConnection_OnceUncommented"/> (2026-10-06): the plain example becomes a <c>keychain:</c> value.</summary>
+    [UnixFact]
+    public void TheEmptyShapesExamples_AreEachAUsableConnection_TheKeychainOnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        var example = OracleConfigFile.EmptyText.Split('\n')
+            .Where(l => l.StartsWith("  // ", StringComparison.Ordinal))
+            .Select(l => l["  // ".Length..])
+            .Where(l => l.EndsWith('{') || l.EndsWith(',') || l.EndsWith('}') || l.EndsWith('"'))
+            .Where(l => l.StartsWith('"') || l.StartsWith("  ", StringComparison.Ordinal) || l.StartsWith('}'));
+        Profile("{ \"connections\": {\n" + string.Join("\n", example) + "\n} }");
+
+        var loaded = OracleConfigFile.Load(ProfilePath);
+
+        Assert.Empty(loaded.Problems);
+        Assert.Equal(["hr", "ledger"], loaded.Connections.Select(c => c.Name));
+        Assert.StartsWith(WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);
+        Assert.True(loaded.Connections[1].Config.InCredentialManager);
     }
 
     [Fact]
@@ -140,7 +164,7 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.Equal(OracleConnectionConfig.DefaultConnectTimeoutSeconds, new OracleConnectionConfig { DataSource = "x", User = "u" }.Builder().ConnectionTimeout);
     }
 
-    [Fact]
+    [WindowsFact]
     public void APlainPassword_IsEncryptedInPlace_TheRestOfTheFileUntouched()
     {
         Profile("""
@@ -158,6 +182,33 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.DoesNotContain("plain-secret", text);
         Assert.Contains("// keep me", text);
         Assert.StartsWith(WindowsCredentials.ProtectedPrefix, loaded.Connections[0].Config.Password);
+        Assert.Equal("plain-secret", OracleSecrets.Resolve(loaded.Connections[0]).Value);
+    }
+
+    /// <summary>The macOS twin of <see cref="APlainPassword_IsEncryptedInPlace_TheRestOfTheFileUntouched"/> (2026-10-06): a <c>keychain:</c> value.</summary>
+    [UnixFact]
+    public void APlainPassword_IsEncryptedInPlace_AsAKeychainValueOnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        Profile("""
+            {
+              // keep me
+              "connections": {
+                "free": { "dataSource": "localhost:1521/FREEPDB1", "user": "neon", "password": "plain-secret" }
+              }
+            }
+            """);
+
+        var loaded = OracleConfigFile.Load(ProfilePath);
+
+        string text = File.ReadAllText(ProfilePath);
+        Assert.DoesNotContain("plain-secret", text);
+        Assert.Contains("// keep me", text);
+        Assert.StartsWith(WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);
         Assert.Equal("plain-secret", OracleSecrets.Resolve(loaded.Connections[0]).Value);
     }
 
@@ -197,7 +248,7 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.Equal("the container", loaded.Connections[0].Config.Description);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Secrets_ResolveFromTheStore_SaveIntoIt_AndNameTheFixWhenEmpty()
     {
         Assert.Equal("plain", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = "plain" })).Value);
@@ -215,6 +266,31 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.Equal((true, SqlText.PasswordSavedToFile("prod", ProfilePath)), OracleSecrets.Save(Named(new OracleConnectionConfig { DataSource = "x", User = "u" }, ProfilePath), "typed"));
         var loaded = OracleConfigFile.Load(ProfilePath);
         Assert.StartsWith(WindowsCredentials.ProtectedPrefix, loaded.Connections[0].Config.Password);
+        Assert.Equal("typed", OracleSecrets.Resolve(loaded.Connections[0]).Value);
+    }
+
+    /// <summary>
+    /// The macOS twin of <see cref="Secrets_ResolveFromTheStore_SaveIntoIt_AndNameTheFixWhenEmpty"/> (2026-10-06, the macOS build): the
+    /// Keychain is the credman store, and a password saved into the file is a <c>keychain:</c> value.
+    /// </summary>
+    [UnixFact]
+    public void Secrets_ResolveFromTheKeychain_AndSaveIntoIt_OnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        Assert.Equal("kept", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.Protect("kept").Value })).Value);
+        var credman = Named(new OracleConnectionConfig { DataSource = "x", User = "ledger_ro", PasswordStore = "credman", Credential = _target });
+        Assert.Equal(OracleText.NoCredential(_target), OracleSecrets.Resolve(credman).Error);
+        Assert.Equal((true, SqlText.PasswordSavedToCredman("prod", _target)), OracleSecrets.Save(credman, "typed"));
+        Assert.Equal("typed", OracleSecrets.Resolve(credman).Value);
+
+        Profile("""{ "connections": { "prod": { "dataSource": "x:1/y", "user": "u" } } }""");
+        Assert.Equal((true, SqlText.PasswordSavedToFile("prod", ProfilePath)), OracleSecrets.Save(Named(new OracleConnectionConfig { DataSource = "x", User = "u" }, ProfilePath), "typed"));
+        var loaded = OracleConfigFile.Load(ProfilePath);
+        Assert.StartsWith(WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);
         Assert.Equal("typed", OracleSecrets.Resolve(loaded.Connections[0]).Value);
     }
 

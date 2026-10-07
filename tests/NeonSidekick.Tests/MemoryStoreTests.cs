@@ -133,7 +133,7 @@ public class MemoryStoreTests : IDisposable
         Assert.False(Directory.Exists(_dir));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Clear_WhenTheFileIsLocked_Throws_AndKeepsTheEntries()
     {
         var store = new MemoryStore(_dir);
@@ -293,7 +293,7 @@ public class MemoryStoreTests : IDisposable
         Assert.Equal(before, File.GetLastWriteTimeUtc(FilePath));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Remove_WhenTheFileIsLocked_Throws_AndKeepsTheEntryInPlace()
     {
         var store = new MemoryStore(_dir);
@@ -365,7 +365,7 @@ public class MemoryStoreTests : IDisposable
         Assert.Equal("one more", store.Snapshot()[^1]);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Import_WhenTheFileIsLocked_Throws_AndKeepsTheEntries()
     {
         var store = new MemoryStore(_dir);

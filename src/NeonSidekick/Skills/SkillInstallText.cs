@@ -46,7 +46,8 @@ public static class SkillInstallText
 
     public static string FileTooBigRefusal(string path, long bytes, long max) => $"{path} is {FileText.Size(bytes)}, over the {FileText.Size(max)} cap for one file";
 
-    public static string UnsafePathRefusal(string path) => $"{path} is not a path a Windows folder can hold safely";
+    /// <summary>A skill file's path that some system's folder could not hold (the check is Windows' rules, kept everywhere so a skill installs alike); a Mac's sentence names no Windows (2026-10-06). Pinned.</summary>
+    public static string UnsafePathRefusal(string path) => OperatingSystem.IsMacOS() ? $"{path} is not a path every system's folders can hold safely" : $"{path} is not a path a Windows folder can hold safely";
 
     public static string CaseCollisionRefusal(string path) => $"{path} differs from another file only by case";
 

@@ -127,6 +127,8 @@ public class PasteBlocksTests
 
     private static ImageAttachment Image(string name) => new(@"C:\pics\" + name, [1, 2, 3], ImageFile.Png, 4, 4);
 
+    private static ImageAttachment UnixImage(string name) => new("/pics/" + name, [1, 2, 3], ImageFile.Png, 4, 4);
+
     [Fact]
     public void ImageLabel_IsPinned()
     {
@@ -209,7 +211,7 @@ public class PasteBlocksTests
         Assert.Equal(new[] { (4, "[Image #1]".Length), (19, "[Pasted text #1 +4 lines]".Length) }, blocks.LabelRanges(draft));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ImagesIn_AreTheDraftsImages_InOrder_TextTokensSkipped()
     {
         var blocks = new PasteBlocks();
@@ -223,7 +225,22 @@ public class PasteBlocksTests
         Assert.Throws<ArgumentNullException>(() => blocks.ImagesIn(null!));
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="ImagesIn_AreTheDraftsImages_InOrder_TextTokensSkipped"/> (2026-10-06, the macOS build): pictures under a Unix folder.</summary>
+    [UnixFact]
+    public void ImagesIn_AreTheDraftsImages_InOrder_TextTokensSkipped_Unix()
+    {
+        var blocks = new PasteBlocks();
+        char a = blocks.AddImage(UnixImage("a.png"));
+        char text = blocks.Add(Lines(4));
+        char b = blocks.AddImage(UnixImage("b.png"));
+
+        Assert.Equal(new[] { "b.png", "a.png", "a.png" }, blocks.ImagesIn($"{b} {text} {a}{a}").Select(i => Path.GetFileName(i.Path)));
+        Assert.Empty(blocks.ImagesIn($"plain {text}"));
+        Assert.Empty(blocks.ImagesIn(""));
+        Assert.Throws<ArgumentNullException>(() => blocks.ImagesIn(null!));
+    }
+
+    [WindowsFact]
     public void Original_IsTheClipboardsOwnBytes_NotTheDownscale_NamedByWhatTheyAre()
     {
         // generate_image's input (later still on 2026-09-24): the paste before the 2048 downscale the model was shown.

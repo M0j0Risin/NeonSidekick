@@ -235,7 +235,7 @@ public class SkillCatalogTests : IDisposable
         Assert.Equal(SkillCatalog.MaxResources, files.Count);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ReadResource_StaysInsideTheSkillFolder_TextOnly()
     {
         string directory = Put(SkillScope.Global, "pdf", Skill("pdf"));
@@ -250,6 +250,30 @@ public class SkillCatalogTests : IDisposable
         Assert.Equal(SkillCatalog.ReadOutcome.Ok, ok.Outcome);
         Assert.Equal("line one\nline two", ok.Text);
         Assert.Equal(SkillCatalog.ReadOutcome.Ok, SkillCatalog.ReadResource(skill, @"references\guide.md").Outcome);
+        Assert.Equal(SkillCatalog.ReadOutcome.Outside, SkillCatalog.ReadResource(skill, "../secret.txt").Outcome);
+        Assert.Equal(SkillCatalog.ReadOutcome.Outside, SkillCatalog.ReadResource(skill, Path.Combine(_roots.Global, "secret.txt")).Outcome);
+        Assert.Equal(SkillCatalog.ReadOutcome.Outside, SkillCatalog.ReadResource(skill, "").Outcome);
+        Assert.Equal(SkillCatalog.ReadOutcome.IsDirectory, SkillCatalog.ReadResource(skill, "references").Outcome);
+        Assert.Equal(SkillCatalog.ReadOutcome.Missing, SkillCatalog.ReadResource(skill, "references/gone.md").Outcome);
+        Assert.Equal(SkillCatalog.ReadOutcome.NotText, SkillCatalog.ReadResource(skill, "references/blob.bin").Outcome);
+    }
+
+    /// <summary>The Unix twin of <see cref="ReadResource_StaysInsideTheSkillFolder_TextOnly"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void ReadResource_StaysInsideTheSkillFolder_TextOnly_Unix()
+    {
+        string directory = Put(SkillScope.Global, "pdf", Skill("pdf"));
+        Directory.CreateDirectory(Path.Combine(directory, "references"));
+        File.WriteAllText(Path.Combine(directory, "references", "guide.md"), "line one\r\nline two");
+        File.WriteAllBytes(Path.Combine(directory, "references", "blob.bin"), [1, 0, 2, 0]);
+        File.WriteAllText(Path.Combine(_roots.Global, "secret.txt"), "outside");
+        _catalog.Scan(external: false);
+        var skill = _catalog.Skills[0];
+
+        var ok = SkillCatalog.ReadResource(skill, "references/guide.md");
+        Assert.Equal(SkillCatalog.ReadOutcome.Ok, ok.Outcome);
+        Assert.Equal("line one\nline two", ok.Text);
+        Assert.Equal(SkillCatalog.ReadOutcome.Ok, SkillCatalog.ReadResource(skill, @"references/guide.md").Outcome);
         Assert.Equal(SkillCatalog.ReadOutcome.Outside, SkillCatalog.ReadResource(skill, "../secret.txt").Outcome);
         Assert.Equal(SkillCatalog.ReadOutcome.Outside, SkillCatalog.ReadResource(skill, Path.Combine(_roots.Global, "secret.txt")).Outcome);
         Assert.Equal(SkillCatalog.ReadOutcome.Outside, SkillCatalog.ReadResource(skill, "").Outcome);

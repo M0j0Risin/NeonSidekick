@@ -1,11 +1,12 @@
 using NeonSidekick.App;
+using NeonSidekick.Speech;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
 public class SmokeChecksTests
 {
-    [Fact]
+    [WindowsFact]
     public void ProbeWinMm_Passes_WithOrWithoutADevice()
     {
         var check = SmokeChecks.ProbeWinMm();
@@ -24,7 +25,7 @@ public class SmokeChecksTests
         Assert.True(check.Passed, check.Detail);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ProbeImageResize_DownscalesABitmapToAPng()
     {
         var check = SmokeChecks.ProbeImageResize();
@@ -36,7 +37,7 @@ public class SmokeChecksTests
     }
 
     /// <summary><c>image:edit</c> (2026-10-04): crop, a quarter turn, grey, hue and a border into five encodes, each the right size and type.</summary>
-    [Fact]
+    [WindowsFact]
     public void ProbeImageEdit_EditsIntoEveryEncoder()
     {
         var check = SmokeChecks.ProbeImageEdit();
@@ -47,7 +48,7 @@ public class SmokeChecksTests
         Assert.Contains("; writes png, jpeg, gif, bmp, tiff", check.Detail);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ProbeSplash_DecodesEveryEmbeddedPicture()
     {
         var check = SmokeChecks.ProbeSplash();
@@ -112,7 +113,8 @@ public class SmokeChecksTests
         Assert.True(check.Passed, check.Detail);
         Assert.StartsWith("libgit2 5853918 (", check.Detail);
         Assert.EndsWith("); init, found from a nested path, 1 untracked, staged, branch created and switched, committed ×2, diff +1 −0 unstaged / staged / by commit, 2 commits logged, blame 2 lines by 2 commits, stashed and popped, 1 path discarded, ahead 1 of origin/main, branch deleted", check.Detail);
-        Assert.Contains("git2-5853918.dll", SmokeChecks.RequiredNativeLibraries);
+        Assert.Contains("git2-5853918.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Contains("libgit2-5853918.dylib", SmokeChecks.MacNativeLibraries);
     }
 
     [Fact]
@@ -123,8 +125,8 @@ public class SmokeChecksTests
         Assert.Equal("sql:parse-and-sni", check.Name);
         Assert.True(check.Passed, check.Detail);
         Assert.StartsWith("ScriptDom gate ok; SqlClient ", check.Detail);
-        Assert.EndsWith(" through the native SNI", check.Detail);
-        Assert.Contains("Microsoft.Data.SqlClient.SNI.dll", SmokeChecks.RequiredNativeLibraries);
+        Assert.EndsWith(OperatingSystem.IsWindows() ? " through the native SNI" : " through the managed SNI", check.Detail);
+        Assert.Contains("Microsoft.Data.SqlClient.SNI.dll", SmokeChecks.WindowsNativeLibraries);
     }
 
     /// <summary><c>oracle:driver</c> (2026-09-30): the gate, the fetch-size setter the trimmed driver broke, and ODP.NET's connect path answering a port nobody serves.</summary>
@@ -216,16 +218,50 @@ public class SmokeChecksTests
     [Fact]
     public void RequiredNativeLibraries_IncludeVoskAndItsRuntime()
     {
-        Assert.Contains("onnxruntime.dll", SmokeChecks.RequiredNativeLibraries);
-        Assert.Contains("onnxruntime_providers_shared.dll", SmokeChecks.RequiredNativeLibraries);
-        Assert.Equal(new[] { Path.Combine("voices", "af_heart.npy"), Path.Combine("espeak", "espeak-ng-win-amd64.dll"), Path.Combine("espeak", "espeak-ng-data", "phondata") }, SmokeChecks.RequiredContentFiles);
-        Assert.Contains("libvosk.dll", SmokeChecks.RequiredNativeLibraries);
-        Assert.Contains("libstdc++-6.dll", SmokeChecks.RequiredNativeLibraries);
-        Assert.Contains("libgcc_s_seh-1.dll", SmokeChecks.RequiredNativeLibraries);
-        Assert.Contains("libwinpthread-1.dll", SmokeChecks.RequiredNativeLibraries);
+        Assert.Contains("onnxruntime.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Contains("onnxruntime_providers_shared.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Contains("libvosk.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Contains("libstdc++-6.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Contains("libgcc_s_seh-1.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Contains("libwinpthread-1.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Equal(OperatingSystem.IsWindows() ? SmokeChecks.WindowsNativeLibraries : SmokeChecks.MacNativeLibraries, SmokeChecks.RequiredNativeLibraries);
+    }
+
+    /// <summary>The macOS list (2026-10-06): the dylibs the packages ship for osx-arm64, at the depths the publish puts them, and none of Windows' own.</summary>
+    [Fact]
+    public void MacNativeLibraries_AreTheArm64Dylibs()
+    {
+        Assert.Equal(
+            new[]
+            {
+                "libonnxruntime.dylib",
+                Path.Combine("runtimes", "macos-arm64", "libwhisper.dylib"),
+                Path.Combine("runtimes", "macos-arm64", "libggml-whisper.dylib"),
+                Path.Combine("runtimes", "macos-arm64", "libggml-base-whisper.dylib"),
+                Path.Combine("runtimes", "macos-arm64", "libggml-cpu-whisper.dylib"),
+                "libvosk.dylib",
+                "libgit2-5853918.dylib",
+                "libe_sqlite3.dylib",
+            },
+            SmokeChecks.MacNativeLibraries);
     }
 
     [Fact]
+    public void RequiredContentFiles_NameThisOsEspeak()
+    {
+        Assert.Equal(new[] { Path.Combine("voices", "af_heart.npy"), Path.Combine("espeak", KokoroInProcessSynthesizer.EspeakExecutable), Path.Combine("espeak", "espeak-ng-data", "phondata") }, SmokeChecks.RequiredContentFiles);
+        var arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture;
+        if (OperatingSystem.IsWindows() && arch == System.Runtime.InteropServices.Architecture.X64)
+        {
+            Assert.Equal("espeak-ng-win-amd64.dll", KokoroInProcessSynthesizer.EspeakExecutable);
+        }
+        else if (OperatingSystem.IsMacOS() && arch == System.Runtime.InteropServices.Architecture.Arm64)
+        {
+            Assert.Equal("espeak-ng-macos-arm64.dll", KokoroInProcessSynthesizer.EspeakExecutable);
+        }
+    }
+
+    [WindowsFact]
     public void ProbeWinMmIn_Passes_WithOrWithoutADevice()
     {
         var check = SmokeChecks.ProbeWinMmIn();

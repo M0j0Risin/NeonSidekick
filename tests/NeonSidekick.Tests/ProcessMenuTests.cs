@@ -67,7 +67,7 @@ public sealed class ProcessMenuTests : IDisposable
         Assert.Equal("(⚡ stopping proc_3f2a1b)", ProcessMenu.StoppingNotice("proc_3f2a1b"));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task TheRows_AreTheListsRows_AnEndedOneDim_UnderTheCount()
     {
         var done = Start("exit 0");
@@ -81,7 +81,7 @@ public sealed class ProcessMenuTests : IDisposable
         Assert.Equal("(⚡ " + done.Id + " has ended: exited 0)", ProcessMenu.EndedNotice(done));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task CursorAfter_FollowsTheProcess_WhenTheRowsShift_AndKeepsTheRowOnceItIsGone()
     {
         // The registry's eviction drops the oldest from the front: the cursor stays on the process, not the row (2026-10-05, the code review).
@@ -96,7 +96,7 @@ public sealed class ProcessMenuTests : IDisposable
         Assert.Equal(0, ProcessMenu.CursorAfter([], b, 3));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Enter_OpensTheHighlightedOne_ThePaneStaysOpen()
     {
         var first = Start("ping -n 30 127.0.0.1 >nul");
@@ -119,7 +119,7 @@ public sealed class ProcessMenuTests : IDisposable
         pane.Dispose();
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ADoubleClickOnARow_OpensIt_AsEnterWould()
     {
         Start("ping -n 30 127.0.0.1 >nul");
@@ -142,7 +142,7 @@ public sealed class ProcessMenuTests : IDisposable
         pane.Dispose();
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task TheKillKey_AsksFirst_NoKeepsIt_YesStopsIt()
     {
         var running = Start("ping -n 30 127.0.0.1 >nul");
@@ -165,7 +165,7 @@ public sealed class ProcessMenuTests : IDisposable
         pane.Dispose();
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task TheKillButton_OnAnEndedOne_SaysSo_AndAsksNothing()
     {
         var done = Start("exit 3");

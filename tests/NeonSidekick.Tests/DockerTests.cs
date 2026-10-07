@@ -690,7 +690,7 @@ public sealed class DockerTests : IDisposable
 
     // ── /docker ─────────────────────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public async Task TheCommand_ListsShowsStatusLogsStats_AndActsAsTheUser()
     {
         var ps = await DockerCommand.RunAsync(_docker, "", CancellationToken.None);
@@ -797,7 +797,7 @@ public sealed class DockerTests : IDisposable
         Assert.Equal(SettingsField.DockerTools, group.Switch);
     }
 
-    [Fact]
+    [WindowsFact]
     public void PrepareTurn_OffersTheGroup_TheChangesOnlyUnderWrites_AndPlanModeDropsThem()
     {
         var assistant = new Assistant(new FakeChatClient(), new ConversationHistory(""), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5)));

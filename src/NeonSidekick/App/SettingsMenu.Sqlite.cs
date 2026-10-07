@@ -229,7 +229,9 @@ internal sealed partial class SettingsMenu
 
     public const string SqliteWizardFileQuestion = "Which sqlite.json: this profile's or the global one?";
     public const string SqliteWizardNameQuestion = "Its name: what the model passes as \"database\" and %name picks on the input line.";
-    public const string SqliteWizardPathQuestion = "The database file: a full path (D:\\data\\app.db), or one relative to sqlite.json's folder.";
+    public static string SqliteWizardPathQuestion => OperatingSystem.IsMacOS()   // a Mac's own example path, 2026-10-06
+        ? "The database file: a full path (/Users/you/data/app.db), or one relative to sqlite.json's folder."
+        : "The database file: a full path (D:\\data\\app.db), or one relative to sqlite.json's folder.";
     public const string SqliteWizardDescriptionQuestion = "What the database holds, in your words (optional): the model reads it to pick one.";
     public const string SqliteWizardSummaryCaption = "Check the database: Test opens it read-only without saving; Enter on a row below changes it.";
     public const string SqliteWizardSaveHiddenRow = "Save, hidden from the model until ticked in SQLite databases offered";

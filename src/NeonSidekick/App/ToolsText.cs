@@ -219,6 +219,9 @@ public static class ToolsText
     public const string NoWorkflowReason = "no workflow is offered";
     public const string NoHomeAssistantReason = "no Home Assistant URL or API key is set";
 
+    /// <summary>A group whose tools need Windows, on a Mac (2026-10-06, the macOS build: UNC, Docker, printing). Pinned.</summary>
+    public const string NeedsWindowsReason = "it needs Windows";
+
     /// <summary>The YouTube group off with its switch on (2026-10-05): no key to search with and no video window to play in.</summary>
     public const string NoYouTubeReason = "no YouTube API key is set and there is no video window";
     public const string NoSqliteDatabaseReason = "no database in sqlite.json is offered and SQLite sandbox files is off";
@@ -283,6 +286,12 @@ public static class ToolsText
         {
             // The one reason that holds (2026-10-04), when the screen could tell which.
             return "(off: " + reason + ")";
+        }
+
+        if (OperatingSystem.IsMacOS() && group.Switch is SettingsField.UncTools or SettingsField.DockerTools or SettingsField.PrintTools)
+        {
+            // A heading drawn with no screen's reason (/sys, the botchat checklist) on a Mac (2026-10-06): the group needs Windows, whatever else holds.
+            return "(off: " + NeedsWindowsReason + ")";
         }
 
         if (group.Switch == SettingsField.ObsidianTools)

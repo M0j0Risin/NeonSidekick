@@ -378,7 +378,7 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Equal(3, _stub.Requests.Count(r => r.Uri.AbsolutePath == "/api/states"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Session_TheTokenIsEncrypted_AndReadBack()
     {
         string stored = HaSession.Protect(" secret ", out string? error);
@@ -388,6 +388,24 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Equal("secret", HaSession.TokenOf(new AppSettingsData { HomeAssistantToken = stored }));
         Assert.Equal("plain", HaSession.TokenOf(new AppSettingsData { HomeAssistantToken = "plain" }));
         Assert.Null(HaSession.TokenOf(new AppSettingsData { HomeAssistantToken = Sql.WindowsCredentials.ProtectedPrefix + "bm90IGEgYmxvYg==" }));
+    }
+
+    /// <summary>The macOS twin of <see cref="Session_TheTokenIsEncrypted_AndReadBack"/> (2026-10-06): a <c>keychain:</c> value.</summary>
+    [UnixFact]
+    public void Session_TheTokenIsEncrypted_AndReadBack_TheKeychainOnMacOS()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        string stored = HaSession.Protect(" secret ", out string? error);
+
+        Assert.Null(error);
+        Assert.StartsWith(Sql.WindowsCredentials.KeychainPrefix, stored);
+        Assert.Equal("secret", HaSession.TokenOf(new AppSettingsData { HomeAssistantToken = stored }));
+        Assert.Equal("plain", HaSession.TokenOf(new AppSettingsData { HomeAssistantToken = "plain" }));
+        Assert.Null(HaSession.TokenOf(new AppSettingsData { HomeAssistantToken = Sql.WindowsCredentials.KeychainPrefix + "bm90IGEgYmxvYg==" }));
     }
 
     [Fact]

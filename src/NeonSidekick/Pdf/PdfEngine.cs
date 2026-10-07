@@ -25,11 +25,19 @@ public static class PdfEngine
     }
 
     /// <summary>A one-line description for the picker.</summary>
-    public static string Describe(string engine) => Resolve(engine) switch
+    public static string Describe(string engine) => OperatingSystem.IsMacOS() ? DescribeMac(engine) : Resolve(engine) switch
     {
         Browser => "Edge, Chrome or Brave only; no browser, no PDF",
         Printer => "Microsoft Print to PDF only: Markdown, text and pictures, in black and white",
         _ => "the browser when one is found, else Microsoft Print to PDF",
+    };
+
+    /// <summary><see cref="Describe"/> on macOS (2026-10-06): no Microsoft Print to PDF there, so the browser is all <c>auto</c> has. Pinned.</summary>
+    private static string DescribeMac(string engine) => Resolve(engine) switch
+    {
+        Browser => "Edge, Chrome, Brave or Chromium only; no browser, no PDF",
+        Printer => "Microsoft Print to PDF: needs Windows",
+        _ => "the browser when one is found",
     };
 }
 

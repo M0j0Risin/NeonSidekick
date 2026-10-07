@@ -20,7 +20,7 @@ public partial class ChatScreenTests
     private Action<string>? _showInViewer;          // PictureWindow.ShowQuietly: null = none
     private Func<bool>? _closeThumbs;               // ThumbsWindow.Close: null = none
 
-    [Fact]
+    [WindowsFact]
     public async Task ViewThumbs_OpensOnAFolder_OrOnAPicturesFolderWithItSelected_AndTheErrors()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -152,7 +152,7 @@ public partial class ChatScreenTests
     /// A pick in the browser moves the viewer without the keyboard and highlights the strip's tile; the viewer's keys and the strip's
     /// arrows move the browser — with the strip off too — and nothing answers back.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task ThePicturesStayInStep_TheBrowserTheViewerAndTheStrip()
     {
         ComfyServer();
@@ -205,7 +205,7 @@ public partial class ChatScreenTests
     /// The picture menu's Attach puts the picture on the line as a paste (the draft's next word apart), Print prints it as
     /// <c>/print</c> would, and a row's line lands in the chat — all from another thread, waking the idle line.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task TheMenusAttachPrintAndLines_ReachTheIdleLine()
     {
         _settings.Update(d => d.TtsOutput = false);

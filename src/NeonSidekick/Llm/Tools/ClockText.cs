@@ -112,7 +112,7 @@ public static class ClockText
         string city = (slash >= 0 ? id[(slash + 1)..] : id).Replace('_', ' ');
         foreach (var candidate in zones)
         {
-            if (ListsCity(candidate.DisplayName, city))
+            if (ListsCity(candidate.DisplayName, city) || NamesCity(candidate.Id, city))
             {
                 zone = candidate;
                 return true;
@@ -121,6 +121,24 @@ public static class ClockText
 
         zone = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Whether an IANA zone id, <c>Asia/Tokyo</c> or <c>America/Port_of_Spain</c>, ends in <paramref name="city"/> (2026-10-06, the
+    /// macOS build): off Windows the system's zones are IANA's and their display names list no cities, so "Tokyo" found nothing.
+    /// Always false on Windows, whose zones are found by <see cref="ListsCity"/> as before.
+    /// </summary>
+    public static bool NamesCity(string zoneId, string city)
+    {
+        ArgumentNullException.ThrowIfNull(zoneId);
+        ArgumentNullException.ThrowIfNull(city);
+        if (OperatingSystem.IsWindows() || city.Length == 0)
+        {
+            return false;
+        }
+
+        int slash = zoneId.LastIndexOf('/');
+        return slash >= 0 && string.Equals(zoneId[(slash + 1)..].Replace('_', ' '), city.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Whether a Windows display name, <c>(UTC+09:00) Osaka, Sapporo, Tokyo</c>, lists <paramref name="city"/> as one of its items.</summary>

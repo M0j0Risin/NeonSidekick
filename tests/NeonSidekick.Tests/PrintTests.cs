@@ -303,7 +303,7 @@ public sealed class PrintTests : IDisposable
         Assert.Equal(@"Printed docs\notes.txt: 1 page to Office Laser", result);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Service_TellsMarkdownPicturesAndTheRestApart()
     {
         Write("readme.md", "# Head\n\ntext");
@@ -341,7 +341,7 @@ public sealed class PrintTests : IDisposable
         Assert.StartsWith("Sent doc.pdf to the program Windows prints it with, on Office Laser", result);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Service_KeepsToTheSandbox()
     {
         Directory.CreateDirectory(Path.Combine(_root, "sub"));

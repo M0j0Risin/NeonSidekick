@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>NeonSidekick</AssemblyName>
     <RootNamespace>NeonSidekick</RootNamespace>
-    <Version>0.4.1</Version>
+    <Version>0.5.0</Version>
     <!-- The copyright holder and the licence (GPL-3.0-or-later since 2026-09-20): the exe's version-info block carries them. -->
     <Authors>Christopher Nelson</Authors>
     <Copyright>Copyright (C) 2026 Christopher Nelson</Copyright>
@@ -29,8 +29,10 @@
       against this level; at the default baseline it is false on every machine, Whisper.net picks
       its noavx runtime, and transcription runs several times slower.
       Whisper.net.Runtime.NoAvx stays referenced regardless (see below).
+      x64 only (2026-10-06, the macOS build): an arm64 publish (osx-arm64) has no such level, and NEON is
+      every arm64 CPU's baseline.
     -->
-    <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
+    <IlcInstructionSet Condition="!$(RuntimeIdentifier.EndsWith('-arm64'))">x86-64-v3</IlcInstructionSet>
 
     <!-- Globalization on (2026-09-23; true until then): Microsoft.Data.SqlClient refuses to run in
          invariant mode ("Globalization Invariant Mode is not supported"; 7.1 has no switch past it, it
@@ -176,7 +178,9 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" ExcludeAssets="all" GeneratePathProperty="true" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!-- Windows only (2026-10-06, the macOS build). The condition is the build host, as Vosk.targets' is: NativeAOT cannot
+       publish across operating systems, so the host is the target. -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <None Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll"
           Link="WebView2Loader.dll"
           CopyToOutputDirectory="PreserveNewest"

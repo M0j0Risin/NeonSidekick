@@ -44,6 +44,18 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
     public const string EspeakFolder = "espeak";
     public const string VoiceExtension = ".npy";
 
+    /// <summary>
+    /// The espeak-ng executable KokoroSharp runs on this OS, inside <see cref="EspeakFolder"/>. The package ships one per OS
+    /// and architecture, every one named <c>.dll</c> whatever it is (a Mach-O on macOS); KokoroSharp builds the same name
+    /// (2026-10-06, the macOS build: the smoke names the running OS's, and <see cref="EnsureEspeakRunnable"/> marks it executable).
+    /// </summary>
+    public static string EspeakExecutable =>
+        "espeak-ng-"
+        + (OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "macos" : "linux")
+        + "-"
+        + (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "amd64")
+        + ".dll";
+
     /// <summary>100 ms of audio per piece handed to the sink, like the HTTP path's reads.</summary>
     private const int PieceBytes = 4800;
 
@@ -145,6 +157,7 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
             {
                 // The tokenizer's espeak-ng lives beside the voices; the default is the exe's directory.
                 Tokenizer.eSpeakNGPath = Path.Combine(_contentDirectory, EspeakFolder);
+                EnsureEspeakRunnable(Tokenizer.eSpeakNGPath);
                 var options = new SessionOptions();
                 try
                 {
@@ -233,6 +246,34 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
     }
 
     public static string UnknownVoiceDetail(string name) => $"unknown voice '{name}'";
+
+    /// <summary>
+    /// Marks this OS's espeak-ng executable runnable by its owner when it is not (2026-10-06, the macOS build). NuGet unpacks
+    /// a package without Unix modes, so the copy beside the exe lands as 0644 and KokoroSharp's start of it fails with a
+    /// permission error; <c>build.ps1</c> sets the bit in the published folder, and this covers a <c>dotnet run</c> or a copy
+    /// that lost it. Nothing to do on Windows; a failure is logged and left for the start itself to report.
+    /// </summary>
+    public static void EnsureEspeakRunnable(string espeakDirectory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var path = Path.Combine(espeakDirectory, EspeakExecutable);
+        try
+        {
+            if (File.Exists(path) && (File.GetUnixFileMode(path) & UnixFileMode.UserExecute) == 0)
+            {
+                File.SetUnixFileMode(path, File.GetUnixFileMode(path) | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+                DiagnosticLog.Debug(Category, $"Marked {path} executable.");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn(Category, $"Could not mark {path} executable: {ex.Message}");
+        }
+    }
 
     /// <summary>Hands <paramref name="pcm"/> to the sink in 100 ms even-length pieces; a trailing odd byte is dropped with a Debug line, as on the HTTP path.</summary>
     private static long Deliver(ReadOnlyMemory<byte> pcm, Action<byte[], int> pcmSink, CancellationToken cancellationToken)

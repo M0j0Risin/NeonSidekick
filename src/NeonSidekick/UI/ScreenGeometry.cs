@@ -61,6 +61,16 @@ public sealed class ScreenGeometry
         return geometry.CursorRow() is null ? null : geometry;
     }
 
+    /// <summary>
+    /// A terminal whose cursor is asked by a reader that owns stdin (2026-10-06, the macOS build: <see cref="UnixConsoleInput.QueryCursor"/>).
+    /// A VT terminal reports screen cells and its mouse reports are in the same frame, so the screen row serves as both rows here.
+    /// </summary>
+    public static ScreenGeometry FromCursorQuery(Func<int?> screenRow)
+    {
+        ArgumentNullException.ThrowIfNull(screenRow);
+        return new ScreenGeometry(screenRow, screenRow);
+    }
+
     private static int? ReadConsoleCursorRow()
     {
         int row = Console.CursorTop - Console.WindowTop;

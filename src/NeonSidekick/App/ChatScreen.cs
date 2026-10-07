@@ -3597,7 +3597,7 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<CompletionItem> StarChoices()
     {
         var effective = _effective();
-        return effective.UncStarMention && effective.UncTools ? UncChoices(_unc.Catalog()) : [];
+        return effective.UncStarMention && effective.UncTools && !OperatingSystem.IsMacOS() ? UncChoices(_unc.Catalog()) : [];   // no UNC on a Mac (2026-10-06)
     }
 
     /// <summary>The UNC shares as mention items (2026-09-30): each name with <see cref="UncText.MentionNote"/>, in the catalog's order. Pure.</summary>
@@ -4429,7 +4429,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/cwd</c>'s path list (2026-10-05): null — the word list — until the argument starts as a drive path; empty once it
+    /// <c>/cwd</c>'s path list (2026-10-05): null — the word list — until the argument starts as a drive path (on a Mac, a <c>/</c>:
+    /// <see cref="FolderCompleter.IsMachinePath"/>); empty once it
     /// ends in whitespace (a folder applied under folder-apply). A folder typed in full lists its subfolders: the completer never
     /// lists the folder itself, so there is no "one folder typed in full" to close on as a file list has (2026-10-06, the code
     /// review's catch: that check was here and could never match). Under folder-remain Enter goes on into them as the @ list's
@@ -4437,7 +4438,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private static MentionResult? CwdPaths(string argText, ArgumentSources sources)
     {
-        if (sources.MachineFolders is not { } folders || !FolderCompleter.IsDrivePath(argText))
+        if (sources.MachineFolders is not { } folders || !FolderCompleter.IsMachinePath(argText))
         {
             return null;
         }
@@ -4630,7 +4631,10 @@ internal sealed partial class ChatScreen
             SettingsField.OracleTools => !effective.OracleTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "oracle.json"),
             SettingsField.MySqlTools => !effective.MySqlTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "mysql.json"),
             SettingsField.PostgresTools => !effective.PostgresTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "postgres.json"),
-            SettingsField.UncTools => !effective.UncTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("share", "unc.json"),
+            SettingsField.UncTools => !effective.UncTools ? ToolsText.SwitchOffReason(field) : OperatingSystem.IsMacOS() ? ToolsText.NeedsWindowsReason : ToolsText.NoneOfferedReason("share", "unc.json"),
+            // The groups that need Windows say so on a Mac (2026-10-06, the macOS build), the switch first as everywhere; on Windows null as before.
+            SettingsField.DockerTools => !OperatingSystem.IsMacOS() ? null : !effective.DockerTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
+            SettingsField.PrintTools => !OperatingSystem.IsMacOS() ? null : !effective.PrintTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
             SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
             SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,
             SettingsField.HomeAssistantTools => !effective.HomeAssistantTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoHomeAssistantReason,
@@ -4886,7 +4890,6 @@ internal sealed partial class ChatScreen
             new SearchFilesTool(files, effective),
             new FileInfoTool(files),
             new ReadFileTool(files),
-            new ViewImageTool(files, effective),
             new WriteFileTool(files),
             new PatchFileTool(files),
             new CreateDirectoryTool(files),
@@ -4896,9 +4899,17 @@ internal sealed partial class ChatScreen
             new ZipTool(files),
             new UnzipTool(files),
             new OpenTool(files, openFile, unc, effective),
-            new ImageInfoTool(files, effective),
-            new ImageEditTool(files, effective),
         };
+
+        // The picture tools only where there are codecs (2026-10-06, the macOS build: ImageCodecs); view_image in its old
+        // place, fifth.
+        if (ImageCodecs.Available)
+        {
+            tools.Insert(4, new ViewImageTool(files, effective));
+            tools.Add(new ImageInfoTool(files, effective));
+            tools.Add(new ImageEditTool(files, effective));
+        }
+
         if (pdf is not null)
         {
             tools.Add(new ConvertToPdfTool(files, pdf, effective));
@@ -7465,6 +7476,9 @@ internal sealed partial class ChatScreen
     /// <summary><c>/terminal</c> where the screen was given no terminal opener (a non-Windows build). Pinned.</summary>
     public const string TerminalUnavailableError = "/terminal opens Windows Terminal, which this system does not have.";
 
+    /// <summary><see cref="TerminalUnavailableError"/> on macOS (2026-10-06): no opener there yet — one would be a new process-start site, a design call. Pinned.</summary>
+    public const string MacTerminalUnavailableError = "/terminal needs Windows for now; open Terminal or iTerm2 yourself in the working directory.";
+
     /// <summary>
     /// <c>/terminal [folder]</c> (2026-10-03, the user's ask: "similar to /explore"): a new terminal window in the working
     /// directory, or in a folder under it, resolved through the sandbox exactly as <see cref="HandleExplore"/> resolves its own —
@@ -7475,7 +7489,7 @@ internal sealed partial class ChatScreen
     {
         if (_openTerminal is not { } openTerminal)
         {
-            _transcript.Error(TerminalUnavailableError);
+            _transcript.Error(OperatingSystem.IsMacOS() ? MacTerminalUnavailableError : TerminalUnavailableError);
             return;
         }
 

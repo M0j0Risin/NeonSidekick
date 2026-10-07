@@ -3,16 +3,36 @@ name: Build & Test
 # Manual only (2026-10-06, the user's call): a push or a pull request to main runs nothing, and a v* tag runs release.yml,
 # which is this same pipeline before it publishes the release. Run this one from the Actions tab (Build & Test, Run workflow)
 # for a CI check without a release, on any branch.
+#
+# Both platforms since 2026-10-06 (the macOS build): Windows x64 and macOS Apple Silicon, each built on its own runner, since
+# NativeAOT cannot publish across operating systems. Cost: the repo is private, and GitHub bills Windows minutes at 2x and
+# macOS minutes at 10x; a run is about 25 minutes on each.
+#
+# The run asks which platform (later on 2026-10-06, the user's call): both by default, or one alone, so a fix for one platform
+# is checked without paying for the other's runner. release.yml always builds both.
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Which platform to build
+        type: choice
+        options:
+          - both
+          - windows
+          - macos
+        default: both
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: windows-latest
-    name: Build, Test, Publish, Smoke, Package
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.platform == 'windows' && '[{"os":"windows-latest","rid":"win-x64"}]' || inputs.platform == 'macos' && '[{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]') }}
+    runs-on: ${{ matrix.os }}
+    name: Build, Test, Publish, Smoke, Package (${{ matrix.rid }})
     # A cold restore, build, coverage run and NativeAOT publish is 20-30 minutes on a hosted
     # runner; anything past this is a hang, not a slow run, and GitHub's default is six hours.
     timeout-minutes: 60
@@ -26,11 +46,28 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # The macOS build keeps its secrets' key in the Keychain (Sql/MacKeychain), and the smoke's keys:keychain probe and the
+      # Keychain tests write throwaway items there. A hosted runner's login keychain may be locked or missing, so the job makes
+      # its own, unlocked, as the default and first in the search list, and deletes it at the end.
+      - name: Make a throwaway keychain (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          keychain="$RUNNER_TEMP/neonsidekick-ci.keychain-db"
+          password="$(openssl rand -base64 24)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -d user -s "$keychain"
+          echo "NEONSIDEKICK_CI_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
       # build.ps1 is the single definition of the pipeline: restore, build with a zero-warning
       # budget, test with -c Release (load-bearing next to --no-build) and coverage, NativeAOT
       # publish with a zero-own-warning budget, run the PUBLISHED exe with --smoke, then stage
-      # the release zip so packaging is exercised on every run, not only on a tag. Anything CI
-      # does that the script does not is a difference nobody can reproduce locally.
+      # the release package so packaging is exercised on every run, not only on a tag. Anything CI
+      # does that the script does not is a difference nobody can reproduce locally. -Runtime is
+      # each runner's default (win-x64, osx-arm64).
       - name: Build, test, publish, smoke, package
         shell: pwsh
         run: ./build.ps1 -Package
@@ -44,9 +81,10 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@v7
         with:
-          name: NeonSidekick-win-x64
+          name: NeonSidekick-${{ matrix.rid }}
           path: |
             publish/package/*.zip
+            publish/package/*.tar.gz
             publish/package/*.sha256
           retention-days: 7
           if-no-files-found: error
@@ -55,7 +93,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: coverage
+          name: coverage-${{ matrix.rid }}
           path: publish/coverage/**/coverage.cobertura.xml
           retention-days: 7
           if-no-files-found: ignore
@@ -66,7 +104,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: hang-diagnostics
+          name: hang-diagnostics-${{ matrix.rid }}
           path: |
             publish/coverage/**/Sequence_*.xml
             publish/coverage/**/*.dmp
@@ -77,3 +115,10 @@ jobs:
         if: always()
         shell: pwsh
         run: Get-ChildItem -Path publish/output -Recurse | Select-Object FullName, Length
+
+      - name: Delete the throwaway keychain (macOS)
+        if: always() && runner.os == 'macOS' && env.NEONSIDEKICK_CI_KEYCHAIN != ''
+        shell: bash
+        run: |
+          security default-keychain -d user -s login.keychain-db || true
+          security delete-keychain "$NEONSIDEKICK_CI_KEYCHAIN" || true

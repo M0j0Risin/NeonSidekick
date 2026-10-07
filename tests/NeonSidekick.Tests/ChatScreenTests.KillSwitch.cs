@@ -52,7 +52,7 @@ public partial class ChatScreenTests
         Assert.Equal(TimeSpan.FromSeconds(2), ChatScreen.KillSwitchConfirmWindow);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task KillSwitch_AtTheIdleLine_UnloadsTheModel_AndTheNextMessageAsksForAServer()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -95,7 +95,7 @@ public partial class ChatScreenTests
         Assert.Equal("http://127.0.0.1:1234/v1", _session.Endpoint?.BaseUrl.AbsoluteUri);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task KillSwitch_UnderAReply_CancelsIt_ThenUnloads()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -125,7 +125,7 @@ public partial class ChatScreenTests
         Assert.Null(_session.Assistant);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task KillSwitch_InAPane_UnloadsAndLeavesThePaneOpen()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -142,7 +142,7 @@ public partial class ChatScreenTests
         Assert.Null(_session.Assistant);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task KillSwitch_UnderALoad_CancelsTheConnect_AndUnloads()
     {
         var embedded = OnTheEmbeddedE2b();
@@ -162,7 +162,7 @@ public partial class ChatScreenTests
         Assert.Null(_session.Assistant);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task KillSwitch_OnePress_OnlyArms_AndShowsTheAlert()
     {
         // Later on 2026-10-01 (the user's ask): a stray press unloads nothing; the hint row says what a second would do.
@@ -180,7 +180,7 @@ public partial class ChatScreenTests
         Assert.NotNull(_session.Assistant);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task KillSwitch_ASecondPressAfterTheWindow_OnlyArmsAgain()
     {
         var embedded = OnTheEmbeddedE2b();

@@ -11,8 +11,12 @@ namespace NeonSidekick.Help;
 /// </summary>
 public static class HelpSettings
 {
-    /// <summary>The row's purpose, plain text (backticks and <c>*Setting*</c> names kept).</summary>
-    public static string Describe(SettingsField field) => field switch
+    /// <summary>The row's purpose, plain text (backticks and <c>*Setting*</c> names kept); on macOS <see cref="HelpMac.Settings"/>' text where it has one (2026-10-06).</summary>
+    public static string Describe(SettingsField field) =>
+        OperatingSystem.IsMacOS() && HelpMac.Setting(field) is { } mac ? mac : DescribeAsWritten(field);
+
+    /// <summary>The row's purpose as written here, every system's but where <see cref="HelpMac"/> has a Mac text.</summary>
+    internal static string DescribeAsWritten(SettingsField field) => field switch
     {
         SettingsField.Profile => "Switches to another profile (each has its own settings, persona, memory, skills and sessions).",
         SettingsField.UserLineStyle => "How the transcript draws your sent line: `quiet` (the › in the user colour, your words in the body's), `slab` (your line on a faint fill) or `bold` (the whole line bold in the user colour).",
@@ -109,7 +113,7 @@ public static class HelpSettings
         SettingsField.GitLibLogMaxCommits => "How many commits `gitlib_log` returns unless the call says otherwise (1–200).",
         SettingsField.ShellCommandPolicy => "Whether and how the model may run shell commands through `run_command`. `off`: no shell tools are offered. `ask`: a command not on the allowed list goes to the approval pane first (with no pane, it is refused). `yolo`: everything runs and nothing is asked. See Shell guards.",
         SettingsField.ShellCommandAllowed => "The command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter on one removes it; the pane's *Allow … always* adds one. The list's ask and yolo buttons (A, Y) switch *Shell command policy*, yolo after a yes. `/cmdlist` opens the list; `/cmdcopy` copies it to another profile.",
-        SettingsField.ShellDefault => "The shell `run_command` uses when the call gives no `shell`: `powershell` (pwsh when installed, else Windows PowerShell 5.1), `cmd`, or `bash` (Git Bash, when found).",
+        SettingsField.ShellDefault => "The shell `run_command` uses when the call gives no `shell`: `powershell` (pwsh when installed, else Windows PowerShell 5.1), `cmd`, or `bash` (Git Bash, when found). On macOS: `zsh` (the default there), `bash` or `powershell` (pwsh, when installed).",
         SettingsField.ShellTimeoutSeconds => "How long a foreground command without its own `timeout` may run before it is killed (1–3600).",
         SettingsField.ShellForegroundCapSeconds => "The longest a foreground command may run, whatever its `timeout` says (10–3600).",
         SettingsField.ShellOutputMaxChars => "The most output one result carries back (2000–500000). Past that, the start and end are kept, and the whole text goes to `.shell\\<id>.log` under the working directory, where `read_file` can reach it.",

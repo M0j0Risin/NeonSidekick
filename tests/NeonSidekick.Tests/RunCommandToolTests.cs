@@ -46,7 +46,7 @@ public sealed class RunCommandToolTests : IDisposable
 
     private async Task<string> Invoke(params (string Name, object? Value)[] pairs) => (string)(await _tool.InvokeAsync(Args(pairs)))!;
 
-    [Fact]
+    [WindowsFact]
     public void Name_Schema_AndDescription_ArePinned()
     {
         Assert.Equal("run_command", _tool.Name);
@@ -96,7 +96,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(3600, RunCommandTool.ForegroundCap(new AppSettingsData { ShellForegroundCapSeconds = 99999 }));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Police_RefusesAnOutsidePath_BeforeTheGate_AndOffLetsItThrough()
     {
         // Shell police (2026-09-22): under ask, a line naming a path outside the sandbox is refused with the 👮 sentence and the asker is never called.
@@ -203,7 +203,7 @@ public sealed class RunCommandToolTests : IDisposable
         _files.ServerDatabases = null;
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task PreferNative_SendsALineBackToItsTool_OnceATurn_BeforeTheGate()
     {
         // Shell prefer native tools (2026-09-26): under ask, a line a tool the turn offers covers comes back not run, and the asker is never called.
@@ -231,7 +231,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(4, _asked.Count);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task PreferNative_Off_OrAnOutsidePathWithThePoliceOff_GoesToTheGate()
     {
         _settings.ShellCommandPolicy = "ask";
@@ -248,7 +248,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(2, _asked.Count);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Echo_UnderYolo_IsTheHeaderAndTheOutput()
     {
         string result = await Invoke(("command", "echo hi"));
@@ -257,7 +257,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Empty(_asked);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ExitCode_Stderr_AndTheShellArgument_ComeThrough()
     {
         Assert.Equal("exit 4 in 0.0 s (cmd): echo out & echo err 1>&2 & exit /b 4\nout \n\n--- stderr ---\nerr  ", await Invoke(("command", "echo out & echo err 1>&2 & exit /b 4"), ("shell", "cmd")));
@@ -265,7 +265,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal("exit 5 in 0.0 s (powershell): exit 5\n(no output)", await Invoke(("command", "exit 5"), ("shell", "powershell")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Workdir_IsUnderTheSandbox_AndSetsWhereTheCommandStarts()
     {
         Directory.CreateDirectory(Path.Combine(_root, "sub"));
@@ -275,7 +275,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal("Error: workdir 'nope' is not a folder", await Invoke(("command", "cd"), ("workdir", "nope")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Refusals_ArePinned()
     {
         Assert.Equal("Error: command is required", await Invoke());
@@ -292,7 +292,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal("Error: Shell command policy is off: no command runs", await Invoke(("command", "dir")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Ask_TheGateDecides_AndADenialIsTheSentence()
     {
         _settings.ShellCommandPolicy = "ask";
@@ -314,7 +314,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.StartsWith("Error: the command was not run: there was no screen to ask the user on", await Invoke(("command", "dir")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Timeout_KillsTheChild_AndSaysSo()
     {
         var run = _tool.InvokeAsync(Args(("command", "ping -n 30 127.0.0.1 >nul"), ("timeout", 2)));
@@ -325,7 +325,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal("timed out after 2.0 s (cmd, killed): ping -n 30 127.0.0.1 >nul\n(no output)", result);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task TheSettingTimeout_IsTheDefault_CappedByTheForegroundCap()
     {
         _settings.ShellTimeoutSeconds = 5000;   // hand-edited over the range: clamped, then capped
@@ -338,7 +338,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.StartsWith("timed out after 10.0 s (cmd, killed): ping", result);   // the cap's own floor is 10
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Cancellation_KillsTheChild_AndThrows()
     {
         using var cts = new CancellationTokenSource();
@@ -349,7 +349,7 @@ public sealed class RunCommandToolTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run.AsTask().WaitAsync(TimeSpan.FromSeconds(60)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task OutputOverTheCap_KeepsHeadAndTail_AndSpillsTheWholeText()
     {
         _settings.ShellOutputMaxChars = 2000;
@@ -377,7 +377,7 @@ public sealed class RunCommandToolTests : IDisposable
     }
 
     /// <summary>Background (2026-09-21): the gate first, then the registry's id at once, the poll hint; with notify the exit is an alert and a note.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Background_StartsUnderTheRegistry_AndAnswersTheIdAtOnce()
     {
         string result = await Invoke(("command", "echo bg"), ("background", true));
@@ -402,7 +402,7 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Equal(1, _signals);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ATimeoutOverTheCap_PromotesToTheBackground()
     {
         _settings.ShellForegroundCapSeconds = 10;

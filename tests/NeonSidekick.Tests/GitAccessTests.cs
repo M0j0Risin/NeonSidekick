@@ -160,10 +160,39 @@ public sealed class GitAccessTests : IDisposable
         Assert.Equal(_dir, _git.Status("").Detail);
     }
 
-    [Fact]
+    // Unix paths through Unix path rules: on Windows Path reads them with its own separators, and RealPath is null there anyway.
+    [UnixTheory]
+    [InlineData("/var/folders/x/files", "/private/var/folders/x/files/.git", "/var/folders/x/files/.git")]
+    [InlineData("/var/folders/x/files", "/private/var/folders/x/files/proj", "/var/folders/x/files/proj")]
+    [InlineData("/var/folders/x/files", "/private/var/folders/x", "/var/folders/x")]                                   // above the root: named the user's way for the refusal
+    [InlineData("/var/folders/x/files", "/private/var/folders/x/filesmore", "/var/folders/x/filesmore")]
+    [InlineData("/var/folders/x/files", "/var/folders/x/files/proj", "/var/folders/x/files/proj")]                     // already the root's spelling
+    [InlineData("/var/folders/x/files", "/elsewhere/repo", "/elsewhere/repo")]                                         // under no real path of theirs
+    [InlineData("/Users/me/repo", "/Users/other/repo", "/Users/other/repo")]                                           // no links on the way
+    public void InRootSpelling_PutsLibgit2sRealPathBackUnderTheRootsSpelling(string root, string path, string expected)
+    {
+        // A fake realpath for a Mac: /var is a link to /private/var, nothing else is a link.
+        static string? Real(string folder) => folder == "/var" || folder.StartsWith("/var/", StringComparison.Ordinal) ? "/private" + folder : folder;
+
+        Assert.Equal(expected, Files.WorkingDirectory.InRootSpelling(root, path, Real));
+        Assert.Equal(path, Files.WorkingDirectory.InRootSpelling(root, path, _ => null));   // no real path (Windows): as libgit2 gave it
+    }
+
+    [WindowsFact]
     public void Locate_RefusesAPathOutsideTheSandbox_AndABareRepository()
     {
         Assert.Equal(GitOutcome.OutsideRoot, _git.Locate("..\\other", out _, out _, out _));
+        Assert.Equal(GitOutcome.NoRepository, _git.Locate("", out _, out _, out _));
+        Repository.Init(Path.Combine(_root, "bare.git"), isBare: true);
+        Assert.Equal(GitOutcome.Bare, _git.Locate("bare.git", out _, out _, out string detail));
+        Assert.Equal(Path.Combine(_root, "bare.git"), detail);
+    }
+
+    /// <summary>The Unix twin of <see cref="Locate_RefusesAPathOutsideTheSandbox_AndABareRepository"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void Locate_RefusesAPathOutsideTheSandbox_AndABareRepository_Unix()
+    {
+        Assert.Equal(GitOutcome.OutsideRoot, _git.Locate("../other", out _, out _, out _));
         Assert.Equal(GitOutcome.NoRepository, _git.Locate("", out _, out _, out _));
         Repository.Init(Path.Combine(_root, "bare.git"), isBare: true);
         Assert.Equal(GitOutcome.Bare, _git.Locate("bare.git", out _, out _, out string detail));

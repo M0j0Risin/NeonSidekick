@@ -66,7 +66,7 @@ public partial class ChatScreenTests
         OnThePaneOnly(output, "• pony-txt2img");
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task DockerLogs_AreOnThePane_ButAFailureIsItsErrorLine()
     {
         var engine = DockerEngine();
@@ -101,7 +101,7 @@ public partial class ChatScreenTests
         OnThePaneOnly(output, "light.den_den_corner_lamp");
     }
 
-    [Fact]
+    [WindowsFact]   // printing needs Windows (2026-10-06)
     public async Task PrintPrinters_AreOnThePane()
     {
         ListPaneScreen();

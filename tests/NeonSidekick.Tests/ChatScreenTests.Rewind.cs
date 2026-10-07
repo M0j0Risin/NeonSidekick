@@ -108,7 +108,7 @@ public partial class ChatScreenTests
     /// A restored session's picture (no recall entry for it this run): the line is rebuilt with the picture put back as a
     /// token, so the re-sent message carries it again. <c>/rewind 1</c> puts the cursor on the last message.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Rewind_RestoredPicture_ComesBackAsAToken_AndIsSentAgain()
     {
         _settings.Update(d => d.TtsOutput = false);

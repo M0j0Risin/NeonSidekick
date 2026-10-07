@@ -37,7 +37,13 @@ public static class ClaudeText
     public const string ResumeLostNotice = "The Claude conversation could not be resumed; starting a new one.";
 
     /// <summary>The CLI is on no path this app looks at. Pinned.</summary>
-    public const string NotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude CLI executable on the ClaudeCLI tab of /tools.";
+    public static string NotFound => OperatingSystem.IsMacOS() ? MacNotFound : WindowsNotFound;
+
+    /// <summary><see cref="NotFound"/> on Windows (and off macOS). Pinned.</summary>
+    public const string WindowsNotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude CLI executable on the ClaudeCLI tab of /tools.";
+
+    /// <summary><see cref="NotFound"/> on macOS (2026-10-06): <c>ClaudeProcess</c> looks in <c>~/.local/bin</c> there. Pinned.</summary>
+    public const string MacNotFound = "Claude Code was not found on the PATH or in ~/.local/bin. Install it, or set Claude CLI executable on the ClaudeCLI tab of /tools.";
 
     /// <summary>The <c>Claude CLI executable</c> setting names no file. Pinned.</summary>
     public static string ConfiguredNotFound(string path) => $"Claude CLI executable '{path}' does not exist. Fix it on the ClaudeCLI tab of /tools, or clear it to look on the PATH.";

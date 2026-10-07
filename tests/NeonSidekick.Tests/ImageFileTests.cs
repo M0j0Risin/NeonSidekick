@@ -175,7 +175,7 @@ public class ImageFileTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => ImageFile.TryPastedPath(null!, out _));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_ReencodesABitmapAsPng_AtItsOwnSize()
     {
         string path = Bmp("small.bmp", 6, 4);
@@ -190,7 +190,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal((6, 4), (image.Width, image.Height));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_DownscalesToTheLongSide_KeepingTheRatio()
     {
         string path = Bmp("wide.bmp", ImageFile.MaxSide * 2, 8);
@@ -203,7 +203,7 @@ public class ImageFileTests : IDisposable
         Assert.True(IsPng(image.Bytes));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_SendsAFittingPng_ByteForByte()
     {
         var first = ImageFile.Load(Bmp("seed.bmp", 5, 5), out _);
@@ -230,7 +230,7 @@ public class ImageFileTests : IDisposable
         return path;
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_SendsAFittingJpeg_ByteForByte_AndAWideOne_Downscaled()
     {
         string small = Jpeg("small.jpg", 8, 6);
@@ -251,7 +251,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal((ImageFile.MaxSide, 4), (scaled.Width, scaled.Height));
     }
 
-    [Fact]
+    [WindowsFact]
     public void TheTypeComesFromTheBytes_NotTheName()
     {
         string png = Path.Combine(_dir, "really-a-png.jpg");
@@ -276,7 +276,7 @@ public class ImageFileTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => ImageFile.SentAs(null!));
     }
 
-    [Fact]
+    [WindowsFact]
     public void TryLoad_ReportsTheFailure_AndLoadStillGivesTheSentence()
     {
         string missing = Path.Combine(_dir, "nope.png");
@@ -322,7 +322,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal($"(image not attached: {path} is over 20 MB or 40 megapixels)", error);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_RefusesTooManyPixels_Undecoded()
     {
         // A real 49-megapixel PNG that deflates to a few hundred KB: under the byte cap, over the pixel one.
@@ -336,7 +336,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal(ImageFile.TooLarge(path), error);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_RefusesWhatTheCodecsCannotRead_AndAMissingFile()
     {
         string corrupt = Path.Combine(_dir, "corrupt.png");
@@ -361,7 +361,7 @@ public class ImageFileTests : IDisposable
     }
     // ── Bytes that never were a file (a picture off the clipboard) ─────────
 
-    [Fact]
+    [WindowsFact]
     public void Load_FromBytes_DecodesLikeAFile_UnderTheNameGiven()
     {
         byte[] png = BlackPng(5, 3);
@@ -386,7 +386,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal((6, 4), (bmp.Width, bmp.Height));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_FromBytes_RefusesTheCap_AndGarbage()
     {
         Assert.Null(ImageFile.Load(new byte[ImageFile.MaxFileBytes + 1], "clipboard-1.png", out string? error));
@@ -403,7 +403,7 @@ public class ImageFileTests : IDisposable
 
     // ── A photo for the model (2026-10-03: ComfyUI's renders) ─────────
 
-    [Fact]
+    [WindowsFact]
     public void TryLoad_AsAPhoto_SendsAnOpaquePngAsJpeg_AtItsOwnSize()
     {
         byte[] png = BlackPng(64, 48);
@@ -418,7 +418,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal("comfy_images/a.png", image.Path);
     }
 
-    [Fact]
+    [WindowsFact]
     public void TryLoad_AsAPhoto_KeepsAPngWithAlpha_AndAJpeg_AsTheyAre()
     {
         byte[] transparent = BlackPng(16, 16, alpha: true);
@@ -433,7 +433,7 @@ public class ImageFileTests : IDisposable
         Assert.Same(jpeg, photo.Bytes);
     }
 
-    [Fact]
+    [WindowsFact]
     public void TryLoad_NotAsAPhoto_SendsAFittingPng_ByteForByte_AsEver()
     {
         byte[] png = BlackPng(64, 48);
@@ -449,5 +449,19 @@ public class ImageFileTests : IDisposable
     {
         Assert.Equal("clipboard-1.png", ImageFile.ClipboardName(1));
         Assert.Equal("clipboard-12.png", ImageFile.ClipboardName(12));
+    }
+
+    /// <summary>The macOS build (2026-10-06): no codecs reads as its own failure with its own sentence, never "could not be read"; codecs on Windows.</summary>
+    [Fact]
+    public void Unsupported_HasItsOwnSentence_AndCodecsAreWindowsOnly()
+    {
+        Assert.Equal("(image not attached: a.png; pictures need Windows for now)", ImageFile.Notice(ImageLoadFailure.Unsupported, "a.png"));
+        Assert.Equal(OperatingSystem.IsWindows(), ImageCodecs.Available);
+        if (!ImageCodecs.Available)
+        {
+            Assert.False(ImageFile.TryLoad(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "a.png", out var image, out var failure));
+            Assert.Null(image);
+            Assert.Equal(ImageLoadFailure.Unsupported, failure);
+        }
     }
 }

@@ -74,7 +74,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
 
     private async Task<string> Invoke(params (string Name, object? Value)[] pairs) => (string)(await _tool.InvokeAsync(Args(pairs)))!;
 
-    [Fact]
+    [WindowsFact]
     public void Name_Schema_AndDescription_ArePinned()
     {
         Assert.Equal("execute_code", _tool.Name);
@@ -288,13 +288,33 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Contains("Error: unknown tool ask_user", result[stderr..]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ANestedRunCommand_GoesThroughTheGate_NeverInTheBackground()
     {
         string result = await Invoke(("language", "powershell"), ("code", "Write-Output (Invoke-NeonTool run_command @{ command = 'echo nested'; shell = 'cmd' })\ntry { Invoke-NeonTool run_command @{ command = 'echo bg'; shell = 'cmd'; background = $true } } catch { Write-Output \"refused: $_\" }"));
 
         Assert.StartsWith("exit 0 in 0.0 s (powershell, 2 tool calls): ", result);
         Assert.Contains("\nexit 0 in 0.0 s (cmd): echo nested\nnested\n", result);
+        Assert.Contains("\nrefused: Error: background is not available from a script", result);
+        Assert.Empty(_registry.List());
+    }
+
+    /// <summary>
+    /// The Unix twin of <see cref="ANestedRunCommand_GoesThroughTheGate_NeverInTheBackground"/> (2026-10-06, the macOS build): the
+    /// nested line runs in zsh, where there is no cmd. pwsh drives it as in the other PowerShell scripts here; without it, nothing to show.
+    /// </summary>
+    [UnixFact]
+    public async Task ANestedRunCommand_GoesThroughTheGate_NeverInTheBackground_InZsh()
+    {
+        if (_interpreters.Locate(CodeLanguage.PowerShell) is null)
+        {
+            return;
+        }
+
+        string result = await Invoke(("language", "powershell"), ("code", "Write-Output (Invoke-NeonTool run_command @{ command = 'echo nested'; shell = 'zsh' })\ntry { Invoke-NeonTool run_command @{ command = 'echo bg'; shell = 'zsh'; background = $true } } catch { Write-Output \"refused: $_\" }"));
+
+        Assert.StartsWith("exit 0 in 0.0 s (powershell, 2 tool calls): ", result);
+        Assert.Contains("\nexit 0 in 0.0 s (zsh): echo nested\nnested\n", result);
         Assert.Contains("\nrefused: Error: background is not available from a script", result);
         Assert.Empty(_registry.List());
     }
@@ -390,7 +410,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Null(response.Result);
     }
 
-    [Fact]
+    [WindowsFact]
     public void CodeLaunch_LaysOutEachLanguage()
     {
         var python = CodeLaunch.Files(CodeLanguage.Python, "print(1)", @"C:\runs\code_1");
@@ -415,7 +435,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", @"C:\runs\code_1\script.ps1"], CodeLaunch.For(CodeLanguage.PowerShell, "pwsh.exe", @"C:\runs\code_1", "script.ps1", ".", "a", "t", "x").ArgumentList);
     }
 
-    [Fact]
+    [WindowsFact]
     public void CodeLaunch_BridgeOff_NoModule_NoImport_NoEnvironment()
     {
         // Shell tool bridge off (later on 2026-09-21): the script alone, PowerShell's under the bare wrapper, and nothing in the environment.
@@ -437,7 +457,27 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(["-X", "utf8", @"C:\runs\code_1\script.py"], launch.ArgumentList);
     }
 
-    [Fact]
+    /// <summary>
+    /// The Unix twin of <see cref="CodeLaunch_LaysOutEachLanguage"/> and <see cref="CodeLaunch_BridgeOff_NoModule_NoImport_NoEnvironment"/>
+    /// (2026-10-06, the macOS build): Unix folders, the node module under <c>/</c>, the script's full path its argument.
+    /// </summary>
+    [UnixFact]
+    public void CodeLaunch_LaysOutEachLanguage_WithUnixPaths()
+    {
+        var node = CodeLaunch.Files(CodeLanguage.Node, "x", "/runs/code_1");
+        Assert.Equal(("script.js", "node_modules/neon_tools/index.js"), (node.ScriptName, node.ModulePath));
+        var ps = CodeLaunch.Files(CodeLanguage.PowerShell, "Write-Output 1", "/runs/it's");
+        Assert.Contains("Import-Module -Force '/runs/it''s/NeonTools.psm1'\nWrite-Output 1\n", ps.ScriptText);
+
+        var launch = CodeLaunch.For(CodeLanguage.Python, "/usr/bin/python3", "/runs/code_1", "script.py", "/Users/me/files", "127.0.0.1:5", "tok", "print(1)");
+        Assert.Equal(["-X", "utf8", "/runs/code_1/script.py"], launch.ArgumentList);
+        Assert.Equal("/Users/me/files", launch.WorkingDirectory);
+        Assert.Equal(["/runs/code_1/script.js"], CodeLaunch.For(CodeLanguage.Node, "node", "/runs/code_1", "script.js", ".", "a", "t", "x").ArgumentList);
+        Assert.Equal(["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "/runs/code_1/script.ps1"], CodeLaunch.For(CodeLanguage.PowerShell, "pwsh", "/runs/code_1", "script.ps1", ".", "a", "t", "x").ArgumentList);
+        Assert.Empty(CodeLaunch.For(CodeLanguage.Python, "/usr/bin/python3", "/runs/code_1", "script.py", "/Users/me/files", null, null, "print(1)").Environment!);
+    }
+
+    [WindowsFact]
     public void ScriptText_Helpers_ArePinned()
     {
         Assert.Equal("exit 0 in 2.3 s (python, 3 tool calls): import os", ShellText.ScriptExitHeader("python", 0, TimeSpan.FromSeconds(2.34), 3, "import os"));
@@ -454,5 +494,14 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal("bridge: read_file → 1,234 chars", ShellText.BridgeLogLine("read_file", new string('x', 1234)));
         Assert.Equal("bridge: nope → Error: unknown tool nope", ShellText.BridgeLogLine("nope", "Error: unknown tool nope"));
         Assert.Equal("execute_code: python \"import os\" → exit 0 in 2.3 s, 3 tool calls (2,340 chars)", ShellText.ScriptLogLine("python", "import os", "exit 0 in 2.3 s", 3, 2340));
+    }
+
+    /// <summary>The Unix twin of the <c>python.exe</c> pins in <see cref="Name_Schema_AndDescription_ArePinned"/> and <see cref="ScriptText_Helpers_ArePinned"/> (2026-10-06): <c>python3</c>.</summary>
+    [UnixFact]
+    public void ThePythonWords_NamePython3_OffWindows()
+    {
+        Assert.Equal("python3", CodeLanguages.FileName(CodeLanguage.Python));
+        Assert.Equal("a .py through python3; from neon_tools import …", CodeLanguages.Describe("python"));
+        Assert.Equal("Error: python is not installed (no python3 found)", ShellText.LanguageNotInstalled(CodeLanguage.Python));
     }
 }

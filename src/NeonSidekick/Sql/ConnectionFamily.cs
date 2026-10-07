@@ -212,7 +212,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// </summary>
     private void EncryptInPlace(string path, string name, TConfig config)
     {
-        if (config.InCredentialManager || string.IsNullOrEmpty(config.Password) || WindowsCredentials.IsProtected(config.Password) || !OperatingSystem.IsWindows())
+        if (config.InCredentialManager || string.IsNullOrEmpty(config.Password) || WindowsCredentials.IsProtected(config.Password) || !WindowsCredentials.CanProtect)
         {
             return;
         }

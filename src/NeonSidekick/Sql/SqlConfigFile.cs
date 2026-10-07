@@ -75,7 +75,54 @@ public sealed class SqlConfigFile
     /// the user, and <c>runas</c> with its password in Credential Manager or in the file (later on 2026-09-23, the
     /// user's ask) — each one valid once its <c>//</c> are removed (pinned by a test). Pinned.
     /// </summary>
-    public const string EmptyText =
+    public static string EmptyText => OperatingSystem.IsMacOS() ? MacEmptyText : WindowsEmptyText;
+
+    /// <summary>
+    /// <see cref="EmptyText"/> on macOS (2026-10-06, the tidy-up before the first Mac release: a Mac user never reads Windows
+    /// wording): the SQL login and Windows sign-in examples kept — <c>auth: windows</c> works on a Mac through Kerberos (proven
+    /// by the user, so it must never be dropped there) — and the two <c>runas</c> examples gone, since a <c>LogonUser</c> token
+    /// needs Windows (<see cref="SqlAccess"/> refuses one off it). The <c>credman</c> example is a SQL login's, in the Keychain
+    /// with <see cref="SqlText.CredentialCommand"/>'s <c>security</c> line, and a typed password becomes <c>keychain:…</c>.
+    /// Built on each read, so no static-field order can catch it unset. Pinned on a Mac.
+    /// </summary>
+    private static string MacEmptyText =>
+        "{\n" +
+        "  // One entry per connection. Its name is what the model passes as \"connection\", and what %name picks on the input\n" +
+        "  // line. Every key but \"server\" is optional. Remove the leading // from an example to use it, and put it inside\n" +
+        "  // \"connections\" below.\n" +
+        "  //\n" +
+        "  // A SQL login (auth sql), the password kept in this file: typed in plain text, it is encrypted (\"" + WindowsCredentials.KeychainPrefix + "…\")\n" +
+        "  // when the app next starts or reads this file.\n" +
+        "  // \"adventureworks\": {\n" +
+        "  //   \"server\": \"127.0.0.1,1433\", \"database\": \"AdventureWorks2022\",\n" +
+        "  //   \"auth\": \"sql\", \"user\": \"reader\", \"password\": \"type-it-here-once\",\n" +
+        "  //   \"encrypt\": \"mandatory\", \"trustServerCertificate\": true,\n" +
+        "  //   \"description\": \"the sample sales database\"\n" +
+        "  // },\n" +
+        "  //\n" +
+        "  // Windows sign-in as you through Kerberos (auth windows: the ticket kinit gave you, no password).\n" +
+        "  // \"reports-me\": {\n" +
+        "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +
+        "  //   \"auth\": \"windows\"\n" +
+        "  // },\n" +
+        "  //\n" +
+        "  // A SQL login with the password in " + SqlText.CredentialStore + " as NeonSidekick/sql/<name> — set it with SQL set password\n" +
+        "  // on the SQL tab of /tools, or: " + SqlText.CredentialCommand("NeonSidekick/sql/reports-reader", "reader") + "\n" +
+        "  // \"reports-reader\": {\n" +
+        "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +
+        "  //   \"auth\": \"sql\", \"user\": \"reader\", \"passwordStore\": \"credman\"\n" +
+        "  // },\n" +
+        "  //\n" +
+        "  // \"credential\" names another Keychain entry; runas (signing in as another Windows account) needs Windows.\n" +
+        "  // encrypt: strict, mandatory (the default) or optional; trustServerCertificate only for a self-signed certificate;\n" +
+        "  // connectTimeoutSeconds: 1 to 120 (15 by default). access: read (the default) or readwrite — sql_execute may change a\n" +
+        "  // readwrite connection's databases while SQL mode is read-write, each change allowed by you. A read-only login is the\n" +
+        "  // real guard for the rest.\n" +
+        "  \"connections\": {}\n" +
+        "}\n";
+
+    /// <summary>What a fresh file holds on Windows (and off macOS): <see cref="EmptyText"/>'s text before the macOS build. Pinned.</summary>
+    public const string WindowsEmptyText =
         "{\n" +
         "  // One entry per connection. Its name is what the model passes as \"connection\", and what %name picks on the input\n" +
         "  // line. Every key but \"server\" is optional, and a JSON backslash is doubled: \"CONTOSO\\\\svc-reader\". Remove the\n" +
@@ -190,7 +237,7 @@ public sealed class SqlConfigFile
     private static void EncryptInPlace(string path, string name, SqlConnectionConfig config)
     {
         if (!config.NeedsPassword || config.InCredentialManager || string.IsNullOrEmpty(config.Password)
-            || WindowsCredentials.IsProtected(config.Password) || !OperatingSystem.IsWindows())
+            || WindowsCredentials.IsProtected(config.Password) || !WindowsCredentials.CanProtect)
         {
             return;
         }

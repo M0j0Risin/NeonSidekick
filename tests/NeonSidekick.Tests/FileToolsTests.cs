@@ -61,7 +61,7 @@ public sealed class FileToolsTests : IDisposable
         File.WriteAllText(full, text);
     }
 
-    [Fact]
+    [WindowsFact]
     public void FileTools_AreTheSixteen_InOrder_AllQuiet()
     {
         Assert.Equal(FileToolNames.WithoutPdf, _tools.Select(t => t.Name));
@@ -71,12 +71,26 @@ public sealed class FileToolsTests : IDisposable
         Assert.All(_tools, t => Assert.Equal("object", t.JsonSchema.GetProperty("type").GetString()));
     }
 
+    /// <summary>The Unix twin of <see cref="FileTools_AreTheSixteen_InOrder_AllQuiet"/> (2026-10-06, the macOS build): no picture codecs, thirteen tools.</summary>
+    [UnixFact]
+    public void FileTools_AreTheThirteen_WithoutThePictureTools_OffWindows()
+    {
+        Assert.Equal(FileToolNames.WithoutPdf, _tools.Select(t => t.Name));
+        Assert.Equal(13, _tools.Count);
+        Assert.DoesNotContain(ViewImageTool.ToolName, _tools.Select(t => t.Name));
+        Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
+        Assert.All(_tools, t => Assert.Contains("working directory", t.Description));
+    }
+
+    /// <summary><c>view_image</c>'s case of <see cref="Schemas_ArePinned"/>, on its own (2026-10-06): the macOS build has no picture codecs and no such tool.</summary>
+    [WindowsFact]
+    public void Schemas_ArePinned_ViewImage() => Schemas_ArePinned(ViewImageTool.ToolName, "path,paths", "");
+
     [Theory]
     [InlineData(GetWorkingDirectoryTool.ToolName, "", "")]
     [InlineData(SearchFilesTool.ToolName, "text,path,files,regex,context,output,order,limit,depth", "")]
     [InlineData(FileInfoTool.ToolName, "path", "path")]
     [InlineData(ReadFileTool.ToolName, "path,start_line,max_lines", "path")]
-    [InlineData(ViewImageTool.ToolName, "path,paths", "")]
     [InlineData(WriteFileTool.ToolName, "path,content,mode", "path,content")]
     [InlineData(PatchFileTool.ToolName, "path,old_text,new_text,replace_all", "path,old_text,new_text")]
     [InlineData(CreateDirectoryTool.ToolName, "path", "path")]
@@ -129,7 +143,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.StartsWith("Error: could not create '" + _root + "': ", await Invoke(Tool<GetWorkingDirectoryTool>()), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task SearchFiles_WithoutText_ListsTheFolder_NestedByDepth_CutByLimit()
     {
         Put(@"docs\a.txt", "aa");
@@ -161,7 +175,40 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal("Error: 'newest' is not one of name or modified for 'order'", FileText.BadChoice("order", "newest", SearchFilesTool.OrderChoices));
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="SearchFiles_WithoutText_ListsTheFolder_NestedByDepth_CutByLimit"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task SearchFiles_WithoutText_ListsTheFolder_NestedByDepth_CutByLimit_Unix()
+    {
+        Put(@"docs/a.txt", "aa");
+        Put(@"docs/sub/b.txt", "b");
+        var search = Tool<SearchFilesTool>();
+
+        // No text, no files, no order (2026-09-19, list_directory folded in): the folder's own entries, folders first with sizes.
+        Assert.Equal("the working directory (1 entry):\ndocs/", await Invoke(search));
+        Assert.Equal("docs/ (2 entries):\nsub/\na.txt  2 B", await Invoke(search, ("path", "docs")));
+        Assert.Equal("docs/ (2 entries):\nsub/\na.txt  2 B", await Invoke(search, ("path", Json("\"docs\"")), ("text", " ")));
+        Assert.Equal(FileText.Missing(@"nope/"), await Invoke(search, ("path", "nope")));
+        Assert.Equal(FileText.OutsideRoot(".."), await Invoke(search, ("path", "..")));
+
+        // depth: 1 or none is the flat listing; deeper nests the entries, files and all; the cap clamps.
+        Assert.Equal("the working directory (1 entry):\ndocs/", await Invoke(search, ("depth", Json("1"))));
+        Assert.Equal("the working directory (4 entries, 3 levels):\ndocs/\n  sub/\n    b.txt  1 B\n  a.txt  2 B", await Invoke(search, ("depth", Json("3"))));
+        Assert.Equal("the working directory (4 entries, 4 levels):\ndocs/\n  sub/\n    b.txt  1 B\n  a.txt  2 B", await Invoke(search, ("depth", "99")));
+        Assert.Equal("the working directory (3 entries, 2 levels):\ndocs/\n  sub/\n  a.txt  2 B", await Invoke(search, ("depth", Json("2"))));
+        Assert.Equal("docs/ (3 entries, 2 levels):\nsub/\n  b.txt  1 B\na.txt  2 B", await Invoke(search, ("path", "docs"), ("depth", Json("2"))));
+        Assert.Equal(FileText.IsAFile(@"docs/a.txt"), await Invoke(search, ("path", @"docs/a.txt"), ("depth", Json("2"))));
+        Assert.Equal(ClockText.BadInteger("depth", "deep"), await Invoke(search, ("depth", "deep")));
+
+        // limit cuts every shape, the tail counting what is shown.
+        Assert.Equal("docs/ (1 entry):\nsub/\n" + FileText.OnlyFirst(1, "entries"), await Invoke(search, ("path", "docs"), ("limit", Json("1"))));
+        Assert.Equal("the working directory (2 entries, 3 levels):\ndocs/\n  sub/\n" + FileText.OnlyFirst(2, "entries"), await Invoke(search, ("depth", Json("3")), ("limit", Json("2"))));
+        Assert.Equal(ClockText.BadInteger("limit", "lots"), await Invoke(search, ("limit", "lots")));
+        Assert.Equal(FileText.BadChoice("output", "lines", SearchFilesTool.OutputChoices), await Invoke(search, ("output", "lines")));
+        Assert.Equal(FileText.BadChoice("order", "newest", SearchFilesTool.OrderChoices), await Invoke(search, ("order", "newest")));
+        Assert.Equal("Error: 'newest' is not one of name or modified for 'order'", FileText.BadChoice("order", "newest", SearchFilesTool.OrderChoices));
+    }
+
+    [WindowsFact]
     public async Task SearchFiles_FindsNames_ListsTheRecent_AndSearchesInside()
     {
         Put("a.md", "needle here");
@@ -219,6 +266,68 @@ public sealed class FileToolsTests : IDisposable
         File.WriteAllBytes(Path.Combine(_root, "crlf.txt"), [0xEF, 0xBB, 0xBF, .. "a\r\nb\r\n"u8.ToArray()]);
         Assert.StartsWith("crlf.txt — 9 bytes, 2 lines, 2 words, CRLF, UTF-8 BOM, modified ", await Invoke(Tool<FileInfoTool>(), ("path", "crlf.txt")), StringComparison.Ordinal);
         Assert.StartsWith("docs\\ — 2 files in 0 folders, 30 B, last modified ", await Invoke(Tool<FileInfoTool>(), ("path", "docs")), StringComparison.Ordinal);
+        Assert.Equal(FileText.Missing("zzz"), await Invoke(Tool<FileInfoTool>(), ("path", "zzz")));
+    }
+
+    /// <summary>The Unix twin of <see cref="SearchFiles_FindsNames_ListsTheRecent_AndSearchesInside"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task SearchFiles_FindsNames_ListsTheRecent_AndSearchesInside_Unix()
+    {
+        Put("a.md", "needle here");
+        Put(@"docs/b.md", "nothing");
+        Put(@"docs/c.txt", "Needle again\nand needle");
+        var search = Tool<SearchFilesTool>();
+
+        // The name search (2026-09-18, find_files folded in): files with no text lists the names that match, every level; depth limits it.
+        Assert.Equal("2 files match '*.md' under the working directory:\na.md\ndocs/b.md", await Invoke(search, ("files", "*.md")));
+        Assert.Equal("1 file matches '*.md' under docs/:\ndocs/b.md", await Invoke(search, ("files", "*.md"), ("path", "docs"), ("text", "")));
+        Assert.Equal("1 file matches '*.md' under the working directory:\na.md", await Invoke(search, ("files", "*.md"), ("depth", Json("1"))));
+        string cut = await Invoke(search, ("files", "*"), ("limit", Json("1")));
+        Assert.StartsWith("1 file matches '*' under the working directory:\n", cut, StringComparison.Ordinal);
+        Assert.EndsWith("\n" + FileText.OnlyFirst(1, "matches"), cut, StringComparison.Ordinal);
+        Assert.Equal("1 file matches 'docs/*.txt' under the working directory:\ndocs/c.txt", await Invoke(search, ("files", "docs/*.txt")));
+        Assert.Equal("1 file matches '**/*.txt' under the working directory:\ndocs/c.txt", await Invoke(search, ("files", "**/*.txt")));
+        // Both blank is the listing now (EmptySearch went 2026-09-19).
+        Assert.Equal("the working directory (2 entries):\ndocs/\na.md  11 B", await Invoke(search, ("files", " "), ("text", " ")));
+
+        // The recent list (recent_files folded in): order modified, files only, newest first.
+        string recent = await Invoke(search, ("order", "modified"), ("limit", Json("2")));
+        Assert.StartsWith("most recently changed under the working directory, newest first:\n", recent, StringComparison.Ordinal);
+        Assert.Equal(3, recent.Split('\n').Length);
+        Assert.Equal(4, (await Invoke(search, ("order", "MODIFIED"))).Split('\n').Length);
+        Assert.Equal(2, (await Invoke(search, ("order", "modified"), ("depth", Json("1")))).Split('\n').Length);
+
+        string hits = await Invoke(search, ("text", "needle"));
+        Assert.StartsWith("3 matches for 'needle' in 2 files (searched 3 files under the working directory in ", hits, StringComparison.Ordinal);
+        Assert.EndsWith(" s):\na.md:1: needle here\ndocs/c.txt:1: Needle again\ndocs/c.txt:2: and needle", hits);
+        Assert.Contains("1 match for 'needle' in 1 file", await Invoke(search, ("text", "needle"), ("files", "*.md")));
+        Assert.Contains("1 match for 'needle' in 1 file (searched 1 file under", await Invoke(search, ("text", "needle"), ("depth", Json("1"))));
+        Assert.Contains("2 matches for 'n..dle'", await Invoke(search, ("text", "n..dle"), ("path", "docs"), ("regex", Json("true"))));
+        Assert.Contains("0 matches for 'n..dle'", await Invoke(search, ("text", "n..dle"), ("path", "docs"), ("regex", "false")));
+        Assert.Equal(FileText.BadBoolean("regex", "sure"), await Invoke(search, ("text", "x"), ("regex", "sure")));
+        Assert.StartsWith("Error: the regular expression is invalid: ", await Invoke(search, ("text", "("), ("regex", Json("true"))), StringComparison.Ordinal);
+        // Context lines (2026-09-17) in grep's shape, and a path glob for files.
+        Assert.EndsWith(" s):\ndocs/c.txt:1: Needle again\ndocs/c.txt-2- and needle", await Invoke(search, ("text", "again"), ("context", Json("2"))));
+        Assert.Contains("2 matches for 'needle' in 1 file", await Invoke(search, ("text", "needle"), ("files", "docs/**/*.txt")));
+        Assert.Contains("0 matches for 'needle'", await Invoke(search, ("text", "needle"), ("files", "docs/**/*.md")));
+        Assert.Equal(ClockText.BadInteger("context", "lots"), await Invoke(search, ("text", "x"), ("context", "lots")));
+        // One file as the path (2026-09-18): searched alone, the header naming it.
+        string one = await Invoke(search, ("text", "needle"), ("path", @"docs/c.txt"), ("files", "*.md"));
+        Assert.StartsWith("2 matches for 'needle' in docs/c.txt (", one, StringComparison.Ordinal);
+        Assert.EndsWith(" s):\ndocs/c.txt:1: Needle again\ndocs/c.txt:2: and needle", one);
+        // limit cuts the hits; output files counts per file (2026-09-19).
+        Assert.EndsWith("\n" + FileText.OnlyFirst(2, "matches") + FileText.NarrowHint, await Invoke(search, ("text", "needle"), ("limit", Json("2"))));
+        string files = await Invoke(search, ("text", "needle"), ("output", "files"));
+        Assert.StartsWith("2 files hold 'needle' (searched 3 files under the working directory in ", files, StringComparison.Ordinal);
+        Assert.EndsWith(" s):\na.md  1 match\ndocs/c.txt  2 matches", files);
+        Assert.EndsWith("\n" + FileText.OnlyFirst(1, "files") + FileText.NarrowHint, await Invoke(search, ("text", "needle"), ("output", "FILES"), ("limit", Json("1"))));
+        Assert.Contains(" (no matches)", await Invoke(search, ("text", "zzz"), ("output", "files")));
+
+        string info = await Invoke(Tool<FileInfoTool>(), ("path", @"docs/c.txt"));
+        Assert.StartsWith("docs/c.txt — 23 bytes, 2 lines, 4 words, LF, modified ", info, StringComparison.Ordinal);
+        File.WriteAllBytes(Path.Combine(_root, "crlf.txt"), [0xEF, 0xBB, 0xBF, .. "a\r\nb\r\n"u8.ToArray()]);
+        Assert.StartsWith("crlf.txt — 9 bytes, 2 lines, 2 words, CRLF, UTF-8 BOM, modified ", await Invoke(Tool<FileInfoTool>(), ("path", "crlf.txt")), StringComparison.Ordinal);
+        Assert.StartsWith("docs/ — 2 files in 0 folders, 30 B, last modified ", await Invoke(Tool<FileInfoTool>(), ("path", "docs")), StringComparison.Ordinal);
         Assert.Equal(FileText.Missing("zzz"), await Invoke(Tool<FileInfoTool>(), ("path", "zzz")));
     }
 
@@ -291,7 +400,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task CreateMoveCopyDelete()
     {
         Assert.Equal("created docs\\notes\\", await Invoke(Tool<CreateDirectoryTool>(), ("path", @"docs\notes")));
@@ -343,6 +452,59 @@ public sealed class FileToolsTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
     }
 
+    /// <summary>The Unix twin of <see cref="CreateMoveCopyDelete"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task CreateMoveCopyDelete_Unix()
+    {
+        Assert.Equal("created docs/notes/", await Invoke(Tool<CreateDirectoryTool>(), ("path", @"docs/notes")));
+        Assert.Equal("docs/ already exists", await Invoke(Tool<CreateDirectoryTool>(), ("path", "docs")));
+        Put("a.txt", "a");
+
+        var move = Tool<MoveTool>();
+        Assert.Equal("renamed a.txt to b.txt", await Invoke(move, ("from", "a.txt"), ("to", "b.txt")));
+        Assert.Equal("moved b.txt to docs/b.txt", await Invoke(move, ("from", "b.txt"), ("to", @"docs/b.txt")));
+        Assert.Equal("renamed docs/ to papers/", await Invoke(move, ("from", "docs"), ("to", "papers")));
+        Put("c.txt", "c");
+        Assert.Equal(FileText.Exists(@"papers/b.txt"), await Invoke(move, ("from", "c.txt"), ("to", @"papers/b.txt")));
+        // With overwrite a file in the way is replaced in place, nothing kept, and a folder in the way is refused (2026-09-20).
+        Assert.Equal("moved c.txt to papers/b.txt", await Invoke(move, ("from", "c.txt"), ("to", @"papers/b.txt"), ("overwrite", Json("true"))));
+        Assert.Equal("c", File.ReadAllText(Path.Combine(_root, "papers", "b.txt")));
+        Put("e.txt", "e");
+        Assert.Equal(FileText.FolderInTheWay(@"papers/"), await Invoke(move, ("from", "e.txt"), ("to", "papers"), ("overwrite", Json("true"))));
+        Assert.Equal("Error: 'papers/' is a folder in the way — move it aside first", FileText.FolderInTheWay(@"papers/"));
+        Assert.Equal("moved e.txt to papers/b.txt", await Invoke(move, ("from", "e.txt"), ("to", @"papers/b.txt"), ("overwrite", Json("true"))));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
+        Assert.Equal(FileText.BadBoolean("overwrite", "y"), await Invoke(move, ("from", "x"), ("to", "y"), ("overwrite", "y")));
+        Assert.Equal(FileText.Missing("x"), await Invoke(move, ("from", "x"), ("to", "y")));
+        Assert.Equal(FileText.PathRequired("from"), await Invoke(move, ("to", "y")));
+        Assert.Equal(FileText.PathRequired("to"), await Invoke(move, ("from", "x")));
+        Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<CreateDirectoryTool>()));
+        Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<UnzipTool>()));
+        Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<WriteFileTool>(), ("content", "x"), ("mode", "append")));
+        Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<ReadFileTool>()));
+
+        var copy = Tool<CopyTool>();
+        Assert.Equal("copied papers/b.txt to d.txt", await Invoke(copy, ("from", @"papers/b.txt"), ("to", "d.txt")));
+        Assert.Equal("copied papers/ to backup/", await Invoke(copy, ("from", "papers"), ("to", "backup")));
+        Assert.Equal(FileText.Exists("d.txt"), await Invoke(copy, ("from", @"papers/b.txt"), ("to", "d.txt")));
+        Assert.Equal(FileText.PathRequired("from"), await Invoke(copy, ("to", "d.txt")));
+        Assert.Equal(FileText.IntoItself(@"papers/", @"papers/inner/"), await Invoke(copy, ("from", "papers"), ("to", @"papers/inner")));
+
+        // delete removes for good — a folder with everything in it (in place since 2026-09-20 with File safe edits off, always since 2026-10-01).
+        var delete = Tool<DeleteTool>();
+        Assert.Equal("deleted d.txt", await Invoke(delete, ("path", "d.txt")));   // no "(File safe edits is off: nothing was kept)" since 2026-09-21
+        Assert.False(File.Exists(Path.Combine(_root, "d.txt")));
+        Assert.Equal(FileText.Missing("d.txt"), await Invoke(delete, ("path", "d.txt")));
+        Assert.Equal(FileText.RootItself, await Invoke(delete));
+        Assert.Equal("deleted the folder backup/ and everything in it", await Invoke(delete, ("path", "backup")));
+        Assert.False(Directory.Exists(Path.Combine(_root, "backup")));
+        // A .trash left from before 2026-10-01 is a folder like any other: deleted like one.
+        Put(@".trash/20260911-140530/old.txt", "old");
+        Assert.Equal(@"deleted .trash/20260911-140530/old.txt", await Invoke(delete, ("path", @".trash/20260911-140530/old.txt")));
+        Assert.Equal("deleted the folder .trash/ and everything in it", await Invoke(delete, ("path", ".trash")));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
+    }
+
     [Fact]
     public void Descriptions_NameNoTrashNoRestoreNoSetting()
     {
@@ -379,7 +541,7 @@ public sealed class FileToolsTests : IDisposable
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ZipUnzipOpen()
     {
         Put(@"docs\a.txt", "alpha");
@@ -401,6 +563,34 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal("opened docs\\a.txt in the user's editor", await Invoke(Tool<OpenTool>(), ("path", @"docs\a.txt")));
         Assert.Equal("opened docs\\ in Explorer", await Invoke(Tool<OpenTool>(), ("path", "docs")));
         Assert.Equal("opened the working directory in Explorer", await Invoke(Tool<OpenTool>()));
+        Assert.Equal(FileText.Missing("nope"), await Invoke(Tool<OpenTool>(), ("path", "nope")));
+        Assert.Equal(new[] { Path.Combine(_root, "docs", "a.txt"), Path.Combine(_root, "docs"), _root }, _opened);
+    }
+
+    /// <summary>The Unix twin of <see cref="ZipUnzipOpen"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public async Task ZipUnzipOpen_Unix()
+    {
+        Put(@"docs/a.txt", "alpha");
+        Put(@"docs/b.txt", "beta");
+
+        Assert.StartsWith("zipped docs/ into docs.zip (2 entries, ", await Invoke(Tool<ZipTool>(), ("path", "docs")), StringComparison.Ordinal);
+        Assert.Equal(FileText.Exists("docs.zip"), await Invoke(Tool<ZipTool>(), ("path", "docs")));
+        Assert.StartsWith("zipped docs/ into out/d.zip (2 entries, ", await Invoke(Tool<ZipTool>(), ("path", "docs"), ("to", @"out/d.zip"), ("overwrite", Json("true"))), StringComparison.Ordinal);
+        Assert.Equal(FileText.BadBoolean("overwrite", "1"), await Invoke(Tool<ZipTool>(), ("path", "docs"), ("overwrite", Json("1"))));
+        Assert.Equal(FileText.Missing("nope"), await Invoke(Tool<ZipTool>(), ("path", "nope")));
+
+        Assert.Equal("unzipped docs.zip into restore/ (2 entries)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")));
+        Assert.Equal("beta", File.ReadAllText(Path.Combine(_root, "restore", "docs", "b.txt")));
+        // The first clash in the archive's order, which on APFS is the folder's enumeration order, not by name as on NTFS.
+        Assert.Contains(await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")), new[] { FileText.Exists("restore/docs/a.txt"), FileText.Exists("restore/docs/b.txt") });
+        Assert.Equal("unzipped docs.zip into restore/ (2 entries)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore"), ("overwrite", Json("true"))));
+        Assert.Equal(FileText.NotAnArchive(@"docs/a.txt"), await Invoke(Tool<UnzipTool>(), ("path", @"docs/a.txt")));
+        Assert.Equal(FileText.BadBoolean("overwrite", "no way"), await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("overwrite", "no way")));
+
+        Assert.Equal("opened docs/a.txt in the user's editor", await Invoke(Tool<OpenTool>(), ("path", @"docs/a.txt")));
+        Assert.StartsWith("opened docs/ in ", await Invoke(Tool<OpenTool>(), ("path", "docs")));
+        Assert.StartsWith("opened the working directory in ", await Invoke(Tool<OpenTool>()));
         Assert.Equal(FileText.Missing("nope"), await Invoke(Tool<OpenTool>(), ("path", "nope")));
         Assert.Equal(new[] { Path.Combine(_root, "docs", "a.txt"), Path.Combine(_root, "docs"), _root }, _opened);
     }
@@ -427,7 +617,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => new WorkingDirectory(() => _root, null!));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ViewImage_ReturnsAToolImageResult_OrTheErrorSentence()
     {
         Directory.CreateDirectory(_root);
@@ -453,7 +643,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.EndsWith(FileText.ViewImageHint, FileText.NotText("square.bmp"), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task ViewImage_Paths_FetchesABatch_OneLinePerPath_FailuresInline()
     {
         Directory.CreateDirectory(_root);
@@ -557,7 +747,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(10, Rows(await Invoke(search, ("order", "modified"))));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ViewImage_Cap_IsTheSetting_Clamped_AndQuotedByTheDescriptionAndTheSchema()
     {
         var view = Tool<ViewImageTool>();

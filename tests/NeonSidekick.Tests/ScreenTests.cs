@@ -171,7 +171,7 @@ public sealed class ScreenPureTests
         Assert.Equal(default, ScreenRect.Union([]));
     }
 
-    [Fact]
+    [WindowsFact]
     public void AScreenshot_IsMarked_AndAStoredSessionKeepsALineNamingIt_UnlessKept()
     {
         var image = ScreenCapture.Attachment(new ScreenFrame(4000, 1000, new byte[4000 * 1000 * 4])) with { Path = "D:\\w\\screen_images\\a.jpg" };
@@ -295,7 +295,7 @@ public sealed class ScreenCaptureTests : IDisposable
 
     private ScreenCapture Capture() => new(_screen, () => _files, () => _settings.ScreenOutputFolder, _time);
 
-    [Fact]
+    [WindowsFact]
     public async Task AShot_IsSavedUnderTheOutputFolder_StampedLocally_AndAClashNumbered()
     {
         var capture = Capture();
@@ -321,7 +321,7 @@ public sealed class ScreenCaptureTests : IDisposable
         Assert.Equal("area 0,0 1920x1080", _screen.Captures[^1]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task AFailure_IsTheSentence_AndASaveOutsideTheSandboxIsRefused()
     {
         var capture = Capture();
@@ -334,7 +334,7 @@ public sealed class ScreenCaptureTests : IDisposable
         Assert.StartsWith("The screenshot could not be saved: ", e.Message);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task TheTool_AnswersEachOutcome_AndReadsItsArguments()
     {
         string? target = null;
@@ -375,7 +375,7 @@ public sealed class ScreenCaptureTests : IDisposable
         Assert.Equal("screen_list", new ScreenListTool(null).Name);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Jpeg_FromBareRows_MatchesTheFrameOverload()
     {
         var pixels = new byte[8 * 6 * 4];

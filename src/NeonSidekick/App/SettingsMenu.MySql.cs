@@ -41,7 +41,7 @@ internal sealed partial class SettingsMenu
     public static string MySqlPasswordRow(MySqlNamedConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        string store = connection.Config.InCredentialManager ? "Windows Credential Manager" : "encrypted in mysql.json";
+        string store = connection.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in mysql.json";
         return $"{connection.Name}  ({connection.Config.Endpoint}, user {connection.Config.User?.Trim()} · {store})";
     }
 

@@ -207,7 +207,7 @@ public sealed class SqlAccess
             DiagnosticLog.Warn(SqlConfigFile.Category, SqlText.ConnectFailedLogLine(target.Name, catalogName, ex.Number, LogText.Excerpt(ex.Message)));
             return SqlRun.Refused(SqlOutcome.ConnectFailed, Message(ex), target.Name);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException && !cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when ((ex is InvalidOperationException or ArgumentException || IsUnsupportedHere(ex)) && !cancellationToken.IsCancellationRequested)
         {
             return SqlRun.Refused(SqlOutcome.ConnectFailed, LogText.Excerpt(ex.Message), target.Name);
         }
@@ -328,7 +328,7 @@ public sealed class SqlAccess
             DiagnosticLog.Warn(SqlConfigFile.Category, SqlText.ConnectFailedLogLine(target.Name, catalogName, ex.Number, LogText.Excerpt(ex.Message)));
             return SqlRun.Refused(SqlOutcome.ConnectFailed, Message(ex), target.Name);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException && !cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when ((ex is InvalidOperationException or ArgumentException || IsUnsupportedHere(ex)) && !cancellationToken.IsCancellationRequested)
         {
             return SqlRun.Refused(SqlOutcome.ConnectFailed, LogText.Excerpt(ex.Message), target.Name);
         }
@@ -398,6 +398,13 @@ public sealed class SqlAccess
         cancellationToken.ThrowIfCancellationRequested();
         return null;
     }
+
+    /// <summary>
+    /// A server spelling this platform's SqlClient cannot reach at all (2026-10-06, the macOS build): an <c>np:\\.\pipe\…</c>
+    /// named pipe throws <see cref="PlatformNotSupportedException"/> from the open off Windows, which escaped the tool as a throw
+    /// rather than the connect error every other unreachable server is. Off Windows only, so Windows' handling is unchanged.
+    /// </summary>
+    private static bool IsUnsupportedHere(Exception ex) => ex is PlatformNotSupportedException && !OperatingSystem.IsWindows();
 
     /// <summary>Rolls back what is left of the transaction; a connection the server already dropped has nothing to roll back.</summary>
     private static async Task RollBackAsync(SqlTransaction transaction)

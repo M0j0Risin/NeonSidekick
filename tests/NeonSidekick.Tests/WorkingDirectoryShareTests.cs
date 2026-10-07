@@ -74,7 +74,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.False(Directory.Exists(_root));   // nothing made, by any of them
     }
 
-    [Fact]
+    [WindowsFact]
     public void DotTrash_IsAPlainFolder_Listed_Walked_AndWritable()
     {
         Put(_root, @".trash\old.txt", "kept needle");
@@ -87,7 +87,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.Equal(FileOutcome.Ok, _share.Delete(@".trash\new.txt").Outcome);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Overwrites_Patches_AndDeletes_ArePermanent_NoCopyKept()
     {
         Put(_root, "a.txt", "one");
@@ -104,7 +104,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void AnOverwrite_KeepsTheReplacedFilesAttributes_TheSandboxsDoesNot()
     {
         string onShare = Put(_root, "a.txt", "one");
@@ -154,7 +154,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.False(_share.Recent("", 10).Budgeted);
     }
 
-    [Fact]
+    [WindowsFact]
     public void CopyBetween_FetchesAFileOrAFolder_IntoTheSandbox_ItsNameAtTheRootByDefault()
     {
         string sandboxRoot = Path.Combine(_dir, "files");
@@ -181,7 +181,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.Equal("q3 v2", File.ReadAllText(Path.Combine(sandboxRoot, "q3.txt")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void CopyBetween_PutsIntoTheShare_KeepingAReplacedFilesAttributes_AndNeverAnyCopy()
     {
         string sandboxRoot = Path.Combine(_dir, "files");
@@ -199,7 +199,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(Path.Combine(_root, "docs"), "*.tmp"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void CopyBetween_KeepsBothSandboxes_AndRefusesAFolderInAFilesWay_AndTheRoot()
     {
         string sandboxRoot = Path.Combine(_dir, "files");

@@ -36,6 +36,9 @@ public sealed class GitAccess
     /// <summary>The libgit2 dll the NativeBinaries package puts beside the exe (<c>git2-&lt;commit&gt;.dll</c>; the smoke checks it).</summary>
     public const string NativeLibraryFileName = "git2-5853918.dll";
 
+    /// <summary>The same libgit2 on macOS (2026-10-06): <c>lib</c> and <c>.dylib</c> around the same commit, flat beside the exe from the package's <c>runtimes/osx-arm64/native</c>.</summary>
+    public const string MacNativeLibraryFileName = "libgit2-5853918.dylib";
+
     /// <summary>What a bare <c>ref</c> means: the checked-out commit.</summary>
     public const string Head = "HEAD";
 
@@ -129,14 +132,14 @@ public sealed class GitAccess
                 return GitOutcome.Bare;
             }
 
-            string workTree = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.WorkingDirectory));
+            string workTree = WorkingDirectory.InRootSpelling(root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.WorkingDirectory)), RealPath.Of);
             if (!WorkingDirectory.IsInside(root, workTree))
             {
                 detail = workTree;
                 return GitOutcome.AboveSandbox;
             }
 
-            location = new RepoLocation(Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.Path)), workTree, _files.Relative(workTree, isDirectory: true));
+            location = new RepoLocation(WorkingDirectory.InRootSpelling(root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(repo.Info.Path)), RealPath.Of), workTree, _files.Relative(workTree, isDirectory: true));
             return GitOutcome.Ok;
         }
         catch (RepositoryNotFoundException)

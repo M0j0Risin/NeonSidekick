@@ -9,7 +9,7 @@ public sealed class ShellTests
 {
     // ── The words ────────────────────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public void ShellKinds_AndCommandPolicy_ArePinned()
     {
         Assert.Equal(["powershell", "cmd", "bash"], ShellKinds.Names);
@@ -236,7 +236,7 @@ public sealed class ShellTests
 
     // ── The probe ────────────────────────────────────────────────────────────
 
-    [Fact]
+    [WindowsFact]
     public void InterpreterProbe_WalksPathAndPathExt_SkipsWhatItIsToldTo()
     {
         var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -262,7 +262,7 @@ public sealed class ShellTests
         Assert.Equal(".COM;.EXE;.BAT;.CMD", InterpreterProbe.DefaultPathExt);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Interpreters_FindTheTwoWindowsShells_WithoutAPath_AndBashOnlyWhenThere()
     {
         var none = new Interpreters(_ => null);
@@ -425,7 +425,7 @@ public sealed class ShellTests
         Assert.Equal(0.6, ShellText.HeadShare);
     }
 
-    [Fact]
+    [WindowsFact]
     public void ShellText_Errors_LogLines_AndThePane_ArePinned()
     {
         Assert.Equal("Error: the script was denied by the user (python); do not retry it or work around the refusal", ShellText.Denied(new CommandRequest("python", "print(1)", ["code:python"], IsScript: true)));

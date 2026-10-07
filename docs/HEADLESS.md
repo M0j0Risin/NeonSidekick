@@ -11,6 +11,7 @@ A fresh profile offers the model no tools and looks for no server: *File tools*,
 are off, *Shell command policy* is `off` and *LLM server scan mode* is `disabled`. The examples below assume a profile set up in
 the TUI beforehand (`/tools`, `/settings`) or its `profile.json` edited: a server saved or given with `--url`, and the
 tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` sets the shell policy for one run.
+On macOS (preview, [Building on a Mac](BUILD.md#building-on-a-mac)) `run_command` runs in `zsh` unless the profile names another shell.
 The SQL, Oracle, MySQL, UNC and ComfyUI tools also offer nothing until entries are ticked in their *… offered* lists (the
 `/tools` tabs, or an add wizard's offer row; in `profile.json`, `SqlConnectionsOffered`, `OracleConnectionsOffered`,
 `MySqlConnectionsOffered`, `UncSharesOffered`, `ComfyWorkflowsOffered`); headless has no way to tick them.
@@ -21,7 +22,7 @@ The SQLite, PostgreSQL, MySQL, SQL and Oracle tools only read headless: `sqlite_
 ## What the output looks like
 
 ```
-NeonSidekick 0.4.1
+NeonSidekick 0.5.0
 Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name]); /skills add <source> [--global] [--yes] installs a skill; /claude <message> asks Claude Code; /rewind [n] goes back n messages; /exit or EOF exits.
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: Here is what I found…

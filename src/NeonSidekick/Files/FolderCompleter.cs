@@ -21,6 +21,11 @@ public static class FolderCompleter
     public static MentionResult Complete(string typed, FileBrowserVisibility visibility = FileBrowserVisibility.Default)
     {
         string text = (typed ?? "").TrimStart();
+        if (!OperatingSystem.IsWindows())
+        {
+            return CompleteUnix(text, visibility);
+        }
+
         if (!IsDrivePath(text))
         {
             return Nothing;
@@ -38,9 +43,30 @@ public static class FolderCompleter
         }
 
         int cut = text.LastIndexOfAny(['\\', '/']);
+        return List(text[..(cut + 1)], text[(cut + 1)..], text[cut], visibility);
+    }
+
+    /// <summary>
+    /// The list off Windows (2026-10-06, the user's report: <c>/cwd</c> listed nothing on a Mac): an absolute path, <c>/</c> its
+    /// one separator, the folder up to the last <c>/</c> and the rest a name prefix, as a drive path is on Windows. A path on a
+    /// network or optical volume, or under the automounter's <c>/net</c> and <c>/Network</c>, lists nothing, for the same reason a
+    /// share does there (<see cref="IsSlowUnixPath"/>). <c>~</c> is not the home folder here: <c>/cwd ~</c> is the default folder.
+    /// </summary>
+    private static MentionResult CompleteUnix(string text, FileBrowserVisibility visibility)
+    {
+        if (!IsMachinePath(text))
+        {
+            return Nothing;
+        }
+
+        int cut = text.LastIndexOf('/');
         string folder = text[..(cut + 1)];
-        string prefix = text[(cut + 1)..];
-        char separator = text[cut];
+        return IsSlowUnixPath(folder) ? Nothing : List(folder, text[(cut + 1)..], '/', visibility);
+    }
+
+    /// <summary>The folders under <paramref name="folder"/> (as typed, ending in its separator) whose names start with <paramref name="prefix"/>, each a row ending in <paramref name="separator"/>.</summary>
+    private static MentionResult List(string folder, string prefix, char separator, FileBrowserVisibility visibility)
+    {
         try
         {
             if (PassesSlowLink(folder))
@@ -87,6 +113,16 @@ public static class FolderCompleter
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="text"/> is a path <see cref="Complete"/> lists: on Windows one that starts as a drive path
+    /// (<see cref="IsDrivePath"/>), elsewhere an absolute one (2026-10-06, the Mac). Until then <c>/cwd</c> shows its words.
+    /// </summary>
+    public static bool IsMachinePath(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return OperatingSystem.IsWindows() ? IsDrivePath(text) : text.StartsWith('/');
+    }
+
     /// <summary>Whether <paramref name="text"/> starts as a drive path: a letter and a colon, then nothing or a separator. Pure.</summary>
     public static bool IsDrivePath(string text)
     {
@@ -119,7 +155,37 @@ public static class FolderCompleter
             return true;
         }
 
+        if (!OperatingSystem.IsWindows() && t.StartsWith('/'))
+        {
+            return IsSlowUnixPath(t);
+        }
+
         return t.Length >= 2 && char.IsAsciiLetter(t[0]) && t[1] == ':' && IsSlowDrive(char.ToUpperInvariant(t[0]) + @":\");
+    }
+
+    /// <summary>
+    /// Off Windows, whether reading <paramref name="path"/> could stall: under the automounter's <c>/net</c> or <c>/Network</c>
+    /// (a lookup there can wait on a server), or on a network or optical volume (<see cref="DriveInfo"/> of the path reads the
+    /// type of the file system holding it: smbfs, nfs, afpfs, webdav, cd9660…). A path that is not there is not slow.
+    /// </summary>
+    public static bool IsSlowUnixPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        foreach (string automount in new[] { "/net", "/Network" })
+        {
+            if (path.Equals(automount, StringComparison.OrdinalIgnoreCase) || path.StartsWith(automount + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        string probe = path;
+        while (probe.Length > 1 && !Directory.Exists(probe))
+        {
+            probe = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(probe)) ?? "/";
+        }
+
+        return IsSlowDrive(probe);
     }
 
     // Each folder of the path from the root down: a link whose target is slow ends the walk before anything under it is read.

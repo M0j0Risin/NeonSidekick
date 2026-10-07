@@ -309,13 +309,23 @@ public class SidekickOptionsTests
             System.Text.Json.JsonSerializer.Serialize(o.ApplyTo(saved), SettingsJsonContext.Default.AppSettingsData));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ApplyTo_MakesTheCwdFull_AgainstTheLaunchDirectory()
     {
         var o = SidekickOptions.Parse(new[] { "--cwd", "sub\\dir" });
         var result = o.ApplyTo(new AppSettingsData { WorkingDirectory = "D:\\saved" });
         Assert.Equal(Path.Combine(Environment.CurrentDirectory, "sub", "dir"), result.WorkingDirectory);
         Assert.Equal("D:\\saved", SidekickOptions.None.ApplyTo(new AppSettingsData { WorkingDirectory = "D:\\saved" }).WorkingDirectory);
+    }
+
+    /// <summary>The Unix twin of <see cref="ApplyTo_MakesTheCwdFull_AgainstTheLaunchDirectory"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void ApplyTo_MakesTheCwdFull_AgainstTheLaunchDirectory_Unix()
+    {
+        var o = SidekickOptions.Parse(new[] { "--cwd", "sub/dir" });
+        var result = o.ApplyTo(new AppSettingsData { WorkingDirectory = "/saved" });
+        Assert.Equal(Path.Combine(Environment.CurrentDirectory, "sub", "dir"), result.WorkingDirectory);
+        Assert.Equal("/saved", SidekickOptions.None.ApplyTo(new AppSettingsData { WorkingDirectory = "/saved" }).WorkingDirectory);
     }
 
     [Fact]

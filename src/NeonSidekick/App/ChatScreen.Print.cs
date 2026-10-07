@@ -38,7 +38,7 @@ internal sealed partial class ChatScreen
     public static bool PrintOffered(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.PrintTools;
+        return effective.PrintTools && !OperatingSystem.IsMacOS();   // printing needs Windows for now (2026-10-06, the macOS build); /tools says so
     }
 
     /// <summary>
@@ -85,6 +85,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandlePrintAsync(string args, CancellationToken cancellationToken)
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            _transcript.Error(PrintText.NeedsWindows);   // 2026-10-06: no spooler on a Mac yet; Windows unchanged
+            return;
+        }
+
         PrintCommandResult result;
         try
         {

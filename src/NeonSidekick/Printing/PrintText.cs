@@ -39,6 +39,9 @@ public static class PrintText
 
     public const string NoPrinter = "Error: no printer is installed on this PC";
 
+    /// <summary>Printing off Windows (2026-10-06, the macOS build: no spooler there yet, so the print group is not offered and <c>/print</c> says this). Pinned.</summary>
+    public const string NeedsWindows = "Printing needs Windows for now: this build has no printer support.";
+
     public const string NoReply = "Error: there is no reply to print yet";
 
     public static string NoDefault(IReadOnlyList<PrinterInfo> printers) =>

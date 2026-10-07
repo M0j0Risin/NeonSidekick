@@ -19,7 +19,7 @@ public static class OracleText
     public static string SysRefused(string user) => $"\"user\" is '{user}'; SYS (or any AS SYSDBA-style sign-in) is not held to a read-only transaction, so the Oracle tools refuse it — use a read-only account";
     public static string BadSchemaKey(string schema) => $"\"schema\" is '{schema}', which is not a valid Oracle name";
     public static string NoPassword(string name) => $"'{name}' has no password; set it on the Oracle tab of /tools (Oracle set password)";
-    public static string NoCredential(string target) => $"no password in Windows Credential Manager for {target}; set it on the Oracle tab of /tools, or: cmdkey /generic:{target} /user:<user> /pass";
+    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on the Oracle tab of /tools, or: {SqlText.CredentialCommand(target, "<user>")}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's oracle.json was checked for plain passwords: {detail}";
     public const string NoPasswordConnections = "No connection in oracle.json yet; add one first (Oracle add connection).";
 

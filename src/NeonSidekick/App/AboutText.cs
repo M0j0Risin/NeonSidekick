@@ -117,6 +117,9 @@ public static class AboutText
 
     private const string Sep = " · ";
 
+    /// <summary>The note a Windows-only component's line ends with on macOS (2026-10-06: a Mac reads that it does nothing there); nothing elsewhere.</summary>
+    private static string WindowsOnlyNote => OperatingSystem.IsMacOS() ? " (Windows only)" : "";
+
     /// <summary>
     /// Every third-party part, in the order the tab lists them (the user's order, 2026-09-20): the
     /// packages with the models beside the package that runs them — the versions the project file
@@ -146,9 +149,9 @@ public static class AboutText
         new("Vosk", "0.3.38", "Apache-2.0", "the wake-word recogniser in-process"),
         new("Vosk models", Unversioned, "Apache-2.0", "wake-word models, downloaded on first use"),
         new("Silero VAD", "6.2.0", "MIT", "the voice-activity model, downloaded on first use"),
-        new("PhotoSauce.MagicScaler", "0.15.0", "MIT", "image decode and downscale through Windows' WIC codecs"),
+        new("PhotoSauce.MagicScaler", "0.15.0", "MIT", "image decode and downscale through Windows' WIC codecs" + WindowsOnlyNote),
         new("Markdig", "1.3.2", "BSD-2-Clause", "the Markdown reader behind the styled transcript"),
-        new("Microsoft.Web.WebView2", "1.0.4258.31", "BSD-3-Clause", "the video window's WebView2 loader; the browser is Windows' WebView2 Runtime"),   // 2026-10-05
+        new("Microsoft.Web.WebView2", "1.0.4258.31", "BSD-3-Clause", "the video window's WebView2 loader; the browser is Windows' WebView2 Runtime" + WindowsOnlyNote),   // 2026-10-05
         new("llama.cpp (llama-server)", EmbeddedLlm.LlamaRelease.Tag, "MIT", "embedded LLM server, downloaded on first use"),   // 2026-09-29; the user's wording 2026-10-03
     ];   // the Gemma 4 (GGUF) row gone 2026-10-03, the user's call
 

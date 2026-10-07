@@ -85,9 +85,9 @@ Every path is relative to the working directory; nothing outside it can be reach
 | `move` | `from, to, overwrite?` | Renames or moves a file or folder; replaces nothing unless `overwrite`. |
 | `copy` | `from, to, overwrite?` | Copies a file or folder, under the same rule; a folder over a folder merges. |
 | `delete` | `path` | Deletes a file or folder for good. `.git`, anything in it and a folder holding one are refused. |
-| `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default. |
+| `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default. A folder's entries are written sorted by path, so the same folder makes the same zip on Windows and a Mac. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. |
-| `open` | `path?, share?` | Opens a file in your own editor or viewer, or a folder in Explorer (the working directory by default). `share` (or a full `\\server\share` path) opens one on a UNC share; a network runas share is refused. |
+| `open` | `path?, share?` | Opens a file in your own editor or viewer, or a folder in Explorer (Finder on a Mac; the working directory by default). `share` (or a full `\\server\share` path) opens one on a UNC share; a network runas share is refused. |
 | `convert_to_pdf` | `path? \| url? \| markdown?, title?, to?, overwrite?, landscape?, paper?` | Makes a PDF in the working directory from a file, a web page (needs *Web tools* too) or Markdown it writes (see Making PDFs). Not in plan mode. |
 
 ### GitLib
@@ -136,11 +136,11 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 ### Connection settings
 
 * **`server`**: `host`, `host,port` or `host\instance`.
-* **`auth`**: `sql` (a SQL login: `user` and `password`), `windows` (your account), or `runas` (another Windows account, `DOMAIN\name` or `name@domain`, plus `password`; like `runas /netonly`, it signs in to the server only as that account).
+* **`auth`**: `sql` (a SQL login: `user` and `password`), `windows` (your account; on a Mac, your Kerberos ticket from `kinit`), or `runas` (another Windows account, `DOMAIN\name` or `name@domain`, plus `password`; like `runas /netonly`, it signs in to the server only as that account). `runas` needs Windows; a Mac's wizard and `sql.json` template leave it out.
 * **`encrypt`**: `strict`, `mandatory` (default) or `optional`. **`trustServerCertificate`**: `true` accepts a self-signed certificate.
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
 * **`access`**: `read` (default) or `readwrite`. Changes through `sql_execute` need `readwrite` **and** *SQL mode* `read-write`, both checked at every call.
-* **`passwordStore`**: `file` (default; a password typed into the file is encrypted in place with DPAPI on the next read) or `credman` (Windows Credential Manager, `NeonSidekick/sql/<connection_name>`).
+* **`passwordStore`**: `file` (default; a password typed into the file is encrypted in place with DPAPI on the next read) or `credman` (Windows Credential Manager, `NeonSidekick/sql/<connection_name>`). On a Mac, `file` encrypts under a key kept in the macOS Keychain (`keychain:…`) and `credman` is a Keychain generic password under the same name (`security add-generic-password -s NeonSidekick/sql/<connection_name> -a <user> -w`).
 
 ### Managing connections
 
@@ -524,6 +524,8 @@ With *PostgreSQL mode* set to `read-write`, the model gets `postgres_execute` be
 
 ## UNC shares and outside folders
 
+**Windows only:** on a Mac the UNC group is never offered, and `/tools` shows it as *off: it needs Windows*.
+
 The UNC tools reach named network shares (`\\server\share`, or a folder under one) and local folders outside the working directory (`D:\Data`), without mapped drives, as you (`windows`) or as another Windows account (`runas`, like `runas /netonly`). Shares are read-only unless two keys say otherwise. They live in `unc.json` (home and profile files, as for SQL).
 
 ### Share settings
@@ -584,6 +586,8 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 
 ## Docker
 
+**Windows only:** on a Mac the Docker group is never offered, and `/tools` shows it as *off: it needs Windows*.
+
 The Docker tools use the engine's own API on its named pipe (*Docker engine pipe*); the app never starts `docker.exe` or Docker Desktop, and says when Desktop isn't running. A container is named by its name, a unique part of one ("mysql" for `mysql_dev`), or an id prefix of four or more characters; an ambiguous name comes back as a question.
 
 * **Changes need two keys:** *Docker writes* offers the changing tools, and every call asks on the pane ("Stop container mysql_dev (mysql:8.4, Up 3 days)?"); a prune says first how much it frees. Headless refuses them; `/docker` still works.
@@ -640,7 +644,7 @@ The Home Assistant tools control your own Home Assistant over its REST API with 
 
 ## Printing
 
-`/print` and the print tools send work to any printer Windows has installed.
+`/print` and the print tools send work to any printer Windows has installed. **Windows only:** on a Mac the print group is never offered (`/tools` shows *off: it needs Windows*) and `/print` says printing needs Windows.
 
 * **Drawn by the app:** text and code print as a monospace listing (tabs as four columns, long lines wrapped, form feeds start pages); Markdown prints formatted (headings, emphasis, lists, quotes, code blocks, rules, links with their address, tables cut to fit); a picture (PNG, JPEG, GIF, WebP, BMP) is fitted to one page, never enlarged. Every page carries the file's name, the time and *page N of M*; paper, tray and quality are the printer's.
 * **Anything else** (a PDF, a Word or Excel file) goes to the program Windows has for printing it, on the default printer only; a printer, copies, pages or landscape given with it is refused. A type nothing can print is refused.
@@ -653,7 +657,7 @@ The Home Assistant tools control your own Home Assistant over its REST API with 
 
 ### Making PDFs
 
-`/pdf` and the `convert_to_pdf` file tool make a PDF in the working directory. Nothing new is installed: the browser you already have makes it, or Windows' own PDF printer.
+`/pdf` and the `convert_to_pdf` file tool make a PDF in the working directory. Nothing new is installed: the browser you already have makes it, or Windows' own PDF printer. On a Mac only the browser makes it (Edge, Chrome, Brave or Chromium in `/Applications`); the `printer` engine needs Windows.
 
 * **Markdown** keeps its headings, emphasis, lists and task lists, quotes, tables, links (clickable), footnotes and code blocks, coloured as in the transcript. Its pictures come from the working directory, relative to the file; a picture outside it or on the web shows as `[image: alt]`. Raw HTML in it is shown as text.
 * **Text and code** become one listing, coloured by the file's extension. **A picture** is fitted to one page, never enlarged.
@@ -838,8 +842,8 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `run_command` | `command, shell?, workdir?, timeout?, background?, notify?` | Runs a command in `powershell` (default), `cmd` or `bash`, returning `exit N in T s (shell)…`, stdout and stderr. `background` (or a long timeout) returns a `proc_…` id; `notify` shows `⚡` when it exits and queues a `process poll` for the next turn. |
-| `execute_code` | `language, code, timeout?` | Runs a one-off `python`, `node` or `powershell` script, approved once per language per session; nothing carries over between scripts. With *Shell tool bridge*, the script can call the app's tools (Python `from neon_tools import call`, Node `await neon.call(...)`, PowerShell `Invoke-NeonTool`), except `execute_code` and `ask_user`; `run_command` through the bridge still needs approval and can't run in the background. |
+| `run_command` | `command, shell?, workdir?, timeout?, background?, notify?` | Runs a command in `powershell` (default), `cmd` or `bash` (on macOS `zsh` (default), `bash` or `powershell`), returning `exit N in T s (shell)…`, stdout and stderr. `background` (or a long timeout) returns a `proc_…` id; `notify` shows `⚡` when it exits and queues a `process poll` for the next turn. |
+| `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on macOS), `node` or `powershell` script, approved once per language per session; nothing carries over between scripts. With *Shell tool bridge*, the script can call the app's tools (Python `from neon_tools import call`, Node `await neon.call(...)`, PowerShell `Invoke-NeonTool`), except `execute_code` and `ask_user`; `run_command` through the bridge still needs approval and can't run in the background. |
 | `process` | `action, session_id?, data?, timeout?, offset?, limit?` | Manages up to 16 background processes (and the last 64 finished), named by any unique id prefix: `list`, `poll`, `log` (a window of the last 5,000 lines), `wait`, `kill` (with children), `write` / `submit` (to stdin; `submit` adds a newline), `close`. |
 
 ### Web

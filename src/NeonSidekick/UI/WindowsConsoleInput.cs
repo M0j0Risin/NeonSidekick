@@ -51,7 +51,7 @@ namespace NeonSidekick.UI;
 /// stops and joins the thread <em>before</em> restoring the mode, or a late key record would
 /// switch the mouse back on after the restore and the shell would inherit it.</para>
 /// </summary>
-public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IDisposable
+public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseInput, IDisposable
 {
     public const string Category = "Screen";
     public const string NoKeyboard = "Failed to read input: the console input is gone.";

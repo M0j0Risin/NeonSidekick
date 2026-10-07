@@ -41,7 +41,7 @@ public class WinMmAudioCaptureTests
         Assert.Throws<ObjectDisposedException>(capture.Start);
     }
 
-    [Fact]
+    [WindowsFact]
     public void InputDeviceCount_IsNonNegative()
     {
         Assert.True(WinMmAudioCapture.InputDeviceCount() >= 0);

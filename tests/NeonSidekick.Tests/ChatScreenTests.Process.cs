@@ -36,6 +36,32 @@ public partial class ChatScreenTests
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary><see cref="ProcessFixture"/>'s Unix twin (2026-10-06, the macOS build): the background child a zsh <c>sleep</c>.</summary>
+    private void ProcessFixtureUnix(Func<int, string?> lines)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShellCommandPolicy = "yolo"; });
+        _chat.Enqueue(FakeChatClient.Call("c1", RunCommandTool.ToolName, new Dictionary<string, object?> { ["command"] = "sleep 30", ["shell"] = "zsh", ["background"] = true }));
+        _chat.EnqueueText("Started.");
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            if (_keys is { PendingLine.IsCompleted: false })
+            {
+                return;
+            }
+
+            string? line = step == 0 ? "start it" : lines(step);
+            if (line is null)
+            {
+                return;
+            }
+
+            step++;
+            PushLine(input, line);
+        };
+    }
+
     /// <summary>The model starts a quiet background child; then the script runs <paramref name="lines"/> at the idle line, one each wait.</summary>
     private void ProcessFixture(Func<int, string?> lines)
     {
@@ -62,7 +88,7 @@ public partial class ChatScreenTests
         };
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Process_ListsAStartedOne_OpensItsWindow_AndItsStopIsTheChatsLine()
     {
         ProcessSession? shown = null;
@@ -94,11 +120,44 @@ public partial class ChatScreenTests
         Assert.True(shown.StoppedByUser);
     }
 
+    /// <summary>The Unix twin of <see cref="Process_ListsAStartedOne_OpensItsWindow_AndItsStopIsTheChatsLine"/> (2026-10-06, the macOS build): a zsh child, not cmd.exe.</summary>
+    [UnixFact]
+    public async Task Process_ListsAStartedOne_OpensItsWindow_AndItsStopIsTheChatsLine_Unix()
+    {
+        ProcessSession? shown = null;
+        _openProcessWindow = (session, stop) =>
+        {
+            shown = session;
+            stop(session);   // Ctrl+K twice in the window, at once
+        };
+        ProcessFixtureUnix(step => step switch
+        {
+            1 => "/process",
+            2 => "/process PROC_",   // the one session's unique prefix, any case
+            // The kill lands, the registry's signal ends the read and the alert prints; then the list again shows it stopped.
+            3 => Output.Contains("was stopped by you", StringComparison.Ordinal) ? "/process" : null,
+            4 => "/exit",
+            _ => null,
+        });
+
+        string output = await RunAsync();
+
+        Assert.NotNull(shown);
+        string id = shown!.Id;
+        Assert.Contains("1 process (1 running)", output);
+        Assert.Contains(id + "  running ", output);
+        Assert.Contains(ProcessWindowText.ListHint, output);
+        Assert.Contains("  · " + ProcessWindowText.OpenedNotice(id), output);
+        Assert.Contains("  ⚡ " + id + " was stopped by you after ", output);
+        Assert.Contains(id + "  stopped by you ", output);
+        Assert.True(shown.StoppedByUser);
+    }
+
     /// <summary>
     /// With the pane (later on 2026-10-05, the user's ask) the bare <c>/process</c> is <see cref="ProcessMenu"/>: Enter opens the
     /// highlighted one through the window's seam, the kill key asks, Yes stops it, and the exit is the chat's "stopped by you" line.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task Process_WithThePane_EnterOpens_TheKillKeyAsks_YesStops()
     {
         var shown = new List<ProcessSession>();
@@ -107,6 +166,49 @@ public partial class ChatScreenTests
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.Enqueue(FakeChatClient.Call("c1", RunCommandTool.ToolName, new Dictionary<string, object?> { ["command"] = "ping -n 30 127.0.0.1 >nul", ["shell"] = "cmd", ["background"] = true }));
+        _chat.EnqueueText("Started.");
+        var steps = new (Func<bool> Ready, Action<ScriptedInput> Act)[]
+        {
+            (() => true, Line("start it")),
+            (() => true, Line("/process")),
+            (() => Output.Contains(ProcessMenu.Title, StringComparison.Ordinal), Key(Keys.Enter)),
+            (() => true, Key(Keys.Char('k'))),
+            (() => true, Key(Keys.Char('y'))),
+            (() => true, Key(Keys.Enter)),
+            (() => true, Key(Keys.Escape)),
+            (() => Output.Contains("was stopped by you", StringComparison.Ordinal), Line("/exit")),
+        };
+        var input = Scripted();
+        int next = 0;
+        input.OnWait = () =>
+        {
+            if (next < steps.Length && steps[next].Ready())
+            {
+                steps[next++].Act(input);
+            }
+        };
+
+        string output = await RunAsync();
+
+        var session = Assert.Single(shown);
+        Assert.Contains("1 process (1 running)", output);
+        Assert.Contains(ProcessMenu.KillPrompt(session), output);
+        Assert.Contains(ProcessMenu.StoppingNotice(session.Id), output);
+        Assert.Contains("  ⚡ " + session.Id + " was stopped by you after ", output);
+        Assert.True(session.StoppedByUser);
+        Assert.DoesNotContain(ProcessWindowText.ListHint, output);   // the pane's keys say it now
+    }
+
+    /// <summary>The Unix twin of <see cref="Process_WithThePane_EnterOpens_TheKillKeyAsks_YesStops"/> (2026-10-06, the macOS build): a zsh child, not cmd.exe.</summary>
+    [UnixFact]
+    public async Task Process_WithThePane_EnterOpens_TheKillKeyAsks_YesStops_Unix()
+    {
+        var shown = new List<ProcessSession>();
+        _openProcessWindow = (session, _) => shown.Add(session);
+        _settings.Update(d => { d.TtsOutput = false; d.ShellCommandPolicy = "yolo"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(FakeChatClient.Call("c1", RunCommandTool.ToolName, new Dictionary<string, object?> { ["command"] = "sleep 30", ["shell"] = "zsh", ["background"] = true }));
         _chat.EnqueueText("Started.");
         var steps = new (Func<bool> Ready, Action<ScriptedInput> Act)[]
         {
@@ -153,7 +255,7 @@ public partial class ChatScreenTests
         Assert.Contains(ProcessWindowText.NoneYet, output);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Process_WithNoWindowHere_SaysSo()
     {
         ProcessFixture(step => step switch
@@ -168,11 +270,45 @@ public partial class ChatScreenTests
         Assert.Contains("  ✗ " + ProcessWindowText.Unavailable, output);
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="Process_WithNoWindowHere_SaysSo"/> (2026-10-06, the macOS build): a zsh child, not cmd.exe.</summary>
+    [UnixFact]
+    public async Task Process_WithNoWindowHere_SaysSo_Unix()
+    {
+        ProcessFixtureUnix(step => step switch
+        {
+            1 => "/process proc_",
+            2 => "/exit",
+            _ => null,
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ProcessWindowText.Unavailable, output);
+    }
+
+    [WindowsFact]
     public async Task Process_AWindowThatFails_IsItsError()
     {
         _openProcessWindow = (_, _) => throw new InvalidOperationException("no thread");
         ProcessFixture(step => step switch
+        {
+            1 => "/process proc_",
+            2 => "/exit",
+            _ => null,
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ProcessWindowText.WindowFailedError("no thread"), output);
+        Assert.DoesNotContain("in the process window", output);
+    }
+
+    /// <summary>The Unix twin of <see cref="Process_AWindowThatFails_IsItsError"/> (2026-10-06, the macOS build): a zsh child, not cmd.exe.</summary>
+    [UnixFact]
+    public async Task Process_AWindowThatFails_IsItsError_Unix()
+    {
+        _openProcessWindow = (_, _) => throw new InvalidOperationException("no thread");
+        ProcessFixtureUnix(step => step switch
         {
             1 => "/process proc_",
             2 => "/exit",

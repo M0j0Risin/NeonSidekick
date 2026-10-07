@@ -30,7 +30,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The store picks, <c>file</c> then <c>credman</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> OracleWizardStoreRows =
-        ["file     encrypted (DPAPI) in oracle.json", "credman  Windows Credential Manager"];
+        Sql.SqlText.StoreRows("oracle.json");
 
     public static readonly string OracleWizardTimeoutQuestion =
         "Seconds a connect may take, 1 to " + Invariant(OracleConnectionConfig.MaxConnectTimeoutSeconds) + "; empty for " + Invariant(OracleConnectionConfig.DefaultConnectTimeoutSeconds) + ".";

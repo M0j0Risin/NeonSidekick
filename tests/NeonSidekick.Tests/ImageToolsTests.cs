@@ -64,7 +64,7 @@ public sealed class ImageToolsTests : IDisposable
 
     private bool Exists(string relative) => File.Exists(Path.Combine(_root, relative));
 
-    [Fact]
+    [WindowsFact]
     public void Schemas_ArePinned()
     {
         Assert.Equal(["path", "paths"], Info.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name));
@@ -81,7 +81,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.Contains("in this order: crop, resize, rotate, flip, colour, blur, border", ImageEditTool.DescriptionText);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_WritesBesideTheSource_AsEdited_ThenNumbersAClash()
     {
         Put("photos/cat.bmp", ImageFixtures.Quadrants(40, 20));
@@ -94,7 +94,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.Equal((20, 10, "image/bmp"), ImageFixtures.Size(Get("photos/cat-edited.bmp")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_AFormatChangeAlone_KeepsTheStem()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(8, 8));
@@ -104,7 +104,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.Equal("image/jpeg", ImageFixtures.Size(Get("cat.jpg")).Mime);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_AnExplicitTo_IsRefusedWhenTaken_UnlessOverwrite()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(8, 8));
@@ -115,7 +115,7 @@ public sealed class ImageToolsTests : IDisposable
         Starts(Rel("wrote thumbs/cat-edited.png"), await Text(Edit, ("path", "cat.bmp"), ("to", "thumbs/"), ("format", "png"), ("width", 4)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_TheSourceItself_NeedsOverwrite()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(8, 8));
@@ -126,7 +126,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.True(pixel.R == pixel.G && pixel.G == pixel.B);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_Refusals()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(8, 8));
@@ -148,7 +148,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.False(Exists("cat-edited.bmp"));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_RotateMinus90_IsAQuarterTurnAnticlockwise()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(20, 10));
@@ -157,7 +157,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.True(ImageFixtures.Near(ImageFixtures.Green, ImageFixtures.Pixel(Get("cat-edited.bmp"), 1, 1)));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_View_AttachesTheWrittenPicture()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(8, 8));
@@ -171,7 +171,7 @@ public sealed class ImageToolsTests : IDisposable
         Ends(FileText.ImageFollows, image.Text);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_TheSettings_AreReadAtEachCall_AndAnArgumentWins()
     {
         Put("cat.bmp", ImageFixtures.Noise(64, 64));
@@ -193,7 +193,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.False(ImageFixtures.HasGps(Get("dropped.jpg")));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Edit_MetadataNoneAlone_IsALosslessStrip_AnythingMoreReencodes()
     {
         byte[] geo = ImageFixtures.ExifJpeg();
@@ -219,7 +219,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.Contains("lossless", ImageEditTool.DescriptionText);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Info_NamesTheMetadataAPictureCarries()
     {
         Put("geo.jpg", ImageFixtures.ExifJpeg());
@@ -229,7 +229,7 @@ public sealed class ImageToolsTests : IDisposable
         Assert.Matches(@"^geo\.jpg: JPEG, 16×16, [\d.]+ [KB ]+, metadata: EXIF with GPS\n", text);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Info_DescribesEachPicture_ThenTheFormatsAndDefaults()
     {
         Put("cat.bmp", ImageFixtures.Quadrants(30, 20));
@@ -288,7 +288,7 @@ public sealed class ImageToolsTests : IDisposable
     /// Image edit mode overwrite-original (later on 2026-10-04, the user's call: it rules image_edit too): with no to the result replaces
     /// the source, a format change writes the new name and deletes the source, an explicit to is untouched, and the description says so.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public async Task OverwriteMode_ReplacesTheSource_AConversionDeletesIt_AnExplicitToUntouched()
     {
         _settings.ImageEditMode = "overwrite-original";

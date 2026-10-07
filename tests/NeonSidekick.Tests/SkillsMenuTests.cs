@@ -134,7 +134,7 @@ public class SkillsMenuTests : IDisposable
     private const string Strip = SkillsText.Label + "   Offered    Reflection    Options ";   // Options last since 2026-09-22 (the user's ask); the Project tab before it went on 2026-10-01, its toggle an Options row; Loaded until 2026-09-19; Options (the settings rows, /settings' Skills tab until then) since later that day; Reflection (the reflection's rows out of Options) later still; the Roots tab after Project until later still that day
 
     /// <summary>The Options tab's five rows at their defaults, padded to the tab's own column (38: the external-skills label), as the pane prints them; Project file third since 2026-10-01. Pinned.</summary>
-    private const string OptionsRows = "▸ Agent skills                          on\n  Use external skills (.agents\\skills)  off\n  Project file                          on\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
+    private static readonly string OptionsRows = "▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
 
     /// <summary>The Reflection tab's nine rows at their defaults (later on 2026-09-19), padded to its own column (31: the cooldown minutes label). Pinned.</summary>
     private const string ReflectionRows = "▸ Reflection (auto-learn)           on\n  Reflection reasoning              none\n  Reflection window                 3 turns\n  Reflection min tool calls         4 tool calls\n  Reflection max requests           4 requests\n  Reflection cooldown (minutes)     5 minutes\n  Reflection cooldown mode          last-written-skill\n  Reflection includes sessions      on\n  Reflection yields to turns        on\n  Reflection edit supporting files  off\n  Reflection downloaded skills      allow-and-mark\n";
@@ -250,7 +250,7 @@ public class SkillsMenuTests : IDisposable
 
         AssertPadded("\n" + Titled(Strip) + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
         Assert.DoesNotContain("\n" + Titled(SkillsText.Label + " › Project file") + "\n", _console.Output);   // no page: Space saved at once
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n  Agent skills                          on\n  Use external skills (.agents\\skills)  off\n▸ Project file                          off\n", _console.Output);   // the flip on the status line, the row re-read, the cursor kept
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n  Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n▸ Project file                          off\n", _console.Output);   // the flip on the status line, the row re-read, the cursor kept
         Assert.False(_settings.Current.ProjectFile);
         Assert.DoesNotContain("Project    ", _console.Output);   // no Project tab in the strip
         Assert.DoesNotContain("Roots", _console.Output);
@@ -642,7 +642,7 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // In the strip's order: Offered, Reflection, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project file row among the Options since 2026-10-01 (a Project section of its own until then), no Roots section.
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  ·   Reflection yields to turns: on\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   Use external skills (.agents\\skills): off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", _console.Output);
+        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  ·   Reflection yields to turns: on\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", _console.Output);
         Assert.DoesNotContain("Roots", _console.Output);
     }
 

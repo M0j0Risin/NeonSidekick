@@ -41,7 +41,7 @@ internal sealed partial class SettingsMenu
     public static string OraclePasswordRow(OracleNamedConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        string store = connection.Config.InCredentialManager ? "Windows Credential Manager" : "encrypted in oracle.json";
+        string store = connection.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in oracle.json";
         return $"{connection.Name}  (user {connection.Config.User?.Trim()} · {store})";
     }
 

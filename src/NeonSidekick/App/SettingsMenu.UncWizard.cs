@@ -37,7 +37,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The store picks, <c>file</c> then <c>credman</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> UncWizardStoreRows =
-        ["file     encrypted (DPAPI) in unc.json", "credman  Windows Credential Manager"];
+        Sql.SqlText.StoreRows("unc.json");
 
     /// <summary>The access picks, <c>read</c> then <c>readwrite</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> UncWizardAccessRows =

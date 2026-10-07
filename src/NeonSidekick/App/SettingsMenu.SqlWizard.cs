@@ -46,13 +46,23 @@ internal sealed partial class SettingsMenu
     public const string SqlWizardDescriptionQuestion = "What the database holds, in your words (optional): the model reads it to pick a connection.";
     public const string SqlWizardSummaryCaption = "Check the connection: Test tries it without saving; Enter on a row below changes it.";
 
-    /// <summary>The sign-in picks, <see cref="SqlConnectionConfig.SqlAuth"/> / <c>windows</c> / <c>runas</c> in that order. Pinned.</summary>
-    public static readonly IReadOnlyList<string> SqlWizardAuthRows =
-        ["sql      a SQL login (user and password)", "windows  Windows sign-in as you (no password)", "runas    Windows sign-in as another account (runas /netonly)"];
+    /// <summary>
+    /// The sign-in picks, <see cref="SqlConnectionConfig.SqlAuth"/> / <c>windows</c> / <c>runas</c> in that order (<see cref="SqlWizardAuthWords"/>).
+    /// On macOS (2026-10-06) <c>sql</c> and <c>windows</c> alone: Windows sign-in works there through Kerberos (proven by the user —
+    /// never drop it), while <c>runas</c> needs Windows' <c>LogonUser</c>. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SqlWizardAuthRows = OperatingSystem.IsMacOS()
+        ? ["sql      a SQL login (user and password)", "windows  Windows sign-in as you through Kerberos (your ticket, no password)"]
+        : ["sql      a SQL login (user and password)", "windows  Windows sign-in as you (no password)", "runas    Windows sign-in as another account (runas /netonly)"];
+
+    /// <summary>The words <see cref="SqlWizardAuthRows"/> pick, row for row.</summary>
+    public static readonly IReadOnlyList<string> SqlWizardAuthWords = OperatingSystem.IsMacOS()
+        ? [SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth]
+        : [SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth, SqlConnectionConfig.RunAsAuth];
 
     /// <summary>The store picks, <c>file</c> then <c>credman</c>. Pinned.</summary>
     public static readonly IReadOnlyList<string> SqlWizardStoreRows =
-        ["file     encrypted (DPAPI) in sql.json", "credman  Windows Credential Manager"];
+        Sql.SqlText.StoreRows("sql.json");
 
     /// <summary>The encryption picks, <see cref="SqlConnectionConfig.EncryptWords"/>' order put the default first. Pinned.</summary>
     public static readonly IReadOnlyList<string> SqlWizardEncryptWords = ["mandatory", "strict", "optional"];
@@ -401,8 +411,8 @@ internal sealed partial class SettingsMenu
 
             case SqlWizardStep.Auth:
             {
-                string[] words = [SqlConnectionConfig.SqlAuth, SqlConnectionConfig.WindowsAuth, SqlConnectionConfig.RunAsAuth];
-                int current = Math.Max(0, Array.IndexOf(words, c.Auth));
+                var words = SqlWizardAuthWords;
+                int current = Math.Max(0, words.ToList().IndexOf(c.Auth ?? ""));
                 if (await SqlWizardPickAsync(SqlWizardAuthQuestion, SqlWizardAuthRows, current, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;

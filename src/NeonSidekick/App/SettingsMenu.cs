@@ -2470,7 +2470,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The label of <see cref="SettingsField.ExternalSkills"/>, naming the folder it reads (the user's wording, 2026-09-16); the longest label there is, so it sets <see cref="LabelWidth"/>. Pinned.</summary>
-    public const string ExternalSkillsName = "Use external skills (.agents\\skills)";
+    public static string ExternalSkillsName => OperatingSystem.IsMacOS() ? "Use external skills (.agents/skills)" : "Use external skills (.agents\\skills)";   // a Mac's separator, 2026-10-06
 
     /// <summary>
     /// How the menu shows an empty <see cref="AppSettingsData.WebBrowserPath"/>: the browser
@@ -2627,7 +2627,7 @@ internal sealed partial class SettingsMenu
     public static string SqlPasswordRow(Sql.SqlNamedConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        string store = connection.Config.InCredentialManager ? "Windows Credential Manager" : "encrypted in sql.json";
+        string store = connection.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in sql.json";
         string login = connection.Config.IsRunAs ? "runas " + connection.Config.User?.Trim() : "sql login " + connection.Config.User?.Trim();
         return $"{connection.Name}  ({login} · {store})";
     }
@@ -2769,7 +2769,7 @@ internal sealed partial class SettingsMenu
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Pdf.PdfEngine.Describe(name));
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.PrintDefaultPrinter"/> (2026-09-28), and the picker's first row.</summary>
-    public const string WindowsDefaultPrinterLabel = "(Windows default)";
+    public static string WindowsDefaultPrinterLabel => OperatingSystem.IsMacOS() ? "(none: printing needs Windows)" : "(Windows default)";   // the Mac's, 2026-10-06: no printers there yet
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.PrintFontSize"/>.</summary>
     public static string PrintFontSizeRangeError =>
@@ -6900,7 +6900,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SqlPercentMention => on ? "% and part of a name lists the SQL connections on the line" : "% is ordinary text",
         SettingsField.LlmCompactShowSummary => on ? "the summary's lines or the pruned results, then the protected counts" : "the one compact notice alone",
         SettingsField.AgentSkills => on ? "the skills catalog, load_skill and skill_editor are offered" : "no skills, no project notes",
-        SettingsField.ExternalSkills => on ? "%USERPROFILE%\\.agents\\skills is read too" : "profile and global skills only",
+        SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "profile and global skills only",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",
         SettingsField.ToolsDollarMention => on ? "$ and part of a name lists the offered tools on the line" : "$ is ordinary text",

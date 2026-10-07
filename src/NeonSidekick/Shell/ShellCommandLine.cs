@@ -20,6 +20,8 @@ namespace NeonSidekick.Shell;
 /// the <c>chcp</c> and writes UTF-8. The exit code is the inner <c>/c</c>'s, the last command's.</item>
 /// <item><b>bash</b>: <c>-lc …</c> as a list — .NET's quoting is MSVCRT's, which is what MSYS bash
 /// parses; <c>-l</c> costs a profile read but gives Git Bash its PATH (the user's call).</item>
+/// <item><b>zsh</b> (2026-10-06, the macOS build): <c>-lc …</c> as a list the same way — on Unix the arguments reach the
+/// child as they are, no quoting at all; <c>-l</c> reads <c>.zprofile</c>, where Homebrew puts itself on the PATH.</item>
 /// </list>
 /// </summary>
 public static class ShellCommandLine
@@ -77,7 +79,7 @@ public static class ShellCommandLine
         return kind switch
         {
             ShellKind.Cmd => new ProcessLaunch(executable, null, CmdArguments(command), workingDirectory, command, name),
-            ShellKind.Bash => new ProcessLaunch(executable, ["-lc", command], null, workingDirectory, command, name),
+            ShellKind.Bash or ShellKind.Zsh => new ProcessLaunch(executable, ["-lc", command], null, workingDirectory, command, name),
             _ => new ProcessLaunch(executable, [.. PowerShellSwitches, "-EncodedCommand", Encode(PowerShellScript(command))], null, workingDirectory, command, name),
         };
     }

@@ -46,6 +46,9 @@ public enum ImageLoadFailure
 
     /// <summary>The codecs refused it — or the file could not be opened at all, which reads the same from the line.</summary>
     CouldNotRead,
+
+    /// <summary>No codecs here at all (2026-10-06, the macOS build: <see cref="ImageCodecs.Available"/>).</summary>
+    Unsupported,
 }
 
 /// <summary>
@@ -230,6 +233,7 @@ public static class ImageFile
     public static string NotFound(string path) => $"(image not attached: {path} was not found)";
     public static string TooLarge(string path) => $"(image not attached: {path} is over {MaxFileBytes / 1_000_000} MB or {MaxPixels / 1_000_000} megapixels)";
     public static string CouldNotRead(string path) => $"(image not attached: {path} could not be read as an image)";
+    public static string Unsupported(string path) => $"(image not attached: {path}; {ImageCodecs.Unavailable})";
 
     /// <summary>The sentence for a <paramref name="failure"/>; <see cref="ImageLoadFailure.None"/> has none (throws).</summary>
     public static string Notice(ImageLoadFailure failure, string path)
@@ -240,6 +244,7 @@ public static class ImageFile
             ImageLoadFailure.NotFound => NotFound(path),
             ImageLoadFailure.TooLarge => TooLarge(path),
             ImageLoadFailure.CouldNotRead => CouldNotRead(path),
+            ImageLoadFailure.Unsupported => Unsupported(path),
             _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Not a failure."),
         };
     }
@@ -341,6 +346,12 @@ public static class ImageFile
         if (bytes.Length > MaxFileBytes)
         {
             failure = ImageLoadFailure.TooLarge;
+            return false;
+        }
+
+        if (!ImageCodecs.Available)
+        {
+            failure = ImageLoadFailure.Unsupported;
             return false;
         }
 

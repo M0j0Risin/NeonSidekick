@@ -19,7 +19,7 @@ public sealed class TreeTextTests
         new("notes.txt", 1, false, 12, true),
     ];
 
-    [Fact]
+    [WindowsFact]
     public void Lines_DrawTheBranches_WithSizes()
     {
         Assert.Equal(
@@ -36,7 +36,25 @@ public sealed class TreeTextTests
             TreeText.Lines(Ok(Sample), showSizes: true, cap: 500));
     }
 
-    [Fact]
+    /// <summary>The Unix twin of <see cref="Lines_DrawTheBranches_WithSizes"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void Lines_DrawTheBranches_WithSizes_Unix()
+    {
+        Assert.Equal(
+            [
+                @"D:\home\profiles\default\files\",   // the root as given: the helper's
+                "├── docs/",
+                "│   ├── a.md  1.2 KB",
+                "│   └── b.md  340 B",
+                "├── src/",
+                "│   └── deep/",
+                "│       └── x [1].cs  0 B",
+                "└── notes.txt  12 B",
+            ],
+            TreeText.Lines(Ok(Sample), showSizes: true, cap: 500));
+    }
+
+    [WindowsFact]
     public void Lines_WithoutSizes_AreTheNamesAlone()
     {
         Assert.Equal(
@@ -47,6 +65,24 @@ public sealed class TreeTextTests
                 "│   └── b.md",
                 "├── src\\",
                 "│   └── deep\\",
+                "│       └── x [1].cs",
+                "└── notes.txt",
+            ],
+            TreeText.Lines(Ok(Sample), showSizes: false, cap: 500));
+    }
+
+    /// <summary>The Unix twin of <see cref="Lines_WithoutSizes_AreTheNamesAlone"/> (2026-10-06, the macOS build): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void Lines_WithoutSizes_AreTheNamesAlone_Unix()
+    {
+        Assert.Equal(
+            [
+                @"D:\home\profiles\default\files\",   // the root as given: the helper's
+                "├── docs/",
+                "│   ├── a.md",
+                "│   └── b.md",
+                "├── src/",
+                "│   └── deep/",
                 "│       └── x [1].cs",
                 "└── notes.txt",
             ],

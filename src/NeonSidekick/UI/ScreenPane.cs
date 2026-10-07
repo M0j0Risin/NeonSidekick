@@ -1860,7 +1860,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            var segments = lead?.GetSegments(_inner).ToList();
+            var segments = lead is null ? null : SpacedSegments(lead.GetSegments(_inner));
             _store.BeginGroup(keep, segments, absorbOpenLine);
         }
     }
@@ -1880,7 +1880,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            _store.SetGroupSummary(collapsed.GetSegments(_inner).ToList(), expanded.GetSegments(_inner).ToList());
+            // The run's header, ▸ 🛠️ 3 tool calls, spaced as the lines under it are (later on 2026-10-06, the user's report).
+            _store.SetGroupSummary(SpacedSegments(collapsed.GetSegments(_inner)), SpacedSegments(expanded.GetSegments(_inner)));
         }
     }
 
@@ -2041,12 +2042,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            var segments = renderable.GetSegments(_inner).ToList();
+            var segments = SpacedSegments(renderable.GetSegments(_inner));
             // A picture's spans are known once it is rendered (later on 2026-09-24): the store tags its lines with them.
             var spans = pictures?.Spans;
             // A diff's fold (2026-10-04): the store makes its lines a group that folds once the run is over.
             var fold = renderable is IFoldLayout { Fold: { } layout }
-                ? new Scrollback.FoldSpec(layout.Head, layout.Keep, layout.Size, layout.Collapsed.GetSegments(_inner).ToList(), layout.Expanded.GetSegments(_inner).ToList())
+                ? new Scrollback.FoldSpec(layout.Head, layout.Keep, layout.Size, SpacedSegments(layout.Collapsed.GetSegments(_inner)), SpacedSegments(layout.Expanded.GetSegments(_inner)))
                 : null;
             if (_top >= 0)
             {
@@ -3488,21 +3489,33 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// gear and a selector cell (later on 2026-09-21, for the toolbar's gear, tools and detective),
     /// so the glyph handed back is the whole string a caller compares against.
     /// </summary>
-    private static bool TryStripGlyphAt(string strip, int x, out string glyph, out int column)
+    private static bool TryStripGlyphAt(string strip, int x, out string glyph, out int column) =>
+        TryStripGlyphAt(strip, x, TextCells.NarrowSelectorSequences, out glyph, out column);
+
+    /// <summary>
+    /// <see cref="TryStripGlyphAt(string, int, out string, out int)"/> for a terminal that draws a selector sequence one cell
+    /// wide (<paramref name="narrow"/>, <see cref="TextCells.NarrowSelectorSequences"/>): Terminal.app moves one cell for
+    /// <c>⚙️</c> but paints the picture two wide, over the blank after it (2026-10-06, the user's report: the right half of the
+    /// gear and the tools opened /settings as a blank does), so such a glyph also takes a click on the blank cell it covers.
+    /// </summary>
+    private static bool TryStripGlyphAt(string strip, int x, bool narrow, out string glyph, out int column)
     {
         column = 0;
         int i = 0;
         while (i < strip.Length && column <= x)
         {
-            int width = TextCells.ElementWidth(strip, i, out int length);
+            int width = TextCells.ElementWidth(strip, i, out int length, narrow);
             length = Math.Max(1, length);
+            bool selected = false;
             if (i + length < strip.Length && strip[i + length] is '\uFE0F' or '\uFE0E')
             {
-                width += TextCells.ElementWidth(strip, i + length, out int selector);
+                width += TextCells.ElementWidth(strip, i + length, out int selector, narrow);
                 length += selector;
+                selected = true;
             }
 
-            if (x < column + width && !string.IsNullOrWhiteSpace(strip.AsSpan(i, length).ToString()))
+            int reach = narrow && selected && width == 1 && i + length < strip.Length && strip[i + length] == ' ' ? 2 : width;
+            if (x < column + reach && !string.IsNullOrWhiteSpace(strip.AsSpan(i, length).ToString()))
             {
                 glyph = strip.Substring(i, length);
                 return true;
@@ -3565,10 +3578,14 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <paramref name="pathColumn"/> (−1 for none): a strip glyph with its first column, else the
     /// path with its first, else the row. Pinned.
     /// </summary>
-    public static ToolbarHit ToolbarHitAt(string strip, int pathColumn, int pathCells, int x)
+    public static ToolbarHit ToolbarHitAt(string strip, int pathColumn, int pathCells, int x) =>
+        ToolbarHitAt(strip, pathColumn, pathCells, x, TextCells.NarrowSelectorSequences);
+
+    /// <summary><see cref="ToolbarHitAt(string, int, int, int)"/> with the terminal's selector widths given (<paramref name="narrow"/>: Terminal.app). Pinned.</summary>
+    public static ToolbarHit ToolbarHitAt(string strip, int pathColumn, int pathCells, int x, bool narrow)
     {
         ArgumentNullException.ThrowIfNull(strip);
-        if (TryStripGlyphAt(strip, x, out string glyph, out int column))
+        if (TryStripGlyphAt(strip, x, narrow, out string glyph, out int column))
         {
             return new ToolbarHit(ToolbarZone.Glyph, glyph, column);
         }
@@ -4763,7 +4780,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             // A picture on its way to the line (2026-09-28): the row is the drag's alone, in the strip button's style, no zones.
             // An alert (2026-10-01, the kill switch's first press) the same, in the warning's style.
-            string shown = Fit(whole, max);
+            string shown = Fit(Spaced(whole), max);
             _inner.Write(new RawText(shown, _dragHint is not null ? Theme.AccentSecondary : _alertFlash ? Theme.Hint : Theme.WarnText));
             _inner.Write(EraseLineEnd);
             _shownHint = shown;
@@ -4795,7 +4812,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             // A label that trails the tally (LabelAfterUsage, the ComfyUI generation's) swaps the two; nothing else moves.
             bool after = usage.Length > 0 && _labelAfterUsage(label);
             // The way out named at the row's end (2026-10-04) while the screen's turn runs and no pane's keys stand there instead.
-            string hint = _overlay?.Hint ?? (_stopHintShown() ? StopHint : "");
+            string hint = Spaced(_overlay?.Hint ?? (_stopHintShown() ? StopHint : ""));
             string unfitted = " " + HintRow(HintRow(Labelled(BusyText(label, elapsed, step), usage, after), queued), hint);
             string labelled = " " + Labelled(BusyText(label, elapsed, step), usage, after);
             // Read once (2026-10-01): an embedded download's strip turns with the clock, and two reads astride a frame
@@ -4899,8 +4916,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void WriteToolbarRow(ToolbarParts toolbar, int width)
     {
         int cells = Math.Max(1, width - 1);
-        string row = ToolbarRow(toolbar.Strip, toolbar.Path, cells);
-        string strip = FitStrip(toolbar.Strip, cells);   // as ToolbarRow placed it: the path is what follows the blanks
+        // Terminal.app paints ⚙️ and 🛠️ over the cell after them: a space of their own keeps the strip's gaps (2026-10-06).
+        string spaced = TextCells.SpaceSelectorSequences(toolbar.Strip, TextCells.NarrowSelectorSequences);
+        string row = ToolbarRow(spaced, toolbar.Path, cells);
+        string strip = FitStrip(spaced, cells);   // as ToolbarRow placed it: the path is what follows the blanks
         string path = row[strip.Length..].TrimStart(' ');
         foreach (var (text, off) in ToolbarStripRuns(strip, toolbar.Off))
         {
@@ -5008,7 +5027,39 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>The overlay's hint while one is open, else the screen's — scrolled too since 2026-10-01, the scroll's hint on a row of its own (<see cref="ScrolledRow"/>).</summary>
-    private string StandingHint() => _overlay is { } overlay ? overlay.Hint : _hint();
+    private string StandingHint() => Spaced(_overlay is { } overlay ? overlay.Hint : _hint());
+
+    /// <summary>
+    /// A hint's text with a space after each emoji the terminal paints over the cell after it (<see cref="TextCells.SpaceSelectorSequences"/>;
+    /// Terminal.app and iTerm2, 2026-10-06, the user's report: <c>⚙️Settings · double-click to open</c> ran together), measured
+    /// after, so the zones read the row as drawn. Unchanged elsewhere.
+    /// </summary>
+    private static string Spaced(string text) => TextCells.SpaceSelectorSequences(text, TextCells.NarrowSelectorSequences);
+
+    /// <summary>
+    /// A flow write's segments with <see cref="Spaced"/> text (later on 2026-10-06, the user's report: the transcript's <c>🛠️</c>
+    /// ran into the tool's name in Terminal.app and iTerm2), before the store keeps them or the screen draws them, so a page
+    /// back and a redraw show the same; control codes and pictures' segments pass as they are. The list itself where nothing is narrow.
+    /// </summary>
+    private static List<Segment> SpacedSegments(IEnumerable<Segment> segments)
+    {
+        var list = segments.ToList();
+        if (!TextCells.NarrowSelectorSequences)
+        {
+            return list;
+        }
+
+        for (int i = 0; i < list.Count; i++)
+        {
+            var segment = list[i];
+            if (!segment.IsControlCode && !segment.IsLineBreak && segment.Text.Contains('\uFE0F', StringComparison.Ordinal))
+            {
+                list[i] = new Segment(Spaced(segment.Text), segment.Style);
+            }
+        }
+
+        return list;
+    }
 
     /// <summary>The queued part while the row is the screen's own — nothing under an overlay's hint (2026-09-18; under the scroll's until 2026-10-01).</summary>
     private string StandingQueued() => _overlay is null ? _queued() : "";
@@ -5267,7 +5318,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The toolbar <see cref="Toolbar"/> answers now is not the drawn one (its text, or its off slabs since 2026-10-03 — a presence change is <see cref="ToolbarRowsFor"/> against the drawn rows).</summary>
     private bool ToolbarChanged() => _toolbarRows > 0 && _toolbar() is { } toolbar
-        && (!string.Equals(ToolbarRow(toolbar.Strip, toolbar.Path, Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal)
+        && (!string.Equals(ToolbarRow(TextCells.SpaceSelectorSequences(toolbar.Strip, TextCells.NarrowSelectorSequences), toolbar.Path, Math.Max(1, Width - 1)), _shownToolbar, StringComparison.Ordinal)
             || !string.Equals(OffKey(toolbar.Off), _shownToolbarOff, StringComparison.Ordinal));
 
     /// <summary>The performance bar <see cref="Perf"/> answers now is not the drawn one (its text — a presence change is <see cref="PerfRowsFor"/> against the drawn rows).</summary>
@@ -5275,7 +5326,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The standing hint (the overlay's while one is open) with the trailer is not what the hint row shows.</summary>
     private bool HintChanged() =>
-        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(whole, Math.Max(1, Width - 1)) : PinRight(StandingRow(), _trailer(), _trailerMark(), Math.Max(1, Width - 1)), _shownHint, StringComparison.Ordinal);
+        !string.Equals((_dragHint ?? _alertHint) is { } whole ? Fit(Spaced(whole), Math.Max(1, Width - 1)) : PinRight(StandingRow(), _trailer(), _trailerMark(), Math.Max(1, Width - 1)), _shownHint, StringComparison.Ordinal);
 
     private void ColumnZero() => _inner.Cursor.Move(CursorDirection.Left, Width);
 

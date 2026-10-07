@@ -268,7 +268,7 @@ internal sealed class VoiceSession : IDisposable
             if (microphones <= 0)
             {
                 _state = State.NoMicrophone;
-                Detail = "no wave-in device";
+                Detail = AudioSupport.Available ? "no wave-in device" : AudioSupport.Unavailable;
                 return;
             }
 

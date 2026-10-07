@@ -38,9 +38,11 @@ public static class ClaudeExecutable
             return shim;
         }
 
-        if (environment("USERPROFILE") is { Length: > 0 } home)
+        // The native installer's place: %USERPROFILE%\.local\bin\claude.exe, or ~/.local/bin/claude off Windows (2026-10-06, the macOS build).
+        bool windows = OperatingSystem.IsWindows();
+        if (environment(windows ? "USERPROFILE" : "HOME") is { Length: > 0 } home)
         {
-            string local = Path.Combine(home, ".local", "bin", "claude.exe");
+            string local = Path.Combine(home, ".local", "bin", windows ? "claude.exe" : "claude");
             if (exists(local))
             {
                 return local;

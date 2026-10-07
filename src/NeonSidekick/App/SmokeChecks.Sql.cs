@@ -29,14 +29,26 @@ public static partial class SmokeChecks
             return new SmokeCheck(name, false, "the gate let SELECT 1 DELETE FROM t through");
         }
 
-        var builder = new SqlConnectionStringBuilder
-        {
-            DataSource = @"np:\\.\pipe\neonsidekick-smoke-" + Guid.NewGuid().ToString("N") + @"\sql\query",
-            IntegratedSecurity = true,
-            ConnectTimeout = 1,
-            Encrypt = SqlConnectionEncryptOption.Optional,
-            Pooling = false,
-        };
+        // Off Windows (2026-10-06, the macOS build) SqlClient's SNI is managed and has no named pipes, and integrated
+        // sign-in would be Kerberos: a TCP port nobody serves on the loopback, signed in by name, is the same proof there.
+        var builder = OperatingSystem.IsWindows()
+            ? new SqlConnectionStringBuilder
+            {
+                DataSource = @"np:\\.\pipe\neonsidekick-smoke-" + Guid.NewGuid().ToString("N") + @"\sql\query",
+                IntegratedSecurity = true,
+                ConnectTimeout = 1,
+                Encrypt = SqlConnectionEncryptOption.Optional,
+                Pooling = false,
+            }
+            : new SqlConnectionStringBuilder
+            {
+                DataSource = "tcp:127.0.0.1,9",
+                UserID = "smoke",
+                Password = "smoke",
+                ConnectTimeout = 1,
+                Encrypt = SqlConnectionEncryptOption.Optional,
+                Pooling = false,
+            };
         try
         {
             using var connection = new SqlConnection(builder.ConnectionString);
@@ -45,7 +57,7 @@ public static partial class SmokeChecks
         }
         catch (SqlException ex)
         {
-            return new SmokeCheck(name, true, $"ScriptDom gate ok; SqlClient {typeof(SqlConnection).Assembly.GetName().Version} answered error {ex.Number.ToString(CultureInfo.InvariantCulture)} through the native SNI");
+            return new SmokeCheck(name, true, $"ScriptDom gate ok; SqlClient {typeof(SqlConnection).Assembly.GetName().Version} answered error {ex.Number.ToString(CultureInfo.InvariantCulture)} through the {(OperatingSystem.IsWindows() ? "native" : "managed")} SNI");
         }
         catch (Exception ex) when (ex is DllNotFoundException or TypeInitializationException or NotSupportedException or EntryPointNotFoundException or BadImageFormatException)
         {

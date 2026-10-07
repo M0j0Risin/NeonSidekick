@@ -60,12 +60,14 @@ public sealed class UncAccess
 
     /// <summary>
     /// Whether the UNC group is offered (2026-09-30; here since 2026-10-01, when <c>open</c> asked it too): the setting
-    /// <c>UNC tools</c> on and at least one share offered.
+    /// <c>UNC tools</c> on and at least one share offered. Never on macOS (2026-10-06, the tidy-up before the first Mac release): the
+    /// catalog reads only <c>\\server\share</c> and <c>X:\</c> paths and a runas share needs Windows' <c>LogonUser</c>, so the group
+    /// would be a Windows-only tool on a Mac; <c>/tools</c> names the reason (<see cref="App.ToolsText.NeedsWindowsReason"/>).
     /// </summary>
     public bool IsOffered(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.UncTools && Catalog().Shares.Count > 0;
+        return effective.UncTools && !OperatingSystem.IsMacOS() && Catalog().Shares.Count > 0;
     }
 
     /// <summary>

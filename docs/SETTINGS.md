@@ -508,7 +508,7 @@ A reflection must `load_skill` a skill before rewriting its instructions or a su
 | Setting | What it does | Default |
 |---|---|---|
 | Agent skills | Lists the skills in the prompt and offers `load_skill` and `skill_editor`. Off also stops the project file being read. | on |
-| Use external skills (.agents\skills) | Also reads `%USERPROFILE%\.agents\skills`, read-only. | off |
+| Use external skills (.agents\skills) | Also reads `%USERPROFILE%\.agents\skills`, read-only. On a Mac the row reads *Use external skills (.agents/skills)* and the folder is `~/.agents/skills`. | off |
 | Project file | Reads `NEON.md` (or `AGENTS.md`) in the working directory into the prompt as project notes. Needs *Agent skills*. | on |
 | Skill compact mode | `protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result. | `protected` |
 | #-mention enabled | `#` and part of a name on the input line lists the skills; a pick writes `#name`. | on |
@@ -594,7 +594,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Shell police | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first, and also stops the forbidden strings and the SQLite rule; `/police` opens it. See Shell guards. | on |
 | Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police* is on. The top row adds one, Enter removes one; `/police`'s strings button (S) opens it too. See Shell guards. | none |
 | Shell prefer native tools | Steers the model to the app's own tools: a lone shell command one of them covers is sent back (once a turn). See Shell guards. | on |
-| Shell default | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd`, or `bash` (Git Bash). | `powershell` |
+| Shell default | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd`, or `bash` (Git Bash). On macOS: `zsh`, `bash` or `powershell` (pwsh, if installed). | `powershell` (`zsh` on macOS) |
 | Shell timeout (s) | How long a foreground command without its own `timeout` may run (1–3600). | 180 |
 | Shell foreground cap (s) | The longest any foreground command may run (10–3600). | 600 |
 | Shell output max chars | Output one result carries (2000–500000). Past that, the start and end are kept and the whole text goes to `.shell\<id>.log` in the working directory. | 30000 |
@@ -624,7 +624,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
   Script files a line runs are judged too. The model gets `Error: refused by the shell police — database…`, sent to that family's tools; the 👮 line shows what tripped it (`PostgreSQL: 'psql' — not run`). A tripwire, as above.
 * **Prefer native tools:** the operating rules name the tools offered that turn and the commands each replaces:
-  * `cat`/`type`/`Get-Content`/`dir`/`ls`/`grep` → `read_file`/`search_files`
+  * `cat`/`type`/`Get-Content`/`dir`/`ls`/`grep` → `read_file`/`search_files` (on a Mac `type` is sent back only in PowerShell: zsh's and bash's `type` describes a command, so the rule leaves out `type` and `dir` there)
   * `git status`/`log`/`diff`/`add`/`commit` → the GitLib tools
   * `curl`/`Invoke-WebRequest` → `web_fetch`
   * `sqlcmd` → `sql_query`, `sqlplus` → `oracle_query`, `mysql` / `mariadb` → `mysql_query`
@@ -672,7 +672,7 @@ The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (th
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude CLI executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin`; a path you set must exist. | (looked up) |
+| Claude CLI executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
 | Claude CLI slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), `edit` (its usual tools with file edits, no commands) or `full` (everything, `bypassPermissions`). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
 | Claude CLI slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
 | Claude CLI slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
@@ -701,11 +701,11 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 
 | Setting | What it does | Default |
 |---|---|---|
-| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. | off |
+| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. Printing needs Windows: on a Mac the group is never offered and `/print` says so. | off |
 | Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
-| Print default printer | Where a print goes when none is named. | (Windows default) |
+| Print default printer | Where a print goes when none is named. On a Mac the row reads *(none: printing needs Windows)*. | (Windows default) |
 | Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
-| PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). | `auto` |
+| PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). On a Mac only the browser makes PDFs (Edge, Chrome, Brave or Chromium); `printer` needs Windows. | `auto` |
 
 ### Obsidian
 
@@ -823,7 +823,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 
 | Setting | What it does | Default |
 |---|---|---|
-| UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See UNC shares. | off |
+| UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See UNC shares. Never on a Mac (`/tools`: *off: it needs Windows*). | off |
 | UNC writes | The master key for changes. On, a share with `access: readwrite` also gets `unc_write`, `unc_patch`, `unc_create_directory`, `unc_move`, `unc_copy`, `unc_delete` (off by default in Offered) and `unc_put`. Changes are permanent. | off |
 | UNC shares offered | As *SQL connections offered*. | none |
 | UNC default share | The share a call uses when it names none and gives no full path. | (the first share) |
@@ -837,7 +837,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 
 | Setting | What it does | Default |
 |---|---|---|
-| Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See Docker. | off |
+| Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See Docker. Never on a Mac (`/tools`: *off: it needs Windows*). | off |
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
 

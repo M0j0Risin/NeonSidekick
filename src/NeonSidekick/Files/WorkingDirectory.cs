@@ -537,6 +537,8 @@ public sealed class WorkingDirectory
             return FileOutcome.OutsideRoot;
         }
 
+        // The root's real spelling (/private/tmp/x for /tmp/x on a Mac) is the root too.
+        candidate = InRootSpelling(root, candidate, RealPath.Of);
         string walked = linkItself ? Path.GetDirectoryName(candidate) ?? candidate : candidate;
         if (!IsInside(root, candidate) || LinkEscape(root, walked, RealLinkTarget) is not null)
         {
@@ -796,6 +798,7 @@ public sealed class WorkingDirectory
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
                 if ((hideDotEntries && info.Name.StartsWith('.'))
+                    || (!showHidden && IsHiddenOffWindows(info.Attributes, info.Name))
                     || (hideGitFolders && isDirectory && string.Equals(info.Name, GitFolderName, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
@@ -2123,7 +2126,7 @@ public sealed class WorkingDirectory
             if (isDirectory)
             {
                 files = 0;
-                foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: true)))
+                foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: true)).Where(f => !IsHiddenOffWindows(f.Attributes, f.Name)))
                 {
                     files++;
                     bytes += file.Length;
@@ -2445,11 +2448,17 @@ public sealed class WorkingDirectory
                 {
                     if (isDirectory)
                     {
+                        // Entries sorted by their name, ordinal (2026-10-06, the macOS build): the walk follows the folder's enumeration
+                        // order, which NTFS and APFS give differently, so the same folder made a different zip on each. This changes
+                        // Windows' zips too, on purpose: the same folder now makes the same zip on both systems.
                         string baseName = Path.GetFileName(source);
-                        foreach (var entry in Walk(source, null, recurse: true))
+                        var files = Walk(source, null, recurse: true)
+                            .Select(entry => (entry.FullPath, Name: baseName + "/" + entry.FullPath[(source.Length + 1)..].Replace('\\', '/')))
+                            .OrderBy(file => file.Name, StringComparer.Ordinal)
+                            .ToList();
+                        foreach (var (fullPath, name) in files)
                         {
-                            string name = baseName + "/" + entry.FullPath[(source.Length + 1)..].Replace('\\', '/');
-                            zip.CreateEntryFromFile(entry.FullPath, name, CompressionLevel.Optimal);
+                            zip.CreateEntryFromFile(fullPath, name, CompressionLevel.Optimal);
                             entries++;
                         }
                     }
@@ -2631,9 +2640,22 @@ public sealed class WorkingDirectory
     {
         RecurseSubdirectories = recurse,
         IgnoreInaccessible = true,
-        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
+        AttributesToSkip = OperatingSystem.IsWindows() ? FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint : FileAttributes.ReparsePoint,
         ReturnSpecialDirectories = false,
     };
+
+    /// <summary>
+    /// Whether a walk leaves an entry out as hidden off Windows (2026-10-06, the macOS build). .NET reads every dot-name as
+    /// <see cref="FileAttributes.Hidden"/> on Unix, so the Windows skip in <see cref="WalkOptions"/> hid <c>.gitignore</c>,
+    /// <c>.github</c> and <c>.env</c> from every listing, search and count and left them out of a folder's copy — on Windows a
+    /// dot-name is a name like any other. Off Windows the options skip no Hidden and this skips what Hidden means without the dot:
+    /// the macOS hidden flag (<c>chflags hidden</c>), as Windows skips its Hidden attribute; and <c>.git</c>, which Git for
+    /// Windows marks Hidden (<c>core.hideDotFiles = dotGitOnly</c>), so a search never reads a repository's objects there
+    /// either. Always false on Windows.
+    /// </summary>
+    private static bool IsHiddenOffWindows(FileAttributes attributes, ReadOnlySpan<char> name) =>
+        !OperatingSystem.IsWindows()
+        && ((attributes & FileAttributes.Hidden) != 0 && !name.StartsWith('.') || name.Equals(GitFolderName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// One enumeration for every walk: files matching <paramref name="namePattern"/> (a Win32
@@ -2657,8 +2679,9 @@ public sealed class WorkingDirectory
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>
                 (includeDirectories || !entry.IsDirectory)
+                && !IsHiddenOffWindows(entry.Attributes, entry.FileName)
                 && (alternatives is null || entry.IsDirectory || MatchesAny(alternatives, ref entry, directory, root)),
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => DepthUnder(entry.Directory, directory) < maxDepth,
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => DepthUnder(entry.Directory, directory) < maxDepth && !IsHiddenOffWindows(entry.Attributes, entry.FileName),
         };
     }
 
@@ -2713,6 +2736,44 @@ public sealed class WorkingDirectory
         PathGlob.IsMatch(pattern, Path.GetRelativePath(directory, fullPath))
         || (!string.Equals(directory, root, StringComparison.OrdinalIgnoreCase) && PathGlob.IsMatch(pattern, Path.GetRelativePath(root, fullPath)));
 
+    /// <summary>
+    /// <paramref name="path"/>, a full path, spelled the way <paramref name="root"/> is (2026-10-06, the first Mac run): on macOS
+    /// <c>/var</c>, <c>/tmp</c> and <c>/etc</c> are links into <c>/private</c>, and libgit2, <c>pwd</c> and the like answer the real
+    /// path, so <c>/private/tmp/x/a.txt</c> under a root of <c>/tmp/x</c> was refused as outside it — by the git tools (above the
+    /// sandbox), the file tools (<see cref="Resolve(string, bool, out string)"/>) and the shell police alike. The same place, only
+    /// spelled another way: the mapping never moves a path, so the link rules still judge it after. The root and each folder above it are resolved in turn
+    /// (<paramref name="realPath"/>: <see cref="RealPath.Of"/> in the app, a fake in the tests); the first whose real path holds
+    /// <paramref name="path"/> has that prefix swapped back for its own spelling, so a repository above the root is named the
+    /// user's way too. A path already inside the root by spelling, or under none of them, comes back as it was. Pure but for
+    /// <paramref name="realPath"/>.
+    /// </summary>
+    internal static string InRootSpelling(string root, string path, Func<string, string?> realPath)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(realPath);
+        if (WorkingDirectory.IsInside(root, path))
+        {
+            return path;
+        }
+
+        for (string? folder = root; folder is not null; folder = Path.GetDirectoryName(folder))
+        {
+            if (realPath(folder) is not { Length: > 0 } resolved)
+            {
+                continue;
+            }
+
+            string real = Path.TrimEndingDirectorySeparator(resolved);
+            if (!string.Equals(real, folder, StringComparison.Ordinal) && WorkingDirectory.IsInside(real, path))
+            {
+                return folder + path[real.Length..];
+            }
+        }
+
+        return path;
+    }
+
     /// <summary><paramref name="path"/> equals <paramref name="root"/> or lies under it, by spelling.</summary>
     internal static bool IsInside(string root, string path) =>
         string.Equals(path, root, StringComparison.OrdinalIgnoreCase)
@@ -2723,12 +2784,12 @@ public sealed class WorkingDirectory
     private static void CopyDirectory(string source, string destination)
     {
         Directory.CreateDirectory(destination);
-        foreach (var file in Directory.EnumerateFiles(source, "*", WalkOptions(recurse: false)))
+        foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: false)).Where(f => !IsHiddenOffWindows(f.Attributes, f.Name)).Select(f => f.FullName))
         {
             File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
         }
 
-        foreach (var folder in Directory.EnumerateDirectories(source, "*", WalkOptions(recurse: false)))
+        foreach (var folder in new DirectoryInfo(source).EnumerateDirectories("*", WalkOptions(recurse: false)).Where(d => !IsHiddenOffWindows(d.Attributes, d.Name)).Select(d => d.FullName))
         {
             CopyDirectory(folder, Path.Combine(destination, Path.GetFileName(folder)));
         }

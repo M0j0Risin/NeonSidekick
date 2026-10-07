@@ -1,9 +1,14 @@
 name: Release
 
 # A plain semver tag (v0.2.0) builds, tests, publishes, smokes and packages through build.ps1,
-# then creates the GitHub release with the zip and its sha256. The tag must equal the csproj
-# <Version>; build.ps1 -Tag refuses anything else, so a mistyped tag fails here rather than
+# then creates the GitHub release with the packages and their sha256 files. The tag must equal the
+# csproj <Version>; build.ps1 -Tag refuses anything else, so a mistyped tag fails here rather than
 # shipping a binary that reports a different version.
+#
+# Two platforms since 2026-10-06 (the macOS build): a build job per platform, each on its own runner
+# (NativeAOT cannot publish across operating systems), and a release job that waits for both, so a
+# release is never made with one package missing. Cost: the repo is private, and GitHub bills
+# Windows minutes at 2x and macOS minutes at 10x; a build is about 25 minutes on each.
 
 on:
   push:
@@ -11,12 +16,20 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    runs-on: windows-latest
-    name: Build, Test, Publish, Smoke, Package, Release
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    name: Build, Test, Publish, Smoke, Package (${{ matrix.rid }})
     # A cold restore, build, coverage run and NativeAOT publish is 20-30 minutes on a hosted
     # runner; anything past this is a hang, not a slow run, and GitHub's default is six hours.
     timeout-minutes: 60
@@ -30,6 +43,21 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # As in build.yml: the smoke's keys:keychain probe and the Keychain tests need an unlocked keychain, and a hosted
+      # runner's login keychain may be locked or missing.
+      - name: Make a throwaway keychain (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          keychain="$RUNNER_TEMP/neonsidekick-ci.keychain-db"
+          password="$(openssl rand -base64 24)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -d user -s "$keychain"
+          echo "NEONSIDEKICK_CI_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
       - name: Build, test, publish, smoke, package
         shell: pwsh
         run: ./build.ps1 -Package -Tag $env:GITHUB_REF_NAME
@@ -40,32 +68,71 @@ jobs:
           # instead of scanning the runner's ports, where anything that answers (even a 401) would run them.
           NEONSIDEKICK_TEST_LLM_URL: http://127.0.0.1:9/v1
 
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: NeonSidekick-${{ matrix.rid }}
+          path: |
+            publish/package/*.zip
+            publish/package/*.tar.gz
+            publish/package/*.sha256
+          retention-days: 7
+          if-no-files-found: error
+
       # --blame-hang (build.ps1) writes Sequence_*.xml (the tests run, last one the culprit) and a
       # process dump beside the coverage output when a test stops making progress.
       - name: Upload hang diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: hang-diagnostics
+          name: hang-diagnostics-${{ matrix.rid }}
           path: |
             publish/coverage/**/Sequence_*.xml
             publish/coverage/**/*.dmp
           retention-days: 7
           if-no-files-found: ignore
 
+      - name: Delete the throwaway keychain (macOS)
+        if: always() && runner.os == 'macOS' && env.NEONSIDEKICK_CI_KEYCHAIN != ''
+        shell: bash
+        run: |
+          security default-keychain -d user -s login.keychain-db || true
+          security delete-keychain "$NEONSIDEKICK_CI_KEYCHAIN" || true
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Create the GitHub release
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download the packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: NeonSidekick-*
+          path: packages
+          merge-multiple: true
+
       - name: Create GitHub release
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = $env:GITHUB_REF_NAME
-          $zip = Get-ChildItem -Path publish/package -Filter "*.zip" | Select-Object -First 1
-          if (-not $zip) { throw "No zip under publish/package." }
-          $sha = "$($zip.FullName).sha256"
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; skipping."
+          tag="$GITHUB_REF_NAME"
+          ls -l packages
+          shopt -s nullglob
+          zips=(packages/*.zip)
+          tars=(packages/*.tar.gz)
+          shas=(packages/*.sha256)
+          if [ ${#zips[@]} -ne 1 ] || [ ${#tars[@]} -ne 1 ] || [ ${#shas[@]} -ne 2 ]; then
+            echo "Expected one zip, one tar.gz and two sha256 files under packages/." >&2
+            exit 1
+          fi
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $tag already exists; skipping."
             exit 0
-          }
-          gh release create $tag --verify-tag --generate-notes --title "NeonSidekick $tag" $zip.FullName $sha
-          if ($LASTEXITCODE -ne 0) { throw "gh release create failed." }
+          fi
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "NeonSidekick $tag" \
+            "${zips[0]}" "${tars[0]}" "${shas[@]}"
