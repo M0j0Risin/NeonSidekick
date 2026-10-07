@@ -4,13 +4,18 @@ using Spectre.Console;
 
 namespace NeonSidekick.App;
 
-/// <summary>What <c>/skills</c> shows, read when it opens: the skills switch, the catalog as of its last scan and the roots (for the scope page). The <c>Project file</c> toggle and the notes on disk, for the Project tab, went with it (2026-10-01).</summary>
+/// <summary>
+/// What <c>/skills</c> shows, read when it opens: the skills switch, the catalog as of its last scan and the roots (for the scope page). The
+/// <c>Project file</c> toggle and the notes on disk, for the Project tab, went with it (2026-10-01). <see cref="Version"/> (2026-10-07)
+/// is each skill's version from the records (<c>SkillRecords.Versions</c>), null for an external one; without it, no version column.
+/// </summary>
 public sealed record SkillsFacts(
     bool Enabled,
     IReadOnlyList<Skill> Skills,
     IReadOnlyList<Skill> Shadowed,
     IReadOnlyList<SkillProblem> Problems,
-    SkillRoots Roots);
+    SkillRoots Roots,
+    Func<Skill, int?>? Version = null);
 
 /// <summary>
 /// The words for <c>/skills</c>: the pane's Offered tab — the catalog, what is shadowed and what was
@@ -49,11 +54,32 @@ public static class SkillsText
     public const string ShadowedHeading = "Shadowed (a higher root holds the name):";
     public const string ProblemsHeading = "Skipped:";
 
-    /// <summary>One catalog row: the name padded to the column, the scope padded to nine, the description. Pinned.</summary>
-    public static string SkillLine(Skill skill, int nameWidth)
+    /// <summary>
+    /// One catalog row: the name padded to the column, the scope padded to nine, the version cell (<see cref="VersionCell"/>, empty
+    /// without a version column), the description. Pinned.
+    /// </summary>
+    public static string SkillLine(Skill skill, int nameWidth, string version = "")
     {
         ArgumentNullException.ThrowIfNull(skill);
-        return skill.Name.PadRight(nameWidth) + "  " + SkillScopes.Name(skill.Scope).PadRight(9) + skill.Description;
+        return skill.Name.PadRight(nameWidth) + "  " + SkillScopes.Name(skill.Scope).PadRight(9) + version + skill.Description;
+    }
+
+    /// <summary>A skill's version as the Offered tab shows it (2026-10-07, the user's ask): <c>v4</c>; empty for none (an external skill). Pinned.</summary>
+    public static string VersionLabel(int? version) =>
+        version is { } v ? "v" + v.ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+
+    /// <summary>The version column's width: the widest label among the listed skills, at least two; 0 without a version source (no column).</summary>
+    public static int VersionWidth(SkillsFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return facts.Version is not { } version ? 0 : Math.Max(2, facts.Skills.Select(s => VersionLabel(version(s)).Length).DefaultIfEmpty(0).Max());
+    }
+
+    /// <summary><paramref name="skill"/>'s version cell: its label padded to <paramref name="width"/> and two spaces; empty when there is no column.</summary>
+    public static string VersionCell(SkillsFacts facts, Skill skill, int width)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return width == 0 || facts.Version is not { } version ? "" : VersionLabel(version(skill)).PadRight(width) + "  ";
     }
 
     /// <summary>A shadowed skill's row: the name, its scope, the scope that hides it. Pinned.</summary>
@@ -97,9 +123,10 @@ public static class SkillsText
 
         var lines = new List<string>();
         int width = NameWidth(facts);
+        int versions = VersionWidth(facts);
         foreach (var skill in facts.Skills)
         {
-            lines.Add(SkillLine(skill, width));
+            lines.Add(SkillLine(skill, width, VersionCell(facts, skill, versions)));
             if (skill.Warning is { } warning)
             {
                 lines.Add(new string(' ', width + 2) + "(" + warning + ")");
@@ -156,9 +183,10 @@ public static class SkillsText
 
         var rows = new List<(string, Skill?)>();
         int width = NameWidth(facts);
+        int versions = VersionWidth(facts);   // the version column (2026-10-07), sized on the whole list so a filter does not shift it
         foreach (var skill in facts.Skills.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)))
         {
-            rows.Add((Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape("  " + SkillScopes.Name(skill.Scope).PadRight(9) + skill.Description), skill));
+            rows.Add((Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape("  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + skill.Description), skill));
             if (skill.Warning is { } warning)
             {
                 rows.Add((Theme.DimMarkup(new string(' ', width + 2) + "(" + warning + ")"), null));

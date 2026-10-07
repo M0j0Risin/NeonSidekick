@@ -216,6 +216,50 @@ public class SkillRecordsTests : IDisposable
     private SkillEditorTool Editor(string actor) =>
         new(() => _roots, () => false, new SkillFileAccess(_time), (roots, result) => _records.Edited(roots, result, actor));
 
+    /// <summary>
+    /// The Offered tab's version column (2026-10-07): the kept older texts counted per skill in one query, a "created" revision with no
+    /// text left out, every skill with a row there (0 for none), the folder matched ignoring case, another profile's skills not in view.
+    /// </summary>
+    [Fact]
+    public void RevisionCounts_CountTheKeptTexts_PerSkillInTheView_AndVersionsAddOne()
+    {
+        var at = _time.GetUtcNow();
+        _store.Created(SkillScope.Profile, "neon", "haiku", "haiku", at);
+        _store.Created(SkillScope.Global, "", "untouched", "untouched", at);
+        _store.Created(SkillScope.Profile, "ada", "elsewhere", "elsewhere", at);
+        _store.AddRevision(SkillScope.Profile, "neon", "haiku", SkillCatalog.FileName, null, SkillActors.Model, at);   // the file created: no older text
+        for (int i = 0; i < 3; i++)
+        {
+            _store.AddRevision(SkillScope.Profile, "neon", "haiku", i == 2 ? "notes.md" : SkillCatalog.FileName, "old " + i, SkillActors.Model, at.AddMinutes(i));
+        }
+
+        _store.AddRevision(SkillScope.Profile, "ada", "elsewhere", SkillCatalog.FileName, "old", SkillActors.Model, at);
+
+        var counts = _store.RevisionCounts("neon");
+        Assert.Equal(2, counts.Count);
+        Assert.Equal(3, counts[(SkillScope.Profile, "HAIKU")]);
+        Assert.Equal(0, counts[(SkillScope.Global, "untouched")]);
+
+        var versions = _records.Versions();
+        Assert.Equal(4, versions(new Skill("haiku", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "haiku"))));
+        Assert.Equal(1, versions(new Skill("untouched", "d", SkillScope.Global, Path.Combine(_roots.Global, "untouched"))));
+        Assert.Equal(1, versions(new Skill("new-one", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "new-one"))));   // no row yet
+        Assert.Null(versions(new Skill("ext", "d", SkillScope.External, Path.Combine(_roots.External, "ext"))));
+    }
+
+    /// <summary>A skill the editor changes keeps the replaced text, so its version moves on (2026-10-07).</summary>
+    [Fact]
+    public void Versions_MoveOn_WithAnEdit()
+    {
+        var editor = Editor(SkillActors.Model);
+        editor.Describe("create", "profile", "haiku", "Writes haiku.", "Seventeen syllables.");
+        var haiku = new Skill("haiku", "Writes haiku.", SkillScope.Profile, Path.Combine(_roots.Profile, "haiku"));
+        Assert.Equal(1, _records.Versions()(haiku));                 // created: no older text yet
+
+        editor.Describe("update", "", "haiku", null, "Five, seven, five.");
+        Assert.Equal(2, _records.Versions()(haiku));
+    }
+
     [Fact]
     public void Store_EventsAndRevisions_HangOffTheRow_TheNewestTenKept_AndGoWithIt()
     {

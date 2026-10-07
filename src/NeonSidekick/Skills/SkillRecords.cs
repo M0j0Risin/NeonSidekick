@@ -351,6 +351,21 @@ public sealed class SkillRecords
     /// <summary>How many times a reflection changed the installed skill <paramref name="skill"/> since its install (the update page's warning).</summary>
     public int ReflectionChangesSinceInstall(Skill skill) => FactsOf(skill)?.ReflectionWritesSinceInstall ?? 0;
 
+    /// <summary>
+    /// Each skill's version as the Offered tab shows it (2026-10-07, the user's ask: <c>v4</c>): 1 for the text in place and one more
+    /// per kept older text (<see cref="SkillRecordStore.RevisionCounts"/>), read once for the whole list; null for an external skill,
+    /// which has no records. A skill with no row yet is <c>v1</c>.
+    /// </summary>
+    public Func<Skill, int?> Versions()
+    {
+        var counts = _store.RevisionCounts(CurrentProfile);
+        return skill =>
+        {
+            ArgumentNullException.ThrowIfNull(skill);
+            return skill.Scope == SkillScope.External ? null : 1 + counts.GetValueOrDefault((skill.Scope, skill.FolderName));
+        };
+    }
+
     /// <summary>The newest revision of <paramref name="skill"/>, or null when there is none.</summary>
     public SkillRevision? LatestRevision(Skill skill)
     {

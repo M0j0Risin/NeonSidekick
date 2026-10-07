@@ -159,6 +159,59 @@ public sealed class SkillRecordStore : IDisposable
             });
     }
 
+    /// <summary>
+    /// The kept older texts of every skill in <paramref name="profile"/>'s view (2026-10-07, the Offered tab's version column), by scope
+    /// and folder (the folder ignoring case, as the column does): one query, every skill with a row, 0 for none. A revision with no text
+    /// (the write created the file) is no older text and is not counted. Empty when the file cannot be opened.
+    /// </summary>
+    public IReadOnlyDictionary<(SkillScope Scope, string Folder), int> RevisionCounts(string profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var counts = new Dictionary<(SkillScope, string), int>(FolderKey.Comparer);
+        lock (_gate)
+        {
+            if (Open() is not { } connection)
+            {
+                return counts;
+            }
+
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT s.scope, s.folder, COUNT(r.id) FROM skills s LEFT JOIN skill_revisions r ON r.skill_id = s.id AND r.content IS NOT NULL " +
+                    "WHERE s.scope = $global OR (s.scope = $profileScope AND s.profile = $profile) GROUP BY s.id";
+                command.Parameters.AddWithValue("$global", SkillScopes.GlobalName);
+                command.Parameters.AddWithValue("$profileScope", SkillScopes.ProfileName);
+                command.Parameters.AddWithValue("$profile", profile);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var scope = reader.GetString(0) == SkillScopes.GlobalName ? SkillScope.Global : SkillScope.Profile;
+                    counts[(scope, reader.GetString(1))] = reader.GetInt32(2);
+                }
+            }
+            catch (SqliteException ex)
+            {
+                Fail("count the skill revisions", ex);
+                counts.Clear();
+            }
+        }
+
+        return counts;
+    }
+
+    /// <summary>A (scope, folder) key compared as the <c>skills</c> table does: the folder ignoring case.</summary>
+    private sealed class FolderKey : IEqualityComparer<(SkillScope Scope, string Folder)>
+    {
+        public static readonly FolderKey Comparer = new();
+
+        public bool Equals((SkillScope Scope, string Folder) x, (SkillScope Scope, string Folder) y) =>
+            x.Scope == y.Scope && string.Equals(x.Folder, y.Folder, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((SkillScope Scope, string Folder) key) =>
+            HashCode.Combine(key.Scope, StringComparer.OrdinalIgnoreCase.GetHashCode(key.Folder));
+    }
+
     /// <summary>Every row, global and every profile's, for the tests and the smoke check.</summary>
     public IReadOnlyList<SkillRecord> All() =>
         Read("SELECT id, scope, profile, folder, name, category, created_at, modified_at, last_used_at FROM skills ORDER BY scope, profile, folder", null);

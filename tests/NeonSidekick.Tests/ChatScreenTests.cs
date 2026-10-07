@@ -19380,7 +19380,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
+        Assert.Contains("  · Offered\n  ·   haiku  profile  v1  Writes haiku. Use when asked for one.\n  · Reflection\n", output);   // Reflection right after Offered since 2026-09-22
         Assert.Contains("  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n", output);   // the Options section last (2026-09-22; between Offered and Reflection from 2026-09-19), the Project file row among it since 2026-10-01
         Assert.Contains("  · Reflection\n  ·   Reflection (auto-learn): off\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): off\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: off\n  ·   Reflection yields to turns: off\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n", output);   // the fixture turns the auto-learn off, the verbose lines on, the cooldown and the sessions evidence off
         Assert.DoesNotContain("  · Project\n", output);   // the Project section, the toggle row alone from later on 2026-09-19, went on 2026-10-01
@@ -19416,7 +19416,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n▸ Reflection (auto-learn)           off\n  Reflection reasoning              none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
         Assert.Contains("\n▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n", output);   // the Options tab, the rows padded to its own column
         Assert.Contains("\n" + SettingsMenu.TabKeys, output);
-        Assert.Contains("\n▸ haiku  profile  Writes haiku. Use when asked for one.\n", output);
+        Assert.Contains("\n▸ haiku  profile  v1  Writes haiku. Use when asked for one.\n", output);
         Assert.Contains("\n" + SkillsMenu.LoadedKeys, output);   // the trailer follows on the hint row
         // The Options tab's Project file row, the flip on the status line and the row re-read.
         Assert.Contains("\n  · Project file: off\n", output);
@@ -21379,7 +21379,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains(SkillsText.Label + " │ Offered · Reflection · Options ", output);   // no Roots tab since later on 2026-09-19
-        Assert.Contains("▸ haiku  profile  Writes haiku. Use when asked for one.", output);
+        Assert.Contains("▸ haiku  profile  v1  Writes haiku. Use when asked for one.", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/skills"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);

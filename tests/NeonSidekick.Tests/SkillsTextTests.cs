@@ -73,6 +73,33 @@ public class SkillsTextTests
             lines);
     }
 
+    /// <summary>
+    /// The version column (2026-10-07, the user's ask): between the scope and the description, padded to the widest, blank for an external
+    /// skill; the lines and the menu rows alike; none at all without a version source (the rows above).
+    /// </summary>
+    [Fact]
+    public void WithVersions_AColumn_SitsBetweenTheScopeAndTheDescription()
+    {
+        Skill global = new("csv", "Tidies CSV.", SkillScope.Global, @"D:\home\skills\csv");
+        var facts = Facts(skills: [Haiku, global, Pdf]) with { Version = s => s.Scope == SkillScope.External ? null : s == Haiku ? 12 : 1 };
+
+        Assert.Equal(
+            [
+                "haiku           profile  v12  Writes haiku.",
+                "csv             global   v1   Tidies CSV.",
+                "pdf-processing  external      Extracts PDF text.",
+                "                (name 'pdf-processing' does not match the folder 'pdf')",
+            ],
+            SkillsText.LoadedLines(facts));
+        Assert.Equal(Cyan("haiku         ") + "  profile  v12  Writes haiku.", SkillsText.LoadedRows(facts)[0].Markup);
+        Assert.Equal(Cyan("csv           ") + "  global   v1   Tidies CSV.", SkillsText.LoadedRows(facts, "csv")[0].Markup);   // a filter keeps the column's width
+
+        Assert.Equal("v4", SkillsText.VersionLabel(4));
+        Assert.Equal("", SkillsText.VersionLabel(null));
+        Assert.Equal(2, SkillsText.VersionWidth(Facts(skills: [Pdf]) with { Version = _ => null }));
+        Assert.Equal(0, SkillsText.VersionWidth(Facts(skills: [Haiku])));
+    }
+
     private static string Cyan(string text) => $"[{Theme.AccentSecondary.ToMarkup()}]{text}[/]";
     private static string Dim(string text) => $"[#9A8BB8]{text}[/]";
 
