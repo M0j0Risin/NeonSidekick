@@ -211,6 +211,24 @@ internal static unsafe partial class AppKitNative
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial nint SendUtf8(nint receiver, nint selector, byte* text);
 
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint Send(nint receiver, nint selector, nint a, nint b, nint c);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint SendCount(nint receiver, nint selector, nint a, nint b, nuint count);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendVoid(nint receiver, nint selector, nint a, nint b, nint c);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendVoidLong(nint receiver, nint selector, long value);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendVoidRectNint(nint receiver, nint selector, CGRect rect, nint a);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial byte SendPopUp(nint receiver, nint selector, nint item, CGPoint location, nint view);
+
     /// <summary><c>struct objc_super</c>: the receiver and the class whose superclass's method is wanted (<c>objc_msgSendSuper</c>'s first argument).</summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct ObjCSuper
@@ -253,6 +271,50 @@ internal static unsafe partial class AppKitNative
 
     [LibraryImport(CoreGraphics)]
     public static partial void CGColorRelease(nint color);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextSetRGBFillColor(nint context, double red, double green, double blue, double alpha);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextFillRect(nint context, CGRect rect);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextDrawImage(nint context, CGRect rect, nint image);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextSetInterpolationQuality(nint context, int quality);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextSaveGState(nint context);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextRestoreGState(nint context);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextTranslateCTM(nint context, double x, double y);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial void CGContextScaleCTM(nint context, double x, double y);
+
+    /// <summary>kCGInterpolationHigh: the scaled thumbnails smooth, as GDI's HALFTONE was.</summary>
+    public const int InterpolationHigh = 3;
+
+    /// <summary>A COLORREF as the context's fill colour.</summary>
+    public static void Fill(nint context, uint colorRef) =>
+        CGContextSetRGBFillColor(context, (colorRef & 0xFF) / 255.0, ((colorRef >> 8) & 0xFF) / 255.0, ((colorRef >> 16) & 0xFF) / 255.0, 1.0);
+
+    /// <summary>
+    /// A CGImage drawn into <paramref name="rect"/> of a flipped view's context the right way up (CoreGraphics draws an image with y up,
+    /// so it is turned over locally around the rectangle).
+    /// </summary>
+    public static void DrawImageFlipped(nint context, CGRect rect, nint image)
+    {
+        CGContextSaveGState(context);
+        CGContextTranslateCTM(context, rect.X, rect.Y + rect.Height);
+        CGContextScaleCTM(context, 1, -1);
+        CGContextDrawImage(context, new CGRect(0, 0, rect.Width, rect.Height), image);
+        CGContextRestoreGState(context);
+    }
 
     // ---- libdispatch, pthread ----
 

@@ -22,12 +22,26 @@ internal static unsafe class AppKitClasses
 
     private static nint s_window;
     private static nint s_view;
+    private static nint s_drawnView;
+    private static nint s_menuTarget;
     private static nint s_windowDelegate;
     private static nint s_appDelegate;
 
     public static nint WindowClass => s_window != 0 ? s_window : (s_window = MakeWindowClass());
 
     public static nint ViewClass => s_view != 0 ? s_view : (s_view = MakeViewClass());
+
+    /// <summary>
+    /// The view that draws itself (<c>drawRect:</c> into <see cref="AppKitWindow.Draw"/>; the thumbnail browser's grid): a subclass of
+    /// <see cref="ViewClass"/>, so a layer-backed view of the plain class (the picture viewer's) is never asked to draw.
+    /// </summary>
+    public static nint DrawnViewClass => s_drawnView != 0 ? s_drawnView : (s_drawnView = MakeDrawnViewClass());
+
+    /// <summary>The target a picture menu's rows send <c>chosen:</c> to (<see cref="MacPictureMenu"/>); its class made once.</summary>
+    public static nint MenuTargetClass => s_menuTarget != 0 ? s_menuTarget : (s_menuTarget = MakeMenuTargetClass());
+
+    /// <summary>The tag of the row last chosen in a picture menu, or null; read and cleared by <see cref="MacPictureMenu"/>. Main thread.</summary>
+    public static long? MenuChosen { get; set; }
 
     public static nint WindowDelegateClass => s_windowDelegate != 0 ? s_windowDelegate : (s_windowDelegate = MakeWindowDelegateClass());
 
@@ -72,8 +86,59 @@ internal static unsafe class AppKitClasses
         AddMouse(cls, "mouseExited:", &MouseExited);
         AddMouse(cls, "rightMouseDown:", &RightMouseDown);
         AddMouse(cls, "scrollWheel:", &ScrollWheel);
+        AddMouse(cls, "magnifyWithEvent:", &Magnify);
         objc_registerClassPair(cls);
         return cls;
+    }
+
+    private static nint MakeDrawnViewClass()
+    {
+        nint cls = objc_allocateClassPair(ViewClass, "NeonSidekickDrawnView", 0);
+        class_addMethod(cls, Sel("drawRect:"), (nint)(delegate* unmanaged<nint, nint, CGRect, void>)&DrawRect, "v@:{CGRect={CGPoint=dd}{CGSize=dd}}");
+        objc_registerClassPair(cls);
+        return cls;
+    }
+
+    private static nint MakeMenuTargetClass()
+    {
+        nint cls = objc_allocateClassPair(Class("NSObject"), "NeonSidekickMenuTarget", 0);
+        class_addMethod(cls, Sel("chosen:"), (nint)(delegate* unmanaged<nint, nint, nint, void>)&Chosen, "v@:@");
+        objc_registerClassPair(cls);
+        return cls;
+    }
+
+    // A picture menu's row: its tag kept for the menu's caller, which runs it once the menu is gone (Windows' posted message).
+    [UnmanagedCallersOnly]
+    private static void Chosen(nint self, nint selector, nint item)
+    {
+        try
+        {
+            MenuChosen = SendLong(item, Sel("tag"));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Error("Viewer", "A picture menu's row failed.", ex);
+        }
+    }
+
+    [UnmanagedCallersOnly]
+    private static void DrawRect(nint self, nint selector, CGRect dirty)
+    {
+        try
+        {
+            if (AppKitWindow.Of(self) is { } window)
+            {
+                nint context = Send(Send(Class("NSGraphicsContext"), Sel("currentContext")), Sel("CGContext"));
+                if (context != 0)
+                {
+                    window.Draw(context, dirty);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Error("Viewer", "A window failed to draw.", ex);
+        }
     }
 
     private static void AddMouse(nint cls, string selector, delegate* unmanaged<nint, nint, nint, void> method) =>
@@ -175,6 +240,9 @@ internal static unsafe class AppKitClasses
 
     [UnmanagedCallersOnly]
     private static void RightMouseDown(nint self, nint selector, nint e) => Mouse(self, e, static (w, ev) => w.RightMouseDown(ev));
+
+    [UnmanagedCallersOnly]
+    private static void Magnify(nint self, nint selector, nint e) => Mouse(self, e, static (w, ev) => w.Magnify(ev));
 
     [UnmanagedCallersOnly]
     private static void ScrollWheel(nint self, nint selector, nint e) => Mouse(self, e, static (w, ev) => w.ScrollWheel(ev));

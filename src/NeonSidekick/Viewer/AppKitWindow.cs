@@ -50,7 +50,7 @@ internal abstract class AppKitWindow
     /// The window made, not shown: <paramref name="width"/> × <paramref name="height"/> points where <paramref name="position"/>
     /// says it last closed (moved onto a screen), else centred on the first screen.
     /// </summary>
-    protected void Create(double width, double height, Func<(int X, int Y)?>? position)
+    protected void Create(double width, double height, Func<(int X, int Y)?>? position, bool drawn = false)
     {
         nint window = SendInitWindow(Send(AppKitClasses.WindowClass, Sel("alloc")), Sel("initWithContentRect:styleMask:backing:defer:"),
             new CGRect(0, 0, width, height), StyleStandard, BackingBuffered, 0);
@@ -66,7 +66,7 @@ internal abstract class AppKitWindow
         SendVoidBool(window, Sel("setRestorable:"), 0);
         SendVoidULong(window, Sel("setCollectionBehavior:"), 1UL << 9);   // FullScreenNone: the green button zooms, no Space of its own
 
-        nint view = SendInitRect(Send(AppKitClasses.ViewClass, Sel("alloc")), Sel("initWithFrame:"), new CGRect(0, 0, width, height));
+        nint view = SendInitRect(Send(drawn ? AppKitClasses.DrawnViewClass : AppKitClasses.ViewClass, Sel("alloc")), Sel("initWithFrame:"), new CGRect(0, 0, width, height));
         View = view;
         s_objects[view] = this;
         SendVoidBool(view, Sel("setWantsLayer:"), 1);
@@ -205,6 +205,30 @@ internal abstract class AppKitWindow
     {
     }
 
+    /// <summary>A trackpad's pinch (<c>magnifyWithEvent:</c>).</summary>
+    internal virtual void Magnify(nint e)
+    {
+    }
+
+    /// <summary>A drawn view's <c>drawRect:</c>: <paramref name="context"/> is the view's (flipped: y down), <paramref name="dirty"/> what needs it.</summary>
+    internal virtual void Draw(nint context, CGRect dirty)
+    {
+    }
+
+    /// <summary>The whole view drawn again at the next display.</summary>
+    protected void Redraw()
+    {
+        if (Alive)
+        {
+            SendVoidBool(View, Sel("setNeedsDisplay:"), 1);
+        }
+    }
+
+    /// <summary>Whether Control was held on a click (a Mac's Control-click is a right-click).</summary>
+    protected static bool ControlClick(nint e) => (SendULong(e, Sel("modifierFlags")) & MacKeys.ControlFlag) != 0;
+
+    /// <summary>The view the window draws in, for a menu to open over.</summary>
+    protected nint ContentView => View;
     internal virtual void Resized()
     {
     }

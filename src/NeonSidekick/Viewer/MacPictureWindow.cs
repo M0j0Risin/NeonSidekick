@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.Versioning;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Images;
 using static NeonSidekick.Viewer.AppKitNative;
 
 namespace NeonSidekick.Viewer;
@@ -231,8 +232,8 @@ internal sealed class MacPictureWindow : AppKitWindow
         });
         _slides = new MainTimer(() =>
         {
-            // A picture armed for deleting holds the show until it is deleted or disarmed.
-            if (!_state.DeleteArmed && _state.NextSlide(Random.Shared))
+            // A picture armed for deleting holds the show until it is deleted or disarmed; an open picture menu holds it too.
+            if (!_state.DeleteArmed && !MacPictureMenu.IsOpen && _state.NextSlide(Random.Shared))
             {
                 UpdateTitle();
                 LoadCurrent();
@@ -314,11 +315,6 @@ internal sealed class MacPictureWindow : AppKitWindow
     internal override bool KeyDown(MacKeyEvent key)
     {
         var action = MacKeys.ViewerAction(key.KeyCode, key.Flags, FullScreen, _state.SlideShow);
-        if (action == ViewerAction.Menu)
-        {
-            action = ViewerAction.None;   // the picture menu comes in the next round
-        }
-
         // Any key but Del disarms a first Del, mapped or not.
         if (action != ViewerAction.Delete && _state.Disarm())
         {
@@ -342,6 +338,12 @@ internal sealed class MacPictureWindow : AppKitWindow
 
     internal override void MouseDown(nint e)
     {
+        if (ControlClick(e))
+        {
+            OpenMenu(e);   // a Mac's Control-click is its right-click
+            return;
+        }
+
         var point = PointOf(e);
         var nav = NavAt(point);
         if (SendLong(e, Sel("clickCount")) >= 2)
@@ -364,6 +366,9 @@ internal sealed class MacPictureWindow : AppKitWindow
             Step(nav);
         }
     }
+
+    // The picture menu (2026-10-07, phase 2): a right-click on the picture.
+    internal override void RightMouseDown(nint e) => OpenMenu(e);
 
     internal override void MouseEntered(nint e)
     {
@@ -427,6 +432,9 @@ internal sealed class MacPictureWindow : AppKitWindow
             case ViewerAction.Close:
                 Close();
                 break;
+            case ViewerAction.Menu:
+                OpenMenu(0);
+                break;
             case ViewerAction.Delete:
                 DeleteShown();
                 break;
@@ -486,6 +494,85 @@ internal sealed class MacPictureWindow : AppKitWindow
 
         Do(action);
         UpdateArrows();
+    }
+
+    // The picture menu on the shown picture: the path kept now, so a slide or an arriving picture changes nothing; a first Del
+    // disarmed. At the mouse (a right-click) or, from the keyboard, in the middle of the window. The row chosen is run once it is gone.
+    private void OpenMenu(nint mouse)
+    {
+        if (_state.Current is not { } path)
+        {
+            return;
+        }
+
+        if (_state.Disarm())
+        {
+            _deleteArm.Stop();
+            UpdateTitle();
+        }
+
+        var (width, height) = ClientSize;
+        if (MacPictureMenu.Show(ContentView, mouse, new CGPoint(width / 2, height / 2), thumbs: false, path) is { } command && Alive)
+        {
+            RunCommand(command, path);
+        }
+    }
+
+    // A menu row chosen: an edit off the thread, Delete, or a file action.
+    private void RunCommand(PictureCommand command, string path)
+    {
+        if (PictureActions.IsEdit(command))
+        {
+            PictureMenu.Edit(path, command, outcome => AppKitHost.Post(() => TakeEdited(outcome)));
+            return;
+        }
+
+        if (command == PictureCommand.Delete)
+        {
+            if (PictureMenu.Delete(path) && _state.Remove(path))
+            {
+                UpdateTitle();
+                LoadCurrent();
+                RestartSlides();
+                NotifyBrowsed();
+            }
+
+            return;
+        }
+
+        PictureMenu.RunFileAction(path, command);
+    }
+
+    // An edit's end: a new picture shown (the strip and the thumbnails told), one replaced in place read again, a converted one shown
+    // in its source's stead.
+    private void TakeEdited(PictureEditOutcome outcome)
+    {
+        if (!Alive || outcome is not { Failed: false, Written: { } written })
+        {
+            return;
+        }
+
+        if (outcome.Replaced)
+        {
+            if (_state.Touched(written))
+            {
+                LoadCurrent();
+            }
+
+            return;
+        }
+
+        if (outcome.Removed is { } removed)
+        {
+            _state.Remove(removed);
+        }
+
+        if (string.Equals(Path.GetDirectoryName(written), _state.Folder, StringComparison.OrdinalIgnoreCase))
+        {
+            Select(written);
+            UpdateTitle();
+            NotifyBrowsed();
+        }
     }
 
     private void RestartSlides()

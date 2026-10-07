@@ -51,6 +51,35 @@ public static class MacKeys
         return ViewerState.ActionFor(vk == VkBack ? ViewerState.VkDelete : vk, fullScreen, slideShow, shift);
     }
 
+    /// <summary>
+    /// What a key does in the thumbnail browser on a Mac (2026-10-07, phase 2): ⌘W closes, ⌃⌘F is full screen, ⌘= and ⌘− size the tiles
+    /// (a Mac's own zoom keys), nothing else with ⌘ or ⌥ held, else <see cref="ThumbsState.ActionFor"/>'s answer with ⌫ read as Del. Pure.
+    /// </summary>
+    public static ThumbsAction ThumbsAction(ushort keyCode, ulong flags, bool fullScreen)
+    {
+        int vk = ToVirtualKey(keyCode);
+        bool command = (flags & CommandFlag) != 0;
+        bool control = (flags & ControlFlag) != 0;
+        bool option = (flags & OptionFlag) != 0;
+        bool shift = (flags & ShiftFlag) != 0;
+        if (command)
+        {
+            return option ? Viewer.ThumbsAction.None
+                : vk == 'W' && !control ? Viewer.ThumbsAction.Close
+                : vk == 'F' && control ? Viewer.ThumbsAction.ToggleFullScreen
+                : vk is ThumbsState.VkOemPlus or ThumbsState.VkAdd && !control ? Viewer.ThumbsAction.ZoomIn
+                : vk is ThumbsState.VkOemMinus or ThumbsState.VkSubtract && !control ? Viewer.ThumbsAction.ZoomOut
+                : Viewer.ThumbsAction.None;
+        }
+
+        if (option)
+        {
+            return Viewer.ThumbsAction.None;
+        }
+
+        return ThumbsState.ActionFor(vk == VkBack ? ThumbsState.VkDelete : vk, control, shift, fullScreen);
+    }
+
     private static Dictionary<ushort, int> Build()
     {
         var keys = new Dictionary<ushort, int>
@@ -60,6 +89,10 @@ public static class MacKeys
             [49] = 0x20,   // Space
             [51] = VkBack, // Delete (backspace)
             [53] = 0x1B,   // Escape
+            [24] = 0xBB,   // = (+ with Shift)
+            [27] = 0xBD,   // -
+            [69] = 0x6B,   // keypad +
+            [78] = 0x6D,   // keypad -
             [76] = 0x0D,   // keypad Enter
             [115] = 0x24,  // Home
             [116] = 0x21,  // Page Up

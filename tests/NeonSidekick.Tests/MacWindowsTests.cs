@@ -77,10 +77,45 @@ public sealed class MacWindowsTests
     [Fact]
     public void TheMacWords_AreTheirOwn_AndWindowsKeepsItsOwn()
     {
-        Assert.Equal("(← or wheel up newer · → or wheel down older · Home newest · End oldest · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · ESC or ⌘W close)", ViewerText.KeysMac);
+        Assert.Equal("(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · ESC or ⌘W close)", ViewerText.KeysMac);
         Assert.Equal("The picture viewer needs the Mac's desktop: there is no window server here (over SSH, say).", ViewerText.UnavailableMac);
         Assert.Equal(OperatingSystem.IsMacOS() ? ViewerText.KeysMac : ViewerText.Keys, ViewerText.KeysHere);
         Assert.Equal(OperatingSystem.IsMacOS() ? ViewerText.UnavailableMac : ViewerText.Unavailable, ViewerText.UnavailableHere);
+    }
+
+    [Fact]
+    public void ThumbsAction_TheWindowsKeys_AndTheMacExtras()
+    {
+        const ushort Return = 36, Equal = 24, Minus = 27, KeypadPlus = 69, KeypadMinus = 78, F5 = 96;
+        Assert.Equal(ThumbsAction.Left, MacKeys.ThumbsAction(Left, 0, fullScreen: false));
+        Assert.Equal(ThumbsAction.Down, MacKeys.ThumbsAction(Down, 0, false));
+        Assert.Equal(ThumbsAction.Open, MacKeys.ThumbsAction(Return, 0, false));
+        Assert.Equal(ThumbsAction.Refresh, MacKeys.ThumbsAction(F5, 0, false));
+        Assert.Equal(ThumbsAction.ZoomIn, MacKeys.ThumbsAction(Equal, MacKeys.ShiftFlag, false));     // + is Shift+=
+        Assert.Equal(ThumbsAction.ZoomIn, MacKeys.ThumbsAction(KeypadPlus, 0, false));
+        Assert.Equal(ThumbsAction.ZoomOut, MacKeys.ThumbsAction(Minus, 0, false));
+        Assert.Equal(ThumbsAction.ZoomOut, MacKeys.ThumbsAction(KeypadMinus, 0, false));
+        Assert.Equal(ThumbsAction.Menu, MacKeys.ThumbsAction(F10, MacKeys.ShiftFlag, false));
+        Assert.Equal(ThumbsAction.Close, MacKeys.ThumbsAction(Escape, 0, false));
+        Assert.Equal(ThumbsAction.LeaveFullScreen, MacKeys.ThumbsAction(Escape, 0, fullScreen: true));
+        Assert.Equal(ThumbsAction.Delete, MacKeys.ThumbsAction(Backspace, 0, false));                 // ⌫ is Del
+        Assert.Equal(ThumbsAction.Delete, MacKeys.ThumbsAction(ForwardDelete, 0, false));
+        Assert.Equal(ThumbsAction.Close, MacKeys.ThumbsAction(KeyW, MacKeys.CommandFlag, false));     // ⌘W
+        Assert.Equal(ThumbsAction.ToggleFullScreen, MacKeys.ThumbsAction(KeyF, MacKeys.CommandFlag | MacKeys.ControlFlag, false));
+        Assert.Equal(ThumbsAction.ZoomIn, MacKeys.ThumbsAction(Equal, MacKeys.CommandFlag, false));   // ⌘=
+        Assert.Equal(ThumbsAction.ZoomOut, MacKeys.ThumbsAction(Minus, MacKeys.CommandFlag, false));  // ⌘−
+        Assert.Equal(ThumbsAction.None, MacKeys.ThumbsAction(Left, MacKeys.CommandFlag, false));
+        Assert.Equal(ThumbsAction.None, MacKeys.ThumbsAction(Left, MacKeys.OptionFlag, false));
+        Assert.Equal(ThumbsAction.None, MacKeys.ThumbsAction(Left, MacKeys.ControlFlag, false));      // a Ctrl chord is never the window's
+    }
+
+    [Fact]
+    public void TheThumbsMacWords_AreTheirOwn()
+    {
+        Assert.Equal("(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · ESC or ⌘W close)", ThumbsText.KeysMac);
+        Assert.Equal("The thumbnail browser needs the Mac's desktop: there is no window server here (over SSH, say).", ThumbsText.UnavailableMac);
+        Assert.Equal(OperatingSystem.IsMacOS() ? ThumbsText.KeysMac : ThumbsText.Keys, ThumbsText.KeysHere);
+        Assert.Equal("Show in Finder", PictureMenuText.ShowInFinder);
     }
 
     [Fact]

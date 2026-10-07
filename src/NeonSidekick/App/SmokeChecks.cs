@@ -814,7 +814,7 @@ public static partial class SmokeChecks
         const string name = "viewer:menu";
         try
         {
-            var (ok, detail) = Viewer.ContextMenuWindow.Probe();
+            var (ok, detail) = OperatingSystem.IsMacOS() ? Viewer.MacPictureMenu.Probe() : Viewer.ContextMenuWindow.Probe();
             return new SmokeCheck(name, ok, detail);
         }
         catch (Exception ex)

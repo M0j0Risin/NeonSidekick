@@ -20,7 +20,7 @@ public partial class ChatScreenTests
     private Action<string>? _showInViewer;          // PictureWindow.ShowQuietly: null = none
     private Func<bool>? _closeThumbs;               // ThumbsWindow.Close: null = none
 
-    [WindowsFact]
+    [Fact]
     public async Task ViewThumbs_OpensOnAFolder_OrOnAPicturesFolderWithItSelected_AndTheErrors()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -36,7 +36,8 @@ public partial class ChatScreenTests
         PushLine("/view --chat docs --thumbs");      // both: the usage error
         PushLine("/view nope --thumbs");
         PushLine("/view notes.txt --thumbs");
-        PushLine(@"/view ..\x --thumbs");
+        string outside = OperatingSystem.IsWindows() ? @"..\x" : "../x";   // this system's spelling (2026-10-07: it ran on Windows only for it)
+        PushLine($"/view {outside} --thumbs");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -44,11 +45,11 @@ public partial class ChatScreenTests
         string docs = Path.Combine(files, "docs");
         Assert.Equal([(docs, null), (docs, Path.Combine(docs, "square.bmp"))], opened);
         Assert.Equal(2, Count(output, ThumbsText.Opened(docs)));
-        Assert.Contains(ThumbsText.Keys, output);
+        Assert.Contains(ThumbsText.KeysHere, output);
         Assert.Equal(2, Count(output, "  ✗ " + ChatScreen.ViewUsageError));
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
         Assert.Contains("  ✗ " + FileText.NotAnImage("notes.txt"), output);
-        Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x"), output);
+        Assert.Contains("  ✗ " + FileText.OutsideRoot(outside), output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -80,7 +81,7 @@ public partial class ChatScreenTests
         }
         else
         {
-            Assert.Contains("  ✗ " + ThumbsText.Unavailable, output);
+            Assert.Contains("  ✗ " + ThumbsText.UnavailableHere, output);
         }
     }
 
