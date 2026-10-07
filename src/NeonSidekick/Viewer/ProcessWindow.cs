@@ -24,8 +24,8 @@ public static class ProcessWindow
     /// <summary>Told the window's corner as it closes, on its thread. It must not block.</summary>
     public static Action<int, int>? Placed { get; set; }
 
-    /// <summary>Whether a window can be opened here at all: Windows only.</summary>
-    public static bool IsAvailable => OperatingSystem.IsWindows();
+    /// <summary>Whether a window can be opened here at all: on Windows, and on a Mac with a window server since 2026-10-07 (<see cref="MacLineWindows"/>).</summary>
+    public static bool IsAvailable => OperatingSystem.IsWindows() || (OperatingSystem.IsMacOS() && AppKitHost.IsEnabled);
 
     /// <summary>
     /// The window on <paramref name="session"/>: the open one brought forward when it shows that session already, else the open
@@ -40,7 +40,13 @@ public static class ProcessWindow
         ArgumentNullException.ThrowIfNull(stop);
         if (!IsAvailable)
         {
-            throw new PlatformNotSupportedException(ProcessWindowText.Unavailable);
+            throw new PlatformNotSupportedException(ProcessWindowText.UnavailableHere);
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            MacLineWindows.ShowProcess(session, stop);
+            return;
         }
 
         lock (s_gate)
@@ -71,6 +77,11 @@ public static class ProcessWindow
     /// <summary>The open window closed and waited for briefly (the app's exit); true when one was open.</summary>
     public static bool Close()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacLineWindows.CloseProcess();
+        }
+
         LogWindowThread? open;
         lock (s_gate)
         {

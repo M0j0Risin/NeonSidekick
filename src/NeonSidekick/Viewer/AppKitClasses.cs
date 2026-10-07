@@ -151,6 +151,7 @@ internal static unsafe class AppKitClasses
         class_addMethod(cls, Sel("windowDidResize:"), (nint)(delegate* unmanaged<nint, nint, nint, void>)&DidResize, "v@:@");
         class_addMethod(cls, Sel("windowDidBecomeKey:"), (nint)(delegate* unmanaged<nint, nint, nint, void>)&DidBecomeKey, "v@:@");
         class_addMethod(cls, Sel("windowDidChangeBackingProperties:"), (nint)(delegate* unmanaged<nint, nint, nint, void>)&DidChangeBacking, "v@:@");
+        class_addMethod(cls, Sel("boundsChanged:"), (nint)(delegate* unmanaged<nint, nint, nint, void>)&BoundsChanged, "v@:@");   // a scroll view's clip view moved
         objc_registerClassPair(cls);
         return cls;
     }
@@ -270,6 +271,9 @@ internal static unsafe class AppKitClasses
 
     [UnmanagedCallersOnly]
     private static void DidBecomeKey(nint self, nint selector, nint notification) => Delegated(self, static w => w.BecameKey());
+
+    [UnmanagedCallersOnly]
+    private static void BoundsChanged(nint self, nint selector, nint notification) => Delegated(self, static w => w.Scrolled());
 
     [UnmanagedCallersOnly]
     private static void DidChangeBacking(nint self, nint selector, nint notification) => Delegated(self, static w => w.ScaleChanged());

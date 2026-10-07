@@ -267,7 +267,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ProcessWindowText.Unavailable, output);
+        Assert.Contains("  ✗ " + ProcessWindowText.UnavailableHere, output);
     }
 
     /// <summary>The Unix twin of <see cref="Process_WithNoWindowHere_SaysSo"/> (2026-10-06, the macOS build): a zsh child, not cmd.exe.</summary>
@@ -283,7 +283,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ProcessWindowText.Unavailable, output);
+        Assert.Contains("  ✗ " + ProcessWindowText.UnavailableHere, output);
     }
 
     [WindowsFact]

@@ -328,7 +328,7 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 
 ### Log window
 
-`/log` opens this run's diagnostic log in a window of its own (Windows only), every line from the start, Trace and up, with or without `--log`. It keeps the newest 20,000 lines, coloured by level, and wraps long lines.
+`/log` opens this run's diagnostic log in a window of its own (on Windows, and on a Mac with its desktop), every line from the start, Trace and up, with or without `--log`. It keeps the newest 20,000 lines, coloured by level, and wraps long lines.
 
 * **Following:** at the bottom it follows new lines; scroll up and it holds still (the title says *paused*). Back at the bottom, Ctrl+E or Ctrl+End follows again.
 * **Copying:** drag to select (Shift+click extends), Ctrl+A selects all, Ctrl+C copies.
@@ -346,9 +346,11 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 
 Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. A second `/log` brings it forward; `/log --file` opens the `--log` file instead.
 
+**On a Mac** (2026-10-07) the text is the system's own text view in its monospaced font: scrolling, selection and copying are the Mac's, with ⌘A to select all and ⌘C to copy (Ctrl+A and Ctrl+C are not the window's there). ⌘↑ goes to the top and ⌘↓ to the bottom beside Ctrl+Home and Ctrl+End or Ctrl+E, ⌃⌘F is full screen (F11 is macOS's Show Desktop), and ⌘W or Esc closes it. A double-click selects a word rather than going full screen. Tab to the terminal is Windows-only for now.
+
 ### Process window
 
-`/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⚡) lists the processes, and Enter or a double-click on one there opens it here.
+`/process <id>` shows a background process's output live (on Windows, and on a Mac with its desktop, as the log window there): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⚡) lists the processes, and Enter or a double-click on one there opens it here.
 
 * **One window:** `/process` with another id switches it to that process, in the same place on screen, without closing it.
 * **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. Once the process has ended, Ctrl+K goes on to the chat as any other key. The `/process` list's **✖ kill** button (or **K**) stops the highlighted one the same way, after a yes/no.

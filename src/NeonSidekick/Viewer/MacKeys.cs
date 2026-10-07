@@ -80,6 +80,40 @@ public static class MacKeys
         return ThumbsState.ActionFor(vk == VkBack ? ThumbsState.VkDelete : vk, control, shift, fullScreen);
     }
 
+    /// <summary>
+    /// What a key does in the log and process windows on a Mac (2026-10-07, phase 3): ⌘C copies and ⌘A selects all (a Mac's own, so
+    /// Ctrl+C and Ctrl+A are not the window's there), ⌘↑ the top and ⌘↓ the bottom beside Windows' Ctrl+Home and Ctrl+End or Ctrl+E,
+    /// ⌘W closes, ⌃⌘F is full screen, nothing else with ⌘ or ⌥ held, else <see cref="LogViewState.ActionFor"/>'s answer. Pure.
+    /// </summary>
+    public static LogViewAction LogAction(ushort keyCode, ulong flags, bool fullScreen)
+    {
+        int vk = ToVirtualKey(keyCode);
+        bool command = (flags & CommandFlag) != 0;
+        bool control = (flags & ControlFlag) != 0;
+        bool option = (flags & OptionFlag) != 0;
+        if (option)
+        {
+            return LogViewAction.None;
+        }
+
+        if (command)
+        {
+            return (vk, control) switch
+            {
+                ('W', false) => LogViewAction.Close,
+                ('F', true) => LogViewAction.ToggleFullScreen,
+                ('C', false) => LogViewAction.Copy,
+                ('A', false) => LogViewAction.SelectAll,
+                (ViewerState.VkUp, false) => LogViewAction.Top,
+                (ViewerState.VkDown, false) => LogViewAction.Bottom,
+                _ => LogViewAction.None,
+            };
+        }
+
+        var action = LogViewState.ActionFor(vk, control, fullScreen);
+        return action is LogViewAction.Copy or LogViewAction.SelectAll ? LogViewAction.None : action;
+    }
+
     private static Dictionary<ushort, int> Build()
     {
         var keys = new Dictionary<ushort, int>

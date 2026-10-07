@@ -119,6 +119,39 @@ public sealed class MacWindowsTests
     }
 
     [Fact]
+    public void LogAction_TheMacsCopyAndEnds_AndWindowsOwnKeys()
+    {
+        const ushort KeyC = 8, KeyE = 14, PageUp = 116, PageDown = 121;
+        Assert.Equal(LogViewAction.Copy, MacKeys.LogAction(KeyC, MacKeys.CommandFlag, fullScreen: false));     // ⌘C
+        Assert.Equal(LogViewAction.SelectAll, MacKeys.LogAction(KeyA, MacKeys.CommandFlag, false));          // ⌘A
+        Assert.Equal(LogViewAction.None, MacKeys.LogAction(KeyC, MacKeys.ControlFlag, false));               // Ctrl+C is not the window's on a Mac
+        Assert.Equal(LogViewAction.None, MacKeys.LogAction(KeyA, MacKeys.ControlFlag, false));
+        Assert.Equal(LogViewAction.Top, MacKeys.LogAction(Up, MacKeys.CommandFlag, false));                  // ⌘↑
+        Assert.Equal(LogViewAction.Bottom, MacKeys.LogAction(Down, MacKeys.CommandFlag, false));             // ⌘↓
+        Assert.Equal(LogViewAction.Bottom, MacKeys.LogAction(KeyE, MacKeys.ControlFlag, false));             // Ctrl+E, as on Windows
+        Assert.Equal(LogViewAction.Top, MacKeys.LogAction(Home, MacKeys.ControlFlag, false));
+        Assert.Equal(LogViewAction.Bottom, MacKeys.LogAction(End, MacKeys.ControlFlag, false));
+        Assert.Equal(LogViewAction.LineUp, MacKeys.LogAction(Up, 0, false));
+        Assert.Equal(LogViewAction.PageDown, MacKeys.LogAction(PageDown, 0, false));
+        Assert.Equal(LogViewAction.PageUp, MacKeys.LogAction(PageUp, 0, false));
+        Assert.Equal(LogViewAction.Close, MacKeys.LogAction(KeyW, MacKeys.CommandFlag, false));
+        Assert.Equal(LogViewAction.Close, MacKeys.LogAction(Escape, 0, false));
+        Assert.Equal(LogViewAction.LeaveFullScreen, MacKeys.LogAction(Escape, 0, fullScreen: true));
+        Assert.Equal(LogViewAction.ToggleFullScreen, MacKeys.LogAction(KeyF, MacKeys.CommandFlag | MacKeys.ControlFlag, false));
+        Assert.Equal(LogViewAction.None, MacKeys.LogAction(KeyC, MacKeys.OptionFlag | MacKeys.CommandFlag, false));
+        Assert.Equal(LogViewAction.None, MacKeys.LogAction(KeyQ, MacKeys.CommandFlag, false));
+    }
+
+    [Fact]
+    public void TheLineWindowsMacWords_AreTheirOwn()
+    {
+        Assert.Equal("The log window needs the Mac's desktop (there is no window server here, over SSH, say); start the app with --log <path> and use /log --file to read the log in your editor.", LogViewText.UnavailableMac);
+        Assert.Equal("The process window needs the Mac's desktop (there is no window server here, over SSH, say); the model's process tool can still read a process's output.", ProcessWindowText.UnavailableMac);
+        Assert.Equal(OperatingSystem.IsMacOS() ? LogViewText.UnavailableMac : LogViewText.Unavailable, LogViewText.UnavailableHere);
+        Assert.Equal(OperatingSystem.IsMacOS() ? ProcessWindowText.UnavailableMac : ProcessWindowText.Unavailable, ProcessWindowText.UnavailableHere);
+    }
+
+    [Fact]
     public void Flip_IsItsOwnInverse_AndMeasuresDownFromTheFirstScreensTop()
     {
         var cocoa = new PlaceRect(100, 600, 1024, 768);   // y up: its bottom 600 above the first screen's bottom

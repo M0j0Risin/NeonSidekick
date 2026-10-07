@@ -17,6 +17,20 @@ internal struct CGPoint
     }
 }
 
+/// <summary>A range of characters (<c>NSRange</c>: location and length, two NSUIntegers passed in two registers).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct NSRange
+{
+    public nuint Location;
+    public nuint Length;
+
+    public NSRange(nuint location, nuint length)
+    {
+        Location = location;
+        Length = length;
+    }
+}
+
 /// <summary>A rectangle in AppKit's coordinates (<c>CGRect</c>: origin and size, four doubles, an HFA arm64 returns in d0–d3).</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct CGRect
@@ -219,6 +233,19 @@ internal static unsafe partial class AppKitNative
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void SendVoid(nint receiver, nint selector, nint a, nint b, nint c);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendVoid(nint receiver, nint selector, nint a, nint b, nint c, nint d);
+
+    /// <summary>A message taking an NSSize (two doubles, an HFA in d0–d1) or any two doubles.</summary>
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendVoidSize(nint receiver, nint selector, double width, double height);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial void SendVoidRange(nint receiver, nint selector, NSRange range);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint SendFontWeight(nint receiver, nint selector, double size, double weight);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void SendVoidLong(nint receiver, nint selector, long value);

@@ -4827,7 +4827,7 @@ internal sealed partial class ChatScreen
     {
         if (_openLogWindow is null)
         {
-            _transcript.Error(LogViewText.Unavailable);
+            _transcript.Error(LogViewText.UnavailableHere);
             return;
         }
 

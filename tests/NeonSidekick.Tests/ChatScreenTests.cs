@@ -14501,7 +14501,7 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/log");
         PushLine("/exit");
         string output = await RunAsync();
-        Assert.Contains("  ✗ " + LogViewText.Unavailable, output);
+        Assert.Contains("  ✗ " + LogViewText.UnavailableHere, output);
 
         _openLogWindow = () => throw new InvalidOperationException("no thread");
         PushLine("/log");

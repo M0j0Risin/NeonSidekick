@@ -26,6 +26,7 @@ internal abstract class AppKitWindow
     private CGRect _savedFrame;
     private ViewerStyle? _chrome;
     private bool _closed;
+    private bool _observing;
 
     /// <summary>The NSWindow, the content view and the delegate (each retained by this window until it is gone).</summary>
     protected nint Window { get; private set; }
@@ -155,6 +156,11 @@ internal abstract class AppKitWindow
         {
             // Let go after AppKit is done with the close in hand: the window, its view and its delegate, then forgotten.
             nint window = Window, view = View, windowDelegate = _delegate;
+            if (_observing)
+            {
+                SendVoid(Send(Class("NSNotificationCenter"), Sel("defaultCenter")), Sel("removeObserver:"), windowDelegate);
+            }
+
             AppKitHost.Post(() =>
             {
                 SendVoid(window, Sel("setDelegate:"), 0);
@@ -203,6 +209,20 @@ internal abstract class AppKitWindow
 
     internal virtual void ScrollWheel(nint e)
     {
+    }
+
+    /// <summary>A scroll view of the window's scrolled (its delegate observing the clip view's bounds; <see cref="ObserveScrolling"/>).</summary>
+    internal virtual void Scrolled()
+    {
+    }
+
+    /// <summary>The window's delegate told when <paramref name="clipView"/> moves (<see cref="Scrolled"/>), until the window closes.</summary>
+    protected void ObserveScrolling(nint clipView)
+    {
+        SendVoidBool(clipView, Sel("setPostsBoundsChangedNotifications:"), 1);
+        nint center = Send(Class("NSNotificationCenter"), Sel("defaultCenter"));
+        SendVoid(center, Sel("addObserver:selector:name:object:"), _delegate, Sel("boundsChanged:"), NSString("NSViewBoundsDidChangeNotification"), clipView);
+        _observing = true;
     }
 
     /// <summary>A trackpad's pinch (<c>magnifyWithEvent:</c>).</summary>
