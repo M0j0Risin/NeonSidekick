@@ -87,6 +87,16 @@ internal static unsafe class AppKitClasses
         AddMouse(cls, "rightMouseDown:", &RightMouseDown);
         AddMouse(cls, "scrollWheel:", &ScrollWheel);
         AddMouse(cls, "magnifyWithEvent:", &Magnify);
+
+        // A drag's source (2026-10-07, phase 4: the picture dragged out of the viewer): a copy only, and its end told to the window.
+        class_addMethod(cls, Sel("draggingSession:sourceOperationMaskForDraggingContext:"), (nint)(delegate* unmanaged<nint, nint, nint, long, ulong>)&DragMask, "Q@:@q");
+        class_addMethod(cls, Sel("draggingSession:endedAtPoint:operation:"), (nint)(delegate* unmanaged<nint, nint, nint, CGPoint, ulong, void>)&DragEnded, "v@:@{CGPoint=dd}Q");
+        nint source = objc_getProtocol("NSDraggingSource");
+        if (source != 0)
+        {
+            class_addProtocol(cls, source);   // declared, as AppKit's dragging session expects of its source
+        }
+
         objc_registerClassPair(cls);
         return cls;
     }
@@ -241,6 +251,22 @@ internal static unsafe class AppKitClasses
 
     [UnmanagedCallersOnly]
     private static void RightMouseDown(nint self, nint selector, nint e) => Mouse(self, e, static (w, ev) => w.RightMouseDown(ev));
+
+    [UnmanagedCallersOnly]
+    private static ulong DragMask(nint self, nint selector, nint session, long context) => DragOperationCopy;
+
+    [UnmanagedCallersOnly]
+    private static void DragEnded(nint self, nint selector, nint session, CGPoint at, ulong operation)
+    {
+        try
+        {
+            AppKitWindow.Of(self)?.DragEnded(operation);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Error("Viewer", "A drag's end failed.", ex);
+        }
+    }
 
     [UnmanagedCallersOnly]
     private static void Magnify(nint self, nint selector, nint e) => Mouse(self, e, static (w, ev) => w.Magnify(ev));

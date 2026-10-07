@@ -77,7 +77,7 @@ public sealed class MacWindowsTests
     [Fact]
     public void TheMacWords_AreTheirOwn_AndWindowsKeepsItsOwn()
     {
-        Assert.Equal("(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · ESC or ⌘W close)", ViewerText.KeysMac);
+        Assert.Equal("(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · TAB terminal · ESC or ⌘W close)", ViewerText.KeysMac);
         Assert.Equal("The picture viewer needs the Mac's desktop: there is no window server here (over SSH, say).", ViewerText.UnavailableMac);
         Assert.Equal(OperatingSystem.IsMacOS() ? ViewerText.KeysMac : ViewerText.Keys, ViewerText.KeysHere);
         Assert.Equal(OperatingSystem.IsMacOS() ? ViewerText.UnavailableMac : ViewerText.Unavailable, ViewerText.UnavailableHere);
@@ -112,7 +112,7 @@ public sealed class MacWindowsTests
     [Fact]
     public void TheThumbsMacWords_AreTheirOwn()
     {
-        Assert.Equal("(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · ESC or ⌘W close)", ThumbsText.KeysMac);
+        Assert.Equal("(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · TAB terminal · ESC or ⌘W close)", ThumbsText.KeysMac);
         Assert.Equal("The thumbnail browser needs the Mac's desktop: there is no window server here (over SSH, say).", ThumbsText.UnavailableMac);
         Assert.Equal(OperatingSystem.IsMacOS() ? ThumbsText.KeysMac : ThumbsText.Keys, ThumbsText.KeysHere);
         Assert.Equal("Show in Finder", PictureMenuText.ShowInFinder);
@@ -149,6 +149,33 @@ public sealed class MacWindowsTests
         Assert.Equal("The process window needs the Mac's desktop (there is no window server here, over SSH, say); the model's process tool can still read a process's output.", ProcessWindowText.UnavailableMac);
         Assert.Equal(OperatingSystem.IsMacOS() ? LogViewText.UnavailableMac : LogViewText.Unavailable, LogViewText.UnavailableHere);
         Assert.Equal(OperatingSystem.IsMacOS() ? ProcessWindowText.UnavailableMac : ProcessWindowText.Unavailable, ProcessWindowText.UnavailableHere);
+    }
+
+    [Fact]
+    public void TerminalPick_TheParentChainFirst_ThenTermProgram()
+    {
+        // zsh → login → Terminal → launchd, as measured on 2026-10-07: Terminal is the first app in the chain.
+        var parents = new Dictionary<int, int> { [500] = 400, [400] = 300, [300] = 200, [200] = 1 };
+        var chain = TerminalPick.Ancestors(500, pid => parents.TryGetValue(pid, out int p) ? p : null);
+        Assert.Equal([400, 300, 200, 1], chain);
+        Assert.Equal(200, TerminalPick.FirstApp(chain, pid => pid == 200));
+        Assert.Null(TerminalPick.FirstApp(chain, _ => false));                       // tmux, ssh: no app in the chain
+        Assert.Null(TerminalPick.FirstApp([1], _ => true));                          // launchd is never the terminal
+        Assert.Equal("com.apple.Terminal", TerminalPick.BundleFor("Apple_Terminal"));
+        Assert.Equal("com.googlecode.iterm2", TerminalPick.BundleFor("iTerm.app"));
+        Assert.Equal("com.googlecode.iterm2", TerminalPick.BundleFor("ITERM.APP"));
+        Assert.Null(TerminalPick.BundleFor("tmux"));
+        Assert.Null(TerminalPick.BundleFor(null));
+        Assert.Null(TerminalPick.BundleFor(""));
+    }
+
+    [Fact]
+    public void TerminalPick_Ancestors_StopAtAnUnreadableParent_ALoop_OrTheLimit()
+    {
+        Assert.Equal([7], TerminalPick.Ancestors(9, pid => pid == 9 ? 7 : null));          // 7's parent unreadable (another user's)
+        Assert.Equal([2, 3], TerminalPick.Ancestors(1000, pid => pid switch { 1000 => 2, 2 => 3, _ => 2 }));   // a loop ends it
+        Assert.Equal(32, TerminalPick.Ancestors(10_000, pid => pid + 1).Count);
+        Assert.Empty(TerminalPick.Ancestors(5, _ => 0));
     }
 
     [Fact]

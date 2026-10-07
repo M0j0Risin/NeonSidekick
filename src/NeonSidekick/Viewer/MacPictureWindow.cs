@@ -158,12 +158,50 @@ internal static class MacPictureWindows
             bool hidden = SendBool(window, Sel("isVisible")) == 0;
             SendVoid(window, Sel("close"));
             bool ok = answer == AppKitClasses.ProbeAnswer && picture && hidden;
-            return (ok, $"AppKit on the main thread: a hidden window of the app's class answered 0x{answer:X}, a CGImage set on its layer{(hidden ? "" : ", but the window showed")}");
+            return (ok, $"AppKit on the main thread: a hidden window of the app's class answered 0x{answer:X}, a CGImage set on its layer{(hidden ? "" : ", but the window showed")}; {MacTerminal.Describe()}");
         }
         finally
         {
             SendVoid(window, Sel("release"));
         }
+    }
+
+    /// <summary>
+    /// <c>viewer:drag</c> on a Mac (2026-10-07, phase 4): short of a drag, the drag out's parts made on the main thread — a file URL for
+    /// <paramref name="path"/> as a dragging item, an NSImage over a CGImage as its picture — and the app's view asked, as a dragging
+    /// source, what a drop may do: a copy only. Nothing is dragged.
+    /// </summary>
+    public static (bool Ok, string Detail) ProbeDrag(string path)
+    {
+        if (!AppKitHost.IsEnabled)
+        {
+            return (true, HasWindowServer() ? "skipped: no AppKit host here (the app's main thread runs it)" : "skipped: no window server");
+        }
+
+        if (!AppKitHost.Invoke(() =>
+        {
+            nint url = Send(Class("NSURL"), Sel("fileURLWithPath:"), NSString(path));
+            nint item = Send(Send(Class("NSDraggingItem"), Sel("alloc")), Sel("initWithPasteboardWriter:"), url);
+            nint cg = CGImage(new byte[2 * 2 * 4], 2, 2, BitmapBgrx);
+            nint image = SendImageInit(Send(Class("NSImage"), Sel("alloc")), Sel("initWithCGImage:size:"), cg, 16, 16);
+            SendVoidRectNint(item, Sel("setDraggingFrame:contents:"), new CGRect(0, 0, 16, 16), image);
+            nint view = SendInitRect(Send(AppKitClasses.ViewClass, Sel("alloc")), Sel("initWithFrame:"), new CGRect(0, 0, 16, 16));
+            ulong mask = SendULong(view, Sel("draggingSession:sourceOperationMaskForDraggingContext:"), 0, 0);
+            nint protocol = objc_getProtocol("NSDraggingSource");
+            bool conforms = protocol != 0 && class_conformsToProtocol(AppKitClasses.ViewClass, protocol);
+            bool file = FromNSString(Send(url, Sel("path"))) is { } back && back.EndsWith(Path.GetFileName(path), StringComparison.Ordinal);
+            SendVoid(view, Sel("release"));
+            SendVoid(image, Sel("release"));
+            CGImageRelease(cg);
+            SendVoid(item, Sel("release"));
+            bool ok = item != 0 && image != 0 && file && mask == DragOperationCopy && conforms;
+            return (ok, $"a dragging item for the file with its picture made; the view, an NSDraggingSource{(conforms ? "" : " (not declared)")}, allows {(mask == DragOperationCopy ? "a copy only" : $"0x{mask:X}")}");
+        }, out (bool Ok, string Detail) result))
+        {
+            return (false, "the main thread did not answer");
+        }
+
+        return result;
     }
 
     // The app's end closes the viewer while the loop still runs (its place kept).
@@ -191,6 +229,9 @@ internal sealed class MacPictureWindow : AppKitWindow
 
     private const double TextHeight = 22;
 
+    /// <summary>How far (points) the mouse moves with the button down before the picture is dragged out: AppKit's own feel.</summary>
+    private const int DragThreshold = 4;
+
     private readonly ViewerState _state = new();
     private readonly ConcurrentQueue<Change> _changes = new();
     private readonly MainTimer _debounce;
@@ -209,6 +250,8 @@ internal sealed class MacPictureWindow : AppKitWindow
     private ViewerStyle? _style;
     private (int Side, uint Fill, uint Ink, double Scale) _arrowKey;
     private bool _hover;
+    private (double X, double Y)? _press;
+    private string? _dragging;
     private ViewerAction _hot;
     private int _wheel;
 
@@ -329,7 +372,7 @@ internal sealed class MacPictureWindow : AppKitWindow
 
         if (action == ViewerAction.None)
         {
-            return false;
+            return TerminalHandoff.TakeMac(key);   // TAB to the terminal, a Ctrl or Option chord to the chat (phase 4)
         }
 
         Do(action);
@@ -364,7 +407,83 @@ internal sealed class MacPictureWindow : AppKitWindow
         if (nav != ViewerAction.None)
         {
             Step(nav);
+            return;
         }
+
+        _press = point;   // the drag out starts once the mouse moves past the threshold
+    }
+
+    // The drag out (2026-10-07, phase 4; PictureWindowDrag's twin): past a few points from the press, the shown picture is dragged as
+    // its file, copied where it is dropped (Finder, the desktop, any app taking a file), never moved. The slide show may move the
+    // window on meanwhile: the drag carries the picture it started with.
+    internal override void MouseDragged(nint e)
+    {
+        if (_press is not { } press)
+        {
+            return;
+        }
+
+        var (x, y) = PointOf(e);
+        if (ViewerState.PastDragThreshold((int)(x - press.X), (int)(y - press.Y), DragThreshold, DragThreshold))
+        {
+            _press = null;
+            DragOut(e);
+        }
+    }
+
+    internal override void MouseUp(nint e) => _press = null;
+
+    internal override void DragEnded(ulong operation)
+    {
+        if (_dragging is { } name)
+        {
+            DiagnosticLog.Info("Viewer", operation != 0 ? $"Dragged {name} out: copied." : $"Dragged {name} out: nothing dropped.");
+            _dragging = null;
+        }
+    }
+
+    private void DragOut(nint e)
+    {
+        if (_state.Current is not { } path || !File.Exists(path))
+        {
+            return;
+        }
+
+        string name = Path.GetFileName(path);
+        try
+        {
+            nint url = Send(Class("NSURL"), Sel("fileURLWithPath:"), NSString(path));
+            nint item = Send(Send(Class("NSDraggingItem"), Sel("alloc")), Sel("initWithPasteboardWriter:"), url);
+            var (width, height) = ClientSize;
+            var frame = DragFrame(width, height);
+            nint image = _image == 0 ? 0 : SendImageInit(Send(Class("NSImage"), Sel("alloc")), Sel("initWithCGImage:size:"), _image, frame.Width, frame.Height);
+            SendVoidRectNint(item, Sel("setDraggingFrame:contents:"), frame, image);
+            nint items = Send(Class("NSArray"), Sel("arrayWithObject:"), item);
+            Send(ContentView, Sel("beginDraggingSessionWithItems:event:source:"), items, e, ContentView);
+            _dragging = name;
+            SendVoid(item, Sel("release"));
+            if (image != 0)
+            {
+                SendVoid(image, Sel("release"));
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Warn("Viewer", ViewerText.DragFailed(name, ex.Message));
+        }
+    }
+
+    // Where the shown picture is drawn (the layer fits it whole, centred): the drag's image starts there, at its size on screen.
+    private CGRect DragFrame(double width, double height)
+    {
+        if (_image == 0)
+        {
+            return new CGRect(width / 2 - 32, height / 2 - 32, 64, 64);
+        }
+
+        double w = CGImageGetWidth(_image), h = CGImageGetHeight(_image);
+        double fit = Math.Min(width / w, height / h);
+        return new CGRect((width - w * fit) / 2, (height - h * fit) / 2, w * fit, h * fit);
     }
 
     // The picture menu (2026-10-07, phase 2): a right-click on the picture.

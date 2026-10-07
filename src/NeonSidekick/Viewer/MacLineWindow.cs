@@ -284,6 +284,12 @@ internal sealed class MacLineWindow : AppKitWindow
             return true;
         }
 
+        // TAB to the terminal, a Ctrl or Option chord to the chat (phase 4; Ctrl+C there cancels a reply, ⌘C being the copy here).
+        if (TerminalHandoff.TakeMac(key))
+        {
+            return true;
+        }
+
         return (key.Flags & MacKeys.CommandFlag) == 0;
     }
 

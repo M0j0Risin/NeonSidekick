@@ -736,7 +736,7 @@ public static partial class SmokeChecks
     public static SmokeCheck ProbeViewerDrag()
     {
         const string name = "viewer:drag";
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
         {
             return new SmokeCheck(name, true, "skipped: not Windows");
         }
@@ -745,7 +745,7 @@ public static partial class SmokeChecks
         try
         {
             File.WriteAllBytes(path, SolidBmp(2, 2));
-            var (ok, detail) = Viewer.PictureWindowDrag.Probe(path);
+            var (ok, detail) = OperatingSystem.IsMacOS() ? Viewer.MacPictureWindows.ProbeDrag(path) : Viewer.PictureWindowDrag.Probe(path);
             return new SmokeCheck(name, ok, detail);
         }
         catch (Exception ex)

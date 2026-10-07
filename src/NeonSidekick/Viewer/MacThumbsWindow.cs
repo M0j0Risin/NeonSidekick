@@ -221,7 +221,7 @@ internal sealed class MacThumbsWindow : AppKitWindow
 
         if (action == ThumbsAction.None)
         {
-            return false;
+            return TerminalHandoff.TakeMac(key);   // TAB to the terminal, a Ctrl or Option chord to the chat (phase 4)
         }
 
         Do(action);

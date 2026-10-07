@@ -121,6 +121,17 @@ internal static unsafe partial class AppKitNative
     [return: MarshalAs(UnmanagedType.U1)]
     public static partial bool class_addMethod(nint cls, nint selector, nint implementation, string types);
 
+    [LibraryImport(ObjC, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial nint objc_getProtocol(string name);
+
+    [LibraryImport(ObjC)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool class_addProtocol(nint cls, nint protocol);
+
+    [LibraryImport(ObjC)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool class_conformsToProtocol(nint cls, nint protocol);
+
     [LibraryImport(ObjC)]
     public static partial nint objc_autoreleasePoolPush();
 
@@ -242,6 +253,15 @@ internal static unsafe partial class AppKitNative
     public static partial void SendVoidSize(nint receiver, nint selector, double width, double height);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint SendImageInit(nint receiver, nint selector, nint image, double width, double height);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial ulong SendULong(nint receiver, nint selector, nint a, long b);
+
+    /// <summary>NSDragOperationCopy: a picture dragged out is copied where it is dropped, never moved.</summary>
+    public const ulong DragOperationCopy = 1;
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void SendVoidRange(nint receiver, nint selector, NSRange range);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
@@ -292,6 +312,12 @@ internal static unsafe partial class AppKitNative
 
     [LibraryImport(CoreGraphics)]
     public static partial void CGImageRelease(nint image);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial nuint CGImageGetWidth(nint image);
+
+    [LibraryImport(CoreGraphics)]
+    public static partial nuint CGImageGetHeight(nint image);
 
     [LibraryImport(CoreGraphics)]
     public static partial nint CGColorCreateSRGB(double red, double green, double blue, double alpha);

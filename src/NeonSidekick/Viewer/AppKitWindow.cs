@@ -22,6 +22,9 @@ internal abstract class AppKitWindow
     /// <summary>The app in front before one of ours took the keyboard (an NSRunningApplication, retained): the terminal, as a rule.</summary>
     private static nint s_before;
 
+    /// <summary>The app in front before one of ours took the keyboard, or 0: TAB's last resort (<see cref="MacTerminal"/>).</summary>
+    internal static nint BeforeApp => s_before != 0 && SendBool(s_before, Sel("isTerminated")) == 0 ? s_before : 0;
+
     private ulong _savedStyle;
     private CGRect _savedFrame;
     private ViewerStyle? _chrome;
@@ -223,6 +226,11 @@ internal abstract class AppKitWindow
         nint center = Send(Class("NSNotificationCenter"), Sel("defaultCenter"));
         SendVoid(center, Sel("addObserver:selector:name:object:"), _delegate, Sel("boundsChanged:"), NSString("NSViewBoundsDidChangeNotification"), clipView);
         _observing = true;
+    }
+
+    /// <summary>A drag out of the window ended: <paramref name="operation"/> what the drop did (0 nothing, a copy otherwise).</summary>
+    internal virtual void DragEnded(ulong operation)
+    {
     }
 
     /// <summary>A trackpad's pinch (<c>magnifyWithEvent:</c>).</summary>

@@ -50,9 +50,9 @@ public static class ThumbsText
 
     /// <summary>
     /// The browser's keys on a Mac (2026-10-07, phase 2): ⌘ for the size beside + −, a pinch, ⌫ for Del, ⌃⌘F for full screen (F11 is
-    /// macOS's Show Desktop), ⌘W beside ESC; Control-click is a right-click; TAB to the terminal is still to come there. Pinned.
+    /// macOS's Show Desktop), ⌘W beside ESC; Control-click is a right-click; TAB to the terminal since phase 4. Pinned.
     /// </summary>
-    public const string KeysMac = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · ESC or ⌘W close)";
+    public const string KeysMac = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · TAB terminal · ESC or ⌘W close)";
 
     /// <summary>The keys line for this system: <see cref="KeysMac"/> on a Mac, <see cref="Keys"/> elsewhere.</summary>
     public static string KeysHere => OperatingSystem.IsMacOS() ? KeysMac : Keys;
