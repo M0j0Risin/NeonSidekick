@@ -48,8 +48,8 @@ public partial class ToolsMenuTests
         Assert.Equal("model", _settings.Current.CameraShutter);
         Assert.Equal("post", _settings.Current.CameraPreview);
         Assert.Equal("640x480", _settings.Current.CameraResolution);
-        Assert.Contains("model    " + CameraShutterMode.Describe("model"), _console.Output);
-        Assert.Contains("disabled " + CameraPreviewMode.Describe("disabled"), _console.Output);
+        Assert.Contains("model    " + CameraShutterMode.Describe("model"), Output);
+        Assert.Contains("disabled " + CameraPreviewMode.Describe("disabled"), Output);
         pane.Dispose();
     }
 
@@ -67,8 +67,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("", _settings.Current.CameraDevice);
-        Assert.Contains("  MX Brio", _console.Output);
-        Assert.Contains("▸ Laptop Camera", _console.Output);   // the second visit opens on the saved one
+        Assert.Contains("  MX Brio", Output);
+        Assert.Contains("▸ Laptop Camera", Output);   // the second visit opens on the saved one
         pane.Dispose();
 
         void OpenAgain() => Push(Keys.Enter);
@@ -84,8 +84,8 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("Media Foundation", _console.Output);
-        Assert.Contains(SettingsMenu.FirstCameraLabel, _console.Output);
+        Assert.Contains("Media Foundation", Output);
+        Assert.Contains(SettingsMenu.FirstCameraLabel, Output);
         pane.Dispose();
     }
 
@@ -105,8 +105,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("", _settings.Current.CameraOutputFolder);
-        Assert.Contains("Camera output folder " + SettingsMenu.CameraOutputFolderError + "; keeping camera_images.", _console.Output);
-        Assert.Contains("  · Camera output folder: comfy_images", _console.Output);
+        Assert.Contains("Camera output folder " + SettingsMenu.CameraOutputFolderError + "; keeping camera_images.", Output);
+        Assert.Contains("  · Camera output folder: comfy_images", Output);
         pane.Dispose();
     }
 
@@ -132,8 +132,8 @@ public partial class ToolsMenuTests
         Assert.Equal(30, _settings.Current.CameraWatchSeconds);
         Assert.Equal(25, _settings.Current.CameraWatchThreshold);
         Assert.Equal(600, _settings.Current.CameraWatchMinGapSeconds);
-        Assert.Contains("Camera watch interval (s) " + SettingsMenu.CameraWatchSecondsRangeError + "; keeping 10.", _console.Output);
-        Assert.Contains("Camera watch min gap (s) " + SettingsMenu.CameraWatchMinGapRangeError + "; keeping 120.", _console.Output);
+        Assert.Contains("Camera watch interval (s) " + SettingsMenu.CameraWatchSecondsRangeError + "; keeping 10.", Output);
+        Assert.Contains("Camera watch min gap (s) " + SettingsMenu.CameraWatchMinGapRangeError + "; keeping 120.", Output);
         pane.Dispose();
     }
 
@@ -167,12 +167,12 @@ public partial class ToolsMenuTests
         Assert.Equal([true, false, true], asked);
         Assert.False(watching);
         Assert.Equal(was, _settings.Current.CameraTools);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + "   " + SettingsMenu.CameraWatchButtonTitle + " ") + "\n", _console.Output);
-        Assert.Contains(SettingsMenu.CameraToggleKeys, _console.Output);
-        Assert.Contains("  · Watching now.\n", _console.Output);
-        Assert.Contains("  · Stopped now.\n", _console.Output);
-        Assert.Contains("No camera answered.", _console.Output);
-        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + " │ " + SettingsMenu.CameraWatchButtonTitle + " ") + "\n", Output);
+        Assert.Contains(SettingsMenu.CameraToggleKeys, Output);
+        Assert.Contains("  · Watching now.\n", Output);
+        Assert.Contains("  · Stopped now.\n", Output);
+        Assert.Contains("No camera answered.", Output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -186,8 +186,8 @@ public partial class ToolsMenuTests
 
         await menu.ShowSwitchAsync(SettingsField.CameraTools, CancellationToken.None);
 
-        Assert.DoesNotContain(SettingsMenu.CameraWatchButtonTitle, _console.Output);
-        Assert.DoesNotContain(SettingsMenu.CameraToggleKeys, _console.Output);
+        Assert.DoesNotContain(SettingsMenu.CameraWatchButtonTitle, Output);
+        Assert.DoesNotContain(SettingsMenu.CameraToggleKeys, Output);
         pane.Dispose();
     }
 
@@ -236,10 +236,10 @@ public partial class ToolsMenuTests
 
         Assert.Equal(["/camera live", "/camera snap"], ran);
         Assert.True(live);
-        string strip = "   " + SettingsMenu.CameraWatchButtonTitle + "    " + SettingsMenu.CameraLiveButtonTitle + "    " + SettingsMenu.CameraSnapButtonTitle + "    " + SettingsMenu.CameraScreenButtonTitle + " ";
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + strip) + "\n", _console.Output);
-        Assert.Contains("Enter = choose · W = watch · L = live · S = snap · C = screen · ESC = back", _console.Output);
-        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        string strip = " │ " + SettingsMenu.CameraWatchButtonTitle + " · " + SettingsMenu.CameraLiveButtonTitle + " · " + SettingsMenu.CameraSnapButtonTitle + " · " + SettingsMenu.CameraScreenButtonTitle + " ";
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + strip) + "\n", Output);
+        Assert.Contains("Enter = choose · W = watch · L = live · S = snap · C = screen · ESC = back", Output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         pane.Dispose();
     }
 
@@ -257,7 +257,7 @@ public partial class ToolsMenuTests
         await menu.ShowSwitchAsync(SettingsField.CameraTools, CancellationToken.None);
 
         Assert.Equal(["/screen"], ran);
-        Assert.DoesNotContain(SettingsMenu.CameraLiveButtonTitle, _console.Output);   // no live viewer: no live button
+        Assert.DoesNotContain(SettingsMenu.CameraLiveButtonTitle, Output);   // no live viewer: no live button
         pane.Dispose();
     }
 

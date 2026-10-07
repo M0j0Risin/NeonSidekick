@@ -51,7 +51,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
 
         Assert.Equal(["One", "Two", "Three"], _built);   // the open measures the other tabs (2026-10-01)
-        Assert.Contains(Rule(40) + "\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nfirst\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled(InfoPane.Title + " │ One · Two · Three ") + "\n \nfirst\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
         Assert.False(pane.OverlayOpen);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
@@ -202,12 +202,18 @@ public class InfoPaneTests : IDisposable
     {
         string strip = InfoPane.TabStripMarkup(InfoPane.Title, ["Commands", "Keys"], 0);
 
+        string sep = Theme.TabSeparator.ToMarkup();
         Assert.Equal(
-            $"[{Theme.Label.ToMarkup()}]❓ Help[/]  [{Theme.MenuHighlight.ToMarkup()}] Commands [/]  [{Theme.DimText.ToMarkup()}] Keys [/]",
+            $"[{Theme.Label.ToMarkup()}]❓ Help[/][{sep}] │[/] [{Theme.TabActive.ToMarkup()}]Commands[/] [{sep}]·[/] [{Theme.TabIdle.ToMarkup()}]Keys[/] ",
             strip);
-        Assert.Equal("❓ Help   Commands    Keys ", Markup.Remove(strip));
+        Assert.Equal("❓ Help │ Commands · Keys ", Markup.Remove(strip));
         // A title with brackets is escaped, not parsed.
-        Assert.Equal("Help   a[b] ", Markup.Remove(InfoPane.TabStripMarkup("Help", ["a[b]"], 0)));
+        Assert.Equal("Help │ a[b] ", Markup.Remove(InfoPane.TabStripMarkup("Help", ["a[b]"], 0)));
+
+        // The tab one is on is underlined and in the accent (2026-10-07), never the cursor row's fill.
+        Assert.True(Theme.TabActive.Decoration.HasFlag(Decoration.Underline));
+        Assert.Equal(Theme.Accent.Foreground, Theme.TabActive.Foreground);
+        Assert.NotEqual(Theme.MenuHighlight.Background, Theme.TabActive.Background);
     }
 
     [Fact]
@@ -215,15 +221,18 @@ public class InfoPaneTests : IDisposable
     {
         // A strip of switches (later on 2026-09-29, the embedded model filters): any number lit, the rest dim.
         string strip = InfoPane.TabStripMarkup("M", ["8GB", "16GB", "uncensored"], new HashSet<int> { 0, 2 });
-        string lit = Theme.MenuHighlight.ToMarkup();
-        string dim = Theme.DimText.ToMarkup();
-        Assert.Equal($"[{Theme.Label.ToMarkup()}]M[/]  [{lit}] 8GB [/]  [{dim}] 16GB [/]  [{lit}] uncensored [/]", strip);
+        // A lit switch is the accent without the underline: the underline is the tab one is on (2026-10-07).
+        string lit = Theme.TabLit.ToMarkup();
+        string idle = Theme.TabIdle.ToMarkup();
+        string sep = Theme.TabSeparator.ToMarkup();
+        Assert.False(Theme.TabLit.Decoration.HasFlag(Decoration.Underline));
+        Assert.Equal($"[{Theme.Label.ToMarkup()}]M[/][{sep}] │[/] [{lit}]8GB[/] [{sep}]·[/] [{idle}]16GB[/] [{sep}]·[/] [{lit}]uncensored[/] ", strip);
         Assert.Equal(strip, InfoPane.TabStripRows("M", ["8GB", "16GB", "uncensored"], new HashSet<int> { 0, 2 }, 200).Single());
         Assert.Equal(InfoPane.TabStripMarkup("M", ["a", "b"], -1), InfoPane.TabStripMarkup("M", ["a", "b"], new HashSet<int>()));
 
         // A menu page's buttons light as they are On.
         var page = new MenuPage("M", ["x"], "keys") { Buttons = [new MenuButton("8GB", '1', On: true), new MenuButton("16GB", '2')] };
-        Assert.Equal($"[{Theme.Label.ToMarkup()}]M[/]  [{lit}] 8GB [/]  [{dim}] 16GB [/]", MenuPane.TopMarkup(page));
+        Assert.Equal($"[{Theme.Label.ToMarkup()}]M[/][{sep}] │[/] [{lit}]8GB[/] [{sep}]·[/] [{idle}]16GB[/] ", MenuPane.TopMarkup(page));
     }
 
     /// <summary>The label's ❓ is two cells, as Windows Terminal draws it (2026-09-28): the strip's indent and its click columns count from it.</summary>
@@ -257,7 +266,7 @@ public class InfoPaneTests : IDisposable
     [Fact]
     public void TabStripMarkup_TakesTheLabel()
     {
-        Assert.Equal("System prompt   Prompt    Tools ", Markup.Remove(InfoPane.TabStripMarkup("System prompt", ["Prompt", "Tools"], 0)));
+        Assert.Equal("System prompt │ Prompt · Tools ", Markup.Remove(InfoPane.TabStripMarkup("System prompt", ["Prompt", "Tools"], 0)));
     }
 
     [Theory]
@@ -359,7 +368,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Short", "brief"), Tab("Tall", Numbered(3))], 0, CancellationToken.None);
 
-        string strip = Titled(InfoPane.Title + "   Short    Tall ");
+        string strip = Titled(InfoPane.Title + " │ Short · Tall ");
         Assert.Contains("\n" + strip + "\n \nbrief\n \n \n" + Rule(40), Output);
         Assert.Contains("\n" + strip + "\n \nline1\nline2\nline3\n" + Rule(40), Output);
     }
@@ -392,7 +401,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20)), Tab("Short", "brief")], 0, CancellationToken.None);
 
         Assert.Equal(["Long", "Short", "Short"], _built);   // End draws from the lines built at the open (2026-10-03)
-        Assert.Contains(Titled(InfoPane.Title + "   Long    Short ") + "\n \nbrief\n \n \n \n \n \n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Contains(Titled(InfoPane.Title + " │ Long · Short ") + "\n \nbrief\n \n \n \n \n \n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
@@ -421,19 +430,19 @@ public class InfoPaneTests : IDisposable
     [Fact]
     public void TabAt_IsPinned()
     {
-        // "Help   One    Two    Three ": the label and two spaces, then each title with its one space either side, two spaces between.
+        // "Help │ One · Two · Three ": the label and its bar, then each title with its one space either side, a dot between.
         string[] titles = ["One", "Two", "Three"];
         Assert.Equal(0, InfoPane.TabAt("Help", titles, 6));
         Assert.Equal(0, InfoPane.TabAt("Help", titles, 10));
-        Assert.Equal(1, InfoPane.TabAt("Help", titles, 13));
-        Assert.Equal(1, InfoPane.TabAt("Help", titles, 17));
-        Assert.Equal(2, InfoPane.TabAt("Help", titles, 20));
-        Assert.Equal(2, InfoPane.TabAt("Help", titles, 26));
+        Assert.Equal(1, InfoPane.TabAt("Help", titles, 12));
+        Assert.Equal(1, InfoPane.TabAt("Help", titles, 16));
+        Assert.Equal(2, InfoPane.TabAt("Help", titles, 18));
+        Assert.Equal(2, InfoPane.TabAt("Help", titles, 24));
         Assert.Null(InfoPane.TabAt("Help", titles, 0));     // the label
-        Assert.Null(InfoPane.TabAt("Help", titles, 5));     // the gap before the first
-        Assert.Null(InfoPane.TabAt("Help", titles, 11));    // the gap between
-        Assert.Null(InfoPane.TabAt("Help", titles, 12));
-        Assert.Null(InfoPane.TabAt("Help", titles, 27));    // past the end
+        Assert.Null(InfoPane.TabAt("Help", titles, 5));     // the bar
+        Assert.Null(InfoPane.TabAt("Help", titles, 11));    // the dot between
+        Assert.Null(InfoPane.TabAt("Help", titles, 17));
+        Assert.Null(InfoPane.TabAt("Help", titles, 25));    // past the end
         Assert.Null(InfoPane.TabAt("Help", titles, -1));
         // A wide title takes its cells, not its characters: "日本" is four cells.
         Assert.Equal(0, InfoPane.TabAt("H", ["日本", "b"], 8));
@@ -442,44 +451,72 @@ public class InfoPaneTests : IDisposable
     }
 
     /// <summary>
-    /// A strip wider than the window takes a second row lined up under the first title (2026-09-27): at 30
-    /// columns the budget is 26 (the × and its gap kept clear), so "Help   One    Two " fits and Three moves
-    /// down to column 6, Four after it.
+    /// A strip wider than the window takes a second row lined up under the first title (2026-09-27): at 28
+    /// columns the budget is 24 (the × and its gap kept clear), so "Help │ One · Two " fits and Three moves
+    /// down to column 6, Four after it; the label's bar carries on down the later row (2026-10-07).
     /// </summary>
     [Fact]
     public void TabStripLayout_BreaksBetweenTitles_AndLinesTheNextRowUpUnderTheFirstTitle()
     {
         string[] titles = ["One", "Two", "Three", "Four"];
-        var (rows, places) = InfoPane.TabStripLayout("Help", titles, 30);
+        var (rows, places) = InfoPane.TabStripLayout("Help", titles, 28);
         Assert.Equal(2, rows);
-        Assert.Equal([(0, 6), (0, 13), (1, 6), (1, 15)], places);
+        Assert.Equal([(0, 6), (0, 12), (1, 6), (1, 14)], places);
         Assert.Equal(
-            ["Help   One    Two ", "       Three    Four "],
-            InfoPane.TabStripRows("Help", titles, 2, 30).Select(Markup.Remove));
+            ["Help │ One · Two ", "     │ Three · Four "],
+            InfoPane.TabStripRows("Help", titles, 2, 28).Select(Markup.Remove));
+
+        // The tab one is on is underlined on the later row as on the first: no row of its own needed.
+        Assert.Contains($"[{Theme.TabActive.ToMarkup()}]Three[/]", InfoPane.TabStripRows("Help", titles, 2, 28)[1]);
 
         // Wide enough: one row, exactly TabStripMarkup's.
         Assert.Equal(1, InfoPane.TabStripLayout("Help", titles, 80).Rows);
         Assert.Equal([InfoPane.TabStripMarkup("Help", titles, 1)], InfoPane.TabStripRows("Help", titles, 1, 80));
 
         // The label is counted in cells: a two-cell glyph moves the whole column.
-        Assert.Equal((1, 10), InfoPane.TabStripLayout("🛠️ Tools", titles, 30).Places[2]);
+        Assert.Equal((1, 10), InfoPane.TabStripLayout("🛠️ Tools", titles, 28).Places[2]);
 
         // A title too wide for any row sits alone on its own row, never on an empty one before it.
         var lone = InfoPane.TabStripLayout("H", ["a", "much too long for this", "b"], 20);
         Assert.Equal([(0, 3), (1, 3), (2, 3)], lone.Places);
     }
 
+    /// <summary>A badge hugs its title (2026-10-07): its own colour, never underlined, counted in the title's cells and its click span.</summary>
+    [Fact]
+    public void ABadge_HugsItsTitle_AndCountsInTheLayoutAndTheClick()
+    {
+        string[] titles = ["One", "Two"];
+        string?[] badges = ["³", null];
+        string strip = InfoPane.TabStripMarkup("Help", titles, 0, badges);
+        Assert.Equal("Help │ One³ · Two ", Markup.Remove(strip));
+        Assert.Contains($"[{Theme.TabActive.ToMarkup()}]One[/][{Theme.TabBadge.ToMarkup()}]³[/] ", strip);
+
+        // "Help │ One³ · Two ": One's span is 6..11 with its badge, the dot 12, Two 13..17.
+        Assert.Equal([(0, 6), (0, 13)], InfoPane.TabStripLayout("Help", titles, 80, badges).Places);
+        Assert.Equal(0, InfoPane.TabAt("Help", titles, 80, 11, 0, badges));
+        Assert.Null(InfoPane.TabAt("Help", titles, 80, 12, 0, badges));
+        Assert.Equal(1, InfoPane.TabAt("Help", titles, 80, 13, 0, badges));
+
+        // An empty badge is none.
+        Assert.Equal(InfoPane.TabStripMarkup("Help", titles, 0), InfoPane.TabStripMarkup("Help", titles, 0, ["", null]));
+
+        // A menu page's tabs carry theirs.
+        var page = MenuPage.Tabbed("Help", [new MenuTab("One", ["a"]) { Badge = "³" }, new MenuTab("Two", ["b"])], 0, "keys");
+        Assert.Equal(strip, MenuPane.TopMarkup(page));
+    }
+
     [Fact]
     public void TabAt_OnALaterRow_HitsTheTitleThere_AndMissesTheIndent()
     {
         string[] titles = ["One", "Two", "Three", "Four"];
-        Assert.Equal(2, InfoPane.TabAt("Help", titles, 30, 6, 1));
-        Assert.Equal(2, InfoPane.TabAt("Help", titles, 30, 12, 1));
-        Assert.Equal(3, InfoPane.TabAt("Help", titles, 30, 15, 1));
-        Assert.Null(InfoPane.TabAt("Help", titles, 30, 3, 1));      // the indent under the label
-        Assert.Null(InfoPane.TabAt("Help", titles, 30, 6, 2));      // no third row
-        Assert.Equal(0, InfoPane.TabAt("Help", titles, 30, 6, 0));  // One, above Three
-        Assert.Null(InfoPane.TabAt("Help", titles, 30, 22, 0));     // where Three was on one row
+        Assert.Equal(2, InfoPane.TabAt("Help", titles, 28, 6, 1));
+        Assert.Equal(2, InfoPane.TabAt("Help", titles, 28, 12, 1));
+        Assert.Equal(3, InfoPane.TabAt("Help", titles, 28, 14, 1));
+        Assert.Null(InfoPane.TabAt("Help", titles, 28, 3, 1));      // the indent under the label
+        Assert.Null(InfoPane.TabAt("Help", titles, 28, 5, 1));      // the bar carried down
+        Assert.Null(InfoPane.TabAt("Help", titles, 28, 6, 2));      // no third row
+        Assert.Equal(0, InfoPane.TabAt("Help", titles, 28, 6, 0));  // One, above Three
+        Assert.Null(InfoPane.TabAt("Help", titles, 28, 20, 0));     // where Three was on one row
     }
 
     /// <summary>At 30 columns the strip is two rows (buffer 100 and 101), the spacer 102, the content from 103; a click on the second row's title switches to it.</summary>
@@ -496,7 +533,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", "second"), Tab("Three", "third"), Tab("Four", "fourth")], 0, CancellationToken.None);
 
         Assert.Equal(["One", "Two", "Three", "Four", "Three"], _built);
-        Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two ", 30) + "\n          Three    Four \n \nthird\n" + Rule(30), Output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + " │ One · Two ", 30) + "\n        │ Three · Four \n \nthird\n" + Rule(30), Output);
     }
 
     /// <summary>The overlay's first row is the cursor's (buffer row 100): the strip 100, the spacer 101, the content from 102.</summary>
@@ -515,7 +552,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, keys).ShowAsync(InfoPane.Title, [Tab("One", "first"), Tab("Two", Numbered(20)), Tab("Three", "third")], 0, CancellationToken.None);
 
         Assert.Equal(["One", "Two", "Three", "Two", "Three", "One"], _built);   // End draws from Two's lines (2026-10-03)
-        Assert.Contains("\n" + Titled(InfoPane.Title + "   One    Two    Three ") + "\n \nthird\n \n \n \n \n \n" + Rule(40), Output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + " │ One · Two · Three ") + "\n \nthird\n \n \n \n \n \n" + Rule(40), Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 

@@ -41,11 +41,11 @@ public partial class ToolsMenuTests
 
         string value = SettingsMenu.FieldValue(offered, _settings.Current, _settings.ProfileDirectory);
         Assert.StartsWith("none of ", value, StringComparison.Ordinal);
-        string page = "\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(toolSwitch) + "   " + SettingsMenu.OfferedTitle(value) + " ") + "\n";
-        int first = _console.Output.IndexOf(page, StringComparison.Ordinal);
-        Assert.True(first >= 0, _console.Output);
-        Assert.True(_console.Output.IndexOf(page, first + 1, StringComparison.Ordinal) > first, _console.Output);   // back on the page after the error
-        Assert.Contains(SettingsMenu.OfferedToggleKeys, _console.Output);
+        string page = "\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(toolSwitch) + " │ " + SettingsMenu.OfferedTitle(value) + " ") + "\n";
+        int first = Output.IndexOf(page, StringComparison.Ordinal);
+        Assert.True(first >= 0, Output);
+        Assert.True(Output.IndexOf(page, first + 1, StringComparison.Ordinal) > first, Output);   // back on the page after the error
+        Assert.Contains(SettingsMenu.OfferedToggleKeys, Output);
         Assert.Equal(was, SettingsMenu.FieldValue(toolSwitch, _settings.Current, _settings.ProfileDirectory) == "on");
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -64,12 +64,12 @@ public partial class ToolsMenuTests
         await menu.ShowSwitchAsync(SettingsField.SqlTools, CancellationToken.None);
 
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);
-        string before = "\n" + Titled(ToolsText.Label + " › SQL tools   ☑  offered (none of 2) ") + "\n";
-        string list = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.SqlConnectionsOffered) + "   ";   // the checklist, its own buttons after
-        string after = "\n" + Titled(ToolsText.Label + " › SQL tools   ☑  offered (1 of 2) ") + "\n";
-        Assert.True(_console.Output.IndexOf(before, StringComparison.Ordinal) < _console.Output.IndexOf(list, StringComparison.Ordinal), _console.Output);
-        Assert.True(_console.Output.IndexOf(list, StringComparison.Ordinal) < _console.Output.LastIndexOf(after, StringComparison.Ordinal), _console.Output);
-        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        string before = "\n" + Titled(ToolsText.Label + " › SQL tools │ ☑  offered (none of 2) ") + "\n";
+        string list = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.SqlConnectionsOffered) + " │ ";   // the checklist, its own buttons after
+        string after = "\n" + Titled(ToolsText.Label + " › SQL tools │ ☑  offered (1 of 2) ") + "\n";
+        Assert.True(Output.IndexOf(before, StringComparison.Ordinal) < Output.IndexOf(list, StringComparison.Ordinal), Output);
+        Assert.True(Output.IndexOf(list, StringComparison.Ordinal) < Output.LastIndexOf(after, StringComparison.Ordinal), Output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -83,7 +83,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowSwitchAsync(SettingsField.DockerTools, CancellationToken.None);
 
-        Assert.DoesNotContain(SettingsMenu.OfferedButton, _console.Output);
+        Assert.DoesNotContain(SettingsMenu.OfferedButton, Output);
         pane.Dispose();
     }
 }

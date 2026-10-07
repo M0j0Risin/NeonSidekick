@@ -57,7 +57,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask", output);
         Assert.Equal([NeonSidekick.Llm.Tools.CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.Contains("✓ mind", output);
         var run = Assert.Single(new BenchHistory(_settings.ProfileDirectory).Runs());

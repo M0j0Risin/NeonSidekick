@@ -94,30 +94,37 @@ public sealed class InfoPane
     }
 
     /// <summary>
-    /// The strip: the label, then every title with a space either side (so the strip does not shift
-    /// when the highlight moves), the active one highlighted, the others dim. Pinned.
+    /// What follows the label when there are titles (2026-10-07, the user's pick): a space and a dim bar, two cells as the
+    /// two-space gap it replaced, so the first title's column is where it was. A later row of a wrapped strip carries the bar
+    /// on under it, a column of its own between the label and the titles.
     /// </summary>
-    public static string TabStripMarkup(string label, IReadOnlyList<string> titles, int active) =>
-        TabStripMarkup(label, titles, active < 0 ? [] : new HashSet<int> { active });
+    public const string LabelSeparator = " │";
+
+    /// <summary>What sits between two titles (2026-10-07): one dim dot, where two blank cells were, so the strip is a cell shorter per title and reads as one row of choices.</summary>
+    public const string TitleSeparator = "·";
+
+    /// <summary>The cells between the label and the first title's highlight (<see cref="LabelSeparator"/>).</summary>
+    private const int LabelGap = 2;
+
+    /// <summary>The cells between one title's highlight and the next's (<see cref="TitleSeparator"/>).</summary>
+    private const int TitleGap = 1;
 
     /// <summary>
-    /// <see cref="TabStripMarkup(string, IReadOnlyList{string}, int)"/> with any number of titles highlighted (later on
-    /// 2026-09-29: a button strip whose buttons are switches, the embedded model filters). Pinned.
+    /// The strip: the label, the <see cref="LabelSeparator"/>, then every title with a space either side (so the strip does not
+    /// shift when the mark moves) and a <see cref="TitleSeparator"/> between them, the active one <see cref="Theme.TabActive"/>
+    /// (underlined, 2026-10-07; highlighted as the cursor's row before), the others <see cref="Theme.TabIdle"/>. A title with a
+    /// badge (<paramref name="badges"/>, by index; null or a null entry for none) wears it right after, inside its click span. Pinned.
     /// </summary>
-    public static string TabStripMarkup(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active)
-    {
-        ArgumentNullException.ThrowIfNull(label);
-        ArgumentNullException.ThrowIfNull(titles);
-        ArgumentNullException.ThrowIfNull(active);
-        var parts = new List<string>(titles.Count + 1) { $"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]" };
-        for (int i = 0; i < titles.Count; i++)
-        {
-            var style = active.Contains(i) ? Theme.MenuHighlight : Theme.DimText;
-            parts.Add($"[{style.ToMarkup()}] {Markup.Escape(titles[i])} [/]");
-        }
+    public static string TabStripMarkup(string label, IReadOnlyList<string> titles, int active, IReadOnlyList<string?>? badges = null) =>
+        TabStripRows(label, titles, Set(active), Theme.TabActive, int.MaxValue, badges)[0];
 
-        return string.Join("  ", parts);
-    }
+    /// <summary>
+    /// <see cref="TabStripMarkup(string, IReadOnlyList{string}, int)"/> with any number of titles lit (later on
+    /// 2026-09-29: a button strip whose buttons are switches, the embedded model filters), each <see cref="Theme.TabLit"/>:
+    /// a switch is on, not the tab one is on, so no underline. Pinned.
+    /// </summary>
+    public static string TabStripMarkup(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active) =>
+        TabStripRows(label, titles, active, Theme.TabLit, int.MaxValue, null)[0];
 
     /// <summary>
     /// Where each title of the strip sits at <paramref name="width"/> columns: its row and the column
@@ -127,21 +134,22 @@ public sealed class InfoPane
     /// ask: Spectre's word-wrap had put /tools' Options under the 🛠️ label, where no click reached it).
     /// The budget is the one <see cref="ScreenPane"/> tests before drawing the
     /// <see cref="ScreenPane.CloseGlyph"/>, so the first row always keeps the ×; the later rows take the
-    /// same budget so the columns stay even. A title too wide for any row sits alone on its own. Pure.
+    /// same budget so the columns stay even. A title too wide for any row sits alone on its own. A badge counts in its
+    /// title's cells (<see cref="TitleCells"/>). Pure.
     /// </summary>
-    public static (int Rows, (int Row, int Column)[] Places) TabStripLayout(string label, IReadOnlyList<string> titles, int width)
+    public static (int Rows, (int Row, int Column)[] Places) TabStripLayout(string label, IReadOnlyList<string> titles, int width, IReadOnlyList<string?>? badges = null)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         int budget = width - 1 - ScreenPane.TrailerGap - TextCells.Width(ScreenPane.CloseGlyph);
-        int indent = TextCells.Width(label) + 2;
+        int indent = TextCells.Width(label) + LabelGap;
         var places = new (int Row, int Column)[titles.Count];
         int row = 0;
         int column = indent;
         bool first = true;
         for (int i = 0; i < titles.Count; i++)
         {
-            int cells = TextCells.Width(titles[i]) + 2;
+            int cells = TitleCells(titles, badges, i);
             if (!first && column + cells > budget)
             {
                 row++;
@@ -149,7 +157,7 @@ public sealed class InfoPane
             }
 
             places[i] = (row, column);
-            column += cells + 2;
+            column += cells + TitleGap;
             first = false;
         }
 
@@ -159,41 +167,71 @@ public sealed class InfoPane
     /// <summary>
     /// The strip laid out for <paramref name="width"/> columns (<see cref="TabStripLayout"/>): one markup
     /// line per row, the first as <see cref="TabStripMarkup"/> draws it, the later ones indented to the
-    /// first title's column with the same gaps and styles.
+    /// first title's column, the <see cref="LabelSeparator"/>'s bar carried down, with the same separators and styles.
     /// </summary>
-    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, int active, int width) =>
-        TabStripRows(label, titles, active < 0 ? [] : new HashSet<int> { active }, width);
+    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, int active, int width, IReadOnlyList<string?>? badges = null) =>
+        TabStripRows(label, titles, Set(active), Theme.TabActive, width, badges);
 
-    /// <summary><see cref="TabStripRows(string, IReadOnlyList{string}, int, int)"/> with any number of titles highlighted (later on 2026-09-29).</summary>
-    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, int width)
+    /// <summary><see cref="TabStripRows(string, IReadOnlyList{string}, int, int)"/> with any number of titles lit (later on 2026-09-29).</summary>
+    public static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, int width) =>
+        TabStripRows(label, titles, active, Theme.TabLit, width, null);
+
+    private static IReadOnlySet<int> Set(int active) => active < 0 ? new HashSet<int>() : new HashSet<int> { active };
+
+    /// <summary>The badge of title <paramref name="i"/>: null for none, and for an empty one.</summary>
+    private static string? BadgeOf(IReadOnlyList<string?>? badges, int i) =>
+        badges is not null && i < badges.Count && !string.IsNullOrEmpty(badges[i]) ? badges[i] : null;
+
+    /// <summary>The cells title <paramref name="i"/> takes, its click span: a space either side, the title, and its badge right after it.</summary>
+    private static int TitleCells(IReadOnlyList<string> titles, IReadOnlyList<string?>? badges, int i) =>
+        TextCells.Width(titles[i]) + 2 + (BadgeOf(badges, i) is { } badge ? TextCells.Width(badge) : 0);
+
+    private static IReadOnlyList<string> TabStripRows(string label, IReadOnlyList<string> titles, IReadOnlySet<int> active, Style lit, int width, IReadOnlyList<string?>? badges)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         ArgumentNullException.ThrowIfNull(active);
-        var (rows, places) = TabStripLayout(label, titles, width);
-        var parts = new List<string>[rows];
+        var (rows, places) = TabStripLayout(label, titles, width, badges);
+        string separator = Theme.TabSeparator.ToMarkup();
+        string bar = $"[{separator}]{Markup.Escape(LabelSeparator)}[/]";
+        var lines = new System.Text.StringBuilder[rows];
         for (int r = 0; r < rows; r++)
         {
-            parts[r] = [];
+            // A later row starts with the label's width of spaces and the bar, so its first title lands in the first title's column.
+            lines[r] = new System.Text.StringBuilder(r == 0 ? $"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]" : new string(' ', TextCells.Width(label)));
+            if (titles.Count > 0)
+            {
+                lines[r].Append(bar);
+            }
         }
 
-        parts[0].Add($"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]");
         for (int i = 0; i < titles.Count; i++)
         {
-            var style = active.Contains(i) ? Theme.MenuHighlight : Theme.DimText;
-            parts[places[i].Row].Add($"[{style.ToMarkup()}] {Markup.Escape(titles[i])} [/]");
+            var line = lines[places[i].Row];
+            if (i > 0 && places[i - 1].Row == places[i].Row)
+            {
+                line.Append($"[{separator}]{TitleSeparator}[/]");
+            }
+
+            // The spaces either side are unstyled (2026-10-07): the underline sits under the title alone; the click still takes them.
+            var style = active.Contains(i) ? lit : Theme.TabIdle;
+            line.Append($" [{style.ToMarkup()}]{Markup.Escape(titles[i])}[/]");
+            if (BadgeOf(badges, i) is { } badge)
+            {
+                // Outside the title's style (2026-10-07): never underlined, its own colour on every tab.
+                line.Append($"[{Theme.TabBadge.ToMarkup()}]{Markup.Escape(badge)}[/]");
+            }
+
+            line.Append(' ');
         }
 
-        string pad = new(' ', TextCells.Width(label));
-        var lines = new string[rows];
+        var result = new string[rows];
         for (int r = 0; r < rows; r++)
         {
-            // A later row's first title is joined to the label's width of spaces by the same two-cell
-            // gap, so it lands in the first title's column.
-            lines[r] = r == 0 ? string.Join("  ", parts[r]) : pad + "  " + string.Join("  ", parts[r]);
+            result[r] = lines[r].ToString();
         }
 
-        return lines;
+        return result;
     }
 
     /// <summary>
@@ -207,14 +245,15 @@ public sealed class InfoPane
     /// <summary>
     /// <see cref="TabAt(string, IReadOnlyList{string}, int)"/> on the strip laid out for
     /// <paramref name="width"/> columns (<see cref="TabStripLayout"/>): the click's
-    /// <paramref name="row"/> of the strip as well as its column; null on the indent of a later row. Pure.
+    /// <paramref name="row"/> of the strip as well as its column; null on the indent of a later row. A click on a badge is
+    /// its tab's. Pure.
     /// </summary>
-    public static int? TabAt(string label, IReadOnlyList<string> titles, int width, int x, int row)
+    public static int? TabAt(string label, IReadOnlyList<string> titles, int width, int x, int row, IReadOnlyList<string?>? badges = null)
     {
-        var (_, places) = TabStripLayout(label, titles, width);
+        var (_, places) = TabStripLayout(label, titles, width, badges);
         for (int i = 0; i < titles.Count; i++)
         {
-            int cells = TextCells.Width(titles[i]) + 2;
+            int cells = TitleCells(titles, badges, i);
             if (places[i].Row == row && x >= places[i].Column && x < places[i].Column + cells)
             {
                 return i;

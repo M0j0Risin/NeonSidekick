@@ -162,6 +162,23 @@ public static class Theme
     /// <summary>The dim part of a highlighted row (the note beside a command or skill name on the input line's list, 2026-09-16).</summary>
     public static Style MenuHighlightDim => s_current[ThemeStyleSlot.MenuHighlightDim];
     /// <summary>
+    /// The tab one is on in a pane's strip (2026-10-07, the user's pick: an underline, which marks a title on any row of a
+    /// wrapped strip without a row of its own): the accent's colour, bold and underlined, no fill, so it no longer reads as the
+    /// cursor's row (<see cref="MenuHighlight"/>) under it. Derived, as <see cref="ToolbarOff"/> is: every theme has its own.
+    /// </summary>
+    public static Style TabActive => new(Accent.Foreground, decoration: Decoration.Bold | Decoration.Underline);
+    /// <summary>A lit switch on a button strip (the embedded model filters; any number at once): <see cref="TabActive"/> without the underline, which is the tab one is on.</summary>
+    public static Style TabLit => new(Accent.Foreground, decoration: Decoration.Bold);
+    /// <summary>A tab one is not on (2026-10-07): body text, a step up from the dim it was, so the titles read as choices.</summary>
+    public static Style TabIdle => new(Body.Foreground);
+    /// <summary>The strip's separators (2026-10-07): the <c>│</c> after the label and the <c>·</c> between titles, in the rule's colour.</summary>
+    public static Style TabSeparator => new(PaneRule.Foreground);
+    /// <summary>
+    /// A tab's badge (2026-10-07): a settings tab's count of rows that differ from the default, in the secondary accent their
+    /// values read in (<c>SettingsMenu.FieldLabel</c>), so the count and the rows it counts are one colour.
+    /// </summary>
+    public static Style TabBadge => new(Secondary);
+    /// <summary>
     /// The slab a menu's footer is drawn on, the cursor's row described under the list (2026-10-05, the user's ask: the
     /// description read as more rows of the list): the dim text on the lifted fill the highlighted row and code blocks use.
     /// </summary>

@@ -12,6 +12,8 @@ namespace NeonSidekick.Tests;
 public class SkillsMenuTests : IDisposable
 {
     private readonly TestConsole _console = new();
+    /// <summary>The console's output with the strips' badges taken off (<see cref="TabStrips.Unbadged"/>, 2026-10-07): the fixture's own rows move them.</summary>
+    private string Output => TabStrips.Unbadged(_console.Output);
     private readonly ManualTimeProvider _time = new();
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly SkillRoots _roots;
@@ -126,12 +128,12 @@ public class SkillsMenuTests : IDisposable
 
     /// <summary><paramref name="before"/>, then the blank rows that hold a tab at its pane's tallest tab's height (2026-10-01) and the footer (its rule since 2026-10-05), then <paramref name="after"/>.</summary>
     private void AssertPadded(string before, string after) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?:(?: |  [^\n]*|" + Rule(100) + ")\n)*" + System.Text.RegularExpressions.Regex.Escape(after)), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(before) + "(?:(?: |  [^\n]*|" + Rule(100) + ")\n)*" + System.Text.RegularExpressions.Regex.Escape(after)), Output);
 
     /// <summary>A title row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     private static string Titled(string row, int width = 100) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
-    private const string Strip = SkillsText.Label + "   Offered    Reflection    Options ";   // Options last since 2026-09-22 (the user's ask); the Project tab before it went on 2026-10-01, its toggle an Options row; Loaded until 2026-09-19; Options (the settings rows, /settings' Skills tab until then) since later that day; Reflection (the reflection's rows out of Options) later still; the Roots tab after Project until later still that day
+    private const string Strip = SkillsText.Label + " │ Offered · Reflection · Options ";   // Options last since 2026-09-22 (the user's ask); the Project tab before it went on 2026-10-01, its toggle an Options row; Loaded until 2026-09-19; Options (the settings rows, /settings' Skills tab until then) since later that day; Reflection (the reflection's rows out of Options) later still; the Roots tab after Project until later still that day
 
     /// <summary>The Options tab's five rows at their defaults, padded to the tab's own column (38: the external-skills label), as the pane prints them; Project file third since 2026-10-01. Pinned.</summary>
     private static readonly string OptionsRows = "▸ Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                          on\n  Skill compact mode                    protected\n  #-mention enabled                     on\n";   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
@@ -199,9 +201,9 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  revert   pick an earlier version to put back\n  delete   remove the folder and everything in it\n", _console.Output);
-        Assert.Contains("  · " + SkillRecordText.NoVersionsNotice("haiku") + "\n", _console.Output);
-        Assert.DoesNotContain(SkillsMenu.VersionsTitle("haiku"), _console.Output);
+        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  revert   pick an earlier version to put back\n  delete   remove the folder and everything in it\n", Output);
+        Assert.Contains("  · " + SkillRecordText.NoVersionsNotice("haiku") + "\n", Output);
+        Assert.DoesNotContain(SkillsMenu.VersionsTitle("haiku"), Output);
         Assert.Empty(_restored);
     }
 
@@ -229,9 +231,9 @@ public class SkillsMenuTests : IDisposable
 
         // No notes.md on disk: the version from before it was there is the file's now too.
         Assert.Contains("\n" + Titled(SkillsMenu.VersionsTitle("haiku")) + "\n" + SkillRecordText.VersionsCaption + "\n \n" +
-            "  SKILL.md your edit of 2026-10-04 14:05 · current\n▸ SKILL.md before the model's change at 2026-10-04 14:05\n  notes.md not there before a reflection's change at 2026-10-04 14:05 · current\n", _console.Output);
+            "  SKILL.md your edit of 2026-10-04 14:05 · current\n▸ SKILL.md before the model's change at 2026-10-04 14:05\n  notes.md not there before a reflection's change at 2026-10-04 14:05 · current\n", Output);
         Assert.Equal(2, Assert.Single(_restored).Id);
-        Assert.Contains("  · " + SkillRecordText.RevertedNotice("haiku", kept[1], TimeZoneInfo.Utc) + "\n", _console.Output);
+        Assert.Contains("  · " + SkillRecordText.RevertedNotice("haiku", kept[1], TimeZoneInfo.Utc) + "\n", Output);
     }
 
     /// <summary>The pane: the three tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project file toggle is an Options row since 2026-10-01 (the one row of a Project tab of its own from later on 2026-09-19 until then) — Enter opens its page, off picked, the status line saying so; ESC closes with nothing in the transcript.</summary>
@@ -249,13 +251,13 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         AssertPadded("\n" + Titled(Strip) + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
-        Assert.DoesNotContain("\n" + Titled(SkillsText.Label + " › Project file") + "\n", _console.Output);   // no page: Space saved at once
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n  Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n▸ Project file                          off\n", _console.Output);   // the flip on the status line, the row re-read, the cursor kept
+        Assert.DoesNotContain("\n" + Titled(SkillsText.Label + " › Project file") + "\n", Output);   // no page: Space saved at once
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n  Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n▸ Project file                          off\n", Output);   // the flip on the status line, the row re-read, the cursor kept
         Assert.False(_settings.Current.ProjectFile);
-        Assert.DoesNotContain("Project    ", _console.Output);   // no Project tab in the strip
-        Assert.DoesNotContain("Roots", _console.Output);
-        Assert.DoesNotContain("Working directory", _console.Output);
-        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), _console.Output);
+        Assert.DoesNotContain("Project    ", Output);   // no Project tab in the strip
+        Assert.DoesNotContain("Roots", Output);
+        Assert.DoesNotContain("Working directory", Output);
+        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), Output);
         Assert.False(pane.OverlayOpen);
         Assert.Equal(flow, pane.FlowRow);
         Assert.True(Exists(SkillScope.Profile, "haiku") && Exists(SkillScope.Global, "haiku"));
@@ -277,12 +279,12 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(MenuFilter.Caption("pdf", 1, 2), _console.Output);
-        Assert.Contains("\n▸ pdf    profile  Extracts PDF text.\n", _console.Output);
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("pdf")) + "\n", _console.Output);
-        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), _console.Output);
-        Assert.Contains(MenuFilter.Hint(SkillsMenu.LoadedKeys, "pdf"), _console.Output);
-        Assert.Contains("\n▸ haiku  profile  Writes haiku.\n  pdf    profile  Extracts PDF text.\n", _console.Output);   // cleared: both again
+        Assert.Contains(MenuFilter.Caption("pdf", 1, 2), Output);
+        Assert.Contains("\n▸ pdf    profile  Extracts PDF text.\n", Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("pdf")) + "\n", Output);
+        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), Output);
+        Assert.Contains(MenuFilter.Hint(SkillsMenu.LoadedKeys, "pdf"), Output);
+        Assert.Contains("\n▸ haiku  profile  Writes haiku.\n  pdf    profile  Extracts PDF text.\n", Output);   // cleared: both again
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -302,8 +304,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter(longer), 100), _console.Output);   // haiku, the first
-        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Extracts PDF text."), 100), _console.Output);   // pdf, after Down
+        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter(longer), 100), Output);   // haiku, the first
+        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Extracts PDF text."), 100), Output);   // pdf, after Down
         pane.Dispose();
     }
 
@@ -318,8 +320,8 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None, midTurn: true);
 
         Assert.False(_settings.Current.ProjectFile);
-        Assert.Contains("\n  · Project file: off\n", _console.Output);
-        Assert.DoesNotContain(SettingsMenu.NotWhileReplyRunsNotice, _console.Output);
+        Assert.Contains("\n  · Project file: off\n", Output);
+        Assert.DoesNotContain(SettingsMenu.NotWhileReplyRunsNotice, Output);
         pane.Dispose();
     }
 
@@ -335,7 +337,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\nloaded in 2 turns across 1 session; last loaded 2026-09-18 14:05\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\nloaded in 2 turns across 1 session; last loaded 2026-09-18 14:05\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n", Output);
     }
 
     /// <summary>Enter on a skill row opens the scope page on its scope; the other root, Yes → the folder moved, the list read again with the notice on its status line.</summary>
@@ -352,9 +354,9 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n" + Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", _console.Output);   // delete always offered since 2026-09-23
-        Assert.Contains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n" + Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n▸ haiku  global   Writes haiku.\n", _console.Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n" + Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
+        Assert.Contains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n" + Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.False(Exists(SkillScope.Profile, "haiku"));
         Assert.True(Exists(SkillScope.Global, "haiku"));
         Assert.Equal(flow, pane.FlowRow);
@@ -374,7 +376,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(2, _console.Output.Split("\n  · " + SkillsMenu.KeptNotice + "\n▸ haiku  global   Writes haiku.\n").Length - 1);
+        Assert.Equal(2, Output.Split("\n  · " + SkillsMenu.KeptNotice + "\n▸ haiku  global   Writes haiku.\n").Length - 1);
         Assert.True(Exists(SkillScope.Global, "haiku"));
         Assert.False(Exists(SkillScope.Profile, "haiku"));
         pane.Dispose();
@@ -393,10 +395,10 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n  · " + SettingsMenu.UnchangedNotice + "\n▸ haiku  profile  Writes haiku.\n", _console.Output);
-        Assert.Contains("\n  ✗ " + SkillsMenu.ExistsError("haiku", "haiku", SkillScope.Global) + "\n▸ haiku  profile  Writes haiku.\n", _console.Output);
-        Assert.Contains("\n  ✗ " + SkillsMenu.ExistsError("haiku", "haiku", SkillScope.Profile) + "\n  haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n▸   haiku  global   shadowed by the profile skills\n", _console.Output);
-        Assert.DoesNotContain("Move skill", _console.Output);
+        Assert.Contains("\n  · " + SettingsMenu.UnchangedNotice + "\n▸ haiku  profile  Writes haiku.\n", Output);
+        Assert.Contains("\n  ✗ " + SkillsMenu.ExistsError("haiku", "haiku", SkillScope.Global) + "\n▸ haiku  profile  Writes haiku.\n", Output);
+        Assert.Contains("\n  ✗ " + SkillsMenu.ExistsError("haiku", "haiku", SkillScope.Profile) + "\n  haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n▸   haiku  global   shadowed by the profile skills\n", Output);
+        Assert.DoesNotContain("Move skill", Output);
         Assert.True(Exists(SkillScope.Profile, "haiku") && Exists(SkillScope.Global, "haiku"));
         pane.Dispose();
     }
@@ -410,8 +412,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n  · " + SkillsMenu.ExternalReadOnlyNotice + "\n▸ pdf   external Extracts PDF text.\n", _console.Output);
-        Assert.DoesNotContain(SkillsMenu.ScopeTitle("pdf"), _console.Output);
+        Assert.Contains("\n  · " + SkillsMenu.ExternalReadOnlyNotice + "\n▸ pdf   external Extracts PDF text.\n", Output);
+        Assert.DoesNotContain(SkillsMenu.ScopeTitle("pdf"), Output);
         Assert.True(Exists(SkillScope.External, "pdf"));
         pane.Dispose();
     }
@@ -433,10 +435,10 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("  profile  " + _roots.Profile) + "\n" + Fitted("▸ global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n", _console.Output);
-        Assert.Contains("\n" + Titled(SkillsMenu.DeletePrompt("haiku", SkillScope.Global)) + "\n \n▸ No\n  Yes\n", _console.Output);
-        Assert.Contains("\n  · " + SkillsMenu.KeptNotice + "\n▸ haiku  global   Writes haiku.\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.DeletedNotice("haiku", SkillScope.Global) + "\n" + Fitted("▸ " + SkillsText.NoneLine) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("  profile  " + _roots.Profile) + "\n" + Fitted("▸ global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n", Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.DeletePrompt("haiku", SkillScope.Global)) + "\n \n▸ No\n  Yes\n", Output);
+        Assert.Contains("\n  · " + SkillsMenu.KeptNotice + "\n▸ haiku  global   Writes haiku.\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.DeletedNotice("haiku", SkillScope.Global) + "\n" + Fitted("▸ " + SkillsText.NoneLine) + "\n", Output);
         Assert.False(Directory.Exists(Path.Combine(_roots.Global, "haiku")));
         pane.Dispose();
     }
@@ -455,9 +457,9 @@ public class SkillsMenuTests : IDisposable
 
         string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
         Assert.Equal([path], _opened);
-        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n", _console.Output);   // the delete row after it, always (2026-09-23)
-        Assert.Contains("\n  · " + SkillsMenu.EditOpenedNotice("haiku", "")[..^1], _console.Output);   // the path fitted to the width after it
-        Assert.Contains("\n▸ haiku  profile  Writes haiku.\n", _console.Output);
+        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n", Output);   // the delete row after it, always (2026-09-23)
+        Assert.Contains("\n  · " + SkillsMenu.EditOpenedNotice("haiku", "")[..^1], Output);   // the path fitted to the width after it
+        Assert.Contains("\n▸ haiku  profile  Writes haiku.\n", Output);
         Assert.True(Exists(SkillScope.Profile, "haiku"));
         pane.Dispose();
     }
@@ -473,8 +475,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(SkillsMenu.EditFailedError("no editor"), _console.Output);
-        Assert.DoesNotContain("opened skill", _console.Output);
+        Assert.Contains(SkillsMenu.EditFailedError("no editor"), Output);
+        Assert.DoesNotContain("opened skill", Output);
         pane.Dispose();
     }
 
@@ -519,8 +521,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n▸ rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.RenamedNotice("haiku", "my-haiku") + "\n▸ my-haiku  profile  Writes haiku.\n", _console.Output);
+        Assert.Contains("\n▸ rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  delete   remove the folder and everything in it\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.RenamedNotice("haiku", "my-haiku") + "\n▸ my-haiku  profile  Writes haiku.\n", Output);
         Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "haiku")));
         Assert.True(Exists(SkillScope.Profile, "my-haiku"));
         Assert.Equal("---\nname: my-haiku\ndescription: Writes haiku.\nlicense: MIT\n---\n\nbody\n", File.ReadAllText(Path.Combine(_roots.Profile, "my-haiku", SkillCatalog.FileName)));
@@ -552,10 +554,10 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n  ✗ " + SkillsMenu.RenameExistsError("haiku", "pdf", SkillScope.Global) + "\n▸ haiku  profile  Writes haiku.\n", _console.Output);
-        Assert.Contains("\n  · " + SettingsMenu.UnchangedNotice + "\n▸ haiku  profile  Writes haiku.\n", _console.Output);
-        Assert.Contains("\n  ✗ " + SkillsMenu.RenameEmptyError + "\n▸ haiku  profile  Writes haiku.\n", _console.Output);
-        Assert.DoesNotContain("(renamed:", _console.Output);
+        Assert.Contains("\n  ✗ " + SkillsMenu.RenameExistsError("haiku", "pdf", SkillScope.Global) + "\n▸ haiku  profile  Writes haiku.\n", Output);
+        Assert.Contains("\n  · " + SettingsMenu.UnchangedNotice + "\n▸ haiku  profile  Writes haiku.\n", Output);
+        Assert.Contains("\n  ✗ " + SkillsMenu.RenameEmptyError + "\n▸ haiku  profile  Writes haiku.\n", Output);
+        Assert.DoesNotContain("(renamed:", Output);
         Assert.True(Exists(SkillScope.Profile, "haiku"));
         Assert.True(Exists(SkillScope.Global, "pdf"));
         pane.Dispose();
@@ -575,7 +577,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n  ✗ " + SkillsMenu.MissingError("haiku") + "\n" + Fitted("▸ " + SkillsText.NoneLine) + "\n", _console.Output);
+        Assert.Contains("\n  ✗ " + SkillsMenu.MissingError("haiku") + "\n" + Fitted("▸ " + SkillsText.NoneLine) + "\n", Output);
         pane.Dispose();
     }
 
@@ -588,8 +590,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None, midTurn: true);
 
-        Assert.Contains("\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ haiku  profile  Writes haiku.\n", _console.Output);
-        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), _console.Output);
+        Assert.Contains("\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ haiku  profile  Writes haiku.\n", Output);
+        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), Output);
         pane.Dispose();
     }
 
@@ -607,7 +609,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(Titled(SkillsMenu.ScopeTitle("haiku")), _console.Output);
+        Assert.Contains(Titled(SkillsMenu.ScopeTitle("haiku")), Output);
         Assert.False(pane.OverlayOpen);
         Assert.False(pane.Dismissed);
         Assert.True(input.IsAvailable);
@@ -624,8 +626,8 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Fitted("▸ " + SkillsText.OffLine) + "\n", _console.Output);
-        Assert.DoesNotContain(SkillsText.Label + " › ", _console.Output);
+        Assert.Contains("\n" + Fitted("▸ " + SkillsText.OffLine) + "\n", Output);
+        Assert.DoesNotContain(SkillsText.Label + " › ", Output);
         pane.Dispose();
     }
 
@@ -642,8 +644,8 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // In the strip's order: Offered, Reflection, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project file row among the Options since 2026-10-01 (a Project section of its own until then), no Roots section.
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  ·   Reflection yields to turns: on\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", _console.Output);
-        Assert.DoesNotContain("Roots", _console.Output);
+        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection cooldown (minutes): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection includes sessions: on\n  ·   Reflection yields to turns: on\n  ·   Reflection edit supporting files: off\n  ·   Reflection downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", Output);
+        Assert.DoesNotContain("Roots", Output);
     }
 
     // ── The Options tab (2026-09-19): /settings' Skills tab, hosted here ────
@@ -667,11 +669,11 @@ public class SkillsMenuTests : IDisposable
         Assert.False(_settings.Current.ReflectionIncludesSessions);
         AssertPadded("\n" + Titled(Strip) + "\n \n" + OptionsRows, Rule(100) + "\n" + SettingsMenu.TabKeys + "\n");
         AssertPadded("\n" + Titled(Strip) + "\n \n" + ReflectionRows, Rule(100) + "\n" + SettingsMenu.TabKeys + "\n");   // the flip's notice dropped by the tab switch (2026-09-20)
-        Assert.DoesNotContain("\n  · Agent skills: off\n" + ReflectionRows, _console.Output);
-        Assert.Contains("\n" + Titled(SkillsText.Label + " › Reflection includes sessions") + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Reflection includes sessions: off\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Agent skills: off\n▸ Agent skills                          off\n", _console.Output);
-        Assert.Contains("\n" + Fitted("▸ " + SkillsText.OffLine) + "\n", _console.Output);   // the tabs re-read after the flip
+        Assert.DoesNotContain("\n  · Agent skills: off\n" + ReflectionRows, Output);
+        Assert.Contains("\n" + Titled(SkillsText.Label + " › Reflection includes sessions") + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Reflection includes sessions: off\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Agent skills: off\n▸ Agent skills                          off\n", Output);
+        Assert.Contains("\n" + Fitted("▸ " + SkillsText.OffLine) + "\n", Output);   // the tabs re-read after the flip
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -689,9 +691,9 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("unprotected", _settings.Current.SkillCompactMode);
-        Assert.Contains("\n" + Titled(SkillsText.Label + " › Skill compact mode") + "\n", _console.Output);
-        Assert.DoesNotContain(SettingsMenu.Title + " › Skill compact mode", _console.Output);
-        Assert.Contains("  · Skill compact mode: unprotected\n", _console.Output);
+        Assert.Contains("\n" + Titled(SkillsText.Label + " › Skill compact mode") + "\n", Output);
+        Assert.DoesNotContain(SettingsMenu.Title + " › Skill compact mode", Output);
+        Assert.Contains("  · Skill compact mode: unprotected\n", Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);   // restored for /settings
         pane.Dispose();
     }
@@ -709,9 +711,9 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None, midTurn: true);
 
         Assert.False(_settings.Current.SkillHashMention);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n", _console.Output);
-        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), _console.Output);
-        Assert.Contains("\n" + Titled(SkillsText.Label + " › #-mention enabled") + "\n", _console.Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n", Output);
+        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), Output);
+        Assert.Contains("\n" + Titled(SkillsText.Label + " › #-mention enabled") + "\n", Output);
         pane.Dispose();
     }
 }

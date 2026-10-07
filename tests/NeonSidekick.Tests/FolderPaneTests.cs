@@ -52,7 +52,7 @@ public class FolderPaneTests : IDisposable
     private static string Titled(string row, int width = 40) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as drawn: the label, then the button as a dim tab with a space either side.</summary>
-    private static string Strip => Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ");
+    private static string Strip => Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ");
 
     /// <summary>A tree row: the pointer or its blank, the depth's indent, the glyph, the name.</summary>
     private static string Row(bool active, int depth, string glyph, string name) => (active ? MenuPane.Pointer : MenuPane.NoPointer) + new string(' ', depth * 2) + glyph + " " + name;

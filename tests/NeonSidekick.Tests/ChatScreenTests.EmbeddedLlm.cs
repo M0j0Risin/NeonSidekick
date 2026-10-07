@@ -226,7 +226,7 @@ public partial class ChatScreenTests
         Assert.Empty(embedded.Starts);
         int started = output.IndexOf(BackgroundJobText.DownloadStarted(EmbeddedModelCatalog.Models[0]), StringComparison.Ordinal);
         Assert.True(started >= 0, output);
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output[started..]);   // the click was the job's, never the row's /settings (the catalog's own /settings closed before)
+        Assert.DoesNotContain(SettingsMenu.Title + " │ General", output[started..]);   // the click was the job's, never the row's /settings (the catalog's own /settings closed before)
     }
 
     /// <summary>

@@ -62,9 +62,9 @@ public partial class ToolsMenuTests
 
         var shop = Assert.Single(SqliteConfigFile.Load(path).Databases);
         Assert.Equal(("shop", db), (shop.Name, shop.FullPath));
-        Assert.Contains(SettingsMenu.SqlWizardNameSpaces, _console.Output);
-        Assert.Contains(SettingsMenu.SqliteWizardTestOk("shop", 3), _console.Output);
-        Assert.Contains(SettingsMenu.SqliteWizardAdded("shop", path), _console.Output);
+        Assert.Contains(SettingsMenu.SqlWizardNameSpaces, Output);
+        Assert.Contains(SettingsMenu.SqliteWizardTestOk("shop", 3), Output);
+        Assert.Contains(SettingsMenu.SqliteWizardAdded("shop", path), Output);
         Assert.Equal(["shop"], _settings.Current.SqliteDatabasesOffered);
     }
 
@@ -82,7 +82,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("read-write", _settings.Current.SqliteMode);
-        Assert.Contains(SqliteModes.Describe("read-only"), _console.Output);
+        Assert.Contains(SqliteModes.Describe("read-only"), Output);
     }
 
     /// <summary><c>SQLite statements allowed</c> (later on 2026-10-05): changing data, creating and reading by default; Enter ticks dropping beside them.</summary>
@@ -99,7 +99,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["data", "create", "drop", "read"], _settings.Current.SqliteStatementsAllowed);
-        Assert.Contains("DROP TABLE, INDEX, VIEW, TRIGGER", _console.Output);
+        Assert.Contains("DROP TABLE, INDEX, VIEW, TRIGGER", Output);
     }
 
     /// <summary>D puts the default back (2026-10-05, the user's ask): changing data, creating, reading, whatever was ticked.</summary>
@@ -116,8 +116,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["data", "create", "read"], _settings.Current.SqliteStatementsAllowed);
-        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
-        Assert.Contains(SettingsMenu.DefaultToggleKeys, _console.Output);
+        Assert.Contains(SettingsMenu.DefaultsButton, Output);
+        Assert.Contains(SettingsMenu.DefaultToggleKeys, Output);
     }
 
     /// <summary>N clears every kind and A ticks them all, saved in menu order.</summary>
@@ -166,7 +166,7 @@ public partial class ToolsMenuTests
 
         Assert.Equal(["notes"], _settings.Current.SqliteDatabasesOffered);
         Assert.Equal("notes", _settings.Current.SqliteDefaultDatabase);
-        Assert.Contains(SettingsMenu.SqliteWizardCancelledNotice, _console.Output);
+        Assert.Contains(SettingsMenu.SqliteWizardCancelledNotice, Output);
         Assert.False(File.Exists(SqliteConfigFile.ProfilePath(_settings.ProfileDirectory)));
     }
 }

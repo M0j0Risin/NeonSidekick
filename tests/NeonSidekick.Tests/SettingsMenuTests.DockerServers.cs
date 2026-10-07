@@ -63,8 +63,8 @@ public partial class SettingsMenuTests
         Assert.Equal(45, _settings.Current.DockerServerStopTimeoutSeconds);
         Assert.Equal(900, _settings.Current.DockerServerReadyTimeoutSeconds);
         Assert.True(_settings.Current.DockerServerStopOnExit);
-        Assert.Contains("Docker server stop timeout (s) " + SettingsMenu.DockerServerStopTimeoutRangeError + "; keeping 30.", _console.Output);
-        Assert.Contains("Docker server ready timeout (s) " + SettingsMenu.DockerServerReadyTimeoutRangeError + "; keeping 900.", _console.Output);
+        Assert.Contains("Docker server stop timeout (s) " + SettingsMenu.DockerServerStopTimeoutRangeError + "; keeping 30.", Output);
+        Assert.Contains("Docker server ready timeout (s) " + SettingsMenu.DockerServerReadyTimeoutRangeError + "; keeping 900.", Output);
         pane.Dispose();
     }
 
@@ -85,10 +85,10 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["sglang_a", "vllm_b"], _settings.Current.DockerServerContainers);
-        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.DockerServerContainers, ["rebuilding"]), _console.Output);
-        Assert.Contains("[x] sglang_a", _console.Output);
-        Assert.Contains("running · sglang_a/image:latest · :30000", _console.Output);
-        Assert.Contains("exited · vllm_b/image:latest", _console.Output);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.DockerServerContainers, ["rebuilding"]), Output);
+        Assert.Contains("[x] sglang_a", Output);
+        Assert.Contains("running · sglang_a/image:latest · :30000", Output);
+        Assert.Contains("exited · vllm_b/image:latest", Output);
         Assert.Equal("[[ ]] mysql_dev  " + NeonSidekick.UI.Theme.DimMarkup("running · mysql_dev/image:latest · :3306"), SettingsMenu.DockerServerRow(Container("mysql_dev", "running", 3306), false, 11));
         pane.Dispose();
     }
@@ -102,21 +102,21 @@ public partial class SettingsMenuTests
         Push(Keys.Enter);   // no door at all
         Push(Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
-        Assert.Contains(SettingsMenu.NoDockerEngineError, _console.Output);
+        Assert.Contains(SettingsMenu.NoDockerEngineError, Output);
 
         menu.DockerContainers = _ => Task.FromResult<(IReadOnlyList<DockerContainer>?, string?)>((null, "Docker Desktop is not running."));
         GoTo(SettingsTab.Docker);
         Down(1);
         Push(Keys.Enter, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
-        Assert.Contains("Docker Desktop is not running.", _console.Output);
+        Assert.Contains("Docker Desktop is not running.", Output);
 
         menu.DockerContainers = _ => Task.FromResult<(IReadOnlyList<DockerContainer>?, string?)>(([], null));
         GoTo(SettingsTab.Docker);
         Down(1);
         Push(Keys.Enter, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
-        Assert.Contains(SettingsMenu.NoDockerContainersNotice, _console.Output);
+        Assert.Contains(SettingsMenu.NoDockerContainersNotice, Output);
         Assert.Null(_settings.Current.DockerServerContainers);
         pane.Dispose();
     }

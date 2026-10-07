@@ -25,8 +25,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(kept, read(_settings.Current));
-        Assert.Contains(SettingsMenu.StaleDroppedNotice(field, ["gone"]), _console.Output);
-        Assert.DoesNotContain(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(field, ["gone"]), Output);
+        Assert.DoesNotContain(SettingsMenu.UnchangedNotice, Output);
     }
 
     private void WriteProfileFile(string path, string json)
@@ -99,7 +99,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["aw", "broken"], _settings.Current.SqlConnectionsOffered);
-        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.SqlConnectionsOffered, ["gone"]), _console.Output);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.SqlConnectionsOffered, ["gone"]), Output);
     }
 
     /// <summary>A profile file that cannot be read hides its names, so nothing is dropped while it is broken.</summary>
@@ -116,7 +116,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["mine", "aw"], _settings.Current.SqlConnectionsOffered);
-        Assert.DoesNotContain("no longer listed", _console.Output);
+        Assert.DoesNotContain("no longer listed", Output);
     }
 
     /// <summary>A workflow whose file failed to load keeps its tick; the gone one goes.</summary>
@@ -133,7 +133,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["broken", "pony-txt2img"], _settings.Current.ComfyWorkflowsOffered);
-        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.ComfyWorkflowsOffered, ["gone"]), _console.Output);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.ComfyWorkflowsOffered, ["gone"]), Output);
     }
 
     [Fact]

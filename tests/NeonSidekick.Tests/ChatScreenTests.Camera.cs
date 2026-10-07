@@ -177,7 +177,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string file = Assert.Single(CameraFiles());
-        Assert.Contains("\n" + Titled(CameraText.PaneTitle + "   " + CameraText.SnapButton + "    " + CameraText.RetakeButton + " "), output);
+        Assert.Contains("\n" + Titled(CameraText.PaneTitle + " │ " + CameraText.SnapButton + " · " + CameraText.RetakeButton + " "), output);
         Assert.Contains(CameraText.OwnPrompt, output);
         Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
         Assert.Equal([file], _shotsShown);   // post: the viewer on the shot
@@ -300,7 +300,7 @@ public partial class ChatScreenTests
         var view = Assert.Single(views);
         Assert.True(view.Disposed);
         Assert.Contains(CameraText.LiveOff, output);
-        string strip = "   " + SettingsMenu.CameraWatchButtonTitle + "    " + SettingsMenu.CameraLiveButtonTitle + "    " + SettingsMenu.CameraSnapButtonTitle + " ";
+        string strip = " │ " + SettingsMenu.CameraWatchButtonTitle + " · " + SettingsMenu.CameraLiveButtonTitle + " · " + SettingsMenu.CameraSnapButtonTitle + " ";
         Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + strip) + "\n", output);
         string file = Assert.Single(CameraFiles());
         Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
@@ -326,7 +326,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(CameraText.ModelPaneTitle + "   " + CameraText.SnapButton + "    " + CameraText.RetakeButton + " "), output);
+        Assert.Contains("\n" + Titled(CameraText.ModelPaneTitle + " │ " + CameraText.SnapButton + " · " + CameraText.RetakeButton + " "), output);
         Assert.Contains("Show me the label.", output);
         Assert.Contains("It says MILK.", output);
         Assert.Equal(2, _chat.Requests.Count);
@@ -749,7 +749,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         var saved = _settings.Current;
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + "   " + SettingsMenu.CameraWatchButtonTitle + "    " + SettingsMenu.CameraSnapButtonTitle + " ") + "\n", output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + " │ " + SettingsMenu.CameraWatchButtonTitle + " · " + SettingsMenu.CameraSnapButtonTitle + " ") + "\n", output);
         Assert.Contains(CameraText.WatchOn(saved.CameraWatchSeconds, saved.CameraWatchThreshold, saved.CameraWatchUnprompted), output);
         Assert.Contains(CameraText.WatchOff, output);
         Assert.DoesNotContain(CameraText.WatchNotOn, output);

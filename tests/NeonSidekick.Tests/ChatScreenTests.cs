@@ -189,7 +189,8 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>Everything the screen has written, snapshotted under the writer's lock: safe to poll while a turn runs.</summary>
-    private string Output => _output.Snapshot();
+    // The strips' badges taken off (TabStrips.Unbadged, 2026-10-07): the fixture's own rows move them.
+    private string Output => TabStrips.Unbadged(_output.Snapshot());
 
     /// <summary>
     /// Whether the pane drawn last still shows the scroll's row. Since 2026-10-01 it sits over the upper rule, so the frame
@@ -2824,12 +2825,12 @@ public partial class ChatScreenTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /cmdlist or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
-    private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + "   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ";
+    private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + " │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ";
     /// <summary>The Memory mode row's saved notice for <paramref name="mode"/> (2026-10-04).</summary>
     private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
 
-    private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + "   " + string.Join("    ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
-    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPolice) + "   " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
+    private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + " │ " + string.Join(" · ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
+    private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPolice) + " │ " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
 
     /// <summary>
     /// The rows of the pane drawn last (its title row, ending with the × glyph, to the rule under
@@ -2884,7 +2885,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>The queue pane's title row since 2026-09-21: the label, then its clear-all button as a dim tab (a space either side), two spaces between.</summary>
-    private const string QueueStrip = QueueMenu.Title + "   ⊠ clear all ";
+    private const string QueueStrip = QueueMenu.Title + " │ ⊠ clear all ";
 
     /// <summary>The rule above the input row with the session's name at its right edge (2026-09-18), at the console's width.</summary>
     private string TitledRule(string title) => ScreenPane.RuleWithTitle(title, _console.Profile.Width);
@@ -4451,7 +4452,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(McpText.Label + "   Servers    Tools    Options ", output);
+        Assert.Contains(McpText.Label + " │ Servers · Tools · Options ", output);
         Assert.Contains("\n▸ pipe        on   connected · 2 tools  stdio: pipe-server\n", output);
         Assert.Contains("  · 🔌 pipe: off\n  · 🔌 pipe: stopped\n▸ pipe        off  off  stdio: pipe-server\n", output);
         Assert.Contains(McpText.NoToolsLine, output);   // the Tools tab after the stop
@@ -4512,7 +4513,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(McpText.Label + "   Servers    Tools    Options ", output);
+        Assert.Contains(McpText.Label + " │ Servers · Tools · Options ", output);
         Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ pipe", output);
         Assert.Contains("  · 🔌 pipe__echo: off", output);
         Assert.Equal(["pipe__echo"], _settings.Current.ToolsDisabled);
@@ -4595,7 +4596,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude CLI executable                   (looked up)\n  Claude CLI slash command permissions    read-only\n  Claude CLI slash command model          (Claude Code's default)\n  Claude CLI slash command effort         (Claude Code's default)\n  Claude CLI advisor tool                 off\n  Claude CLI advisor tool context         brief\n  Claude CLI advisor tool calls per turn  2 calls\n  Claude CLI advisor tool model           (as Claude CLI slash command model)\n  Claude CLI advisor tool effort          (as Claude CLI slash command effort)\n  Claude CLI advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -4649,7 +4650,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ", output);
         Assert.Contains("\n▸ ComfyUI tools                  on\n  ComfyUI URL                    (not set)\n  ComfyUI workflows offered      none of 0\n  ComfyUI add workflow           Enter to start workflow wizard\n  ComfyUI ^-mention enabled      on\n  ComfyUI timeout (s)            300\n  ComfyUI max pictures per call  5 pictures\n  ComfyUI reinforce negatives    on\n  ComfyUI show prompts           on\n  ComfyUI picture strip          on\n  ComfyUI output folder          comfy_images\n", output);   // 2026-09-24; the offered checklist and the wizard later that day, the ^-mention switch later still
         Assert.Contains("\n▸ Claude CLI executable                   (looked up)\n  Claude CLI slash command permissions    read-only\n  Claude CLI slash command model          (Claude Code's default)\n  Claude CLI slash command effort         (Claude Code's default)\n  Claude CLI advisor tool                 off\n  Claude CLI advisor tool context         brief\n  Claude CLI advisor tool calls per turn  2 calls\n  Claude CLI advisor tool model           (as Claude CLI slash command model)\n  Claude CLI advisor tool effort          (as Claude CLI slash command effort)\n  Claude CLI advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -5108,7 +5109,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ", output);
         Assert.Contains("  · " + CameraCaptureTool.ToolName + ": off", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -6296,7 +6297,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n  · 🖥️ LLM offer tools: off\n", output);
         Assert.Contains("  · " + ChatScreen.ToolsChangedNotice(false) + "\n", output);
         Assert.Equal("(LLM offer tools off; conversation cleared)", ChatScreen.ToolsChangedNotice(false));
@@ -6500,7 +6501,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(Titled(QueueMenu.Title + "   " + QueueMenu.SendButton + "    " + QueueMenu.ClearAllButton + " "), output);
+        Assert.Contains(Titled(QueueMenu.Title + " │ " + QueueMenu.SendButton + " · " + QueueMenu.ClearAllButton + " "), output);
         Assert.Contains(QueueMenu.KeysWithSend, output);
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal("later", _chat.Requests[1][^1].Text);
@@ -8924,7 +8925,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + Titled(AllowedCommandsTitle) + "\n \n▸ git push\n", output);
         Assert.Contains("  · " + SettingsMenu.PrefixRemovedNotice("dotnet build") + "\n", output);
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.DoesNotContain(ToolsText.Label + "   Offered", output);      // the crumb, never the tabs: ESC closes
+        Assert.DoesNotContain(ToolsText.Label + " │ Offered", output);      // the crumb, never the tabs: ESC closes
         Assert.Empty(_chat.Requests);
     }
 
@@ -8969,7 +8970,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(page + "  " + on + "\n▸ " + off + "\n", output);    // the second on "off"
         Assert.False(_settings.Current.ShellPolice);
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", output);   // off asks first (2026-10-02)
-        Assert.DoesNotContain(ToolsText.Label + "   Offered", output);      // the crumb, never the tabs: ESC closes
+        Assert.DoesNotContain(ToolsText.Label + " │ Offered", output);      // the crumb, never the tabs: ESC closes
         Assert.Empty(_chat.Requests);
     }
 
@@ -9016,10 +9017,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(_settings.Current.WebTools);
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
         // The Web page carries the browser-mode buttons on its title row since 2026-10-04 (the user's ask).
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools) + "   " + string.Join("    ", BrowserMode.Names.Select(SettingsMenu.WebModeButtonTitle)) + " ") + "\n", output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools) + " │ " + string.Join(" · ", BrowserMode.Names.Select(SettingsMenu.WebModeButtonTitle)) + " ") + "\n", output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandPolicy)) + "\n", output);
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", output);
-        Assert.DoesNotContain(ToolsText.Label + "   Offered", output);   // the crumb, never the tabs
+        Assert.DoesNotContain(ToolsText.Label + " │ Offered", output);   // the crumb, never the tabs
         Assert.All(new[] { "/tools" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Empty(_chat.Requests);
     }
@@ -9122,7 +9123,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false), cwd, 239), output);
         Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
         Assert.Empty(_chat.Requests);
@@ -9151,7 +9152,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false), cwd, 239), output);
         Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
         Assert.Empty(_chat.Requests);
@@ -9203,8 +9204,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("disabled", _settings.Current.MemoryMode);
         Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -9791,16 +9792,16 @@ public partial class ChatScreenTests : IDisposable
         // Nothing in the transcript: the list is in the pane, under the rule, with its own hint.
         Assert.DoesNotContain("  · Commands:", output);
         string rule = new(ScreenPane.RuleGlyph, 240);
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \n/about ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then; /clear first until /about joined it, 2026-10-03)
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/about ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then; /clear first until /about joined it, 2026-10-03)
         Assert.Contains(HelpRows(Entry("/sessions"))[0], output);   // the label column is the widest label of all, the description column the longest description
         Assert.Contains(HelpRows(Entry("/sessions"))[1], output);   // and its further forms stacked under the first (2026-10-05)
         // → the advanced tab: the rest, A to Z, in the same label column.
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \n/botchat ", output);   // /about first until 2026-10-03, when it moved to the basic tab
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/botchat ", output);   // /about first until 2026-10-03, when it moved to the basic tab
         Assert.Contains(HelpRow("/timer", Entry("/timer").Summary) + new string(' ', SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap - Entry("/timer").Summary.Length) + "/timer [<duration> [<name>]]", output);
         Assert.Contains("\n" + new string(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap) + "/timer stop <name>|all", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \nEnter", output);
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04) + the gap of 2.
         Assert.Contains("Ctrl+Home                scroll to the top of the transcript", output);
         Assert.Contains("Ctrl+End                 scroll to the bottom of the transcript", output);
@@ -9811,7 +9812,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(@"\nCtrl\+H {19}open the help {2,}/help\s*\n", keys);
         Assert.Equal(column, keys.Split('\n').Single(l => l.StartsWith("Ctrl+Alt+Q ", StringComparison.Ordinal)).IndexOf("/queue clear", StringComparison.Ordinal));
         Assert.Matches(@"\nCtrl\+L {19}cancel a background learning turn\s*\n", keys);
-        Assert.DoesNotContain("F4", output[output.IndexOf("Help   Basic    Advanced    Keys", StringComparison.Ordinal)..]);
+        Assert.DoesNotContain("F4", output[output.IndexOf("Help │ Basic · Advanced · Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
     }
@@ -9842,7 +9843,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
-        const string strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);
         Assert.Contains(rule + "\n" + Row(SettingsMenu.SettingsTabKeys) + "\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · Memory mode: read-only\n", output);
@@ -9890,7 +9891,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
         Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
         Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
         Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
@@ -9900,7 +9901,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Request — ", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → the Tools tab: every group, the memory group offered.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);
@@ -9931,7 +9932,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
         Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
         Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
         Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n", output);
@@ -9941,7 +9942,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Request — ", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → the Tools tab: every group, the memory group offered.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
@@ -9972,7 +9973,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        string strip = rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         int top = output.IndexOf(strip, StringComparison.Ordinal);
         Assert.True(top >= 0, output);
         int bottom = output.IndexOf("\n" + rule + "\n" + Row(InfoPane.HintText) + "\n", top, StringComparison.Ordinal);
@@ -10006,7 +10007,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // 12 rows: 8 overlay rows, 6 of content, one of them the more row: the first page is five lines.
-        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
+        Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
         Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph) + "\n"), output);   // speech on here: the strip stays under the pane's hint
         Assert.DoesNotContain("── Memory ── read-write", output[..output.IndexOf("\n ▼ 1–", StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
@@ -10096,7 +10097,7 @@ public partial class ChatScreenTests : IDisposable
         string raw = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled("About   General    Components    Licence ") + "\n \n";
+        string strip = rule + "\n" + Titled("About │ General · Components · Licence ") + "\n \n";
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         string output = string.Join("\n", raw.Split('\n').Select(l => l.TrimEnd()));
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
@@ -10225,7 +10226,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        const string strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
+        const string strip = SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains("\n" + Titled(strip) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);
         Assert.DoesNotContain("› /settings", output);
         Assert.Contains("› hi!", output);
@@ -10263,7 +10264,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.StartsWith("25 tokens", UsageText.HintPart(_session.Usage, _session.ContextLength));
         int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && settings > usage, output);
         Assert.DoesNotContain("› /usage", output);
         Assert.Contains("› ok!", output);
@@ -10329,21 +10330,21 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ", StringComparison.Ordinal);
-        int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
-        int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
-        int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ", StringComparison.Ordinal);
+        int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
+        int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
+        int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
         int sessions = output.IndexOf("\n" + Titled(SessionsMenu.Title) + "\n", StringComparison.Ordinal);
         int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
-        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
+        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
+        int folder = output.IndexOf("\n" + Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
         Assert.Equal(1, output.Split("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n").Length - 1);
-        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n").Length - 1);   // the gear and the blanks
+        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
         Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -10403,21 +10404,21 @@ public partial class ChatScreenTests : IDisposable
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
-        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ", StringComparison.Ordinal);
-        int mcp = output.IndexOf(McpText.Label + "   Servers    Tools    Options ", StringComparison.Ordinal);
-        int skills = output.IndexOf(SkillsText.Label + "   Offered    Reflection    Options ", StringComparison.Ordinal);
-        int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
+        int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ", StringComparison.Ordinal);
+        int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
+        int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
+        int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
         int sessions = output.IndexOf("\n" + Titled(SessionsMenu.Title) + "\n", StringComparison.Ordinal);
         int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
         int memory = output.IndexOf("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         int police = output.IndexOf("\n" + Titled(PoliceTitle) + "\n", StringComparison.Ordinal);
-        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n", StringComparison.Ordinal);
-        int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
+        int blanks = output.LastIndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
+        int folder = output.IndexOf("\n" + Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ") + "\n" + cwd + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && tools > settings && mcp > tools && skills > mcp && sys > skills && sessions > sys && usage > sessions && memory > usage && allowed > memory && police > allowed && blanks > police && folder > blanks, output);
         Assert.Equal(1, output.Split("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n").Length - 1);
-        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n").Length - 1);   // the gear and the blanks
+        Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
         Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -10502,12 +10503,12 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ") + "\n";
-        string help = "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n";
-        string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ") + "\n";
+        string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
+        string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Options ") + "\n";
+        string skills = "\n" + Titled(SkillsText.Label + " │ Offered · Reflection · Options ") + "\n";
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string usage = "\n" + Titled(UsageText.Label) + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
@@ -10589,12 +10590,12 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ") + "\n";
-        string help = "\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n";
-        string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ") + "\n";
+        string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
+        string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string skills = "\n" + Titled(SkillsText.Label + "   Offered    Reflection    Options ") + "\n";
+        string skills = "\n" + Titled(SkillsText.Label + " │ Offered · Reflection · Options ") + "\n";
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string usage = "\n" + Titled(UsageText.Label) + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
@@ -10662,8 +10663,8 @@ public partial class ChatScreenTests : IDisposable
 
         string model = "\n" + Titled(SettingsMenu.ServerTitle) + "\n";
         string reasoning = "\n" + Titled(SettingsMenu.ReasoningTitle) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
-        string folder = "\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
+        string folder = "\n" + Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ") + "\n";
         Assert.Equal(2, output.Split(model).Length - 1);
         Assert.Equal(1, output.Split(reasoning).Length - 1);
         Assert.Equal(2, output.Split(settings).Length - 1);
@@ -10700,7 +10701,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotContain(ChatScreen.SysToolGlyph, output);
         Assert.DoesNotContain(ChatScreen.ToolbarStrip, output);   // the strip, not its 🛠️ alone: the transcript's tool lines carry that glyph since 2026-09-21
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);
+        Assert.DoesNotContain(SettingsMenu.Title + " │ General", output);
         Assert.Contains("› hi", output);
         Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
@@ -10749,7 +10750,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow("📊", ScreenPane.HomeTilde(cwd, _dir), 239), output);
         Assert.DoesNotContain(ChatScreen.SettingsToolGlyph + " ", output);
         int usage = output.IndexOf("\n" + Titled(UsageText.Label) + "\n", StringComparison.Ordinal);
-        int folder = output.IndexOf("\n" + Titled(FolderText.Title + "   " + FolderText.CollapseAllButton + " ") + "\n", StringComparison.Ordinal);
+        int folder = output.IndexOf("\n" + Titled(FolderText.Title + " │ " + FolderText.CollapseAllButton + " ") + "\n", StringComparison.Ordinal);
         Assert.True(usage > 0 && folder > usage, output);
     }
 
@@ -10776,7 +10777,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);   // no row, so no blanks' /settings
+        Assert.DoesNotContain(SettingsMenu.Title + " │ General", output);   // no row, so no blanks' /settings
         Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
         Assert.DoesNotContain(ChatScreen.PoliceToolGlyph, output);
         Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
@@ -10933,7 +10934,7 @@ public partial class ChatScreenTests : IDisposable
         int tail = after.IndexOf("row12", StringComparison.Ordinal);
         int draft = after.IndexOf('!');   // the typed character alone: the input row's redraw writes the changed cell
         Assert.True(tail >= 0 && draft > tail, after);
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);
+        Assert.DoesNotContain(SettingsMenu.Title + " │ General", output);
         Assert.Equal("!", _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
     }
 
@@ -11015,7 +11016,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(ChatScreen.SpeechGlyphs(true, true, false, false), output);   // both glyphs were up before the click
         Assert.EndsWith(rule + "\n" + Row(ChatScreen.HintLine(null), strip: ChatScreen.SpeechGlyphs(true, false, false, false)) + "\n", output);
         Assert.DoesNotContain("› /stt", output);
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);
+        Assert.DoesNotContain(SettingsMenu.Title + " │ General", output);
     }
 
     /// <summary>The map behind the strip's double-click: each glyph its switch, anything else null. Pinned.</summary>
@@ -11514,7 +11515,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string strip = FolderText.Title + "   " + FolderText.CollapseAllButton + " ";
+        string strip = FolderText.Title + " │ " + FolderText.CollapseAllButton + " ";
         Assert.Contains("\n" + Titled(strip) + "\n" + elsewhere + "\n", output);                  // the path row: the cursor on the directory in force
         Assert.Contains("\n" + Titled(strip) + "\n" + Path.GetDirectoryName(elsewhere) + "\n", output);
         Assert.Contains("  · Working directory (cwd): " + Path.GetDirectoryName(elsewhere) + "\n", output);   // the saved notice, from the menu
@@ -11544,7 +11545,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string defaultPath = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
-        string strip = FolderText.Title + "   " + FolderText.CollapseAllButton + " ";
+        string strip = FolderText.Title + " │ " + FolderText.CollapseAllButton + " ";
         Assert.True(Directory.Exists(defaultPath));
         Assert.Contains("\n" + Titled(strip) + "\n" + defaultPath + "\n" + MenuPane.Pointer + FolderText.CollapsedGlyph + " " + FolderText.ShortcutGlyph + " " + FolderText.ProfileLabel + "\n" + MenuPane.NoPointer + FolderText.CollapsedGlyph + " ", output);
         Assert.Equal(2, output.Split("  · Working directory (cwd): " + SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory)).Length - 1);   // ~, then the pick
@@ -12595,11 +12596,11 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        int pane = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n", StringComparison.Ordinal);
+        int pane = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
         Assert.True(pane > 0, output);
         Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
         Assert.DoesNotContain("› /sys", output);
-        Assert.DoesNotContain(FolderText.Title + "   ", output);
+        Assert.DoesNotContain(FolderText.Title + " │ ", output);
         Assert.DoesNotContain(FolderText.KeptNotice, output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -12652,10 +12653,10 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ") + "\n";
-        string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ") + "\n";
+        string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         int at = output.IndexOf(tools, StringComparison.Ordinal);
         Assert.True(at > 0, output);
@@ -12663,7 +12664,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(output.IndexOf(allowed, StringComparison.Ordinal) > output.IndexOf(sys, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(sessions, StringComparison.Ordinal) > output.IndexOf(allowed, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(settings, StringComparison.Ordinal) > output.IndexOf(sessions, StringComparison.Ordinal), output);
-        Assert.DoesNotContain(FolderText.Title + "   ", output);
+        Assert.DoesNotContain(FolderText.Title + " │ ", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/cwd"), output);
         Assert.Contains("eight.", output);
         Assert.All(new[] { "/tools", "/sys", "/sessions", "/cmdlist", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -12712,10 +12713,10 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ") + "\n";
-        string sys = "\n" + Titled(SystemPromptSummary.Label + "   Prompt    Tools ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ") + "\n";
+        string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
-        string settings = "\n" + Titled(SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ") + "\n";
+        string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         int at = output.IndexOf(tools, StringComparison.Ordinal);
         Assert.True(at > 0, output);
@@ -12723,7 +12724,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(output.IndexOf(allowed, StringComparison.Ordinal) > output.IndexOf(sys, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(sessions, StringComparison.Ordinal) > output.IndexOf(allowed, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(settings, StringComparison.Ordinal) > output.IndexOf(sessions, StringComparison.Ordinal), output);
-        Assert.DoesNotContain(FolderText.Title + "   ", output);
+        Assert.DoesNotContain(FolderText.Title + " │ ", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/cwd"), output);
         Assert.Contains("eight.", output);
         Assert.All(new[] { "/tools", "/sys", "/sessions", "/cmdlist", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
@@ -12775,7 +12776,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         // The pane over the reply: the strip, the question, its keys after the spinner's count.
-        Assert.Contains("\n" + Titled("Questions   Colour    Q2    Submit ") + "\nWhich colour?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", output);
+        Assert.Contains("\n" + Titled("Questions │ Colour · Q2 · Submit ") + "\nWhich colour?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", output);
         // The tool runs while the pane asks: its name is the spinner's stage, as any tool's.
         Assert.Contains(" " + ScreenPane.BusyRow(AskUserTool.ToolName, TimeSpan.Zero, QuestionMenu.SingleKeys), output);
         Assert.Contains("\n  Q1 Colour — blue\n  Q2 — cheese, olives\n▸ Submit\n", output);
@@ -13674,7 +13675,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         // The queue is held at idle, so the send button leads the strip (2026-10-05).
-        Assert.Contains("\n" + Titled(QueueMenu.Title + "   " + QueueMenu.SendButton + "    " + QueueMenu.ClearAllButton + " ") + "\n \n▸ 1  later\n", output);
+        Assert.Contains("\n" + Titled(QueueMenu.Title + " │ " + QueueMenu.SendButton + " · " + QueueMenu.ClearAllButton + " ") + "\n \n▸ 1  later\n", output);
         Assert.DoesNotContain("› /queue", output);
         Assert.Single(_chat.Requests);
         Assert.Contains("\n" + ChatScreen.QueuedHintPart(1), output);
@@ -14037,7 +14038,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n", output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n", output);
         Assert.Contains("three.", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -16806,7 +16807,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + "   Offered    Ask ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask ", output);
         Assert.DoesNotContain("› /tools", output);
         Assert.Single(_chat.Requests);
         Assert.Equal("keep", UserText(_chat.Requests[0]));
@@ -16823,7 +16824,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SkillsText.Label + "   Offered    Reflection    Options ", output);
+        Assert.Contains(SkillsText.Label + " │ Offered · Reflection · Options ", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -16891,7 +16892,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.Title + "   General ", output);
+        Assert.Contains(SettingsMenu.Title + " │ General ", output);
         Assert.DoesNotContain("› /settings", output);
         Assert.Single(_chat.Requests);
         Assert.Equal("keep", UserText(_chat.Requests[0]));
@@ -16907,7 +16908,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SystemPromptSummary.Label + "   Prompt    Tools ", output);
+        Assert.Contains(SystemPromptSummary.Label + " │ Prompt · Tools ", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -16922,7 +16923,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(Titled(InfoPane.Title + "   Basic    Advanced    Keys ") + "\n \n/about ", output);   // /clear first until 2026-10-03
+        Assert.Contains(Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/about ", output);   // /clear first until 2026-10-03
         Assert.DoesNotContain("› /help", output);
         Assert.Empty(_chat.Requests);
     }
@@ -16959,7 +16960,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.DoesNotContain(InfoPane.Title + "   Basic", output);
+        Assert.DoesNotContain(InfoPane.Title + " │ Basic", output);
         Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
         Assert.False(_settings.Current.ShowHeader);
         Assert.Contains(HeaderToggle.Notice(false), output);
@@ -17036,9 +17037,9 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        int help = output.IndexOf(InfoPane.Title + "   Basic", StringComparison.Ordinal);
+        int help = output.IndexOf(InfoPane.Title + " │ Basic", StringComparison.Ordinal);
         Assert.True(help > 0, output);
-        Assert.True(output.IndexOf(SystemPromptSummary.Label + "   Prompt    Tools ", help, StringComparison.Ordinal) > help, output);
+        Assert.True(output.IndexOf(SystemPromptSummary.Label + " │ Prompt · Tools ", help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain("› /sys", output);
         Assert.Empty(_chat.Requests);
     }
@@ -17076,7 +17077,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(1, Refreshes(output));     // /clear's wipe
-        Assert.Contains(ToolsText.Label + "   Offered    Ask ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask ", output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("b", UserText(_chat.Requests[1]));   // the one user message: the conversation forgotten
     }
@@ -17379,7 +17380,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        int help = output.IndexOf(InfoPane.Title + "   Basic", StringComparison.Ordinal);
+        int help = output.IndexOf(InfoPane.Title + " │ Basic", StringComparison.Ordinal);
         Assert.True(help > 0, output);
         Assert.True(output.IndexOf(SettingsMenu.ReasoningTitle, help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain("› /reasoning", output);
@@ -17446,7 +17447,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(InfoPane.Title + "   Basic", output);
+        Assert.Contains(InfoPane.Title + " │ Basic", output);
         Assert.Contains(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
         Assert.Equal(1, Refreshes(output));     // /clear's wipe, at the idle line after the cancel
@@ -17474,7 +17475,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        int help = output.IndexOf(InfoPane.Title + "   Basic", StringComparison.Ordinal);
+        int help = output.IndexOf(InfoPane.Title + " │ Basic", StringComparison.Ordinal);
         Assert.True(help > 0, output);
         Assert.True(output.IndexOf(UsageText.Label, help, StringComparison.Ordinal) > help, output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
@@ -17546,7 +17547,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(InfoPane.Title + "   Basic", output);
+        Assert.Contains(InfoPane.Title + " │ Basic", output);
         Assert.True(barWhileOpen, output);
         Assert.NotNull(_settings.Current.PerformanceBarItems);
         Assert.Single(_chat.Requests);
@@ -19408,7 +19409,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SkillsText.Label + "   Offered    Reflection    Options ", output);
+        Assert.Contains(SkillsText.Label + " │ Offered · Reflection · Options ", output);
         Assert.DoesNotContain("Roots", output);
         Assert.False(_settings.Current.ProjectFile);
         Assert.Contains("\n▸ Reflection (auto-learn)           off\n  Reflection reasoning              none\n", output);   // the Reflection tab, padded to its own column (the fixture turns the auto-learn off)
@@ -20088,7 +20089,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("learning failed", output);
         Assert.False(_session.IsLearning);
         Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "greeting")));
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);   // the click was the brain's, never the row's /settings
+        Assert.DoesNotContain(SettingsMenu.Title + " │ General", output);   // the click was the brain's, never the row's /settings
     }
 
     [Fact]
@@ -21376,7 +21377,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SkillsText.Label + "   Offered    Reflection    Options ", output);   // no Roots tab since later on 2026-09-19
+        Assert.Contains(SkillsText.Label + " │ Offered · Reflection · Options ", output);   // no Roots tab since later on 2026-09-19
         Assert.Contains("▸ haiku  profile  Writes haiku. Use when asked for one.", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/skills"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);

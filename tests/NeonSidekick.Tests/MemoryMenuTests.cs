@@ -224,7 +224,7 @@ public class MemoryMenuTests : IDisposable
         return (menu, pane, switched);
     }
 
-    private static string SwitchTitle(MemoryAccess mode) => MemoryMenu.Title + "   " + string.Join("    ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";
+    private static string SwitchTitle(MemoryAccess mode) => MemoryMenu.Title + " │ " + string.Join(" · ", MemoryMenu.Buttons(mode).Select(b => b.Title)) + " ";
 
     /// <summary>
     /// Memory mode's buttons on the title row (2026-10-03, the user's ask: ask/yolo's shape; three since 2026-10-04): D sets disabled

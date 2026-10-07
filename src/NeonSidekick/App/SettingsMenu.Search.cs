@@ -34,6 +34,22 @@ internal sealed partial class SettingsMenu
     /// <summary>The word <c>/settings changed</c> takes. Pinned.</summary>
     public const string ChangedWord = "changed";
 
+    /// <summary>
+    /// A tab's badge in the strip (2026-10-07, the user's ask): how many of its rows differ from the default, in superscript
+    /// digits (<c>General³</c>), so it hugs the title without a cell of its own between; null for none changed. Pinned.
+    /// </summary>
+    public static string? ChangedBadge(int changed)
+    {
+        if (changed <= 0)
+        {
+            return null;
+        }
+
+        const string digits = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+        var text = changed.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return string.Concat(text.Select(c => digits[c - '0']));
+    }
+
     /// <summary>The footer's last line for a row whose value is not its default: the default and a note. Pinned.</summary>
     public const string ChangedNote = " · this profile differs";
 

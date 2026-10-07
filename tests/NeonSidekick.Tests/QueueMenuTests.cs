@@ -68,7 +68,7 @@ public class QueueMenuTests : IDisposable
     private static string Row(int index, string text) => (index + 1) + "  " + text;
 
     /// <summary>The title row as the pane prints it since 2026-09-21: the label, then the one button as a dim tab (a space either side), two spaces between.</summary>
-    private const string Strip = QueueMenu.Title + "   ⊠ clear all ";
+    private const string Strip = QueueMenu.Title + " │ ⊠ clear all ";
 
     [Fact]
     public void Strings_ArePinned()
@@ -258,7 +258,7 @@ public class QueueMenuTests : IDisposable
     }
 
     /// <summary>The title row with the send button (2026-10-05): the label, then send and clear all as dim tabs.</summary>
-    private const string SendStrip = QueueMenu.Title + "   ➤ send    ⊠ clear all ";
+    private const string SendStrip = QueueMenu.Title + " │ ➤ send · ⊠ clear all ";
 
     /// <summary>
     /// The send button (2026-10-05, the user's ask): over a held queue at the idle line, <c>s</c> takes the front message off the

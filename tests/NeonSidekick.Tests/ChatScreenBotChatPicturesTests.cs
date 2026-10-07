@@ -362,7 +362,7 @@ public partial class ChatScreenTests
 
         Assert.True(drained, "requests " + _chat.Requests.Count + "\n" + output);
         Assert.Contains(ComfyText.Drained(1), output);
-        Assert.DoesNotContain(SettingsMenu.Title + "   General", output);   // the glyph's, never the row's /settings
+        Assert.DoesNotContain(SettingsMenu.Title + " │ General", output);   // the glyph's, never the row's /settings
     }
 
     [Fact]

@@ -13,6 +13,8 @@ public class McpMenuTests : IAsyncDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly TestConsole _console = new TestConsole().Interactive();
+    /// <summary>The console's output with the strips' badges taken off (<see cref="TabStrips.Unbadged"/>, 2026-10-07): the fixture's own rows move them.</summary>
+    private string Output => TabStrips.Unbadged(_console.Output);
     private readonly AppSettings _settings;
     private readonly ManualTimeProvider _time = new();
     private readonly FakeSynthesizer _synth = new();
@@ -85,12 +87,12 @@ public class McpMenuTests : IAsyncDisposable
 
     /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
     private void AssertTabEnds(string rows, int width) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), Output);
 
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it. Pinned.</summary>
-    private const string Strip = McpText.Label + "   Servers    Tools    Options ";
+    private const string Strip = McpText.Label + " │ Servers · Tools · Options ";
 
     [Fact]
     public async Task OnThePane_OpensOnTheFirstServer_TheThreeTabsOnTheStrip()
@@ -101,8 +103,8 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n" + MenuLayout.BlankFooter(100) + " \n" + Rule(100), _console.Output);   // the footer's rule and blank slab (2026-10-04; the rule and slab 2026-10-05), then a blank row to the Tools tab's height
-        Assert.Contains(McpText.ServersKeys, _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n" + MenuLayout.BlankFooter(100) + " \n" + Rule(100), Output);   // the footer's rule and blank slab (2026-10-04; the rule and slab 2026-10-05), then a blank row to the Tools tab's height
+        Assert.Contains(McpText.ServersKeys, Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -121,8 +123,8 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Empty(_settings.Current.McpServersDisabled);
         // The status lines stack under the strip: the flip, then what the connect or disconnect did.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker: off\n  · 🔌 docker: stopped\n▸ docker      off  off  stdio: docker mcp gateway run\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker: on\n  · 🔌 connecting docker…\n  · 🔌 docker: connected, 2 tools\n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker: off\n  · 🔌 docker: stopped\n▸ docker      off  off  stdio: docker mcp gateway run\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker: on\n  · 🔌 connecting docker…\n  · 🔌 docker: connected, 2 tools\n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n", Output);
         Assert.Equal(["docker", "chrome", "docker"], _servers.Requested.Select(r => r.Name));
         Assert.Equal(3, _session.Tools.Count);
         pane.Dispose();
@@ -139,7 +141,7 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["chrome"], _settings.Current.McpServersDisabled);
-        Assert.Contains("  · 🔌 chrome: stopped\n", _console.Output);
+        Assert.Contains("  · 🔌 chrome: stopped\n", Output);
         await _session.ConnectAllAsync(_settings.Current, null, CancellationToken.None);
         Assert.Equal([McpState.Connected, McpState.Off], _session.Servers.Select(s => s.State));
         pane.Dispose();
@@ -159,8 +161,8 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Empty(_settings.Current.McpServersDisabled);
-        Assert.Contains("  chrome      on   failed: no such command: http://localhost:9/mcp  http: http://localhost:9/mcp\n", _console.Output);
-        Assert.Contains("  · 🔌 chrome: connected, 1 tool\n", _console.Output);
+        Assert.Contains("  chrome      on   failed: no such command: http://localhost:9/mcp  http: http://localhost:9/mcp\n", Output);
+        Assert.Contains("  · 🔌 chrome: connected, 1 tool\n", Output);
         Assert.Equal(McpState.Connected, _session.Servers[1].State);
         pane.Dispose();
     }
@@ -179,7 +181,7 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Empty(_settings.Current.McpServersDisabled);
-        Assert.Contains("  · 🔌 chrome: on\n  · 🔌 connecting chrome…\n  ✗ chrome failed: no such command: http://localhost:9/mcp\n  docker      on   connected · 2 tools  stdio: docker mcp gateway run\n▸ chrome      on   failed: no such command: http://localhost:9/mcp", _console.Output);
+        Assert.Contains("  · 🔌 chrome: on\n  · 🔌 connecting chrome…\n  ✗ chrome failed: no such command: http://localhost:9/mcp\n  docker      on   connected · 2 tools  stdio: docker mcp gateway run\n▸ chrome      on   failed: no such command: http://localhost:9/mcp", Output);
         pane.Dispose();
     }
 
@@ -200,11 +202,11 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["docker"], _settings.Current.McpServersDisabled);
-        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n▸ docker      off  off  stdio: docker mcp gateway run\n  chrome      on   off  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n" + MenuLayout.BlankFooter(100) + Rule(100), _console.Output);
-        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n  docker      off  off  stdio: docker mcp gateway run\n", _console.Output);   // Space's answer, then the cursor moved on under it
-        Assert.DoesNotContain("docker: on", _console.Output);
-        Assert.DoesNotContain("connecting docker", _console.Output);
-        Assert.DoesNotContain("\n  reload\n", _console.Output);
+        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n▸ docker      off  off  stdio: docker mcp gateway run\n  chrome      on   off  http: http://localhost:9/mcp\n  edit profile mcp.json\n  edit global mcp.json\n" + MenuLayout.BlankFooter(100) + Rule(100), Output);
+        Assert.Contains("  · " + McpText.OffNotice + "\n  " + McpText.OffLine + "\n  docker      off  off  stdio: docker mcp gateway run\n", Output);   // Space's answer, then the cursor moved on under it
+        Assert.DoesNotContain("docker: on", Output);
+        Assert.DoesNotContain("connecting docker", Output);
+        Assert.DoesNotContain("\n  reload\n", Output);
         Assert.Equal([_session.ProfilePath], _opened);
         Assert.Equal(McpState.Off, _session.Servers[0].State);
         pane.Dispose();
@@ -223,9 +225,9 @@ public class McpMenuTests : IAsyncDisposable
         Assert.Equal([_session.ProfilePath, _session.GlobalPath], _opened);
         Assert.Equal(McpConfigFile.EmptyText, File.ReadAllText(_session.ProfilePath));
         Assert.Equal(McpConfigFile.EmptyText, File.ReadAllText(_session.GlobalPath));
-        Assert.Contains("  · 🔌 opened the profile's mcp.json\n", _console.Output);
-        Assert.Contains("  · 🔌 opened the global mcp.json\n  " + McpText.NoServersLine + "\n  edit profile mcp.json\n▸ edit global mcp.json\n  reload\n", _console.Output);
-        Assert.Contains(McpText.NoServersLine, _console.Output);
+        Assert.Contains("  · 🔌 opened the profile's mcp.json\n", Output);
+        Assert.Contains("  · 🔌 opened the global mcp.json\n  " + McpText.NoServersLine + "\n  edit profile mcp.json\n▸ edit global mcp.json\n  reload\n", Output);
+        Assert.Contains(McpText.NoServersLine, Output);
         pane.Dispose();
     }
 
@@ -240,9 +242,9 @@ public class McpMenuTests : IAsyncDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  · 🔌 reloaded: 1 added, 1 removed, 1 kept\n", _console.Output);
+        Assert.Contains("  · 🔌 reloaded: 1 added, 1 removed, 1 kept\n", Output);
         Assert.Equal(["docker", "fs"], _session.Servers.Select(s => s.Name));
-        Assert.Contains("  fs          on   connected · 2 tools  stdio: fs\n", _console.Output);
+        Assert.Contains("  fs          on   connected · 2 tools  stdio: fs\n", Output);
         pane.Dispose();
     }
 
@@ -262,10 +264,10 @@ public class McpMenuTests : IAsyncDisposable
         Assert.Equal(["docker__fail"], _settings.Current.ToolsDisabled);
         // The servers' headings are rules with a gap between them (2026-10-03), the /tools look.
         // The band under the list says the cursor's tool whole (2026-10-05, the user's ask: it stood blank on this tab).
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + MenuLayout.Footer(new MenuFooter("Always fails."), 100) + Rule(100), _console.Output);
-        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Echoes the text back."), 100) + Rule(100), _console.Output);   // the first, before the move
-        Assert.Contains("  · 🔌 docker__fail: on\n" + Heading("── docker · 2") + "\n", _console.Output);
-        Assert.Contains(ToolsText.OfferedKeys, _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n" + MenuLayout.Footer(new MenuFooter("Always fails."), 100) + Rule(100), Output);
+        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Echoes the text back."), 100) + Rule(100), Output);   // the first, before the move
+        Assert.Contains("  · 🔌 docker__fail: on\n" + Heading("── docker · 2") + "\n", Output);
+        Assert.Contains(ToolsText.OfferedKeys, Output);
         pane.Dispose();
     }
 
@@ -283,9 +285,9 @@ public class McpMenuTests : IAsyncDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["chrome__navigate"], _settings.Current.ToolsDisabled);
-        Assert.Contains(MenuFilter.Caption("navig", 1, 3), _console.Output);
-        Assert.Contains("\n" + Heading("── chrome · 1") + "\n▸ chrome__navigate  on   Opens a page.\n", _console.Output);
-        Assert.Contains(MenuFilter.Hint(ToolsText.OfferedKeys, "navig"), _console.Output);
+        Assert.Contains(MenuFilter.Caption("navig", 1, 3), Output);
+        Assert.Contains("\n" + Heading("── chrome · 1") + "\n▸ chrome__navigate  on   Opens a page.\n", Output);
+        Assert.Contains(MenuFilter.Hint(ToolsText.OfferedKeys, "navig"), Output);
         pane.Dispose();
     }
 
@@ -311,10 +313,10 @@ public class McpMenuTests : IAsyncDisposable
         Assert.False(_settings.Current.McpServers);
         Assert.Equal(45, _settings.Current.McpConnectTimeoutSeconds);
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ MCP servers              on\n  MCP connect timeout (s)  30\n", 100);
-        Assert.Contains(McpText.Label + " › MCP servers", _console.Output);
-        Assert.Contains("no MCP server is started; the pane still lists the config", _console.Output);
-        Assert.Contains("  · MCP servers: off\n", _console.Output);
-        Assert.Contains("  · MCP connect timeout (s): 45\n", _console.Output);
+        Assert.Contains(McpText.Label + " › MCP servers", Output);
+        Assert.Contains("no MCP server is started; the pane still lists the config", Output);
+        Assert.Contains("  · MCP servers: off\n", Output);
+        Assert.Contains("  · MCP connect timeout (s): 45\n", Output);
         pane.Dispose();
     }
 
@@ -329,7 +331,7 @@ public class McpMenuTests : IAsyncDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(30, _settings.Current.McpConnectTimeoutSeconds);
-        Assert.Contains("MCP connect timeout (s) must be 5 to 300 seconds; keeping 30.", _console.Output);
+        Assert.Contains("MCP connect timeout (s) must be 5 to 300 seconds; keeping 30.", Output);
         Assert.Equal("must be 5 to 300 seconds", SettingsMenu.McpConnectTimeoutRangeError);
         pane.Dispose();
     }
@@ -354,9 +356,9 @@ public class McpMenuTests : IAsyncDisposable
         Assert.True(_settings.Current.McpServers);
         Assert.Equal(90, _settings.Current.McpConnectTimeoutSeconds);
         Assert.Equal([_session.ProfilePath], _opened);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ docker", _console.Output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n  docker", _console.Output);   // reload's refusal, the cursor on the reload row
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ MCP servers", _console.Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ docker", Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n  docker", Output);   // reload's refusal, the cursor on the reload row
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ MCP servers", Output);
         Assert.Equal(3, _session.Tools.Count);   // nothing stopped
         pane.Dispose();
     }
@@ -374,7 +376,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("  · Servers\n  ·   docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  ·   chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  · Tools\n  ·   docker (1 of 2)\n  ·     docker__echo      on   Echoes the text back.\n  ·     docker__fail      off  Always fails.\n  ·   chrome (1)\n  ·     chrome__navigate  on   Opens a page.\n  · Options\n  ·   MCP servers: on\n  ·   MCP connect timeout (s): 30\n", _console.Output);
+        Assert.Contains("  · Servers\n  ·   docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  ·   chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  · Tools\n  ·   docker (1 of 2)\n  ·     docker__echo      on   Echoes the text back.\n  ·     docker__fail      off  Always fails.\n  ·   chrome (1)\n  ·     chrome__navigate  on   Opens a page.\n  · Options\n  ·   MCP servers: on\n  ·   MCP connect timeout (s): 30\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

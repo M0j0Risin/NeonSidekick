@@ -23,8 +23,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("opus", _settings.Current.ClaudeCliModel);
-        Assert.Contains("fable   " + "the latest Fable", _console.Output);
-        Assert.Contains(SettingsMenu.ClaudeModelOtherWord + "  type a full model name", _console.Output);
+        Assert.Contains("fable   " + "the latest Fable", Output);
+        Assert.Contains(SettingsMenu.ClaudeModelOtherWord + "  type a full model name", Output);
         pane.Dispose();
     }
 
@@ -40,8 +40,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("", _settings.Current.ClaudeCliAdvisorModel);
-        Assert.Contains("▸ sonnet  ", _console.Output);   // opened on the saved alias, any case
-        Assert.Contains(SettingsMenu.ClaudeAdvisorModelLabel, _console.Output);
+        Assert.Contains("▸ sonnet  ", Output);   // opened on the saved alias, any case
+        Assert.Contains(SettingsMenu.ClaudeAdvisorModelLabel, Output);
         pane.Dispose();
     }
 
@@ -58,7 +58,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("claude-opus-5-5", _settings.Current.ClaudeCliModel);
-        Assert.Contains("▸ " + SettingsMenu.ClaudeModelOtherWord + "  (claude-opus-5-5)", _console.Output);
+        Assert.Contains("▸ " + SettingsMenu.ClaudeModelOtherWord + "  (claude-opus-5-5)", Output);
         pane.Dispose();
     }
 

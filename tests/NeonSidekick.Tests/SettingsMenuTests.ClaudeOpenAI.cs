@@ -32,7 +32,7 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.AnthropicApi);
-        Assert.Contains("  · Anthropic API: on", _console.Output);
+        Assert.Contains("  · Anthropic API: on", Output);
         pane.Dispose();
     }
 
@@ -62,14 +62,14 @@ public partial class SettingsMenuTests
 
         var saved = _settings.Current;
         Assert.Equal("sk-openai-secret", SettingsSecrets.Reveal(saved.OpenAIApiKey));
-        Assert.DoesNotContain("sk-openai-secret", _console.Output);
+        Assert.DoesNotContain("sk-openai-secret", Output);
         if (OperatingSystem.IsWindows())
         {
             Assert.StartsWith(Sql.WindowsCredentials.ProtectedPrefix, saved.OpenAIApiKey);
-            Assert.Contains(SettingsMenu.ApiKeyEncryptedLabel, _console.Output);
+            Assert.Contains(SettingsMenu.ApiKeyEncryptedLabel, Output);
         }
 
-        Assert.Contains("  ✗ OpenAI API max tokens " + SettingsMenu.OpenAIApiMaxTokensRangeError + "; keeping 0.", _console.Output);
+        Assert.Contains("  ✗ OpenAI API max tokens " + SettingsMenu.OpenAIApiMaxTokensRangeError + "; keeping 0.", Output);
         Assert.Equal(8192, saved.OpenAIApiMaxTokens);
         Assert.Equal("org-1", saved.OpenAIApiOrganization);
         pane.Dispose();

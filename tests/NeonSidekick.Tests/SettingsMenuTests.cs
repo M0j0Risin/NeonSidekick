@@ -20,6 +20,8 @@ public partial class SettingsMenuTests : IDisposable
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly TestConsole _console = new TestConsole().Interactive();
+    /// <summary>The console's output with the strips' badges taken off (<see cref="TabStrips.Unbadged"/>, 2026-10-07): the fixture's own rows move them.</summary>
+    private string Output => TabStrips.Unbadged(_console.Output);
     private readonly AppSettings _settings;
     private readonly StubHttpMessageHandler _http = new();
     private readonly Dictionary<SettingsField, string> _overrides = new();
@@ -118,8 +120,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(before.LlmUrl, _settings.Current.LlmUrl);
-        Assert.Contains(SettingsMenu.Title, _console.Output);
-        Assert.Contains("LLM URL", _console.Output);
+        Assert.Contains(SettingsMenu.Title, Output);
+        Assert.Contains("LLM URL", Output);
     }
 
     [Fact]
@@ -132,7 +134,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.TtsOutput);
-        Assert.Contains("  · TTS output: off", _console.Output);
+        Assert.Contains("  · TTS output: off", Output);
     }
 
     /// <summary>Memory mode (2026-10-04, the user's ask; the Memory toggle until then): a picker over the three modes, read-write under the cursor, no reconnect.</summary>
@@ -146,8 +148,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("read-only", _settings.Current.MemoryMode);
-        Assert.Contains("  · Memory mode: read-only", _console.Output);
-        Assert.Contains(MemoryMode.Describe("disabled"), _console.Output);   // the picker's rows, each with its hint
+        Assert.Contains("  · Memory mode: read-only", Output);
+        Assert.Contains(MemoryMode.Describe("disabled"), Output);   // the picker's rows, each with its hint
     }
 
     [Fact]
@@ -160,7 +162,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.CopyUserPrompt);
-        Assert.Contains("  · Copy user prompt: off", _console.Output);   // "Copy user text" until 2026-09-18
+        Assert.Contains("  · Copy user prompt: off", Output);   // "Copy user text" until 2026-09-18
     }
 
     [Fact]
@@ -173,7 +175,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.ShowImageThumbnails);
-        Assert.Contains("  · Show image thumbnails: off", _console.Output);
+        Assert.Contains("  · Show image thumbnails: off", Output);
     }
 
     [Fact]
@@ -187,7 +189,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Llm, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("qwen3", _settings.Current.LlmModel);
-        Assert.Contains("  · 🖥️ LLM model: qwen3", _console.Output);
+        Assert.Contains("  · 🖥️ LLM model: qwen3", Output);
     }
 
     [Fact]
@@ -206,7 +208,7 @@ public partial class SettingsMenuTests : IDisposable
         if (OperatingSystem.IsWindows())
         {
             Assert.True(NeonSidekick.Sql.WindowsCredentials.IsProtected(stored));
-            Assert.Contains("  · 🖥️ LLM API key: " + SettingsMenu.ApiKeyEncryptedLabel, _console.Output);
+            Assert.Contains("  · 🖥️ LLM API key: " + SettingsMenu.ApiKeyEncryptedLabel, Output);
         }
     }
 
@@ -249,7 +251,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.Llm, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("", _settings.Current.LlmUrl);
-        Assert.Contains("(probe local ports)", _console.Output);
+        Assert.Contains("(probe local ports)", Output);
     }
 
     [Fact]
@@ -263,7 +265,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("", _settings.Current.LlmModel);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -278,8 +280,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(3600, _settings.Current.LlmRequestTimeoutSeconds);
-        Assert.Contains(SettingsMenu.LlmRequestTimeoutRangeError, _console.Output);
-        Assert.Contains("keeping 3600", _console.Output);
+        Assert.Contains(SettingsMenu.LlmRequestTimeoutRangeError, Output);
+        Assert.Contains("keeping 3600", Output);
     }
 
     [Fact]
@@ -295,7 +297,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(3600, _settings.Current.LlmRequestTimeoutSeconds);
-        Assert.Contains("LLM request timeout (s) must be more than 0 and at most 3600 seconds; keeping 3600.", _console.Output);
+        Assert.Contains("LLM request timeout (s) must be more than 0 and at most 3600 seconds; keeping 3600.", Output);
     }
 
     [Fact]
@@ -327,7 +329,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(expected, _settings.Current.LlmTurnTimeoutSeconds);
         if (changes == SettingsChanges.None)
         {
-            Assert.Contains("LLM turn timeout (s) must be more than 0 and at most 21600 seconds; keeping 21600.", _console.Output);
+            Assert.Contains("LLM turn timeout (s) must be more than 0 and at most 21600 seconds; keeping 21600.", Output);
         }
     }
 
@@ -342,7 +344,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.Llm, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(32_768, _settings.Current.LlmContextLength);
-        Assert.Contains("  · 🖥️ LLM context length: 32,768 tokens", _console.Output);
+        Assert.Contains("  · 🖥️ LLM context length: 32,768 tokens", Output);
     }
 
     /// <summary>The picture budget (2026-10-03): two typed rows, 20 pictures and 24 MB by default, 0 = no cap, out of range refused; no reconnect.</summary>
@@ -374,7 +376,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(8, _settings.Current.LlmPictureKeep);
         Assert.Equal(0, _settings.Current.LlmPictureMegabytes);
-        Assert.Contains("LLM picture keep " + SettingsMenu.LlmPictureKeepRangeError + "; keeping 20.", _console.Output);
+        Assert.Contains("LLM picture keep " + SettingsMenu.LlmPictureKeepRangeError + "; keeping 20.", Output);
     }
 
     [Theory]
@@ -394,8 +396,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(8_192, _settings.Current.LlmContextLength);
-        Assert.Contains(SettingsMenu.ContextLengthRangeError, _console.Output);
-        Assert.Contains("keeping 8192", _console.Output);
+        Assert.Contains(SettingsMenu.ContextLengthRangeError, Output);
+        Assert.Contains("keeping 8192", Output);
     }
 
     [Fact]
@@ -414,9 +416,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(20, _settings.Current.LlmMaxToolIterations);
-        Assert.Contains(SettingsMenu.MaxToolIterationsRangeError, _console.Output);
-        Assert.Contains("keeping 10000", _console.Output);
-        Assert.Contains("  · 🖥️ LLM max tool iterations: 20 round trips", _console.Output);
+        Assert.Contains(SettingsMenu.MaxToolIterationsRangeError, Output);
+        Assert.Contains("keeping 10000", Output);
+        Assert.Contains("  · 🖥️ LLM max tool iterations: 20 round trips", Output);
     }
 
     [Fact]
@@ -430,10 +432,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("F8", _settings.Current.SttPushToTalkKey);
-        Assert.Contains(Breadcrumb("STT push-to-talk key"), _console.Output);
-        Assert.Contains("  · STT push-to-talk key: F8", _console.Output);
-        Assert.Contains("F4  the default", _console.Output);
-        Assert.DoesNotContain("F11", _console.Output);   // only the listed keys are offered
+        Assert.Contains(Breadcrumb("STT push-to-talk key"), Output);
+        Assert.Contains("  · STT push-to-talk key: F8", Output);
+        Assert.Contains("F4  the default", Output);
+        Assert.DoesNotContain("F11", Output);   // only the listed keys are offered
     }
 
     [Fact]
@@ -456,7 +458,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("Insert", _settings.Current.SttPushToTalkKey);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -507,9 +509,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("hey jarvis", _settings.Current.SttWakePhrase);
-        Assert.Contains("  · STT wake phrase: hey jarvis", _console.Output);
-        Assert.Equal(2, _console.Output.Split(SettingsMenu.WakePhraseError).Length - 1);
-        Assert.Contains("keeping hey jarvis", _console.Output);
+        Assert.Contains("  · STT wake phrase: hey jarvis", Output);
+        Assert.Equal(2, Output.Split(SettingsMenu.WakePhraseError).Length - 1);
+        Assert.Contains("keeping hey jarvis", Output);
     }
 
     [Fact]
@@ -531,7 +533,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
         Assert.True(_settings.Current.SttInterrupt);
-        Assert.Contains("  · STT interrupt: on", _console.Output);
+        Assert.Contains("  · STT interrupt: on", Output);
     }
 
     [Fact]
@@ -542,8 +544,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.False(_settings.Current.SttInterrupt);
-        Assert.Contains("  · " + ChatScreen.InterruptNeedsWakeNotice, _console.Output);
-        Assert.DoesNotContain("STT interrupt: on", _console.Output);
+        Assert.Contains("  · " + ChatScreen.InterruptNeedsWakeNotice, Output);
+        Assert.DoesNotContain("STT interrupt: on", Output);
     }
 
     [Fact]
@@ -556,8 +558,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
         Assert.False(_settings.Current.SttWake);
         Assert.False(_settings.Current.SttInterrupt);
-        Assert.Contains("  · STT wake: off", _console.Output);
-        Assert.Contains("  · " + ChatScreen.InterruptOffWithWakeNotice, _console.Output);
+        Assert.Contains("  · STT wake: off", Output);
+        Assert.Contains("  · " + ChatScreen.InterruptOffWithWakeNotice, Output);
     }
 
     [Theory]
@@ -614,11 +616,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("ggml-small.en.bin", _settings.Current.SttWhisperModel);
-        Assert.Contains(Breadcrumb("STT whisper model"), _console.Output);
-        Assert.Contains("  · STT whisper model: ggml-small.en.bin", _console.Output);
-        Assert.Contains("ggml-base.en.bin   the default, 148 MB", _console.Output);
-        Assert.Contains("ggml-small.en.bin  most accurate, 488 MB", _console.Output);
-        Assert.DoesNotContain(ModelStore.WhisperModelError, _console.Output);
+        Assert.Contains(Breadcrumb("STT whisper model"), Output);
+        Assert.Contains("  · STT whisper model: ggml-small.en.bin", Output);
+        Assert.Contains("ggml-base.en.bin   the default, 148 MB", Output);
+        Assert.Contains("ggml-small.en.bin  most accurate, 488 MB", Output);
+        Assert.DoesNotContain(ModelStore.WhisperModelError, Output);
     }
 
     [Fact]
@@ -641,7 +643,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("ggml-small.en.bin", _settings.Current.SttWhisperModel);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -684,12 +686,12 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("vosk-model-en-us-0.22-lgraph", _settings.Current.SttVoskModel);
-        Assert.Contains(Breadcrumb("STT vosk model"), _console.Output);
-        Assert.Contains("  · STT vosk model: vosk-model-en-us-0.22-lgraph", _console.Output);
-        Assert.Contains("vosk-model-small-en-us-0.15   the default, 41 MB", _console.Output);
-        Assert.Contains("vosk-model-en-us-0.22-lgraph  most accurate, 131 MB", _console.Output);
-        Assert.Contains("vosk-model-small-en-in-0.4    Indian English, 38 MB", _console.Output);
-        Assert.DoesNotContain(ModelStore.VoskModelError, _console.Output);
+        Assert.Contains(Breadcrumb("STT vosk model"), Output);
+        Assert.Contains("  · STT vosk model: vosk-model-en-us-0.22-lgraph", Output);
+        Assert.Contains("vosk-model-small-en-us-0.15   the default, 41 MB", Output);
+        Assert.Contains("vosk-model-en-us-0.22-lgraph  most accurate, 131 MB", Output);
+        Assert.Contains("vosk-model-small-en-in-0.4    Indian English, 38 MB", Output);
+        Assert.DoesNotContain(ModelStore.VoskModelError, Output);
     }
 
     [Fact]
@@ -712,7 +714,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("vosk-model-small-en-in-0.4", _settings.Current.SttVoskModel);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -750,9 +752,9 @@ public partial class SettingsMenuTests : IDisposable
         await _menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(1.5, _settings.Current.TtsSpeed);
-        Assert.Contains("  · TTS speed: 1.5", _console.Output);
-        Assert.Contains(SettingsMenu.TtsSpeedRangeError, _console.Output);
-        Assert.Contains("keeping 1.5", _console.Output);
+        Assert.Contains("  · TTS speed: 1.5", Output);
+        Assert.Contains(SettingsMenu.TtsSpeedRangeError, Output);
+        Assert.Contains("keeping 1.5", Output);
     }
 
     [Fact]
@@ -766,8 +768,8 @@ public partial class SettingsMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("(overridden by NEONSIDEKICK_LLM_MODEL)", _console.Output);
-        Assert.Contains("  ! " + SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmModelVariable), _console.Output);
+        Assert.Contains("(overridden by NEONSIDEKICK_LLM_MODEL)", Output);
+        Assert.Contains("  ! " + SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmModelVariable), Output);
     }
 
     [Fact]
@@ -1767,9 +1769,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(12, _settings.Current.BotChatNonTtsDelaySeconds);
-        Assert.Contains("Botchat non-TTS delay: 12 seconds", _console.Output);
-        Assert.Contains(SettingsMenu.BotChatNonTtsDelayRangeError, _console.Output);
-        Assert.Contains("keeping 12", _console.Output);
+        Assert.Contains("Botchat non-TTS delay: 12 seconds", Output);
+        Assert.Contains(SettingsMenu.BotChatNonTtsDelayRangeError, Output);
+        Assert.Contains("keeping 12", Output);
         pane.Dispose();
     }
 
@@ -1796,9 +1798,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(80, _settings.Current.SttInterruptEchoGuard);
-        Assert.Contains("  · STT interrupt echo guard: 80 %", _console.Output);
-        Assert.Contains(SettingsMenu.SttInterruptEchoGuardRangeError, _console.Output);
-        Assert.Contains("keeping 80", _console.Output);
+        Assert.Contains("  · STT interrupt echo guard: 80 %", Output);
+        Assert.Contains(SettingsMenu.SttInterruptEchoGuardRangeError, Output);
+        Assert.Contains("keeping 80", Output);
     }
 
     [Fact]
@@ -1818,9 +1820,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(400, _settings.Current.SttInterruptConfirmMs);
-        Assert.Contains("  · STT interrupt confirm: 400 ms", _console.Output);
-        Assert.Contains(SettingsMenu.SttInterruptConfirmRangeError, _console.Output);
-        Assert.Contains("keeping 400", _console.Output);
+        Assert.Contains("  · STT interrupt confirm: 400 ms", Output);
+        Assert.Contains(SettingsMenu.SttInterruptConfirmRangeError, Output);
+        Assert.Contains("keeping 400", Output);
     }
 
     // ── Image thumbnail size ────────────────────────────────────────────────
@@ -1836,8 +1838,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("medium", _settings.Current.ImageThumbnailSize);
-        Assert.Contains(Breadcrumb("Image thumbnail size"), _console.Output);
-        Assert.Contains("  · Image thumbnail size: medium", _console.Output);
+        Assert.Contains(Breadcrumb("Image thumbnail size"), Output);
+        Assert.Contains("  · Image thumbnail size: medium", Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -1851,7 +1853,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("large", _settings.Current.ImageThumbnailSize);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -1907,8 +1909,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(next, _settings.Current.Theme);
         Assert.Same(ThemeLibrary.Get(next), Theme.Current);
-        Assert.Contains(Breadcrumb("Theme"), _console.Output);
-        Assert.Contains("  · Theme: " + next, _console.Output);
+        Assert.Contains(Breadcrumb("Theme"), Output);
+        Assert.Contains("  · Theme: " + next, Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -1954,7 +1956,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(ThemeName.Default, _settings.Current.Theme);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     // ── Tree max length / Tree show sizes ───────────────────────────────────
@@ -1979,9 +1981,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(250, _settings.Current.FileTreeMaxLength);
-        Assert.Contains(SettingsMenu.TreeMaxLengthRangeError, _console.Output);
-        Assert.Contains("keeping 500", _console.Output);
-        Assert.Contains("  · File /tree max length: 250 entries", _console.Output);
+        Assert.Contains(SettingsMenu.TreeMaxLengthRangeError, Output);
+        Assert.Contains("keeping 500", Output);
+        Assert.Contains("  · File /tree max length: 250 entries", Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -1995,7 +1997,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.FileTreeShowSizes);
-        Assert.Contains("  · File /tree show sizes: off", _console.Output);
+        Assert.Contains("  · File /tree show sizes: off", Output);
     }
 
     // ── LLM use fun verbs ───────────────────────────────────────────────────
@@ -2010,7 +2012,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.LlmUseFunVerbs);
-        Assert.Contains("  · 🖥️ LLM use fun verbs: on", _console.Output);
+        Assert.Contains("  · 🖥️ LLM use fun verbs: on", Output);
     }
 
     // ── LLM offer tools ───────────────────────────────────────────────────────────
@@ -2025,7 +2027,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Conversation, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.LlmOfferTools);
-        Assert.Contains("  · 🖥️ LLM offer tools: off", _console.Output);
+        Assert.Contains("  · 🖥️ LLM offer tools: off", Output);
     }
 
     [Fact]
@@ -2038,7 +2040,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Conversation, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.LlmOfferTools);
-        Assert.Contains("  · 🖥️ LLM offer tools: on", _console.Output);
+        Assert.Contains("  · 🖥️ LLM offer tools: on", Output);
     }
 
     // ── New profile mode ────────────────────────────────────────────────────
@@ -2054,8 +2056,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("advanced", _settings.Current.NewProfileMode);
-        Assert.Contains(Breadcrumb("New profile mode"), _console.Output);
-        Assert.Contains("  · New profile mode: advanced", _console.Output);
+        Assert.Contains(Breadcrumb("New profile mode"), Output);
+        Assert.Contains("  · New profile mode: advanced", Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -2069,7 +2071,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("advanced", _settings.Current.NewProfileMode);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2081,7 +2083,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("basic", _settings.Current.NewProfileMode);
-        Assert.Contains("  · New profile mode: basic", _console.Output);
+        Assert.Contains("  · New profile mode: basic", Output);
     }
 
     // ── LLM server scan mode ───────────────────────────────────────────────────────
@@ -2097,9 +2099,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains(Breadcrumb("LLM server scan mode"), _console.Output);
-        Assert.Contains("  · 🖥️ LLM server scan mode: remote", _console.Output);
-        Assert.Contains("the usual ports on every other machine on the local network", _console.Output);
+        Assert.Contains(Breadcrumb("LLM server scan mode"), Output);
+        Assert.Contains("  · 🖥️ LLM server scan mode: remote", Output);
+        Assert.Contains("the usual ports on every other machine on the local network", Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -2113,7 +2115,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("both", _settings.Current.LlmScanMode);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2125,7 +2127,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains("(probe local ports and the network)", _console.Output);   // the list as it opened
+        Assert.Contains("(probe local ports and the network)", Output);   // the list as it opened
     }
 
     // ── TTS source (flat row 52, under TTS output on the TTS tab) ───────────
@@ -2141,9 +2143,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("in-process", _settings.Current.TtsSource);
-        Assert.Contains(Breadcrumb("TTS source"), _console.Output);
-        Assert.Contains("  · TTS source: in-process", _console.Output);
-        Assert.Contains("kokoro.onnx (326 MB) downloads on first use", _console.Output);
+        Assert.Contains(Breadcrumb("TTS source"), Output);
+        Assert.Contains("  · TTS source: in-process", Output);
+        Assert.Contains("kokoro.onnx (326 MB) downloads on first use", Output);
         Assert.Equal(0, _synth.ListCalls);          // the menu itself connects nothing; the screen reconnects after it closes
         Assert.Equal(0, _synth.PrepareCalls);
     }
@@ -2159,9 +2161,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("folder-apply", _settings.Current.FileMentionFolderMode);
-        Assert.Contains(Breadcrumb("File @-mention folder mode"), _console.Output);
-        Assert.Contains("  · File @-mention folder mode: folder-apply", _console.Output);
-        Assert.Contains("insert @folder/ and close the list", _console.Output);
+        Assert.Contains(Breadcrumb("File @-mention folder mode"), Output);
+        Assert.Contains("  · File @-mention folder mode: folder-apply", Output);
+        Assert.Contains("insert @folder/ and close the list", Output);
     }
 
     [Fact]
@@ -2174,7 +2176,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("folder-apply", _settings.Current.FileMentionFolderMode);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2197,7 +2199,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("in-process", _settings.Current.TtsSource);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2209,7 +2211,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal("http", _settings.Current.TtsSource);
-        Assert.Contains("  · TTS source: http", _console.Output);
+        Assert.Contains("  · TTS source: http", Output);
     }
 
     [Fact]
@@ -2220,7 +2222,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None, midTurn: true));
         Assert.Equal("http", _settings.Current.TtsSource);
-        Assert.Contains(SettingsMenu.NotWhileReplyRunsNotice, _console.Output);
+        Assert.Contains(SettingsMenu.NotWhileReplyRunsNotice, Output);
     }
 
     [Fact]
@@ -2254,11 +2256,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("stop", _settings.Current.LlmToolCompactType);
-        Assert.Contains(Breadcrumb("LLM tool compact type"), _console.Output);
-        Assert.Contains("  · 🖥️ LLM tool compact type: stop", _console.Output);
-        Assert.Contains("end the turn with a notice; /compact or /clear first", _console.Output);
-        Assert.Contains("no check; the server's own limit answers", _console.Output);
-        Assert.Contains("prune, then summarise if the turn is still over the share", _console.Output);
+        Assert.Contains(Breadcrumb("LLM tool compact type"), Output);
+        Assert.Contains("  · 🖥️ LLM tool compact type: stop", Output);
+        Assert.Contains("end the turn with a notice; /compact or /clear first", Output);
+        Assert.Contains("no check; the server's own limit answers", Output);
+        Assert.Contains("prune, then summarise if the turn is still over the share", Output);
     }
 
     [Fact]
@@ -2271,7 +2273,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("nothing", _settings.Current.LlmToolCompactType);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2297,7 +2299,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.WebTools);
-        Assert.Contains("  · Web tools: off", _console.Output);
+        Assert.Contains("  · Web tools: off", Output);
     }
 
     [Fact]
@@ -2311,10 +2313,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("chromium", _settings.Current.WebBrowserMode);
-        Assert.Contains(Breadcrumb("Web browser mode"), _console.Output);
-        Assert.Contains("  · Web browser mode: chromium", _console.Output);
-        Assert.Contains("HttpClient, then a headless browser when a page is blocked or empty", _console.Output);
-        Assert.Contains("a headless Edge, Chrome or Brave for every page", _console.Output);
+        Assert.Contains(Breadcrumb("Web browser mode"), Output);
+        Assert.Contains("  · Web browser mode: chromium", Output);
+        Assert.Contains("HttpClient, then a headless browser when a page is blocked or empty", Output);
+        Assert.Contains("a headless Edge, Chrome or Brave for every page", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -2328,7 +2330,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("httpclient", _settings.Current.WebBrowserMode);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [WindowsFact]
@@ -2352,9 +2354,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("", _settings.Current.WebBrowserPath);
-        Assert.Contains("Web browser path " + SettingsMenu.BrowserPathError + "; keeping (auto: msedge.exe).", _console.Output);
-        Assert.Contains("  · Web browser path: " + exe, _console.Output);
-        Assert.Contains("  · Web browser path: (auto: msedge.exe)", _console.Output);
+        Assert.Contains("Web browser path " + SettingsMenu.BrowserPathError + "; keeping (auto: msedge.exe).", Output);
+        Assert.Contains("  · Web browser path: " + exe, Output);
+        Assert.Contains("  · Web browser path: (auto: msedge.exe)", Output);
     }
 
     /// <summary>The Unix twin of <see cref="WebBrowserPath_IsRow43_Typed_AMissingFileIsRefused_AndEmptyMeansAuto"/> (2026-10-06, the macOS build): a Unix executable, and the auto label of the fixture's Windows path read as one name.</summary>
@@ -2380,9 +2382,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("", _settings.Current.WebBrowserPath);
-        Assert.Contains("Web browser path " + SettingsMenu.BrowserPathError + "; keeping " + auto + ".", _console.Output);
-        Assert.Contains("  · Web browser path: " + exe, _console.Output);
-        Assert.Contains("  · Web browser path: " + auto, _console.Output);
+        Assert.Contains("Web browser path " + SettingsMenu.BrowserPathError + "; keeping " + auto + ".", Output);
+        Assert.Contains("  · Web browser path: " + exe, Output);
+        Assert.Contains("  · Web browser path: " + auto, Output);
     }
 
     [Fact]
@@ -2398,11 +2400,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("local_area_network", _settings.Current.WebBrowserNetworkMode);
-        Assert.Contains(Breadcrumb("Web browser network mode"), _console.Output);
-        Assert.Contains("  · Web browser network mode: local_area_network", _console.Output);
-        Assert.Contains("public addresses alone; this machine and the local network refused", _console.Output);
-        Assert.Contains("this machine and the local network alone; the internet refused", _console.Output);
-        Assert.Contains("every address", _console.Output);
+        Assert.Contains(Breadcrumb("Web browser network mode"), Output);
+        Assert.Contains("  · Web browser network mode: local_area_network", Output);
+        Assert.Contains("public addresses alone; this machine and the local network refused", Output);
+        Assert.Contains("this machine and the local network alone; the internet refused", Output);
+        Assert.Contains("every address", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -2416,7 +2418,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("both", _settings.Current.WebBrowserNetworkMode);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2437,9 +2439,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("", _settings.Current.WebSearxngUrl);
-        Assert.Contains("Web SearXNG URL " + SettingsMenu.SearxngUrlError + "; keeping (not set).", _console.Output);
-        Assert.Contains("  · Web SearXNG URL: http://localhost:8080", _console.Output);
-        Assert.Contains("  · Web SearXNG URL: (not set)", _console.Output);
+        Assert.Contains("Web SearXNG URL " + SettingsMenu.SearxngUrlError + "; keeping (not set).", Output);
+        Assert.Contains("  · Web SearXNG URL: http://localhost:8080", Output);
+        Assert.Contains("  · Web SearXNG URL: (not set)", Output);
     }
 
     [Fact]
@@ -2461,9 +2463,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(5, _settings.Current.WebSearchMaxResults);
-        Assert.Contains(SettingsMenu.WebSearchMaxResultsRangeError, _console.Output);
-        Assert.Contains("keeping 20", _console.Output);
-        Assert.Contains("  · Web search max results: 5 results", _console.Output);
+        Assert.Contains(SettingsMenu.WebSearchMaxResultsRangeError, Output);
+        Assert.Contains("keeping 20", Output);
+        Assert.Contains("  · Web search max results: 5 results", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -2478,7 +2480,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM server scan mode: remote\n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            remote\n  URL                         (scan the local network)\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM server scan mode: remote\n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            remote\n  URL                         (scan the local network)\n", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -2497,9 +2499,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Llm, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("high", _settings.Current.LlmReasoning);
-        Assert.Contains(Breadcrumb("LLM reasoning"), _console.Output);
-        Assert.Contains("  · 🖥️ LLM reasoning: high", _console.Output);
-        Assert.Contains("  ! " + SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmReasoningVariable), _console.Output);
+        Assert.Contains(Breadcrumb("LLM reasoning"), Output);
+        Assert.Contains("  · 🖥️ LLM reasoning: high", Output);
+        Assert.Contains("  ! " + SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmReasoningVariable), Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -2513,7 +2515,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("medium", _settings.Current.LlmReasoning);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2540,8 +2542,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("af_bella", _settings.Current.TtsVoice);
-        Assert.Contains(Breadcrumb("TTS voice"), _console.Output);
-        Assert.Contains("  · TTS voice: af_bella", _console.Output);
+        Assert.Contains(Breadcrumb("TTS voice"), Output);
+        Assert.Contains("  · TTS voice: af_bella", Output);
         Assert.Equal(1, _synth.ListCalls);
     }
 
@@ -2554,7 +2556,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("af_heart", _settings.Current.TtsVoice);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2585,8 +2587,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("bf_emma", _settings.Current.TtsVoice);
-        Assert.Contains("did not list voices", _console.Output);
-        Assert.DoesNotContain(Breadcrumb("TTS voice"), _console.Output);
+        Assert.Contains("did not list voices", Output);
+        Assert.DoesNotContain(Breadcrumb("TTS voice"), Output);
     }
 
     // ── TTS voice 2 and the mix ─────────────────────────────────────────────
@@ -2603,8 +2605,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("af_bella", _settings.Current.TtsVoice2);
-        Assert.Contains(Breadcrumb("TTS voice 2"), _console.Output);
-        Assert.Contains("  · TTS voice 2: af_bella", _console.Output);
+        Assert.Contains(Breadcrumb("TTS voice 2"), Output);
+        Assert.Contains("  · TTS voice 2: af_bella", Output);
         Assert.Equal(1, _synth.ListCalls);
     }
 
@@ -2620,7 +2622,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("", _settings.Current.TtsVoice2);
-        Assert.Contains("  · TTS voice 2: (none)", _console.Output);
+        Assert.Contains("  · TTS voice 2: (none)", Output);
     }
 
     [Fact]
@@ -2643,9 +2645,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("bf_emma", _settings.Current.TtsVoice2);
-        Assert.Contains("  · TTS voice 2: (none)", _console.Output);
-        Assert.Contains("  · TTS voice 2: bf_emma", _console.Output);
-        Assert.DoesNotContain(Breadcrumb("TTS voice 2"), _console.Output);
+        Assert.Contains("  · TTS voice 2: (none)", Output);
+        Assert.Contains("  · TTS voice 2: bf_emma", Output);
+        Assert.DoesNotContain(Breadcrumb("TTS voice 2"), Output);
     }
 
     [Fact]
@@ -2668,9 +2670,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(70, _settings.Current.TtsVoiceMix);
-        Assert.Contains("  · TTS voice mix: 70 % / 30 %", _console.Output);
-        Assert.Contains(SettingsMenu.TtsVoiceMixRangeError, _console.Output);
-        Assert.Contains("keeping 70", _console.Output);
+        Assert.Contains("  · TTS voice mix: 70 % / 30 %", Output);
+        Assert.Contains(SettingsMenu.TtsVoiceMixRangeError, Output);
+        Assert.Contains("keeping 70", Output);
         Assert.Equal(0, _synth.ListCalls);      // a typed number consults no server
     }
 
@@ -2687,8 +2689,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await _menu.PickModelAsync(session, "", CancellationToken.None));
 
         Assert.Equal("second", _settings.Current.LlmModel);
-        Assert.Contains("  · 🖥️ LLM model: second", _console.Output);
-        Assert.Contains(SettingsMenu.ModelTitle, _console.Output);
+        Assert.Contains("  · 🖥️ LLM model: second", Output);
+        Assert.Contains(SettingsMenu.ModelTitle, Output);
     }
 
     [Fact]
@@ -2713,7 +2715,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(await _menu.PickModelAsync(session, "", CancellationToken.None));
         Assert.Equal("", _settings.Current.LlmModel);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2734,7 +2736,7 @@ public partial class SettingsMenuTests : IDisposable
         using var session = Session();
         Assert.True(await _menu.PickModelAsync(session, "  direct-id ", CancellationToken.None));
         Assert.Equal("direct-id", _settings.Current.LlmModel);
-        Assert.DoesNotContain(SettingsMenu.ModelTitle, _console.Output);
+        Assert.DoesNotContain(SettingsMenu.ModelTitle, Output);
     }
 
     [Fact]
@@ -2743,7 +2745,7 @@ public partial class SettingsMenuTests : IDisposable
         using var session = Session();
         await session.ConnectAsync(PreFlipDefaults.Data(), CancellationToken.None);   // the local scan finds the stub   // nothing answers, nothing configured
         Assert.False(await _menu.PickModelAsync(session, "", CancellationToken.None));
-        Assert.Contains(SettingsMenu.NoUrlError, _console.Output);
+        Assert.Contains(SettingsMenu.NoUrlError, Output);
     }
 
     // ── /reasoning ──────────────────────────────────────────────────────────
@@ -2756,10 +2758,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await _menu.PickReasoningAsync("", "medium", CancellationToken.None));
 
         Assert.Equal("high", _settings.Current.LlmReasoning);
-        Assert.Contains(SettingsMenu.ReasoningTitle, _console.Output);
-        Assert.DoesNotContain(Breadcrumb("LLM reasoning"), _console.Output);
-        Assert.Contains("  · 🖥️ LLM reasoning: high", _console.Output);
-        Assert.Contains("maximum thinking, slowest", _console.Output);   // every level's hint is on its row
+        Assert.Contains(SettingsMenu.ReasoningTitle, Output);
+        Assert.DoesNotContain(Breadcrumb("LLM reasoning"), Output);
+        Assert.Contains("  · 🖥️ LLM reasoning: high", Output);
+        Assert.Contains("maximum thinking, slowest", Output);   // every level's hint is on its row
     }
 
     [Fact]
@@ -2771,7 +2773,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(await _menu.PickReasoningAsync("", "low", CancellationToken.None));
 
         Assert.Equal("low", _settings.Current.LlmReasoning);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     [Theory]
@@ -2785,8 +2787,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await _menu.PickReasoningAsync(argument, "medium", CancellationToken.None));
 
         Assert.Equal(expected, _settings.Current.LlmReasoning);
-        Assert.Contains("  · 🖥️ LLM reasoning: " + expected, _console.Output);
-        Assert.DoesNotContain(SettingsMenu.KeepKeys, _console.Output);   // no list was shown (the title is the notice's own words)
+        Assert.Contains("  · 🖥️ LLM reasoning: " + expected, Output);
+        Assert.DoesNotContain(SettingsMenu.KeepKeys, Output);   // no list was shown (the title is the notice's own words)
     }
 
     [Theory]
@@ -2800,8 +2802,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(await _menu.PickReasoningAsync(argument, "medium", CancellationToken.None));
 
         Assert.Equal("medium", _settings.Current.LlmReasoning);
-        Assert.Contains("  ✗ " + SettingsMenu.ReasoningLevelError, _console.Output);
-        Assert.DoesNotContain(SettingsMenu.KeepKeys, _console.Output);
+        Assert.Contains("  ✗ " + SettingsMenu.ReasoningLevelError, Output);
+        Assert.DoesNotContain(SettingsMenu.KeepKeys, Output);
     }
 
     [Fact]
@@ -2812,8 +2814,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await _menu.PickReasoningAsync("high", "none", CancellationToken.None));
 
         Assert.Equal("high", _settings.Current.LlmReasoning);
-        Assert.Contains("  · 🖥️ LLM reasoning: high", _console.Output);
-        Assert.Contains("  ! " + SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmReasoningVariable), _console.Output);
+        Assert.Contains("  · 🖥️ LLM reasoning: high", Output);
+        Assert.Contains("  ! " + SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmReasoningVariable), Output);
     }
 
     [Fact]
@@ -2847,9 +2849,9 @@ public partial class SettingsMenuTests : IDisposable
         var picked = await _menu.PickServerAsync(servers, servers[1].BaseUrl, SettingsMenu.ServerTitle, CancellationToken.None);
 
         Assert.Same(servers[0], picked);
-        Assert.Contains(SettingsMenu.ServerTitle, _console.Output);
-        Assert.Contains("LM Studio      http://127.0.0.1:1234/v1   1 chat model", _console.Output);   // the URLs padded to one column (2026-09-29)
-        Assert.Contains("Ollama         http://127.0.0.1:11434/v1  2 chat models", _console.Output);
+        Assert.Contains(SettingsMenu.ServerTitle, Output);
+        Assert.Contains("LM Studio      http://127.0.0.1:1234/v1   1 chat model", Output);   // the URLs padded to one column (2026-09-29)
+        Assert.Contains("Ollama         http://127.0.0.1:11434/v1  2 chat models", Output);
         Assert.Empty(_settings.Current.LlmUrl);   // picking saves nothing; the caller does
     }
 
@@ -2864,14 +2866,14 @@ public partial class SettingsMenuTests : IDisposable
         var network = new[] { Server(1234, "LM Studio", "lm"), Server(8000, "vLLM", "v") };
         Push(Keys.Enter);
         Assert.Same(network[0], await menu.PickServerAsync(network, null, SettingsMenu.ServerTitle, CancellationToken.None));
-        Assert.DoesNotContain("16GB", _console.Output);
+        Assert.DoesNotContain("16GB", Output);
 
         var servers = new[] { Server(1234, "LM Studio", "lm"), Embedded("gemma-4-31b"), Embedded("gemma-4-e2b") };
         Push(Keys.Char('1'));                   // 8GB: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(" 8GB    16GB    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03; 32GB gone since 2026-10-05
-        Assert.Contains("ESC = the first listed", _console.Output);
+        Assert.Contains(" 8GB · 16GB · ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // uncensored last (later on 2026-09-30); the glyphs since 2026-10-03; 32GB gone since 2026-10-05
+        Assert.Contains("ESC = the first listed", Output);
 
         Push(Keys.Char('x'), Keys.Enter);       // uncensored (X since later on 2026-09-30): no embedded row passes, LM Studio is still there to pick
         Assert.Same(servers[0], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
@@ -2907,12 +2909,12 @@ public partial class SettingsMenuTests : IDisposable
 
         Push(Keys.Escape);
         Assert.Null(await _menu.PickServerAsync(servers, null, SettingsMenu.StartupServerTitle, CancellationToken.None));
-        Assert.Contains(SettingsMenu.StartupServerTitle, _console.Output);
-        Assert.DoesNotContain(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.StartupServerTitle, Output);
+        Assert.DoesNotContain(SettingsMenu.UnchangedNotice, Output);
 
         Push(Keys.Escape);
         Assert.Null(await _menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
-        Assert.Contains("  · " + SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice, Output);
     }
 
     [Fact]
@@ -2940,7 +2942,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(_menu.SaveServer(new Uri("http://127.0.0.1:8000/v1")));
         Assert.Equal("http://127.0.0.1:8000/v1", _settings.Current.LlmUrl);
         Assert.Equal("", _settings.Current.LlmModel);
-        Assert.Contains("  · 🖥️ LLM URL: http://127.0.0.1:8000/v1", _console.Output);
+        Assert.Contains("  · 🖥️ LLM URL: http://127.0.0.1:8000/v1", Output);
 
         _settings.Update(d => d.LlmModel = "new-model");
         Assert.False(_menu.SaveServer(new Uri("http://127.0.0.1:8000/v1")));
@@ -2948,7 +2950,7 @@ public partial class SettingsMenuTests : IDisposable
 
         _overrides[SettingsField.LlmUrl] = "--url";
         Assert.True(_menu.SaveServer(new Uri("http://127.0.0.1:1234/v1")));
-        Assert.Contains("  ! " + SettingsMenu.OverrideNotice("--url"), _console.Output);
+        Assert.Contains("  ! " + SettingsMenu.OverrideNotice("--url"), Output);
     }
 
     [Fact]
@@ -2968,7 +2970,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("pinned", _settings.Current.LlmModel);
 
         Assert.False(await _menu.PickModelFromListAsync(ProbeResult.Missing("refused"), "", CancellationToken.None));
-        Assert.Contains("The server did not answer (refused). " + SettingsMenu.NoModelsListedError, _console.Output);
+        Assert.Contains("The server did not answer (refused). " + SettingsMenu.NoModelsListedError, Output);
     }
 
     [Fact]
@@ -3006,7 +3008,7 @@ public partial class SettingsMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("Profile                                 " + Profiles.DefaultName, _console.Output);
+        Assert.Contains("Profile                                 " + Profiles.DefaultName, Output);
         Assert.StartsWith(Profiles.DefaultName, _settings.ProfileName);
     }
 
@@ -3024,8 +3026,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("work", _settings.ProfileName);
         Assert.Equal("work-model", _settings.Current.LlmModel);
-        Assert.DoesNotContain(SettingsMenu.SwitchedNotice("work"), _console.Output);   // the screen announces it, after its redraw
-        Assert.Contains("Profile                                 work", _console.Output);   // the menu again, on the new profile
+        Assert.DoesNotContain(SettingsMenu.SwitchedNotice("work"), Output);   // the screen announces it, after its redraw
+        Assert.Contains("Profile                                 work", Output);   // the menu again, on the new profile
     }
 
     [Fact]
@@ -3037,7 +3039,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        Assert.Contains("  · " + SettingsMenu.AlreadyCurrentNotice(Profiles.DefaultName), _console.Output);
+        Assert.Contains("  · " + SettingsMenu.AlreadyCurrentNotice(Profiles.DefaultName), Output);
     }
 
     [Fact]
@@ -3049,7 +3051,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        Assert.Contains("  · " + SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice, Output);
     }
 
     /// <summary>A typed letter jumps to the next profile starting with it, a second press to the one after (2026-10-06, the user's ask: as the theme picker).</summary>
@@ -3065,7 +3067,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await menu.PickProfileAsync(CancellationToken.None));
 
         Assert.Equal("work", _settings.ProfileName);
-        Assert.Contains(SettingsMenu.ProfileKeys, _console.Output);
+        Assert.Contains(SettingsMenu.ProfileKeys, Output);
         Assert.Contains("A–Z = jump", SettingsMenu.SwitchKeys);
         pane.Dispose();
     }
@@ -3107,10 +3109,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.True(Directory.Exists(elsewhere));
-        Assert.Contains("  · Working directory (cwd): " + elsewhere, _console.Output);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
-        Assert.Contains("  ✗ Working directory (cwd) " + SettingsMenu.WorkingDirectoryError + "; keeping " + elsewhere + ".", _console.Output);
-        Assert.Contains("  · Working directory (cwd): " + SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory), _console.Output);
+        Assert.Contains("  · Working directory (cwd): " + elsewhere, Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
+        Assert.Contains("  ✗ Working directory (cwd) " + SettingsMenu.WorkingDirectoryError + "; keeping " + elsewhere + ".", Output);
+        Assert.Contains("  · Working directory (cwd): " + SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory), Output);
         Assert.Equal("", _settings.Current.WorkingDirectory);
     }
 
@@ -3130,8 +3132,8 @@ public partial class SettingsMenuTests : IDisposable
         string blocked = Path.Combine(_dir, "file.txt");
         File.WriteAllText(blocked, "x");
         Assert.False(_menu.TrySaveWorkingDirectory(Path.Combine(blocked, "sub")));
-        Assert.Contains("  ✗ Could not create " + Path.Combine(blocked, "sub") + " (", _console.Output);
-        Assert.Contains("; keeping " + Path.Combine(_dir, "made", "here") + ".", _console.Output);
+        Assert.Contains("  ✗ Could not create " + Path.Combine(blocked, "sub") + " (", Output);
+        Assert.Contains("; keeping " + Path.Combine(_dir, "made", "here") + ".", Output);
 
         Assert.True(_menu.TrySaveWorkingDirectory(""));
         Assert.Equal("", _settings.Current.WorkingDirectory);
@@ -3158,8 +3160,8 @@ public partial class SettingsMenuTests : IDisposable
         string blocked = Path.Combine(_dir, "file.txt");
         File.WriteAllText(blocked, "x");
         Assert.False(_menu.TrySaveWorkingDirectory(Path.Combine(blocked, "sub")));
-        Assert.Contains("  ✗ Could not create " + Path.Combine(blocked, "sub") + " (", _console.Output);
-        Assert.Contains("; keeping " + Path.Combine(_dir, "made", "here") + ".", _console.Output);
+        Assert.Contains("  ✗ Could not create " + Path.Combine(blocked, "sub") + " (", Output);
+        Assert.Contains("; keeping " + Path.Combine(_dir, "made", "here") + ".", Output);
 
         Assert.True(_menu.TrySaveWorkingDirectory(""));
         Assert.Equal("", _settings.Current.WorkingDirectory);
@@ -3206,7 +3208,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(1, opened);
         Assert.Equal(picked, _settings.Current.WorkingDirectory);
         Assert.True(Directory.Exists(picked));
-        Assert.DoesNotContain(SettingsMenu.WorkingDirectoryError, _console.Output);   // nothing was typed, so nothing was rejected
+        Assert.DoesNotContain(SettingsMenu.WorkingDirectoryError, Output);   // nothing was typed, so nothing was rejected
     }
 
     /// <summary>The picker closed with nothing chosen: the setting stands and the row says so, as every cancelled edit does.</summary>
@@ -3221,7 +3223,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(_dir, _settings.Current.WorkingDirectory);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
     }
 
     /// <summary>The picker chose the profile's own folder: the empty value is saved, so the row reads as the default again.</summary>
@@ -3254,13 +3256,13 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
     private void AssertTabEnds(string rows, int width) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), Output);
 
     /// <summary>A title or strip row as the pane prints it since 2026-09-18: the text, then the × close glyph in column width − 2 (the console's width as the test set it).</summary>
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = SettingsMenu.Title + "   General    LLM    Embedded    Docker    Anthropic    OpenAI    TTS    STT    Sessions    Botchat ";   // LLM second since 2026-10-04   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
+    private const string Strip = SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ";   // LLM second since 2026-10-04   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
     [WindowsFact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()
@@ -3276,11 +3278,11 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", _console.Output);
-        Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
-        Assert.DoesNotContain("LLM URL", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
+        Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
-        Assert.EndsWith(Rule(240) + "\n› \n" + Rule(240) + "\nidle", _console.Output);
+        Assert.EndsWith(Rule(240) + "\n› \n" + Rule(240) + "\nidle", Output);
         Assert.Equal(0, pane.FlowRow);   // nothing reached the transcript
         pane.Dispose();
     }
@@ -3300,11 +3302,11 @@ public partial class SettingsMenuTests : IDisposable
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/default/files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", _console.Output);
-        Assert.DoesNotContain("File /tree max length", _console.Output);   // the Files tab's since 2026-09-15
-        Assert.DoesNotContain("LLM URL", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 35\n  Show performance bar         CPU, RAM, GPU, VRAM · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
+        Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
-        Assert.EndsWith(Rule(240) + "\n› \n" + Rule(240) + "\nidle", _console.Output);
+        Assert.EndsWith(Rule(240) + "\n› \n" + Rule(240) + "\nidle", Output);
         Assert.Equal(0, pane.FlowRow);   // nothing reached the transcript
         pane.Dispose();
     }
@@ -3319,15 +3321,15 @@ public partial class SettingsMenuTests : IDisposable
 
         // Each tab under the strip, padded to its own column (28, 32, 19, 26), the whole tab in view, nothing of another tab on it.
         AssertTabEnds("\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 120);
-        Assert.Contains("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n  URL                         (probe local ports)\n  Model                       (first listed)\n  API key                     ", _console.Output);   // the tab's name off every row, the sections as headings (2026-10-04)
+        Assert.Contains("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n  URL                         (probe local ports)\n  Model                       (first listed)\n  API key                     ", Output);   // the tab's name off every row, the sections as headings (2026-10-04)
         AssertTabEnds("\n" + MenuLayout.Heading("How it answers", 120) + "\n  Reasoning                   none\n  Show thinking               on\n  Preserve thinking           off\n  Reasoning estimate          chars\n  Sampling                    (server defaults)\n  Sampling from Hugging Face  off\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  Offer tools                 on\n  Max tool iterations         10000 round trips\n  Request timeout (s)         3600\n  Turn timeout (s)            21600\n" + MenuLayout.Heading("Context", 120) + "\n  Context length              (from the server)\n  Mid-turn usage              last-known\n  Max turns                   auto\n  Auto compact (%)            85 %\n  Compact type                summary\n  Compact keep recent         2 turns\n  Compact show summary        off\n  Tool compact type           compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  Picture keep                20 pictures\n  Picture megabytes           24 MB\n  Use fun verbs               off\n", 120);   // five runs since 2026-10-01 (the users call): the connection, how it answers, tools and limits, the context, the fun verbs
         AssertTabEnds("\n \n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix      80 % / 20 %\n  Speed          1.2\n", 120);
         AssertTabEnds("\n \n▸ Input                 off\n  Destination           chat\n  Wake                  off\n  Wake phrase           hey neon\n  Interrupt             off\n  Interrupt echo guard  100 %\n  Interrupt confirm     200 ms\n  Push-to-talk key      F4\n  Whisper model         ggml-base.en.bin\n  Vosk model            vosk-model-small-en-us-0.15\n", 120);
-        Assert.DoesNotContain("Ask user", _console.Output);   // /tools' since 2026-09-19
-        Assert.DoesNotContain("File tools", _console.Output);
-        Assert.DoesNotContain("Web tools", _console.Output);
-        Assert.DoesNotContain("Agent skills", _console.Output);   // /skills' Options tab since 2026-09-19
-        Assert.DoesNotMatch(@"[ ▲]▼ \d+–\d+ of \d+", _console.Output);
+        Assert.DoesNotContain("Ask user", Output);   // /tools' since 2026-09-19
+        Assert.DoesNotContain("File tools", Output);
+        Assert.DoesNotContain("Web tools", Output);
+        Assert.DoesNotContain("Agent skills", Output);   // /skills' Options tab since 2026-09-19
+        Assert.DoesNotMatch(@"[ ▲]▼ \d+–\d+ of \d+", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3344,9 +3346,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(_settings.Current.TtsOutput);
         // The on/off page under the breadcrumb: the saved value on the cursor, each row with its sentence.
-        Assert.Contains("\n" + Titled(Breadcrumb("TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", Output);
         // The status under the strip: the saved notice and the override warning, the tab's list under them with the cursor kept.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ Output         off  (overridden by X)\n  Source", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ Output         off  (overridden by X)\n  Source", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3366,8 +3368,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("read-write", _settings.Current.MemoryMode);
-        Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  ", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  ", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         Assert.False(pane.OverlayOpen);
         Assert.True(input.IsAvailable);
         pane.Dispose();
@@ -3389,9 +3391,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("read-only", _settings.Current.MemoryMode);
-        Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  " + MemoryMode.Describe("read-write") + "\n  read-only   " + MemoryMode.Describe("read-only") + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory mode: read-only\n" + MenuLayout.Heading("Who and where", 240) + "\n  Profile                      default (", _console.Output);
-        Assert.Contains("\n▸ Memory mode                  read-only\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  " + MemoryMode.Describe("read-write") + "\n  read-only   " + MemoryMode.Describe("read-only") + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory mode: read-only\n" + MenuLayout.Heading("Who and where", 240) + "\n  Profile                      default (", Output);
+        Assert.Contains("\n▸ Memory mode                  read-only\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -3411,7 +3413,7 @@ public partial class SettingsMenuTests : IDisposable
         input.PushClick(60, 50);                 // the pair: every level closes
         input.Push(Keys.Escape);                 // never read
 
-        int mark = _console.Output.Length;
+        int mark = Output.Length;
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("read-write", _settings.Current.MemoryMode);
@@ -3419,9 +3421,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(pane.Dismissed);
         Assert.True(input.IsAvailable);
         // Nothing after the page's draw: the unwinding drew no list.
-        int page = _console.Output.LastIndexOf(Titled(Breadcrumb("Memory mode")), StringComparison.Ordinal);
+        int page = Output.LastIndexOf(Titled(Breadcrumb("Memory mode")), StringComparison.Ordinal);
         Assert.True(page > mark);
-        Assert.DoesNotContain(Titled(Strip), _console.Output[page..]);
+        Assert.DoesNotContain(Titled(Strip), Output[page..]);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3444,11 +3446,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(_settings.Current.TtsOutput);
         Assert.False(_settings.Current.SttInput);
         // The refusal on the status line under the strip (a redraw repeats it, so no count), the toggle's own line too.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n" + MenuLayout.Heading("Who and where", 120) + "\n▸ Profile", _console.Output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Output", _console.Output);
-        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Input", _console.Output);
-        Assert.Contains("  · Memory mode: read-only", _console.Output);
-        Assert.DoesNotContain(SettingsMenu.ProfileTitle + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n" + MenuLayout.Heading("Who and where", 120) + "\n▸ Profile", Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Output", Output);
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n▸ Input", Output);
+        Assert.Contains("  · Memory mode: read-only", Output);
+        Assert.DoesNotContain(SettingsMenu.ProfileTitle + "\n", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3485,8 +3487,8 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Push(Keys.Down, Keys.Enter);
         Assert.True(await menu.ConfirmAsync("💾 Forget 2 memories?", CancellationToken.None));
-        Assert.Contains("\n" + Titled("💾 Forget 2 memories?") + "\n \n▸ No\n  Yes\n" + Rule(120) + "\n" + SettingsMenu.ConfirmKeys + "\n", _console.Output);
-        Assert.Contains("\n  No\n▸ Yes\n", _console.Output);
+        Assert.Contains("\n" + Titled("💾 Forget 2 memories?") + "\n \n▸ No\n  Yes\n" + Rule(120) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
+        Assert.Contains("\n  No\n▸ Yes\n", Output);
         Assert.False(pane.OverlayOpen);
 
         Push(Keys.Enter);
@@ -3503,9 +3505,9 @@ public partial class SettingsMenuTests : IDisposable
     {
         Push(Keys.Enter);
         Assert.False(await _menu.ConfirmAsync("Empty the trash?", CancellationToken.None));
-        Assert.Contains(SettingsMenu.PromptTitle("Empty the trash?", SettingsMenu.ConfirmKeys), _console.Output);
-        Assert.Contains("No", _console.Output);
-        Assert.Contains("Yes", _console.Output);
+        Assert.Contains(SettingsMenu.PromptTitle("Empty the trash?", SettingsMenu.ConfirmKeys), Output);
+        Assert.Contains("No", Output);
+        Assert.Contains("Yes", Output);
 
         Push(Keys.Down, Keys.Enter);
         Assert.True(await _menu.ConfirmAsync("Empty the trash?", CancellationToken.None));
@@ -3519,18 +3521,18 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         Push(Keys.Char('y'), Keys.Enter);
         Assert.True(await menu.ConfirmAsync("💾 Forget 2 memories?", CancellationToken.None));
-        Assert.Contains("\n  No\n▸ Yes\n", _console.Output);
+        Assert.Contains("\n  No\n▸ Yes\n", Output);
 
         _console.Clear();
         Push(Keys.Char('Y'), Keys.Char('n'), Keys.Enter);
         Assert.False(await menu.ConfirmAsync("💾 Forget 2 memories?", CancellationToken.None));
-        Assert.Contains("\n  No\n▸ Yes\n", _console.Output);
-        Assert.Contains("\n▸ No\n  Yes\n", _console.Output);
+        Assert.Contains("\n  No\n▸ Yes\n", Output);
+        Assert.Contains("\n▸ No\n  Yes\n", Output);
 
         _console.Clear();
         Push(Keys.Char('y'), Keys.Escape);
         Assert.False(await menu.ConfirmAsync("💾 Forget 2 memories?", CancellationToken.None));
-        Assert.Contains("\n  No\n▸ Yes\n", _console.Output);
+        Assert.Contains("\n  No\n▸ Yes\n", Output);
 
         Push(Keys.Char('x'), Keys.Enter);
         Assert.False(await menu.ConfirmAsync("💾 Forget 2 memories?", CancellationToken.None));
@@ -3555,13 +3557,13 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("qwen3", _settings.Current.LlmModel);
         // The edit: the tab's list under its strip with the row marked, the slot under it, the edit keys in the hint row.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n  Server scan mode            local\n  URL                         (probe local ports)\n▸ Model                       (first listed)\n", _console.Output);
-        Assert.Contains("\n› \n" + Rule(120) + "\n" + SettingsMenu.EditKeys, _console.Output);
-        Assert.Contains("qwen3-typo", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n  Server scan mode            local\n  URL                         (probe local ports)\n▸ Model                       (first listed)\n", Output);
+        Assert.Contains("\n› \n" + Rule(120) + "\n" + SettingsMenu.EditKeys, Output);
+        Assert.Contains("qwen3-typo", Output);
         // The results on the status line, never as a › line or a notice in the flow.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM model: qwen3\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
-        Assert.DoesNotContain("› qwen3", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM model: qwen3\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", Output);
+        Assert.DoesNotContain("› qwen3", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3584,7 +3586,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(pane.OverlayOpen);
         // Nothing is in the flow, so every lift (cursor up, erase to the end of the screen) must land on
         // row 0 — whatever shape the pane had before it. A lift from the wrong row leaves rows behind.
-        AssertEveryEraseStartsAtRow(_console.Output, 0, height: 40);
+        AssertEveryEraseStartsAtRow(Output, 0, height: 40);
         pane.Dispose();
     }
 
@@ -3652,8 +3654,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(1.2, _settings.Current.TtsSpeed);
-        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", _console.Output);
-        string afterError = _console.Output[_console.Output.IndexOf("✗ TTS speed", StringComparison.Ordinal)..];
+        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", Output);
+        string afterError = Output[Output.IndexOf("✗ TTS speed", StringComparison.Ordinal)..];
         Assert.Contains("\n  Voice mix      80 % / 20 %\n▸ Speed          1.2\n", afterError.Split(Rule(120))[0]);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
@@ -3672,8 +3674,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        Assert.Contains(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n▸ default\n  work\n" + Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (", _console.Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n▸ default\n  work\n" + Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -3689,7 +3691,7 @@ public partial class SettingsMenuTests : IDisposable
         var listed = new ProbeResult(true, new[] { "zeta", "Beta", "alpha", "gamma" }, "4 chat models");
         Push(Keys.Escape);
         Assert.False(await menu.PickModelFromListAsync(listed, "gamma", CancellationToken.None));
-        Assert.Contains("\n \n  alpha\n  Beta\n▸ gamma\n  zeta\n", _console.Output);
+        Assert.Contains("\n \n  alpha\n  Beta\n▸ gamma\n  zeta\n", Output);
 
         Push(Keys.Enter);
         Assert.True(await menu.PickModelFromListAsync(listed, "", CancellationToken.None));
@@ -3712,14 +3714,14 @@ public partial class SettingsMenuTests : IDisposable
         Push([.. "SON".Select(Keys.Char), Keys.Enter]);
         Assert.True(await menu.PickModelFromListAsync(listed, "gemma", CancellationToken.None));
         Assert.Equal("claude-sonnet", _settings.Current.LlmModel);
-        Assert.Contains(MenuFilter.Caption("SON", 1, 4), _console.Output);
-        Assert.Contains(MenuFilter.Hint(SettingsMenu.ModelKeys, "SON"), _console.Output);
+        Assert.Contains(MenuFilter.Caption("SON", 1, 4), Output);
+        Assert.Contains(MenuFilter.Hint(SettingsMenu.ModelKeys, "SON"), Output);
 
         Push([.. "zz".Select(Keys.Char), Keys.Enter, Keys.Escape, Keys.Escape]);
         Assert.False(await menu.PickModelFromListAsync(listed, "gemma", CancellationToken.None));
         Assert.Equal("claude-sonnet", _settings.Current.LlmModel);
-        Assert.Contains(MenuFilter.NoMatchNameLine("zz"), _console.Output);
-        Assert.Contains(SettingsMenu.UnchangedNotice, _console.Output);
+        Assert.Contains(MenuFilter.NoMatchNameLine("zz"), Output);
+        Assert.Contains(SettingsMenu.UnchangedNotice, Output);
         Assert.False(pane.OverlayOpen);
 
         Assert.Equal("Enter = choose · type = filter · ESC = keep", SettingsMenu.ModelKeys);
@@ -3738,9 +3740,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True(await menu.PickModelFromListAsync(listed, "a", CancellationToken.None));
 
         Assert.Equal("b", _settings.Current.LlmModel);
-        Assert.Contains(Rule(120) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + Rule(120) + "\n" + SettingsMenu.ModelKeys + "\n", _console.Output);
+        Assert.Contains(Rule(120) + "\n" + Titled(SettingsMenu.ModelTitle) + "\n \n▸ a\n  b\n" + Rule(120) + "\n" + SettingsMenu.ModelKeys + "\n", Output);
         Assert.False(pane.OverlayOpen);
-        Assert.Contains("  · 🖥️ LLM model: b\n", _console.Output);
+        Assert.Contains("  · 🖥️ LLM model: b\n", Output);
         Assert.Equal(1, pane.FlowRow);   // the notice is a transcript line, under no pane
         pane.Dispose();
     }
@@ -3789,7 +3791,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.All(_synth.Spoken, s => { Assert.Contains(s.Text, PreviewSentences); Assert.Equal(1.2, s.Speed); });
         Assert.Equal("bm_george", _synth.Spoken[^1].Voice);
         Assert.DoesNotContain(_synth.Spoken, s => s.Voice == "af_heart");   // the opening row is not a move
-        Assert.Contains("\n▸ Voice          bm_george\n", _console.Output);
+        Assert.Contains("\n▸ Voice          bm_george\n", Output);
         pane.Dispose();
     }
 
@@ -3835,7 +3837,7 @@ public partial class SettingsMenuTests : IDisposable
 
         var saved = _settings.Current;
         Assert.Equal(("am_adam", "am_michael", 70, 1.3), (saved.TtsVoice, saved.TtsVoice2, saved.TtsVoiceMix, saved.TtsSpeed));
-        Assert.Contains("TTS voice preset: hunter · am_adam + am_michael · 70 % / 30 % · 1.3", _console.Output);
+        Assert.Contains("TTS voice preset: hunter · am_adam + am_michael · 70 % / 30 % · 1.3", Output);
         Assert.Equal("hunter", SettingsMenu.FieldValue(SettingsField.TtsVoicePreset, saved, _settings.ProfileDirectory));
     }
 
@@ -3854,7 +3856,7 @@ public partial class SettingsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Enter, Keys.Escape);   // amanda
         Assert.Equal(SettingsChanges.Tts, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(("af_bella", "af_nicole", 60, 1.2), (_settings.Current.TtsVoice, _settings.Current.TtsVoice2, _settings.Current.TtsVoiceMix, _settings.Current.TtsSpeed));
-        Assert.Contains(SettingsMenu.OverrideNotice("NEONSIDEKICK_TTS_SPEED"), _console.Output);
+        Assert.Contains(SettingsMenu.OverrideNotice("NEONSIDEKICK_TTS_SPEED"), Output);
     }
 
     [Fact]
@@ -3870,7 +3872,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("bm_george", _settings.Current.TtsVoice);
         Assert.Equal(Preview(VoiceMix.Spec("bm_george", "am_fenrir", 50), 1.2), _synth.Spoken);
-        Assert.Contains("\n▸ Voice preset   richard\n  Voice          bm_george\n", _console.Output);
+        Assert.Contains("\n▸ Voice preset   richard\n  Voice          bm_george\n", Output);
         pane.Dispose();
     }
 
@@ -3910,16 +3912,16 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("", _settings.Current.TtsVoice2);
-        Assert.Contains("\n▸ (none)\n  af_heart\n", _console.Output);
-        Assert.Contains("\n" + SettingsMenu.NoneKeys + "\n", _console.Output);
-        Assert.Contains("TTS voice 2: (none)", _console.Output);
+        Assert.Contains("\n▸ (none)\n  af_heart\n", Output);
+        Assert.Contains("\n" + SettingsMenu.NoneKeys + "\n", Output);
+        Assert.Contains("TTS voice 2: (none)", Output);
 
         // The primary picker has no (none) row: Backspace is swallowed, Enter saves the row the cursor is on.
         GoTo(SettingsTab.Tts); Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);              // TTS voice, opening on af_heart
         Push(Keys.Backspace, Keys.Enter, Keys.Escape);
         Assert.Equal(SettingsChanges.Tts, await menu.ShowAsync(CancellationToken.None));
         Assert.Equal("af_heart", _settings.Current.TtsVoice);
-        Assert.Contains("TTS voice: af_heart", _console.Output);
+        Assert.Contains("TTS voice: af_heart", Output);
         pane.Dispose();
     }
 
@@ -3955,8 +3957,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.TtsVoicePreview);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice preview: off\n", _console.Output);
-        Assert.Contains("\n  HTTP URL       http://localhost:8880/v1\n▸ Voice preview  off\n  Voice preset   neon\n  Voice          af_heart\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice preview: off\n", Output);
+        Assert.Contains("\n  HTTP URL       http://localhost:8880/v1\n▸ Voice preview  off\n  Voice preset   neon\n  Voice          af_heart\n", Output);
         pane.Dispose();
     }
 
@@ -3976,8 +3978,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Tts, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("", _settings.Current.TtsHttpUrl);
-        Assert.Contains("HTTP URL       " + SettingsMenu.NoTtsUrlLabel + "\n", _console.Output);
-        Assert.DoesNotContain("cannot be empty", _console.Output);
+        Assert.Contains("HTTP URL       " + SettingsMenu.NoTtsUrlLabel + "\n", Output);
+        Assert.DoesNotContain("cannot be empty", Output);
         pane.Dispose();
     }
 
@@ -4010,7 +4012,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(70, _settings.Current.TtsVoiceMix);
         Assert.Equal(Preview("af_heart(70)+af_sky(30)", 1.5), _synth.Spoken);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice mix: 70 % / 30 %\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice mix: 70 % / 30 %\n", Output);
 
         // No second voice: the blend is the primary alone, and that is what plays.
         _settings.Update(d => d.TtsVoice2 = "");
@@ -4040,7 +4042,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(80, _settings.Current.TtsVoiceMix);
-        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS voice mix " + SettingsMenu.TtsVoiceMixRangeError + "; keeping 80.\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS voice mix " + SettingsMenu.TtsVoiceMixRangeError + "; keeping 80.\n", Output);
         Assert.Empty(_synth.Spoken);
         Assert.Null(_speech.Playing);
 
@@ -4072,7 +4074,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(1.4, _settings.Current.TtsSpeed);
         Assert.Equal(Preview("af_heart(70)+af_sky(30)", 1.4), _synth.Spoken);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS speed: 1.4\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS speed: 1.4\n", Output);
         Assert.Equal(1, _synth.ListCalls);
         pane.Dispose();
     }
@@ -4090,7 +4092,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(1.2, _settings.Current.TtsSpeed);
-        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", Output);
         Assert.Empty(_synth.Spoken);
         Assert.Null(_speech.Playing);
 
@@ -4151,7 +4153,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.TtsVoicePreview);
-        Assert.Contains("  · TTS voice preview: off", _console.Output);
+        Assert.Contains("  · TTS voice preview: off", Output);
     }
 
     // ── File tools / Web search method (2026-09-15) ─────────────────────
@@ -4165,7 +4167,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.FileTools);
-        Assert.Contains("  · File tools: off", _console.Output);
+        Assert.Contains("  · File tools: off", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4180,10 +4182,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("searxng", _settings.Current.WebSearchMethod);
-        Assert.Contains(Breadcrumb("Web search method"), _console.Output);
-        Assert.Contains("  · Web search method: searxng", _console.Output);
-        Assert.Contains("the built-in DuckDuckGo scrape, no setup", _console.Output);
-        Assert.Contains("the instance named in Web SearXNG URL; DuckDuckGo until one is set", _console.Output);
+        Assert.Contains(Breadcrumb("Web search method"), Output);
+        Assert.Contains("  · Web search method: searxng", Output);
+        Assert.Contains("the built-in DuckDuckGo scrape, no setup", Output);
+        Assert.Contains("the instance named in Web SearXNG URL; DuckDuckGo until one is set", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4198,7 +4200,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.AskUser);
-        Assert.Contains("  · Ask user: off", _console.Output);
+        Assert.Contains("  · Ask user: off", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4221,8 +4223,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(3, _settings.Current.AskMaxQuestions);
-        Assert.Contains("Ask max questions " + SettingsMenu.AskMaxQuestionsRangeError + "; keeping 10.", _console.Output);
-        Assert.Contains("  · Ask max questions: 3 questions", _console.Output);
+        Assert.Contains("Ask max questions " + SettingsMenu.AskMaxQuestionsRangeError + "; keeping 10.", Output);
+        Assert.Contains("  · Ask max questions: 3 questions", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4245,8 +4247,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(2, _settings.Current.AskMaxChoices);
-        Assert.Contains("Ask max choices per question " + SettingsMenu.AskMaxChoicesRangeError + "; keeping 10.", _console.Output);
-        Assert.Contains("  · Ask max choices per question: 2 choices", _console.Output);
+        Assert.Contains("Ask max choices per question " + SettingsMenu.AskMaxChoicesRangeError + "; keeping 10.", Output);
+        Assert.Contains("  · Ask max choices per question: 2 choices", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4261,7 +4263,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.AgentSkills);
-        Assert.Contains("  · Agent skills: off", _console.Output);
+        Assert.Contains("  · Agent skills: off", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4274,7 +4276,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.ExternalSkills);
-        Assert.Contains("  · " + SettingsMenu.ExternalSkillsName + ": on", _console.Output);   // a Mac spells it with /, 2026-10-06
+        Assert.Contains("  · " + SettingsMenu.ExternalSkillsName + ": on", Output);   // a Mac spells it with /, 2026-10-06
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4289,9 +4291,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("unprotected", _settings.Current.SkillCompactMode);
-        Assert.Contains(Breadcrumb("Skill compact mode"), _console.Output);
-        Assert.Contains("  · Skill compact mode: unprotected", _console.Output);
-        Assert.Contains("loaded skills prune like any tool result", _console.Output);
+        Assert.Contains(Breadcrumb("Skill compact mode"), Output);
+        Assert.Contains("  · Skill compact mode: unprotected", Output);
+        Assert.Contains("loaded skills prune like any tool result", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4304,8 +4306,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.SkillHashMention);
-        Assert.Contains("  · #-mention enabled: off", _console.Output);
-        Assert.Contains("# is ordinary text", _console.Output);
+        Assert.Contains("  · #-mention enabled: off", Output);
+        Assert.Contains("# is ordinary text", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4319,8 +4321,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.ToolsDollarMention);
-        Assert.Contains("  · $-mention enabled: off", _console.Output);
-        Assert.Contains("$ is ordinary text", _console.Output);
+        Assert.Contains("  · $-mention enabled: off", Output);
+        Assert.Contains("$ is ordinary text", Output);
         Assert.True(SettingsMenu.IsToggle(SettingsField.ToolsDollarMention));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ToolsDollarMention));
         Assert.Equal("$-mention enabled", SettingsMenu.FieldName(SettingsField.ToolsDollarMention));
@@ -4344,8 +4346,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("", _settings.Current.DraftEditor);
-        Assert.Contains("  · Draft editor: code --wait", _console.Output);
-        Assert.Contains("  · Draft editor: " + SettingsMenu.DefaultDraftEditorLabel, _console.Output);
+        Assert.Contains("  · Draft editor: code --wait", Output);
+        Assert.Contains("  · Draft editor: " + SettingsMenu.DefaultDraftEditorLabel, Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4367,9 +4369,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(7, _settings.Current.ReflectionMaxRequests);
-        Assert.Contains("  · Reflection max requests: 7 requests", _console.Output);
-        Assert.Contains(SettingsMenu.ReflectionMaxRequestsRangeError, _console.Output);
-        Assert.Contains("keeping 7", _console.Output);
+        Assert.Contains("  · Reflection max requests: 7 requests", Output);
+        Assert.Contains(SettingsMenu.ReflectionMaxRequestsRangeError, Output);
+        Assert.Contains("keeping 7", Output);
         Assert.Equal(0, _synth.ListCalls);
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ReflectionMaxRequests));
     }
@@ -4385,7 +4387,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.TranscriptMarkdown);
-        Assert.Contains("  · Transcript markdown: off", _console.Output);
+        Assert.Contains("  · Transcript markdown: off", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4421,9 +4423,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(0, _settings.Current.PastePreviewLines);
-        Assert.Contains(SettingsMenu.PastePreviewLinesRangeError, _console.Output);
-        Assert.Contains("keeping 25", _console.Output);
-        Assert.Contains("  · Paste preview lines: off", _console.Output);
+        Assert.Contains(SettingsMenu.PastePreviewLinesRangeError, Output);
+        Assert.Contains("keeping 25", Output);
+        Assert.Contains("  · Paste preview lines: off", Output);
         Assert.Equal(0, _synth.ListCalls);          // no server is consulted
     }
 
@@ -4438,7 +4440,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None, midTurn: true));
         Assert.Equal(40, _settings.Current.PastePreviewLines);
-        Assert.Contains("  · Paste preview lines: 40 lines", _console.Output);
+        Assert.Contains("  · Paste preview lines: 40 lines", Output);
     }
 
     [Fact]
@@ -4451,9 +4453,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n", _console.Output);
-        Assert.Contains("\n▸ Servers enabled", _console.Output);   // the Embedded tab's rows wear no "Embedded" since 2026-10-04
-        Assert.DoesNotContain("Agent skills", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n", Output);
+        Assert.Contains("\n▸ Servers enabled", Output);   // the Embedded tab's rows wear no "Embedded" since 2026-10-04
+        Assert.DoesNotContain("Agent skills", Output);
         pane.Dispose();
     }
 
@@ -4476,14 +4478,14 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(30, _settings.Current.SessionRetentionDays);
         // The seven rows padded to the tab's own column (28) in the user's order (retention second, the show-name picker under the naming mode, the tool above the search cap, save thinking last since 2026-09-28), then the picker's page, then the notices on the status line.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Session logging             on\n  Session retention (days)    forever\n  Session naming mode         model-written\n  Session show name           all-names\n  Session tool                on\n  Session search max results  10 results\n  Session save thinking       off\n", 120);
-        Assert.Contains("\n" + Titled(Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(120), _console.Output);
-        Assert.Contains("\n  · Session retention (days): 30 days\n", _console.Output);
-        Assert.Contains("\n▸ Session retention (days)    30 days\n", _console.Output);
-        Assert.Contains("\n  · Session naming mode: first-line\n", _console.Output);
-        Assert.Contains("\n▸ Session naming mode         first-line\n", _console.Output);
-        Assert.Contains("\n" + Titled(Breadcrumb("Session show name")) + "\n \n▸ all-names      every session name shows on the rule above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n" + Rule(120), _console.Output);
-        Assert.Contains("\n  · Session show name: none\n", _console.Output);
-        Assert.Contains("\n▸ Session show name           none\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n" + Rule(120), Output);
+        Assert.Contains("\n  · Session retention (days): 30 days\n", Output);
+        Assert.Contains("\n▸ Session retention (days)    30 days\n", Output);
+        Assert.Contains("\n  · Session naming mode: first-line\n", Output);
+        Assert.Contains("\n▸ Session naming mode         first-line\n", Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("Session show name")) + "\n \n▸ all-names      every session name shows on the rule above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n" + Rule(120), Output);
+        Assert.Contains("\n  · Session show name: none\n", Output);
+        Assert.Contains("\n▸ Session show name           none\n", Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));
         Assert.Equal(SettingsTab.Sessions, (SettingsTab)8);   // seventh until Claude and OpenAI, 2026-10-03; fifth until Docker, 2026-10-02
         Assert.Equal(SettingsTab.Llm, (SettingsTab)1);        // the user's order, 2026-10-04
@@ -4567,7 +4569,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.HideExitAutocomplete);
-        Assert.Contains("  · Hide /exit autocomplete: off", _console.Output);
+        Assert.Contains("  · Hide /exit autocomplete: off", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4582,7 +4584,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.CommandTypoIntercept);
-        Assert.Contains("  · Command typo intercept: off", _console.Output);
+        Assert.Contains("  · Command typo intercept: off", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4599,9 +4601,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("tiled", _settings.Current.WelcomeSplashMode);
-        Assert.Contains(Breadcrumb("Welcome splash"), _console.Output);
-        Assert.Contains("  · Welcome splash: tiled", _console.Output);
-        Assert.Contains("the banner alone at startup", _console.Output);
+        Assert.Contains(Breadcrumb("Welcome splash"), Output);
+        Assert.Contains("  · Welcome splash: tiled", Output);
+        Assert.Contains("the banner alone at startup", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4618,9 +4620,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("half-screen", _settings.Current.MenuMaxHeight);
-        Assert.Contains(Breadcrumb("Menus max height"), _console.Output);
-        Assert.Contains("  · Menus max height: half-screen", _console.Output);
-        Assert.Contains("a menu grows to all but one row of the window", _console.Output);
+        Assert.Contains(Breadcrumb("Menus max height"), Output);
+        Assert.Contains("  · Menus max height: half-screen", Output);
+        Assert.Contains("a menu grows to all but one row of the window", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4635,7 +4637,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.ShowHeader);
-        Assert.Contains("  · Show header: off", _console.Output);
+        Assert.Contains("  · Show header: off", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4650,7 +4652,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.ShowWorkingDirectory);
-        Assert.Contains("  · Working directory in header: on", _console.Output);
+        Assert.Contains("  · Working directory in header: on", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -4674,15 +4676,15 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(["tools", "skills", "memory", "cmdlist", "police", "shell", "files", "web"], _settings.Current.ToolbarItems);
-        Assert.Contains("[x] ⚙️  Settings", _console.Output);
-        Assert.Contains("[ ] ⚙️  Settings", _console.Output);
-        Assert.Contains("[x] 📂  Working directory path", _console.Output);
-        Assert.Contains("[ ] 📂  Working directory path", _console.Output);
-        Assert.Contains("[ ] 🔌  MCP", _console.Output);
-        Assert.Contains("[ ] 🪪  Profile", _console.Output);
-        Assert.Contains("[ ] 📈  Performance", _console.Output);
-        Assert.Contains("  · Show toolbar: 9 of 35", _console.Output);
-        Assert.Contains("  · Show toolbar: 8 of 35", _console.Output);
+        Assert.Contains("[x] ⚙️  Settings", Output);
+        Assert.Contains("[ ] ⚙️  Settings", Output);
+        Assert.Contains("[x] 📂  Working directory path", Output);
+        Assert.Contains("[ ] 📂  Working directory path", Output);
+        Assert.Contains("[ ] 🔌  MCP", Output);
+        Assert.Contains("[ ] 🪪  Profile", Output);
+        Assert.Contains("[ ] 📈  Performance", Output);
+        Assert.Contains("  · Show toolbar: 9 of 35", Output);
+        Assert.Contains("  · Show toolbar: 8 of 35", Output);
         pane.Dispose();
     }
 
@@ -4703,11 +4705,11 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(ToolbarItems.Names, _settings.Current.ToolbarItems);
-        Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
-        Assert.Contains(SettingsMenu.SelectNoneButton, _console.Output);
-        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
-        Assert.Contains(SettingsMenu.DefaultToggleKeys, _console.Output);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(_console.Output, "  · Show toolbar: all"));
+        Assert.Contains(SettingsMenu.SelectAllButton, Output);
+        Assert.Contains(SettingsMenu.SelectNoneButton, Output);
+        Assert.Contains(SettingsMenu.DefaultsButton, Output);
+        Assert.Contains(SettingsMenu.DefaultToggleKeys, Output);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Show toolbar: all"));
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
@@ -4741,8 +4743,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Null(_settings.Current.ToolbarItems);
         Assert.Equal(ToolbarItems.Defaults.ToHashSet(StringComparer.Ordinal), ToolbarItems.Resolve(_settings.Current.ToolbarItems));
-        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(_console.Output, "  · Show toolbar: " + System.Text.RegularExpressions.Regex.Escape(ToolbarItems.Value(null))));
+        Assert.Contains(SettingsMenu.DefaultsButton, Output);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output, "  · Show toolbar: " + System.Text.RegularExpressions.Regex.Escape(ToolbarItems.Value(null))));
         pane.Dispose();
     }
 
@@ -4768,9 +4770,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(["cpu", "ram"], _settings.Current.PerformanceBarItems);
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
-        Assert.Contains(SettingsMenu.PerfBarToggleKeys, _console.Output);
-        Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
-        Assert.Contains("  · Show performance bar: CPU, RAM · gauge", _console.Output);
+        Assert.Contains(SettingsMenu.PerfBarToggleKeys, Output);
+        Assert.Contains(SettingsMenu.SelectAllButton, Output);
+        Assert.Contains("  · Show performance bar: CPU, RAM · gauge", Output);
         Assert.Equal(["◔ gauge"], SettingsMenu.PerfBarButtons(PerfBarStyle.Gauge).Where(b => b.On).Select(b => b.Title));
         Assert.Equal(["⊞ select all", "⊠ select none", "⊡ default", "≡ text", "◔ gauge", "▁ spark", "● led"], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Title));   // the looks' glyphs since 2026-10-03
         Assert.Equal(['a', 'n', 'd', 't', 'g', 's', 'l'], SettingsMenu.PerfBarButtons(PerfBarStyle.Text).Select(b => b.Key!.Value));
@@ -4812,8 +4814,8 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(PerfBarItems.Defaults, _settings.Current.PerformanceBarItems);
         Assert.Equal("spark", _settings.Current.PerformanceBarLook);
-        Assert.Contains(SettingsMenu.DefaultsButton, _console.Output);
-        Assert.Contains("  · Show performance bar: CPU, RAM, GPU, VRAM · spark", _console.Output);
+        Assert.Contains(SettingsMenu.DefaultsButton, Output);
+        Assert.Contains("  · Show performance bar: CPU, RAM, GPU, VRAM · spark", Output);
         pane.Dispose();
     }
 
@@ -4835,7 +4837,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([], _settings.Current.ToolbarItems);
-        Assert.Contains("  · Show toolbar: off", _console.Output);
+        Assert.Contains("  · Show toolbar: off", Output);
         pane.Dispose();
     }
 
@@ -4860,7 +4862,7 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Equal(["haiku", "gone"], _settings.Current.BotChatLimitedSkills);
-        Assert.Contains(SettingsMenu.NotAvailableNote, _console.Output);
+        Assert.Contains(SettingsMenu.NotAvailableNote, Output);
 
         (menu, pane) = PaneMenu(botChatSkills: () => skills);
         GoTo(SettingsTab.BotChat);
@@ -4883,7 +4885,7 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Null(_settings.Current.BotChatLimitedSkills);
-        Assert.Contains(SettingsMenu.SelectAllButton, _console.Output);
+        Assert.Contains(SettingsMenu.SelectAllButton, Output);
 
         _settings.Update(d => d.BotChatLimitedSkills = ["haiku", "gone"]);
         (menu, pane) = PaneMenu(botChatSkills: () => skills);
@@ -4925,8 +4927,8 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Equal(["pony"], _settings.Current.BotChatLimitedComfyWorkflows);
-        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.BotChatLimitedComfyWorkflows, ["gone"]), _console.Output);
-        Assert.DoesNotContain(SettingsMenu.LimitedComfyUnusedCaption, _console.Output);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.BotChatLimitedComfyWorkflows, ["gone"]), Output);
+        Assert.DoesNotContain(SettingsMenu.LimitedComfyUnusedCaption, Output);
 
         _settings.Update(d => d.BotChatComfy = true);
         (menu, pane) = PaneMenu();
@@ -4939,7 +4941,7 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Equal(["flux", "pony"], _settings.Current.BotChatLimitedComfyWorkflows);
-        Assert.Contains(SettingsMenu.LimitedComfyUnusedCaption, _console.Output);
+        Assert.Contains(SettingsMenu.LimitedComfyUnusedCaption, Output);
 
         (menu, pane) = PaneMenu();
         GoTo(SettingsTab.BotChat);
@@ -4987,9 +4989,9 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Equal(["get_current_time", "chrome__gone"], _settings.Current.BotChatLimitedTools);
-        Assert.Contains("not offered: web tools is off", _console.Output);
-        Assert.Contains(SettingsMenu.NotAvailableHeading, _console.Output);
-        Assert.DoesNotContain(SettingsMenu.LimitedToolsUnusedCaption, _console.Output);
+        Assert.Contains("not offered: web tools is off", Output);
+        Assert.Contains(SettingsMenu.NotAvailableHeading, Output);
+        Assert.DoesNotContain(SettingsMenu.LimitedToolsUnusedCaption, Output);
 
         _settings.Update(d => d.BotChatTools = true);
         (menu, pane) = PaneMenu(botChatTools: () => groups);
@@ -5002,7 +5004,7 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Equal(["get_current_time", "web_search", "web_fetch", "chrome__gone"], _settings.Current.BotChatLimitedTools);
-        Assert.Contains(SettingsMenu.LimitedToolsUnusedCaption, _console.Output);
+        Assert.Contains(SettingsMenu.LimitedToolsUnusedCaption, Output);
 
         (menu, pane) = PaneMenu(botChatTools: () => groups);
         GoTo(SettingsTab.BotChat);
@@ -5066,7 +5068,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Show toolbar: 10 of 35", _console.Output);
+        Assert.Contains("  · Show toolbar: 10 of 35", Output);
         pane.Dispose();
     }
 
@@ -5081,9 +5083,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.QueueMessages);
-        Assert.Contains("  · Queue messages: off", _console.Output);
-        Assert.Contains("a message sent while a reply runs is queued and sent when the reply ends", _console.Output);
-        Assert.Contains("a message sent during a reply goes when it ends, unlisted; no /queue", _console.Output);
+        Assert.Contains("  · Queue messages: off", Output);
+        Assert.Contains("a message sent while a reply runs is queued and sent when the reply ends", Output);
+        Assert.Contains("a message sent during a reply goes when it ends, unlisted; no /queue", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -5100,11 +5102,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("hold", _settings.Current.QueueCancelMode);
-        Assert.Contains(Breadcrumb("Queue cancel mode"), _console.Output);
-        Assert.Contains("  · Queue cancel mode: hold", _console.Output);
-        Assert.Contains("a cancelled reply holds the queue; your next message runs first, then it resumes", _console.Output);
-        Assert.Contains("a cancelled reply sends the next queued message at once", _console.Output);
-        Assert.Contains("a cancelled reply drops every queued message", _console.Output);
+        Assert.Contains(Breadcrumb("Queue cancel mode"), Output);
+        Assert.Contains("  · Queue cancel mode: hold", Output);
+        Assert.Contains("a cancelled reply holds the queue; your next message runs first, then it resumes", Output);
+        Assert.Contains("a cancelled reply sends the next queued message at once", Output);
+        Assert.Contains("a cancelled reply drops every queued message", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -5140,10 +5142,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("read-write", _settings.Current.MemoryMode);
-        Assert.Equal(2, _console.Output.Split(SettingsMenu.UnchangedNotice).Length - 1);
-        Assert.DoesNotContain("Memory mode: read-write", _console.Output);
-        Assert.Contains(SettingsMenu.PromptTitle(Breadcrumb("Memory mode"), SettingsMenu.PickKeys), _console.Output);
-        Assert.Contains(MemoryMode.Describe("disabled"), _console.Output);
+        Assert.Equal(2, Output.Split(SettingsMenu.UnchangedNotice).Length - 1);
+        Assert.DoesNotContain("Memory mode: read-write", Output);
+        Assert.Contains(SettingsMenu.PromptTitle(Breadcrumb("Memory mode"), SettingsMenu.PickKeys), Output);
+        Assert.Contains(MemoryMode.Describe("disabled"), Output);
     }
 
     [Fact]
@@ -5166,8 +5168,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.SttInput);
-        Assert.Contains("\n" + Titled(Breadcrumb("STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · STT input: on\n▸ Input                 on\n", _console.Output);
+        Assert.Contains("\n" + Titled(Breadcrumb("STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · STT input: on\n▸ Input                 on\n", Output);
         pane.Dispose();
     }
 
@@ -5182,8 +5184,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("draft", _settings.Current.SttDestination);
-        Assert.Contains("chat  " + SttDestinationMode.Describe("chat"), _console.Output);
-        Assert.Contains("draft " + SttDestinationMode.Describe("draft"), _console.Output);
+        Assert.Contains("chat  " + SttDestinationMode.Describe("chat"), Output);
+        Assert.Contains("draft " + SttDestinationMode.Describe("draft"), Output);
         pane.Dispose();
     }
 
@@ -5201,9 +5203,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(_settings.Current.CopyUserPrompt);
         Assert.Equal("small", _settings.Current.ImageThumbnailSize);
-        Assert.Contains("  · Copy user prompt: off\n", _console.Output);
-        Assert.DoesNotContain(Breadcrumb("Copy user prompt"), _console.Output);   // no page
-        Assert.DoesNotContain(Breadcrumb("Image thumbnail size"), _console.Output);
+        Assert.Contains("  · Copy user prompt: off\n", Output);
+        Assert.DoesNotContain(Breadcrumb("Copy user prompt"), Output);   // no page
+        Assert.DoesNotContain(Breadcrumb("Image thumbnail size"), Output);
         pane.Dispose();
     }
 
@@ -5220,7 +5222,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.SttInterrupt);
-        Assert.Contains("  · " + ChatScreen.InterruptNeedsWakeNotice, _console.Output);
+        Assert.Contains("  · " + ChatScreen.InterruptNeedsWakeNotice, Output);
         pane.Dispose();
     }
 
@@ -5269,10 +5271,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None, midTurn: false, words: "copy user prompt"));
 
         Assert.False(_settings.Current.CopyUserPrompt);
-        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("copy user prompt"))), _console.Output);
-        Assert.Matches(@"▸ Copy user prompt +on  /settings › General", _console.Output);
-        Assert.Contains("  · Copy user prompt: off", _console.Output);
-        Assert.Contains(SettingsMenu.SearchEmptyLine, _console.Output);   // the words cleared
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("copy user prompt"))), Output);
+        Assert.Matches(@"▸ Copy user prompt +on  /settings › General", Output);
+        Assert.Contains("  · Copy user prompt: off", Output);
+        Assert.Contains(SettingsMenu.SearchEmptyLine, Output);   // the words cleared
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -5288,10 +5290,10 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel(""))), _console.Output);   // the first ESC: the words gone (the four letters arrived as one run)
-        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("wake"))), _console.Output);
-        Assert.Matches(@"▸ STT wake +off  /settings › STT", _console.Output);
-        Assert.True(_console.Output.LastIndexOf(SettingsMenu.SettingsTabKeys, StringComparison.Ordinal) > _console.Output.LastIndexOf(SettingsMenu.SearchKeys, StringComparison.Ordinal));   // the tab came back after the search
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel(""))), Output);   // the first ESC: the words gone (the four letters arrived as one run)
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("wake"))), Output);
+        Assert.Matches(@"▸ STT wake +off  /settings › STT", Output);
+        Assert.True(Output.LastIndexOf(SettingsMenu.SettingsTabKeys, StringComparison.Ordinal) > Output.LastIndexOf(SettingsMenu.SearchKeys, StringComparison.Ordinal));   // the tab came back after the search
         pane.Dispose();
     }
 
@@ -5320,6 +5322,21 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>A tab's badge (2026-10-07): how many of its rows differ from the default, in superscript digits; none while none does.</summary>
+    [Fact]
+    public void FieldsTab_Badge_CountsTheRowsThatDiffer()
+    {
+        var (menu, pane) = PaneMenu();
+        Assert.Null(SettingsMenu.ChangedBadge(0));
+        Assert.Equal("³", SettingsMenu.ChangedBadge(3));
+        Assert.Equal("¹²", SettingsMenu.ChangedBadge(12));
+
+        SettingsField[] fields = [SettingsField.TtsOutput, SettingsField.TtsSpeed];
+        Assert.Null(menu.FieldsTab("TTS", fields, new AppSettingsData()).Badge);
+        Assert.Equal("¹", menu.FieldsTab("TTS", fields, new AppSettingsData { TtsSpeed = 1.5 }).Badge);
+        pane.Dispose();
+    }
+
     /// <summary>/settings changed lists the changed rows with their defaults; R on one puts it back.</summary>
     [Fact]
     public async Task OnThePane_ChangedWord_ListsTheChangedRows_AndRResetsOne()
@@ -5333,10 +5350,10 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None, midTurn: false, words: "changed");
 
         Assert.True(_settings.Current.CopyUserPrompt);
-        Assert.Contains(Titled(Breadcrumb(SettingsMenu.ChangedLabel) + "   " + SettingsMenu.ResetButton + " "), _console.Output);
-        Assert.Matches(@"▸ Copy user prompt +off  Default: on  /settings › General", _console.Output);
-        Assert.Contains("  · Copy user prompt: on", _console.Output);
-        Assert.Contains(SettingsMenu.NothingChangedLine, _console.Output);
+        Assert.Contains(Titled(Breadcrumb(SettingsMenu.ChangedLabel) + " │ " + SettingsMenu.ResetButton + " "), Output);
+        Assert.Matches(@"▸ Copy user prompt +off  Default: on  /settings › General", Output);
+        Assert.Contains("  · Copy user prompt: on", Output);
+        Assert.Contains(SettingsMenu.NothingChangedLine, Output);
         pane.Dispose();
     }
 }

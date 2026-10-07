@@ -21,6 +21,8 @@ public partial class ToolsMenuTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly TestConsole _console = new TestConsole().Interactive();
+    /// <summary>The console's output with the strips' badges taken off (<see cref="TabStrips.Unbadged"/>, 2026-10-07): the fixture's own rows move them.</summary>
+    private string Output => TabStrips.Unbadged(_console.Output);
     private readonly AppSettings _settings;
     private readonly ManualTimeProvider _time = new();
     private readonly FakeSynthesizer _synth = new();
@@ -119,7 +121,7 @@ public partial class ToolsMenuTests : IDisposable
 
     /// <summary>A tab's rows, then the blank rows that hold every tab at its pane's tallest tab's height (2026-10-01), then the rule under the list.</summary>
     private void AssertTabEnds(string rows, int width) =>
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), _console.Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(rows) + "(?:(?: |  [^\n]*)\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(width))), Output);
 
     /// <summary>A title or strip row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     // The pane's own rule (ScreenPane.Draw): a first row with no room for the gap and the glyph goes without. The nine-tab
@@ -130,7 +132,7 @@ public partial class ToolsMenuTests : IDisposable
             : row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = ToolsText.Label + "   Offered    Ask    Web    Shell    Files    UNC    Print    Camera    Screen    Obsidian    SQL    MySQL    SQLite    Postgres    Oracle    ClaudeCLI    Docker    HA    ComfyUI    YouTube    GitLib    Options ";   // the user's order since 2026-10-03; before it Camera after Ask and Docker after UNC since 2026-10-02; HA second to last since later on 2026-10-01 (the user's ask); Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+    private const string Strip = ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ";   // the user's order since 2026-10-03; before it Camera after Ask and Docker after UNC since 2026-10-02; HA second to last since later on 2026-10-01 (the user's ask); Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
 
     /// <summary>The rows of the settings tab titled <paramref name="title"/>: <see cref="SettingsMenu.ToolsTabFields"/> one down from <see cref="ToolsText.TabTitles"/>, so a pin follows the tab, not its place (2026-10-03).</summary>
     internal static IReadOnlyList<SettingsField> TabFields(string title) => SettingsMenu.ToolsTabFields[TabIndex(title) - 1];
@@ -222,7 +224,7 @@ public partial class ToolsMenuTests : IDisposable
         {
             var footer = ToolsText.ToolFooter(facts, tool);
             Assert.NotNull(footer);
-            Assert.Contains("\n" + MenuLayout.Footer(footer, 240), _console.Output);   // the padding to the tallest tab goes under it
+            Assert.Contains("\n" + MenuLayout.Footer(footer, 240), Output);   // the padding to the tallest tab goes under it
         }
 
         pane.Dispose();
@@ -239,10 +241,10 @@ public partial class ToolsMenuTests : IDisposable
 
         // The strip, the Clock heading, the cursor on get_current_time (the first tool row, past its heading), the hint with the flip keys; nothing reached the transcript.
         // The headings are rules with a gap before each but the first (2026-10-03).
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 16") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
-        Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", _console.Output);
-        Assert.Contains("\n" + Heading("── Files · 16") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
-        Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", _console.Output);   // 39 rows over 30: the list scrolls
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 16") + "\n", Output);   // Files next: alphabetical since 2026-10-04
+        Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 16") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", Output);
+        Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", Output);   // 39 rows over 30: the list scrolls
         Assert.False(pane.OverlayOpen);
         Assert.Equal(0, pane.FlowRow);
         Assert.Empty(_settings.Current.ToolsDisabled);
@@ -261,10 +263,10 @@ public partial class ToolsMenuTests : IDisposable
 
         // The strip, the Clock heading, the cursor on get_current_time (the first tool row, past its heading), the hint with the flip keys; nothing reached the transcript.
         // The headings are rules with a gap before each but the first (2026-10-03).
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 13") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
-        Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", _console.Output);
-        Assert.Contains("\n" + Heading("── Files · 13") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
-        Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", _console.Output);   // 39 rows over 30: the list scrolls
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 13") + "\n", Output);   // Files next: alphabetical since 2026-10-04
+        Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 13") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", Output);
+        Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", Output);   // 39 rows over 30: the list scrolls
         Assert.False(pane.OverlayOpen);
         Assert.Equal(0, pane.FlowRow);
         Assert.Empty(_settings.Current.ToolsDisabled);
@@ -285,8 +287,8 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal(["shift_date"], _settings.Current.ToolsDisabled);
         // The row reads off where it stands, the cursor on it, the notice on the status line under the strip.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: off\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: on\n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: off\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · shift_date: on\n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true) + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -306,12 +308,12 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal(["shift_date"], _settings.Current.ToolsDisabled);
         int total = Facts().Groups.Sum(g => g.Tools.Count);
-        Assert.Contains(MenuFilter.Caption("shift_d", 1, total), _console.Output);
-        Assert.Contains("\n" + Heading("── Clock · 3") + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", _console.Output);   // the one tool under its heading
-        Assert.Contains("\n" + Heading("── Clock · 2 of 3") + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", _console.Output);
-        Assert.Contains(MenuFilter.Hint(ToolsText.OfferedKeys, "shift_d"), _console.Output);
+        Assert.Contains(MenuFilter.Caption("shift_d", 1, total), Output);
+        Assert.Contains("\n" + Heading("── Clock · 3") + "\n" + Row(ShiftDateTool.ToolName, true, "▸ ") + "\n", Output);   // the one tool under its heading
+        Assert.Contains("\n" + Heading("── Clock · 2 of 3") + "\n" + Row(ShiftDateTool.ToolName, false, "▸ ") + "\n", Output);
+        Assert.Contains(MenuFilter.Hint(ToolsText.OfferedKeys, "shift_d"), Output);
         // Cleared: the whole tab again, the cursor back on the first tool.
-        Assert.Contains("\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, false) + "\n", _console.Output);
+        Assert.Contains("\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, false) + "\n", Output);
         pane.Dispose();
     }
 
@@ -325,8 +327,8 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.DoesNotContain(MenuFilter.Caption("z", 0, Facts().Groups.Sum(g => g.Tools.Count)), _console.Output);
-        Assert.DoesNotContain(MenuFilter.NoMatchLine("z"), _console.Output);
+        Assert.DoesNotContain(MenuFilter.Caption("z", 0, Facts().Groups.Sum(g => g.Tools.Count)), Output);
+        Assert.DoesNotContain(MenuFilter.NoMatchLine("z"), Output);
         pane.Dispose();
     }
 
@@ -343,7 +345,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([DownloadFileTool.ToolName, GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.DoesNotContain("▸ ──", _console.Output);
+        Assert.DoesNotContain("▸ ──", Output);
         pane.Dispose();
     }
 
@@ -359,9 +361,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Heading("── Files · 16 ── off: File tools is off") + "\n", _console.Output);
-        Assert.Contains("  · get_working_directory: off\n", _console.Output);
-        Assert.Contains("\n" + Heading("── Files · 15 of 16 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Heading("── Files · 16 ── off: File tools is off") + "\n", Output);
+        Assert.Contains("  · get_working_directory: off\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 15 of 16 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", Output);
         pane.Dispose();
     }
 
@@ -378,9 +380,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Heading("── Files · 13 ── off: File tools is off") + "\n", _console.Output);
-        Assert.Contains("  · get_working_directory: off\n", _console.Output);
-        Assert.Contains("\n" + Heading("── Files · 12 of 13 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Heading("── Files · 13 ── off: File tools is off") + "\n", Output);
+        Assert.Contains("  · get_working_directory: off\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 12 of 13 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", Output);
         pane.Dispose();
     }
 
@@ -395,8 +397,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetCurrentTimeTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Fitted("  " + ToolsText.OffLine) + "\n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · get_current_time: off\n" + Fitted("  " + ToolsText.OffLine) + "\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Fitted("  " + ToolsText.OffLine) + "\n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · get_current_time: off\n" + Fitted("  " + ToolsText.OffLine) + "\n" + Heading("── Clock · 2 of 3") + "\n" + Row(GetCurrentTimeTool.ToolName, false, "▸ ") + "\n", Output);
         pane.Dispose();
     }
 
@@ -414,9 +416,9 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.False(_settings.Current.ToolsDollarMention);
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ $-mention enabled    on\n  Tool collapse count  2 lines\n  Code collapse count  20 lines\n  Show file diffs      on\n  Diff max lines       10 lines\n  Diff collapse count  10 lines\n", 100);
-        Assert.Contains(ToolsText.Label + " › $-mention enabled", _console.Output);
-        Assert.Contains("$ is ordinary text", _console.Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · $-mention enabled: off\n▸ $-mention enabled    off\n", _console.Output);
+        Assert.Contains(ToolsText.Label + " › $-mention enabled", Output);
+        Assert.Contains("$ is ordinary text", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · $-mention enabled: off\n▸ $-mention enabled    off\n", Output);
         pane.Dispose();
     }
 
@@ -435,8 +437,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.False(_settings.Current.AskUser);
         // The three rows padded to the tab's own column (30), the toggle's notice on the status line under the strip.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Ask user                      on\n  Ask max questions             10 questions\n  Ask max choices per question  10 choices\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Ask user: off\n▸ Ask user                      off\n", _console.Output);
-        Assert.Contains("\n▸ File tools                      on\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Ask user: off\n▸ Ask user                      off\n", Output);
+        Assert.Contains("\n▸ File tools                      on\n", Output);
         pane.Dispose();
     }
 
@@ -454,8 +456,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.False(_settings.Current.FileTools);
         // The six rows (the view_image cap last, 2026-09-19; the @-mention folder mode before it, 2026-09-17, and the browser mode under that, 2026-09-21; Safe edits gone since 2026-10-01, folder-remain the default since then, Always return line numbers gone later that day and the stale line number guard later still, with edit_lines) padded to the tab's own column (32), the toggle's notice on the status line under the strip.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ File tools                      on\n  File /tree max length           500 entries\n  File /tree show sizes           on\n  File @-mention folder mode      folder-remain\n  File browser/tree mode          default\n  File view image max (per call)  10 pictures\n  File search max results         200 results\n  Image edit quality              90\n  Image edit metadata             none\n  Image edit mode                 beside-original\n  Image edit output folder        (beside the source)\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · File tools: off\n▸ File tools                      off\n", _console.Output);
-        Assert.Contains("\n▸ GitLib tools            on\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · File tools: off\n▸ File tools                      off\n", Output);
+        Assert.Contains("\n▸ GitLib tools            on\n", Output);
         pane.Dispose();
     }
 
@@ -477,8 +479,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(vault, _settings.Current.ObsidianVault);
-        Assert.Contains("Obsidian vault " + SettingsMenu.ObsidianVaultError[..40], _console.Output);   // the status line, cut at the pane's width
-        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Obsidian tools                  on\n  Obsidian vault                  (not set)\n  Obsidian allow delete (.trash)  on\n", _console.Output);
+        Assert.Contains("Obsidian vault " + SettingsMenu.ObsidianVaultError[..40], Output);   // the status line, cut at the pane's width
+        Assert.Contains("\n" + Titled(Strip) + "\n \n▸ Obsidian tools                  on\n  Obsidian vault                  (not set)\n  Obsidian allow delete (.trash)  on\n", Output);
     }
 
     /// <summary>
@@ -502,10 +504,10 @@ public partial class ToolsMenuTests : IDisposable
         var loaded = NeonSidekick.Sql.SqlConfigFile.Load(path);
         Assert.StartsWith(NeonSidekick.Sql.WindowsCredentials.ProtectedPrefix, loaded.Connections[0].Config.Password);
         Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(loaded.Connections[0]).Value);
-        Assert.Contains("▸ " + SettingsMenu.SqlPasswordRow(loaded.Connections[0]), _console.Output);
-        Assert.Contains("••••••", _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
-        Assert.Contains("Saved the password of 'prod', encrypted, in ", _console.Output);
+        Assert.Contains("▸ " + SettingsMenu.SqlPasswordRow(loaded.Connections[0]), Output);
+        Assert.Contains("••••••", Output);
+        Assert.DoesNotContain("s3cret", Output);
+        Assert.Contains("Saved the password of 'prod', encrypted, in ", Output);
         Assert.Equal("prod  (runas CONTOSO\\svc-test · encrypted in sql.json)", SettingsMenu.SqlPasswordRow(loaded.Connections[0]));
     }
 
@@ -532,10 +534,10 @@ public partial class ToolsMenuTests : IDisposable
         var loaded = NeonSidekick.Sql.SqlConfigFile.Load(path);
         Assert.StartsWith(NeonSidekick.Sql.WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);
         Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(loaded.Connections[0]).Value);
-        Assert.Contains("▸ " + SettingsMenu.SqlPasswordRow(loaded.Connections[0]), _console.Output);
-        Assert.Contains("••••••", _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
-        Assert.Contains("Saved the password of 'prod', encrypted, in ", _console.Output);
+        Assert.Contains("▸ " + SettingsMenu.SqlPasswordRow(loaded.Connections[0]), Output);
+        Assert.Contains("••••••", Output);
+        Assert.DoesNotContain("s3cret", Output);
+        Assert.Contains("Saved the password of 'prod', encrypted, in ", Output);
         Assert.Equal("prod  (runas CONTOSO\\svc-test · encrypted in sql.json)", SettingsMenu.SqlPasswordRow(loaded.Connections[0]));
     }
 
@@ -589,12 +591,12 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("the container", free.Config.Description);
         Assert.Equal("s3cret", NeonSidekick.Oracle.OracleSecrets.Resolve(free).Value);
         Assert.StartsWith(NeonSidekick.Oracle.OracleConfigFile.EmptyText[..40], File.ReadAllText(path));
-        Assert.Contains("\"user\" is 'sys'; SYS", _console.Output);
-        Assert.Contains(NeonSidekick.Oracle.OracleText.TestOk("free", "NEON", "FREEPDB1", "23.0.0.0.0"), _console.Output);
-        Assert.Contains("This account can change data (CREATE TABLE, owns 3 tables)", _console.Output);
-        Assert.Contains("Added 'free' to ", _console.Output);
-        Assert.Contains(SettingsMenu.SqlWizardMasked, _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Contains("\"user\" is 'sys'; SYS", Output);
+        Assert.Contains(NeonSidekick.Oracle.OracleText.TestOk("free", "NEON", "FREEPDB1", "23.0.0.0.0"), Output);
+        Assert.Contains("This account can change data (CREATE TABLE, owns 3 tables)", Output);
+        Assert.Contains("Added 'free' to ", Output);
+        Assert.Contains(SettingsMenu.SqlWizardMasked, Output);
+        Assert.DoesNotContain("s3cret", Output);
         Assert.Equal(["free"], _settings.Current.OracleConnectionsOffered);   // offered by the wizard into a list nothing was in
     }
 
@@ -629,9 +631,9 @@ public partial class ToolsMenuTests : IDisposable
         {
             await menu.ShowAsync(CancellationToken.None);
 
-            Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, _console.Output);
-            Assert.Contains(NeonSidekick.Oracle.OracleText.BadSchemaKey("not a name"), _console.Output);
-            Assert.Contains("Error: could not connect to ledger: ORA-12541: no listener", _console.Output);
+            Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
+            Assert.Contains(NeonSidekick.Oracle.OracleText.BadSchemaKey("not a name"), Output);
+            Assert.Contains("Error: could not connect to ledger: ORA-12541: no listener", Output);
             var ledger = Assert.Single(NeonSidekick.Oracle.OracleConfigFile.Load(home).Connections);
             Assert.Equal("ledger", ledger.Config.Schema);
             Assert.True(ledger.Config.InCredentialManager);
@@ -662,9 +664,9 @@ public partial class ToolsMenuTests : IDisposable
 
         var loaded = NeonSidekick.Oracle.OracleConfigFile.Load(path);
         Assert.Equal("s3cret", NeonSidekick.Oracle.OracleSecrets.Resolve(loaded.Connections[0]).Value);
-        Assert.Contains("▸ " + SettingsMenu.OraclePasswordRow(loaded.Connections[0]), _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
-        Assert.Contains("Saved the password of 'free', encrypted, in ", _console.Output);
+        Assert.Contains("▸ " + SettingsMenu.OraclePasswordRow(loaded.Connections[0]), Output);
+        Assert.DoesNotContain("s3cret", Output);
+        Assert.Contains("Saved the password of 'free', encrypted, in ", Output);
         Assert.Equal("free  (user neon · encrypted in oracle.json)", SettingsMenu.OraclePasswordRow(loaded.Connections[0]));
     }
 
@@ -686,8 +688,8 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal(["ledger"], _settings.Current.OracleConnectionsOffered);
         Assert.Equal("ledger", _settings.Current.OracleDefaultConnection);
-        Assert.Contains("Oracle connections offered    none of 2", _console.Output);
-        Assert.Contains("[ ] free", _console.Output);
+        Assert.Contains("Oracle connections offered    none of 2", Output);
+        Assert.Contains("[ ] free", Output);
         Assert.Equal("1 of 2", SettingsMenu.OracleOfferedValue(_settings.Current.OracleConnectionsOffered, NeonSidekick.Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory)));
     }
 
@@ -736,13 +738,13 @@ public partial class ToolsMenuTests : IDisposable
         var shop = Assert.Single(NeonSidekick.MySql.MySqlConfigFile.Load(path).Connections);
         Assert.Equal(("localhost", 3307, "shop", "neon", "verify-full"), (shop.Config.Host, shop.Config.Port, shop.Config.Database, shop.Config.User, shop.Config.SslMode));
         Assert.Equal("s3cret", NeonSidekick.MySql.MySqlSecrets.Resolve(shop).Value);
-        Assert.Contains(SettingsMenu.MySqlWizardPortError("99999"), _console.Output);
-        Assert.Contains(NeonSidekick.MySql.MySqlText.TestOk("shop", "neon@%", "8.4.11"), _console.Output);
-        Assert.Contains("This account can change data (ALL PRIVILEGES ON `shop`.*); the MySQL tools only read", _console.Output);
+        Assert.Contains(SettingsMenu.MySqlWizardPortError("99999"), Output);
+        Assert.Contains(NeonSidekick.MySql.MySqlText.TestOk("shop", "neon@%", "8.4.11"), Output);
+        Assert.Contains("This account can change data (ALL PRIVILEGES ON `shop`.*); the MySQL tools only read", Output);
         Assert.Null(shop.Config.Access);   // read is the default, left out of the file
-        Assert.Contains("Added 'shop' to ", _console.Output);
+        Assert.Contains("Added 'shop' to ", Output);
         Assert.Equal(["shop"], _settings.Current.MySqlConnectionsOffered);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.DoesNotContain("s3cret", Output);
     }
 
     [Fact]
@@ -765,7 +767,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("s3cret", NeonSidekick.MySql.MySqlSecrets.Resolve(loaded.Connections[0]).Value);
         Assert.Equal("shop  (localhost:3306, user reader · encrypted in mysql.json)", SettingsMenu.MySqlPasswordRow(loaded.Connections[0]));
         Assert.Equal(["billing"], _settings.Current.MySqlConnectionsOffered);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.DoesNotContain("s3cret", Output);
     }
 
     /// <summary>Types <paramref name="text"/> into the open slot and submits it.</summary>
@@ -813,10 +815,10 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(("eng", folder, true, "engineering specs"), (eng.Name, eng.Config.Root, eng.Config.IsReadWrite, eng.Config.Description));
         Assert.Null(eng.Config.Auth);                        // windows is the default: left out of the entry
         Assert.Contains("\"access\": \"readwrite\"", File.ReadAllText(path));
-        Assert.Contains(NeonSidekick.Unc.UncText.NotAbsolute(@"specs\only"), _console.Output);
-        Assert.Contains(SettingsMenu.UncWizardWritesOffNotice, _console.Output);
-        Assert.Contains(SettingsMenu.UncWizardTestOkNotice("eng", 7), _console.Output);
-        Assert.Contains("Added 'eng' to ", _console.Output);
+        Assert.Contains(NeonSidekick.Unc.UncText.NotAbsolute(@"specs\only"), Output);
+        Assert.Contains(SettingsMenu.UncWizardWritesOffNotice, Output);
+        Assert.Contains(SettingsMenu.UncWizardTestOkNotice("eng", 7), Output);
+        Assert.Contains("Added 'eng' to ", Output);
         Assert.Equal(["eng"], _settings.Current.UncSharesOffered);
         Assert.Equal("Reached 'eng': 7 entries at its root.", SettingsMenu.UncWizardTestOkNotice("eng", 7));
     }
@@ -851,10 +853,10 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal((@"\\fs02\finance", true, @"CORP\svc", false), (fin.Config.Root, fin.Config.IsRunAs, fin.Config.User, fin.Config.IsReadWrite));
         Assert.StartsWith(NeonSidekick.Sql.WindowsCredentials.ProtectedPrefix, fin.Config.Password);
         Assert.Equal("s3cret", NeonSidekick.Unc.UncSecrets.Resolve(fin).Value);
-        Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsDomain("svc"), _console.Output);
-        Assert.Contains(NeonSidekick.Unc.UncText.BadAccount("fin", @"CORP\svc"), _console.Output);
-        Assert.Contains(SettingsMenu.UncWizardCancelledNotice, _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsDomain("svc"), Output);
+        Assert.Contains(NeonSidekick.Unc.UncText.BadAccount("fin", @"CORP\svc"), Output);
+        Assert.Contains(SettingsMenu.UncWizardCancelledNotice, Output);
+        Assert.DoesNotContain("s3cret", Output);
         Assert.Null(_settings.Current.UncSharesOffered);   // saved hidden: nothing offered
     }
 
@@ -881,7 +883,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("s3cret", NeonSidekick.Unc.UncSecrets.Resolve(fin).Value);
         Assert.Equal(@"fin  (\\fs02\fin, runas CORP\svc · encrypted in unc.json)", SettingsMenu.UncPasswordRow(fin));
         Assert.Equal(["fin"], _settings.Current.UncSharesOffered);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.DoesNotContain("s3cret", Output);
         Assert.Equal("1 of 2", SettingsMenu.UncOfferedValue(["fin"], NeonSidekick.Unc.UncConfigFile.Load(path)));
         Assert.Equal("none of 2", SettingsMenu.UncOfferedValue(null, NeonSidekick.Unc.UncConfigFile.Load(path)));
         Assert.Equal("2 shares · Enter edits unc.json", SettingsMenu.UncSharesLabel(path));
@@ -943,12 +945,12 @@ public partial class ToolsMenuTests : IDisposable
         Assert.StartsWith(NeonSidekick.Sql.WindowsCredentials.ProtectedPrefix, aw.Config.Password);
         Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(aw).Value);
         Assert.StartsWith(NeonSidekick.Sql.SqlConfigFile.EmptyText[..40], File.ReadAllText(path));   // made with its commented shape
-        Assert.Contains(SettingsMenu.SqlWizardTestOkNotice("aw", "Microsoft SQL Server 2022 (RTM) - 16.0"), _console.Output);
-        Assert.Contains("Added 'aw' to ", _console.Output);   // the status line cuts the temp path at the pane's width
+        Assert.Contains(SettingsMenu.SqlWizardTestOkNotice("aw", "Microsoft SQL Server 2022 (RTM) - 16.0"), Output);
+        Assert.Contains("Added 'aw' to ", Output);   // the status line cuts the temp path at the pane's width
         Assert.Equal("Added 'aw' to " + path + ".", NeonSidekick.Sql.SqlText.ConnectionAdded("aw", path));
-        Assert.Contains(SettingsMenu.SqlWizardSummaryCaption, _console.Output);
-        Assert.Contains(SettingsMenu.SqlWizardMasked, _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Contains(SettingsMenu.SqlWizardSummaryCaption, Output);
+        Assert.Contains(SettingsMenu.SqlWizardMasked, Output);
+        Assert.DoesNotContain("s3cret", Output);
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);   // offered by the wizard (nothing is until ticked, 2026-10-01)
     }
 
@@ -1004,12 +1006,12 @@ public partial class ToolsMenuTests : IDisposable
         Assert.StartsWith(NeonSidekick.Sql.WindowsCredentials.KeychainPrefix, aw.Config.Password);
         Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(aw).Value);
         Assert.StartsWith(NeonSidekick.Sql.SqlConfigFile.EmptyText[..40], File.ReadAllText(path));   // made with its commented shape
-        Assert.Contains(SettingsMenu.SqlWizardTestOkNotice("aw", "Microsoft SQL Server 2022 (RTM) - 16.0"), _console.Output);
-        Assert.Contains("Added 'aw' to ", _console.Output);   // the status line cuts the temp path at the pane's width
+        Assert.Contains(SettingsMenu.SqlWizardTestOkNotice("aw", "Microsoft SQL Server 2022 (RTM) - 16.0"), Output);
+        Assert.Contains("Added 'aw' to ", Output);   // the status line cuts the temp path at the pane's width
         Assert.Equal("Added 'aw' to " + path + ".", NeonSidekick.Sql.SqlText.ConnectionAdded("aw", path));
-        Assert.Contains(SettingsMenu.SqlWizardSummaryCaption, _console.Output);
-        Assert.Contains(SettingsMenu.SqlWizardMasked, _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Contains(SettingsMenu.SqlWizardSummaryCaption, Output);
+        Assert.Contains(SettingsMenu.SqlWizardMasked, Output);
+        Assert.DoesNotContain("s3cret", Output);
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);   // offered by the wizard (nothing is until ticked, 2026-10-01)
     }
 
@@ -1049,10 +1051,10 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Null(me.Config.Database);
         Assert.Equal(30, me.Config.ConnectTimeoutSeconds);
         Assert.Equal("readwrite", me.Config.Access);
-        Assert.Contains(SettingsMenu.DatabaseWizardModeOffNotice(NeonSidekick.Sql.SqlStatementKinds.Family), _console.Output);
+        Assert.Contains(SettingsMenu.DatabaseWizardModeOffNotice(NeonSidekick.Sql.SqlStatementKinds.Family), Output);
         Assert.Equal(["other", "me"], _settings.Current.SqlConnectionsOffered);
-        Assert.Contains(SettingsMenu.SqlWizardTimeoutError("abc"), _console.Output);
-        Assert.Contains(SettingsMenu.SqlWizardSaveHiddenRow, _console.Output);
+        Assert.Contains(SettingsMenu.SqlWizardTimeoutError("abc"), Output);
+        Assert.Contains(SettingsMenu.SqlWizardSaveHiddenRow, Output);
         Assert.False(File.Exists(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory)));
     }
 
@@ -1071,8 +1073,8 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, _console.Output);
-        Assert.DoesNotContain(SettingsMenu.SqlWizardNameRequired, _console.Output);
+        Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
+        Assert.DoesNotContain(SettingsMenu.SqlWizardNameRequired, Output);
         Assert.False(File.Exists(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory)));
     }
 
@@ -1109,10 +1111,10 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("'AW' is already in ", _console.Output);
-        Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsDomain("svc"), _console.Output);
-        Assert.Contains("Error: could not connect to rep: Login failed for user.", _console.Output);
-        Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, _console.Output);
+        Assert.Contains("'AW' is already in ", Output);
+        Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsDomain("svc"), Output);
+        Assert.Contains("Error: could not connect to rep: Login failed for user.", Output);
+        Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
         Assert.Equal(Before, File.ReadAllText(path));
     }
 
@@ -1141,8 +1143,8 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("Connected to 'live': Microsoft SQL Server", _console.Output);
-        Assert.DoesNotContain(LiveSql.Password, _console.Output);
+        Assert.Contains("Connected to 'live': Microsoft SQL Server", Output);
+        Assert.DoesNotContain(LiveSql.Password, Output);
         Assert.False(File.Exists(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory)));
     }
 
@@ -1195,9 +1197,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);
-        Assert.Contains("SQL connections offered     none of 2", _console.Output);
-        Assert.Contains("SQL connections offered     1 of 2", _console.Output);
-        Assert.Contains("[x] aw    SQL Server · x", _console.Output);
+        Assert.Contains("SQL connections offered     none of 2", Output);
+        Assert.Contains("SQL connections offered     1 of 2", Output);
+        Assert.Contains("[x] aw    SQL Server · x", Output);
 
         File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" }, "new": { "server": "z", "auth": "windows" } } }""");
         var loaded = NeonSidekick.Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
@@ -1244,8 +1246,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(20, _settings.Current.GitLibLogMaxCommits);
         // The five rows padded to the tab's own column (24 since the GitLib labels, 2026-09-30; 28 before), the diff cap's notice then the log cap's refusal on the status line.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ GitLib tools            on\n  GitLib diff max lines   500 lines\n  GitLib log max commits  20 commits\n  GitLib email            (not set)\n  GitLib name             (not set)\n", 100);
-        Assert.Contains("\n  GitLib diff max lines   1000 lines\n", _console.Output);
-        Assert.Contains("GitLib log max commits must be 1 to 200 commits; keeping 20.", _console.Output);
+        Assert.Contains("\n  GitLib diff max lines   1000 lines\n", Output);
+        Assert.Contains("GitLib log max commits must be 1 to 200 commits; keeping 20.", Output);
         pane.Dispose();
     }
 
@@ -1271,13 +1273,13 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", _console.Output);
-        Assert.Contains("  · Shell command policy: yolo\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
-        Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell default") + "\n \n▸ powershell pwsh when installed, else Windows PowerShell 5.1\n  cmd        cmd.exe: batch syntax\n  bash       Git Bash, when bash.exe is found\n", _console.Output);
-        Assert.Contains("  · Shell default: cmd\n", _console.Output);
-        Assert.Contains("Shell timeout (s) must be 1 to 3600 seconds; keeping 180.", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        Assert.Contains("  · Shell command policy: yolo\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell default") + "\n \n▸ powershell pwsh when installed, else Windows PowerShell 5.1\n  cmd        cmd.exe: batch syntax\n  bash       Git Bash, when bash.exe is found\n", Output);
+        Assert.Contains("  · Shell default: cmd\n", Output);
+        Assert.Contains("Shell timeout (s) must be 1 to 3600 seconds; keeping 180.", Output);
         pane.Dispose();
     }
 
@@ -1303,13 +1305,13 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", _console.Output);
-        Assert.Contains("  · Shell command policy: yolo\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
-        Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell default") + "\n \n▸ zsh        the macOS shell\n  bash       bash from the PATH, else /bin/bash\n  powershell pwsh, when installed\n", _console.Output);
-        Assert.Contains("  · Shell default: bash\n", _console.Output);
-        Assert.Contains("Shell timeout (s) must be 1 to 3600 seconds; keeping 180.", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        Assert.Contains("  · Shell command policy: yolo\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell default") + "\n \n▸ zsh        the macOS shell\n  bash       bash from the PATH, else /bin/bash\n  powershell pwsh, when installed\n", Output);
+        Assert.Contains("  · Shell default: bash\n", Output);
+        Assert.Contains("Shell timeout (s) must be 1 to 3600 seconds; keeping 180.", Output);
         pane.Dispose();
     }
 
@@ -1326,9 +1328,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.True(_settings.Current.ShellToolBridge);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell tool bridge") + "\n \n  on  a script may call this app's other tools through its neon_tools module\n▸ off a script does everything itself: no neon_tools module, no tool calls\n", _console.Output);
-        Assert.Contains("  · Shell tool bridge: on", _console.Output);
-        Assert.Contains("\n▸ Shell tool bridge               on\n  Shell tool bridge max calls     50 tool calls\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell tool bridge") + "\n \n  on  a script may call this app's other tools through its neon_tools module\n▸ off a script does everything itself: no neon_tools module, no tool calls\n", Output);
+        Assert.Contains("  · Shell tool bridge: on", Output);
+        Assert.Contains("\n▸ Shell tool bridge               on\n  Shell tool bridge max calls     50 tool calls\n", Output);
         pane.Dispose();
     }
 
@@ -1346,10 +1348,10 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ShellPolice);
-        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police   ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", _console.Output);
-        Assert.Contains("  · Shell police: off", _console.Output);
-        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n", _console.Output);
+        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", Output);
+        Assert.Contains("  · Shell police: off", Output);
+        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n", Output);
         pane.Dispose();
     }
 
@@ -1367,10 +1369,10 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ShellPolice);
-        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police   ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", _console.Output);
-        Assert.Contains("  · Shell police: off", _console.Output);
-        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n", _console.Output);
+        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", Output);
+        Assert.Contains("  · Shell police: off", Output);
+        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n", Output);
         pane.Dispose();
     }
 
@@ -1387,8 +1389,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowPoliceAsync(CancellationToken.None);
 
         Assert.True(_settings.Current.ShellPolice);
-        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", _console.Output);
-        Assert.DoesNotContain("Shell police: off", _console.Output);
+        Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", Output);
+        Assert.DoesNotContain("Shell police: off", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1402,7 +1404,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowPoliceAsync(CancellationToken.None);
 
         Assert.False(_settings.Current.ShellPolice);
-        Assert.Contains(SettingsMenu.PoliceOffConfirmQuestion, _console.Output);
+        Assert.Contains(SettingsMenu.PoliceOffConfirmQuestion, Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1418,7 +1420,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowPoliceAsync(CancellationToken.None);
 
         Assert.True(_settings.Current.ShellPolice);
-        Assert.DoesNotContain(SettingsMenu.PoliceOffConfirmQuestion, _console.Output);
+        Assert.DoesNotContain(SettingsMenu.PoliceOffConfirmQuestion, Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1437,8 +1439,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowSwitchAsync(SettingsField.DockerTools, CancellationToken.None);
 
         Assert.True(_settings.Current.DockerTools);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.DockerTools)) + "\n", _console.Output);
-        Assert.DoesNotContain(ToolsText.OfferedTabTitle + "    Web", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.DockerTools)) + "\n", Output);
+        Assert.DoesNotContain(ToolsText.OfferedTabTitle + "    Web", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1457,11 +1459,11 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal("chromium", _settings.Current.WebBrowserMode);
         Assert.True(_settings.Current.WebTools);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools   ⇄ default    ↓ httpclient    ◎ chromium ") + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web tools │ ⇄ default · ↓ httpclient · ◎ chromium ") + "\n", Output);
 
-        Assert.Contains(SettingsMenu.WebToggleKeys, _console.Output);
-        Assert.Contains("  · Web browser mode: chromium\n", _console.Output);
-        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
+        Assert.Contains(SettingsMenu.WebToggleKeys, Output);
+        Assert.Contains("  · Web browser mode: chromium\n", Output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1478,8 +1480,8 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal("httpclient", _settings.Current.WebBrowserMode);
         Assert.False(_settings.Current.WebTools);
-        Assert.DoesNotContain("Web browser mode: default", _console.Output);
-        Assert.Contains("  · Web browser mode: httpclient\n", _console.Output);
+        Assert.DoesNotContain("Web browser mode: default", Output);
+        Assert.Contains("  · Web browser mode: httpclient\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1507,17 +1509,17 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
 
         Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
-        Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", Output);
 
         Push(Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // yolo picked; yes
         await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
 
-        int mark = _console.Output.Length;
+        int mark = Output.Length;
         Push(Keys.Up, Keys.Up, Keys.Enter);   // off: nothing asked
         await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
         Assert.Equal("off", _settings.Current.ShellCommandPolicy);
-        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, _console.Output[mark..]);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, Output[mark..]);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1537,11 +1539,11 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["node"], _settings.Current.ShellCodeLanguages);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell code languages   " + SettingsMenu.SelectAllButton + "    " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh or Windows PowerShell; Invoke-NeonTool calls a tool\n  [x] python     a .py through python.exe; from neon_tools import …\n  [x] node       a .js through node.exe; require('neon_tools')\n", _console.Output);
-        Assert.Contains("  · Shell code languages: python, node\n", _console.Output);
-        Assert.Contains("  · Shell code languages: node\n", _console.Output);
-        Assert.Contains("At least one language stays on.", _console.Output);
-        Assert.Contains("\n▸ Shell code languages            node\n  Shell code timeout (s)          300\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell code languages │ " + SettingsMenu.SelectAllButton + " · " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh or Windows PowerShell; Invoke-NeonTool calls a tool\n  [x] python     a .py through python.exe; from neon_tools import …\n  [x] node       a .js through node.exe; require('neon_tools')\n", Output);
+        Assert.Contains("  · Shell code languages: python, node\n", Output);
+        Assert.Contains("  · Shell code languages: node\n", Output);
+        Assert.Contains("At least one language stays on.", Output);
+        Assert.Contains("\n▸ Shell code languages            node\n  Shell code timeout (s)          300\n", Output);
         pane.Dispose();
     }
 
@@ -1560,11 +1562,11 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["node"], _settings.Current.ShellCodeLanguages);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell code languages   " + SettingsMenu.SelectAllButton + "    " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh; Invoke-NeonTool calls a tool\n  [x] python     a .py through python3; from neon_tools import …\n  [x] node       a .js through node; require('neon_tools')\n", _console.Output);
-        Assert.Contains("  · Shell code languages: python, node\n", _console.Output);
-        Assert.Contains("  · Shell code languages: node\n", _console.Output);
-        Assert.Contains("At least one language stays on.", _console.Output);
-        Assert.Contains("\n▸ Shell code languages            node\n  Shell code timeout (s)          300\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell code languages │ " + SettingsMenu.SelectAllButton + " · " + SettingsMenu.SelectNoneButton + " ") + "\n \n▸ [x] powershell a .ps1 through pwsh; Invoke-NeonTool calls a tool\n  [x] python     a .py through python3; from neon_tools import …\n  [x] node       a .js through node; require('neon_tools')\n", Output);
+        Assert.Contains("  · Shell code languages: python, node\n", Output);
+        Assert.Contains("  · Shell code languages: node\n", Output);
+        Assert.Contains("At least one language stays on.", Output);
+        Assert.Contains("\n▸ Shell code languages            node\n  Shell code timeout (s)          300\n", Output);
         pane.Dispose();
     }
 
@@ -1582,7 +1584,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.False(_settings.Current.WebTools);
         // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          (auto: msedge.exe)\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", Output);
         pane.Dispose();
     }
 
@@ -1601,7 +1603,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.False(_settings.Current.WebTools);
         // The seven rows padded to the tab's own column (26), the toggle's notice on the status line under the strip.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Web tools                 on\n  Web browser mode          default\n  Web browser path          " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n  Web browser network mode  internet\n  Web search method         duckduckgo\n  Web SearXNG URL           (not set)\n  Web search max results    20 results\n  Web download max (MB)     50 MB\n", 100);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", _console.Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Web tools: off\n▸ Web tools                 off\n", Output);
         pane.Dispose();
     }
 
@@ -1637,9 +1639,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("httpclient", _settings.Current.WebBrowserMode);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web browser mode") + "\n", _console.Output);
-        Assert.DoesNotContain(SettingsMenu.Title + " › Web browser mode", _console.Output);
-        Assert.Contains("  · Web browser mode: httpclient\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Web browser mode") + "\n", Output);
+        Assert.DoesNotContain(SettingsMenu.Title + " › Web browser mode", Output);
+        Assert.Contains("  · Web browser mode: httpclient\n", Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);   // restored for /settings
         pane.Dispose();
     }
@@ -1658,9 +1660,9 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal(3, _settings.Current.AskMaxQuestions);
         Assert.Equal(10, _settings.Current.AskMaxChoices);
-        Assert.Contains("  · Ask max questions: 3 questions\n", _console.Output);
-        Assert.Contains("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
-        Assert.Contains(Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);   // the typed slot under the list (pre-filled with 10: two Backspaces and a 3 made 3), the edit keys in the hint row
+        Assert.Contains("  · Ask max questions: 3 questions\n", Output);
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
+        Assert.Contains(Rule(100) + "\n" + SettingsMenu.EditKeys, Output);   // the typed slot under the list (pre-filled with 10: two Backspaces and a 3 made 3), the edit keys in the hint row
         pane.Dispose();
     }
 
@@ -1679,9 +1681,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(12, _settings.Current.DiffMaxLines);
-        Assert.Contains("Diff max lines " + SettingsMenu.DiffMaxLinesRangeError + "; keeping 10.", _console.Output);
-        Assert.Contains("  · Diff max lines: header only\n", _console.Output);
-        Assert.Contains("  · Diff max lines: 12 lines\n", _console.Output);
+        Assert.Contains("Diff max lines " + SettingsMenu.DiffMaxLinesRangeError + "; keeping 10.", Output);
+        Assert.Contains("  · Diff max lines: header only\n", Output);
+        Assert.Contains("  · Diff max lines: 12 lines\n", Output);
         pane.Dispose();
     }
 
@@ -1700,9 +1702,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(5, _settings.Current.DiffCollapseCount);
-        Assert.Contains("Diff collapse count " + SettingsMenu.DiffCollapseCountRangeError + "; keeping 10.", _console.Output);
-        Assert.Contains("  · Diff collapse count: off\n", _console.Output);
-        Assert.Contains("  · Diff collapse count: 5 lines\n", _console.Output);
+        Assert.Contains("Diff collapse count " + SettingsMenu.DiffCollapseCountRangeError + "; keeping 10.", Output);
+        Assert.Contains("  · Diff collapse count: off\n", Output);
+        Assert.Contains("  · Diff collapse count: 5 lines\n", Output);
         Assert.Equal("must be 0 to 500 lines (0 = off)", SettingsMenu.DiffCollapseCountRangeError);
         Assert.Equal("Diff collapse count", SettingsMenu.FieldName(SettingsField.DiffCollapseCount));
         Assert.Equal(10, new AppSettingsData().DiffCollapseCount);
@@ -1724,9 +1726,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(5, _settings.Current.ToolCollapseCount);
-        Assert.Contains("Tool collapse count " + SettingsMenu.ToolCollapseCountRangeError + "; keeping 2.", _console.Output);
-        Assert.Contains("  · Tool collapse count: off\n", _console.Output);
-        Assert.Contains("  · Tool collapse count: 5 lines\n", _console.Output);
+        Assert.Contains("Tool collapse count " + SettingsMenu.ToolCollapseCountRangeError + "; keeping 2.", Output);
+        Assert.Contains("  · Tool collapse count: off\n", Output);
+        Assert.Contains("  · Tool collapse count: 5 lines\n", Output);
         Assert.Equal("must be 0 to 100 lines (0 = off)", SettingsMenu.ToolCollapseCountRangeError);
         Assert.Equal("Tool collapse count", SettingsMenu.FieldName(SettingsField.ToolCollapseCount));
         Assert.False(SettingsMenu.IsToggle(SettingsField.ToolCollapseCount));
@@ -1750,9 +1752,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(30, _settings.Current.CodeCollapseCount);
-        Assert.Contains("Code collapse count " + SettingsMenu.CodeCollapseCountRangeError + "; keeping 20.", _console.Output);
-        Assert.Contains("  · Code collapse count: off\n", _console.Output);
-        Assert.Contains("  · Code collapse count: 30 lines\n", _console.Output);
+        Assert.Contains("Code collapse count " + SettingsMenu.CodeCollapseCountRangeError + "; keeping 20.", Output);
+        Assert.Contains("  · Code collapse count: off\n", Output);
+        Assert.Contains("  · Code collapse count: 30 lines\n", Output);
         Assert.Equal("must be 0 to 100 lines (0 = off)", SettingsMenu.CodeCollapseCountRangeError);
         Assert.Equal("Code collapse count", SettingsMenu.FieldName(SettingsField.CodeCollapseCount));
         Assert.False(SettingsMenu.IsToggle(SettingsField.CodeCollapseCount));
@@ -1776,9 +1778,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(25, _settings.Current.FileViewImageMaxPerCall);
-        Assert.Contains("File view image max (per call) " + SettingsMenu.ViewImageMaxPerCallRangeError + "; keeping 10.", _console.Output);
-        Assert.Contains("  · File view image max (per call): 25 pictures\n", _console.Output);
-        Assert.Contains("\n▸ File view image max (per call)  25 pictures\n", _console.Output);
+        Assert.Contains("File view image max (per call) " + SettingsMenu.ViewImageMaxPerCallRangeError + "; keeping 10.", Output);
+        Assert.Contains("  · File view image max (per call): 25 pictures\n", Output);
+        Assert.Contains("\n▸ File view image max (per call)  25 pictures\n", Output);
         pane.Dispose();
     }
 
@@ -1796,8 +1798,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(1000, _settings.Current.FileSearchMaxResults);
-        Assert.Contains("File search max results " + SettingsMenu.FileSearchMaxResultsRangeError + "; keeping 200.", _console.Output);
-        Assert.Contains("  · File search max results: 1000 results\n", _console.Output);
+        Assert.Contains("File search max results " + SettingsMenu.FileSearchMaxResultsRangeError + "; keeping 200.", Output);
+        Assert.Contains("  · File search max results: 1000 results\n", Output);
         pane.Dispose();
     }
 
@@ -1822,9 +1824,9 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("all", _settings.Current.ImageEditMetadata);
         Assert.Equal("overwrite-original", _settings.Current.ImageEditMode);
         Assert.Equal("ed", _settings.Current.ImageEditOutputFolder);
-        Assert.Contains("Image edit quality " + SettingsMenu.ImageEditQualityRangeError + "; keeping 90.", _console.Output);
-        Assert.Contains("Image edit output folder " + SettingsMenu.CameraOutputFolderError + "; keeping " + SettingsMenu.ImageEditBesideLabel + ".", _console.Output);
-        Assert.Contains("  · Image edit quality: 55\n", _console.Output);
+        Assert.Contains("Image edit quality " + SettingsMenu.ImageEditQualityRangeError + "; keeping 90.", Output);
+        Assert.Contains("Image edit output folder " + SettingsMenu.CameraOutputFolderError + "; keeping " + SettingsMenu.ImageEditBesideLabel + ".", Output);
+        Assert.Contains("  · Image edit quality: 55\n", Output);
         Assert.Equal("must be 1 to 100", SettingsMenu.ImageEditQualityRangeError);
         pane.Dispose();
     }
@@ -1865,8 +1867,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(2000, _settings.Current.WebDownloadMaxMegabytes);
-        Assert.Contains("Web download max (MB) " + SettingsMenu.WebDownloadMaxMegabytesRangeError + "; keeping 50.", _console.Output);
-        Assert.Contains("  · Web download max (MB): 2,000 MB\n", _console.Output);
+        Assert.Contains("Web download max (MB) " + SettingsMenu.WebDownloadMaxMegabytesRangeError + "; keeping 50.", Output);
+        Assert.Contains("  · Web download max (MB): 2,000 MB\n", Output);
         pane.Dispose();
     }
 
@@ -1884,8 +1886,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(200_000, _settings.Current.QueryResultMaxChars);
-        Assert.Contains("SQL query result max chars " + SettingsMenu.QueryResultMaxCharsRangeError + "; keeping 32000.", _console.Output);
-        Assert.Contains("  · SQL query result max chars: 200,000 chars\n", _console.Output);
+        Assert.Contains("SQL query result max chars " + SettingsMenu.QueryResultMaxCharsRangeError + "; keeping 32000.", Output);
+        Assert.Contains("  · SQL query result max chars: 200,000 chars\n", Output);
         pane.Dispose();
     }
 
@@ -1904,8 +1906,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.False(_settings.Current.AskUser);
         Assert.Equal(10, _settings.Current.AskMaxQuestions);
         Assert.Empty(_settings.Current.ToolsDisabled);
-        Assert.Contains("  · Ask user: off\n", _console.Output);
-        Assert.DoesNotContain(SettingsMenu.PickKeys, _console.Output);
+        Assert.Contains("  · Ask user: off\n", Output);
+        Assert.DoesNotContain(SettingsMenu.PickKeys, Output);
         pane.Dispose();
     }
 
@@ -1921,7 +1923,7 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal([GetCurrentTimeTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.False(_settings.Current.AskUser);
-        Assert.DoesNotContain(SettingsMenu.NotWhileReplyRunsNotice, _console.Output);
+        Assert.DoesNotContain(SettingsMenu.NotWhileReplyRunsNotice, Output);
         pane.Dispose();
     }
 
@@ -1938,7 +1940,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([ShiftDateTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("  · shift_date: off\n", _console.Output);
+        Assert.Contains("  · shift_date: off\n", Output);
         Assert.False(pane.OverlayOpen);
         Assert.False(pane.Dismissed);
         Assert.True(input.IsAvailable);
@@ -1959,19 +1961,19 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", _console.Output);
-        Assert.Contains("  ·   Files (15 of 16)\n", _console.Output);
-        Assert.Contains("  ·     read_file             off  Reads a text file", _console.Output);   // the console wraps the long line
-        Assert.Contains("switched off in /tools", _console.Output);
-        Assert.Contains("  ·   Questions (1) (off: no pane)\n", _console.Output);
+        Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", Output);
+        Assert.Contains("  ·   Files (15 of 16)\n", Output);
+        Assert.Contains("  ·     read_file             off  Reads a text file", Output);   // the console wraps the long line
+        Assert.Contains("switched off in /tools", Output);
+        Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);
         // The tabs in strip order, the user's since 2026-10-03: Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options. Before it Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Anthropic API's four rows last since), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27), HA (2026-09-28; second to last since later on 2026-10-01, the user's ask) and Options last (2026-09-22).
-        Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", _console.Output);
-        Assert.Contains("  ·   Web search max results: 20 results\n  ·   Web download max (MB): 50 MB\n  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  ·   File view image max (per call): 10 pictures\n  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n", _console.Output);
-        Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", _console.Output);
-        Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", _console.Output);
-        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add/edit share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL mode: read-only\n  ·   SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add/edit connection: Enter to start the connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL mode: read-only\n  ·   MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add/edit connection: Enter to start the connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: off\n  ·   SQLite add/edit database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL mode: read-only\n  ·   PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle mode: read-only\n  ·   Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add/edit connection: Enter to start the connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · YouTube\n  ·   YouTube tools: off\n  ·   YouTube API key: (none)\n  ·   YouTube search max results: 8 results\n  ·   YouTube autoplay: on\n  ·   YouTube while speaking: pause\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: (auto: msedge.exe)\n", Output);
+        Assert.Contains("  ·   Web search max results: 20 results\n  ·   Web download max (MB): 50 MB\n  · Shell\n  ·   Shell command policy: ask\n", Output);
+        Assert.Contains("  ·   File view image max (per call): 10 pictures\n  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n", Output);
+        Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", Output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", Output);
+        Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", Output);
+        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add/edit share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL mode: read-only\n  ·   SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add/edit connection: Enter to start the connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL mode: read-only\n  ·   MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add/edit connection: Enter to start the connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: off\n  ·   SQLite add/edit database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL mode: read-only\n  ·   PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle mode: read-only\n  ·   Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add/edit connection: Enter to start the connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · YouTube\n  ·   YouTube tools: off\n  ·   YouTube API key: (none)\n  ·   YouTube search max results: 8 results\n  ·   YouTube autoplay: on\n  ·   YouTube while speaking: pause\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -1991,19 +1993,19 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", _console.Output);
-        Assert.Contains("  ·   Files (12 of 13)\n", _console.Output);
-        Assert.Contains("  ·     read_file             off  Reads a text file", _console.Output);   // the console wraps the long line
-        Assert.Contains("switched off in /tools", _console.Output);
-        Assert.Contains("  ·   Questions (1) (off: no pane)\n", _console.Output);
+        Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", Output);
+        Assert.Contains("  ·   Files (12 of 13)\n", Output);
+        Assert.Contains("  ·     read_file             off  Reads a text file", Output);   // the console wraps the long line
+        Assert.Contains("switched off in /tools", Output);
+        Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);
         // The tabs in strip order, the user's since 2026-10-03: Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options. Before it Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Anthropic API's four rows last since), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27), HA (2026-09-28; second to last since later on 2026-10-01, the user's ask) and Options last (2026-09-22).
-        Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n", _console.Output);
-        Assert.Contains("  ·   Web search max results: 20 results\n  ·   Web download max (MB): 50 MB\n  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  ·   File view image max (per call): 10 pictures\n  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n", _console.Output);
-        Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", _console.Output);
-        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", _console.Output);
-        Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", _console.Output);
-        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add/edit share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: " + SettingsMenu.WindowsDefaultPrinterLabel + "\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL mode: read-only\n  ·   SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add/edit connection: Enter to start the connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL mode: read-only\n  ·   MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add/edit connection: Enter to start the connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: off\n  ·   SQLite add/edit database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL mode: read-only\n  ·   PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle mode: read-only\n  ·   Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add/edit connection: Enter to start the connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · YouTube\n  ·   YouTube tools: off\n  ·   YouTube API key: (none)\n  ·   YouTube search max results: 8 results\n  ·   YouTube autoplay: on\n  ·   YouTube while speaking: pause\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", _console.Output);
+        Assert.Contains("  · Web\n  ·   Web tools: on\n  ·   Web browser mode: default\n  ·   Web browser path: " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n", Output);
+        Assert.Contains("  ·   Web search max results: 20 results\n  ·   Web download max (MB): 50 MB\n  · Shell\n  ·   Shell command policy: ask\n", Output);
+        Assert.Contains("  ·   File view image max (per call): 10 pictures\n  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n", Output);
+        Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", Output);
+        Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", Output);
+        Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", Output);
+        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC default share: (the first share)\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add/edit share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: " + SettingsMenu.WindowsDefaultPrinterLabel + "\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL mode: read-only\n  ·   SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQL connections offered: none of 0\n  ·   SQL default connection: (the first connection)\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add/edit connection: Enter to start the connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL mode: read-only\n  ·   MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   MySQL connections offered: none of 0\n  ·   MySQL default connection: (the first connection)\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add/edit connection: Enter to start the connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite default database: (the first database)\n  ·   SQLite sandbox files: off\n  ·   SQLite add/edit database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL mode: read-only\n  ·   PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL default connection: (the first connection)\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle mode: read-only\n  ·   Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·   Oracle connections offered: none of 0\n  ·   Oracle default connection: (the first connection)\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add/edit connection: Enter to start the connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · YouTube\n  ·   YouTube tools: off\n  ·   YouTube API key: (none)\n  ·   YouTube search max results: 8 results\n  ·   YouTube autoplay: on\n  ·   YouTube while speaking: pause\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2023,9 +2025,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands   " + SettingsMenu.PolicyAskButton + "    " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", _console.Output);
-        Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", _console.Output);
-        Assert.DoesNotContain(Strip, _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
+        Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
+        Assert.DoesNotContain(Strip, Output);
         Assert.Equal(SettingsMenu.Title, settings.Root);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -2046,9 +2048,9 @@ public partial class ToolsMenuTests : IDisposable
 
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
         Assert.Equal(["git push"], _settings.Current.ShellCommandAllowed);
-        Assert.Contains(SettingsMenu.AllowedCommandsKeys, _console.Output);
-        Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", _console.Output);
-        Assert.Contains("  · Shell command policy: yolo\n▸ git push\n", _console.Output);
+        Assert.Contains(SettingsMenu.AllowedCommandsKeys, Output);
+        Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", Output);
+        Assert.Contains("  · Shell command policy: yolo\n▸ git push\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2064,8 +2066,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
-        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, _console.Output);
-        Assert.Contains("  · Shell command policy: ask\n", _console.Output);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, Output);
+        Assert.Contains("  · Shell command policy: ask\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2079,10 +2081,10 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
-        Assert.Contains(SettingsMenu.AllowedCommandsEmptyKeys, _console.Output);   // the buttons work on the empty list
-        Assert.Contains(SettingsMenu.YoloConfirmQuestion, _console.Output);
-        Assert.Contains("  · " + SettingsMenu.UnchangedNotice + "\n", _console.Output);
-        Assert.DoesNotContain("Shell command policy: yolo", _console.Output);
+        Assert.Contains(SettingsMenu.AllowedCommandsEmptyKeys, Output);   // the buttons work on the empty list
+        Assert.Contains(SettingsMenu.YoloConfirmQuestion, Output);
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice + "\n", Output);
+        Assert.DoesNotContain("Shell command policy: yolo", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2097,7 +2099,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
-        Assert.Contains(SettingsMenu.YoloConfirmQuestion, _console.Output);
+        Assert.Contains(SettingsMenu.YoloConfirmQuestion, Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2112,8 +2114,8 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
-        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, _console.Output);
-        Assert.DoesNotContain("Shell command policy: yolo", _console.Output);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, Output);
+        Assert.DoesNotContain("Shell command policy: yolo", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2133,8 +2135,8 @@ public partial class ToolsMenuTests : IDisposable
         _settings.Update(d => d.ShellCommandAllowed = []);
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
-        Assert.Contains("  · Shell allowed commands\n  ·   dotnet build\n  ·   git push\n", _console.Output);
-        Assert.Contains("  · Shell allowed commands\n  ·   " + SettingsMenu.NoAllowedCommandsRow + "\n", _console.Output);
+        Assert.Contains("  · Shell allowed commands\n  ·   dotnet build\n  ·   git push\n", Output);
+        Assert.Contains("  · Shell allowed commands\n  ·   " + SettingsMenu.NoAllowedCommandsRow + "\n", Output);
         Assert.Equal(["Shell allowed commands", "  dotnet build", "  git push"], ToolsMenu.AllowedCommandLines(new AppSettingsData { ShellCommandAllowed = ["git push", "dotnet build"] }));
         Assert.Equal(["Shell allowed commands", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.AllowedCommandLines(new AppSettingsData()));
         Assert.False(pane.OverlayOpen);
@@ -2167,13 +2169,13 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["Format"], _settings.Current.ShellPoliceForbiddenStrings);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", _console.Output);
-        Assert.Contains(SettingsMenu.ForbiddenKeys, _console.Output);
-        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("rm -rf") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  rm -rf\n", _console.Output);
-        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("Format") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  Format\n  rm -rf\n", _console.Output);
-        Assert.Contains("  · Shell police forbidden strings: RM -RF is already in the list\n", _console.Output);
-        Assert.Contains("  · Shell police forbidden strings: rm -rf removed\n", _console.Output);
-        Assert.Contains("\n▸ Shell police forbidden strings  1 string\n  Shell prefer native tools       on\n", _console.Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", Output);
+        Assert.Contains(SettingsMenu.ForbiddenKeys, Output);
+        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("rm -rf") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  rm -rf\n", Output);
+        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("Format") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  Format\n  rm -rf\n", Output);
+        Assert.Contains("  · Shell police forbidden strings: RM -RF is already in the list\n", Output);
+        Assert.Contains("  · Shell police forbidden strings: rm -rf removed\n", Output);
+        Assert.Contains("\n▸ Shell police forbidden strings  1 string\n  Shell prefer native tools       on\n", Output);
         pane.Dispose();
     }
 
@@ -2205,13 +2207,13 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(["shutdown"], _settings.Current.ShellPoliceForbiddenStrings);
         Assert.True(_settings.Current.ShellPolice);
         // The button counts the strings (2026-10-04): none before, one when the page comes back.
-        string police = "\n" + Titled(ToolsText.Label + " › Shell police   ≡ strings (none) ") + "\n";
-        string policeAfter = "\n" + Titled(ToolsText.Label + " › Shell police   ≡ strings (1) ") + "\n";
+        string police = "\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (none) ") + "\n";
+        string policeAfter = "\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (1) ") + "\n";
         string list = "\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n";
-        Assert.Contains(SettingsMenu.PoliceToggleKeys, _console.Output);
-        Assert.True(_console.Output.IndexOf(police, StringComparison.Ordinal) < _console.Output.IndexOf(list, StringComparison.Ordinal), _console.Output);
-        Assert.True(_console.Output.IndexOf(list, StringComparison.Ordinal) < _console.Output.LastIndexOf(policeAfter, StringComparison.Ordinal), _console.Output);   // back on the page
-        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("shutdown") + "\n", _console.Output);
+        Assert.Contains(SettingsMenu.PoliceToggleKeys, Output);
+        Assert.True(Output.IndexOf(police, StringComparison.Ordinal) < Output.IndexOf(list, StringComparison.Ordinal), Output);
+        Assert.True(Output.IndexOf(list, StringComparison.Ordinal) < Output.LastIndexOf(policeAfter, StringComparison.Ordinal), Output);   // back on the page
+        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("shutdown") + "\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2229,7 +2231,7 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowPoliceAsync(CancellationToken.None);
 
-        Assert.Contains("  · Shell police: on\n  · Shell police forbidden strings\n  ·   Format\n  ·   rm -rf\n", _console.Output);
+        Assert.Contains("  · Shell police: on\n  · Shell police forbidden strings\n  ·   Format\n  ·   rm -rf\n", Output);
         Assert.Equal(["Shell police forbidden strings", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.ForbiddenStringLines(new AppSettingsData()));
         pane.Dispose();
     }
@@ -2272,7 +2274,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["powershell", "python", "node"], _settings.Current.ShellCodeLanguages);
-        Assert.Contains(SettingsMenu.LastLanguageError, _console.Output);
+        Assert.Contains(SettingsMenu.LastLanguageError, Output);
         pane.Dispose();
     }
 
@@ -2346,9 +2348,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["pony-txt2img"], _settings.Current.ComfyWorkflowsOffered);
-        Assert.Matches(@"ComfyUI workflows offered +none of 2", _console.Output);   // the column is the tab's widest label
-        Assert.Matches(@"ComfyUI workflows offered +1 of 2", _console.Output);
-        Assert.Contains("[ ] juggernaut-xl  ", _console.Output);
+        Assert.Matches(@"ComfyUI workflows offered +none of 2", Output);   // the column is the tab's widest label
+        Assert.Matches(@"ComfyUI workflows offered +1 of 2", Output);
+        Assert.Contains("[ ] juggernaut-xl  ", Output);
 
         ComfyWorkflowFile(_settings.ProfileComfyDirectory, "new-one");
         var installed = new NeonSidekick.Comfy.ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory, _settings.GlobalComfyDirectory]).Workflows;
@@ -2394,8 +2396,8 @@ public partial class ToolsMenuTests : IDisposable
         string queued = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
         Assert.Contains("\"width\":512", queued);   // the test is small
         Assert.Contains("\"steps\":8", queued);
-        Assert.Contains("Tested 'ponydiffusionv6xl' in ", _console.Output);
-        Assert.Contains("Added workflow 'ponydiffusionv6xl' to ", _console.Output);
+        Assert.Contains("Tested 'ponydiffusionv6xl' in ", Output);
+        Assert.Contains("Added workflow 'ponydiffusionv6xl' to ", Output);
         Assert.Equal(["ponydiffusionv6xl"], _settings.Current.ComfyWorkflowsOffered);
     }
 
@@ -2424,9 +2426,9 @@ public partial class ToolsMenuTests : IDisposable
         string json = Path.Combine(_settings.GlobalComfyDirectory, "my-export.json");
         Assert.True(NeonSidekick.Comfy.ComfyWorkflow.TryLoad(json, out var workflow, out string? problem), problem);
         Assert.Equal(new NeonSidekick.Comfy.ComfyDefaults(832, 1216, 20, 6.5, "score_4, blurry"), workflow!.Defaults);
-        Assert.Contains("Found {{prompt}} → node 6 CLIPTextEncode.text", _console.Output);
+        Assert.Contains("Found {{prompt}} → node 6 CLIPTextEncode.text", Output);
         Assert.Equal(["other", "my-export"], _settings.Current.ComfyWorkflowsOffered);
-        Assert.Contains(SettingsMenu.ComfyWizardSaveHiddenRow[..40], _console.Output);
+        Assert.Contains(SettingsMenu.ComfyWizardSaveHiddenRow[..40], Output);
     }
 
     /// <summary>ESC out of the first page writes nothing; a name already in a comfy folder is refused.</summary>
@@ -2448,8 +2450,8 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(SettingsMenu.ComfyWizardCancelledNotice, _console.Output);
-        Assert.Contains("a workflow named 'juggernautxl_ragnarok' is already in", _console.Output);
+        Assert.Contains(SettingsMenu.ComfyWizardCancelledNotice, Output);
+        Assert.Contains("a workflow named 'juggernautxl_ragnarok' is already in", Output);
         Assert.Equal(["juggernautxl_ragnarok.json"], Directory.GetFiles(_settings.GlobalComfyDirectory).Select(Path.GetFileName));
         Assert.Empty(Directory.GetFiles(_settings.ProfileComfyDirectory));
     }

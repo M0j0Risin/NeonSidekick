@@ -77,13 +77,13 @@ public class QuestionMenuTests : IDisposable
         Assert.Same(Colour, answers![0].Question);
         Assert.False(pane.OverlayOpen);
         // The first tab: the strip, the question as the caption, the spacer, the options, the Other row, the single keys.
-        AssertPadded(Rule(60) + "\n" + Titled("Questions   Colour    Q2    Submit ") + "\nWhich colour?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", Rule(60) + "\n" + QuestionMenu.SingleKeys + "\n");
+        AssertPadded(Rule(60) + "\n" + Titled("Questions │ Colour · Q2 · Submit ") + "\nWhich colour?\n \n▸ ( ) red\n  ( ) blue\n  ( ) Other…\n", Rule(60) + "\n" + QuestionMenu.SingleKeys + "\n");
         // Enter on blue: the next tab, its own caption and keys.
         AssertPadded("\nToppings?\n \n▸ [ ] cheese\n  [ ] olives\n  [ ] ham\n  [ ] Other…\n", Rule(60) + "\n" + QuestionMenu.MultiKeys + "\n");
         Assert.Contains("\n▸ [x] cheese\n  [ ] olives\n", Output);
         Assert.Contains("\n  [x] cheese\n▸ [x] olives\n", Output);
         // The Submit tab: every question with its answer, the cursor on Submit.
-        AssertPadded("\n" + Titled("Questions   Colour    Q2    Submit ") + "\n" + QuestionMenu.SubmitCaption + "\n \n  Q1 Colour — blue\n  Q2 — cheese, olives\n▸ Submit\n", Rule(60) + "\n" + QuestionMenu.SubmitKeys);
+        AssertPadded("\n" + Titled("Questions │ Colour · Q2 · Submit ") + "\n" + QuestionMenu.SubmitCaption + "\n \n  Q1 Colour — blue\n  Q2 — cheese, olives\n▸ Submit\n", Rule(60) + "\n" + QuestionMenu.SubmitKeys);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public class QuestionMenuTests : IDisposable
         var answers = await menu.AskAsync([Colour], CancellationToken.None);
 
         Assert.Equal(["Which colour? — blue"], Flat(answers!));
-        Assert.Contains("\n" + Titled("Questions   Colour    Submit ") + "\n" + QuestionMenu.SubmitCaption + "\n \n▸ Q1 Colour — blue\n  Submit\n", Output);
+        Assert.Contains("\n" + Titled("Questions │ Colour · Submit ") + "\n" + QuestionMenu.SubmitCaption + "\n \n▸ Q1 Colour — blue\n  Submit\n", Output);
         Assert.Contains("\nWhich colour?\n \n  ( ) red\n▸ (x) blue\n", Output);
     }
 

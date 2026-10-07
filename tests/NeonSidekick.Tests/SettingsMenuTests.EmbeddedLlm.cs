@@ -125,8 +125,8 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("1 of 49 installed (4.3 GB)", _console.Output);
-        Assert.Contains("auto (cuda: fake driver)", _console.Output);
+        Assert.Contains("1 of 49 installed (4.3 GB)", Output);
+        Assert.Contains("auto (cuda: fake driver)", Output);
         pane.Dispose();
     }
 
@@ -144,8 +144,8 @@ public partial class SettingsMenuTests
 
         Assert.Equal("gemma-4-e2b", menu.TakePendingEmbeddedModel()!.Id);
         Assert.Null(menu.TakePendingEmbeddedModel());   // taken once
-        Assert.Contains(SettingsMenu.UseNowRow, _console.Output);
-        Assert.Contains(SettingsMenu.RemoveRow(EmbeddedModelCatalog.Find("gemma-4-e2b")!), _console.Output);
+        Assert.Contains(SettingsMenu.UseNowRow, Output);
+        Assert.Contains(SettingsMenu.RemoveRow(EmbeddedModelCatalog.Find("gemma-4-e2b")!), Output);
         Assert.Equal("", _settings.Current.LlmUrl);   // the screen saves it, after an install if need be
         Assert.Empty(embedded.Removes);
         pane.Dispose();
@@ -169,8 +169,8 @@ public partial class SettingsMenuTests
         var first = EmbeddedModelCatalog.Models.First(m => filter.Matches(m));
         Assert.True(first.Uncensored);
         Assert.Equal(first.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" 8GB    16GB    ✓ installed    ⤓ uninstalled    ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
-        Assert.Contains(EmbeddedModelFilter.CatalogKeys, _console.Output);
+        Assert.Contains(" 8GB · 16GB · ✓ installed · ⤓ uninstalled · ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // the catalog's pair after the sizes (later on 2026-09-29), uncensored last (later on 2026-09-30)
+        Assert.Contains(EmbeddedModelFilter.CatalogKeys, Output);
         pane.Dispose();
     }
 
@@ -193,9 +193,9 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(big.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" › " + small.Display, _console.Output);   // the sorted top row's page came first
-        Assert.Contains(" ⇉ drafter    ⇅ sort (name)    ◌ uncensored ", _console.Output);   // uncensored last (later on 2026-09-30)
-        Assert.Contains(" ⇉ drafter    ⇅ sort (size)    ◌ uncensored ", _console.Output);   // while sorted by size
+        Assert.Contains(" › " + small.Display, Output);   // the sorted top row's page came first
+        Assert.Contains(" ⇉ drafter · ⇅ sort (name) · ◌ uncensored ", Output);   // uncensored last (later on 2026-09-30)
+        Assert.Contains(" ⇉ drafter · ⇅ sort (size) · ◌ uncensored ", Output);   // while sorted by size
         pane.Dispose();
     }
 
@@ -236,7 +236,7 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("gemma-4-12b", menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(SettingsMenu.UseNowRow, _console.Output);   // the installed one's page came first
+        Assert.Contains(SettingsMenu.UseNowRow, Output);   // the installed one's page came first
         pane.Dispose();
     }
 
@@ -274,7 +274,7 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(uncensored.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(" › " + normal.Display + " ", _console.Output);   // the normal one's page came first
+        Assert.Contains(" › " + normal.Display + " ", Output);   // the normal one's page came first
         pane.Dispose();
     }
 
@@ -320,7 +320,7 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(small.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(EmbeddedLlmText.NoFilterMatch, _console.Output);
+        Assert.Contains(EmbeddedLlmText.NoFilterMatch, Output);
         pane.Dispose();
     }
 
@@ -337,7 +337,7 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("gemma-4-e4b-qat", menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains(SettingsMenu.InstallRow(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!, 577_081_932), _console.Output);
+        Assert.Contains(SettingsMenu.InstallRow(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!, 577_081_932), Output);
         Assert.Empty(embedded.Installs);   // the screen installs it, under the spinner
         pane.Dispose();
     }
@@ -357,8 +357,8 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["gemma-4-e2b"], embedded.Removes);
-        Assert.Contains(EmbeddedLlmText.RemoveQuestion(EmbeddedModelCatalog.Find("gemma-4-e2b")!), _console.Output);
-        Assert.Contains(EmbeddedLlmText.Removed(EmbeddedModelCatalog.Find("gemma-4-e2b")!), _console.Output);
+        Assert.Contains(EmbeddedLlmText.RemoveQuestion(EmbeddedModelCatalog.Find("gemma-4-e2b")!), Output);
+        Assert.Contains(EmbeddedLlmText.Removed(EmbeddedModelCatalog.Find("gemma-4-e2b")!), Output);
         Assert.Null(menu.TakePendingEmbeddedModel());
         pane.Dispose();
     }
@@ -390,8 +390,8 @@ public partial class SettingsMenuTests
 
         Assert.Equal(["gemma-4-e4b-qat"], embedded.Removes);
         Assert.Equal([0], removesAtHook);       // the hook before the removal
-        Assert.Contains(SettingsMenu.RemovePartialRow, _console.Output);
-        Assert.Contains(EmbeddedLlmText.RemovePartialQuestion(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!), _console.Output);
+        Assert.Contains(SettingsMenu.RemovePartialRow, Output);
+        Assert.Contains(EmbeddedLlmText.RemovePartialQuestion(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!), Output);
         Assert.Null(menu.TakePendingEmbeddedModel());
         pane.Dispose();
     }
@@ -420,7 +420,7 @@ public partial class SettingsMenuTests
 
         Assert.Equal(["gemma-4-e2b"], embedded.Removes);
         Assert.Equal(("", ""), (_settings.Current.LlmUrl, _settings.Current.LlmModel));
-        Assert.Contains(SettingsMenu.EmbeddedLlmClearedNotice, _console.Output);
+        Assert.Contains(SettingsMenu.EmbeddedLlmClearedNotice, Output);
         pane.Dispose();
     }
 
@@ -445,7 +445,7 @@ public partial class SettingsMenuTests
 
         Assert.Equal(["gemma-4-e2b"], embedded.Removes);
         Assert.Equal(("embedded", "gemma-4-12b"), (_settings.Current.LlmUrl, _settings.Current.LlmModel));
-        Assert.DoesNotContain(SettingsMenu.EmbeddedLlmClearedNotice, _console.Output);
+        Assert.DoesNotContain(SettingsMenu.EmbeddedLlmClearedNotice, Output);
         pane.Dispose();
     }
 
@@ -481,8 +481,8 @@ public partial class SettingsMenuTests
         Assert.Equal(16_384, _settings.Current.EmbeddedContextSize);
         Assert.Equal("all", _settings.Current.EmbeddedGpuLayers);
         Assert.Equal(92, _settings.Current.EmbeddedVramBudget);
-        Assert.Contains("Embedded context size " + EmbeddedContextSize.Error + "; keeping 0.", _console.Output);   // fit, the default since later on 2026-09-29
-        Assert.Contains("Embedded VRAM budget " + EmbeddedVramBudget.Error + "; keeping 91.", _console.Output);   // the default since 2026-09-30
+        Assert.Contains("Embedded context size " + EmbeddedContextSize.Error + "; keeping 0.", Output);   // fit, the default since later on 2026-09-29
+        Assert.Contains("Embedded VRAM budget " + EmbeddedVramBudget.Error + "; keeping 91.", Output);   // the default since 2026-09-30
         pane.Dispose();
     }
 
@@ -514,7 +514,7 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("single", _settings.Current.EmbeddedHfDownloadType);
-        Assert.Contains("parallel  " + NeonSidekick.EmbeddedLlm.EmbeddedHfDownloadTypes.Describe("parallel"), _console.Output);
+        Assert.Contains("parallel  " + NeonSidekick.EmbeddedLlm.EmbeddedHfDownloadTypes.Describe("parallel"), Output);
         Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.EmbeddedHfDownloadType, _settings.Current, "C:\\p"));
         pane.Dispose();
     }
@@ -563,7 +563,7 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));   // read at each request: no reconnect
 
         Assert.Equal("tokenize", _settings.Current.LlmReasoningEstimate);
-        Assert.Contains("  · 🖥️ LLM reasoning estimate: tokenize", _console.Output);
+        Assert.Contains("  · 🖥️ LLM reasoning estimate: tokenize", Output);
         pane.Dispose();
     }
 
@@ -578,8 +578,8 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(SettingsMenu.NoEmbeddedModelNotice, _console.Output);
-        Assert.Contains(SettingsMenu.EmbeddedModelsDoorLabel, _console.Output);
+        Assert.Contains(SettingsMenu.NoEmbeddedModelNotice, Output);
+        Assert.Contains(SettingsMenu.EmbeddedModelsDoorLabel, Output);
         pane.Dispose();
     }
 }

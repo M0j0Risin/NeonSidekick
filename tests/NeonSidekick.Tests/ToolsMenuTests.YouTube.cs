@@ -55,14 +55,14 @@ public partial class ToolsMenuTests
         var saved = _settings.Current;
         Assert.True(saved.YouTubeTools);
         Assert.Equal("AIza-youtube-secret", SettingsSecrets.Reveal(saved.YouTubeApiKey));
-        Assert.DoesNotContain("AIza-youtube-secret", _console.Output);
+        Assert.DoesNotContain("AIza-youtube-secret", Output);
         if (OperatingSystem.IsWindows())
         {
             Assert.StartsWith(Sql.WindowsCredentials.ProtectedPrefix, saved.YouTubeApiKey);
-            Assert.Contains("  · YouTube API key: " + SettingsMenu.ApiKeyEncryptedLabel, _console.Output);
+            Assert.Contains("  · YouTube API key: " + SettingsMenu.ApiKeyEncryptedLabel, Output);
         }
 
-        Assert.Contains("  ✗ YouTube search max results " + SettingsMenu.YouTubeSearchMaxResultsRangeError + "; keeping 8.", _console.Output);
+        Assert.Contains("  ✗ YouTube search max results " + SettingsMenu.YouTubeSearchMaxResultsRangeError + "; keeping 8.", Output);
         Assert.Equal(12, saved.YouTubeSearchMaxResults);
         pane.Dispose();
     }

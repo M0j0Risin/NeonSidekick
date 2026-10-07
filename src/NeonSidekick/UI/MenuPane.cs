@@ -23,6 +23,12 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// <summary>The tab's <see cref="MenuPage.Caption"/>; null for none.</summary>
     public string? Caption { get; init; }
 
+    /// <summary>
+    /// A few cells drawn right after the title in the strip (2026-10-07, the user's ask): a settings tab's count of rows that
+    /// differ from the default (<c>SettingsMenu.ChangedBadge</c>); null for none.
+    /// </summary>
+    public string? Badge { get; init; }
+
     /// <summary>The tab's hint row; null for the page's.</summary>
     public string? Hint { get; init; }
 
@@ -620,7 +626,7 @@ public sealed class MenuPane : INoticeSink
                     {
                         // Any row of the strip (2026-09-27): a strip wider than the window takes more than one.
                         _clicks.Reset();
-                        if (page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), Width, click.X, at) is int hit && hit != page.Tab)
+                        if (page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), Width, click.X, at, Badges(strip)) is int hit && hit != page.Tab)
                         {
                             count = SwitchTab(page, strip, hit);
                         }
@@ -851,6 +857,8 @@ public sealed class MenuPane : INoticeSink
 
     private static List<string> Titles(IReadOnlyList<MenuButton> buttons) => buttons.Select(b => b.Title).ToList();
 
+    private static List<string?> Badges(IReadOnlyList<MenuTab> tabs) => tabs.Select(t => t.Badge).ToList();
+
     /// <summary>The indices of the buttons that are <see cref="MenuButton.On"/>: the strip draws them highlighted (later on 2026-09-29).</summary>
     private static HashSet<int> Lit(IReadOnlyList<MenuButton> buttons) => Enumerable.Range(0, buttons.Count).Where(i => buttons[i].On).ToHashSet();
 
@@ -926,7 +934,7 @@ public sealed class MenuPane : INoticeSink
     public static string TopMarkup(MenuPage page)
     {
         ArgumentNullException.ThrowIfNull(page);
-        return page.Tabs is { } tabs ? InfoPane.TabStripMarkup(page.Title, Titles(tabs), page.Tab)
+        return page.Tabs is { } tabs ? InfoPane.TabStripMarkup(page.Title, Titles(tabs), page.Tab, Badges(tabs))
             : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripMarkup(page.Title, Titles(buttons), Lit(buttons))
             : TitleMarkup(page.Title);
     }
@@ -939,7 +947,7 @@ public sealed class MenuPane : INoticeSink
     public static IReadOnlyList<string> TopRows(MenuPage page, int width)
     {
         ArgumentNullException.ThrowIfNull(page);
-        return page.Tabs is { } tabs ? InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width)
+        return page.Tabs is { } tabs ? InfoPane.TabStripRows(page.Title, Titles(tabs), page.Tab, width, Badges(tabs))
             : page.Buttons is { Count: > 0 } buttons ? InfoPane.TabStripRows(page.Title, Titles(buttons), Lit(buttons), width)
             : [TitleMarkup(page.Title)];
     }

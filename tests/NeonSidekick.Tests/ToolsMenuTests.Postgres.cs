@@ -56,14 +56,14 @@ public partial class ToolsMenuTests
         var shop = Assert.Single(PostgresConfigFile.Load(path).Connections);
         Assert.Equal(("localhost", 5433, "shop", "postgres", "require"), (shop.Config.Host, shop.Config.Port, shop.Config.Database, shop.Config.User, shop.Config.SslMode));
         Assert.Equal("s3cret", PostgresSecrets.Resolve(shop).Value);
-        Assert.Contains(PostgresText.TestOk("shop", "postgres", "shop", "PostgreSQL 17.2"), _console.Output);
-        Assert.Contains("This account can change data (superuser). As readwrite, postgres_execute may use those powers", _console.Output);
+        Assert.Contains(PostgresText.TestOk("shop", "postgres", "shop", "PostgreSQL 17.2"), Output);
+        Assert.Contains("This account can change data (superuser). As readwrite, postgres_execute may use those powers", Output);
         Assert.Equal("readwrite", shop.Config.Access);
         Assert.Equal("readwrite", Assert.Single(tested).Config.Access);   // the test tries the draft as it will be saved
-        Assert.Contains(SettingsMenu.DatabaseWizardModeOffNotice(PostgresStatementKinds.Family), _console.Output);
-        Assert.Contains(SettingsMenu.DatabaseWizardAccessQuestion, _console.Output);
+        Assert.Contains(SettingsMenu.DatabaseWizardModeOffNotice(PostgresStatementKinds.Family), Output);
+        Assert.Contains(SettingsMenu.DatabaseWizardAccessQuestion, Output);
         Assert.Equal(["shop"], _settings.Current.PostgresConnectionsOffered);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.DoesNotContain("s3cret", Output);
     }
 
     /// <summary><c>PostgreSQL mode</c> (2026-10-05): read-only by default, the pick lists both with their hints, read-write saved.</summary>
@@ -80,7 +80,7 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("read-write", _settings.Current.PostgresMode);
-        Assert.Contains(DatabaseWriteModes.Describe("read-only", PostgresStatementKinds.Family), _console.Output);
+        Assert.Contains(DatabaseWriteModes.Describe("read-only", PostgresStatementKinds.Family), Output);
     }
 
     /// <summary><c>PostgreSQL statements allowed</c> (2026-10-05): changing data, creating and reading by default; Enter ticks dropping; D puts the default back; N then A.</summary>
@@ -95,8 +95,8 @@ public partial class ToolsMenuTests
         Push(Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         Assert.Equal(["data", "create", "drop", "read"], _settings.Current.PostgresStatementsAllowed);
-        Assert.Contains("DROP TABLE, INDEX, VIEW", _console.Output);
-        Assert.Contains("procedures and triggers", _console.Output);
+        Assert.Contains("DROP TABLE, INDEX, VIEW", Output);
+        Assert.Contains("procedures and triggers", Output);
 
         (menu, _, _) = PaneMenu();
         OpenPostgresRow(2);

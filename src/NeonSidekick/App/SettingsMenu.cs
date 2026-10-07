@@ -3720,7 +3720,9 @@ internal sealed partial class SettingsMenu
             rows.Add(f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located, shortTab is null ? null : RowName(f, shortTab)));
         }
 
-        return new MenuTab(title, rows) { Headings = headings, SpaceToggles = true };
+        // The strip's badge (2026-10-07): the rows here whose value is not the default, as each such row reads in the secondary accent.
+        string? badge = ChangedBadge(fields.Count(f => IsChanged(f, saved, _settings.ProfileDirectory)));
+        return new MenuTab(title, rows) { Headings = headings, SpaceToggles = true, Badge = badge };
     }
 
     /// <summary>A row as a plain line, for a console without the pane: <c>Web browser mode: chromium</c> (the <see cref="SavedNotice"/> shape). The seam <see cref="ToolsMenu"/> prints its settings tabs through.</summary>

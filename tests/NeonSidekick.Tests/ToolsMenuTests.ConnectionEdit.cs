@@ -72,11 +72,11 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(SettingsMenu.ConnectionWizardPickQuestion, _console.Output);
-        Assert.Contains("+ New connection", _console.Output);
-        Assert.Contains(SettingsMenu.SqlWizardMaskedKept, _console.Output);
-        Assert.Contains("Saved 'adventure' in ", _console.Output);
-        Assert.DoesNotContain("s3cret", _console.Output);
+        Assert.Contains(SettingsMenu.ConnectionWizardPickQuestion, Output);
+        Assert.Contains("+ New connection", Output);
+        Assert.Contains(SettingsMenu.SqlWizardMaskedKept, Output);
+        Assert.Contains("Saved 'adventure' in ", Output);
+        Assert.DoesNotContain("s3cret", Output);
         string text = File.ReadAllText(path);
         Assert.Contains("// the user's note", text);
         Assert.Contains("}, // kept", text);
@@ -109,8 +109,8 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(SettingsMenu.ConnectionWizardUnchangedNotice, _console.Output);
-        Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, _console.Output);
+        Assert.Contains(SettingsMenu.ConnectionWizardUnchangedNotice, Output);
+        Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
         Assert.Equal(Before, File.ReadAllText(path));
     }
 
@@ -184,7 +184,7 @@ public partial class ToolsMenuTests
         Assert.Equal(["renamed"], names());
         Assert.Equal(family == "sqlite" ? "the notes" : "pw", password());
         Assert.Contains("// mine", File.ReadAllText(path));
-        Assert.Contains("Saved 'renamed' in ", _console.Output);
-        Assert.DoesNotContain("Added 'renamed'", _console.Output);
+        Assert.Contains("Saved 'renamed' in ", Output);
+        Assert.DoesNotContain("Added 'renamed'", Output);
     }
 }
