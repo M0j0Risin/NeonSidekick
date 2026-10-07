@@ -484,7 +484,7 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 
 ### Offered
 
-The loaded skills with their scope (`profile`, `global` or `external`) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see Skill history), or delete it after a confirmation.
+The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see Skill history), or delete it after a confirmation.
 
 ### Reflection
 
@@ -548,7 +548,7 @@ A reflection must `load_skill` a skill before rewriting its instructions or a su
 - **The reflection's view:** each skill carries a usage line (`loaded 12 times across 6 sessions, 3 followed by errors; …; edited by hand …; installed from owner/repo`), also the caption of its `/skills` page. The reflection is asked to fix skills often followed by errors, keep your wording in hand-edited ones, and prefer a companion skill over changing an installed one.
 - **Earlier versions:** before overwriting `SKILL.md` or a supporting file, the old text is kept (the last 10 per skill, up to 256 KB each). An update through `/skills add` keeps only the old `SKILL.md`.
 - **Hand edits:** when the app finds a hand-edited `SKILL.md`, it keeps a copy of your text, one per skill, until the app next writes that file.
-- **Reverting:** on `/skills`, Enter or a double-click on a skill, then `revert`, lists every kept version, newest first: `before the model's change at …`, `not there before …` (putting it back removes the file), `your edit of …`, `before a revert at …`, the one the file holds now marked `· current`. Enter puts the pick back. The file's current text is kept first as a version, so nothing is lost and you can go back and forth. Only a current text over 256 KB, which can't be kept, refuses.
+- **Reverting:** on `/skills`, Enter or a double-click on a skill, then `revert`, lists every kept version, newest first: `before the model's change at …`, `not there before …` (putting it back removes the file), `your edit of …`, `before a revert at …`, the one the file holds now marked `· current`. Each kept text carries its version number, counted as the skill list's (the oldest kept `v1`; the caption says which version the skill is at now), and a `not there before …` row has none. Enter puts the pick back. The file's current text is kept first as a version, so nothing is lost and you can go back and forth. Only a current text over 256 KB, which can't be kept, refuses.
 - The history lives in `skills.db`, so it survives purged sessions, renamed skills and *Session logging* off.
 
 ## Tools settings (`/tools`)

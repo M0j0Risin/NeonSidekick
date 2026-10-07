@@ -183,6 +183,13 @@ public class SkillsMenuTests : IDisposable
         var at = new DateTimeOffset(2026, 10, 4, 14, 5, 0, TimeSpan.Zero);
         Assert.Equal("notes.md [#9A8BB8]not there before a reflection's change at 2026-10-04 14:05[/]", SkillsMenu.VersionRow(new SkillRevision(1, 1, at, "notes.md", null, SkillActors.Reflection), false, 8, TimeZoneInfo.Utc));
         Assert.Equal("SKILL.md   [#9A8BB8]your edit of 2026-10-04 14:05 · current[/]", SkillsMenu.VersionRow(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.User), true, 10, TimeZoneInfo.Utc));
+        // The version numbers (2026-10-07): the kept texts counted down from the newest, a revision with no text none; the caption says where the skill is.
+        Assert.Equal("v12  SKILL.md [#9A8BB8]your edit of 2026-10-04 14:05[/]", SkillsMenu.VersionRow(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.User), false, 8, TimeZoneInfo.Utc, 12, 3));
+        Assert.Equal("     notes.md [#9A8BB8]not there before a reflection's change at 2026-10-04 14:05[/]", SkillsMenu.VersionRow(new SkillRevision(1, 1, at, "notes.md", null, SkillActors.Reflection), false, 8, TimeZoneInfo.Utc, null, 3));
+        Assert.Equal(
+            [3, 2, null, 1],
+            SkillsMenu.VersionNumbers([new SkillRevision(4, 1, at, "SKILL.md", "c", SkillActors.Model), new SkillRevision(3, 1, at, "notes.md", "b", SkillActors.Model), new SkillRevision(2, 1, at, "notes.md", null, SkillActors.Model), new SkillRevision(1, 1, at, "SKILL.md", "a", SkillActors.Model)]));
+        Assert.Equal("Now v4. " + SkillRecordText.VersionsCaption, SkillRecordText.VersionsCaptionAt(4));
         Assert.Equal("before a revert at 2026-10-04 14:05", SkillRecordText.VersionText(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.Revert), TimeZoneInfo.Utc));
         Assert.Equal("before the model's change at 2026-10-04 14:05", SkillRecordText.VersionText(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.Model), TimeZoneInfo.Utc));
         Assert.Equal("(↩️ nothing to revert: no earlier version of haiku is kept yet)", SkillRecordText.NoVersionsNotice("haiku"));
@@ -230,8 +237,9 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // No notes.md on disk: the version from before it was there is the file's now too.
-        Assert.Contains("\n" + Titled(SkillsMenu.VersionsTitle("haiku")) + "\n" + SkillRecordText.VersionsCaption + "\n \n" +
-            "  SKILL.md your edit of 2026-10-04 14:05 · current\n▸ SKILL.md before the model's change at 2026-10-04 14:05\n  notes.md not there before a reflection's change at 2026-10-04 14:05 · current\n", Output);
+        // Numbered as the Offered tab counts (2026-10-07): two kept texts, so the skill is at v3; the revision from before notes.md was there is none.
+        Assert.Contains("\n" + Titled(SkillsMenu.VersionsTitle("haiku")) + "\n" + SkillRecordText.VersionsCaptionAt(3) + "\n \n" +
+            "  v2  SKILL.md your edit of 2026-10-04 14:05 · current\n▸ v1  SKILL.md before the model's change at 2026-10-04 14:05\n      notes.md not there before a reflection's change at 2026-10-04 14:05 · current\n", Output);
         Assert.Equal(2, Assert.Single(_restored).Id);
         Assert.Contains("  · " + SkillRecordText.RevertedNotice("haiku", kept[1], TimeZoneInfo.Utc) + "\n", Output);
     }

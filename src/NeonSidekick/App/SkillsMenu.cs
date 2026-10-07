@@ -154,11 +154,38 @@ internal sealed class SkillsMenu
     /// A version's row (2026-10-04): its file's path padded to <paramref name="pathWidth"/>, then what it is, dim
     /// (<see cref="SkillRecordText.VersionText"/>), and <see cref="SkillRecordText.CurrentMark"/> on the one the file holds now. Pinned.
     /// </summary>
-    public static string VersionRow(SkillRevision revision, bool current, int pathWidth, TimeZoneInfo zone)
+    public static string VersionRow(SkillRevision revision, bool current, int pathWidth, TimeZoneInfo zone) =>
+        VersionRow(revision, current, pathWidth, zone, null, 0);
+
+    /// <summary>
+    /// <see cref="VersionRow(SkillRevision, bool, int, TimeZoneInfo)"/> led by its version number (2026-10-07, the user's ask: the Offered
+    /// tab's <c>v4</c> on the revert list too): <see cref="SkillsText.VersionLabel"/> padded to <paramref name="numberWidth"/> and two
+    /// spaces, blank for a revision with no number (<see cref="VersionNumbers"/>); no cell at all at width 0. Pinned.
+    /// </summary>
+    public static string VersionRow(SkillRevision revision, bool current, int pathWidth, TimeZoneInfo zone, int? number, int numberWidth)
     {
         ArgumentNullException.ThrowIfNull(revision);
         string text = SkillRecordText.VersionText(revision, zone) + (current ? " " + SkillRecordText.CurrentMark : "");
-        return Markup.Escape(revision.Path.PadRight(pathWidth)) + " " + Theme.DimMarkup(text);
+        string cell = numberWidth > 0 ? SkillsText.VersionLabel(number).PadRight(numberWidth) + "  " : "";
+        return Markup.Escape(cell + revision.Path.PadRight(pathWidth)) + " " + Theme.DimMarkup(text);
+    }
+
+    /// <summary>
+    /// Each kept revision's version number, for a list newest first (2026-10-07): the Offered tab's count told backwards. The revisions
+    /// with a text are the skill's older versions, the oldest <c>v1</c> and the newest one below the text in place
+    /// (<c>SkillRecords.Versions</c>' <c>1 + kept</c>); a revision with no text (the file not there yet) is no version, null. Pure.
+    /// </summary>
+    public static IReadOnlyList<int?> VersionNumbers(IReadOnlyList<SkillRevision> newestFirst)
+    {
+        ArgumentNullException.ThrowIfNull(newestFirst);
+        int next = newestFirst.Count(r => r.Content is not null);
+        var numbers = new int?[newestFirst.Count];
+        for (int i = 0; i < newestFirst.Count; i++)
+        {
+            numbers[i] = newestFirst[i].Content is null ? null : next--;
+        }
+
+        return numbers;
     }
 
     /// <summary>What the status line says once the edit row opened the file (<c>/skills edit</c>'s words until 2026-09-23). Pinned.</summary>
@@ -511,9 +538,13 @@ internal sealed class SkillsMenu
         var zone = _records?.Zone ?? TimeZoneInfo.Utc;
         int width = versions.Max(v => v.Path.Length);
         var current = versions.Select(v => SkillRecords.IsCurrent(skill, v)).ToList();
-        var rows = versions.Select((v, i) => VersionRow(v, current[i], width, zone)).ToList();
+        // The version numbers (2026-10-07): the Offered tab's v, the text in place one past the newest kept.
+        var numbers = VersionNumbers(versions);
+        int kept = numbers.Count(n => n is not null);
+        int numberWidth = kept == 0 ? 0 : Math.Max(2, numbers.Max(n => SkillsText.VersionLabel(n).Length));
+        var rows = versions.Select((v, i) => VersionRow(v, current[i], width, zone, numbers[i], numberWidth)).ToList();
         int cursor = Math.Max(0, current.IndexOf(false));
-        var page = new MenuPage(VersionsTitle(skill.Name), rows, SettingsMenu.PickKeys) { Caption = SkillRecordText.VersionsCaption };
+        var page = new MenuPage(VersionsTitle(skill.Name), rows, SettingsMenu.PickKeys) { Caption = SkillRecordText.VersionsCaptionAt(kept + 1) };
         if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { Row: var picked } || picked >= versions.Count)
         {
             return false;

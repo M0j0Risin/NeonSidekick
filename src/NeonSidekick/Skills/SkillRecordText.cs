@@ -237,6 +237,10 @@ public static class SkillRecordText
     /// <summary>The version list's caption. Pinned.</summary>
     public const string VersionsCaption = "Pick a version to put back; the current text is kept first, so you can come back to it.";
 
+    /// <summary>The version list's caption led by the version the skill is at now (2026-10-07), as the Offered tab counts it: <c>Now v4. Pick…</c>. Pinned.</summary>
+    public static string VersionsCaptionAt(int current) =>
+        "Now v" + current.ToString(System.Globalization.CultureInfo.InvariantCulture) + ". " + VersionsCaption;
+
     /// <summary>The revert row on a skill with no version kept. Pinned.</summary>
     public static string NoVersionsNotice(string name) =>
         "(" + RevertGlyph + "nothing to revert: no earlier version of " + name + " is kept yet)";
