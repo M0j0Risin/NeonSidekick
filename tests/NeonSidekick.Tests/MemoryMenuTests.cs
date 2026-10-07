@@ -166,11 +166,34 @@ public class MemoryMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(Rule(100) + "\n" + Titled(MemoryMenu.Title) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + Rule(100) + "\n" + MemoryMenu.Keys + "\n", _console.Output);
+        // The highlighted memory in full under the list (2026-10-07): the footer band.
+        Assert.Contains(Rule(100) + "\n" + Titled(MemoryMenu.Title) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("one"), 100) + Rule(100) + "\n" + MemoryMenu.Keys + "\n", _console.Output);
         Assert.DoesNotContain(PromptTitle, _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.Equal(flow, pane.FlowRow);   // nothing reached the transcript
         Assert.Equal(new[] { "one", "two" }, _store.Snapshot());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A long memory (2026-10-07, the user's ask): its row cut to the line, its whole text in the footer under the list, wrapped to the
+    /// band's rows; the cursor moved, the next one's. A memory near the 300-character cap reads whole at 80 columns.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheHighlightedMemory_ShowsWholeUnderTheList()
+    {
+        string longOne = string.Join(' ', Enumerable.Repeat("the user prefers PowerShell for build.ps1 runs", 6));
+        Assert.True(longOne.Length > 270 && longOne.Length <= MemoryStore.MaxTextLength);
+        Seed(longOne, "short");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MenuLayout.Footer(new MenuFooter(longOne), 100), _console.Output);
+        Assert.Contains(MenuLayout.Footer(new MenuFooter("short"), 100), _console.Output);
+        Assert.Equal(longOne, string.Join(' ', MenuPane.FooterLines(new MenuFooter(longOne), 80 - MenuPane.NoPointer.Length)));   // whole at 80 columns
+        Assert.Null(MemoryMenu.Footer([], 0));
         pane.Dispose();
     }
 
@@ -186,7 +209,7 @@ public class MemoryMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // The re-shown list: the notice where the spacer was, the cursor on the row that slid up.
-        Assert.Contains("\n" + Titled(MemoryMenu.Title) + "\n  · (💾 removed: two)\n  " + rows[0] + "\n▸ " + rows[2] + "\n" + Rule(100) + "\n" + MemoryMenu.Keys + "\n", _console.Output);
+        Assert.Contains("\n" + Titled(MemoryMenu.Title) + "\n  · (💾 removed: two)\n  " + rows[0] + "\n▸ " + rows[2] + "\n" + MenuLayout.Footer(new MenuFooter("three"), 100) + Rule(100) + "\n" + MemoryMenu.Keys + "\n", _console.Output);
         Assert.Equal(flow, pane.FlowRow);   // the notice was a status line, not a transcript line
         Assert.False(pane.OverlayOpen);
         Assert.Equal(new[] { "one", "three" }, new MemoryStore(_dir).Snapshot());

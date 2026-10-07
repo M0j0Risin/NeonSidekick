@@ -90,7 +90,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/expand` | Unfolds every tool run, code block, diff and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
-| `/memory` | Lists memories on a pane (Enter removes one); **read-write** (W), **read-only** (R) and **disabled** (D) on its title row set *Memory mode*. |
+| `/memory` | Lists memories on a pane, one line each, with the highlighted one in full under the list (Enter removes it); **read-write** (W), **read-only** (R) and **disabled** (D) on its title row set *Memory mode*. |
 | `/memory read-write\|read-only\|disabled\|on\|off` | Sets *Memory mode* (`on` is read-write, `off` disabled). |
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
 | `/memory copy <profile> [overwrite]` | Adds them to another profile's memory (or replaces it with `overwrite`), after a confirmation. |

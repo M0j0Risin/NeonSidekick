@@ -1736,11 +1736,12 @@ public class MenuPaneTests : IDisposable
     /// <summary>
     /// A page's footer (2026-10-04, the UI review: no settings row said what it does): the cursor's row described right under the list,
     /// its last line kept whole, the footer's rows kept blank for a row that says nothing, so the pane holds its height. Since
-    /// 2026-10-05 a rule over it and its rows padded to the list's edge on the slab.
+    /// 2026-10-05 a rule over it and its rows padded to the list's edge on the slab; four rows since 2026-10-07 (three before).
     /// </summary>
     [Fact]
     public async Task AFooter_DescribesTheCursorsRow_UnderTheList_AndKeepsItsRows()
     {
+        _console.Profile.Height = 14;   // the fixture's 12 leave the two rows no room under four footer rows (2026-10-07)
         using var pane = Pane();
         pane.Show();
         var menu = new MenuPane(pane, _keys);
@@ -1750,10 +1751,11 @@ public class MenuPaneTests : IDisposable
         Assert.Null(await menu.PickAsync(page, 0, CancellationToken.None));
 
         string Slab(string text) => (MenuPane.NoPointer + text).PadRight(40);
-        Assert.Contains("\n▸ a\n  b\n" + Rule(40) + "\n" + Slab("All about a.") + "\n" + Slab("Default: x") + "\n" + Slab("") + "\n" + Rule(40), Output);
-        Assert.Contains("\n  a\n▸ b\n" + Rule(40) + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
+        Assert.Contains("\n▸ a\n  b\n" + Rule(40) + "\n" + Slab("All about a.") + "\n" + Slab("Default: x") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
+        Assert.Contains("\n  a\n▸ b\n" + Rule(40) + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
         // A long text wraps to the rows its last line leaves; the last line keeps its own row.
-        Assert.Equal(["one two", "three …", "Defaul…"], MenuPane.FooterLines(new MenuFooter("one two three four five", "Default: x"), 7));
+        Assert.Equal(4, MenuPane.FooterRows);
+        Assert.Equal(["one two", "three", "four f…", "Defaul…"], MenuPane.FooterLines(new MenuFooter("one two three four five six", "Default: x"), 7));
         Assert.Equal(MenuPane.FooterRows, MenuPane.FooterLines(new MenuFooter("one two three four five six"), 7).Count);
     }
 

@@ -6431,9 +6431,10 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane: the title, a spacer, the rows with the pointer, the keys on the hint row.
-        Assert.Contains(rule + "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + rule + "\n" + Row(MemoryMenu.SwitchKeys) + "\n", output);
+        // The highlighted memory in full under the list since 2026-10-07: the footer band.
+        Assert.Contains(rule + "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n \n▸ " + rows[0] + "\n  " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("Their name is Chris."), 240) + rule + "\n" + Row(MemoryMenu.SwitchKeys) + "\n", output);
         // Re-shown after the removal with the notice as the status line, not a transcript line.
-        Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n  · (💾 removed: Their name is Chris.)\n▸ " + rows[1] + "\n" + rule + "\n", output);
+        Assert.Contains("\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n  · (💾 removed: Their name is Chris.)\n▸ " + rows[1] + "\n" + MenuLayout.Footer(new MenuFooter("They live in Leeds."), 240) + rule + "\n", output);
         Assert.DoesNotContain(SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys), output);
         Assert.Equal(new[] { "They live in Leeds." }, new MemoryStore(_settings.ProfileDirectory).Snapshot());
         Assert.Empty(_chat.Requests);

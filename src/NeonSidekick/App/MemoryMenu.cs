@@ -25,6 +25,10 @@ namespace NeonSidekick.App;
 /// lit one the mode in force, a press of another setting it (<see cref="SettingsMenu.SetMemoryMode"/>, the Memory mode row's own save and
 /// notice) and showing the list again. So the switch is always in reach, the pane opens with nothing remembered too, on one dim row, and
 /// stays open when the last row goes.</para>
+///
+/// <para>Under the list (2026-10-07, the user's ask: one cut line said little of a long memory), the highlighted memory in full: the
+/// pane's footer band (<see cref="MenuPage.Footer"/>, <see cref="MenuPane.FooterRows"/> rows), word-wrapped, so a 300-character
+/// memory reads whole down to about 80 columns. No last line: the date is on the row already.</para>
 /// </summary>
 internal sealed class MemoryMenu
 {
@@ -99,6 +103,13 @@ internal sealed class MemoryMenu
     /// <summary>One menu row as markup: the date dimmed, two spaces, the text escaped.</summary>
     public static string RowMarkup(MemoryEntry entry) => Theme.DimMarkup(DateLabel(entry)) + "  " + Markup.Escape(entry.Text);
 
+    /// <summary>The footer under the list for the cursor on <paramref name="row"/> of <paramref name="entries"/> (2026-10-07): that memory's whole text; null past the end.</summary>
+    public static MenuFooter? Footer(IReadOnlyList<MemoryEntry> entries, int row)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        return row >= 0 && row < entries.Count ? new MenuFooter(entries[row].Text) : null;
+    }
+
     /// <summary>The plain numbered list for a console without menus: <c>1. 2026-09-11  text</c>.</summary>
     public static IReadOnlyList<string> ListLines(IReadOnlyList<MemoryEntry> entries)
     {
@@ -147,8 +158,9 @@ internal sealed class MemoryMenu
                 {
                     // The buttons on the title row (2026-10-03): the list, or one dim row with nothing remembered.
                     var mode = _memoryMode!();
+                    var shown = entries;
                     var page = entries.Count > 0
-                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), SwitchKeys)
+                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), SwitchKeys) { Footer = (_, row) => Footer(shown, row) }
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], EmptySwitchKeys);
                     pick = await _pane.PickAsync(page with { Buttons = Buttons(mode) }, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: >= 0 } pressed)
@@ -170,7 +182,8 @@ internal sealed class MemoryMenu
                 }
                 else
                 {
-                    var page = new MenuPage(Title, entries.Select(RowMarkup).ToList(), Keys);
+                    var shown = entries;
+                    var page = new MenuPage(Title, entries.Select(RowMarkup).ToList(), Keys) { Footer = (_, row) => Footer(shown, row) };
                     pick = await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } picked ? new MenuPick(0, picked) : null;
                 }
 
