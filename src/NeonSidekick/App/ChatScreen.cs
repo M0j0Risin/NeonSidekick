@@ -1077,7 +1077,13 @@ internal sealed partial class ChatScreen
         // The YouTube tools (2026-10-05): the Data API over the web tools' client, the video window when there is one.
         _videoPlayer = videoPlayer;
         _youTubeSearch = new YouTube.YouTubeDataApi(_web.Http);
-        _youTubeTools = YouTubeTools(_youTubeSearch, videoPlayer, _effective, _time);
+        _youTubeTools = YouTubeTools(_youTubeSearch, videoPlayer, _effective, _time, YouTubeLibraryNow);
+        // The saved videos' places (2026-10-07): kept from the window's reports, whoever played the video; the resume lives on as
+        // the window's listener, nothing here holds it.
+        if (videoPlayer is not null)
+        {
+            _ = new YouTube.YouTubeResume(videoPlayer, YouTubeLibraryNow, _time);
+        }
         // A playing video pauses (YouTube while speaking) from a speaker's first audio to its last, and around a request's listen.
         _videoPause = videoPlayer is null ? null : new YouTube.VideoVoicePause(videoPlayer, () => _effective().YouTubeVoice);
         if (_videoPause is { } videoPause)

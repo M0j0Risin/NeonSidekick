@@ -732,8 +732,8 @@ public sealed class SidekickApp
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
         var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null);
-        // The YouTube search (2026-10-05): no window headless, so youtube_search alone.
-        var youTubeTools = ChatScreen.YouTubeTools(new YouTube.YouTubeDataApi(_web.Http), player: null, () => EffectiveSettings);
+        // The YouTube search (2026-10-05): no window headless, so youtube_search, and the saved videos (2026-10-07) to list and change.
+        var youTubeTools = ChatScreen.YouTubeTools(new YouTube.YouTubeDataApi(_web.Http), player: null, () => EffectiveSettings, _time, HeadlessYouTubeLibrary);
         // The Docker tools (2026-10-02): no pane to ask on, so every change is refused; the reads and /docker work.
         using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time);
         // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
@@ -1010,11 +1010,22 @@ public sealed class SidekickApp
                     continue;
                 }
 
-                // /youtube (2026-10-05): a search lists what it finds, ahead of the server check (the API needs no LLM);
-                // every other verb wants the video window, which headless has none of.
+                // /youtube (2026-10-05): a search lists what it finds, ahead of the server check (the API needs no LLM); the saved
+                // videos (2026-10-07) are listed, saved by id or link and taken off; every other verb wants the video window, which
+                // headless has none of.
                 if (SlashCommands.Parse(text) is (SlashCommand.YouTube, var youTubeArgs))
                 {
                     var youTubeLine = YouTube.YouTubeCommand.Parse(youTubeArgs);
+                    if (youTubeLine.Verb is YouTube.YouTubeVerb.Save or YouTube.YouTubeVerb.Unsave or YouTube.YouTubeVerb.Saved)
+                    {
+                        foreach (string savedRow in await HeadlessSavedVideosAsync(youTubeLine, cancellationToken).ConfigureAwait(false))
+                        {
+                            await HeadlessLineAsync(savedRow.StartsWith("Error: ", StringComparison.Ordinal) ? "[error] " + savedRow["Error: ".Length..] : savedRow).ConfigureAwait(false);
+                        }
+
+                        continue;
+                    }
+
                     if (youTubeLine.Verb != YouTube.YouTubeVerb.Search)
                     {
                         await HeadlessLineAsync("[error] " + (youTubeLine.Error ?? YouTube.YouTubeText.NeedsScreen)).ConfigureAwait(false);
@@ -1944,6 +1955,32 @@ public sealed class SidekickApp
 
         _headlessOutput.WriteLine("[notice] " + Docker.DockerText.Glyph + " " + phase);
         _headlessAtLineStart = true;
+    }
+
+    /// <summary>The loaded profile's saved videos for a headless run (2026-10-07): made afresh each time, so a profile switch moves it.</summary>
+    private YouTube.YouTubeLibrary HeadlessYouTubeLibrary() => new(_settings.ProfileDirectory, _time);
+
+    /// <summary>
+    /// Headless <c>/youtube save &lt;id|link&gt;</c>, <c>unsave &lt;n|id|link&gt;</c> and <c>saved</c> (2026-10-07): the answer's lines, a
+    /// refusal led by <c>Error: </c>. With no window, a bare <c>save</c> has nothing to save.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> HeadlessSavedVideosAsync(YouTube.YouTubeCommandLine line, CancellationToken cancellationToken)
+    {
+        var library = HeadlessYouTubeLibrary();
+        var lookup = YouTube.YouTubeTitles.Lookup(new YouTube.YouTubeDataApi(_web.Http), () => EffectiveSettings);
+        if (line.Verb == YouTube.YouTubeVerb.Save)
+        {
+            return [await Llm.Tools.YouTubeSaveTool.AddAsync(library, null, line.VideoId ?? "", lookup, cancellationToken).ConfigureAwait(false)];
+        }
+
+        if (line.Verb == YouTube.YouTubeVerb.Unsave)
+        {
+            return [Llm.Tools.YouTubeSaveTool.Remove(library, null, line.Text)];
+        }
+
+        await YouTube.YouTubeTitles.FillMissingAsync(library, lookup, cancellationToken).ConfigureAwait(false);
+        var videos = library.List();
+        return videos.Count == 0 ? [YouTube.YouTubeText.NoneSaved] : YouTube.YouTubeText.SavedList(videos).Split('\n');
     }
 
     private async Task HeadlessLineAsync(string line)

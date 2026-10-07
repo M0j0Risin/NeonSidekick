@@ -164,7 +164,128 @@ public static class YouTubeText
     public const string HelpSummary = "search and play YouTube videos";
 
     /// <summary>A <c>/youtube</c> verb without what it needs.</summary>
-    public const string CommandUsage = "/youtube [<words> | play <id|link> [<time>] | pause | resume | seek <time> | volume <0-100> | mute | unmute | close | status | search <words>]";
+    public const string CommandUsage = "/youtube [<words> | play <id|link> [<time>] | pause | resume | seek <time> | volume <0-100> | mute | unmute | close | status | save [<id|link>] | saved | unsave <n|id|link> | search <words>]";
+
+    // ── The saved videos (2026-10-07, the user's ask) ─────────────────────────
+
+    /// <summary>The saved-videos pane's label. Pinned.</summary>
+    public const string SavedLabel = "📺 Saved videos";
+
+    /// <summary>The saved-videos pane's hint row. Pinned.</summary>
+    public const string SavedKeys = "Enter = play · d = remove · ESC = close";
+
+    /// <summary>
+    /// The saved-videos pane's title-row button: the highlighted video taken off the list after a yes/no. Two spaces after the
+    /// glyph, as <c>ProcessMenu.KillButton</c>'s: Windows Terminal draws ✖ two cells wide over the one space after it.
+    /// </summary>
+    public const string RemoveButton = "✖  remove";
+
+    /// <summary>The key that is <see cref="RemoveButton"/>.</summary>
+    public const char RemoveKey = 'd';
+
+    /// <summary>The search picker's title-row button: the highlighted hit saved without playing it. Pinned.</summary>
+    public const string SaveButton = "+ save";
+
+    /// <summary>The key that is <see cref="SaveButton"/>.</summary>
+    public const char SaveKey = 's';
+
+    /// <summary>The search picker's hint row: <c>SettingsMenu.PickKeys</c> with the save key. Pinned.</summary>
+    public const string PickKeys = "Enter = play · s = save · ESC = back";
+
+    /// <summary>No saved videos to show.</summary>
+    public const string NoneSaved = "No saved videos yet: /youtube save keeps the one playing, /youtube save <id|link> any other.";
+
+    /// <summary>The model's answer with nothing saved.</summary>
+    public const string NoneSavedForModel = "No saved YouTube videos; " + Llm.Tools.YouTubeSaveTool.ToolName + " adds one.";
+
+    /// <summary><c>/youtube save</c>, or youtube_save's <c>current</c>, with no video in the window.</summary>
+    public const string NothingToSave = "No video is open to save; give its id or a link.";
+
+    /// <summary>The spinner's label while <c>/youtube save &lt;id|link&gt;</c> looks the video up (2026-10-07).</summary>
+    public const string LookingUp = "Looking the video up on YouTube…";
+
+    /// <summary>The spinner's label while <c>/youtube saved</c> looks up the titles still missing (2026-10-07).</summary>
+    public const string LookingUpTitles = "Looking up the saved videos' titles…";
+
+    /// <summary>The list could not be written (the log has why).</summary>
+    public const string SaveFailed = "Could not write the saved videos (" + YouTubeLibrary.FileName + "); the log says why.";
+
+    /// <summary>How a saved video is named in a sentence: its title in quotes once the player has told it, else its id.</summary>
+    public static string Name(YouTubeSaved video)
+    {
+        ArgumentNullException.ThrowIfNull(video);
+        return video.Title is { Length: > 0 } title ? $"\"{title}\"" : "video " + video.Id;
+    }
+
+    /// <summary>Where a saved video stands: <c>at 12:34 of 45:00</c>, <c>watched</c> (and where a rewatch was left), or <c>not played yet</c>.</summary>
+    public static string Place(YouTubeSaved video)
+    {
+        ArgumentNullException.ThrowIfNull(video);
+        string at = video.Position <= 0 ? ""
+            : video.Duration > 0 ? $"at {YouTubeIds.FormatTime(video.Position)} of {YouTubeIds.FormatTime(video.Duration)}"
+            : $"at {YouTubeIds.FormatTime(video.Position)}";
+        if (video.Watched)
+        {
+            return at.Length > 0 ? "watched · " + at : "watched";
+        }
+
+        return at.Length > 0 ? at
+            : video.LastPlayed is null ? "not played yet"
+            : video.Duration > 0 ? "from the start · " + YouTubeIds.FormatTime(video.Duration) : "from the start";
+    }
+
+    /// <summary>A saved video as the pane's row and the printed list's: <c>Title — Channel · at 12:34 of 45:00</c>.</summary>
+    public static string SavedRow(YouTubeSaved video)
+    {
+        ArgumentNullException.ThrowIfNull(video);
+        string title = video.Title ?? "video " + video.Id;
+        return title + (video.Author is { Length: > 0 } author ? " — " + author : "") + " · " + Place(video);
+    }
+
+    /// <summary>The count over the pane's rows and the printed list.</summary>
+    public static string SavedCaption(int count) =>
+        $"{count.ToString(CultureInfo.InvariantCulture)} saved video{(count == 1 ? "" : "s")}; each resumes where it was left.";
+
+    /// <summary>youtube_saved's answer: a numbered line per video, its id last for youtube_play.</summary>
+    public static string SavedList(IReadOnlyList<YouTubeSaved> videos)
+    {
+        ArgumentNullException.ThrowIfNull(videos);
+        if (videos.Count == 0)
+        {
+            return NoneSavedForModel;
+        }
+
+        var lines = new List<string> { $"Saved YouTube videos ({videos.Count.ToString(CultureInfo.InvariantCulture)}); youtube_play resumes each where it was left:" };
+        for (int i = 0; i < videos.Count; i++)
+        {
+            lines.Add($"{(i + 1).ToString(CultureInfo.InvariantCulture)}. {SavedRow(videos[i])} · id {videos[i].Id}");
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    /// <summary>A save done, or found done already.</summary>
+    public static string Saved(YouTubeSaved video, YouTubeSaveOutcome outcome) => outcome switch
+    {
+        YouTubeSaveOutcome.AlreadySaved => $"{Name(video)} is saved already ({Place(video)}).",
+        YouTubeSaveOutcome.Failed => "Error: " + SaveFailed,
+        _ => $"Saved {Name(video)}; it resumes where it is left.",
+    };
+
+    /// <summary>A saved video taken off the list.</summary>
+    public static string Unsaved(YouTubeSaved video) => $"Removed {Name(video)} from the saved videos.";
+
+    /// <summary>The question before the pane's remove.</summary>
+    public static string RemovePrompt(YouTubeSaved video) => $"📺 Remove {Name(video)} from the saved videos?";
+
+    /// <summary>What names no saved video.</summary>
+    public static string NotSaved(string? text) => $"Error: \"{text}\" is no saved video: give its number in the saved list, its id or a link to it.";
+
+    /// <summary>youtube_play's lead when a saved video picked up where it was left.</summary>
+    public static string Resumed(double seconds) => $"Resumed the saved video at {YouTubeIds.FormatTime(seconds)}, a moment before where it was left. ";
+
+    /// <summary>youtube_save's <c>action</c> neither add nor remove.</summary>
+    public static string NotASaveAction(string? text) => $"Error: \"action\" must be add or remove, not \"{text}\".";
 
     /// <summary>The picker's title over a search's hits.</summary>
     public static string PickTitle(string query) => $"YouTube: \"{query}\"";

@@ -181,6 +181,40 @@ public class YouTubeSearchTests
         Assert.Null(outcome.Hits[1].Duration);
     }
 
+    /// <summary>A saved video's title (2026-10-07): oEmbed with no key, then videos.list with the key only when oEmbed fails.</summary>
+    [Fact]
+    public async Task Lookup_AsksOEmbedWithoutAKey_AndFallsBackToTheDataApi_OnlyWithOne()
+    {
+        var keys = new List<string?>();
+        var stub = new StubHttpMessageHandler()
+            .Map("https://www.youtube.com/oembed", (request, _) => Answer(request, keys, "oembed.json"));
+        var info = await new YouTubeDataApi(new HttpClient(stub)).LookupAsync("jNQXAC9IVRw", Key, CancellationToken.None);
+
+        Assert.Equal(new YouTubeVideoInfo("jNQXAC9IVRw", "Me at the zoo", "jawed"), info);
+        Assert.Equal("https://www.youtube.com/oembed?format=json&url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DjNQXAC9IVRw", Assert.Single(stub.Requests).Uri.AbsoluteUri);
+        Assert.Equal([null], keys);                                                  // oEmbed never gets the key
+
+        // oEmbed refuses (a private or unembeddable video answers 401/404): the Data API, with the key in the header.
+        keys.Clear();
+        stub = new StubHttpMessageHandler()
+            .Map("https://www.youtube.com/oembed", HttpStatusCode.Unauthorized, "Unauthorized")
+            .Map("https://www.googleapis.com/youtube/v3/videos", (request, _) => Answer(request, keys, "video-snippet.json"));
+        info = await new YouTubeDataApi(new HttpClient(stub)).LookupAsync("jNQXAC9IVRw", Key, CancellationToken.None);
+        Assert.Equal(new YouTubeVideoInfo("jNQXAC9IVRw", "Me at the zoo & more", "jawed", 19), info);
+        Assert.Equal("https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=jNQXAC9IVRw", stub.Requests[^1].Uri.AbsoluteUri);
+        Assert.Equal([Key], keys);
+
+        // Without a key, a refused oEmbed is the end; with one, a Data API that finds nothing is too.
+        Assert.Null(await new YouTubeDataApi(new HttpClient(stub)).LookupAsync("jNQXAC9IVRw", null, CancellationToken.None));
+        stub = new StubHttpMessageHandler()
+            .Map("https://www.youtube.com/oembed", HttpStatusCode.NotFound, "Not Found")
+            .Map("https://www.googleapis.com/youtube/v3/videos", HttpStatusCode.OK, "{ \"items\": [] }");
+        Assert.Null(await new YouTubeDataApi(new HttpClient(stub)).LookupAsync("aqz-KE-bpKQ", Key, CancellationToken.None));
+        Assert.Null(await new YouTubeDataApi(new HttpClient(new StubHttpMessageHandler())).LookupAsync("aqz-KE-bpKQ", null, CancellationToken.None));   // no connection: null, not thrown
+        Assert.Null(YouTubeDataApi.ParseOEmbed("x", "{ \"title\": \"\" }"));
+        Assert.Null(YouTubeDataApi.ParseOEmbed("x", "not json"));
+    }
+
     [Fact]
     public async Task Search_KeepsTheHits_WhenTheDetailsFail()
     {

@@ -273,7 +273,7 @@ public class YouTubeToolsTests
 
         Assert.Equal(["youtube_search"], headless.Select(t => t.Name));
         Assert.Equal(["youtube_search", "youtube_play", "youtube_control", "youtube_status"], screen.Select(t => t.Name));
-        Assert.Equal(ChatScreen.YouTubeToolNames.Order(), screen.Select(t => t.Name).Order());
+        Assert.Subset(ChatScreen.YouTubeToolNames.ToHashSet(), screen.Select(t => t.Name).ToHashSet());   // the saved videos' two come with a library (YouTubeSavedToolsTests)
 
         var noKey = new AppSettingsData { YouTubeTools = true };
         Assert.Equal(["youtube_play", "youtube_control", "youtube_status"], ChatScreen.YouTubeToolsFor(screen, noKey).Select(t => t.Name));
@@ -309,5 +309,7 @@ public class YouTubeToolsTests
             Last = (query, max, apiKey);
             return Task.FromResult(Outcome ?? new YouTubeSearchOutcome(Hits));
         }
+
+        public Task<YouTubeVideoInfo?> LookupAsync(string videoId, string? apiKey, CancellationToken cancellationToken) => Task.FromResult<YouTubeVideoInfo?>(null);
     }
 }

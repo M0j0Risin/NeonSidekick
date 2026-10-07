@@ -1,0 +1,16 @@
+{
+  "kind": "youtube#videoListResponse",
+  "items": [
+    {
+      "kind": "youtube#video",
+      "id": "jNQXAC9IVRw",
+      "snippet": {
+        "title": "Me at the zoo &amp; more",
+        "channelTitle": "jawed",
+        "liveBroadcastContent": "none"
+      },
+      "contentDetails": { "duration": "PT19S" }
+    }
+  ],
+  "pageInfo": { "totalResults": 1, "resultsPerPage": 1 }
+}

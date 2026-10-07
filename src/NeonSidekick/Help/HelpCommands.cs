@@ -398,6 +398,9 @@ public static class HelpCommands
             new("/youtube mute|unmute", "Mute or unmute the video."),
             new("/youtube close", "Close the video window."),
             new("/youtube status", "The bare word's status line."),
+            new("/youtube save [<id>|<link>]", "Save the video playing, or the one named, to this profile's saved videos; one named is looked up for its title (YouTube's oEmbed, no key needed, then the Data API with a *YouTube API key*). A saved video resumes where it was left the next time it plays (a time you give wins); seen to the end, it starts over. `s` in a search's picker saves the highlighted hit."),
+            new("/youtube saved", "The saved videos on the pane, each with where it was left; Enter plays one from there, `d` removes one. Titles still missing are looked up first."),
+            new("/youtube unsave <n>|<id>|<link>", "Take a saved video off the list, by its number in `/youtube saved`, its id or a link."),
         ]),
     ];
 

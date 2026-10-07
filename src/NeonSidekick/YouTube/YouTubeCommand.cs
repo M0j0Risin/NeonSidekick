@@ -21,6 +21,15 @@ public enum YouTubeVerb
     Unmute,
     Close,
 
+    /// <summary><c>save</c> (the video in the window) or <c>save &lt;id|link&gt;</c> (2026-10-07).</summary>
+    Save,
+
+    /// <summary><c>saved</c>: the saved videos' pane (2026-10-07).</summary>
+    Saved,
+
+    /// <summary><c>unsave &lt;n|id|link&gt;</c>: a saved video taken off the list (2026-10-07).</summary>
+    Unsave,
+
     /// <summary>A verb without the argument it needs (the error is the usage).</summary>
     Unknown,
 }
@@ -49,6 +58,9 @@ public static class YouTubeCommand
         ("unmute", "unmute the video"),
         ("close", "close the video window"),
         ("status", "what the video window plays"),
+        ("save", "save the video playing, or /youtube save <id|link>; it resumes where it is left"),
+        ("saved", "the saved videos: Enter plays one where it was left"),
+        ("unsave", "take a saved video off the list: /youtube unsave <n|id|link>"),
         ("search", "search for words that start with one of these: /youtube search <words>"),
     ];
 
@@ -103,6 +115,16 @@ public static class YouTubeCommand
                 return new YouTubeCommandLine(YouTubeVerb.Close);
             case "status" when rest.Length == 0:
                 return new YouTubeCommandLine(YouTubeVerb.Status);
+            case "save" when rest.Length == 0:
+                return new YouTubeCommandLine(YouTubeVerb.Save);
+            case "save" when YouTubeIds.TryParse(rest, out string saving, out _):
+                return new YouTubeCommandLine(YouTubeVerb.Save, rest, saving);
+            case "saved" when rest.Length == 0:
+                return new YouTubeCommandLine(YouTubeVerb.Saved);
+            case "unsave" when rest.Length == 0:
+                return Usage();
+            case "unsave" when rest.All(char.IsAsciiDigit) || YouTubeIds.TryParse(rest, out _, out _):
+                return new YouTubeCommandLine(YouTubeVerb.Unsave, rest);
         }
 
         // A link alone plays; anything else is words to search for.

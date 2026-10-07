@@ -11,13 +11,23 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// <c>/youtube &lt;words&gt;</c>'s picker (2026-10-05, the YouTube plan): a search's hits as rows (<c>YouTubeText.PickRow</c>, escaped
-    /// here), Enter plays the highlighted one, ESC none. The row's index, or null.
+    /// here), Enter plays the highlighted one, ESC none; the <c>YouTubeText.SaveButton</c> on the title row (a click, or
+    /// <c>YouTubeText.SaveKey</c>, 2026-10-07) saves it instead. The row and whether it was the save, or null; without the pane (the
+    /// Spectre prompt) there is no button.
     /// </summary>
-    public Task<int?> PickVideoAsync(string title, IReadOnlyList<string> rows, CancellationToken cancellationToken)
+    public async Task<(int Row, bool Save)?> PickVideoAsync(string title, IReadOnlyList<string> rows, int cursor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), PickKeys);
-        return PickAsync(page, 0, cancellationToken);
+        var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), YouTube.YouTubeText.PickKeys);
+        if (!_pane.Enabled)
+        {
+            return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, false) : null;
+        }
+
+        var buttons = new[] { new MenuButton(YouTube.YouTubeText.SaveButton, YouTube.YouTubeText.SaveKey) };
+        return await _pane.PickAsync(page with { Buttons = buttons }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
+            ? (picked.Row, picked.Button >= 0)
+            : null;
     }
 
     /// <summary>The <c>YouTube while speaking</c> picker (2026-10-05): one <see cref="YouTubeVoiceLabel"/> row per word, the saved one under the cursor.</summary>

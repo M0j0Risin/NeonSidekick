@@ -60,11 +60,23 @@ public sealed record YouTubeSearchOutcome(IReadOnlyList<YouTubeHit> Hits, YouTub
     public static YouTubeSearchOutcome Failed(YouTubeFailure failure, string detail = "") => new([], failure, detail);
 }
 
+/// <summary>What a lookup found of one video (2026-10-07): its title and channel, and its length in seconds when known (0 otherwise).</summary>
+public sealed record YouTubeVideoInfo(string Id, string Title, string Author, double Duration = 0);
+
+/// <summary>A video's title looked up by its id (2026-10-07): <see cref="IYouTubeSearch.LookupAsync"/> with the key in force; null when none was found.</summary>
+public delegate Task<YouTubeVideoInfo?> YouTubeLookup(string videoId, CancellationToken cancellationToken);
+
 /// <summary>The search seam (2026-10-05): <see cref="YouTubeDataApi"/>, the official API with the user's key; a stub in tests.</summary>
 public interface IYouTubeSearch
 {
     /// <summary>At most <paramref name="max"/> videos for <paramref name="query"/>, asked with <paramref name="apiKey"/>.</summary>
     Task<YouTubeSearchOutcome> SearchAsync(string query, int max, string apiKey, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One video's title and channel (2026-10-07, a saved video's name): YouTube's oEmbed first, which needs no key, then — when that
+    /// fails and <paramref name="apiKey"/> is set — the Data API's <c>videos.list</c>. Null when neither found it; never throws.
+    /// </summary>
+    Task<YouTubeVideoInfo?> LookupAsync(string videoId, string? apiKey, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -79,11 +91,18 @@ public interface IYouTubeSearch
 /// <see cref="LanPolicy"/>: under the network mode <c>local_area_network</c> the internet, this API with it, is off limits. A
 /// failed details call keeps the hits without their lengths and counts. JSON read by hand over <see cref="JsonDocument"/>;
 /// the titles come HTML-escaped (<c>&amp;amp;</c>, <c>&amp;#39;</c>) and are decoded.</para>
+///
+/// <para>A saved video's title (2026-10-07, the user's call: oEmbed, the key as a fallback) is <see cref="LookupAsync"/>'s: YouTube's
+/// public oEmbed answer (<see cref="OEmbedUrl"/>, no key and no quota, the title and channel only), and only when that fails and a key
+/// is set, <c>videos.list</c> with the snippet (one quota unit, the length too). The same client and network rules as the search.</para>
 /// </summary>
 public sealed partial class YouTubeDataApi : IYouTubeSearch
 {
     public static readonly Uri Endpoint = new("https://www.googleapis.com/youtube/v3/");
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>A title lookup's own budget (2026-10-07): a save waits on it, so it is short; past it the video is saved untitled.</summary>
+    public static readonly TimeSpan LookupTimeout = TimeSpan.FromSeconds(8);
 
     /// <summary>The most one call returns: <c>search.list</c>'s own limit is 50; a tool shows fewer.</summary>
     public const int MaxResults = 50;
@@ -107,6 +126,73 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
     /// <summary>The <c>videos.list</c> address for <paramref name="ids"/>. Pinned.</summary>
     public static Uri VideosUrl(IEnumerable<string> ids) =>
         new(Endpoint, "videos?part=contentDetails,statistics&id=" + string.Join(",", ids));
+
+    /// <summary>YouTube's oEmbed address for <paramref name="videoId"/>'s watch page (2026-10-07): no key. Pinned.</summary>
+    public static Uri OEmbedUrl(string videoId) =>
+        new("https://www.youtube.com/oembed?format=json&url=" + Uri.EscapeDataString(YouTubeIds.WatchUrl(videoId)));
+
+    /// <summary>The <c>videos.list</c> address for one video's snippet and length (2026-10-07), the lookup's fallback. Pinned.</summary>
+    public static Uri VideoInfoUrl(string videoId) =>
+        new(Endpoint, "videos?part=snippet,contentDetails&id=" + Uri.EscapeDataString(videoId));
+
+    public async Task<YouTubeVideoInfo?> LookupAsync(string videoId, string? apiKey, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(videoId);
+        var (body, failure) = await GetAsync(OEmbedUrl(videoId), null, cancellationToken, LookupTimeout).ConfigureAwait(false);
+        if (failure is null && ParseOEmbed(videoId, body!) is { } found)
+        {
+            return found;
+        }
+
+        string why = failure is null ? "no title in the answer" : $"{failure.Failure} {failure.Detail}";
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            DiagnosticLog.Info(Category, $"oEmbed for {videoId}: {why}; no key to ask the Data API.");
+            return null;
+        }
+
+        (body, var keyed) = await GetAsync(VideoInfoUrl(videoId), apiKey, cancellationToken, LookupTimeout).ConfigureAwait(false);
+        if (keyed is null && ParseVideoInfo(videoId, body!) is { } listed)
+        {
+            return listed;
+        }
+
+        DiagnosticLog.Info(Category, $"title of {videoId}: oEmbed {why}; videos.list {(keyed is null ? "found no such video" : $"{keyed.Failure} {keyed.Detail}")}.");
+        return null;
+    }
+
+    /// <summary>An oEmbed answer's <c>title</c> and <c>author_name</c>; null without a title. Pure; pinned.</summary>
+    public static YouTubeVideoInfo? ParseOEmbed(string videoId, string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.ValueKind == JsonValueKind.Object && Text(doc.RootElement, "title") is { Length: > 0 } title
+                ? new YouTubeVideoInfo(videoId, title, Text(doc.RootElement, "author_name"))
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary><c>videos.list</c>'s one item: the snippet's title and channel (HTML-decoded, as the search's) and the length; null without it. Pure; pinned.</summary>
+    public static YouTubeVideoInfo? ParseVideoInfo(string videoId, string json)
+    {
+        foreach (var item in Items(json))
+        {
+            if (Text(item, "id") == videoId && item.TryGetProperty("snippet", out var snippet) && snippet.ValueKind == JsonValueKind.Object
+                && Text(snippet, "title") is { Length: > 0 } title)
+            {
+                double length = item.TryGetProperty("contentDetails", out var content) && content.ValueKind == JsonValueKind.Object
+                    && ParseDuration(Text(content, "duration")) is { } duration ? duration.TotalSeconds : 0;
+                return new YouTubeVideoInfo(videoId, WebUtility.HtmlDecode(title), WebUtility.HtmlDecode(Text(snippet, "channelTitle")), length);
+            }
+        }
+
+        return null;
+    }
 
     public async Task<YouTubeSearchOutcome> SearchAsync(string query, int max, string apiKey, CancellationToken cancellationToken)
     {
@@ -141,16 +227,19 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
         return new YouTubeSearchOutcome(hits);
     }
 
-    // One GET: the body, or the outcome that says why there is none.
-    private async Task<(string? Body, YouTubeSearchOutcome? Failure)> GetAsync(Uri url, string apiKey, CancellationToken cancellationToken)
+    // One GET: the body, or the outcome that says why there is none. No key (oEmbed's) sends no key header.
+    private async Task<(string? Body, YouTubeSearchOutcome? Failure)> GetAsync(Uri url, string? apiKey, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         try
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(Timeout);
+            budget.CancelAfter(timeout ?? Timeout);
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation("Accept", "application/json");
-            request.Headers.TryAddWithoutValidation("X-Goog-Api-Key", apiKey.Trim());
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                request.Headers.TryAddWithoutValidation("X-Goog-Api-Key", apiKey.Trim());
+            }
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, budget.Token).ConfigureAwait(false);
             string body = await response.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
             return response.IsSuccessStatusCode ? (body, null) : (null, ParseError(response.StatusCode, body));

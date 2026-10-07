@@ -815,6 +815,10 @@ Under *YouTube tools*. Videos play in the app's own video window: a Windows wind
 | `youtube_play` | `video, start?` | Plays a video by its id or any YouTube link (a link's `t=` included), from `start` (`90` or `1:30`), and answers with what the player reports. Starts at once, or cued under *YouTube autoplay* off. Needs no key; not headless. |
 | `youtube_control` | `action, value?` | `play`, `pause`, `seek` (to a time), `forward` / `back` (by seconds, 10 by default), `volume` (0–100), `mute`, `unmute` or `close`, and answers with where the video then is. |
 | `youtube_status` | (none) | What the window is playing: the video and channel, the state, the position and length, the volume. Allowed in plan mode. |
+| `youtube_saved` | (none) | Lists your saved videos, numbered, with channel, where each was left (or watched) and id; any still untitled are looked up first. Headless too. Allowed in plan mode. |
+| `youtube_save` | `action, video` | `add` saves a video (`current` for the one in the window, with where it is; one named by id or link is looked up for its title), `remove` takes one off (also by its number in `youtube_saved`). Headless too, by id or link. |
+
+Saved videos (your bookmarks, per profile, in `youtube.json`) resume where they were left: the app writes a saved video's place when it is paused, ends, is switched away from or its window closes, and every 15 seconds while it plays. `youtube_play` with no `start` picks a saved video up a few seconds before that place; one seen to the end (or stopped in its last 10 seconds) starts over and reads `watched`. A video saved by its id or link gets its title and channel from YouTube's oEmbed (no key, no quota), or, when that fails and a *YouTube API key* is set, from the Data API (1 quota unit, the length too); one found nowhere keeps its id until it first plays. `/youtube save`, `/youtube saved` and `/youtube unsave` are your own hand on the list (see [Commands](COMMANDS.md)).
 
 ## Shell & Web
 

@@ -24,6 +24,7 @@ public partial class ChatScreenTests
         _settings.Update(d => { d.TtsOutput = false; d.YouTubeApiKey = key ? "AIza-test" : ""; d.YouTubeSearchMaxResults = 3; });
         _http.Map("https://www.googleapis.com/youtube/v3/search", HttpStatusCode.OK, YouTubeFixtureFile("search.json"));
         _http.Map("https://www.googleapis.com/youtube/v3/videos", HttpStatusCode.OK, YouTubeFixtureFile("videos.json"));
+        _http.Map("https://www.youtube.com/oembed", HttpStatusCode.OK, YouTubeFixtureFile("oembed.json"));   // a saved video's title (2026-10-07): the zoo's, whatever is asked
     }
 
     [Fact]
@@ -85,6 +86,86 @@ public partial class ChatScreenTests
         Assert.Contains("  ✗ " + YouTubeText.NoWindow, output);
         Assert.Contains("  ✗ " + YouTubeText.CommandUsage, output);
         Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == "www.googleapis.com");
+    }
+
+    /// <summary>
+    /// The saved videos (2026-10-07): <c>/youtube save</c> keeps the one playing, <c>save &lt;link&gt;</c> another; the <c>saved</c> pane
+    /// lists them and <c>d</c> removes one after a yes; <c>unsave &lt;n&gt;</c> takes one off by its number.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_Save_TheSavedPane_RemovesOne_AndUnsaveTakesOneOff()
+    {
+        YouTubeFixture(key: false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/youtube play aqz-KE-bpKQ");
+        PushLine("/youtube save");
+        PushLine("/youtube save https://youtu.be/jNQXAC9IVRw");
+        PushLine("/youtube saved");
+        _console.Input.PushKey(Keys.Down);                 // the zoo
+        _console.Input.PushKey(Keys.Char('d'));
+        _console.Input.PushKey(Keys.Down);                 // Yes
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/youtube saved");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/youtube unsave 1");
+        PushLine("/youtube saved");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Saved \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\"; it resumes where it is left.", output);
+        Assert.Contains("  · Saved \"Me at the zoo\"; it resumes where it is left.", output);   // looked up by its link (oEmbed)
+        Assert.Contains(YouTubeText.SavedCaption(2), output);
+        Assert.Contains("Me at the zoo — jawed · not played yet", output);
+        Assert.Contains(YouTubeText.RemovePrompt(new YouTubeSaved { Id = "jNQXAC9IVRw", Title = "Me at the zoo" }), output);
+        Assert.Contains("Removed \"Me at the zoo\" from the saved videos.", output);
+        Assert.Contains(YouTubeText.SavedCaption(1), output);
+        Assert.Contains("  · Removed \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\" from the saved videos.", output);
+        Assert.Contains("  · " + YouTubeText.NoneSaved, output);
+        Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
+    }
+
+    /// <summary>In a search's picker, s saves the highlighted video without playing it (2026-10-07), the picker kept open.</summary>
+    [Fact]
+    public async Task YouTube_ThePickersSaveKey_SavesTheHit_WithoutPlayingIt()
+    {
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/youtube big buck bunny");
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Down);                 // the zoo, third
+        _console.Input.PushKey(Keys.Char('s'));
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.PickKeys, output);
+        var saved = Assert.Single(new YouTubeLibrary(_settings.ProfileDirectory).List());
+        Assert.Equal(("jNQXAC9IVRw", "jawed", 19.0), (saved.Id, saved.Author, saved.Duration));
+        Assert.Contains("it resumes where it is left.", output);
+        Assert.Empty(_videoPlayer!.Plays);
+    }
+
+    /// <summary>A saved video played with no time picks up where it was left (2026-10-07), and the place follows the window.</summary>
+    [Fact]
+    public async Task YouTube_PlayingASavedVideo_ResumesIt_AndAPauseKeepsTheNewPlace()
+    {
+        YouTubeFixture(key: false);
+        new YouTubeLibrary(_settings.ProfileDirectory).Add("aqz-KE-bpKQ", position: 100);
+        PushLine("/youtube play aqz-KE-bpKQ");
+        PushLine("/youtube seek 3:00");
+        PushLine("/youtube pause");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(97, Assert.Single(_videoPlayer!.Plays).Start);
+        Assert.Contains("  · Resumed the saved video at 1:37, a moment before where it was left. Playing ", output);
+        Assert.Equal(180, new YouTubeLibrary(_settings.ProfileDirectory).Find("aqz-KE-bpKQ")!.Position);
     }
 
     /// <summary>Without the pane (or a window), a search's hits are listed instead of picked.</summary>

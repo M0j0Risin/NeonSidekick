@@ -172,6 +172,9 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/youtube <words>` | Searches YouTube (with a *YouTube API key*; 100 quota units a search) and opens a picker of the videos found; Enter plays one in the video window. Words that start with a verb below search too, unless what follows fits the verb; `/youtube search <words>` searches whatever they are. |
 | `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. |
 | `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: carry on, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
+| `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos (`youtube.json` in the profile folder). One named by its id or link is looked up for its title and channel first: YouTube's oEmbed, which needs no key, then the Data API when that fails and a *YouTube API key* is set (1 quota unit); found nowhere, it is saved by its id and named the first time it plays. A saved video resumes where it was left the next time it plays, a few seconds back; a time you give wins, and one seen to the end starts over. In a search's picker, `s` saves the highlighted video. |
+| `/youtube saved` | The saved videos on the pane, each with where it was left (`at 12:34 of 45:00`, `watched`, `not played yet`); Enter plays one from there, `d` removes one after a yes. Any still without a title are looked up first. |
+| `/youtube unsave <n>\|<id>\|<link>` | Takes a saved video off the list, by its number in `/youtube saved`, its id or a link. |
 
 ## Command details
 

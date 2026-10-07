@@ -28,6 +28,15 @@ public class YouTubeCommandTests
     [InlineData("mute", YouTubeVerb.Mute, "", null, null)]
     [InlineData("unmute", YouTubeVerb.Unmute, "", null, null)]
     [InlineData("close", YouTubeVerb.Close, "", null, null)]
+    [InlineData("save", YouTubeVerb.Save, "", null, null)]                                       // the saved videos (2026-10-07)
+    [InlineData("save https://youtu.be/aqz-KE-bpKQ", YouTubeVerb.Save, "https://youtu.be/aqz-KE-bpKQ", "aqz-KE-bpKQ", null)]
+    [InlineData("save aqz-KE-bpKQ", YouTubeVerb.Save, "aqz-KE-bpKQ", "aqz-KE-bpKQ", null)]
+    [InlineData("save the whales", YouTubeVerb.Search, "save the whales", null, null)]
+    [InlineData("saved", YouTubeVerb.Saved, "", null, null)]
+    [InlineData("saved by the bell", YouTubeVerb.Search, "saved by the bell", null, null)]
+    [InlineData("unsave 2", YouTubeVerb.Unsave, "2", null, null)]
+    [InlineData("unsave aqz-KE-bpKQ", YouTubeVerb.Unsave, "aqz-KE-bpKQ", null, null)]
+    [InlineData("unsave the date", YouTubeVerb.Search, "unsave the date", null, null)]
     public void Parse_ReadsAVerb_OnlyWhenWhatFollowsFitsIt(string args, YouTubeVerb verb, string text, string? id, double? number)
     {
         var line = YouTubeCommand.Parse(args);
@@ -40,6 +49,7 @@ public class YouTubeCommandTests
     [InlineData("seek")]
     [InlineData("volume")]
     [InlineData("volume 140")]
+    [InlineData("unsave")]
     public void Parse_AVerbWithoutItsArgument_IsTheUsage(string args)
     {
         Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Unknown, Error: YouTubeText.CommandUsage), YouTubeCommand.Parse(args));
