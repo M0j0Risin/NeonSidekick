@@ -33,6 +33,12 @@ internal static unsafe partial class MacTerminal
     [LibraryImport("/usr/lib/libSystem.B.dylib")]
     private static partial int proc_pidpath(int pid, void* buffer, uint size);
 
+    /// <summary>This process's ancestors, the parent first, as read at startup (2026-10-07: the screen capture's own window). Any thread.</summary>
+    public static IReadOnlyList<int> Ancestors => s_ancestors;
+
+    /// <summary><c>TERM_PROGRAM</c> as read at startup. Any thread.</summary>
+    public static string? TermProgram => s_termProgram;
+
     /// <summary>The ancestors and the terminal's name kept (startup, any thread; no AppKit).</summary>
     public static void Remember(string? termProgram)
     {

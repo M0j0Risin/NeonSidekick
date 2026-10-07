@@ -35,8 +35,9 @@ public sealed record ScreenFrame(int Width, int Height, byte[] Bgrx);
 
 /// <summary>
 /// The screen as <c>screen_capture</c> and <c>/screen</c> see it (2026-10-04): the monitors, the windows that can be captured, the
-/// app's own window, and the pictures. <see cref="WindowsScreenSystem"/> on Windows (GDI); <c>FakeScreenSystem</c> in the tests;
-/// none elsewhere (<c>Program</c> passes null, and the tool is not offered). Every call may throw <see cref="ScreenException"/>.
+/// app's own window, and the pictures. <see cref="WindowsScreenSystem"/> on Windows (GDI); <see cref="MacScreenSystem"/> on a Mac
+/// (2026-10-07: ScreenCaptureKit, macOS 14+); <c>FakeScreenSystem</c> in the tests; none elsewhere (<c>Program</c> passes null, and
+/// the tool is not offered). Every call may throw <see cref="ScreenException"/>.
 /// </summary>
 public interface IScreenSystem
 {
@@ -57,6 +58,14 @@ public interface IScreenSystem
 
     /// <summary>The window's own pixels, drawn even when another window covers it.</summary>
     ScreenFrame CaptureWindow(long id);
+
+    /// <summary>
+    /// The sentence that stands in for every capture while the system refuses them, or null when captures may go ahead
+    /// (2026-10-07, the Mac's Screen Recording permission: without it macOS hands back the wallpaper and no window titles, which
+    /// must never reach the model as a screenshot). <paramref name="ask"/> is a capture the user or the model asked for: the
+    /// system may put up its own prompt then. Windows never refuses, so <see cref="WindowsScreenSystem"/> keeps this default.
+    /// </summary>
+    string? Refusal(bool ask) => null;
 }
 
 /// <summary>A screen failure whose message is the sentence the user and the model read.</summary>

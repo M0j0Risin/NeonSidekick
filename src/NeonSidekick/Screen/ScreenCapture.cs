@@ -37,9 +37,26 @@ public sealed class ScreenCapture
 
     public IScreenSystem Screen => _screen;
 
-    /// <summary>The target resolved now (<see cref="ScreenAiming.Resolve"/>), off the calling thread. Throws <see cref="ScreenException"/>.</summary>
+    /// <summary>
+    /// The target resolved now (<see cref="ScreenAiming.Resolve"/>), off the calling thread. Throws <see cref="ScreenException"/>,
+    /// with the system's refusal first (2026-10-07, the Mac's permission): before the allow pane, so the user is never asked for a
+    /// picture that would come back as the wallpaper.
+    /// </summary>
     public Task<ScreenAim> AimAsync(ScreenTarget target, CancellationToken cancellationToken) =>
-        Bounded(() => ScreenAiming.Resolve(target, _screen), cancellationToken);
+        Bounded(() => _screen.Refusal(ask: true) is { } refusal ? throw new ScreenException(refusal) : ScreenAiming.Resolve(target, _screen), cancellationToken);
+
+    /// <summary>
+    /// <c>screen_list</c>'s and <c>/screen list</c>'s lines (2026-10-07): <see cref="ScreenText.List(IReadOnlyList{ScreenMonitor}, int?, IReadOnlyList{ScreenWindow}, long?)"/>,
+    /// or, while the system refuses captures, the monitors and the refusal where the windows would be (their titles are hidden
+    /// then). Never asks the system. Blocking; throws <see cref="ScreenException"/>.
+    /// </summary>
+    public static IReadOnlyList<string> Listing(IScreenSystem screen)
+    {
+        ArgumentNullException.ThrowIfNull(screen);
+        return screen.Refusal(ask: false) is { } refusal
+            ? ScreenText.List(screen.Monitors(), screen.OwnMonitor(), refusal)
+            : ScreenText.List(screen.Monitors(), screen.OwnMonitor(), screen.Windows(), screen.OwnWindow());
+    }
 
     /// <summary>The aim captured, encoded and saved. Throws <see cref="ScreenException"/> for the capture and for a save the sandbox refuses.</summary>
     public async Task<ScreenShot> TakeAsync(ScreenAim aim, CancellationToken cancellationToken)

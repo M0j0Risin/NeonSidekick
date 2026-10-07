@@ -371,13 +371,18 @@ A USB or built-in webcam through Windows' Media Foundation; nothing to install. 
 
 ### Screen capture
 
-A monitor, every monitor or one window, through Windows' own GDI; nothing to install. Windows only.
+A monitor, every monitor or one window, through Windows' own GDI or, on a Mac (macOS 14 or later), Apple's ScreenCaptureKit; nothing to install.
 
 * **Targets:** `screen` (the monitor the app is on, the default), `all`, `monitor:N`, `window:<id or title words>` (a title's words, or its process name; an id from `screen_list` or `/screen list` when several match) and `behind` (the window right behind the app's).
 * **A window** is drawn by itself, so it comes out whole even when another covers it; a minimized one must be restored first. Protected video and some HDR content come out black: Windows keeps it out of every screenshot.
 * **Screenshots** are JPEGs in *Screen capture output folder* (`screen_images` by default), named by time, scaled to 2048 pixels on the longer side at most.
 * **Asking:** under *Screen capture ask* `ask` the pane says what would be captured and the model's reason; a denial isn't retried that turn, and *Allow for this session* lasts until the session ends.
 * **Stored sessions** keep a line instead of the picture unless *Screen capture keep in sessions* is on: a screenshot can hold anything that was on the screen.
+* **On a Mac:**
+  * **The permission.** macOS lets an app record the screen only with the *Screen Recording* permission, and the app holds it through the terminal it runs in (Terminal, iTerm2…). At the first capture macOS asks once; after that, turn the terminal on in System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen the terminal (macOS applies it only then). Without it nothing is captured, the model is told why, and `/screen list` shows the monitors and that sentence instead of the windows. To ask again from scratch: `tccutil reset ScreenCapture com.apple.Terminal` (or `com.googlecode.iterm2`).
+  * **Retina** screens are captured at their full pixels (a 5K screen at 5120x2880), and the sizes in `/screen list` are pixels too. With screens of different sharpness side by side, the sizes are counted at the sharpest one's scale: a plain screen beside a Retina one lists at twice its pixels, is captured alone at its own, and is scaled up inside `all`.
+  * **Windows** are the ones on the screen on the normal layer (not the menu bar, the Dock or Notification Center), titled and visible. A window on another desktop (Space), or minimized, isn't listed and must be brought up first. The pointer isn't drawn.
+  * **`behind`** is the window right behind the terminal window the app runs in.
 
 ### Pasting a picture
 

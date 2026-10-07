@@ -81,7 +81,30 @@ public static class ScreenText
 
     public const string WindowMinimized = "That window is minimized: restore it first.";
 
-    public const string Unsupported = "There is no screen capture on this system (Windows only).";
+    /// <summary>No screen system here: Windows' sentence, unchanged, and a Mac's own (2026-10-07: ScreenCaptureKit's screenshots need macOS 14).</summary>
+    public static string Unsupported => OperatingSystem.IsMacOS() ? UnsupportedMac : "There is no screen capture on this system (Windows only).";
+
+    public const string UnsupportedMac = "There is no screen capture on this Mac: it needs macOS 14 or later.";
+
+    // ── A Mac's own sentences (2026-10-07) ─────────────────────────────────
+
+    public const string MacNoDisplays = "macOS lists no display (no window server: a session over SSH?).";
+
+    public const string WindowOffScreen = "That window is not on the screen (minimized, hidden, or on another desktop): bring it up first.";
+
+    /// <summary>The settings page that holds the permission, as macOS 15 names it (macOS 14 calls it Screen Recording).</summary>
+    public const string PermissionPage = "System Settings › Privacy & Security › Screen & System Audio Recording";
+
+    /// <summary>
+    /// The refusal without the Screen Recording permission, naming the terminal app that holds it (macOS asks per app, and the app
+    /// runs inside the terminal). It has to stand alone: macOS prompts once per app, and a grant takes effect only once the terminal
+    /// is quit and reopened. Pinned.
+    /// </summary>
+    public static string NoPermission(string? terminal)
+    {
+        string app = terminal is { Length: > 0 } ? terminal : "your terminal app";
+        return $"Screen Recording is off for {app}, so macOS would show only the wallpaper; nothing was captured. Turn {app} on in {PermissionPage}, then quit and reopen {app}.";
+    }
 
     public static string Failed(string detail) => $"The screen could not be captured ({detail}).";
 
@@ -144,8 +167,7 @@ public static class ScreenText
     {
         ArgumentNullException.ThrowIfNull(monitors);
         ArgumentNullException.ThrowIfNull(windows);
-        var lines = new List<string> { "Monitors:" };
-        lines.AddRange(monitors.Select(m => $"  monitor:{N(m.Number)}  {Size(m.Bounds)} at {N(m.Bounds.Left)},{N(m.Bounds.Top)}" + (m.Primary ? ", primary" : "") + (m.Number == ownMonitor ? ", this app's" : "")));
+        var lines = MonitorLines(monitors, ownMonitor);
         lines.Add(windows.Count == 0 ? "Windows: none" : "Windows (front to back):");
         foreach (var w in windows.Take(MaxListed))
         {
@@ -157,6 +179,22 @@ public static class ScreenText
             lines.Add($"  and {N(windows.Count - MaxListed)} more");
         }
 
+        return lines;
+    }
+
+    /// <summary>The list while the system refuses captures (2026-10-07, a Mac without Screen Recording): the monitors, then the refusal in place of the windows. Pinned.</summary>
+    public static IReadOnlyList<string> List(IReadOnlyList<ScreenMonitor> monitors, int? ownMonitor, string refusal)
+    {
+        ArgumentNullException.ThrowIfNull(monitors);
+        var lines = MonitorLines(monitors, ownMonitor);
+        lines.Add("Windows: not listed. " + refusal);
+        return lines;
+    }
+
+    private static List<string> MonitorLines(IReadOnlyList<ScreenMonitor> monitors, int? ownMonitor)
+    {
+        var lines = new List<string> { "Monitors:" };
+        lines.AddRange(monitors.Select(m => $"  monitor:{N(m.Number)}  {Size(m.Bounds)} at {N(m.Bounds.Left)},{N(m.Bounds.Top)}" + (m.Primary ? ", primary" : "") + (m.Number == ownMonitor ? ", this app's" : "")));
         return lines;
     }
 

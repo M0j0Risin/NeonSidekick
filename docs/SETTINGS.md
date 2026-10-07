@@ -662,7 +662,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. | off |
+| Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. On a Mac the terminal app needs the Screen Recording permission (see [Screen capture](COMMANDS.md#screen-capture)). | off |
 | Screen capture ask | `ask`: a pane names what would be captured and why; Deny, Allow once, or Allow for this session. `allow`: taken without asking. | `ask` |
 | Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
 | Screen capture output folder | Where screenshots are saved, under the working directory (empty = the working directory). | `screen_images` |

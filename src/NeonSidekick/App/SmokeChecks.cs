@@ -151,6 +151,8 @@ public static partial class SmokeChecks
         results.Add(PicturesHere ? ProbeCameraEncode() : NotWindows("camera:encode"));
         results.Add(ProbeScreenGdi());
         results.Add(ProbeScreenWindows());
+        results.Add(ProbeScreenCg());
+        results.Add(ProbeScreenSck());
         results.Add(ProbeHotkey());
         results.Add(ProbeSqlite());
         results.Add(ProbePostgres());

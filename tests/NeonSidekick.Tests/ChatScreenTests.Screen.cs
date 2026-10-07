@@ -166,6 +166,21 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task ScreenTool_Refused_IsTheSentence_BeforeAnyPane_AndSendsNoPicture()
+    {
+        ScreenToolFixture([Keys.Char('o'), Keys.Enter], "Then I cannot see it.");
+        _screenSystem!.Refused = ScreenText.NoPermission("Terminal");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(ScreenText.AllowTitle, output);
+        Assert.Equal("Error: " + ScreenText.NoPermission("Terminal"), Assert.Single(Results(_chat.Requests[^1])).Result);
+        Assert.DoesNotContain(_chat.Requests[^1], m => m.Contents.OfType<DataContent>().Any());
+        Assert.Empty(_screenSystem.Captures);
+        Assert.Empty(ScreenFiles());
+    }
+
+    [Fact]
     public async Task ScreenCommand_WithoutAScreen_SaysSo()
     {
         PushLine("/screen");

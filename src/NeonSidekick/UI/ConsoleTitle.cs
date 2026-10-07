@@ -9,6 +9,12 @@ namespace NeonSidekick.UI;
 public static class ConsoleTitle
 {
     /// <summary>
+    /// The title last set, null before any (2026-10-07): a Mac's screen capture tells the app's own terminal window from the
+    /// terminal's others by it, since <c>Console.Title</c> cannot be read back off Windows.
+    /// </summary>
+    public static string? Last { get; private set; }
+
+    /// <summary>
     /// Sets the window title. True when it took; false on a detached or redirected console, where
     /// the runtime throws — the title is decoration, never worth a crash.
     /// </summary>
@@ -18,6 +24,7 @@ public static class ConsoleTitle
         try
         {
             Console.Title = title;
+            Last = title;
             return true;
         }
         catch

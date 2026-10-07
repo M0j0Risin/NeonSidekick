@@ -184,7 +184,7 @@ internal sealed partial class ChatScreen
             IReadOnlyList<string> lines;
             try
             {
-                lines = await Task.Run(() => ScreenText.List(system.Monitors(), system.OwnMonitor(), system.Windows(), system.OwnWindow()), cancellationToken).ConfigureAwait(false);
+                lines = await Task.Run(() => ScreenCapture.Listing(system), cancellationToken).ConfigureAwait(false);
             }
             catch (ScreenException e)
             {

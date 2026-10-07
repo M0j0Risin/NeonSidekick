@@ -40,7 +40,7 @@ public sealed class ScreenListTool : AIFunction
 
         try
         {
-            var lines = await Task.Run(() => ScreenText.List(screen.Monitors(), screen.OwnMonitor(), screen.Windows(), screen.OwnWindow()), cancellationToken)
+            var lines = await Task.Run(() => ScreenCapture.Listing(screen), cancellationToken)
                 .WaitAsync(ScreenCapture.Timeout, cancellationToken).ConfigureAwait(false);
             return string.Join('\n', lines);
         }

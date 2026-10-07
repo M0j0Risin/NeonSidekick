@@ -997,7 +997,7 @@ public sealed class SidekickApp
                     IReadOnlyList<string> screenLines;
                     try
                     {
-                        screenLines = Screen.ScreenText.List(screenSystem.Monitors(), screenSystem.OwnMonitor(), screenSystem.Windows(), screenSystem.OwnWindow());
+                        screenLines = Screen.ScreenCapture.Listing(screenSystem);
                     }
                     catch (Screen.ScreenException e)
                     {
