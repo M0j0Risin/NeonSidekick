@@ -167,10 +167,30 @@ The first build and run on a Mac was on 2026-10-06 (Apple Silicon, Terminal.app)
   * **The sandbox hid every dot-name.** .NET reads a dot-name as Hidden on Unix, and the walks skip Hidden, so `.gitignore`, `.github` and `.env` were missing from listings and searches and dropped from a folder's copy. Off Windows a walk now skips only the macOS hidden flag (`chflags hidden`) and `.git`, as Windows skips its Hidden attribute and Git for Windows' hidden `.git` (`WorkingDirectory.IsHiddenOffWindows`).
   * **A city named no time zone.** "Tokyo" was matched against Windows display names, which macOS zones don't have; the city is now read from the IANA id's last segment too (`ClockText.NamesCity`).
 
+* **Windows wording on a Mac** (the tidy-up before the first Mac release, 2026-10-06). On a Mac, the app now uses Mac wording in these places:
+  * The connection files' templates (`sql.json`, `oracle.json`, `mysql.json`, `postgres.json`, `unc.json`) name the macOS Keychain, `security add-generic-password -s <target> -a <user> -w` and `keychain:…` (`SqlText.CredentialStore`/`CredentialCommand`).
+  * The wizards' store picks, the set-password rows and the saved/undecryptable password sentences name the Keychain too.
+  * `open` says a folder opened in Finder.
+  * The skills row reads `.agents/skills`, and its value reads `~/.agents/skills`.
+  * `/terminal`, the Claude CLI's not-found error, the skill installer's path refusal and the SQLite wizard's example path have Mac sentences.
+  * `convert_to_pdf` and the PDF errors drop Microsoft Print to PDF.
+  * The perf bar's GPU note, `/camera list`'s note and `/about`'s WIC and WebView2 lines have Mac wording.
+  * `neon_help` and `/help` read a Mac layer (`Help/HelpMac`) for the settings and command forms whose text named Windows. Windows' own sentences are unchanged.
+  * SQL Server's Windows sign-in stays on a Mac: it works there through Kerberos (a `kinit` ticket). The SQL wizard offers `sql` and `windows`, and the Mac `sql.json` template keeps the `windows` example and leaves out the `runas` ones. `runas` needs Windows' `LogonUser`.
+* **UNC and printing were offered on a Mac.**
+  * The UNC catalog reads only `\\server\share` and `X:\` paths, so `UncAccess.IsOffered` is now false on a Mac.
+  * Printing had only the null spooler there, so `PrintOffered` is false and `/print` says it needs Windows.
+  * `/tools` shows both groups, and Docker's, as *off: it needs Windows*.
+* **Smaller differences.**
+  * The prefer-native rule no longer sends zsh's or bash's `type` (which describes a command) to `read_file` on a Mac, and the prompt's rule no longer lists `type` or `dir` there (`NativeRedirect.For(command, offered, kind)`).
+  * A skill resource spelled with `\` is read through its folders off Windows (`SkillCatalog.ReadResource`).
+  * **A zip's entries are written sorted by path (ordinal)**, so the same folder makes the same zip on both systems. This changes Windows' zips too, on purpose.
+  * The theme and welcome-splash tests that only need the splash to stay away run on a Mac: the fixture gives no splash off Windows. Four that draw a picture stay Windows-only.
+
 **Open:**
-* **Wording that still says Windows on a Mac.** The connection files' templates (`sql.json`, `oracle.json`, `mysql.json`, `postgres.json`, `unc.json`) name Windows Credential Manager and `cmdkey`; `open` tells the model a folder opened "in Explorer"; the settings label reads `.agents\skills`.
-* **UNC shares are not switched off.** The tools are offered when `unc.json` names a share, but its catalog reads only `\\server\share` and `X:\` paths.
-* **Smaller differences.** The prefer-native rule sends zsh's `type` (which describes a command) to `read_file`; a skill resource spelled with `\` is a file name on a Mac; a zip's entries follow the folder's enumeration order, not names; a few theme and mid-turn screen tests are Windows-only only because their fixture draws a splash picture.
+* **Windows-only groups still have their rows on a Mac.** The UNC, Docker, camera and embedded tabs show their settings: the UNC wizard's `D:\Data` and runas wording, and Docker's pipe. Their groups are off, and `/tools` and the help say they need Windows.
+* **The performance bar has no Mac source.** Only PROC has a reading; CPU, RAM, GPU and network need a macOS `IPerfSource`.
+* **`/terminal` has no Mac opener.** One would be a new process-start site (`open -a Terminal`), a design call.
 * **The tests use a Keychain key of their own** on a Mac (`NeonSidekick.Tests` / `master-key`), so a test run never makes or reads the app's (`NeonSidekick` / `master-key`). Before that change a run made the app's key when there was none, trusting `dotnet`; the app still reads such a key after its Keychain prompt. The tests' item can be deleted in Keychain Access at any time.
 * **Sound.** Speech and the microphone need Windows for now (`AudioSupport.Available`: WinMM is the only backend), so Kokoro never speaks on a Mac. When a macOS sound backend comes, check that quitting after Kokoro has spoken still exits cleanly: the exit-crash fix releases ONNX Runtime's environment, but has only been seen with no session alive.
 
