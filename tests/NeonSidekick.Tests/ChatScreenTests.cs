@@ -9529,9 +9529,9 @@ public partial class ChatScreenTests : IDisposable
 
             return Task.CompletedTask;
         };
-        PushLine("/timer 10m cooking");
-        PushLine("hi");
-        PushLine("/exit");
+        // Each line once the screen is idle and nothing plays (2026-10-06, GitHub's macOS runner): typed up front, /exit was read
+        // while the reply was still to be voiced and cut it before a word was spoken (SpokenText empty), as Turn_SpeechReady_… warns.
+        LinesWhenIdle("/timer 10m cooking", "hi", "/exit");
 
         string output = await RunAsync();
 
