@@ -515,4 +515,4 @@ Every list pane works the same way (2026-10-07): ↑/↓ move, Enter picks the h
 | `/server`, `/model` | Enter chooses · type to filter |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · ESC denies |
-| Info panes (`/help`, `/sys`, a `v` view) | ↑/↓ PgUp/PgDn scroll · ←/→ or Tab switch tabs · ESC closes |
+| Info panes (`/help`, `/sys`, `/about`, `/tree`, a `v` view…) | ↑/↓ PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find: Enter or F3 the next match, Shift+Enter or Shift+F3 the one before, Backspace erases, the first ESC clears the find · ESC closes |

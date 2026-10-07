@@ -10119,7 +10119,7 @@ public partial class ChatScreenTests : IDisposable
         for (int i = 0; i < 12; i++)
         {
             _console.Input.PushKey(Keys.PageDown);  // five lines a page, past the end: the extra presses are swallowed
-            _console.Input.PushKey(Keys.Char('x')); // swallowed; each page its own draw, not one queued run (2026-10-03)
+            _console.Input.PushKey(Keys.Key(ConsoleKey.Insert)); // swallowed (a typed x finds since 2026-10-07); each page its own draw, not one queued run (2026-10-03)
         }
 
         _console.Input.PushKey(Keys.Escape);
@@ -14352,7 +14352,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         StepsWhenIdle(
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlPeriod, Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlPeriod, Keys.Char('x'), Keys.Escape, Keys.Escape, Keys.Enter); },   // the x a find since 2026-10-07: the first ESC clears it
             Line("/exit"));
 
         string output = await RunAsync();
@@ -17213,7 +17213,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlF, Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlF, Keys.Char('x'), Keys.Escape, Keys.Escape, Keys.Enter); },   // the x a find since 2026-10-07: the first ESC clears it
             Line("/exit"));
 
         string output = await RunAsync();
@@ -17254,7 +17254,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         StepsWhenIdle(
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlE, Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlE, Keys.Char('x'), Keys.Escape, Keys.Escape, Keys.Enter); },   // the x a find since 2026-10-07: the first ESC clears it
             Line("/exit"));
 
         string output = await RunAsync();
@@ -17278,7 +17278,7 @@ public partial class ChatScreenTests : IDisposable
         StepsWhenIdle(
             input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.G)); },
             Key(Keys.Enter),
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.G), Keys.Char('x'), Keys.Escape, Keys.Enter); },
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlAlt(ConsoleKey.G), Keys.Char('x'), Keys.Escape, Keys.Escape, Keys.Enter); },   // the x a find since 2026-10-07: the first ESC clears it
             Line("/exit"));
 
         string output = await RunAsync();

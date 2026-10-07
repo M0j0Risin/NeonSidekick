@@ -51,7 +51,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
 
         Assert.Equal(["One", "Two", "Three"], _built);   // the open measures the other tabs (2026-10-01)
-        Assert.Contains(Rule(40) + "\n" + Titled(InfoPane.Title + " │ One · Two · Three ") + "\n \nfirst\n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled(InfoPane.Title + " │ One · Two · Three ") + "\n \nfirst\n" + Rule(40) + "\n" + ScreenPane.Fit(InfoPane.HintText, 39) + "\n", Output);
         Assert.False(pane.OverlayOpen);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
@@ -68,10 +68,11 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync("/screen list", [Tab("/screen list", "Monitors:")], 0, CancellationToken.None);
 
-        Assert.Contains(Rule(40) + "\n" + Titled("/screen list") + "\n \nMonitors:\n" + Rule(40) + "\n" + InfoPane.SingleTabHintText + "\n", Output);
+        Assert.Contains(Rule(40) + "\n" + Titled("/screen list") + "\n \nMonitors:\n" + Rule(40) + "\n" + ScreenPane.Fit(InfoPane.SingleTabHintText, 39) + "\n", Output);
         Assert.DoesNotContain("/screen list   /screen list", Output);
         Assert.Single(_built);   // built once: the keys drew nothing again
-        Assert.Equal("ESC closes · ↑/↓ scroll", InfoPane.SingleTabHintText);
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · type = find · ESC = close", InfoPane.SingleTabHintText);   // the find since 2026-10-07
+        Assert.Equal("↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · ESC = close", InfoPane.HintText);
     }
 
     [Fact]
@@ -120,9 +121,9 @@ public class InfoPaneTests : IDisposable
     [Fact]
     public async Task OtherKeys_AreSwallowed_WithoutARedraw()
     {
+        // A typed character starts a find since 2026-10-07 (FindTests below); Enter with nothing found is nothing.
         using var pane = Pane();
         pane.Show();
-        _console.Input.PushKey(Keys.Char('x'));
         _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.F4);
         _console.Input.PushKey(Keys.Up);
@@ -296,7 +297,7 @@ public class InfoPaneTests : IDisposable
 
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20))], 0, CancellationToken.None);
 
-        Assert.Contains("\nline1\nline2\nline3\nline4\nline5\n" + MenuPane.MoreHint(0, 5, 20) + "\n" + Rule(40) + "\n" + InfoPane.SingleTabHintText + "\n", Output);   // one tab: nothing to switch (2026-10-04)
+        Assert.Contains("\nline1\nline2\nline3\nline4\nline5\n" + MenuPane.MoreHint(0, 5, 20) + "\n" + Rule(40) + "\n" + ScreenPane.Fit(InfoPane.SingleTabHintText, 39) + "\n", Output);   // one tab: nothing to switch (2026-10-04)
         Assert.DoesNotContain("line6", Output);
     }
 
@@ -401,7 +402,7 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Tab("Long", Numbered(20)), Tab("Short", "brief")], 0, CancellationToken.None);
 
         Assert.Equal(["Long", "Short", "Short"], _built);   // End draws from the lines built at the open (2026-10-03)
-        Assert.Contains(Titled(InfoPane.Title + " │ Long · Short ") + "\n \nbrief\n \n \n \n \n \n" + Rule(40) + "\n" + InfoPane.HintText + "\n", Output);
+        Assert.Contains(Titled(InfoPane.Title + " │ Long · Short ") + "\n \nbrief\n \n \n \n \n \n" + Rule(40) + "\n" + ScreenPane.Fit(InfoPane.HintText, 39) + "\n", Output);
         Assert.EndsWith(Rule(40) + "\n› \n" + Rule(40) + "\nidle", Output);
     }
 
@@ -665,5 +666,129 @@ public class InfoPaneTests : IDisposable
         using var none = Pane(geometry: false);
         await new InfoPane(none, Source(), owned.Add).ShowAsync(InfoPane.Title, Tabs(), 0, CancellationToken.None);
         Assert.Equal([true, false, true, false], owned);
+    }
+
+    /// <summary>A tab of laid-out lines for the find tests: one per string.</summary>
+    private InfoTab Lines(string title, params string[] lines) => new(title, () =>
+    {
+        _built.Add(title);
+        return new Text(string.Join("\n", lines));
+    });
+
+    /// <summary>
+    /// Typing finds (2026-10-07, the user's ask, phase 4 of the UI round): the hint row is the find's, which match of how many;
+    /// Enter goes to the next, Shift+Enter back, both wrapping; the first ESC clears the find and the hint, the next closes.
+    /// </summary>
+    [Fact]
+    public async Task Typing_Finds_EnterAndShiftEnterMove_AndTheFirstEscClears()
+    {
+        _console.Profile.Width = 120;
+        using var pane = Pane();
+        pane.Show();
+        _console.Input.PushKey(Keys.Char('A'));                    // case ignored
+        _console.Input.PushKey(Keys.Char('l'));
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Enter);                        // wraps to the first
+        _console.Input.PushKey(Keys.Shift(ConsoleKey.Enter));      // back: wraps to the last
+        _console.Input.PushKey(Keys.Escape);                       // clears
+        _console.Input.PushKey(Keys.Escape);                       // closes
+
+        await new InfoPane(pane, Source()).ShowAsync("/sys", [Lines("/sys", "alpha", "beta", "gamma alpha")], 0, CancellationToken.None);
+
+        int one = Output.IndexOf(InfoPane.FindHint("Al", 0, 2), StringComparison.Ordinal);
+        int two = Output.IndexOf(InfoPane.FindHint("Al", 1, 2), one, StringComparison.Ordinal);
+        int wrapped = Output.IndexOf(InfoPane.FindHint("Al", 0, 2), two, StringComparison.Ordinal);
+        int back = Output.IndexOf(InfoPane.FindHint("Al", 1, 2), wrapped, StringComparison.Ordinal);
+        int cleared = Output.IndexOf(InfoPane.SingleTabHintText, back, StringComparison.Ordinal);
+        Assert.True(one > 0 && two > one && wrapped > two && back > wrapped && cleared > back, Output);
+        Assert.False(pane.OverlayOpen);
+        Assert.Single(_built);   // the find redraws from the laid-out lines, never building the tab again
+    }
+
+    [Fact]
+    public async Task NoMatch_SaysSo_AndBackspaceErases()
+    {
+        _console.Profile.Width = 120;
+        using var pane = Pane();
+        pane.Show();
+        _console.Input.PushKey(Keys.Char('b'));
+        _console.Input.PushKey(Keys.Char('z'));
+        _console.Input.PushKey(Keys.Backspace);
+        _console.Input.PushKey(Keys.Backspace);
+        _console.Input.PushKey(Keys.Backspace);                    // nothing left to erase: nothing
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync("/sys", [Lines("/sys", "alpha", "beta")], 0, CancellationToken.None);
+
+        int none = Output.IndexOf(InfoPane.FindHint("bz", 0, 0), StringComparison.Ordinal);
+        int erased = Output.IndexOf(InfoPane.FindHint("b", 0, 1), none, StringComparison.Ordinal);
+        Assert.True(none > 0 && erased > none, Output);
+        Assert.Equal("find: bz · no match · Backspace = erase · ESC = clear", InfoPane.FindHint("bz", 0, 0));
+        Assert.Equal("find: b · 1 of 1 · Enter = next · Shift+Enter = back · ESC = clear", InfoPane.FindHint("b", 0, 1));
+        Assert.True(Output.IndexOf(InfoPane.SingleTabHintText, erased, StringComparison.Ordinal) > erased, Output);   // all erased: the pane's own hint
+        Assert.False(pane.OverlayOpen);
+    }
+
+    /// <summary>A match below the view scrolls into it, a third of the way down; F3 is Enter.</summary>
+    [Fact]
+    public async Task AMatchOutOfView_ScrollsIntoIt()
+    {
+        _console.Profile.Width = 120;
+        var lines = Enumerable.Range(1, 40).Select(i => "row " + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        using var pane = Pane();
+        pane.Show();
+        foreach (char c in "row 3")
+        {
+            _console.Input.PushKey(Keys.Char(c));
+        }
+
+        _console.Input.PushKey(Keys.Key(ConsoleKey.F3));             // row 3 → row 30 (row 31… are matches too)
+        _console.Input.PushKey(Keys.Escape);
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync("/sys", [Lines("/sys", lines)], 0, CancellationToken.None);
+
+        Assert.Contains(InfoPane.FindHint("row 3", 1, 11), Output);   // row 3 and rows 30 to 39
+        Assert.Contains("\nrow 30\n", Output);
+        Assert.DoesNotContain("\nrow 40\n", Output);                  // the view moved, not to the end
+    }
+
+    /// <summary>A tab switch keeps the find and looks again in the new tab.</summary>
+    [Fact]
+    public async Task ATabSwitch_KeepsTheFind_AndCountsTheNewTab()
+    {
+        _console.Profile.Width = 120;
+        using var pane = Pane();
+        pane.Show();
+        _console.Input.PushKey(Keys.Char('a'));
+        _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Escape);
+        _console.Input.PushKey(Keys.Escape);
+
+        await new InfoPane(pane, Source()).ShowAsync(InfoPane.Title, [Lines("One", "a"), Lines("Two", "a a", "b", "a")], 0, CancellationToken.None);
+
+        int first = Output.IndexOf(InfoPane.FindHint("a", 0, 1), StringComparison.Ordinal);
+        Assert.True(first > 0 && Output.IndexOf(InfoPane.FindHint("a", 0, 3), first, StringComparison.Ordinal) > first, Output);
+    }
+
+    [Fact]
+    public void TextFind_FindsEveryPlace_IgnoringCase_AndMarksThem()
+    {
+        var plain = new Style(Color.Red);
+        IReadOnlyList<Segment> line = [new Segment("an ", plain), new Segment("Answer", plain)];
+        var hits = TextFind.Matches([line, [new Segment("none")]], "an");
+
+        Assert.Equal([new TextFind.Hit(0, 0), new TextFind.Hit(0, 3)], hits);
+        Assert.Equal("an Answer", TextFind.LineText(line));
+        Assert.Empty(TextFind.Matches([line], ""));
+
+        // Each stretch marked, the segment it cuts split; the current one in the selection's colours, the others the text's own over the find's fill.
+        var marked = TextFind.Mark(line, [0, 3], 2, current: 3);
+        Assert.Equal(["an", " ", "An", "swer"], marked.Select(segment => segment.Text));
+        Assert.Equal(plain.Combine(Theme.FindMatch), marked[0].Style);
+        Assert.Equal(plain, marked[1].Style);
+        Assert.Equal(Theme.FindCurrent, marked[2].Style);
+        Assert.Equal(plain, marked[3].Style);
+        Assert.Same(line, TextFind.Mark(line, [], 2, -1));
     }
 }

@@ -179,6 +179,13 @@ public static class Theme
     /// </summary>
     public static Style TabBadge => new(Secondary);
     /// <summary>
+    /// A find's matches in an info pane (2026-10-07, phase 4 of the UI round: type to find): the text keeps its colour, underlined
+    /// on the lifted fill of a menu's highlighted row. Derived, so every theme has its own.
+    /// </summary>
+    public static Style FindMatch => new(background: MenuHighlight.Background, decoration: Decoration.Underline);
+    /// <summary>The match a find is on (2026-10-07): the input row's selection colours, so it stands out from the others.</summary>
+    public static Style FindCurrent => SelectedText;
+    /// <summary>
     /// The slab a menu's footer is drawn on, the cursor's row described under the list (2026-10-05, the user's ask: the
     /// description read as more rows of the list): the dim text on the lifted fill the highlighted row and code blocks use.
     /// </summary>

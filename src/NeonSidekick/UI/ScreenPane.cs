@@ -2600,7 +2600,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The busy row's text past the frame: <see cref="BusyText"/>, and behind <see cref="HintSeparator"/>
-    /// the overlay's own hint when one is open under the spinner (<c>thinking 00:12 · ESC closes · ←/→ tabs · ↑/↓ scroll</c>:
+    /// the overlay's own hint when one is open under the spinner (<c>thinking 00:12 · ↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · ESC = close</c>:
     /// a pane opened mid-turn needs its keys named, ESC closing it rather than the turn). An empty
     /// <paramref name="overlayHint"/> is the bare <see cref="BusyText"/>. Pinned.
     /// </summary>

@@ -18,7 +18,10 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content);
 ///
 /// <para>Keys: ESC closes; → and Tab go to the next tab, ← and Shift+Tab to the previous one,
 /// wrapping; ↑/↓ scroll the content by a line, PageUp/PageDown by a page, Home/End to either end;
-/// every other key is swallowed, so nothing typed by accident lands on the input line.
+/// a typed character starts a find over the shown tab's lines (2026-10-07, the user's ask, phase 4 of the UI round): the
+/// matches marked, the view on the first from its top down, the hint row the find's (<see cref="FindHint"/>); Enter or F3 goes
+/// to the next, Shift with either back, Backspace erases, and the first ESC clears it. Every other key is swallowed, so nothing
+/// typed by accident lands on the input line.
 /// The keys come through the <see cref="KeySource"/> like the input line's, never from the console
 /// directly. Without the pane on the screen (no geometry) there is nothing to show and nothing is
 /// read: the caller prints instead.</para>
@@ -47,11 +50,23 @@ public sealed class InfoPane
     /// <summary>The strip's label for <c>/help</c> (the glyph since 2026-09-28, the user's ask: every other pane's label wore one).</summary>
     public const string Title = "❓ Help";
 
-    /// <summary>The hint row under the pane. Pinned.</summary>
-    public const string HintText = "ESC closes · ←/→ tabs · ↑/↓ scroll";
+    /// <summary>The hint row under the pane (the find and PgUp/PgDn since 2026-10-07, in the <c>key = what</c> form of the menus' hints). Pinned.</summary>
+    public const string HintText = "↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · ESC = close";
 
     /// <summary>The hint row under a pane of one tab (2026-10-04): no tabs to switch. Pinned.</summary>
-    public const string SingleTabHintText = "ESC closes · ↑/↓ scroll";
+    public const string SingleTabHintText = "↑/↓ PgUp/PgDn = scroll · type = find · ESC = close";
+
+    /// <summary>The longest find (the menus' filter's cap).</summary>
+    public const int FindMaxLength = MenuFilter.MaxLength;
+
+    /// <summary>
+    /// The hint row while a find is typed (2026-10-07, phase 4 of the UI round): the text, which match of how many the view is
+    /// on and the keys; with none, the keys that get out of it. Pinned.
+    /// </summary>
+    public static string FindHint(string find, int index, int count) =>
+        count > 0
+            ? $"find: {find} · {(index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = next · Shift+Enter = back · ESC = clear"
+            : $"find: {find} · no match · Backspace = erase · ESC = clear";
 
     /// <summary>The rows above the content when the strip fits one row: the strip and the spacer; a strip that takes more rows (<see cref="TabStripLayout"/>) adds them.</summary>
     public const int HeaderRows = 2;
@@ -83,6 +98,18 @@ public sealed class InfoPane
     private List<SegmentLine>? _content;
     private int _contentTab = -1;
     private int _contentWidth = -1;
+
+    // The find (2026-10-07, phase 4 of the UI round): the text typed this visit, where it occurs in the shown tab's lines and
+    // which of those the view is on. The places are worked out again when the text, the tab or the width moves; _findMoved says
+    // the text or the tab did, so the find starts again from the view's top; _seek scrolls the one it is on into view.
+    private string _find = "";
+    private List<TextFind.Hit> _hits = [];
+    private int _hit;
+    private string _hitsFind = "";
+    private int _hitsTab = -1;
+    private int _hitsWidth = -1;
+    private bool _findMoved;
+    private bool _seek;
 
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
     public InfoPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
@@ -322,6 +349,12 @@ public sealed class InfoPane
         _content = null;
         _contentTab = -1;
         _contentWidth = -1;
+        _find = "";
+        _hits = [];
+        _hit = 0;
+        _hitsTab = -1;
+        _findMoved = false;
+        _seek = false;
         _clicks.Reset();
         _mouse?.Invoke(true);
         try
@@ -339,6 +372,7 @@ public sealed class InfoPane
 
                 int next = active;
                 int first = _first;
+                bool redraw = false;
                 if (input is InputEvent.Click click)
                 {
                     // A left click on the × at the corner is ESC (2026-09-18), one on a tab's title
@@ -385,6 +419,13 @@ public sealed class InfoPane
                     _clicks.Reset();
                     continue;
                 }
+                else if (Keys.IsCancel(k) && _find.Length > 0)
+                {
+                    // The first ESC clears a find (2026-10-07), the view staying where the find took it; the next one closes.
+                    _clicks.Reset();
+                    _find = "";
+                    redraw = true;
+                }
                 else if (Keys.IsCancel(k) || Keys.IsInterrupt(k))
                 {
                     // ESC, and Ctrl+C the same (2026-09-17): the pane backs out.
@@ -394,6 +435,42 @@ public sealed class InfoPane
                 {
                     _clicks.Reset();
                     next = (active + step + tabs.Count) % tabs.Count;
+                }
+                else if (FindStep(k) is int along)
+                {
+                    // Enter or F3 the next match, with Shift the one before, wrapping; nothing until something is found.
+                    _clicks.Reset();
+                    if (_hits.Count > 0)
+                    {
+                        _hit = (_hit + along + _hits.Count) % _hits.Count;
+                        _seek = true;
+                        redraw = true;
+                    }
+                }
+                else if (k.Key == ConsoleKey.Backspace)
+                {
+                    _clicks.Reset();
+                    if (_find.Length > 0)
+                    {
+                        _find = _find[..^1];
+                        _findMoved = true;
+                        redraw = true;
+                    }
+                }
+                else if (FindChar(k) is char typed)
+                {
+                    // Typed: the find grows (2026-10-07; every other key was swallowed before), the keys already waiting with it.
+                    _clicks.Reset();
+                    var find = new System.Text.StringBuilder(_find).Append(typed);
+                    while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && FindChar(q) is not null) is InputEvent.Key { Info: var more })
+                    {
+                        find.Append(more.KeyChar);
+                    }
+
+                    string grown = find.ToString();
+                    _find = grown.Length > FindMaxLength ? grown[..FindMaxLength] : grown;
+                    _findMoved = true;
+                    redraw = true;
                 }
                 else
                 {
@@ -422,12 +499,13 @@ public sealed class InfoPane
                 {
                     active = next;
                     _first = 0;
+                    _findMoved = _find.Length > 0;
                 }
                 else if (first != _first)
                 {
                     _first = first;
                 }
-                else
+                else if (!redraw)
                 {
                     continue;
                 }
@@ -455,6 +533,23 @@ public sealed class InfoPane
         ConsoleKey.PageUp => -Math.Max(1, _shown),
         _ => null,
     };
+
+    /// <summary>The find's step: +1 for Enter or F3, −1 with Shift; null for every other key (Ctrl+Enter, a line break elsewhere, among them).</summary>
+    private static int? FindStep(ConsoleKeyInfo key) =>
+        (key.Key is ConsoleKey.Enter or ConsoleKey.F3) && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt)) == 0
+            ? (key.Modifiers & ConsoleModifiers.Shift) != 0 ? -1 : 1
+            : null;
+
+    /// <summary>
+    /// The character a key adds to the find: a printable one, typed bare or with Shift (Ctrl+Alt too, which is AltGr on some
+    /// keyboards); null for a chord and for the keys with jobs of their own (Tab, Enter, Backspace).
+    /// </summary>
+    private static char? FindChar(ConsoleKeyInfo key)
+    {
+        var chord = key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt);
+        bool bare = chord == 0 || chord == (ConsoleModifiers.Control | ConsoleModifiers.Alt);
+        return bare && key.KeyChar != '\0' && !char.IsControl(key.KeyChar) ? key.KeyChar : null;
+    }
 
     private static string[] Titles(IReadOnlyList<InfoTab> tabs)
     {
@@ -489,6 +584,37 @@ public sealed class InfoPane
         var content = _content;
         _count = content.Count;
         (_first, _shown) = Viewport(_count, capacity, _first);
+        if (_find.Length == 0)
+        {
+            _hits = [];
+        }
+        else if (_findMoved || _hitsFind != _find || _hitsTab != active || _hitsWidth != width)
+        {
+            // A new text or tab starts at the first match from the view's top down (the first of all when none is below);
+            // a new width keeps the match it was on as near as the count allows.
+            _hits = TextFind.Matches(content, _find);
+            if (_findMoved)
+            {
+                int below = _hits.FindIndex(hit => hit.Line >= _first);
+                _hit = below >= 0 ? below : 0;
+                _seek = true;
+            }
+            else
+            {
+                _hit = Math.Clamp(_hit, 0, Math.Max(0, _hits.Count - 1));
+            }
+
+            (_hitsFind, _hitsTab, _hitsWidth) = (_find, active, width);
+        }
+
+        _findMoved = false;
+        if (_seek && _hits.Count > 0 && (_hits[_hit].Line < _first || _hits[_hit].Line >= _first + _shown))
+        {
+            // Into view a third of the way down, so the lines before it read as its context.
+            (_first, _shown) = Viewport(_count, capacity, _hits[_hit].Line - _shown / 3);
+        }
+
+        _seek = false;
         if (_tallestWidth != width)
         {
             // Every other tab built and laid out once a visit (the shown one is above), and again only when the width
@@ -517,9 +643,22 @@ public sealed class InfoPane
         }
 
         lines.Add(new Text(" "));
+        int h = _hits.FindIndex(hit => hit.Line >= _first);
         for (int i = 0; i < _shown; i++)
         {
-            lines.Add(new SegmentLines(content[_first + i]));
+            int at = _first + i;
+            var starts = new List<int>();
+            int current = -1;
+            for (; h >= 0 && h < _hits.Count && _hits[h].Line == at; h++)
+            {
+                starts.Add(_hits[h].Start);
+                if (h == _hit)
+                {
+                    current = _hits[h].Start;
+                }
+            }
+
+            lines.Add(new SegmentLines(starts.Count == 0 ? content[at] : TextFind.Mark(content[at], starts, _find.Length, current)));
         }
 
         if (more)
@@ -532,6 +671,7 @@ public sealed class InfoPane
             lines.Add(new Text(" "));
         }
 
-        _pane.ShowOverlay(new Rows(lines), tabs.Count == 1 ? SingleTabHintText : HintText, close: true);
+        string hint = _find.Length > 0 ? FindHint(_find, _hit, _hits.Count) : tabs.Count == 1 ? SingleTabHintText : HintText;
+        _pane.ShowOverlay(new Rows(lines), hint, close: true);
     }
 }
