@@ -582,7 +582,8 @@ public sealed class FileToolsTests : IDisposable
 
         Assert.Equal("unzipped docs.zip into restore/ (2 entries)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")));
         Assert.Equal("beta", File.ReadAllText(Path.Combine(_root, "restore", "docs", "b.txt")));
-        Assert.Equal(FileText.Exists(@"restore/docs/a.txt"), await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")));
+        // The first clash in the archive's order, which on APFS is the folder's enumeration order, not by name as on NTFS.
+        Assert.Contains(await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")), new[] { FileText.Exists("restore/docs/a.txt"), FileText.Exists("restore/docs/b.txt") });
         Assert.Equal("unzipped docs.zip into restore/ (2 entries)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore"), ("overwrite", Json("true"))));
         Assert.Equal(FileText.NotAnArchive(@"docs/a.txt"), await Invoke(Tool<UnzipTool>(), ("path", @"docs/a.txt")));
         Assert.Equal(FileText.BadBoolean("overwrite", "no way"), await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("overwrite", "no way")));

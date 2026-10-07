@@ -47,7 +47,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.False(PictureActions.IsEdit(PictureCommand.OpenInViewer));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Beside_WritesANewFile_EditedThenNumbered_TheSourceUntouched()
     {
         string source = Put("cat.bmp");
@@ -67,7 +67,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Beside_AConversion_IsTheStemInTheNewFormat_TheSourceKept()
     {
         string source = Put("dog.bmp");
@@ -79,7 +79,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.Equal("image/png", ImageEditor.Info(File.ReadAllBytes(outcome.Written!))!.MimeType);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Overwrite_ReplacesTheSourceInPlace()
     {
         string source = Put("cat.bmp");
@@ -95,7 +95,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.Equal(["cat.bmp"], Directory.GetFiles(_dir).Select(Path.GetFileName));   // no temp file, no copy
     }
 
-    [Fact]
+    [WindowsFact]
     public void Overwrite_AConversion_WritesTheNewName_AndDeletesTheSource()
     {
         string source = Put("cat.bmp");
@@ -111,7 +111,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.EndsWith("; deleted cat.bmp (Image edit mode: overwrite-original)", outcome.Line, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public void NothingWouldChange_IsRefused_AndNothingWritten()
     {
         string source = Put("small.bmp", 40, 20);
@@ -130,7 +130,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.Equal(["small.bmp"], Directory.GetFiles(_dir).Select(Path.GetFileName));
     }
 
-    [Fact]
+    [WindowsFact]
     public void ABigPicture_FitsTheBox_AndANotPicture_IsRefused()
     {
         string source = Put("wide.bmp", 1200, 300);
@@ -143,7 +143,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.Equal(ImageText.NotAnImage, bad.Line);
     }
 
-    [Fact]
+    [WindowsFact]
     public void StripMetadata_Beside_WritesALosslessCopy_TheSourceUntouched()
     {
         string source = Path.Combine(_dir, "geo.jpeg");
@@ -163,7 +163,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.Null(PictureActions.RequestFor(PictureCommand.StripMetadata));
     }
 
-    [Fact]
+    [WindowsFact]
     public void StripMetadata_Overwrite_ReplacesTheSource_AndTheRefusals()
     {
         string source = Path.Combine(_dir, "geo.jpg");

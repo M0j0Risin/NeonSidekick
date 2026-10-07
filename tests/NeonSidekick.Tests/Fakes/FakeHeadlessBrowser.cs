@@ -11,7 +11,10 @@ namespace NeonSidekick.Tests.Fakes;
 /// </summary>
 public sealed class FakeHeadlessBrowser : IHeadlessBrowser
 {
-    public string? Executable { get; set; } = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
+    /// <summary>Edge's place on this OS (2026-10-06, the macOS build: a Windows path reads as one name there, so its <c>msedge</c> was lost).</summary>
+    public string? Executable { get; set; } = OperatingSystem.IsWindows()
+        ? @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+        : "/Applications/Microsoft Edge.app/Contents/MacOS/msedge";
 
     public string? Html { get; set; }
 

@@ -280,7 +280,7 @@ public sealed class ThumbsTests
     public void ActionFor_MapsTheKeys(int key, bool control, bool shift, bool fullScreen, ThumbsAction expected) =>
         Assert.Equal(expected, ThumbsState.ActionFor(key, control, shift, fullScreen));
 
-    [Fact]
+    [WindowsFact]
     public void PressDelete_ArmsTheSelected_ThenDeletesIt_OnASecondWithinTheWindow()
     {
         var state = Grid(3);
@@ -517,7 +517,7 @@ public sealed class ThumbsTests
         Assert.Equal(ViewerStyle.ColorRef(palette.Primary), ThumbsStyle.For(palette).Selected);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Wording_IsPinned()
     {
         Assert.Equal(@"NeonSidekick thumbnails — D:\p", ThumbsText.Title(@"D:\p", 0, null, 0));
@@ -559,7 +559,7 @@ public sealed class ThumbsTests
         Assert.Equal("viewer:menu", check.Name);
     }
 
-    [Fact]
+    [WindowsFact]
     public void DecodeThumbnail_BringsTheLongestSideDown_NeverUp()
     {
         var big = ViewerImage.DecodeThumbnail(SmokeChecks.SolidBmp(400, 200), "big.bmp", 128);

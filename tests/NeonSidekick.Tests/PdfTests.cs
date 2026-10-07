@@ -614,7 +614,7 @@ public sealed class PdfTests : IDisposable
         Assert.Equal(PdfFileState.NotPdf, await PrintToFile.WaitForPdfAsync(path, TimeSpan.FromSeconds(5), TimeProvider.System, CancellationToken.None));
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WaitForPdf_AFileStillHeldForWriting_IsUnfinished()
     {
         Directory.CreateDirectory(_temp);
