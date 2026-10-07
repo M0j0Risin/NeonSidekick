@@ -10,8 +10,8 @@ namespace NeonSidekick.UI;
 /// ways, <see cref="WindowsClipboard"/>'s two text doors with the same contract — nothing throws, a failure reads as null and
 /// writes as false. A process-start site of its own, counted and deliberate: <c>/usr/bin/pbpaste</c> and <c>/usr/bin/pbcopy</c>,
 /// by absolute path (never the PATH), the text over their redirected stdin and stdout (so .NET never hands them the terminal the
-/// app's reader keeps raw), each waited for at most <see cref="Timeout"/>. No picture: images are left out of the macOS build
-/// until it has codecs (<c>Files/ImageCodecs</c>). Cmd+V needs none of this — the terminal pastes it as a bracketed paste; this
+/// app's reader keeps raw), each waited for at most <see cref="Timeout"/>. No picture yet: a Mac has picture codecs since 2026-10-07
+/// (<c>Images/ImageIOCodecs</c>), but reading one off the pasteboard needs AppKit, a later round (a dropped file works). Cmd+V needs none of this — the terminal pastes it as a bracketed paste; this
 /// is <c>/copy</c>, the input line's Ctrl+C copy, and the right click's and Alt+V's paste.
 /// </summary>
 [SupportedOSPlatform("macos")]

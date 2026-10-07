@@ -34,6 +34,13 @@ using Spectre.Console;
 // is off since SqlClient refuses it, and this keeps what the flag gave (App/CulturePin.cs).
 CulturePin.Apply();
 
+// Pictures on a Mac (2026-10-07): ImageIO registered as MagicScaler's codecs before anything touches MagicScaler, which fixes
+// its codec list on first use (Images/ImageIOCodecs). Windows keeps WIC and never calls this.
+if (OperatingSystem.IsMacOS())
+{
+    NeonSidekick.Images.ImageIOCodecs.Register();
+}
+
 // The Claude CLI server's MCP relay (2026-09-30): this executable started by the claude CLI as its MCP server
 // (NeonSidekick --mcp-relay <address> <key>), copying the CLI's stdio to the app's loopback listener. Before anything
 // touches the console: stdout is the MCP pipe, not a screen.

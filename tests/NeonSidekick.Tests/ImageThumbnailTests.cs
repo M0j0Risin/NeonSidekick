@@ -35,7 +35,7 @@ public class ImageThumbnailTests : IDisposable
         return image!;
     }
 
-    [WindowsFact]
+    [Fact]
     public void Read_FitsTheColumns_KeepingTheAspectRatio()
     {
         var thumbnail = ImageThumbnail.Read(Solid(64, 32));
@@ -49,7 +49,7 @@ public class ImageThumbnailTests : IDisposable
     }
 
     /// <summary>A left/right two-tone picture keeps its halves apart: a stride or format slip would smear the columns.</summary>
-    [WindowsFact]
+    [Fact]
     public void Read_KeepsTheColumnsInPlace()
     {
         byte[] bmp = SmokeChecks.SolidBmp(96, 48);   // 24-bit, rows of 288 bytes
@@ -107,7 +107,7 @@ public class ImageThumbnailTests : IDisposable
         Assert.Equal([new Color(0x80, 0x80, 0x80)], ImageThumbnail.Decode([0x00, 0x00, 0x00, 0x00], 4, new Color(0x80, 0x80, 0x80)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Read_ATallPicture_IsCappedByTheRows()
     {
         var thumbnail = ImageThumbnail.Read(Solid(32, 64));
@@ -117,7 +117,7 @@ public class ImageThumbnailTests : IDisposable
         Assert.Equal(24, thumbnail.Height);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Read_HonoursItsOwnSize()
     {
         var thumbnail = ImageThumbnail.Read(Solid(100, 100), columns: 8, maxRows: 40);
@@ -135,7 +135,7 @@ public class ImageThumbnailTests : IDisposable
         Assert.Null(ImageThumbnail.Read(image));
     }
 
-    [WindowsFact]
+    [Fact]
     public void ToCanvas_IsOneCellPerPixelAcross_TwoPixelRowsPerLine()
     {
         using var console = new TestConsole();

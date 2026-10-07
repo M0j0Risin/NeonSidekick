@@ -188,7 +188,7 @@ public sealed class MetadataStripperTests
         return result;
     }
 
-    [WindowsFact]
+    [Fact]
     public void ContainerOf_ByTheMagicBytes_AndByTheExtension()
     {
         Assert.Equal(StripContainer.Jpeg, MetadataStripper.ContainerOf(StripFixtures.Jpeg()));
@@ -205,14 +205,14 @@ public sealed class MetadataStripperTests
         Assert.Equal(".jpg", MetadataStripper.ExtensionFor(StripContainer.Jpeg, "cat.bin"));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Crc32_IsPngs()
     {
         Assert.Equal(0xAE426082u, MetadataStripper.Crc32("IEND"u8));
         Assert.All(StripFixtures.Chunks(StripFixtures.Png()), c => Assert.True(c.CrcOk, c.Type));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Jpeg_TheExifAndItsGps_Go_TheScanIsTheSameToTheByte()
     {
         byte[] source = ImageFixtures.ExifJpeg();
@@ -229,7 +229,7 @@ public sealed class MetadataStripperTests
         Assert.Equal(ImageFixtures.Pixel(source, 12, 12), ImageFixtures.Pixel(result.Bytes, 12, 12));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Jpeg_AnOrientation_IsWrittenBackAlone()
     {
         byte[] tiff = StripFixtures.Tiff((0x0112, 6, null), (0x8298, 0, ImageFixtures.Copyright));
@@ -250,7 +250,7 @@ public sealed class MetadataStripperTests
         Assert.True(segments.Take(exif).All(s => s.Marker == 0xE0), string.Join(",", segments.Select(s => s.Marker.ToString("X2"))));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Jpeg_TheColourStays_EveryOtherSegmentAndTheTrailerGo()
     {
         byte[] clean = StripFixtures.Jpeg();
@@ -289,7 +289,7 @@ public sealed class MetadataStripperTests
         Assert.True(result.Bytes.AsSpan().EndsWith((ReadOnlySpan<byte>)[0xFF, 0xD9]));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Jpeg_ACommentAfterTheScan_Goes_TheScanStays()
     {
         byte[] clean = StripFixtures.Jpeg();
@@ -301,7 +301,7 @@ public sealed class MetadataStripperTests
         Assert.Equal(clean, result.Bytes);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Jpeg_Clean_HasNothingToTake_AndADamagedOne_IsRefused()
     {
         byte[] clean = StripFixtures.Jpeg();
@@ -319,7 +319,7 @@ public sealed class MetadataStripperTests
         Assert.Null(MetadataStripper.Survey(ImageFixtures.Solid(2, 2, ImageFixtures.Red)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Png_TheTextExifAndTime_Go_ThePictureChunksStayToTheByte()
     {
         byte[] clean = StripFixtures.Png();
@@ -346,7 +346,7 @@ public sealed class MetadataStripperTests
         Assert.NotNull(ImageEditor.Info(result.Bytes));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Png_AnOrientation_IsABareExifChunkBeforeTheData()
     {
         byte[] source = StripFixtures.BeforeIend(StripFixtures.Png(), StripFixtures.Chunk("eXIf", StripFixtures.GeoTiff()));
@@ -362,7 +362,7 @@ public sealed class MetadataStripperTests
         Assert.False(ImageFixtures.HasGps(result.Bytes));
     }
 
-    [WindowsFact]
+    [Fact]
     public void WebP_ExifXmpAndTheUnknown_Go_TheFlagsFollow_TheBitstreamStays()
     {
         byte[] vp8l = StripFixtures.RiffChunk("VP8L", StripFixtures.Vp8l);
@@ -413,7 +413,7 @@ public sealed class MetadataStripperTests
         }
     }
 
-    [WindowsFact]
+    [Fact]
     public void Gif_CommentsAndXmp_Go_TheLoopAndTheFramesStay()
     {
         byte[] clean = ImageFixtures.AnimatedGif();
@@ -434,7 +434,7 @@ public sealed class MetadataStripperTests
         Assert.Equal(MetadataKinds.None, Strip(clean).Removed);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Survey_NamesTheKinds_AndTheWordsSayThem()
     {
         Assert.Equal(MetadataKinds.Exif | MetadataKinds.Gps, MetadataStripper.Survey(ImageFixtures.ExifJpeg())!.Found);

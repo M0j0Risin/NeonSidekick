@@ -334,6 +334,25 @@ public static class ImageEditor
             return ImageText.OptionNotFor("quality", format, "jpeg, jxl or heif");
         }
 
+        if (OperatingSystem.IsMacOS())
+        {
+            // ImageIO's encoders have no chroma setting and take no palette (2026-10-07): refused, not ignored, as a mismatch is.
+            if (request.Chroma != ImageChroma.Auto)
+            {
+                return ImageText.OptionNotOnMac("chroma");
+            }
+
+            if (request.Colors is not null)
+            {
+                return ImageText.OptionNotOnMac("colors");
+            }
+
+            if (request.Dither != DitherMode.Auto)
+            {
+                return ImageText.OptionNotOnMac("dither");
+            }
+        }
+
         return null;
     }
 
@@ -510,6 +529,13 @@ public static class ImageEditor
 
     private static IEncoderOptions? EncoderOptions(ImageEditRequest request, ImageFormat format, int quality)
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            // ImageIO's encoders (2026-10-07): MagicScaler hands them no DPI or metadata names of its own off WIC, so the options
+            // carry them; chroma and palettes were refused already (OptionMismatch).
+            return new ImageIOEncoderOptions(format.Lossy ? quality : 0, request.Interlace, request.Dpi ?? 0, MetadataNamesOf(request.Metadata));
+        }
+
         if (format == ImageFormats.Jpeg)
         {
             var chroma = request.Chroma switch

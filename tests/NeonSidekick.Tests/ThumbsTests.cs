@@ -559,7 +559,7 @@ public sealed class ThumbsTests
         Assert.Equal("viewer:menu", check.Name);
     }
 
-    [WindowsFact]
+    [Fact]
     public void DecodeThumbnail_BringsTheLongestSideDown_NeverUp()
     {
         var big = ViewerImage.DecodeThumbnail(SmokeChecks.SolidBmp(400, 200), "big.bmp", 128);

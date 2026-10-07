@@ -8,7 +8,8 @@ namespace NeonSidekick.Help;
 /// <see cref="HelpCommands"/>, used only when <see cref="OperatingSystem.IsMacOS"/>, so Windows' sentences stay byte for byte as
 /// they were (many are pinned). A setting or a form missing here keeps its one text, true on both systems. A feature that needs
 /// Windows (the camera, the picture viewer, printing, <c>/keycheck</c>, <c>/terminal</c>) says so, in its area's own words where
-/// it has them. The embedded LLM runs on a Mac since 2026-10-07 (Metal), so its rows here say how it differs, not that it is missing.
+/// it has them. The embedded LLM runs on a Mac since 2026-10-07 (Metal), so its rows here say how it differs, not that it is missing; pictures
+/// came the same day (ImageIO), so <c>Embedded vision</c> needs no Mac text any more.
 /// <c>HelpMacTests</c> pins that every key still names a setting or a form the tables hold, so the layer cannot go stale.
 /// </summary>
 public static class HelpMac
@@ -42,7 +43,7 @@ public static class HelpMac
         [SettingsField.EmbeddedBackend] = "Which llama.cpp build runs the model. On a Mac there is one, Metal, which uses the Apple Silicon GPU: `auto` and `metal` both pick it. The row shows what `auto` picked.",
         [SettingsField.EmbeddedVramBudget] = "How much of the GPU's memory the embedded server may fill: `off` (llama.cpp leaves 1 GiB free) or 50–99 % of it, leaving the rest free for other programs. On a Mac the GPU shares the computer's memory, and the budget is a share of the part macOS lets the GPU use (about two thirds of the memory on a 16 GB Mac). A profile that saved `off` keeps it. The budget only adjusts what is left to fit: *Embedded context size* 0 (the context shrinks first) and *Embedded GPU layers* `auto` (then layers move to the CPU). If you set a context too big for the budget, layers are all it can move and replies slow down sharply, so it works best with context 0. The budget is measured when the server starts; memory other programs take later is not held back. A change restarts the server.",
         [SettingsField.EmbeddedVramOnly] = "Keeps the embedded model on the GPU. Every layer goes on the GPU (whatever *Embedded GPU layers* says; with *Embedded context size* 0 the context shrinks to fit instead). If llama.cpp still leaves layers on the CPU, or a buffer could not be allocated, the app stops the server and the connect fails with what to lower. On a Mac the GPU shares the computer's memory, so this checks where the layers went, not which memory holds them. Refused when llama-server does not report where it put the layers, so the load cannot be checked. A profile saved while the default was off keeps it off.",
-        [SettingsField.EmbeddedVision] = "Loads the model's vision projector so it can read images. Pictures need Windows for now, so on a Mac the projector is downloaded with the model but not loaded, which saves its memory (about 1 GB for most models), and the model reads as one that cannot see images.",
+        [SettingsField.ImageEditQuality] = "The quality `image_edit` writes a JPEG or HEIF at when the model gives none (1–100), and where `max_kb` starts lowering it from. A Mac's ImageIO writes no JPEG XL.",
         [SettingsField.DockerEnginePipe] = "The Docker engine's named pipe (Docker Desktop on Windows). The Docker tools need Windows for now, so on a Mac it changes nothing.",
         [SettingsField.CameraDevice] = "The camera the camera tool and `/camera` use. The camera needs Windows for now, so on a Mac it changes nothing.",
         [SettingsField.PostgresSetPassword] = "Pick a connection and type its password (masked); it is saved encrypted in postgres.json or in the macOS Keychain, as the connection says.",

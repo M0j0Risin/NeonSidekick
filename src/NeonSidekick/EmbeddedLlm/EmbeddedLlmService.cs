@@ -422,9 +422,9 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         }
 
         // The projector with Embedded vision on and the file there — and pictures readable on this machine (2026-10-07, the
-        // user's call for the Mac): without codecs (ImageCodecs, Windows only for now) no picture can reach the model, so the
-        // projector would hold about 1 GB of unified memory for nothing. It is still downloaded with the model, so pictures on a
-        // Mac need no second download; the server then reads as blind, which the screen already handles.
+        // user's call for the Mac): without codecs (ImageCodecs) no picture can reach the model, so the projector would hold
+        // about 1 GB of unified memory for nothing. A Mac has codecs since the same day (ImageIO behind MagicScaler), so there it
+        // loads as on Windows; a Mac whose ImageIO failed to register still gets a blind server, which the screen handles.
         string mmproj = _files.MmprojPath(model);
         var (drafter, mtp) = await MtpAsync(model, effective, phase, cancellationToken).ConfigureAwait(false);
         var launch = new LlamaLaunch(

@@ -175,7 +175,7 @@ public class ImageFileTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => ImageFile.TryPastedPath(null!, out _));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Load_ReencodesABitmapAsPng_AtItsOwnSize()
     {
         string path = Bmp("small.bmp", 6, 4);
@@ -190,7 +190,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal((6, 4), (image.Width, image.Height));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Load_DownscalesToTheLongSide_KeepingTheRatio()
     {
         string path = Bmp("wide.bmp", ImageFile.MaxSide * 2, 8);
@@ -203,7 +203,7 @@ public class ImageFileTests : IDisposable
         Assert.True(IsPng(image.Bytes));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Load_SendsAFittingPng_ByteForByte()
     {
         var first = ImageFile.Load(Bmp("seed.bmp", 5, 5), out _);
@@ -230,7 +230,7 @@ public class ImageFileTests : IDisposable
         return path;
     }
 
-    [WindowsFact]
+    [Fact]
     public void Load_SendsAFittingJpeg_ByteForByte_AndAWideOne_Downscaled()
     {
         string small = Jpeg("small.jpg", 8, 6);
@@ -251,7 +251,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal((ImageFile.MaxSide, 4), (scaled.Width, scaled.Height));
     }
 
-    [WindowsFact]
+    [Fact]
     public void TheTypeComesFromTheBytes_NotTheName()
     {
         string png = Path.Combine(_dir, "really-a-png.jpg");
@@ -273,10 +273,11 @@ public class ImageFileTests : IDisposable
         Assert.Equal(ImageFile.Png, ImageFile.SentAs("image/gif"));
         Assert.Equal(ImageFile.Png, ImageFile.SentAs("image/bmp"));
         Assert.Equal(ImageFile.Png, ImageFile.SentAs(""));
+        Assert.Equal(OperatingSystem.IsMacOS() ? ImageFile.Jpeg : ImageFile.Png, ImageFile.SentAs("image/heic"));   // a photo on a Mac (2026-10-07); Windows unchanged
         Assert.Throws<ArgumentNullException>(() => ImageFile.SentAs(null!));
     }
 
-    [WindowsFact]
+    [Fact]
     public void TryLoad_ReportsTheFailure_AndLoadStillGivesTheSentence()
     {
         string missing = Path.Combine(_dir, "nope.png");
@@ -322,7 +323,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal($"(image not attached: {path} is over 20 MB or 40 megapixels)", error);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Load_RefusesTooManyPixels_Undecoded()
     {
         // A real 49-megapixel PNG that deflates to a few hundred KB: under the byte cap, over the pixel one.
@@ -336,7 +337,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal(ImageFile.TooLarge(path), error);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Load_RefusesWhatTheCodecsCannotRead_AndAMissingFile()
     {
         string corrupt = Path.Combine(_dir, "corrupt.png");
@@ -357,11 +358,14 @@ public class ImageFileTests : IDisposable
         Assert.Equal(20_000_000, ImageFile.MaxFileBytes);
         Assert.Equal(40_000_000, ImageFile.MaxPixels);
         Assert.Equal(85, ImageFile.JpegQuality);
-        Assert.Equal(new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" }, ImageFile.Extensions);
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Equal(new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" }, ImageFile.Extensions);   // a Mac's longer list: ImageIOMacTests
+        }
     }
     // ── Bytes that never were a file (a picture off the clipboard) ─────────
 
-    [WindowsFact]
+    [Fact]
     public void Load_FromBytes_DecodesLikeAFile_UnderTheNameGiven()
     {
         byte[] png = BlackPng(5, 3);
@@ -386,7 +390,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal((6, 4), (bmp.Width, bmp.Height));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Load_FromBytes_RefusesTheCap_AndGarbage()
     {
         Assert.Null(ImageFile.Load(new byte[ImageFile.MaxFileBytes + 1], "clipboard-1.png", out string? error));
@@ -403,7 +407,7 @@ public class ImageFileTests : IDisposable
 
     // ── A photo for the model (2026-10-03: ComfyUI's renders) ─────────
 
-    [WindowsFact]
+    [Fact]
     public void TryLoad_AsAPhoto_SendsAnOpaquePngAsJpeg_AtItsOwnSize()
     {
         byte[] png = BlackPng(64, 48);
@@ -418,7 +422,7 @@ public class ImageFileTests : IDisposable
         Assert.Equal("comfy_images/a.png", image.Path);
     }
 
-    [WindowsFact]
+    [Fact]
     public void TryLoad_AsAPhoto_KeepsAPngWithAlpha_AndAJpeg_AsTheyAre()
     {
         byte[] transparent = BlackPng(16, 16, alpha: true);
@@ -433,7 +437,7 @@ public class ImageFileTests : IDisposable
         Assert.Same(jpeg, photo.Bytes);
     }
 
-    [WindowsFact]
+    [Fact]
     public void TryLoad_NotAsAPhoto_SendsAFittingPng_ByteForByte_AsEver()
     {
         byte[] png = BlackPng(64, 48);
@@ -451,12 +455,15 @@ public class ImageFileTests : IDisposable
         Assert.Equal("clipboard-12.png", ImageFile.ClipboardName(12));
     }
 
-    /// <summary>The macOS build (2026-10-06): no codecs reads as its own failure with its own sentence, never "could not be read"; codecs on Windows.</summary>
+    /// <summary>
+    /// No codecs reads as its own failure with its own sentence, never "could not be read" (2026-10-06); codecs on Windows, and on a
+    /// Mac since ImageIO stands behind MagicScaler (2026-10-07), so the sentence only reaches other systems.
+    /// </summary>
     [Fact]
-    public void Unsupported_HasItsOwnSentence_AndCodecsAreWindowsOnly()
+    public void Unsupported_HasItsOwnSentence_AndCodecsAreWindowsAndMac()
     {
-        Assert.Equal("(image not attached: a.png; pictures need Windows for now)", ImageFile.Notice(ImageLoadFailure.Unsupported, "a.png"));
-        Assert.Equal(OperatingSystem.IsWindows(), ImageCodecs.Available);
+        Assert.Equal("(image not attached: a.png; pictures need Windows or macOS for now)", ImageFile.Notice(ImageLoadFailure.Unsupported, "a.png"));
+        Assert.Equal(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), ImageCodecs.Available);
         if (!ImageCodecs.Available)
         {
             Assert.False(ImageFile.TryLoad(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "a.png", out var image, out var failure));

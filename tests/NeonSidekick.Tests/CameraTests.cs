@@ -125,7 +125,7 @@ public sealed class CameraPureTests
         Assert.Equal(76, CameraPixels.Luma(0, 0, 255));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Encode_IsAJpeg_ScaledToFit_ThatTryLoadKeepsByteForByte_RedStayingRed()
     {
         var size = new CameraSize(320, 240);
@@ -719,7 +719,7 @@ public sealed class CameraCaptureTests : IDisposable
 
     private CameraCapture Capture() => new(_session, () => _files, () => _settings.CameraOutputFolder, () => CameraSettings.Options(_settings), _time);
 
-    [WindowsFact]
+    [Fact]
     public async Task ASnap_IsSavedUnderCamera_StampedLocally_AClashNumbered_AndADiscardDeletesIt()
     {
         var capture = Capture();
@@ -744,7 +744,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal("20260911-140530", CameraCapture.Stem(new DateTimeOffset(2026, 9, 11, 14, 5, 30, TimeSpan.Zero)));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ASnap_GoesToTheOutputFolderSetting_EvenComfysOrTheWorkingDirectoryItself()
     {
         var capture = Capture();
@@ -777,7 +777,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal(".watch", CameraWatch.FolderFor(""));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ASnap_IsScaledToTheResolutionsLongerSide()
     {
         _system.Size = new CameraSize(1920, 1080);
@@ -790,7 +790,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal((640, 360), (shot.Image.Width, shot.Image.Height));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ASaveTheSandboxRefuses_IsACameraFailure()
     {
         await File.WriteAllTextAsync(Path.Combine(_dir, "camera_images"), "a file where the folder goes");
@@ -802,7 +802,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.StartsWith("The camera failed. (The photo could not be saved: Error:", error.Message);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheTool_HasItsSchema_ReadsThePromptLeniently_AndAnswersEachOutcome()
     {
         var shot = await Capture().SnapAsync(_session.Acquire("test"), CancellationToken.None);
@@ -861,7 +861,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal(CameraText.Failure(CameraFailure.NoCamera, null), Assert.Single(lines).Text);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Watch_KeepsTheFirstFrame_ThenOnlyAChange_AndStopsOnRevoke()
     {
         long frameNo = 0;

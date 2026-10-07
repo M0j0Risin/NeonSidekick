@@ -182,7 +182,8 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Equal("(none: printing needs Windows)", SettingsMenu.WindowsDefaultPrinterLabel);
         Assert.Equal("GPU load (needs Windows for now)", Perf.PerfText.GpuNote);
         Assert.DoesNotContain(Camera.CameraCommand.Words, w => w.Note.Contains("Windows lists", StringComparison.Ordinal));
-        Assert.Contains(AboutText.Components, c => c.Name == "PhotoSauce.MagicScaler" && c.Role.EndsWith(" (Windows only)", StringComparison.Ordinal));
+        // MagicScaler works on a Mac since 2026-10-07, over ImageIO: its line names that, not "Windows only".
+        Assert.Contains(AboutText.Components, c => c.Name == "PhotoSauce.MagicScaler" && c.Role == "image decode, edit and downscale through Apple's ImageIO codecs");
     }
 
     [UnixFact]

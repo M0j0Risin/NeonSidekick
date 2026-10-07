@@ -240,7 +240,7 @@ public partial class ChatScreenTests
     /// <c>/help</c> typed in a looped <c>/imagine</c>'s wait opens there (the reply's own watch, 2026-10-04; it waited for the
     /// loop's end until then), the next pass waits for the pane to close, and the ESC that closes it does not stop the loop.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task Loop_Imagine_APaneTypedInTheWait_OpensThere_AndTheLoopGoesOnAfterIt()
     {
         UsePane();

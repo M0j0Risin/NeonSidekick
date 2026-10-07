@@ -275,7 +275,7 @@ public sealed class ImageEditorTests
 
     // ---- the pixels ----
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Resize_DownAndUp()
     {
         var (down, downBytes) = Edit(ImageFixtures.Quadrants(100, 50), new ImageEditRequest { Width = 40 });
@@ -286,7 +286,7 @@ public sealed class ImageEditorTests
         Assert.Equal((40, 20, "image/png"), ImageFixtures.Size(downBytes));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Rotate90_TurnsClockwise()
     {
         var (result, bytes) = Edit(ImageFixtures.Quadrants(20, 10), new ImageEditRequest { Rotate = 90 });
@@ -297,7 +297,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.Red, ImageFixtures.Pixel(bytes, 8, 1)), ImageFixtures.Pixel(bytes, 8, 1).ToString());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Rotate270_AndFlips()
     {
         var (_, turned) = Edit(ImageFixtures.Quadrants(20, 10), new ImageEditRequest { Rotate = 270 });
@@ -309,7 +309,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.Blue, ImageFixtures.Pixel(flipped, 1, 1)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Crop_TakesThatPart()
     {
         var (result, bytes) = Edit(ImageFixtures.Quadrants(20, 20), new ImageEditRequest { Crop = new Rectangle(10, 0, 10, 10) });
@@ -318,7 +318,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.Green, ImageFixtures.Pixel(bytes, 5, 5)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Cover_KeepsTheAnchoredPart()
     {
         var (_, left) = Edit(ImageFixtures.Quadrants(40, 20), new ImageEditRequest { Width = 10, Height = 20, Fit = ImageFit.Cover, Anchor = ImageAnchor.Left });
@@ -328,7 +328,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.Green, ImageFixtures.Pixel(right, 5, 2)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Filters_GreyAndNegative()
     {
         var (_, grey) = Edit(ImageFixtures.Solid(4, 4, ImageFixtures.Red), new ImageEditRequest { Filter = ImageFilter.Grey });
@@ -339,7 +339,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(Color.FromArgb(255, 0, 255, 255), ImageFixtures.Pixel(negative, 1, 1)), ImageFixtures.Pixel(negative, 1, 1).ToString());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Brightness_Contrast_Saturation()
     {
         var grey = Color.FromArgb(255, 100, 100, 100);
@@ -353,7 +353,7 @@ public sealed class ImageEditorTests
         Assert.True(Math.Abs(s.R - s.G) <= 2 && Math.Abs(s.G - s.B) <= 2, s.ToString());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Hue120_TurnsRedTowardGreen()
     {
         var (_, bytes) = Edit(ImageFixtures.Solid(4, 4, ImageFixtures.Red), new ImageEditRequest { Hue = 120 });
@@ -362,7 +362,7 @@ public sealed class ImageEditorTests
         Assert.True(c.G > c.R + 40 && c.G > c.B + 40, c.ToString());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Tint_PullsTowardTheColour_ByItsAmount()
     {
         var (_, none) = Edit(ImageFixtures.Solid(4, 4, ImageFixtures.White), new ImageEditRequest { Tint = ImageFixtures.Blue, TintAmount = 0, Pad = 1 });
@@ -376,7 +376,7 @@ public sealed class ImageEditorTests
         Assert.True(f.B > 240 && f.R < 20 && f.G < 20, f.ToString());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Pad_AddsABorderInTheBackground()
     {
         var (result, bytes) = Edit(ImageFixtures.Solid(4, 4, ImageFixtures.Red), new ImageEditRequest { Pad = 3, Background = Color.FromArgb(255, 0, 0, 0) });
@@ -386,7 +386,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.Red, ImageFixtures.Pixel(bytes, 5, 5)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_FitPad_FillsAroundThePicture()
     {
         var (result, bytes) = Edit(ImageFixtures.Solid(20, 10, ImageFixtures.Red), new ImageEditRequest { Width = 20, Height = 20, Fit = ImageFit.Pad, Background = ImageFixtures.Blue });
@@ -396,7 +396,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.Red, ImageFixtures.Pixel(bytes, 10, 10)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Jpeg_PutsTransparencyOnWhite()
     {
         var (_, transparent) = Edit(ImageFixtures.Solid(4, 4, ImageFixtures.Red), new ImageEditRequest { Pad = 4, Background = Color.FromArgb(0, 0, 0, 0) });
@@ -406,7 +406,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.White, ImageFixtures.Pixel(jpeg, 0, 0), 20), ImageFixtures.Pixel(jpeg, 0, 0).ToString());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Blur_SoftensAnEdge()
     {
         var (_, sharp) = Edit(ImageFixtures.Quadrants(20, 20), new ImageEditRequest { Filter = ImageFilter.None, Pad = 0, Brightness = 0, Sharpen = false, Interpolation = "nearest", Width = 20 });
@@ -417,7 +417,7 @@ public sealed class ImageEditorTests
         Assert.True(edge.G > 30 && edge.R < 230, edge.ToString());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Sharpen_WithoutAResize_ChangesThePixels()
     {
         // Settled 2026-10-04: MagicScaler's unsharp mask runs on a same-size pass too, so sharpen needs no resize.
@@ -427,7 +427,7 @@ public sealed class ImageEditorTests
         Assert.NotEqual(Convert.ToBase64String(unsharpened), Convert.ToBase64String(sharpened));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_Metadata_NoneDropsIt_BasicKeepsTheCopyright_AllKeepsThePlace()
     {
         var source = ImageFixtures.ExifJpeg();
@@ -447,7 +447,7 @@ public sealed class ImageEditorTests
 
     // ---- the formats ----
 
-    [WindowsFact]
+    [Fact]
     public void Apply_EveryWritableFormat_RoundTrips_AndAMissingOne_SaysWhatCanBe()
     {
         var writable = ImageFormats.WritableFormats();
@@ -464,7 +464,7 @@ public sealed class ImageEditorTests
         {
             var (result, error) = ImageEditor.Apply(ImageFixtures.Quadrants(8, 8), new ImageEditRequest(), format);
             Assert.Null(result);
-            Assert.Equal("Error: this Windows has no " + format.Label + " encoder; it can write " + string.Join(", ", writable.Select(f => f.Name)), error);
+            Assert.Equal("Error: this " + (OperatingSystem.IsMacOS() ? "Mac" : "Windows") + " has no " + format.Label + " encoder; it can write " + string.Join(", ", writable.Select(f => f.Name)), error);
         }
     }
 
@@ -499,7 +499,51 @@ public sealed class ImageEditorTests
         static int IndexOf(byte[] haystack, ReadOnlySpan<byte> needle) => haystack.AsSpan().IndexOf(needle);
     }
 
-    [WindowsTheory]
+    /// <summary>The Mac's twin (2026-10-07): ImageIO has no chroma setting, so quality alone changes the JPEG's size.</summary>
+    [MacFact]
+    public void Apply_Quality_ChangesTheJpegsSize_OnAMac()
+    {
+        var source = ImageFixtures.Noise(64, 64);
+        var (_, high) = Edit(source, new ImageEditRequest { Quality = 90 }, ImageFormats.Jpeg);
+        var (low, lowBytes) = Edit(source, new ImageEditRequest { Quality = 20 }, ImageFormats.Jpeg);
+
+        Assert.True(lowBytes.Length < high.Length, $"{lowBytes.Length} vs {high.Length}");
+        Assert.Equal(20, low.Quality);
+        Assert.Equal((64, 64, "image/jpeg"), ImageFixtures.Size(lowBytes));
+    }
+
+    /// <summary>The Mac's twin (2026-10-07): interlace and DPI are written through ImageIO; a palette is not offered.</summary>
+    [MacFact]
+    public void Apply_Interlace_AndDpi_AreWritten_OnAMac()
+    {
+        var (_, interlaced) = Edit(ImageFixtures.Noise(32, 32), new ImageEditRequest { Interlace = true, Dpi = 300 });
+
+        Assert.Equal(1, interlaced[28]);                    // IHDR interlace method
+        int phys = interlaced.AsSpan().IndexOf("pHYs"u8);
+        Assert.True(phys > 0);
+        Assert.Equal(11811, BinaryPrimitives.ReadInt32BigEndian(interlaced.AsSpan(phys + 4)));   // 300 DPI in pixels a metre
+    }
+
+    /// <summary>The options ImageIO has no setting for are refused on a Mac (2026-10-07), after the format's own mismatches.</summary>
+    [MacTheory]
+    [InlineData("jpeg", "chroma")]
+    [InlineData("png", "colors")]
+    [InlineData("gif", "dither")]
+    public void OptionMismatch_OnAMac_RefusesWhatImageIOCannotDo(string formatName, string option)
+    {
+        var request = option switch
+        {
+            "chroma" => new ImageEditRequest { Chroma = ImageChroma.Subsample444 },
+            "colors" => new ImageEditRequest { Colors = 16 },
+            _ => new ImageEditRequest { Dither = DitherMode.None },
+        };
+
+        string expected = "Error: " + option + " is not available on macOS; its ImageIO encoders have no such setting";
+        Assert.Equal(expected, ImageEditor.OptionMismatch(request, ImageFormats.ByName(formatName)!));
+        Assert.Equal(expected, ImageEditor.Apply(ImageFixtures.Quadrants(4, 4), request, ImageFormats.ByName(formatName)!).Error);
+    }
+
+    [Theory]
     [InlineData("png", "chroma", "Error: chroma does not apply to PNG; it is for jpeg")]
     [InlineData("jpeg", "colors", "Error: colors does not apply to JPEG; it is for png or gif")]
     [InlineData("jpeg", "interlace", "Error: interlace does not apply to JPEG; it is for png")]
@@ -522,7 +566,7 @@ public sealed class ImageEditorTests
 
     // ---- max_kb ----
 
-    [WindowsFact]
+    [Fact]
     public void MaxKb_Jpeg_LowersTheQualityToFit()
     {
         var source = ImageFixtures.Noise(256, 256);
@@ -539,7 +583,7 @@ public sealed class ImageEditorTests
         Assert.EndsWith("; under " + target + " KB at quality " + result.Quality, ImageText.Written("a.jpg", result, target));
     }
 
-    [WindowsFact]
+    [Fact]
     public void MaxKb_ShrinksWhenTheQualityFloorIsNotEnough()
     {
         var source = ImageFixtures.Noise(256, 256);
@@ -555,7 +599,7 @@ public sealed class ImageEditorTests
         Assert.EndsWith(", made smaller to fit", ImageText.Written("a.jpg", result, target));
     }
 
-    [WindowsFact]
+    [Fact]
     public void MaxKb_Png_OnlyShrinks_AndAnUnreachableCap_WritesNothing()
     {
         var source = ImageFixtures.Noise(128, 128);
@@ -570,12 +614,13 @@ public sealed class ImageEditorTests
         Assert.True(result.Width < 128);
         Assert.Null(none);
         Assert.StartsWith("Error: could not get under 1 KB, so nothing was written; the smallest tried was ", error);
-        Assert.EndsWith(". Try \"colors\" (fewer colours) or a lossy format such as jpeg", error);
+        // A Mac's ImageIO takes no palette (2026-10-07), so the hint names only the lossy format there.
+        Assert.EndsWith(OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colours) or a lossy format such as jpeg", error);
     }
 
     // ---- the rest ----
 
-    [WindowsFact]
+    [Fact]
     public void Apply_AnAnimatedGif_WritesTheFirstFrame_AndSaysSo()
     {
         var gif = ImageFixtures.AnimatedGif();
@@ -588,7 +633,7 @@ public sealed class ImageEditorTests
         Assert.EndsWith("; first of 2 frames", ImageText.Written("a.png", result));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Apply_NotAPicture_AndInfo_OfOne()
     {
         Assert.Equal(ImageText.NotAnImage, ImageEditor.Apply("hello"u8.ToArray(), new ImageEditRequest(), ImageFormats.Png).Error);
@@ -599,7 +644,7 @@ public sealed class ImageEditorTests
         Assert.Equal("a.bmp: BMP, 30×20, " + NeonSidekick.Files.FileText.Size(info.Bytes), ImageText.Info("a.bmp", info));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Info_OfASidewaysPhoto_IsUpright_AndAnEditPlansAgainstThatSize()
     {
         // 2026-10-07: MagicScaler reports the upright size already; Info swapped it a second time, so a sideways photo read as
@@ -614,7 +659,7 @@ public sealed class ImageEditorTests
         Assert.True(ImageFixtures.Near(ImageFixtures.Red, ImageFixtures.Pixel(bytes, 13, 2), 40));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Written_NamesTheSourceSize_OnlyWhenItChanged()
     {
         var (same, _) = Edit(ImageFixtures.Quadrants(8, 8), new ImageEditRequest { Filter = ImageFilter.Grey });

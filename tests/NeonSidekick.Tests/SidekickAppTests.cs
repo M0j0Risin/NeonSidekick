@@ -1096,7 +1096,7 @@ public partial class SidekickAppTests : IDisposable
     }
 
     /// <summary>The picture travels in the history, so headless has view_image like every file tool: the generic lines, and the carrier on the next request.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task Headless_ViewImage_PrintsTheGenericLines_AndTheCarrierFollowsTheResult()
     {
         ServerOn1234("llama");

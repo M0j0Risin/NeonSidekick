@@ -25,7 +25,7 @@ public class SmokeChecksTests
         Assert.True(check.Passed, check.Detail);
     }
 
-    [WindowsFact]
+    [Fact]
     public void ProbeImageResize_DownscalesABitmapToAPng()
     {
         var check = SmokeChecks.ProbeImageResize();
@@ -48,7 +48,7 @@ public class SmokeChecksTests
         Assert.Contains("; writes png, jpeg, gif, bmp, tiff", check.Detail);
     }
 
-    [WindowsFact]
+    [Fact]
     public void ProbeSplash_DecodesEveryEmbeddedPicture()
     {
         var check = SmokeChecks.ProbeSplash();

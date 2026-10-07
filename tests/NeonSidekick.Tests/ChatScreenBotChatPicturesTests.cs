@@ -38,7 +38,7 @@ public partial class ChatScreenTests
     /// whatever the setting said): a wide picture fills the size's columns, one half-block row at 4 px tall; <c>fullsize</c>
     /// is the window's 238 of 240, less the strip's two-cell margin since 2026-10-03.
     /// </summary>
-    [WindowsTheory]
+    [Theory]
     [InlineData("tiny", 32)]
     [InlineData("medium", 64)]
     [InlineData("fullsize", 236)]
@@ -63,7 +63,7 @@ public partial class ChatScreenTests
     /// Show image thumbnails off (2026-09-28, the user's report: botchat drew its pictures whatever the toggle said): the
     /// transcript gets the picture's result line alone; the picture is still made and gathered in the strip.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_ThumbnailsOff_TheAppsPictureIsNotDrawn()
     {
         var stub = BotPicturesFixture(width: 512, height: 4);
@@ -89,7 +89,7 @@ public partial class ChatScreenTests
     /// before it, captioned; the first bot's next turn carries its own reply's picture and ada's, and no request's earlier
     /// messages carry any.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Vision_TheNextBotSeesThePictureOfTheReplyBefore_AndEachBotWhatItMissed()
     {
         BotPicturesFixture();
@@ -138,7 +138,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>Autonomous, vision on (2026-09-27): a bot's own generate_image picture reaches the other bot next turn, not itself again.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Vision_Autonomous_ABotsOwnPicture_ReachesTheOther_NotItself()
     {
         BotPicturesFixture(mode: "autonomous");
@@ -178,7 +178,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Automatic_Sync_WritesAPromptFromTheHeldReply_AndDrawsThePictureAboveIt()
     {
         var stub = BotPicturesFixture();
@@ -211,7 +211,7 @@ public partial class ChatScreenTests
         Assert.Contains(BotChat.StoppedNotice(1), output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Automatic_Async_DrawsThePictureLater_UnderWhoseItIs()
     {
         var stub = BotPicturesFixture(async: true);
@@ -457,7 +457,7 @@ public partial class ChatScreenTests
     /// An img2img workflow among the botchat ones (2026-09-27, the user's ask): the first picture is fresh, its prompt writer offered no rework;
     /// the next reply's writer is offered the latest picture and answers REWORK, so that picture is uploaded and reworked.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Automatic_TheNextPicture_MayReworkTheLatest()
     {
         var stub = BotPicturesFixture();
@@ -758,7 +758,7 @@ public partial class ChatScreenTests
     /// The botchat workflows are any installed ones (later on 2026-09-27, the user's call): with ComfyUI workflows offered ticking
     /// none of them, automatic still draws with pony and reworks with the img2img one.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Automatic_UsesItsWorkflows_EvenWhenNotOffered()
     {
         var stub = BotPicturesFixture();
@@ -783,7 +783,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>Autonomous: the bots' tool lists the two workflows though neither is offered (later on 2026-09-27).</summary>
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Autonomous_TheBotsToolListsItsWorkflows_EvenWhenNotOffered()
     {
         var stub = BotPicturesFixture(mode: "autonomous");
@@ -1106,7 +1106,7 @@ public partial class ChatScreenTests
 
     private ComfyWorkflow PonyWorkflow => new ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows.Single(w => w.Name == "pony");
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Autonomous_APictureTheBotOnlyTalkedAbout_IsDrawnUnderTheReply()
     {
         var stub = BotPicturesFixture(mode: "autonomous");
@@ -1216,7 +1216,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("prompt=\"a dog", output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Autonomous_Async_APromisedPictureIsDrawnLater_UnderWhoseItIs()
     {
         var stub = BotPicturesFixture(mode: "autonomous", async: true);

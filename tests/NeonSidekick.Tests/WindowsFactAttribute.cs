@@ -53,3 +53,47 @@ public sealed class WindowsTheoryAttribute : TheoryAttribute
         }
     }
 }
+
+/// <summary>
+/// A fact about a macOS backend (2026-10-07, pictures through ImageIO): a Mac twin of a Windows-only test that pins WIC's exact
+/// output, checking what matters there instead. Skipped elsewhere.
+/// </summary>
+public sealed class MacFactAttribute : FactAttribute
+{
+    public const string SkipReason = "macOS-only: the Mac backend's side of the rule.";
+
+    public MacFactAttribute()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Skip = SkipReason;
+        }
+    }
+}
+
+/// <summary>The theory twin of <see cref="MacFactAttribute"/>.</summary>
+public sealed class MacTheoryAttribute : TheoryAttribute
+{
+    public MacTheoryAttribute()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Skip = MacFactAttribute.SkipReason;
+        }
+    }
+}
+
+/// <summary>
+/// A fact about a system with no picture codecs (2026-10-07): neither WIC nor ImageIO, so the picture tools are not offered. The
+/// Unix twins that pinned the macOS build's counts before it had ImageIO moved here; on Windows and a Mac the original runs.
+/// </summary>
+public sealed class NoPictureCodecsFactAttribute : FactAttribute
+{
+    public NoPictureCodecsFactAttribute()
+    {
+        if (Files.ImageCodecs.Available)
+        {
+            Skip = "This system has picture codecs; the original test runs instead.";
+        }
+    }
+}

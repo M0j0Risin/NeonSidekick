@@ -152,7 +152,7 @@ public partial class ChatScreenTests
     /// A pick in the browser moves the viewer without the keyboard and highlights the strip's tile; the viewer's keys and the strip's
     /// arrows move the browser — with the strip off too — and nothing answers back.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task ThePicturesStayInStep_TheBrowserTheViewerAndTheStrip()
     {
         ComfyServer();

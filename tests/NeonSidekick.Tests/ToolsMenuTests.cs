@@ -19,6 +19,9 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ToolsMenuTests : IDisposable
 {
+    /// <summary>The picture tools a Unix twin's file-tool counts add where there are codecs (2026-10-07: a Mac, through ImageIO).</summary>
+    private static int Pictures => Files.ImageCodecs.Available ? 3 : 0;
+
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly TestConsole _console = new TestConsole().Interactive();
     private readonly AppSettings _settings;
@@ -228,7 +231,7 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task OnThePane_OpensOnTheOfferedTab_OnTheFirstTool_AndEscClosesIt()
     {
         var (menu, pane, _) = PaneMenu();
@@ -261,9 +264,9 @@ public partial class ToolsMenuTests : IDisposable
 
         // The strip, the Clock heading, the cursor on get_current_time (the first tool row, past its heading), the hint with the flip keys; nothing reached the transcript.
         // The headings are rules with a gap before each but the first (2026-10-03).
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 13") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading($"── Files · {13 + Pictures}") + "\n", _console.Output);   // Files next: alphabetical since 2026-10-04
         Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", _console.Output);
-        Assert.Contains("\n" + Heading("── Files · 13") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
+        Assert.Contains("\n" + Heading($"── Files · {13 + Pictures}") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", _console.Output);
         Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", _console.Output);   // 39 rows over 30: the list scrolls
         Assert.False(pane.OverlayOpen);
         Assert.Equal(0, pane.FlowRow);
@@ -347,7 +350,7 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task OnThePane_AGroupOff_ShowsDimWithTheSwitchNamed_AndStillFlips()
     {
         _settings.Update(d => d.FileTools = false);
@@ -378,9 +381,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Heading("── Files · 13 ── off: File tools is off") + "\n", _console.Output);
+        Assert.Contains("\n" + Heading($"── Files · {13 + Pictures} ── off: File tools is off") + "\n", _console.Output);
         Assert.Contains("  · get_working_directory: off\n", _console.Output);
-        Assert.Contains("\n" + Heading("── Files · 12 of 13 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", _console.Output);
+        Assert.Contains("\n" + Heading($"── Files · {12 + Pictures} of {13 + Pictures} ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", _console.Output);
         pane.Dispose();
     }
 
@@ -1992,7 +1995,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", _console.Output);
-        Assert.Contains("  ·   Files (12 of 13)\n", _console.Output);
+        Assert.Contains($"  ·   Files ({12 + Pictures} of {13 + Pictures})\n", _console.Output);
         Assert.Contains("  ·     read_file             off  Reads a text file", _console.Output);   // the console wraps the long line
         Assert.Contains("switched off in /tools", _console.Output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", _console.Output);

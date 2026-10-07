@@ -303,7 +303,7 @@ public sealed class PrintTests : IDisposable
         Assert.Equal(@"Printed docs\notes.txt: 1 page to Office Laser", result);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Service_TellsMarkdownPicturesAndTheRestApart()
     {
         Write("readme.md", "# Head\n\ntext");

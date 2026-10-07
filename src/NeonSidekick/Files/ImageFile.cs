@@ -65,7 +65,8 @@ public enum ImageLoadFailure
 /// <see cref="JpegQuality"/> for a JPEG/WebP one; a PNG or JPEG that already fits goes byte for
 /// byte. Decoding goes through Windows' own codecs (WIC, driven by MagicScaler), so WebP needs the
 /// system's WebP codec (Windows 11 ships it) and a file the codecs refuse reads as
-/// <see cref="CouldNotRead"/>. Every failure is a sentence back to the line, never an exception.
+/// <see cref="CouldNotRead"/>. On a Mac (2026-10-07) MagicScaler drives Apple's ImageIO instead
+/// (<see cref="Images.ImageIOCodecs"/>), which also reads HEIC, TIFF and AVIF (<see cref="MacExtensions"/>). Every failure is a sentence back to the line, never an exception.
 /// A picture off the clipboard (<see cref="UI.WindowsClipboard.TryReadImage"/>) takes the same
 /// road from its bytes under the name <see cref="ClipboardName"/>.
 /// Pure apart from the file system; the sentences are pinned.</para>
@@ -87,8 +88,17 @@ public static class ImageFile
     public const string Png = "image/png";
     public const string Jpeg = "image/jpeg";
 
-    /// <summary>The extensions that make a pasted path an image, lower case with the dot.</summary>
-    public static readonly string[] Extensions = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"];
+    // The extensions every system's codecs read (WIC; ImageIO on a Mac).
+    private static readonly string[] CommonExtensions = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"];
+
+    /// <summary>
+    /// What a Mac reads besides (2026-10-07, ImageIO): an iPhone's HEIC/HEIF, TIFF, and AVIF. Re-encoded for the model as WebP is
+    /// (<see cref="SentAs"/>). Windows' list stays as it was: its HEIF codec is a Store extension, not a given.
+    /// </summary>
+    public static readonly IReadOnlyList<string> MacExtensions = [".heic", ".heif", ".tif", ".tiff", ".avif"];
+
+    /// <summary>The extensions that make a pasted path an image, lower case with the dot (<see cref="MacExtensions"/> too on a Mac).</summary>
+    public static readonly string[] Extensions = OperatingSystem.IsMacOS() ? [.. CommonExtensions, .. MacExtensions] : CommonExtensions;
 
     /// <summary>True when the path ends in one of <see cref="Extensions"/> (any case). No file system.</summary>
     public static bool IsImagePath(string path)
@@ -421,10 +431,21 @@ public static class ImageFile
         : bytes.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xD8, 0xFF]) ? ".jpg"
         : ".png";
 
-    /// <summary>What a re-encoded image is sent as: JPEG for a JPEG or WebP source (a photo), PNG for the rest (a drawing, a screenshot). Pinned.</summary>
+    /// <summary>
+    /// What a re-encoded image is sent as: JPEG for a JPEG or WebP source (a photo), PNG for the rest (a drawing, a screenshot, a
+    /// TIFF). On a Mac a HEIC/HEIF or AVIF source is a photo too (2026-10-07). Pinned.
+    /// </summary>
     public static string SentAs(string sourceMediaType)
     {
         ArgumentNullException.ThrowIfNull(sourceMediaType);
+        if (OperatingSystem.IsMacOS() && MacPhotoTypes.Contains(sourceMediaType, StringComparer.OrdinalIgnoreCase))
+        {
+            return Jpeg;
+        }
+
         return sourceMediaType.Equals(Jpeg, StringComparison.OrdinalIgnoreCase) || sourceMediaType.Equals("image/webp", StringComparison.OrdinalIgnoreCase) ? Jpeg : Png;
     }
+
+    /// <summary>The source types a Mac sends as JPEG besides JPEG and WebP (2026-10-07): an iPhone's HEIC/HEIF, and AVIF.</summary>
+    public static readonly IReadOnlyList<string> MacPhotoTypes = ["image/heic", "image/heif", "image/avif"];
 }

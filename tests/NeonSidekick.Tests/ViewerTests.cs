@@ -642,7 +642,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal("▶ 5 s · random", ViewerText.SlideShowTail(5, true));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Decode_ABmp_IsBgrx_TopRowFirst()
     {
         var bitmap = ViewerImage.Decode(SmokeChecks.SolidBmp(8, 2), "x.bmp");
@@ -653,7 +653,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal([0xC8, 0x40, 0xFF], bitmap.Bgrx[..3]);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Decode_OverTheMaxSide_IsDownscaled()
     {
         var bitmap = ViewerImage.Decode(SmokeChecks.SolidBmp(ViewerImage.MaxSide * 2, 4), "wide.bmp");
@@ -674,7 +674,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal([100, 50, 0, 0, 0, 0, 0, 0], ViewerImage.ToBgrx([200, 100, 0, 128, 255, 255, 255, 0], 4));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task LoadAsync_ReadsAPicture()
     {
         string path = Path.Combine(_dir, "a.bmp");
@@ -698,7 +698,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(ViewerImage.Attempts - 1, waits);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task LoadAsync_OfAFileThatFinishesBetweenTries_ShowsIt()
     {
         string path = Path.Combine(_dir, "late.bmp");
@@ -722,7 +722,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Null(await ViewerImage.LoadAsync(path, new CancellationToken(canceled: true)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Probe_MakesAHiddenWindow_ThatAnswers()
     {
         var check = SmokeChecks.ProbeViewerWindow();

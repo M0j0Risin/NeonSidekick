@@ -29,7 +29,7 @@ public class WindowsClipboardTests
 
     private static int PixelOffset(byte[] bmp) => BinaryPrimitives.ReadInt32LittleEndian(bmp.AsSpan(10));
 
-    [WindowsFact]
+    [Fact]
     public void BmpFromDib_PutsTheFileHeaderInFront_AndTheCodecsReadIt()
     {
         byte[] original = SmokeChecks.SolidBmp(4, 3);

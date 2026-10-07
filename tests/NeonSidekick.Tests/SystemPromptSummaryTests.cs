@@ -293,7 +293,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Assistant.OperatingRulesWithoutFiles, SystemPromptSummary.PromptSections(Facts(files: false))[1].Body);
     }
 
-    [WindowsFact]
+    [Fact]
     public void ToolGroups_WithDisabledTools_CountTheOffered_AndNoteEachRow()
     {
         var (clock, timers, files, memory) = Tools();
@@ -330,8 +330,8 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(["Clock (3)", "Files (16)", "Memory (2)", "Timers (3)"], SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, disabled: ToolsText.DisabledSet([])).Select(g => g.Title));
     }
 
-    /// <summary>The Unix twin of <see cref="ToolGroups_WithDisabledTools_CountTheOffered_AndNoteEachRow"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="ToolGroups_WithDisabledTools_CountTheOffered_AndNoteEachRow"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void ToolGroups_WithDisabledTools_CountTheOffered_AndNoteEachRow_Unix()
     {
         var (clock, timers, files, memory) = Tools();
@@ -368,7 +368,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(["Clock (3)", "Files (13)", "Memory (2)", "Timers (3)"], SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, disabled: ToolsText.DisabledSet([])).Select(g => g.Title));
     }
 
-    [WindowsFact]
+    [Fact]
     public void OfferedOnly_LeavesOutEveryToolAndGroupTheTurnDoesNotSend()
     {
         // /sys' Tools tab (2026-09-26): only what the next turn sends — a disabled tool, a noted one, a group off by its switch, a group emptied by /tools.
@@ -393,8 +393,8 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Contains("No tools offered (LLM offer tools is off)", console.Output);
     }
 
-    /// <summary>The Unix twin of <see cref="OfferedOnly_LeavesOutEveryToolAndGroupTheTurnDoesNotSend"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="OfferedOnly_LeavesOutEveryToolAndGroupTheTurnDoesNotSend"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void OfferedOnly_LeavesOutEveryToolAndGroupTheTurnDoesNotSend_Unix()
     {
         // /sys' Tools tab (2026-09-26): only what the next turn sends — a disabled tool, a noted one, a group off by its switch, a group emptied by /tools.
@@ -419,7 +419,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Contains("No tools offered (LLM offer tools is off)", console.Output);
     }
 
-    [WindowsFact]
+    [Fact]
     public void ToolGroups_NoSkillInstalled_NotesLoadSkill_OnlyWhenAsked()
     {
         var (clock, timers, files, memory) = Tools();
@@ -446,8 +446,8 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.True(plain[1].Offers(DeleteTool.ToolName));
     }
 
-    /// <summary>The Unix twin of <see cref="ToolGroups_NoSkillInstalled_NotesLoadSkill_OnlyWhenAsked"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="ToolGroups_NoSkillInstalled_NotesLoadSkill_OnlyWhenAsked"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void ToolGroups_NoSkillInstalled_NotesLoadSkill_OnlyWhenAsked_Unix()
     {
         var (clock, timers, files, memory) = Tools();
@@ -589,7 +589,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(groups.Select(g => g.Label).Order(StringComparer.OrdinalIgnoreCase), groups.Select(g => g.Label));
     }
 
-    [WindowsFact]
+    [Fact]
     public void ToolGroups_AreTheTurnsTools_InOrder_MemoryMarkedWhenOff()
     {
         var (clock, timers, files, memory) = Tools();
@@ -713,8 +713,8 @@ public class SystemPromptSummaryTests : IDisposable
         _ = echo;
     }
 
-    /// <summary>The Unix twin of <see cref="ToolGroups_AreTheTurnsTools_InOrder_MemoryMarkedWhenOff"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="ToolGroups_AreTheTurnsTools_InOrder_MemoryMarkedWhenOff"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void ToolGroups_AreTheTurnsTools_InOrder_MemoryMarkedWhenOff_Unix()
     {
         var (clock, timers, files, memory) = Tools();
@@ -933,7 +933,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], mcp: true), SystemPromptSummary.SystemPrompt(Facts() with { McpTools = 1 }));
     }
 
-    [WindowsFact]
+    [Fact]
     public void ToolLines_AndToolsTab_NameEveryTool_WithItsDescription()
     {
         var (clock, timers, files, memory) = Tools();
@@ -1001,8 +1001,8 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.NotEqual(Lead(ansiOn.Output, "save_memory"), Lead(dimmed, "save_memory"));   // the rows under it still dim
     }
 
-    /// <summary>The Unix twin of <see cref="ToolLines_AndToolsTab_NameEveryTool_WithItsDescription"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="ToolLines_AndToolsTab_NameEveryTool_WithItsDescription"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void ToolLines_AndToolsTab_NameEveryTool_WithItsDescription_Unix()
     {
         var (clock, timers, files, memory) = Tools();

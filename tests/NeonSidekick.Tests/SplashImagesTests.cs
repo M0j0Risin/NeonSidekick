@@ -20,7 +20,7 @@ public class SplashImagesTests
         Assert.Contains("splash/splash_01.png", names);   // the zero-padded names since 2026-09-18
     }
 
-    [WindowsFact]
+    [Fact]
     public void FromDirectory_IsTheFoldersPictures_InNameOrder_LoadedFromDisk_OrNull()
     {
         // The profile's own splash folder (later on 2026-09-19): image files alone, ordinal order; null without one.
@@ -100,7 +100,7 @@ public class SplashImagesTests
         Assert.DoesNotContain(typeof(SplashImages).Assembly.GetManifestResourceNames(), n => n.StartsWith(SplashImages.ResourcePrefix, StringComparison.Ordinal) && !ImageFile.IsImagePath(n));
     }
 
-    [WindowsFact]
+    [Fact]
     public void EveryPicture_Loads_AndReadsToAThumbnail()
     {
         foreach (var name in SplashImages.Names)
@@ -143,7 +143,7 @@ public class SplashImagesTests
         Assert.Throws<ArgumentNullException>(() => SplashImages.Load(null!));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Source_IsTheNamesAndTheLoader()
     {
         // The screen's seam (2026-09-19): the embedded names over Load.

@@ -136,8 +136,9 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsWindows() ? ProbeWinMmIn() : NotWindows("audio:winmm-in"));
         results.Add(OperatingSystem.IsWindows() ? ProbeConsoleInput() : NotWindows("console:input"));
         results.Add(OperatingSystem.IsMacOS() ? ProbeTermios() : new SmokeCheck("console:termios", true, "skipped: not macOS"));
-        results.Add(OperatingSystem.IsWindows() ? ProbeImageResize() : NotWindows("image:resize"));
-        results.Add(OperatingSystem.IsWindows() ? ProbeImageEdit() : NotWindows("image:edit"));
+        results.Add(PicturesHere ? ProbeImageResize() : NotWindows("image:resize"));
+        results.Add(PicturesHere ? ProbeImageEdit() : NotWindows("image:edit"));
+        results.Add(OperatingSystem.IsMacOS() ? ProbeImageIO() : new SmokeCheck("image:imageio", true, "skipped: not macOS"));
         results.Add(OperatingSystem.IsWindows() ? ProbeViewerWindow() : NotWindows("viewer:window"));
         results.Add(ProbeViewerDrag());
         results.Add(ProbeLogWindow());
@@ -145,7 +146,7 @@ public static partial class SmokeChecks
         results.Add(ProbePictureMenu());
         results.Add(ProbeVideoWebView2());
         results.Add(ProbeCameraMf());
-        results.Add(OperatingSystem.IsWindows() ? ProbeCameraEncode() : NotWindows("camera:encode"));
+        results.Add(PicturesHere ? ProbeCameraEncode() : NotWindows("camera:encode"));
         results.Add(ProbeScreenGdi());
         results.Add(ProbeScreenWindows());
         results.Add(ProbeHotkey());
@@ -154,7 +155,7 @@ public static partial class SmokeChecks
         results.Add(ProbePrintSpooler());
         results.Add(ProbePdfHtml());
         results.Add(ProbePdfBrowser());
-        results.Add(OperatingSystem.IsWindows() ? ProbeSplash() : NotWindows("splash:decode"));
+        results.Add(PicturesHere ? ProbeSplash() : NotWindows("splash:decode"));
         results.Add(ProbeWebMarkdown());
         results.Add(ProbeTranscriptMarkdown());
         results.Add(ProbeOnnxRuntime());
@@ -187,9 +188,15 @@ public static partial class SmokeChecks
 
     /// <summary>
     /// A check that cannot apply off Windows (2026-10-06, the macOS build): WinMM audio, the console's input records, and
-    /// MagicScaler's WIC codecs behind every picture probe. Each feature is off on macOS until it has a backend of its own.
+    /// (where neither WIC nor ImageIO is) the picture probes. Each feature is off on macOS until it has a backend of its own.
     /// </summary>
     private static SmokeCheck NotWindows(string name) => new(name, true, "skipped: not Windows");
+
+    /// <summary>
+    /// Where the picture probes run (2026-10-07): Windows (WIC) and a Mac (ImageIO behind MagicScaler). Not
+    /// <see cref="ImageCodecs.Available"/>: a Mac whose ImageIO failed to register must fail them, not skip them.
+    /// </summary>
+    private static bool PicturesHere => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
 
     /// <summary>
     /// <c>mcp:roundtrip</c> (2026-09-20): the MCP SDK's JSON path on the published binary — an in-process
@@ -534,14 +541,23 @@ public static partial class SmokeChecks
             };
             var source = SolidBmp(8, 4);
             var done = new List<string>();
-            foreach (var (label, format, edit) in new (string, Images.ImageFormat, Images.ImageEditRequest)[]
-            {
-                ("png", Images.ImageFormats.Png, request),
-                ("png/16", Images.ImageFormats.Png, request with { Colors = 16 }),
-                ("jpeg/444", Images.ImageFormats.Jpeg, request with { Chroma = Images.ImageChroma.Subsample444 }),
-                ("gif", Images.ImageFormats.Gif, request),
-                ("tiff", Images.ImageFormats.Tiff, request),
-            })
+            // A Mac's ImageIO takes no palette or chroma setting (2026-10-07): it writes HEIF instead, which Windows may not.
+            (string, Images.ImageFormat, Images.ImageEditRequest)[] edits = OperatingSystem.IsMacOS()
+                ? [
+                    ("png", Images.ImageFormats.Png, request),
+                    ("jpeg", Images.ImageFormats.Jpeg, request with { Quality = 80 }),
+                    ("gif", Images.ImageFormats.Gif, request),
+                    ("tiff", Images.ImageFormats.Tiff, request),
+                    ("heif", Images.ImageFormats.Heif, request),
+                ]
+                : [
+                    ("png", Images.ImageFormats.Png, request),
+                    ("png/16", Images.ImageFormats.Png, request with { Colors = 16 }),
+                    ("jpeg/444", Images.ImageFormats.Jpeg, request with { Chroma = Images.ImageChroma.Subsample444 }),
+                    ("gif", Images.ImageFormats.Gif, request),
+                    ("tiff", Images.ImageFormats.Tiff, request),
+                ];
+            foreach (var (label, format, edit) in edits)
             {
                 var (result, error) = Images.ImageEditor.Apply(source, edit, format);
                 if (result is null)
@@ -566,6 +582,57 @@ public static partial class SmokeChecks
             bool grey = Math.Abs(r - g) <= 3 && Math.Abs(g - b) <= 3;
             string writes = string.Join(", ", Images.ImageFormats.WritableFormats().Select(f => f.Name));
             return new SmokeCheck(name, grey, $"{string.Join(", ", done)} at 8x10; middle #{r:X2}{g:X2}{b:X2}; writes {writes}");
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <c>image:imageio</c> (2026-10-07, pictures on a Mac): ImageIO stands behind MagicScaler (<see cref="Images.ImageIOCodecs"/>),
+    /// a JPEG stored on its side with EXIF orientation 6 reads upright through <see cref="Images.ImageEditor.Info"/> and goes to
+    /// the model upright through <see cref="ImageFile.TryLoad(byte[], string, out ImageAttachment?, out ImageLoadFailure)"/>, and a
+    /// HEIC written by ImageIO reads back as one and is sent as JPEG — the CoreFoundation dictionaries, the exported keys, vImage's
+    /// conversion and both ends of the codec plug-in, on the published binary.
+    /// </summary>
+    public static SmokeCheck ProbeImageIO()
+    {
+        const string name = "image:imageio";
+        try
+        {
+            if (!Images.ImageIOCodecs.Registered)
+            {
+                return new SmokeCheck(name, false, "ImageIO is not registered as the picture codecs");
+            }
+
+            var (jpeg, jpegError) = Images.ImageEditor.Apply(SolidBmp(8, 4), new Images.ImageEditRequest(), Images.ImageFormats.Jpeg);
+            if (jpeg is null)
+            {
+                return new SmokeCheck(name, false, "jpeg: " + jpegError);
+            }
+
+            byte[] app1 = [.. "Exif\0\0"u8, .. Images.MetadataStripper.OrientationTiff(6)];
+            byte[] sideways = [0xFF, 0xD8, 0xFF, 0xE1, (byte)((app1.Length + 2) >> 8), (byte)(app1.Length + 2), .. app1, .. jpeg.Bytes.AsSpan(2)];
+            var info = Images.ImageEditor.Info(sideways);
+            bool upright = info is { Width: 4, Height: 8, Orientation: PhotoSauce.MagicScaler.Orientation.Rotate90 }
+                && ImageFile.TryLoad(sideways, "sideways.jpg", out var sent, out _) && sent is { Width: 4, Height: 8 } && !ReferenceEquals(sent.Bytes, sideways);
+            if (!upright)
+            {
+                return new SmokeCheck(name, false, $"a sideways JPEG read {info?.Width}x{info?.Height} {info?.Orientation}");
+            }
+
+            var (heic, heicError) = Images.ImageEditor.Apply(SolidBmp(8, 4), new Images.ImageEditRequest(), Images.ImageFormats.Heif);
+            if (heic is null)
+            {
+                return new SmokeCheck(name, false, "heif: " + heicError);
+            }
+
+            var heicInfo = Images.ImageEditor.Info(heic.Bytes);
+            bool heicOk = heicInfo is { MimeType: "image/heic", Width: 8, Height: 4 }
+                && ImageFile.TryLoad(heic.Bytes, "photo.heic", out var heicSent, out _) && heicSent?.MediaType == ImageFile.Jpeg;
+            string writes = string.Join(", ", Images.ImageIOCodecs.Writers.Select(w => w.Uti));
+            return new SmokeCheck(name, heicOk, $"writes {writes}; a sideways JPEG reads 4x8 upright; HEIC {heic.Bytes.Length} bytes {heicInfo?.MimeType} {heicInfo?.Width}x{heicInfo?.Height}, sent as {(heicOk ? "JPEG" : "something else")}");
         }
         catch (Exception ex)
         {

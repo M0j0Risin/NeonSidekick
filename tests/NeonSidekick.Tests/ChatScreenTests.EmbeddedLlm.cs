@@ -431,7 +431,7 @@ public partial class ChatScreenTests
         return input;
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task APicture_ToAModelWhoseVisionIsOff_PointsAtTheSwitch()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "embedded"; d.LlmModel = "gemma-4-e2b"; d.EmbeddedVision = false; });
