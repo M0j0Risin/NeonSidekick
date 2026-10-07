@@ -138,7 +138,7 @@ public sealed class GitToolsTests : IDisposable
             "A branch's unmerged commits and a dropped stash are gone from every listing — do it only when the user asked for exactly that.",
             Tool<GitDeleteTool>().Description);
         // gitlib_delete is the fresh profile's opt-in (gitlib_discard on out of the box since 2026-09-23); the rule names neither.
-        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete", "docker_remove", "docker_prune"], new AppSettingsData().ToolsDisabled);   // delete on out of the box since later on 2026-09-21; unc_delete off since 2026-09-30; docker_remove and docker_prune since 2026-10-02
+        Assert.Equal(["gitlib_delete", "unzip", "zip", "unc_delete", "docker_remove", "docker_prune", "ha_todo"], new AppSettingsData().ToolsDisabled);   // ha_todo since 2026-10-07; delete on out of the box since later on 2026-09-21; unc_delete off since 2026-09-30; docker_remove and docker_prune since 2026-10-02
         Assert.All(_tools, t => Assert.Contains(t.Name, App.ChatScreen.QuietTools));
     }
 

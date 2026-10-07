@@ -4097,7 +4097,7 @@ public partial class ChatScreenTests : IDisposable
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
         // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName], _settings.Current.ToolsDisabled);   // docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
+        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);
@@ -4132,7 +4132,7 @@ public partial class ChatScreenTests : IDisposable
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
         // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName], _settings.Current.ToolsDisabled);   // docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
+        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);

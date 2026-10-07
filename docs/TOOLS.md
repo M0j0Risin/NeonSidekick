@@ -638,7 +638,7 @@ The Home Assistant tools control your own Home Assistant over its REST API with 
 | `ha_lights` | `target, action?, brightness_pct?, color_name?, color_temp_kelvin?, transition?` | `on` (default; also changes brightness or colour), `off` or `toggle`, with a colour name or white temperature (1500–9000 K) and a 0–300 s fade. |
 | `ha_scene` | `scene, transition?` | Activates a scene by name or id. |
 | `ha_media` | `action, target?, volume_pct?, source?` | `on`, `off`, `volume`, `volume_up`, `volume_down`, `mute`, `unmute`, `source`, `play`, `pause`, `play_pause`, `stop`, `next`, `previous`. The target may be left out when there's one player. A source matches by name or prefix (`hdmi 3` → `HDMI 3 (eARC/ARC)`). |
-| `ha_todo` | `action, item?, list?` | `list` (allowed under every policy), or `add`, `complete` or `remove` an item. |
+| `ha_todo` | `action, item?, list?` | `list` (allowed under every policy), or `add`, `complete` or `remove` an item. Off in a new profile; switch it on in `/tools` › Offered. |
 | `ha_call_service` | `domain, service, entity?, data?` | Any other service (`remote.send_command` with `{"command": "Home"}`, `button.press`, `script.turn_on`), subject to the policy. |
 | `ha_assist` | `text` | Hands a sentence to Home Assistant's Assist agent, as a last resort. Refused under policy `off`; Assist reaches only entities exposed to it. |
 

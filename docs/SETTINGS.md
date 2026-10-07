@@ -555,7 +555,7 @@ A reflection must `load_skill` a skill before rewriting its instructions or a su
 
 ### Offered
 
-Every tool, grouped, the groups in alphabetical order, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove` and `docker_prune` start off.
+Every tool, grouped, the groups in alphabetical order, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune` and `ha_todo` start off.
 
 ### Web
 

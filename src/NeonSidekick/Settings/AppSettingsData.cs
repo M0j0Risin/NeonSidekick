@@ -1221,9 +1221,11 @@ public sealed class AppSettingsData
     /// with it off keeps it off until it is flipped on the Offered tab. <c>unc_delete</c> joined on 2026-09-30 (a delete on a share is
     /// permanent, a folder with everything in it — opt-in like <c>gitlib_delete</c>, even under <c>UNC writes</c>). <c>docker_remove</c>
     /// and <c>docker_prune</c> joined on 2026-10-02 (a removed volume or image is gone; opt-in even under <c>Docker writes</c>, each call
-    /// still asking); a profile saved before keeps its list, so there the yes on the pane is their only guard.
+    /// still asking); a profile saved before keeps its list, so there the yes on the pane is their only guard. <c>ha_todo</c> joined on
+    /// 2026-10-07 (the user's call: opt-in, flipped on <c>/tools</c>' Offered tab); a profile saved before keeps its list and with it
+    /// <c>ha_todo</c> on.
     /// </summary>
-    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName, Llm.Tools.DockerRemoveTool.ToolName, Llm.Tools.DockerPruneTool.ToolName];
+    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName, Llm.Tools.DockerRemoveTool.ToolName, Llm.Tools.DockerPruneTool.ToolName, Llm.Tools.HaTodoTool.ToolName];
 
     /// <summary>
     /// Whether <c>$</c> and part of a name on the chat line lists the tools the next turn offers
