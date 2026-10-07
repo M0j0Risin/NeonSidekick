@@ -124,7 +124,7 @@ public class KeysTests
         Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
         Assert.Equal(line, Keys.ShortcutLine(Keys.Ctrl(key)));
         Assert.Contains(line, NeonSidekick.App.SlashCommands.Words);
-        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: true, alt: false, control: true)));
+        Assert.Equal(key == ConsoleKey.F ? "/find" : null, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: true, alt: false, control: true)));   // Ctrl+Shift+F /find (2026-10-07)
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(key.ToString()[0], key, shift: false, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(Keys.Char(char.ToLowerInvariant(key.ToString()[0]))));

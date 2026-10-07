@@ -580,6 +580,81 @@ public sealed class Scrollback
         }
     }
 
+    /// <summary>A fold the transcript's find opened (2026-10-07): the group and the state it had, to put back when the find ends.</summary>
+    public sealed record Unfolded(int Id, bool? Was);
+
+    /// <summary>
+    /// Every fold that hides a line holding <paramref name="find"/> (ignoring case) opened — a tool run, a code or thinking block, a
+    /// diff, both when a diff hides in a folded run (2026-10-07, phase 5 of the UI round: the transcript's find reaches into what
+    /// is folded). Returns what it opened, for <see cref="Refold"/>; the rows are laid out again when anything opened.
+    /// </summary>
+    public IReadOnlyList<Unfolded> UnfoldMatching(string find)
+    {
+        ArgumentNullException.ThrowIfNull(find);
+        var opened = new List<Unfolded>();
+        if (find.Length == 0)
+        {
+            return opened;
+        }
+
+        foreach (var line in _lines)
+        {
+            if (Shown(line) is not null || !TextFind.LineText(line.Segments).Contains(find, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var group in (ReadOnlySpan<Group?>)[line.Group, line.Fold])
+            {
+                if (group is { Folds: true } folds && !Expanded(folds))
+                {
+                    opened.Add(new Unfolded(folds.Id, folds.Expanded));
+                    folds.Expanded = true;
+                }
+            }
+        }
+
+        if (opened.Count > 0)
+        {
+            Reflow();
+        }
+
+        return opened;
+    }
+
+    /// <summary>The folds <see cref="UnfoldMatching"/> opened, put back as they were (one gone from the store meanwhile is skipped).</summary>
+    public void Refold(IReadOnlyList<Unfolded> opened)
+    {
+        ArgumentNullException.ThrowIfNull(opened);
+        bool any = false;
+        foreach (var fold in opened)
+        {
+            if (_groups.TryGetValue(fold.Id, out var group))
+            {
+                group.Expanded = fold.Was;
+                any = true;
+            }
+        }
+
+        if (any)
+        {
+            Reflow();
+        }
+    }
+
+    /// <summary>Every row laid out again at the cached width, the pane told to rebuild (<see cref="SetAllExpanded"/>'s way).</summary>
+    private void Reflow()
+    {
+        if (_width > 0)
+        {
+            int width = _width;
+            _width = -1;
+            Layout(width);
+        }
+
+        _reshaped = true;
+    }
+
     /// <summary>Rows other than the end changed and <see cref="TakeReshaped"/> has not been asked yet.</summary>
     public bool Reshaped => _reshaped;
 

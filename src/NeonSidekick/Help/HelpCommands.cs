@@ -118,6 +118,10 @@ public static class HelpCommands
         [
             new("/explore [<folder>]", "Open the working directory, or a folder in it, in your file browser. Ctrl+E runs it too."),
         ]),
+        new("/find",
+        [
+            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row and the transcript scrolls to the newest match, every match marked. Typing changes the text; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. The first Enter after the text changes, and the words given here, open the folded tool runs, code blocks, diffs and thinking blocks that hold it; they fold again when the find ends. ESC ends it at the bottom of the transcript. Ctrl+Shift+F runs it too."),
+        ]),
         new("/gituser",
         [
             new("/gituser [force]", "Write *GitLib email* and *GitLib name* into the repository's config as `user.email` / `user.name`. An existing `[user]` section is kept unless you add `force`. Does nothing while *GitLib tools* is off."),

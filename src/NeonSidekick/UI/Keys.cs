@@ -180,6 +180,17 @@ public static class Keys
             };
         }
 
+        if (held == (ConsoleModifiers.Control | ConsoleModifiers.Shift))
+        {
+            // Ctrl+Shift+F /find (2026-10-07, the user's pick): Shift tells it from Ctrl+F's /perfbar. Windows Terminal binds it to
+            // its own find by default, so there it reaches the app only once that binding is taken off.
+            return (key.Key, key.KeyChar) switch
+            {
+                (ConsoleKey.F, '\0' or '\x06') => "/find",
+                _ => null,
+            };
+        }
+
         if (held != (ConsoleModifiers.Control | ConsoleModifiers.Alt))
         {
             return null;

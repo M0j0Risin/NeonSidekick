@@ -48,6 +48,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+/ | `/settings` | opens over the reply |
 | Ctrl+E | `/explore` | at once |
 | Ctrl+F | `/perfbar` (performance bar on/off) | at once |
+| Ctrl+Shift+F | `/find` (find in the transcript; Windows Terminal keeps Ctrl+Shift+F for its own find until you unbind it) | waits for the reply to end |
 | Ctrl+H | `/help` | opens over the reply |
 | Ctrl+L | cancels the background learning (🧠) | at once |
 | Ctrl+M | `/model` | waits for the reply |

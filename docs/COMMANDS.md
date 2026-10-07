@@ -91,6 +91,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/botchat --kill` | Stops the extra embedded servers the bots started. |
 | `/expand` | Unfolds every tool run, code block, diff and thinking block, now and from here on. Ctrl+O switches between this and `/collapse`. |
 | `/collapse` | Folds them again. |
+| `/find [<words>]` | Finds words in the transcript: a find row opens over the input row and the transcript scrolls to the newest match, every match marked. Typing changes the text; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. The first Enter after the text changes (and the words given here, at once) opens the folded tool runs, code blocks, diffs and thinking blocks that hold it; they fold again when the find ends. ESC ends it at the bottom. Ctrl+Shift+F runs it too (in Windows Terminal, once its own Ctrl+Shift+F find is unbound). A word the window wraps across two rows is not found. |
 | `/mcp` | Connects MCP servers and switches their tools. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/memory` | Lists memories on a pane, one line each, with the highlighted one in full under the list (Enter forgets it after a yes); **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row set *Memory mode*. |
 | `/memory read-write\|read-only\|disabled\|on\|off` | Sets *Memory mode* (`on` is read-write, `off` disabled). |
@@ -515,4 +516,5 @@ Every list pane works the same way (2026-10-07): ↑/↓ move, Enter picks the h
 | `/server`, `/model` | Enter chooses · type to filter |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · ESC denies |
+| `/find` (the transcript) | type to find · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · ESC done, back at the bottom |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`, a `v` view…) | ↑/↓ PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find: Enter or F3 the next match, Shift+Enter or Shift+F3 the one before, Backspace erases, the first ESC clears the find · ESC closes |

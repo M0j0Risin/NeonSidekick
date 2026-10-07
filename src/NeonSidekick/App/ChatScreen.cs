@@ -353,6 +353,9 @@ internal sealed partial class ChatScreen
     public const string MemoryFailedError = "Could not save the memory; the log has the reason.";
     public const string NothingToForgetNotice = "(" + NoticeGlyphs.Memory + "nothing to forget)";
     public const string KeptNotice = "(kept)";
+
+    /// <summary><c>/find</c> without the screen to scroll (2026-10-07). Pinned.</summary>
+    public const string FindNeedsPaneNotice = "/find needs the interactive screen.";
     public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push <name>, pull <name>, edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
@@ -11183,6 +11186,17 @@ internal sealed partial class ChatScreen
             case SlashCommand.Expand or SlashCommand.Collapse:
                 // The transcript's tool runs and code blocks (2026-09-22; /tools expand|collapse until later that day), no pane.
                 SetFolds(command == SlashCommand.Expand);
+                return false;
+
+            case SlashCommand.Find:
+                // The transcript's find (2026-10-07, phase 5 of the UI round): over the input row, the screen's own keys.
+                if (!_pane.Enabled)
+                {
+                    _transcript.Notice(FindNeedsPaneNotice);
+                    return false;
+                }
+
+                await new TranscriptFind(_pane, _keys).RunAsync(args.Trim(), cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Tools when args.Trim().Length > 0:

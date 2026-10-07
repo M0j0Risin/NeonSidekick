@@ -119,6 +119,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     // the bottom writes the store's tail back first (RestoreFlow). _liveCount: the live block's
     // rows not yet committed, for the rows-below count while scrolled.
     private int _top = -1;
+
+    // The transcript's find while one is shown (2026-10-07, ShowFind): its text, and the store row and character of the match it
+    // is on; null when none is. The scroll is then held on the store, even at its last window.
+    private string? _find;
+    private int _findRow = -1;
+    private int _findStart = -1;
     private bool _drawnScrolled;
     private bool _blank = true;
     private int _liveCount;
@@ -1496,7 +1502,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             int max = Math.Max(0, count - ScrolledRegionRows);
             int current = _top >= 0 ? _top : max;
             int top = Math.Clamp(current + rows, 0, max);
-            int next = top >= max ? -1 : top;
+            int next = top >= max && _find is null ? -1 : top;   // a find holds the store's last window (2026-10-07)
             if (next == _top)
             {
                 return;
@@ -1551,6 +1557,124 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _top = 0;
             Redraw();
         }
+    }
+
+    /// <summary>
+    /// The transcript's rows at the window's width, a copy (2026-10-07, phase 5 of the UI round: the find looks through them);
+    /// none while disabled.
+    /// </summary>
+    public IReadOnlyList<SegmentLine> TranscriptRows()
+    {
+        if (!Enabled)
+        {
+            return [];
+        }
+
+        lock (_gate)
+        {
+            return _store.Rows(Width).ToList();
+        }
+    }
+
+    /// <summary>
+    /// The folds that hide a line holding <paramref name="find"/> opened (<see cref="Scrollback.UnfoldMatching"/>), the screen
+    /// rebuilt when anything opened; what opened, for <see cref="Refold"/>. Disabled: nothing.
+    /// </summary>
+    public IReadOnlyList<Scrollback.Unfolded> UnfoldMatching(string find)
+    {
+        if (!Enabled)
+        {
+            return [];
+        }
+
+        lock (_gate)
+        {
+            var opened = _store.UnfoldMatching(find);
+            RedrawIfReshaped();
+            return opened;
+        }
+    }
+
+    /// <summary>The folds <see cref="UnfoldMatching"/> opened, put back as they were. Disabled: nothing.</summary>
+    public void Refold(IReadOnlyList<Scrollback.Unfolded> opened)
+    {
+        if (!Enabled || opened.Count == 0)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _store.Refold(opened);
+            RedrawIfReshaped();
+        }
+    }
+
+    /// <summary>
+    /// The transcript's find shown (2026-10-07, phase 5 of the UI round): every place <paramref name="find"/> occurs in the rows the
+    /// region paints is marked (<see cref="TextFind.Mark"/>), the one at store row <paramref name="row"/> from character
+    /// <paramref name="start"/> as the current one, and the region scrolled to put that row a third of the way down. While a find
+    /// is shown the region is painted from the store even at its last window (where it would be the bottom's flow, unmarked); a
+    /// <paramref name="row"/> of −1 leaves the view where it is. Disabled: nothing.
+    /// </summary>
+    public void ShowFind(string find, int row, int start)
+    {
+        ArgumentNullException.ThrowIfNull(find);
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _find = find;
+            _findRow = row;
+            _findStart = start;
+            if (row >= 0)
+            {
+                int region = ScrolledRegionRows;
+                int max = Math.Max(0, _store.Rows(Width).Count - region);
+                _top = Math.Clamp(row - region / 3, 0, max);
+            }
+
+            Redraw();
+        }
+    }
+
+    /// <summary>The find gone (<see cref="ShowFind"/>): the marks off and the region at the bottom again. Disabled, or no find: nothing.</summary>
+    public void EndFind()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (_find is null)
+            {
+                return;
+            }
+
+            _find = null;
+            _findRow = -1;
+            _findStart = -1;
+            _top = -1;
+            Redraw();
+        }
+    }
+
+    /// <summary>A store row as the region paints it: with the find's places marked while one is shown (<see cref="ShowFind"/>).</summary>
+    private List<Segment> FindMarked(IReadOnlyList<SegmentLine> rows, int row)
+    {
+        var line = rows[row];
+        if (_find is not { Length: > 0 } find)
+        {
+            return line;
+        }
+
+        var starts = TextFind.Matches([line], find).Select(hit => hit.Start).ToList();
+        return starts.Count == 0 ? line : TextFind.Mark(line, starts, find.Length, row == _findRow ? _findStart : -1).ToList();
     }
 
     /// <summary>The hint row's text while scrolled: <c>⇡ 12 rows below · PgUp/PgDn scroll · Ctrl+End bottom</c>, <c>1 row</c> singular. Pinned.</summary>
@@ -3879,7 +4003,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         {
             window = _store.Rows(w);
             int max = Math.Max(0, window.Count - region);
-            if (_top >= max)
+            if (_find is not null)
+            {
+                // A find (2026-10-07) paints the store at its last window too, so its marks show there; a short store from its top.
+                _top = Math.Min(_top, max);
+            }
+            else if (_top >= max)
             {
                 _top = -1;
                 window = null;
@@ -3913,7 +4042,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
             for (int i = 0; i < region; i++)
             {
-                _inner.Write(new SegmentList(window[_top + i]));
+                if (_top + i < window.Count)
+                {
+                    _inner.Write(new SegmentList(FindMarked(window, _top + i)));
+                }
+
                 _inner.WriteLine();
             }
 
@@ -5067,7 +5200,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The scroll's row (2026-10-01) on the cursor's row: <see cref="ScrolledRow"/> in the hint's style, the rest of the row erased; the text remembered for the tick.</summary>
     private void WriteScrollRow(int width)
     {
-        string row = ScrolledRow(RowsBelowLocked(), width - 1);
+        string row = ScrollRowText(width - 1);
         _inner.Write(new RawText(row, Theme.Hint));
         _inner.Write(EraseLineEnd);
         _shownScroll = row;
@@ -5085,7 +5218,26 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>The count on the scroll's row is not the drawn one (a reply streaming on below, a write stored while scrolled).</summary>
-    private bool ScrollRowChanged() => _scrollRows > 0 && !string.Equals(ScrolledRow(RowsBelowLocked(), Width - 1), _shownScroll, StringComparison.Ordinal);
+    private bool ScrollRowChanged() => _scrollRows > 0 && !string.Equals(ScrollRowText(Width - 1), _shownScroll, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The scroll's row: <see cref="ScrolledRow"/>, or under a find with nothing below (2026-10-07: a find holds the store's last
+    /// window, where the row read "0 rows below") <see cref="FindAtTheEnd"/>, centered the same way.
+    /// </summary>
+    private string ScrollRowText(int cells)
+    {
+        int below = RowsBelowLocked();
+        if (_find is null || below > 0)
+        {
+            return ScrolledRow(below, cells);
+        }
+
+        string end = Fit(FindAtTheEnd, Math.Max(1, cells));
+        return new string(' ', (Math.Max(1, cells) - TextCells.Width(end)) / 2) + end;
+    }
+
+    /// <summary>The scroll's row under a find at the transcript's last window (2026-10-07). Pinned.</summary>
+    public const string FindAtTheEnd = "the end of the transcript";
 
     /// <summary>The standing hint behind the strip and the queued part (<see cref="HintRow"/>: each alone when the others are empty).</summary>
     private string StandingRow() => HintRow(HintRow(_strip(), StandingQueued()), StandingHint());

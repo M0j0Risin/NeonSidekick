@@ -535,7 +535,7 @@ public sealed class InfoPane
     };
 
     /// <summary>The find's step: +1 for Enter or F3, −1 with Shift; null for every other key (Ctrl+Enter, a line break elsewhere, among them).</summary>
-    private static int? FindStep(ConsoleKeyInfo key) =>
+    internal static int? FindStep(ConsoleKeyInfo key) =>
         (key.Key is ConsoleKey.Enter or ConsoleKey.F3) && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt)) == 0
             ? (key.Modifiers & ConsoleModifiers.Shift) != 0 ? -1 : 1
             : null;
@@ -544,7 +544,7 @@ public sealed class InfoPane
     /// The character a key adds to the find: a printable one, typed bare or with Shift (Ctrl+Alt too, which is AltGr on some
     /// keyboards); null for a chord and for the keys with jobs of their own (Tab, Enter, Backspace).
     /// </summary>
-    private static char? FindChar(ConsoleKeyInfo key)
+    internal static char? FindChar(ConsoleKeyInfo key)
     {
         var chord = key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt);
         bool bare = chord == 0 || chord == (ConsoleModifiers.Control | ConsoleModifiers.Alt);

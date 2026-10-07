@@ -110,7 +110,7 @@ What to use instead:
 | `/usage` | Not available; `--log` records the run. |
 | `/process` | Not available; ask the model, whose `process` tool lists, reads and stops the background processes. |
 | `/sys` | Not available; open `/sys` in the TUI on the same profile to see the prompt. |
-| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/theme`, `/perfbar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/queue`, `/rename`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
+| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/theme`, `/perfbar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/queue`, `/rename`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
 
 ---
 
