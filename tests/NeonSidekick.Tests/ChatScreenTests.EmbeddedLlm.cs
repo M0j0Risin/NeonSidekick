@@ -22,7 +22,7 @@ public partial class ChatScreenTests
 
     private const string EmbeddedConnectedE2b = "LLM: http://embedded.localhost/v1 model=gemma-4-e2b (embedded llama.cpp b11258 cuda on 127.0.0.1:59999)";
 
-    [WindowsFact]
+    [Fact]
     public async Task Server_ListsTheInstalledEmbeddedModelsAlone_AndPickingOne_SavesItAndStartsIt()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -78,7 +78,7 @@ public partial class ChatScreenTests
         input.Push(Keys.Enter);                           // Install: the pane closes, the screen downloads
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Server_ListsNoEmbeddedModelNotInstalled_TheCatalogInstallsIt_ThenStartsIt()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -119,7 +119,7 @@ public partial class ChatScreenTests
     /// <c>/server</c> until later that day, which lists the installed models alone since), then the line is the user's while
     /// it runs — a command typed meanwhile runs — and its end installs, saves and connects.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task Settings_AnEmbeddedDownload_RunsBehindTheLine_ThenSwitchesToIt()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -298,7 +298,7 @@ public partial class ChatScreenTests
         Assert.Equal("http://127.0.0.1:1234/v1", _settings.Current.LlmUrl);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Server_Embedded_ListsTheInstalledEmbeddedModelsAlone()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -317,7 +317,7 @@ public partial class ChatScreenTests
         Assert.Equal(1, ModelProbes);   // the startup connect alone: /server embedded asked no server
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Server_Embedded_WithNoneInstalled_PointsAtTheCatalog()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -332,7 +332,7 @@ public partial class ChatScreenTests
         Assert.Empty(embedded.Starts);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Startup_OnAnEmbeddedUrl_StartsTheSavedModel()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "embedded"; d.LlmModel = "gemma-4-e2b"; });
@@ -347,7 +347,7 @@ public partial class ChatScreenTests
         Assert.NotNull(_session.Assistant);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Startup_OnAnEmbeddedModelNotInstalled_OffersTheInstall_AndNoKeepsItOff()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "embedded"; d.LlmModel = "gemma-4-e4b-qat"; });
@@ -379,7 +379,7 @@ public partial class ChatScreenTests
         Assert.Contains("LLM: http://127.0.0.1:1234/v1 model=llama (probed http://127.0.0.1:1234/v1)", output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task SwitchedOff_TheSavedModelNeverStarts_TheRowsAreGone_AndServerEmbeddedRefuses()
     {
         // Embedded servers enabled off (2026-09-29, the user's ask): the saved embedded URL reads as none, so the startup picker
@@ -399,7 +399,7 @@ public partial class ChatScreenTests
         Assert.Equal("http://127.0.0.1:1234/v1", _session.Endpoint?.BaseUrl.AbsoluteUri);   // the first server that answered
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ASwitchAway_StopsTheEmbeddedServer()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmUrl = "embedded"; d.LlmModel = "gemma-4-e2b"; });
@@ -445,7 +445,7 @@ public partial class ChatScreenTests
 
     // ── The start with nothing to connect to (2026-09-30, the user's ask) ─────────────────────────────
 
-    [WindowsFact]
+    [Fact]
     public async Task Startup_ScanDisabled_NoModelDownloaded_OpensTheCatalog_WhoseInstallStartsIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
@@ -469,7 +469,7 @@ public partial class ChatScreenTests
         Assert.Equal(model.Id, _settings.Current.LlmModel);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Startup_ScanDisabled_NoModelDownloaded_EscapeTwice_LeavesTheLine_AndServerSaysTheSame()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });
@@ -496,7 +496,7 @@ public partial class ChatScreenTests
     /// container checklist; with containers chosen, Docker servers is switched on, the page says how /server starts one and
     /// leaves the input row to the user (2026-10-06, the code review's catch: it showed the page again over the hint).
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task Startup_TheDockerRow_OpensTheContainerChecklist_AndSwitchesDockerServersOn()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; d.DockerServers = false; d.DockerServerContainers = ["vllm_b"]; });
@@ -516,7 +516,7 @@ public partial class ChatScreenTests
         Assert.Null(_session.Endpoint);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Startup_ScanDisabled_AModelDownloaded_OffersThePicker_NotTheCatalog()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "disabled"; d.LlmUrl = ""; });

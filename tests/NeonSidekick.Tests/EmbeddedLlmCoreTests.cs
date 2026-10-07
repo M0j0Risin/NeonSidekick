@@ -253,8 +253,8 @@ public class EmbeddedLlmCoreTests
         foreach (var backend in Enum.GetValues<LlamaBackend>())
         {
             Assert.All(LlamaRelease.Assets(backend), a => Assert.Matches("^[0-9a-f]{64}$", a.Sha256));
-            Assert.Contains(LlamaRelease.ServerExecutable, LlamaRelease.RequiredFiles(backend));
-            Assert.Contains("mtmd.dll", LlamaRelease.RequiredFiles(backend));
+            Assert.Contains(LlamaRelease.ServerFile(backend), LlamaRelease.RequiredFiles(backend));
+            Assert.Contains(backend == LlamaBackend.Metal ? "libmtmd.0.dylib" : "mtmd.dll", LlamaRelease.RequiredFiles(backend));
         }
 
         Assert.Contains("cudart64_13.dll", LlamaRelease.RequiredFiles(LlamaBackend.Cuda));
@@ -326,16 +326,71 @@ public class EmbeddedLlmCoreTests
     public void AForcedBackend_Wins_WhateverTheMachine(string setting, LlamaBackend backend)
     {
         Assert.Equal(new BackendChoice(backend, "forced in settings"), Choose(setting, false, null, false));
-        Assert.True(EmbeddedBackends.IsValid(setting));
+        Assert.True(EmbeddedBackends.IsValid(setting, mac: false));
+        Assert.False(EmbeddedBackends.IsValid(setting, mac: true));
+        Assert.Null(EmbeddedBackends.Forced(setting, mac: true));
     }
 
     [Fact]
     public void AnUnknownBackend_ReadsAsAuto()
     {
-        Assert.Null(EmbeddedBackends.Forced("rocm"));
-        Assert.False(EmbeddedBackends.IsValid("rocm"));
+        Assert.Null(EmbeddedBackends.Forced("rocm", mac: false));
+        Assert.False(EmbeddedBackends.IsValid("rocm", mac: false));
         Assert.Equal(LlamaBackend.Cuda, Choose("rocm", true, "32.0.16.1088", true).Backend);
-        Assert.Equal(["auto", "cuda", "vulkan", "cpu"], EmbeddedBackends.Names);
+        Assert.Equal(["auto", "cuda", "vulkan", "cpu"], EmbeddedBackends.WindowsNames);
+        Assert.Null(EmbeddedBackends.Forced("metal", mac: false));   // a Mac's name reads as auto on Windows
+        Assert.Equal("must be auto, cuda, vulkan or cpu", EmbeddedBackends.WindowsError);
+    }
+
+    // ── A Mac (2026-10-07) ──────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("auto", "Apple Silicon GPU")]
+    [InlineData("", "Apple Silicon GPU")]
+    [InlineData("cuda", "Apple Silicon GPU")]   // a Windows name in a shared profile reads as auto
+    [InlineData(" Metal ", "forced in settings")]
+    public void AMac_RunsMetal_WhateverTheSetting(string setting, string reason)
+    {
+        Assert.Equal(new BackendChoice(LlamaBackend.Metal, reason), LlamaBackendDetect.ChooseMac(setting));
+    }
+
+    [Fact]
+    public void AMac_OffersAutoAndMetal()
+    {
+        Assert.Equal(["auto", "metal"], EmbeddedBackends.MacNames);
+        Assert.True(EmbeddedBackends.IsValid("METAL", mac: true));
+        Assert.False(EmbeddedBackends.IsValid("vulkan", mac: true));
+        Assert.Equal(LlamaBackend.Metal, EmbeddedBackends.Forced("metal", mac: true));
+        Assert.Equal("must be auto or metal", EmbeddedBackends.MacError);
+        Assert.Equal(OperatingSystem.IsMacOS() ? EmbeddedBackends.MacNames : EmbeddedBackends.WindowsNames, EmbeddedBackends.Names);
+    }
+
+    [Fact]
+    public void TheMetalBuild_IsPinned_WithItsLinksAndTheirFiles()
+    {
+        var tarball = Assert.Single(LlamaRelease.Assets(LlamaBackend.Metal));
+        Assert.Equal(new LlamaAsset("llama-b11258-bin-macos-arm64.tar.gz", 11_767_268, "faab9dd583b06dc1e6663b8b2d5a8349e05b7b70559bcefe1190be556f12c38e"), tarball);
+        Assert.Equal(Speech.ModelFormat.TarGz, Speech.ModelStore.ArchiveFormat(tarball.Name));
+        Assert.Equal("metal", LlamaRelease.Name(LlamaBackend.Metal));
+        Assert.Equal("llama-server", LlamaRelease.ServerFile(LlamaBackend.Metal));
+        Assert.Equal("llama-server.exe", LlamaRelease.ServerFile(LlamaBackend.Cuda));
+        Assert.EndsWith(Path.Combine("b11258-metal", "llama-server"), LlamaRelease.Executable("llama", LlamaBackend.Metal), StringComparison.Ordinal);
+        var files = LlamaRelease.RequiredFiles(LlamaBackend.Metal);
+
+        // Every .0 link dyld loads by, and the versioned file it points at: a dangling link still passes File.Exists.
+        foreach (var library in new[] { "libllama-common", "libllama", "libmtmd" })
+        {
+            Assert.Contains(library + ".0.dylib", files);
+            Assert.Contains(library + ".0.5.0.dylib", files);
+        }
+
+        foreach (var library in new[] { "libggml", "libggml-base", "libggml-cpu", "libggml-blas", "libggml-metal", "libggml-rpc" })
+        {
+            Assert.Contains(library + ".0.dylib", files);
+            Assert.Contains(library + ".0.25.3.dylib", files);
+        }
+
+        Assert.Contains("libllama-server-impl.dylib", files);
     }
 
     // ── The command line ────────────────────────────────────────────────────

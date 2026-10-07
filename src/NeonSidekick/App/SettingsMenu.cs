@@ -6957,12 +6957,14 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>A backend picker row: the name padded, then what it means, dim. Pinned.</summary>
+    /// <summary>A backend picker row: the name padded, then what it means, dim. Pinned. A Mac's two rows (2026-10-07) both mean Metal.</summary>
     public static string EmbeddedBackendLabel(string name) => Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(name switch
     {
         "cuda" => "NVIDIA GPUs (driver 580 or newer)",
         "vulkan" => "any GPU: NVIDIA, AMD, Intel",
         "cpu" => "no GPU; slow",
+        "metal" => "the Apple Silicon GPU",
+        _ when OperatingSystem.IsMacOS() => "Metal, the Apple Silicon GPU",
         _ => "CUDA with an NVIDIA driver, else Vulkan, else the CPU",
     });
 

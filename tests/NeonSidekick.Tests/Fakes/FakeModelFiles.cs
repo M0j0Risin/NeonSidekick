@@ -113,6 +113,27 @@ public static class FakeModelFiles
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// A gzipped tar of <paramref name="entries"/> (2026-10-07, llama.cpp's macOS build): a file with its content and Unix
+    /// mode, or — <c>Link</c> set — a symbolic link to it.
+    /// </summary>
+    public static byte[] TarGz(params (string Name, string Content, UnixFileMode Mode, string? Link)[] entries)
+    {
+        using var stream = new MemoryStream();
+        using (var gzip = new System.IO.Compression.GZipStream(stream, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
+        using (var tar = new System.Formats.Tar.TarWriter(gzip, System.Formats.Tar.TarEntryFormat.Pax))
+        {
+            foreach (var (name, content, mode, link) in entries)
+            {
+                tar.WriteEntry(link is not null
+                    ? new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.SymbolicLink, name) { LinkName = link }
+                    : new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.RegularFile, name) { Mode = mode, DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content)) });
+            }
+        }
+
+        return stream.ToArray();
+    }
+
     /// <summary>The lowercase hex SHA-256 of <paramref name="bytes"/>, as a pinned spec carries it.</summary>
     public static string Sha256(byte[] bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
 

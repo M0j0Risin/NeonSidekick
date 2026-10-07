@@ -62,7 +62,7 @@ public sealed class EmbeddedModels
         ModelsDirectory = embeddedModelsDirectory;
         LlamaDirectory = llamaDirectory;
         _store = new ModelStore(embeddedModelsDirectory, http, Category);
-        Catalog = catalog ?? EmbeddedModelCatalog.Models;
+        Catalog = catalog ?? EmbeddedModelCatalog.ForThisMachine;
         _runtime = runtime ?? (backend => LlamaRelease.Spec(llamaDirectory, backend));
     }
 
@@ -170,7 +170,7 @@ public sealed class EmbeddedModels
         RuntimeInstalled(backend) ? 0 : _runtime(backend).Parts.Sum(p => p.Bytes);
 
     /// <summary>The server executable of <paramref name="backend"/>'s runtime.</summary>
-    public string Executable(LlamaBackend backend) => Path.Combine(_runtime(backend).Path, LlamaRelease.ServerExecutable);
+    public string Executable(LlamaBackend backend) => Path.Combine(_runtime(backend).Path, LlamaRelease.ServerFile(backend));
 
     /// <summary>Makes sure <paramref name="backend"/>'s runtime is installed, labelling the spinner through <paramref name="phase"/>.</summary>
     public async Task<ModelResult> EnsureRuntimeAsync(LlamaBackend backend, Action<string>? phase, CancellationToken cancellationToken)

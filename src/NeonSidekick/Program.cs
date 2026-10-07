@@ -42,6 +42,14 @@ if (NeonSidekick.Claude.McpRelay.Asked(args))
     return await NeonSidekick.Claude.McpRelay.RunAsync(args[1], args[2]);
 }
 
+// The embedded LLM's guard on a Mac (2026-10-07): this executable started by LlamaServerHost to start llama-server and kill it
+// when this process's stdin closes — which the kernel does when the app dies, however it dies. Before anything touches the
+// console: stdout and stderr are the app's pipes, shared with llama-server's lines.
+if (NeonSidekick.EmbeddedLlm.LlamaGuard.Asked(args))
+{
+    return await NeonSidekick.EmbeddedLlm.LlamaGuard.RunAsync(args);
+}
+
 // Force UTF-8 console output. On Windows the NativeAOT build (InvariantGlobalization) falls back
 // to the console's OEM code page (CP437/CP850); the themed UI's box-drawing, bullets and braille
 // spinner frames are not in that code page and print as '?'. Wrapped in try/catch because the
@@ -200,7 +208,7 @@ var app = new SidekickApp(console, settings, environment, geometry: geometry, in
 // SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, and Windows ends the
 // process about 5 s on, so the handler does the exit's work itself, on the console's control thread, the process alive
 // until it returns. Cancel stays unset: the window still closes. Ctrl+C, Ctrl+Break and /exit take the usual way out.
-using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGHUP, _ =>
+void OnClosing(System.Runtime.InteropServices.PosixSignalContext _)
 {
     app.ConsoleClosing();
     // The debounced save the normal exit flushes below, as the quarter-second rule asks. A failure must not throw here.
@@ -212,7 +220,15 @@ using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Creat
     {
         DiagnosticLog.Warn(AppSettings.Category, "Settings flush on window close: " + ex.Message);
     }
-});
+}
+
+using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGHUP, OnClosing);
+
+// On a Mac (2026-10-07, the embedded LLM there) a SIGTERM or SIGQUIT — `kill`, a logout, Activity Monitor's Quit — ends the
+// process with no ProcessExit and no finally (measured that day on .NET 10), so it takes the window close's way out too:
+// the embedded servers killed, the settings flushed. Windows keeps its own (its console has no such signals to send).
+using var terminating = OperatingSystem.IsMacOS() ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, OnClosing) : null;
+using var quitting = OperatingSystem.IsMacOS() ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGQUIT, OnClosing) : null;
 
 // The Themed external windows switch (later on 2026-09-27 for the viewer; every window of ours since 2026-10-03), read from the effective settings on the window's thread.
 NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedExternalWindows;

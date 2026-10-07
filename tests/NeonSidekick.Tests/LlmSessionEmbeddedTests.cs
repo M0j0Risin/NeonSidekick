@@ -31,7 +31,7 @@ public class LlmSessionEmbeddedTests
 
     private void ServeProps() => _http.Map("http://127.0.0.1:59999/props", HttpStatusCode.OK, LlamaProps);
 
-    [WindowsFact]
+    [Fact]
     public async Task AnEmbeddedUrl_StartsTheModel_ShowsTheSentinel_AndPostsToTheLiveUrl()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -63,7 +63,7 @@ public class LlmSessionEmbeddedTests
     /// Another model's load (2026-09-30, the user's ask): the old model's name leaves the endpoint, and so the hint row, as the
     /// load begins. A reconnect to the model already running keeps it.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task AnotherModelsLoad_ClearsTheEndpointFirst_TheSameModelKeepsIt()
     {
         _embedded.Installed("gemma-4-e2b", "gemma-4-12b");
@@ -80,7 +80,7 @@ public class LlmSessionEmbeddedTests
         Assert.Equal("gemma-4-12b", session.Endpoint!.ModelId);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task AnEmbeddedUrl_WithNoModel_RunsTheFirstInstalled()
     {
         _embedded.Installed("gemma-4-e4b-qat", "gemma-4-e4b-uncensored", "gemma-4-12b");
@@ -91,7 +91,7 @@ public class LlmSessionEmbeddedTests
         Assert.Equal(["gemma-4-12b"], _embedded.Starts);   // catalog order, not install order
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task AnEmbeddedModelNotInstalled_ConnectsNothing_AndSaysSo()
     {
         using var session = Session();
@@ -105,7 +105,7 @@ public class LlmSessionEmbeddedTests
         Assert.Contains(EmbeddedLlmText.NotInstalled(EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!), log.Errors);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task AnUnknownOrMissingEmbeddedModel_SaysWhich()
     {
         using var session = Session();
@@ -117,7 +117,7 @@ public class LlmSessionEmbeddedTests
         Assert.Equal([EmbeddedLlmText.UnknownModel("gemma-9"), EmbeddedLlmText.NoneInstalled], log.Errors);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task AStartThatFails_LeavesTheSentinelEndpoint_WithNoClient()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -148,7 +148,7 @@ public class LlmSessionEmbeddedTests
         Assert.Null(await session.ListModelsAsync(CancellationToken.None));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task AnotherServer_StopsTheEmbeddedOne()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -169,7 +169,7 @@ public class LlmSessionEmbeddedTests
         Assert.Null(_embedded.Running);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task EachReconnect_AsksTheServiceAgain_WhichKeepsARunningServer()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -200,7 +200,7 @@ public class LlmSessionEmbeddedTests
         Assert.Equal(requests, _http.Requests.Count);   // asked of no server
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheServerRows_ListTheInstalledCatalogModels_AfterTheScan_BeforeTheClaudeApi()
     {
         // The installed models alone (2026-09-29, the user's ask: every catalog model until then, a download or a paused one
@@ -230,7 +230,7 @@ public class LlmSessionEmbeddedTests
         Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == EmbeddedEndpoint.Host);   // the sentinel as the extra URL is never asked
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheServerRows_StandEvenWithTheScanDisabled()
     {
         _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
@@ -244,7 +244,7 @@ public class LlmSessionEmbeddedTests
 
     // ── Embedded servers enabled (2026-09-29) ───────────────────────────────────
 
-    [WindowsFact]
+    [Fact]
     public async Task SwitchedOff_TheRowsAreGone()
     {
         using var session = Session();
@@ -257,7 +257,7 @@ public class LlmSessionEmbeddedTests
         Assert.Single(session.EmbeddedRows(new AppSettingsData()));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task SwitchedOff_ASavedEmbeddedUrl_StandsForNothing_AndTheRunningServerStops()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -295,7 +295,7 @@ public class LlmSessionEmbeddedTests
         Assert.True(EmbeddedEndpoint.Chosen(Embedded()) && !EmbeddedEndpoint.SwitchedOff(Embedded()));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task SwitchedOff_ABotsEmbeddedLink_IsRefused()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -311,7 +311,7 @@ public class LlmSessionEmbeddedTests
 
     // ── /botchat multi ──────────────────────────────────────────────────────
 
-    [WindowsFact]
+    [Fact]
     public async Task ABotBorrowingAnEmbeddedServer_TakesItsLiveUrl_KeyAndModel()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -327,7 +327,7 @@ public class LlmSessionEmbeddedTests
         link.Dispose();
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ABotOnTheEmbeddedUrl_SharesTheRunningModel_EvenForAnother_UnderParentServer()
     {
         // A bot naming another model uses the running one with a warning (later on 2026-09-29, the user's ask; refused until then).
@@ -350,7 +350,7 @@ public class LlmSessionEmbeddedTests
         other.Dispose();
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ABotOnTheEmbeddedUrl_WithNothingRunning_StartsItsInstalledModel_TheNextShares()
     {
         _embedded.Installed("gemma-4-e2b");
@@ -367,7 +367,7 @@ public class LlmSessionEmbeddedTests
         next.Dispose();
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ParallelLinks_WithNothingRunning_StartTheFirstBotsModelOnly()
     {
         // The race of before later on 2026-09-29: each link saw nothing running and started its own model, stopping the one
@@ -384,7 +384,7 @@ public class LlmSessionEmbeddedTests
         Assert.All(links, l => l.Link!.Dispose());
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task MultiServer_AnotherModel_GetsAnExtra_TheParentsKept_AndTwoBotsShareIt()
     {
         _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
@@ -408,7 +408,7 @@ public class LlmSessionEmbeddedTests
         Assert.All(links, l => l.Link!.Dispose());
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task MultiServer_AnExtraThatFails_IsTheBotsProblem_AndTheSwitchOffStopsTheExtras()
     {
         _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat", "gemma-4-e4b");

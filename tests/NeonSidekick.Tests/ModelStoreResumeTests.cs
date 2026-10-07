@@ -305,6 +305,76 @@ public class ModelStoreResumeTests : IDisposable
         Assert.Equal("present", again.Detail);
     }
 
+    // ── A tar.gz (2026-10-07, llama.cpp's macOS build) ───────────────────────
+
+    private const UnixFileMode Executable = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+    private const UnixFileMode Plain = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+
+    private ArchiveSetSpec TarSpec(byte[] tar, params string[] required) => new(
+        "llama.cpp runtime",
+        RuntimeDir,
+        new[] { new ArchivePart("llama-bin-macos-arm64.tar.gz", new Uri(BinUrl), tar.Length, FakeModelFiles.Sha256(tar)) },
+        required);
+
+    [UnixFact]
+    public async Task ArchiveSet_UnpacksATarGz_FromItsTopFolder_KeepingExecBitsAndLinks()
+    {
+        var tar = FakeModelFiles.TarGz(
+            ("llama-b1/llama-server", "server", Executable, null),
+            ("llama-b1/libllama.0.5.0.dylib", "lib", Plain, null),
+            ("llama-b1/libllama.0.dylib", "", Plain, "libllama.0.5.0.dylib"));
+        Serve(BinUrl, tar);
+
+        var result = await _store.EnsureArchiveSetAsync(TarSpec(tar, "llama-server", "libllama.0.dylib", "libllama.0.5.0.dylib"), null, null, null, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Detail);
+        string server = Path.Combine(RuntimeDir, "llama-server");
+        Assert.Equal("server", File.ReadAllText(server));
+        Assert.True(OperatingSystem.IsWindows() || (File.GetUnixFileMode(server) & UnixFileMode.UserExecute) != 0);
+        var link = new FileInfo(Path.Combine(RuntimeDir, "libllama.0.dylib"));
+        Assert.Equal("libllama.0.5.0.dylib", link.LinkTarget);
+        Assert.Equal("lib", File.ReadAllText(link.FullName));
+        Assert.False(Directory.Exists(RuntimeDir + ".parts"));
+        Assert.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(RuntimeDir)!, "*.extracting"));
+    }
+
+    [Fact]
+    public async Task ArchiveSet_ATarGzThatIsNoGzip_IsRefused()
+    {
+        var zip = FakeModelFiles.Zip(("llama-server", "server"));
+        Serve(BinUrl, zip);
+
+        var result = await _store.EnsureArchiveSetAsync(TarSpec(zip, "llama-server"), null, null, null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Contains("is not a gzip archive", result.Detail);
+        Assert.False(Directory.Exists(RuntimeDir));
+    }
+
+    [UnixFact]
+    public async Task ArchiveSet_ATarGzLinkingOutOfTheFolder_Fails_AndLeavesNoFolder()
+    {
+        var tar = FakeModelFiles.TarGz(
+            ("llama-b1/llama-server", "server", Executable, null),
+            ("llama-b1/escape", "", Plain, "../../../../etc/passwd"));
+        Serve(BinUrl, tar);
+
+        var result = await _store.EnsureArchiveSetAsync(TarSpec(tar, "llama-server"), null, null, null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Contains("outside the specified destination", result.Detail);
+        Assert.False(Directory.Exists(RuntimeDir));
+    }
+
+    [Fact]
+    public void ArchiveFormat_IsReadFromTheName()
+    {
+        Assert.Equal(ModelFormat.TarGz, ModelStore.ArchiveFormat("llama-b11258-bin-macos-arm64.tar.gz"));
+        Assert.Equal(ModelFormat.TarGz, ModelStore.ArchiveFormat("x.TGZ"));
+        Assert.Equal(ModelFormat.Zip, ModelStore.ArchiveFormat("cudart-llama-bin-win-cuda-13.4-x64.zip"));
+        Assert.Equal("a gzip", ModelStore.FormatName(ModelFormat.TarGz));
+    }
+
     [Fact]
     public async Task ArchiveSet_MissingARequiredFile_Fails_AndLeavesNoFolder()
     {

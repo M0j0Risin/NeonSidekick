@@ -1,3 +1,4 @@
+using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
 using System.Net;
@@ -22,6 +23,13 @@ public enum ModelFormat
 
     /// <summary>A zip archive (one part of an <see cref="ArchiveSetSpec"/>, 2026-09-29): the embedded-header magic.</summary>
     Zip,
+
+    /// <summary>
+    /// A gzipped tar archive (2026-10-07, llama.cpp's macOS build, the embedded LLM on a Mac): the gzip magic. A tar, not a
+    /// zip, because it carries what a Mac build needs and a zip drops: the executable bits and the <c>lib*.0.dylib</c>
+    /// symlinks dyld loads by.
+    /// </summary>
+    TarGz,
 }
 
 /// <summary>
@@ -101,6 +109,9 @@ public sealed class ModelStore
 
     /// <summary>Every zip archive starts with a local file header: "PK\x03\x04".</summary>
     private static readonly byte[] ZipMagic = { 0x50, 0x4B, 0x03, 0x04 };
+
+    /// <summary>Every gzip stream starts with 1F 8B and, for deflate (the only method there is), 08.</summary>
+    private static readonly byte[] GzipMagic = { 0x1F, 0x8B, 0x08 };
 
     private readonly HttpClient _http;
     private readonly string _category;
@@ -383,7 +394,7 @@ public sealed class ModelStore
             if (!LooksLike(partial, spec.Format))
             {
                 DeleteFileQuietly(partial);
-                return ModelResult.Failed(path, $"the download from {url} is not {FormatName(spec.Format)} {(spec.Format == ModelFormat.Zip ? "archive" : "model")}");
+                return ModelResult.Failed(path, $"the download from {url} is not {FormatName(spec.Format)} {(spec.Format is ModelFormat.Zip or ModelFormat.TarGz ? "archive" : "model")}");
             }
 
             if (spec.Sha256 is { } pinned)
@@ -529,7 +540,7 @@ public sealed class ModelStore
             long done = 0;
             foreach (var part in spec.Parts)
             {
-                var partSpec = new ModelSpec(part.Name, System.IO.Path.Combine(partsPath, part.Name), part.Url, part.Bytes, ModelFormat.Zip, part.Sha256, Resumable: true);
+                var partSpec = new ModelSpec(part.Name, System.IO.Path.Combine(partsPath, part.Name), part.Url, part.Bytes, ArchiveFormat(part.Name), part.Sha256, Resumable: true);
                 var partProgress = progress is null ? null : new OffsetProgress(progress, done, total);
                 var result = await EnsureAsync(partSpec, partProgress, verifying, cancellationToken).ConfigureAwait(false);
                 if (!result.Ok)
@@ -547,7 +558,14 @@ public sealed class ModelStore
             {
                 foreach (var archive in archives)
                 {
-                    ZipFile.ExtractToDirectory(archive, extractPath, overwriteFiles: true);
+                    if (ArchiveFormat(archive) == ModelFormat.TarGz)
+                    {
+                        ExtractTarGz(archive, extractPath);
+                    }
+                    else
+                    {
+                        ZipFile.ExtractToDirectory(archive, extractPath, overwriteFiles: true);
+                    }
                 }
             }, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
@@ -575,6 +593,27 @@ public sealed class ModelStore
         {
             DeleteDirectoryQuietly(extractPath);
         }
+    }
+
+    /// <summary>An archive part's format by its name: <c>.tar.gz</c>/<c>.tgz</c> a <see cref="ModelFormat.TarGz"/> (2026-10-07), anything else a zip.</summary>
+    public static ModelFormat ArchiveFormat(string name) =>
+        name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase)
+            ? ModelFormat.TarGz
+            : ModelFormat.Zip;
+
+    /// <summary>
+    /// Unpacks the gzipped tar <paramref name="archive"/> into <paramref name="destination"/> (2026-10-07, llama.cpp's macOS
+    /// build). <see cref="TarFile"/> keeps the Unix mode bits (so <c>llama-server</c> stays executable) and makes symbolic
+    /// links as links, and it refuses — as <see cref="ZipFile"/> does for a path — any entry whose path or link target would
+    /// land outside <paramref name="destination"/> (an <see cref="IOException"/>; checked against <c>../</c> paths and an
+    /// <c>../../../etc/passwd</c> link that day). The archives are pinned by SHA-256 before this runs anyway.
+    /// </summary>
+    public static void ExtractTarGz(string archive, string destination)
+    {
+        System.IO.Directory.CreateDirectory(destination);
+        using var file = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16);
+        using var gzip = new GZipStream(file, CompressionMode.Decompress);
+        TarFile.ExtractToDirectory(gzip, destination, overwriteFiles: true);
     }
 
     /// <summary>Where a resumable download of <paramref name="path"/> collects its bytes until verified.</summary>
@@ -637,6 +676,9 @@ public sealed class ModelStore
 
     /// <summary>Whether the file at <paramref name="path"/> starts with the zip local-header magic (<c>PK\x03\x04</c>). False for a missing, short or unreadable file.</summary>
     public static bool LooksLikeZip(string path) => StartsWith(path, ZipMagic);
+
+    /// <summary>Whether the file at <paramref name="path"/> starts with the gzip magic (<c>1F 8B 08</c>). False for a missing, short or unreadable file.</summary>
+    public static bool LooksLikeGzip(string path) => StartsWith(path, GzipMagic);
 
     /// <summary>The unpacked directory that holds the model: the extraction root itself, or its one top-level folder (Vosk archives wrap the model in one).</summary>
     private static string? FindModelRoot(string extractPath, IReadOnlyList<string> requiredFiles)
@@ -798,15 +840,17 @@ public sealed class ModelStore
         ModelFormat.Onnx => LooksLikeOnnx(path),
         ModelFormat.Gguf => LooksLikeGguf(path),
         ModelFormat.Zip => LooksLikeZip(path),
+        ModelFormat.TarGz => LooksLikeGzip(path),
         _ => LooksLikeGgml(path),
     };
 
-    /// <summary>The words after "not" in the discard / refusal lines: <c>a ggml</c>, <c>an ONNX</c>, <c>a GGUF</c> or <c>a zip</c>.</summary>
+    /// <summary>The words after "not" in the discard / refusal lines: <c>a ggml</c>, <c>an ONNX</c>, <c>a GGUF</c>, <c>a zip</c> or <c>a gzip</c>.</summary>
     public static string FormatName(ModelFormat format) => format switch
     {
         ModelFormat.Onnx => "an ONNX",
         ModelFormat.Gguf => "a GGUF",
         ModelFormat.Zip => "a zip",
+        ModelFormat.TarGz => "a gzip",
         _ => "a ggml",
     };
 
@@ -820,7 +864,7 @@ public sealed class ModelStore
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             Span<byte> head = stackalloc byte[4];
             int read = stream.Read(head);
-            return read == magic.Length && head[..magic.Length].SequenceEqual(magic);
+            return read >= magic.Length && head[..magic.Length].SequenceEqual(magic);   // >=: gzip's magic is three bytes
         }
         catch
         {

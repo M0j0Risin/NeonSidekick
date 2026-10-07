@@ -1912,9 +1912,16 @@ public sealed class SidekickApp
     /// <c>SIGHUP</c> registration, which is <c>CTRL_CLOSE_EVENT</c> on Windows, calls this on the console's control thread,
     /// and the process lives until it returns — no <c>finally</c> of the run's will. With <c>Docker server stop on exit</c> on
     /// and a container in use, the stop is asked under <see cref="CloseBudget"/>. Blocks; never throws. Nothing when no run is live.
+    /// On a Mac (2026-10-07, the embedded LLM there) it also takes <c>SIGTERM</c> and <c>SIGQUIT</c>, and kills the embedded
+    /// servers first (<see cref="KillEmbeddedAtExit"/>): no job object ends them with the app there.
     /// </summary>
     public void ConsoleClosing()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            KillEmbeddedAtExit();
+        }
+
         if (_liveSession is not { } session || !EffectiveSettings.DockerServerStopOnExit || session.DockerInUse is not { } name)
         {
             return;
@@ -1931,6 +1938,27 @@ public sealed class SidekickApp
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+        }
+    }
+
+    /// <summary>
+    /// The embedded servers killed as the process is told to go (2026-10-07, the Mac port; the first of the three layers that
+    /// keep a <c>llama-server</c> from outliving the app there, <see cref="EmbeddedLlm.LlamaGuard"/>): the kill switch's own
+    /// <see cref="EmbeddedLlm.IEmbeddedLlm.Kill"/>, main and extras, at once. Windows needs none of it: its kill-on-close job
+    /// (<see cref="EmbeddedLlm.ChildJob"/>) ends them however the app ends. Never throws.
+    /// </summary>
+    private void KillEmbeddedAtExit()
+    {
+        try
+        {
+            if (_liveSession?.Embedded is { } embedded && embedded.Kill() is { Count: > 0 } killed)
+            {
+                DiagnosticLog.Info(ChatScreen.AppCategory, "Signalled to exit: unloaded " + string.Join(", ", killed) + ".");
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn(ChatScreen.AppCategory, "Embedded servers at exit: " + Llm.Assistant.Explain(ex));
         }
     }
 

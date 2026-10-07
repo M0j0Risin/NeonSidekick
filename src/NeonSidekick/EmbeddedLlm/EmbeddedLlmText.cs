@@ -154,6 +154,10 @@ public static class EmbeddedLlmText
     public static string BackendRowValue(string setting, BackendChoice choice) =>
         $"{setting} ({LlamaRelease.Name(choice.Backend)}: {choice.Reason})";
 
+    /// <summary>The sweep's line for a server an app that is gone left running (2026-10-07, the Mac's <see cref="LlamaRecords"/>). Pinned.</summary>
+    public static string LeftBehind(int serverPid, int ownerPid) =>
+        string.Create(CultureInfo.InvariantCulture, $"Killing llama-server {serverPid}, left running by NeonSidekick {ownerPid}, which is gone.");
+
     public static string NotInstalled(EmbeddedModel model) => $"{model.Display} is not installed; install it in /settings › Embedded › Embedded models";
 
     public static string UnknownModel(string id) => $"'{id}' is not an embedded model; /model lists the installed ones";

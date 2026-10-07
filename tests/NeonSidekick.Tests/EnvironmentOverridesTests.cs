@@ -63,7 +63,7 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.LlmSamplingVariable, " {\"temperature\":0.3} "),
             (EnvironmentOverrides.HomeAssistantUrlVariable, " http://localhost:8123 "),
             (EnvironmentOverrides.HomeAssistantTokenVariable, " ha-token "),
-            (EnvironmentOverrides.EmbeddedBackendVariable, " Vulkan "),
+            (EnvironmentOverrides.EmbeddedBackendVariable, OperatingSystem.IsMacOS() ? " Metal " : " Vulkan "),   // each machine's own names (2026-10-07)
             (EnvironmentOverrides.EmbeddedContextVariable, "16384"),
             (EnvironmentOverrides.ClaudeCliServerVariable, " ON "),
             (EnvironmentOverrides.DockerPipeVariable, " npipe:////./pipe/dockerDesktopLinuxEngine "),
@@ -102,7 +102,7 @@ public class EnvironmentOverridesTests
         Assert.Equal(0.3, e.LlmSampling!["*"].Temperature);   // laid over every model (2026-09-28)
         Assert.Equal("http://localhost:8123", e.HomeAssistantUrl);   // trimmed (2026-09-28)
         Assert.Equal("ha-token", e.HomeAssistantToken);   // trimmed (2026-09-28)
-        Assert.Equal("vulkan", e.EmbeddedBackend);   // any case, trimmed, the saved word (2026-09-29)
+        Assert.Equal(OperatingSystem.IsMacOS() ? "metal" : "vulkan", e.EmbeddedBackend);   // any case, trimmed, the saved word (2026-09-29)
         Assert.Equal(16_384, e.EmbeddedContextSize);   // (2026-09-29)
         Assert.True(e.ClaudeCliServer);   // a switch word, any case, trimmed (2026-09-30)
         Assert.Equal("npipe:////./pipe/dockerDesktopLinuxEngine", e.DockerEnginePipe);   // trimmed, kept as given; the pipe's bare name is read where it is used (2026-10-02)
