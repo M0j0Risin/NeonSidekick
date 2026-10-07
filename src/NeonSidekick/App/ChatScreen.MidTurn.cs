@@ -166,7 +166,7 @@ internal sealed partial class ChatScreen
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
-            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
+            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.SrvCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -509,6 +509,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.KeyCopy:
                 // /keycopy (2026-09-28): /cmdcopy's reason — another profile's file, the yes/no on the pane.
                 await HandleKeyCopyAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.SrvCopy:
+                // /srvcopy (2026-10-07): /keycopy's reason.
+                await HandleSrvCopyAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Persona:
                 await HandlePromptFileAsync(_persona, "/persona", args, PersonaCreatedNotice, PersonaOpenedNotice, PersonaOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);

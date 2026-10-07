@@ -8574,6 +8574,121 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
     }
 
+    // ── /srvcopy (2026-10-07) ───────────────────────────────────────────────
+
+    /// <summary>The server settings that are safe to change on the loaded profile go across; the target's other settings and keys stay.</summary>
+    [Fact]
+    public async Task SrvCopy_Yes_WritesTheServerSettings_AndLeavesTheRestOfTheTargetAlone()
+    {
+        _console.Profile.Width = 320;   // the question and its keys on one row
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", Theme = "synthwave", EmbeddedBackend = "cuda", DockerServers = false });
+        _settings.Update(d => { d.EmbeddedBackend = "vulkan"; d.DockerServers = true; d.DockerServerContainers = ["vllm_qwen"]; d.AnthropicApi = true; d.OpenAIApi = true; d.EmbeddedContextSize = 16384; });
+        PushLine("/srvcopy work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.SrvCopyPrompt("work"), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (copied the server settings into \"work\": LLM URL ", output);
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal(("vulkan", true, true, true, 16384), (work.EmbeddedBackend, work.DockerServers, work.AnthropicApi, work.OpenAIApi, work.EmbeddedContextSize));
+        Assert.Equal(["vllm_qwen"], work.DockerServerContainers!);
+        Assert.Equal((_settings.Current.LlmUrl, _settings.Current.LlmModel), (work.LlmUrl, work.LlmModel));
+        Assert.Equal(("work-llm", "synthwave"), (work.LlmApiKey, work.Theme));   // the keys are /keycopy's; the rest round-trips
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>Mirrored: a setting at its default here puts the target's back to it.</summary>
+    [Fact]
+    public async Task SrvCopy_Mirrors_ADefaultHereResetsTheTargets()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { DockerServers = true, DockerServerContainers = ["sglang"], AnthropicApi = true, ClaudeCliServer = true, EmbeddedVision = false });
+        PushLine("/srvcopy work");
+        PickYes();
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        var fresh = new AppSettingsData();
+        Assert.Equal((_settings.Current.DockerServers, _settings.Current.AnthropicApi, _settings.Current.ClaudeCliServer, fresh.EmbeddedVision), (work.DockerServers, work.AnthropicApi, work.ClaudeCliServer, work.EmbeddedVision));
+        Assert.Equal(_settings.Current.DockerServerContainers, work.DockerServerContainers);
+    }
+
+    [Fact]
+    public async Task SrvCopy_No_Keeps_TheRefusals_AreOneLineEach_AndACorruptTargetIsLeftAlone()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { DockerServers = true });
+        Profiles.Create(_dir, "broken", new AppSettingsData());
+        File.WriteAllText(Profiles.ProfileFile(_dir, "broken"), "{ not json");
+        PushLine("/srvcopy work");
+        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
+        PushLine("/srvcopy");
+        PushLine("/srvcopy work now");
+        PushLine("/srvcopy ghost");
+        PushLine("/srvcopy default");
+        PushLine("/srvcopy broken");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.KeptNotice, output);
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.SrvCopyUsageError).Length - 1);
+        Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
+        Assert.Contains("  ✗ " + ChatScreen.SrvCopySelfError, output);
+        Assert.Contains("  ✗ " + ChatScreen.CmdCopyFailedError(""), output);
+        Assert.True(ReadProfile(Profiles.ProfileFile(_dir, "work")).DockerServers);
+        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "broken")));
+    }
+
+    /// <summary>
+    /// The list (the user's ten, Embedded models aside as it stores nothing per profile, and the three groups they added): every field
+    /// copied whole. A source with each one off its default makes the target read the same on every row, none of them the default.
+    /// </summary>
+    [Fact]
+    public void SrvCopyFields_AreTheServerSettings_AndEachIsCopied()
+    {
+        Assert.Equal(
+            [
+                SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel,
+                SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers,
+                SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter,
+                SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds,
+                SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit,
+                SettingsField.AnthropicApi, SettingsField.OpenAIApi, SettingsField.ClaudeCliServer,
+            ],
+            ChatScreen.SrvCopyFields.Select(f => f.Field));
+
+        var from = new AppSettingsData
+        {
+            LlmScanMode = "remote", LlmUrl = "http://10.0.0.5:8000/v1", LlmModel = "qwen3",
+            EmbeddedLlmServer = false, EmbeddedBackend = "vulkan", EmbeddedContextSize = 16384, EmbeddedGpuLayers = "20",
+            EmbeddedVramBudget = 80, EmbeddedVramOnly = false, EmbeddedVision = false, EmbeddedDrafter = false,
+            DockerServers = true, DockerServerContainers = ["vllm_qwen", "sglang"], DockerServerStopTimeoutSeconds = 45,
+            DockerServerPostStopDelaySeconds = 5, DockerServerReadyTimeoutSeconds = 600, DockerServerStopOnExit = true,
+            AnthropicApi = true, OpenAIApi = true, ClaudeCliServer = true,
+        };
+        var to = new AppSettingsData();
+        foreach (var (_, copy) in ChatScreen.SrvCopyFields)
+        {
+            copy(from, to);
+        }
+
+        string dir = _settings.ProfileDirectory;
+        foreach (var (field, _) in ChatScreen.SrvCopyFields)
+        {
+            Assert.Equal(SettingsMenu.FieldValue(field, from, dir), SettingsMenu.FieldValue(field, to, dir));
+            Assert.NotEqual(SettingsMenu.FieldValue(field, new AppSettingsData(), dir), SettingsMenu.FieldValue(field, to, dir));
+        }
+
+        Assert.NotSame(from.DockerServerContainers, to.DockerServerContainers);   // a list of its own
+        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced.", ChatScreen.SrvCopyPrompt("work"));
+        Assert.Equal("(copied the server settings into \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.SrvCopiedNotice("work", "http://x/v1", "qwen3"));
+    }
+
     // ── /keycopy (2026-09-28) ───────────────────────────────────────────────
 
     [Fact]

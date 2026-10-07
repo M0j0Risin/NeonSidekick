@@ -315,6 +315,10 @@ public static class HelpCommands
         [
             new("/splash", "Start a new conversation and show the splash screen."),
         ]),
+        new("/srvcopy",
+        [
+            new("/srvcopy <profile>", "Copy this profile's server settings into another profile, replacing its own, after a yes/no: *LLM server scan mode*, *LLM URL* and *LLM model*; *Embedded servers enabled*, *Embedded backend* and the embedded context size, GPU layers, VRAM budget, VRAM only, vision and drafter; *Docker servers enabled*, *Docker server containers* and the Docker server timings and stop on exit; *Anthropic API*, *OpenAI API* and *Claude CLI server*. The saved values are copied, not a `--url` or variable that only overrides this run. Installed embedded models are shared by every profile already; the API keys are `/keycopy`'s."),
+        ]),
         new("/stt",
         [
             new("/stt [on|off]", "Toggle voice input."),

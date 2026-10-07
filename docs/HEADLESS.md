@@ -105,6 +105,7 @@ What to use instead:
 | `/timer` | Not available; there are no timers headless (nothing could deliver the alert). |
 | `/tts`, `/stt`, `/wake`, `/interrupt`, `/speak`, `/echo` | Not available; headless never speaks or listens. |
 | `/cmdlist`, `/cmdcopy`, `/cmdclear`, `/police` | Not available. Manage the allow list in the TUI; `NEONSIDEKICK_COMMAND_POLICY` sets the policy for a run. |
+| `/srvcopy` | Not available; copy the server settings in the TUI. `--url`, `--model` and `NEONSIDEKICK_LLM_URL` set the server for a run. |
 | `/keycopy` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_HA_TOKEN` and `NEONSIDEKICK_YOUTUBE_API_KEY` set them for a run. |
 | `/usage` | Not available; `--log` records the run. |
 | `/process` | Not available; ask the model, whose `process` tool lists, reads and stops the background processes. |

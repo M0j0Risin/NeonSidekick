@@ -3909,6 +3909,9 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/keycopy</c> target's note (2026-09-28).</summary>
     public const string KeyCopyTargetNote = "copy this profile's API keys into it";
 
+    /// <summary>The <c>/srvcopy</c> target's note (2026-10-07).</summary>
+    public const string SrvCopyTargetNote = "copy this profile's server settings into it";
+
     /// <summary>The <c>/timer</c> list's entries. Pinned.</summary>
     public const string TimerStopNote = "stop a timer: /timer stop <name> | all";
     public const string TimerStopAllNote = "stop every timer";
@@ -4129,15 +4132,17 @@ internal sealed partial class ChatScreen
             }
 
             case SlashCommand.KeyCopy:
+            case SlashCommand.SrvCopy:
             {
-                // /keycopy (2026-09-28): every profile but the loaded one; nothing after a name.
+                // /keycopy (2026-09-28) and /srvcopy (2026-10-07): every profile but the loaded one; nothing after a name.
                 if (argText.Contains(' ', StringComparison.Ordinal))
                 {
                     return [];
                 }
 
+                string note = kind == SlashCommand.SrvCopy ? SrvCopyTargetNote : KeyCopyTargetNote;
                 var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile));
-                return MentionCompleter.Matches(targets.Select(name => new CompletionItem(name, KeyCopyTargetNote)).ToList(), argText);
+                return MentionCompleter.Matches(targets.Select(name => new CompletionItem(name, note)).ToList(), argText);
             }
 
             case SlashCommand.Cwd:
@@ -6932,6 +6937,113 @@ internal sealed partial class ChatScreen
             data.YouTubeApiKey = youTubeKey;
             Profiles.WriteProfileFile(path, data);
             _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet, openAISet, haSet, youTubeSet));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            _flow.Error(CmdCopyFailedError(ex.Message));
+        }
+        finally
+        {
+            RunOrPost(DrainDiagnostics);
+        }
+    }
+
+    // ── /srvcopy (2026-10-07) ───────────────────────────────────────────────
+
+    public const string SrvCopyUsageError = "/srvcopy takes a profile name: /srvcopy <profile>";
+
+    public const string SrvCopySelfError = "/srvcopy copies into another profile; that one is loaded.";
+
+    /// <summary>
+    /// What <c>/srvcopy</c> carries (2026-10-07, the user's list, and the three groups they added: the Claude CLI server, the embedded
+    /// tuning, the Docker server timings), in the settings pane's order: each field and the copy of its stored value. <c>Embedded
+    /// models</c> stores nothing per profile (the models are shared under the home, the one in use is in <c>LLM URL</c> and
+    /// <c>LLM model</c>), and the keys are <c>/keycopy</c>'s. A server setting added later is one line here.
+    /// </summary>
+    public static readonly IReadOnlyList<(SettingsField Field, Action<AppSettingsData, AppSettingsData> Copy)> SrvCopyFields =
+    [
+        (SettingsField.LlmScanMode, (from, to) => to.LlmScanMode = from.LlmScanMode),
+        (SettingsField.LlmUrl, (from, to) => to.LlmUrl = from.LlmUrl),
+        (SettingsField.LlmModel, (from, to) => to.LlmModel = from.LlmModel),
+        (SettingsField.EmbeddedLlmServer, (from, to) => to.EmbeddedLlmServer = from.EmbeddedLlmServer),
+        (SettingsField.EmbeddedBackend, (from, to) => to.EmbeddedBackend = from.EmbeddedBackend),
+        (SettingsField.EmbeddedContextSize, (from, to) => to.EmbeddedContextSize = from.EmbeddedContextSize),
+        (SettingsField.EmbeddedGpuLayers, (from, to) => to.EmbeddedGpuLayers = from.EmbeddedGpuLayers),
+        (SettingsField.EmbeddedVramBudget, (from, to) => to.EmbeddedVramBudget = from.EmbeddedVramBudget),
+        (SettingsField.EmbeddedVramOnly, (from, to) => to.EmbeddedVramOnly = from.EmbeddedVramOnly),
+        (SettingsField.EmbeddedVision, (from, to) => to.EmbeddedVision = from.EmbeddedVision),
+        (SettingsField.EmbeddedDrafter, (from, to) => to.EmbeddedDrafter = from.EmbeddedDrafter),
+        (SettingsField.DockerServers, (from, to) => to.DockerServers = from.DockerServers),
+        (SettingsField.DockerServerContainers, (from, to) => to.DockerServerContainers = from.DockerServerContainers is { } containers ? [.. containers] : null),
+        (SettingsField.DockerServerStopTimeoutSeconds, (from, to) => to.DockerServerStopTimeoutSeconds = from.DockerServerStopTimeoutSeconds),
+        (SettingsField.DockerServerPostStopDelaySeconds, (from, to) => to.DockerServerPostStopDelaySeconds = from.DockerServerPostStopDelaySeconds),
+        (SettingsField.DockerServerReadyTimeoutSeconds, (from, to) => to.DockerServerReadyTimeoutSeconds = from.DockerServerReadyTimeoutSeconds),
+        (SettingsField.DockerServerStopOnExit, (from, to) => to.DockerServerStopOnExit = from.DockerServerStopOnExit),
+        (SettingsField.AnthropicApi, (from, to) => to.AnthropicApi = from.AnthropicApi),
+        (SettingsField.OpenAIApi, (from, to) => to.OpenAIApi = from.OpenAIApi),
+        (SettingsField.ClaudeCliServer, (from, to) => to.ClaudeCliServer = from.ClaudeCliServer),
+    ];
+
+    /// <summary>The question before a server copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
+    public static string SrvCopyPrompt(string profile) =>
+        $"Copy this profile's server settings into \"{profile}\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced.";
+
+    /// <summary>
+    /// The copy done: <c>(copied the server settings into "work": LLM URL http://…, LLM model qwen3)</c> — what the target now connects to,
+    /// in the settings pane's words (<c>(scan the local network)</c>, <c>(first listed)</c> when they are empty). Pinned.
+    /// </summary>
+    public static string SrvCopiedNotice(string profile, string url, string model) =>
+        $"(copied the server settings into \"{profile}\": LLM URL {url}, LLM model {model})";
+
+    /// <summary>
+    /// <c>/srvcopy &lt;profile&gt;</c> (2026-10-07, the user's ask, <c>/keycopy</c>'s twin): this profile's server settings
+    /// (<see cref="SrvCopyFields"/>) into another's, after a confirmation, by the same read-edit-write of the target's
+    /// <c>profile.json</c> (<see cref="Profiles.ReadProfileFile"/>: a corrupt one is an error, never overwritten). Mirrored: the target
+    /// ends with exactly these values, a default here resetting its own, and the question says so. The stored values
+    /// (<c>_settings.Current</c>), not the effective ones: a URL that only <c>--url</c> or <c>NEONSIDEKICK_LLM_URL</c> sets is this run's,
+    /// and stays out of the file.
+    /// </summary>
+    private async Task HandleSrvCopyAsync(string args, CancellationToken cancellationToken)
+    {
+        string[] words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length != 1)
+        {
+            _flow.Error(SrvCopyUsageError);
+            return;
+        }
+
+        string home = _settings.StorageDirectory;
+        if (Profiles.Resolve(home, words[0]) is not { } target)
+        {
+            _flow.Error(ProfileMissingError(words[0]));
+            return;
+        }
+
+        if (Profiles.NameEquals(target, _settings.ProfileName))
+        {
+            _flow.Error(SrvCopySelfError);
+            return;
+        }
+
+        if (!await ConfirmAsync(SrvCopyPrompt(target), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        var current = _settings.Current;
+        try
+        {
+            string path = Profiles.ProfileFile(home, target);
+            var data = Profiles.ReadProfileFile(path);
+            foreach (var (_, copy) in SrvCopyFields)
+            {
+                copy(current, data);
+            }
+
+            Profiles.WriteProfileFile(path, data);
+            string targetDirectory = Path.GetDirectoryName(path)!;
+            _flow.Notice(SrvCopiedNotice(target, SettingsMenu.FieldValue(SettingsField.LlmUrl, data, targetDirectory), SettingsMenu.FieldValue(SettingsField.LlmModel, data, targetDirectory)));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
@@ -10898,6 +11010,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.KeyCopy:
                 await HandleKeyCopyAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.SrvCopy:
+                await HandleSrvCopyAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Timer:
