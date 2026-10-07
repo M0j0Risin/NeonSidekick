@@ -585,6 +585,12 @@ public partial class ChatScreenTests : IDisposable
                 await Task.Delay(200);
                 input.Push(Keys.Escape);
                 PushLine("again");
+            }
+            else if (text == "Next.")
+            {
+                // /exit only once the second reply's speech is under way (2026-10-06, GitHub's macOS runner): the device starts
+                // before the synthesis, so Started is 2 by now. Typed with "again", it could be read before the consumer started
+                // the device for "Next." and the count came out 1.
                 PushLine("/exit");
             }
         };
