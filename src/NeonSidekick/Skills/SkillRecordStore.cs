@@ -532,6 +532,24 @@ public sealed class SkillRecordStore : IDisposable
     }
 
     /// <summary>
+    /// The skill's kept versions deleted (2026-10-07, the user's ask: the revert list's <c>d</c> and <c>c</c>): the one with id
+    /// <paramref name="revisionId"/>, or every one when it is null. Its row, events and use stay. The count deleted.
+    /// </summary>
+    public int DeleteRevisions(SkillScope scope, string profile, string folder, long? revisionId)
+    {
+        string one = revisionId is null ? "" : " AND id = $revision";
+        return Write("delete a skill's kept versions",
+            "DELETE FROM skill_revisions WHERE skill_id IN (SELECT id FROM skills WHERE scope = $scope AND profile = $profile AND folder = $folder)" + one,
+            scope, profile, folder, command =>
+            {
+                if (revisionId is { } id)
+                {
+                    command.Parameters.AddWithValue("$revision", id);
+                }
+            });
+    }
+
+    /// <summary>
     /// The hand-edit copies (<see cref="SkillRevision.IsHandEdit"/>) of <paramref name="path"/> dropped (2026-10-04): a newer hand edit's
     /// copy replaces them, and an app write of the file keeps the hand-edited text as its own revision. The count dropped.
     /// </summary>

@@ -504,6 +504,7 @@ Every list pane works the same way (2026-10-07): ↑/↓ move, Enter picks the h
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/process` | Enter opens the window · `k` kills (asks) |
+| `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
 | `/youtube saved` | Enter plays · `d` removes (asks) · type to filter |
 | `/cmdlist` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |

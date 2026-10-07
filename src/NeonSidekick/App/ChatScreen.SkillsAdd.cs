@@ -56,6 +56,9 @@ internal sealed partial class ChatScreen
         return _skillRecords.Restore(skill, revision);
     }
 
+    /// <summary>Kept versions forgotten from the Skills pane's revert list (2026-10-07, <see cref="SkillRecords.ForgetVersions"/>): one, or every one for null.</summary>
+    private int ForgetSkillVersions(Skill skill, SkillRevision? revision) => _skillRecords.ForgetVersions(skill, revision);
+
     /// <summary>The flow's host on the screen.</summary>
     private sealed class ScreenSkillHost(ChatScreen screen) : ISkillInstallHost
     {

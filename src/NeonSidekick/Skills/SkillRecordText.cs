@@ -287,6 +287,36 @@ public static class SkillRecordText
         };
     }
 
+    /// <summary>The removing of one kept version (2026-10-07), the yes/no's title: <c>↩️ Remove v3 of haiku?</c>. Pinned.</summary>
+    public static string RemoveVersionQuestion(string name, string label) =>
+        RevertGlyph + "Remove " + (label.Length > 0 ? label : "this entry") + " of " + name + "?";
+
+    /// <summary>Under it, which version: <c>SKILL.md, before the model's change at …; it can no longer be put back.</c> Pinned.</summary>
+    public static string RemoveVersionCaption(SkillRevision revision, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        return revision.Path + ", " + VersionText(revision, zone) + "; it can no longer be put back.";
+    }
+
+    /// <summary>The clearing of every kept version (2026-10-07), the yes/no's title. Pinned.</summary>
+    public static string ClearVersionsQuestion(string name, int count) =>
+        RevertGlyph + "Remove all " + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " kept version" : " kept versions") + " of " + name + "?";
+
+    /// <summary>Under it. Pinned.</summary>
+    public const string ClearVersionsCaption = "The text in place stays; none of them can be put back.";
+
+    /// <summary>After one is removed. Pinned.</summary>
+    public static string VersionRemovedNotice(string name, string label) =>
+        "(" + RevertGlyph + "removed " + (label.Length > 0 ? label : "an entry") + " of " + name + ")";
+
+    /// <summary>After all are cleared. Pinned.</summary>
+    public static string VersionsClearedNotice(string name, int count) =>
+        "(" + RevertGlyph + "removed " + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " kept version" : " kept versions") + " of " + name + ")";
+
+    /// <summary><c>Skill versions forgotten: global/haiku, 9</c>. Pinned.</summary>
+    public static string VersionsForgottenLogLine(SkillScope scope, string folder, int count) =>
+        "Skill versions forgotten: " + Key(scope, folder) + ", " + count.ToString(CultureInfo.InvariantCulture);
+
     /// <summary>The undo glyph the revert's notices wear.</summary>
     public const string RevertGlyph = "↩️ ";
 

@@ -21189,7 +21189,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(Titled(SkillsMenu.VersionsTitle("clock-check")), output);
+        Assert.Contains(Titled(SkillsMenu.VersionsTitle("clock-check") + " │ " + string.Join(" · ", SkillsMenu.VersionButtons.Select(b => b.Title)) + " "), output);   // the buttons since 2026-10-07
         Assert.Contains(SkillRecordText.VersionsCaption, output);
         Assert.Contains("(↩️ clock-check: SKILL.md is back as it was before the model's change at ", output);
         Assert.Contains("before a revert at ", output);

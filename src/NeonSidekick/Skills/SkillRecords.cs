@@ -387,6 +387,28 @@ public sealed class SkillRecords
             : _store.Revisions(row.Id);
     }
 
+    /// <summary>
+    /// Kept versions of <paramref name="skill"/> forgotten (2026-10-07, the user's ask: the revert list's <c>d</c> removes the highlighted
+    /// one, <c>c</c> clears them all, each after a yes): <paramref name="revision"/>, or every one when it is null. The skill's file, row,
+    /// events and use are untouched; a forgotten version can no longer be put back. The count forgotten; 0 for an external skill.
+    /// </summary>
+    public int ForgetVersions(Skill skill, SkillRevision? revision)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        if (skill.Scope == SkillScope.External)
+        {
+            return 0;
+        }
+
+        int forgotten = _store.DeleteRevisions(skill.Scope, CurrentProfile, skill.FolderName, revision?.Id);
+        if (forgotten > 0)
+        {
+            DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.VersionsForgottenLogLine(skill.Scope, skill.FolderName, forgotten));
+        }
+
+        return forgotten;
+    }
+
     /// <summary>Whether <paramref name="revision"/> is what its file holds now (the list's <c>current</c> mark): the same text, or no file for a version that had none.</summary>
     public static bool IsCurrent(Skill skill, SkillRevision revision)
     {

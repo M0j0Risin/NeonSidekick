@@ -78,6 +78,13 @@ internal sealed class SkillsMenu
     private readonly SkillRecords? _records;
     private readonly Func<Skill, IReadOnlyList<SkillRevision>>? _versions;
     private readonly Func<Skill, SkillRevision, SkillRevert>? _restore;
+    private readonly Func<Skill, SkillRevision?, int>? _forget;
+
+    /// <summary>The revert list's buttons (2026-10-07, the user's pick): the highlighted version removed, or every one, each after a yes.</summary>
+    public static readonly IReadOnlyList<MenuButton> VersionButtons = [new("✖ remove", 'd'), new(QueueMenu.ClearAllButton, QueueMenu.ClearAllKey)];
+
+    /// <summary>The revert list's hint with its buttons (2026-10-07). Pinned.</summary>
+    public const string VersionsKeys = "Enter = put back · d = remove · c = clear all · ESC = back";
 
     /// <param name="facts">The catalog as of a fresh scan and the rest the tabs show; read when the list opens and again after every change.</param>
     /// <param name="settings">The store the Options tab's rows show and save to.</param>
@@ -90,12 +97,14 @@ internal sealed class SkillsMenu
     /// <param name="records">The skill records (2026-09-30): a move, a rename and a delete keep them in step. Null for none.</param>
     /// <param name="versions">The <c>revert</c> row's list (2026-10-04, the screen's: a reconcile, then <see cref="SkillRecords.Revisions"/>); null, or no <paramref name="restore"/>, = no row.</param>
     /// <param name="restore">The version picked put back (the screen's <see cref="SkillRecords.Restore"/>).</param>
+    /// <param name="forget">A kept version forgotten, or every one for null (the screen's <see cref="SkillRecords.ForgetVersions"/>, 2026-10-07); null = no buttons on the list.</param>
     public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null,
-        Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null)
+        Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null, Func<Skill, SkillRevision?, int>? forget = null)
     {
         _records = records;
         _versions = versions;
         _restore = restore;
+        _forget = forget;
         _facts = facts ?? throw new ArgumentNullException(nameof(facts));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _menu = menu ?? throw new ArgumentNullException(nameof(menu));
@@ -525,43 +534,87 @@ internal sealed class SkillsMenu
     /// the cursor on the newest that is not; Enter puts the pick back (<see cref="SkillRecords.Restore"/>: the current text kept first, so
     /// no yes/no — nothing is lost, the rename's rule), ESC goes back to the list. Nothing kept is a notice on the status line. True when
     /// the skill changed (the facts are stale).
+    /// <para>Since 2026-10-07 (the user's pick) the title row's <see cref="VersionButtons"/> forget kept versions: <c>d</c> the highlighted
+    /// one, <c>c</c> every one, each after a yes with No on the cursor (<see cref="SkillRecords.ForgetVersions"/>; the text in place and the
+    /// skill's record stay). The list shows again after a removal, and goes when nothing is left; a removal counts as a change (the
+    /// Offered tab's version moves).</para>
     /// </summary>
     private async Task<bool> PickVersionAsync(Skill skill, CancellationToken cancellationToken)
     {
-        var versions = _versions!(skill);
-        if (versions.Count == 0)
-        {
-            Sink.Notice(SkillRecordText.NoVersionsNotice(skill.Name));
-            return false;
-        }
-
         var zone = _records?.Zone ?? TimeZoneInfo.Utc;
-        int width = versions.Max(v => v.Path.Length);
-        var current = versions.Select(v => SkillRecords.IsCurrent(skill, v)).ToList();
-        // The version numbers (2026-10-07): the Offered tab's v, the text in place one past the newest kept.
-        var numbers = VersionNumbers(versions);
-        int kept = numbers.Count(n => n is not null);
-        int numberWidth = kept == 0 ? 0 : Math.Max(2, numbers.Max(n => SkillsText.VersionLabel(n).Length));
-        var rows = versions.Select((v, i) => VersionRow(v, current[i], width, zone, numbers[i], numberWidth)).ToList();
-        int cursor = Math.Max(0, current.IndexOf(false));
-        var page = new MenuPage(VersionsTitle(skill.Name), rows, SettingsMenu.PickKeys) { Caption = SkillRecordText.VersionsCaptionAt(kept + 1) };
-        if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { Row: var picked } || picked >= versions.Count)
+        bool forgot = false;
+        int? cursor = null;
+        while (true)
         {
-            return false;
-        }
+            var versions = _versions!(skill);
+            if (versions.Count == 0)
+            {
+                if (!forgot)
+                {
+                    Sink.Notice(SkillRecordText.NoVersionsNotice(skill.Name));
+                }
 
-        var revert = _restore!(skill, versions[picked]);
-        var (changed, text) = SkillRecordText.RevertText(skill.Name, revert, zone);
-        if (changed || revert.Outcome == SkillRevertOutcome.Unchanged)
-        {
-            Sink.Notice(text);
-        }
-        else
-        {
-            Sink.Error(text);
-        }
+                return forgot;
+            }
 
-        return changed;
+            int width = versions.Max(v => v.Path.Length);
+            var current = versions.Select(v => SkillRecords.IsCurrent(skill, v)).ToList();
+            // The version numbers (2026-10-07): the Offered tab's v, the text in place one past the newest kept.
+            var numbers = VersionNumbers(versions);
+            int kept = numbers.Count(n => n is not null);
+            int numberWidth = kept == 0 ? 0 : Math.Max(2, numbers.Max(n => SkillsText.VersionLabel(n).Length));
+            var rows = versions.Select((v, i) => VersionRow(v, current[i], width, zone, numbers[i], numberWidth)).ToList();
+            int at = Math.Clamp(cursor ?? Math.Max(0, current.IndexOf(false)), 0, versions.Count - 1);
+            var page = new MenuPage(VersionsTitle(skill.Name), rows, _forget is null ? SettingsMenu.PickKeys : VersionsKeys)
+            {
+                Caption = SkillRecordText.VersionsCaptionAt(kept + 1),
+                Buttons = _forget is null ? null : VersionButtons,
+            };
+            if (await _pane.PickAsync(page, at, cancellationToken).ConfigureAwait(false) is not { Row: var picked } pick || picked >= versions.Count)
+            {
+                return forgot;
+            }
+
+            if (pick.Button >= 0 && _forget is not null)
+            {
+                bool all = VersionButtons[pick.Button].Key == QueueMenu.ClearAllKey;
+                string label = SkillsText.VersionLabel(numbers[picked]);
+                string question = all ? SkillRecordText.ClearVersionsQuestion(skill.Name, versions.Count) : SkillRecordText.RemoveVersionQuestion(skill.Name, label);
+                var asking = new MenuPage(question, SettingsMenu.ConfirmRows, SettingsMenu.ConfirmKeys)
+                {
+                    Hotkeys = SettingsMenu.ConfirmHotkeys,
+                    Caption = all ? SkillRecordText.ClearVersionsCaption : SkillRecordText.RemoveVersionCaption(versions[picked], zone),
+                };
+                cursor = picked;
+                if (await _pane.PickAsync(asking, 0, cancellationToken).ConfigureAwait(false) is not { Row: 1 })
+                {
+                    Sink.Notice(ChatScreen.KeptNotice);
+                    continue;
+                }
+
+                int forgotten = _forget(skill, all ? null : versions[picked]);
+                if (forgotten > 0)
+                {
+                    forgot = true;
+                    Sink.Notice(all ? SkillRecordText.VersionsClearedNotice(skill.Name, forgotten) : SkillRecordText.VersionRemovedNotice(skill.Name, label));
+                }
+
+                continue;
+            }
+
+            var revert = _restore!(skill, versions[picked]);
+            var (changed, text) = SkillRecordText.RevertText(skill.Name, revert, zone);
+            if (changed || revert.Outcome == SkillRevertOutcome.Unchanged)
+            {
+                Sink.Notice(text);
+            }
+            else
+            {
+                Sink.Error(text);
+            }
+
+            return changed || forgot;
+        }
     }
 
     /// <summary>The rename's slot under the page, the name checked and the act (2026-09-21); true when the folder changed.</summary>

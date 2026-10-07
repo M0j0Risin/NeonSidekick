@@ -307,7 +307,7 @@ public static class HelpCommands
         ]),
         new("/skills",
         [
-            new("/skills", "List the skills (Enter moves, renames, edits, reverts or deletes one; revert lists the kept versions to pick one to put back) and edit the skill, reflection and project-file settings. On the Offered tab, type to narrow the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
+            new("/skills", "List the skills (Enter moves, renames, edits, reverts or deletes one; revert lists the kept versions to pick one to put back, d removing the highlighted one and c all of them, each after a yes) and edit the skill, reflection and project-file settings. On the Offered tab, type to narrow the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
             new("/skills add <source> [--global|--profile]", "Install an Agent Skill from the web, with a preview first: search words, `owner/repo[/skill]`, a GitHub URL (the repository, a `/tree/…` folder or a `SKILL.md`) or a `.zip` URL. A pane asks where it goes (the cursor starts on Cancel). Refused while a reply runs. See Installing skills."),
             new("/skills purge list|commit <age>", "`list` lists the skills not used for that long (`30` days, `12h`, `90m`) and deletes nothing; `commit` deletes them, folder and record, after a yes/no that lists them. See Skill records."),
         ]),

@@ -29,6 +29,8 @@ public class SkillsMenuTests : IDisposable
     /// <summary>The revert row's seams (2026-10-04): null, no row; the restores the menu asked for.</summary>
     private Func<Skill, IReadOnlyList<SkillRevision>>? _versions;
     private readonly List<SkillRevision> _restored = new();
+    /// <summary>The revert list's forgetting (2026-10-07): null, no buttons.</summary>
+    private Func<Skill, SkillRevision?, int>? _forget;
 
     private void OpenFile(string path) => (_openFile ?? _opened.Add)(path);
 
@@ -101,7 +103,7 @@ public class SkillsMenuTests : IDisposable
         var menuPane = new MenuPane(pane, keys);
         var settings = Settings(pane, keys, menuPane);
         var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage,
-            versions: _versions, restore: _versions is null ? null : Restore);
+            versions: _versions, restore: _versions is null ? null : Restore, forget: _forget);
         pane.Show();
         return (menu, pane, settings);
     }
@@ -242,6 +244,84 @@ public class SkillsMenuTests : IDisposable
             "  v2  SKILL.md your edit of 2026-10-04 14:05 · current\n▸ v1  SKILL.md before the model's change at 2026-10-04 14:05\n      notes.md not there before a reflection's change at 2026-10-04 14:05 · current\n", Output);
         Assert.Equal(2, Assert.Single(_restored).Id);
         Assert.Contains("  · " + SkillRecordText.RevertedNotice("haiku", kept[1], TimeZoneInfo.Utc) + "\n", Output);
+    }
+
+    /// <summary>A kept list the forget seam changes, as the records would.</summary>
+    private List<SkillRevision> ForgettableVersions(string current)
+    {
+        var at = new DateTimeOffset(2026, 10, 4, 14, 5, 0, TimeSpan.Zero);
+        var kept = new List<SkillRevision>
+        {
+            new(3, 1, at, SkillCatalog.FileName, current, SkillActors.User),
+            new(2, 1, at, SkillCatalog.FileName, "old", SkillActors.Model),
+            new(1, 1, at, SkillCatalog.FileName, "older", SkillActors.Model),
+        };
+        _versions = _ => kept.ToList();
+        _forget = (_, revision) =>
+        {
+            int count = revision is null ? kept.Count : kept.RemoveAll(r => r.Id == revision.Id);
+            if (revision is null)
+            {
+                kept.Clear();
+            }
+
+            return count;
+        };
+        return kept;
+    }
+
+    /// <summary>
+    /// The revert list's d (2026-10-07, the user's pick): the highlighted version removed after a yes, No on the cursor keeping it; the
+    /// list shows again without it, and the buttons' keys are on the hint.
+    /// </summary>
+    [Fact]
+    public async Task RevertList_D_RemovesTheHighlightedVersion_AfterAYes()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var kept = ForgettableVersions(File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)));
+        var removing = kept[1];
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list, the cursor on v2 (the newest not current)
+        Push(Keys.Char('d'), Keys.Enter);                            // No: kept
+        Push(Keys.Char('d'), Keys.Down, Keys.Enter);                 // Yes
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsMenu.VersionsKeys, Output);
+        Assert.Contains(SkillRecordText.RemoveVersionQuestion("haiku", "v2"), Output);
+        Assert.Contains(SkillRecordText.RemoveVersionCaption(removing, TimeZoneInfo.Utc), Output);
+        Assert.Equal("↩️ Remove v2 of haiku?", SkillRecordText.RemoveVersionQuestion("haiku", "v2"));
+        Assert.Contains(ChatScreen.KeptNotice, Output);
+        Assert.Contains(SkillRecordText.VersionRemovedNotice("haiku", "v2"), Output);
+        Assert.Equal([3L, 1L], kept.Select(r => r.Id));
+        Assert.Empty(_restored);
+        Assert.Equal("(↩️ removed v2 of haiku)", SkillRecordText.VersionRemovedNotice("haiku", "v2"));
+        Assert.Equal("Enter = put back · d = remove · c = clear all · ESC = back", SkillsMenu.VersionsKeys);
+    }
+
+    /// <summary>The revert list's c (2026-10-07): every kept version removed after a yes; the list goes, with no "nothing kept" notice after it.</summary>
+    [Fact]
+    public async Task RevertList_C_ClearsEveryVersion_AfterAYes()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var kept = ForgettableVersions(File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)));
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+        Push(Keys.Char('c'), Keys.Down, Keys.Enter);                 // Yes
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillRecordText.ClearVersionsQuestion("haiku", 3), Output);
+        Assert.Contains(SkillRecordText.VersionsClearedNotice("haiku", 3), Output);
+        Assert.DoesNotContain(SkillRecordText.NoVersionsNotice("haiku"), Output);
+        Assert.Empty(kept);
+        Assert.Contains(SkillRecordText.ClearVersionsCaption, Output);
+        Assert.Equal("↩️ Remove all 3 kept versions of haiku?", SkillRecordText.ClearVersionsQuestion("haiku", 3));
+        Assert.Equal("(↩️ removed 1 kept version of haiku)", SkillRecordText.VersionsClearedNotice("haiku", 1));
     }
 
     /// <summary>The pane: the three tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project file toggle is an Options row since 2026-10-01 (the one row of a Project tab of its own from later on 2026-09-19 until then) — Enter opens its page, off picked, the status line saying so; ESC closes with nothing in the transcript.</summary>

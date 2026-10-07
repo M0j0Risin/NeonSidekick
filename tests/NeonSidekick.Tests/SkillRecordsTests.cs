@@ -378,6 +378,38 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal(3, _store.Events(id).Count(e => e.Kind == SkillEventKinds.Reverted));
     }
 
+    /// <summary>
+    /// Forgetting kept versions (2026-10-07, the user's ask: the revert list's d and c): one by its row, then every one; the file, the
+    /// skill's row and its events stay; an external skill has none to forget.
+    /// </summary>
+    [Fact]
+    public void ForgetVersions_OneThenAll_KeepsTheFileAndTheRecord()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        var editor = Editor(SkillActors.Model);
+        editor.Describe("update", "", "haiku", null, "Version one.");
+        editor.Describe("update", "", "haiku", null, "Version two.");
+        editor.Describe("update", "", "haiku", null, "Version three.");
+        string now = File.ReadAllText(path);
+        var skill = SkillOf("haiku");
+        var list = _records.Revisions(skill);
+        Assert.Equal(3, list.Count);
+        long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
+        int events = _store.Events(id).Count;
+
+        Assert.Equal(1, _records.ForgetVersions(skill, list[1]));
+        Assert.Equal([list[0].Id, list[2].Id], _records.Revisions(skill).Select(r => r.Id));
+        Assert.Equal(0, _records.ForgetVersions(skill, list[1]));   // gone already
+
+        Assert.Equal(2, _records.ForgetVersions(skill, null));
+        Assert.Empty(_records.Revisions(skill));
+        Assert.Equal(now, File.ReadAllText(path));
+        Assert.Equal(events, _store.Events(id).Count);
+        Assert.Equal("Skill versions forgotten: profile/haiku, 2", SkillRecordText.VersionsForgottenLogLine(SkillScope.Profile, "haiku", 2));
+    }
+
     [Fact]
     public void Restore_AVersionNoLongerKept_IsRefused()
     {
