@@ -2448,11 +2448,17 @@ public sealed class WorkingDirectory
                 {
                     if (isDirectory)
                     {
+                        // Entries sorted by their name, ordinal (2026-10-06, the macOS build): the walk follows the folder's enumeration
+                        // order, which NTFS and APFS give differently, so the same folder made a different zip on each. This changes
+                        // Windows' zips too, on purpose: the same folder now makes the same zip on both systems.
                         string baseName = Path.GetFileName(source);
-                        foreach (var entry in Walk(source, null, recurse: true))
+                        var files = Walk(source, null, recurse: true)
+                            .Select(entry => (entry.FullPath, Name: baseName + "/" + entry.FullPath[(source.Length + 1)..].Replace('\\', '/')))
+                            .OrderBy(file => file.Name, StringComparer.Ordinal)
+                            .ToList();
+                        foreach (var (fullPath, name) in files)
                         {
-                            string name = baseName + "/" + entry.FullPath[(source.Length + 1)..].Replace('\\', '/');
-                            zip.CreateEntryFromFile(entry.FullPath, name, CompressionLevel.Optimal);
+                            zip.CreateEntryFromFile(fullPath, name, CompressionLevel.Optimal);
                             entries++;
                         }
                     }
