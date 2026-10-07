@@ -233,7 +233,8 @@ public class SkillsMenuTests : IDisposable
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list
-        Push(Keys.Enter);                                            // the cursor's: the model's
+        Push(Keys.Enter, Keys.Enter);                                // the cursor's: the model's; No (asked since later on 2026-10-07): the list again
+        Push(Keys.Enter, Keys.Down, Keys.Enter);                     // the model's again, Yes
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -242,7 +243,11 @@ public class SkillsMenuTests : IDisposable
         // Numbered as the Offered tab counts (2026-10-07): two kept texts, so the skill is at v3; the revision from before notes.md was there is none.
         Assert.Contains("\n" + Titled(SkillsMenu.VersionsTitle("haiku")) + "\n" + SkillRecordText.VersionsCaptionAt(3) + "\n \n" +
             "  v2  SKILL.md your edit of 2026-10-04 14:05 · current\n▸ v1  SKILL.md before the model's change at 2026-10-04 14:05\n      notes.md not there before a reflection's change at 2026-10-04 14:05 · current\n", Output);
-        Assert.Equal(2, Assert.Single(_restored).Id);
+        Assert.Equal(2, Assert.Single(_restored).Id);   // once: the No put nothing back
+        Assert.Contains(SkillRecordText.PutBackQuestion("haiku", "v1"), Output);
+        Assert.Contains(SkillRecordText.PutBackCaption(kept[1], TimeZoneInfo.Utc), Output);
+        Assert.Contains("  · " + ChatScreen.KeptNotice + "\n", Output);
+        Assert.Equal("↩️ Put v1 of haiku back?", SkillRecordText.PutBackQuestion("haiku", "v1"));
         Assert.Contains("  · " + SkillRecordText.RevertedNotice("haiku", kept[1], TimeZoneInfo.Utc) + "\n", Output);
     }
 

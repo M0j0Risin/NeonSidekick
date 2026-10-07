@@ -298,6 +298,17 @@ public static class SkillRecordText
         return revision.Path + ", " + VersionText(revision, zone) + "; it can no longer be put back.";
     }
 
+    /// <summary>The putting back of a kept version (later on 2026-10-07, the user's ask), the yes/no's title: <c>↩️ Put v2 of haiku back?</c>. Pinned.</summary>
+    public static string PutBackQuestion(string name, string label) =>
+        RevertGlyph + "Put " + (label.Length > 0 ? label : "this entry") + " of " + name + " back?";
+
+    /// <summary>Under it, which version and that nothing is lost: <c>SKILL.md, before the model's change at …; the text in place is kept first.</c> Pinned.</summary>
+    public static string PutBackCaption(SkillRevision revision, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        return revision.Path + ", " + VersionText(revision, zone) + "; the text in place is kept first.";
+    }
+
     /// <summary>The clearing of every kept version (2026-10-07), the yes/no's title. Pinned.</summary>
     public static string ClearVersionsQuestion(string name, int count) =>
         RevertGlyph + "Remove all " + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " kept version" : " kept versions") + " of " + name + "?";

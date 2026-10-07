@@ -21164,6 +21164,8 @@ public partial class ChatScreenTests : IDisposable
 
                         input.Push(Keys.Enter);   // the version list
                         input.Push(Keys.Enter);   // the newest: before the model's change
+                        input.Push(Keys.Down);    // Yes (asked since later on 2026-10-07)
+                        input.Push(Keys.Enter);
                     }
 
                     break;

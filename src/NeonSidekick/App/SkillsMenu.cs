@@ -80,8 +80,12 @@ internal sealed class SkillsMenu
     private readonly Func<Skill, SkillRevision, SkillRevert>? _restore;
     private readonly Func<Skill, SkillRevision?, int>? _forget;
 
-    /// <summary>The revert list's buttons (2026-10-07, the user's pick): the highlighted version removed, or every one, each after a yes.</summary>
-    public static readonly IReadOnlyList<MenuButton> VersionButtons = [new("✖ remove", 'd'), new(QueueMenu.ClearAllButton, QueueMenu.ClearAllKey)];
+    /// <summary>
+    /// The revert list's buttons (2026-10-07, the user's pick): the highlighted version removed, or every one, each after a yes. The remove
+    /// is the saved list's <c>✖  remove</c>, two spaces (later that day, the user's report: Windows Terminal draws ✖ two cells wide over
+    /// one space, so it read "✖remove", as <c>/process</c>' kill did).
+    /// </summary>
+    public static readonly IReadOnlyList<MenuButton> VersionButtons = [new(YouTube.YouTubeText.RemoveButton, 'd'), new(QueueMenu.ClearAllButton, QueueMenu.ClearAllKey)];
 
     /// <summary>The revert list's hint with its buttons (2026-10-07). Pinned.</summary>
     public const string VersionsKeys = "Enter = put back · d = remove · c = clear all · ESC = back";
@@ -531,9 +535,10 @@ internal sealed class SkillsMenu
 
     /// <summary>
     /// The revert row's list (2026-10-04, the user's ask): every kept version of the skill, newest first, the one the file holds now marked,
-    /// the cursor on the newest that is not; Enter puts the pick back (<see cref="SkillRecords.Restore"/>: the current text kept first, so
-    /// no yes/no — nothing is lost, the rename's rule), ESC goes back to the list. Nothing kept is a notice on the status line. True when
-    /// the skill changed (the facts are stale).
+    /// the cursor on the newest that is not; Enter puts the pick back (<see cref="SkillRecords.Restore"/>: the current text kept first) after
+    /// a yes with No on the cursor (later on 2026-10-07, the user's ask; no yes/no until then, nothing being lost — the rename's rule; a No
+    /// shows the list again), ESC goes back to the list. Nothing kept is a notice on the status line. True when the skill changed (the
+    /// facts are stale).
     /// <para>Since 2026-10-07 (the user's pick) the title row's <see cref="VersionButtons"/> forget kept versions: <c>d</c> the highlighted
     /// one, <c>c</c> every one, each after a yes with No on the cursor (<see cref="SkillRecords.ForgetVersions"/>; the text in place and the
     /// skill's record stay). The list shows again after a removal, and goes when nothing is left; a removal counts as a change (the
@@ -599,6 +604,18 @@ internal sealed class SkillsMenu
                     Sink.Notice(all ? SkillRecordText.VersionsClearedNotice(skill.Name, forgotten) : SkillRecordText.VersionRemovedNotice(skill.Name, label));
                 }
 
+                continue;
+            }
+
+            var putting = new MenuPage(SkillRecordText.PutBackQuestion(skill.Name, SkillsText.VersionLabel(numbers[picked])), SettingsMenu.ConfirmRows, SettingsMenu.ConfirmKeys)
+            {
+                Hotkeys = SettingsMenu.ConfirmHotkeys,
+                Caption = SkillRecordText.PutBackCaption(versions[picked], zone),
+            };
+            if (await _pane.PickAsync(putting, 0, cancellationToken).ConfigureAwait(false) is not { Row: 1 })
+            {
+                Sink.Notice(ChatScreen.KeptNotice);
+                cursor = picked;
                 continue;
             }
 
