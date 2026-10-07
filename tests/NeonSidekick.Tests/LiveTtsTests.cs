@@ -58,7 +58,7 @@ public class LiveTtsTests
 
     /// <summary>
     /// The whole speech path for real: a scripted reply through the chat screen, the real Kokoro
-    /// server and the real WinMM device. Passing means the turn waited for the audio to drain
+    /// server and the real device (WinMM, or AudioQueue on a Mac). Passing means the turn waited for the audio to drain
     /// and nothing warned; whether it was audible is <c>--audio-check</c>'s question.
     /// </summary>
     [LiveSpeechFact]
@@ -69,12 +69,12 @@ public class LiveTtsTests
         console.Interactive();
         console.Profile.Width = 240;
         using var settings = new AppSettings(dir);
-        settings.Update(d => { d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = LiveTtsServer.BaseUrl!.AbsoluteUri; });
+        settings.Update(d => { d.LlmUrl = "http://127.0.0.1:1234/v1"; d.TtsOutput = true; d.TtsSource = "http"; d.TtsHttpUrl = LiveTtsServer.BaseUrl!.AbsoluteUri; });
 
         var http = new StubHttpMessageHandler().Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("llama"));
         var chat = new FakeChatClient().EnqueueText("Hello from Neon. ", "This is a live test.");
         using var session = new LlmSession(new LlmEndpointProbe(new HttpClient(http), TimeSpan.FromMilliseconds(500)), new ContextLengthProbe(new HttpClient(http), TimeSpan.FromMilliseconds(500)), (_, _) => chat);
-        using var speech = new SpeechSession(request => new KokoroHttpSynthesizer(request.Url!), format => new WinMmAudioPlayback(format), new ModelStore(Path.Combine(dir, "models"), new HttpClient(http)));
+        using var speech = new SpeechSession(request => new KokoroHttpSynthesizer(request.Url!), AudioSupport.DefaultPlayback, new ModelStore(Path.Combine(dir, "models"), new HttpClient(http)));
         // Voice input stays off (the default), so the session touches neither the microphone nor the models.
         using var voice = new VoiceSession(_ => new FakeAudioCapture(), _ => new FakeRecognizer(), (_, _) => new FakeVad(), new ModelStore(Path.Combine(dir, "models"), new HttpClient(http)), () => 0, (_, _) => new FakeWakeWordDetector());
 

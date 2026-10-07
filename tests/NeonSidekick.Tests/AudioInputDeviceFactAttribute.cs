@@ -2,7 +2,7 @@ using NeonSidekick.Audio;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>Counts wave-in devices once per assembly; CI runners have none.</summary>
+/// <summary>Counts microphones once per assembly (WinMM on Windows, Core Audio's default on macOS); CI runners may have none.</summary>
 internal static class AudioInputDevice
 {
     public static readonly int InputCount;
@@ -12,13 +12,21 @@ internal static class AudioInputDevice
     {
         try
         {
-            InputCount = WinMmAudioCapture.InputDeviceCount();
-            Unavailable = InputCount > 0 ? "" : "No wave-in device on this machine.";
+            InputCount = AudioSupport.DefaultInputDeviceCount();
+            Unavailable = InputCount > 0 ? "" : "No microphone on this machine.";
+
+            // macOS (2026-10-07): recording from a terminal that was never asked would bring up the permission question,
+            // and AudioQueueStart waits for the answer; a CI runner has nobody to give it. Only an allowed terminal records.
+            if (InputCount > 0 && OperatingSystem.IsMacOS() && AudioQueueNative.MicrophoneAuthorization() != MicrophoneAccess.Authorized)
+            {
+                InputCount = 0;
+                Unavailable = "The terminal running the tests has no microphone permission (System Settings › Privacy & Security › Microphone).";
+            }
         }
         catch (Exception ex)
         {
             InputCount = 0;
-            Unavailable = "winmm probe failed: " + ex.Message;
+            Unavailable = "audio probe failed: " + ex.Message;
         }
     }
 }
@@ -33,4 +41,20 @@ public sealed class AudioInputDeviceFactAttribute : FactAttribute
             Skip = AudioInputDevice.Unavailable;
         }
     }
+
+    /// <summary>A fact about the AudioQueue backend itself (2026-10-07): skipped off macOS as well.</summary>
+    public bool MacOnly
+    {
+        get => _macOnly;
+        set
+        {
+            _macOnly = value;
+            if (value && !OperatingSystem.IsMacOS())
+            {
+                Skip = MacFactAttribute.SkipReason;
+            }
+        }
+    }
+
+    private bool _macOnly;
 }

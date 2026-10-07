@@ -77,6 +77,8 @@ catch
 // Terminal.app (and iTerm2 on the alternate screen) draws ⚙️, 🛠️ and the other text-default emoji with U+FE0F one cell wide where other terminals draw two
 // (2026-10-06, measured there): the cell arithmetic follows the terminal, or the toolbar's clicks land on the wrong button.
 NeonSidekick.UI.TextCells.NarrowSelectorSequences = NeonSidekick.UI.TextCells.ForTerminal(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
+// The app macOS asks about the microphone (2026-10-07, sound on a Mac): the terminal, named in the permission's sentences.
+NeonSidekick.Audio.MicrophoneText.Terminal = NeonSidekick.Audio.MicrophoneText.TerminalName(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
 
 var frames = new FrameWriter(Console.OpenStandardOutput());
 Console.SetOut(frames);
@@ -172,7 +174,17 @@ using var shutdown = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
     e.Cancel = true;
-    shutdown.Cancel();
+    try
+    {
+        shutdown.Cancel();
+    }
+    catch (ObjectDisposedException)
+    {
+        // The app is already on its way out (2026-10-07, the user's Mac run: Ctrl+C twice to quit mid-reply). The token is
+        // disposed as Main returns, the handler stays registered until the process is gone, and once raw mode is put back the
+        // terminal turns a late Ctrl+C into SIGINT: unhandled here, it aborted the exit (SIGABRT, crash.log). Nothing is left
+        // to cancel.
+    }
 };
 
 // The bottom pane needs to know where the cursor is; a console that cannot say (redirected

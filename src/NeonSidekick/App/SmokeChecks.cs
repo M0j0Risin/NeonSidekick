@@ -134,6 +134,8 @@ public static partial class SmokeChecks
         results.Add(ProbeOpenAiSdk());
         results.Add(OperatingSystem.IsWindows() ? ProbeWinMm() : NotWindows("audio:winmm"));
         results.Add(OperatingSystem.IsWindows() ? ProbeWinMmIn() : NotWindows("audio:winmm-in"));
+        results.Add(OperatingSystem.IsMacOS() ? ProbeAudioQueue() : new SmokeCheck("audio:audioqueue", true, "skipped: not macOS"));
+        results.Add(OperatingSystem.IsMacOS() ? ProbeAudioQueueIn() : new SmokeCheck("audio:audioqueue-in", true, "skipped: not macOS"));
         results.Add(OperatingSystem.IsWindows() ? ProbeConsoleInput() : NotWindows("console:input"));
         results.Add(OperatingSystem.IsMacOS() ? ProbeTermios() : new SmokeCheck("console:termios", true, "skipped: not macOS"));
         results.Add(PicturesHere ? ProbeImageResize() : NotWindows("image:resize"));

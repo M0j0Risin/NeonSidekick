@@ -97,3 +97,19 @@ public sealed class NoPictureCodecsFactAttribute : FactAttribute
         }
     }
 }
+
+/// <summary>
+/// A fact that needs a sound backend (2026-10-07, sound on a Mac): WinMM on Windows, AudioQueue on macOS. It runs there
+/// with fakes behind the seams (<c>--audio-check</c>/<c>--voice-check</c> refuse up front where there is no backend);
+/// skipped elsewhere.
+/// </summary>
+public sealed class AudioBackendFactAttribute : FactAttribute
+{
+    public AudioBackendFactAttribute()
+    {
+        if (!Audio.AudioSupport.Available)
+        {
+            Skip = Audio.AudioSupport.Unavailable;
+        }
+    }
+}

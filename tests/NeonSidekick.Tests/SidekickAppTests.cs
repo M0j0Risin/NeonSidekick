@@ -229,7 +229,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains(_console.Lines, line => line.Contains("native:long", StringComparison.Ordinal) && line.Contains(path + " (exit 0)", StringComparison.Ordinal));
     }
 
-    [WindowsFact]
+    [AudioBackendFact]
     public async Task AudioCheck_UsesThePlaybackFactory_AndExitsWithItsCode()
     {
         var fake = new FakeAudioPlayback();
@@ -246,7 +246,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("N E O N   S I D E K I C K", _console.Output);
     }
 
-    [WindowsFact]
+    [AudioBackendFact]
     public async Task VoiceCheck_Heard_ExitsZero_ThroughTheFactories()
     {
         FakeModelsPresent();
@@ -265,7 +265,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(Path.Combine(_dir, "models"), app.ModelsDirectory);
     }
 
-    [WindowsFact]
+    [AudioBackendFact]
     public async Task VoiceCheck_RecognizerFails_ExitsOne()
     {
         FakeModelsPresent();
@@ -279,7 +279,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains(VoiceCheck.NoTranscriptLine, _console.Output);
     }
 
-    [WindowsFact]
+    [AudioBackendFact]
     public async Task VoiceCheck_ModelDownloadRefused_ExitsOne_WithTheStatusLine()
     {
         int code = await App().RunAsync(SidekickOptions.None with { VoiceCheck = true }, CancellationToken.None);

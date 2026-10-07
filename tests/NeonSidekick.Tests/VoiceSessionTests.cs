@@ -616,6 +616,37 @@ public class VoiceSessionTests : IDisposable
         Assert.Empty(_http.Requests);
     }
 
+    /// <summary>The Mac twin (2026-10-07): Core Audio naming no default input says so in the Mac's words.</summary>
+    [MacFact]
+    public async Task NoMicrophone_IsAWarning_WithNoHttp_Mac()
+    {
+        _microphones = 0;
+
+        await ConnectAsync(Enabled());
+
+        Assert.True(_voice.StatusIsWarning);
+        Assert.Equal(VoiceSession.NoMicrophoneLine("no input device"), _voice.StatusLine());
+        Assert.Empty(_http.Requests);
+    }
+
+    /// <summary>
+    /// macOS's permission refused (2026-10-07): the voice session says so at connect, with where to turn it on, before any
+    /// model is fetched or anything records zeros.
+    /// </summary>
+    [Fact]
+    public async Task MicrophoneRefused_IsAWarning_WithTheSettingsPath_AndNoHttp()
+    {
+        string refusal = MicrophoneText.Denied("Terminal");
+        using var voice = new VoiceSession(_ => _capture, _ => _recognizer, (_, _) => _vad, new ModelStore(_models, new HttpClient(_http)), () => 1, (_, _) => _wake, () => refusal);
+
+        await voice.ConnectAsync(Enabled(), _ => { }, CancellationToken.None);
+
+        Assert.True(voice.StatusIsWarning);
+        Assert.Equal(VoiceSession.NoMicrophoneLine(refusal), voice.StatusLine());
+        Assert.Contains(MicrophoneText.SettingsPath, voice.StatusLine(), StringComparison.Ordinal);
+        Assert.Empty(_http.Requests);
+    }
+
     [Fact]
     public async Task Downloads_ThenLoads_ThenReady()
     {

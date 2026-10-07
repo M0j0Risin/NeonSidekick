@@ -87,23 +87,50 @@ public class AudioCheckTests : IDisposable
     [AudioDeviceFact]
     public async Task RunAsync_RealDevice_ReturnsZero()
     {
-        int code = await AudioCheck.RunAsync(_console, new WinMmAudioPlayback(PcmFormat.Kokoro));
+        int code = await AudioCheck.RunAsync(_console, AudioSupport.DefaultPlayback(PcmFormat.Kokoro));
 
         Assert.Equal(0, code);
         Assert.Contains(AudioCheck.DrainedLine, _console.Output);
     }
 
-    /// <summary>The macOS build (2026-10-06): the default devices are WinMM's on Windows; elsewhere a refusal with the one sentence and no microphone.</summary>
+    /// <summary>
+    /// The default devices (2026-10-06, the macOS build; 2026-10-07, sound on a Mac): WinMM's on Windows, AudioQueue's on
+    /// macOS, and elsewhere a refusal with the one sentence and no microphone.
+    /// </summary>
     [Fact]
-    public void AudioSupport_IsWinMm_OnWindows_AndARefusalElsewhere()
+    public void AudioSupport_IsWinMm_OnWindows_AudioQueue_OnMacOS_AndARefusalElsewhere()
     {
-        Assert.Equal(OperatingSystem.IsWindows(), AudioSupport.Available);
-        if (!AudioSupport.Available)
+        Assert.Equal(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), AudioSupport.Available);
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.IsType<WinMmAudioPlayback>(AudioSupport.DefaultPlayback(PcmFormat.Kokoro));
+            Assert.IsType<WinMmAudioCapture>(AudioSupport.DefaultCapture(PcmFormat.Whisper));
+            Assert.Equal("no wave-in device", AudioSupport.NoMicrophoneDetail);
+            Assert.Null(AudioSupport.MicrophoneRefusal());
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            using var playback = AudioSupport.DefaultPlayback(PcmFormat.Kokoro);
+            using var capture = AudioSupport.DefaultCapture(PcmFormat.Whisper);
+            Assert.IsType<AudioQueuePlayback>(playback);
+            Assert.IsType<AudioQueueCapture>(capture);
+            Assert.Equal(MicrophoneText.NoInputDevice, AudioSupport.NoMicrophoneDetail);
+            Assert.InRange(AudioSupport.DefaultInputDeviceCount(), 0, 1);
+            Assert.InRange(AudioSupport.DefaultOutputDeviceCount(), 0, 1);
+        }
+        else
         {
             var ex = Assert.Throws<PlatformNotSupportedException>(() => AudioSupport.DefaultPlayback(PcmFormat.Kokoro));
             Assert.Equal(AudioSupport.Unavailable, ex.Message);
             Assert.Throws<PlatformNotSupportedException>(() => AudioSupport.DefaultCapture(PcmFormat.Kokoro));
             Assert.Equal(0, AudioSupport.DefaultInputDeviceCount());
+            Assert.Equal(AudioSupport.Unavailable, AudioSupport.NoMicrophoneDetail);
         }
+    }
+
+    [Fact]
+    public void Unavailable_NamesBothBackends()
+    {
+        Assert.Equal("Audio needs Windows or macOS for now: this build has no sound output or microphone.", AudioSupport.Unavailable);
     }
 }

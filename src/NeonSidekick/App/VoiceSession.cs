@@ -52,6 +52,7 @@ internal sealed class VoiceSession : IDisposable
     private readonly Func<string, VadOptions, IVoiceActivityDetector> _vadFactory;
     private readonly ModelStore _models;
     private readonly Func<int> _inputDeviceCount;
+    private readonly Func<string?> _microphoneRefusal;
     private readonly Func<string, string, IWakeWordDetector> _wakeDetectorFactory;
 
     private IAudioCapture? _capture;
@@ -69,6 +70,7 @@ internal sealed class VoiceSession : IDisposable
     /// <param name="vadFactory">Builds the voice activity detector for a model path and options.</param>
     /// <param name="models">Where the ggml files live and come from.</param>
     /// <param name="inputDeviceCount">How many microphones Windows reports; <see cref="WinMmAudioCapture.InputDeviceCount"/> in the app.</param>
+    /// <param name="microphoneRefusal">Why the microphone may not be used, or null (2026-10-07: macOS's permission, denied or restricted, read before anything records); <see cref="AudioSupport.MicrophoneRefusal"/> in the app, none by default.</param>
     /// <param name="wakeDetectorFactory">Builds the wake-word recogniser for a model directory and phrase; <see cref="VoskWakeWordDetector"/> in the app.</param>
     public VoiceSession(
         Func<PcmFormat, IAudioCapture> captureFactory,
@@ -76,7 +78,8 @@ internal sealed class VoiceSession : IDisposable
         Func<string, VadOptions, IVoiceActivityDetector> vadFactory,
         ModelStore models,
         Func<int> inputDeviceCount,
-        Func<string, string, IWakeWordDetector> wakeDetectorFactory)
+        Func<string, string, IWakeWordDetector> wakeDetectorFactory,
+        Func<string?>? microphoneRefusal = null)
     {
         _captureFactory = captureFactory ?? throw new ArgumentNullException(nameof(captureFactory));
         _recognizerFactory = recognizerFactory ?? throw new ArgumentNullException(nameof(recognizerFactory));
@@ -84,6 +87,7 @@ internal sealed class VoiceSession : IDisposable
         _models = models ?? throw new ArgumentNullException(nameof(models));
         _inputDeviceCount = inputDeviceCount ?? throw new ArgumentNullException(nameof(inputDeviceCount));
         _wakeDetectorFactory = wakeDetectorFactory ?? throw new ArgumentNullException(nameof(wakeDetectorFactory));
+        _microphoneRefusal = microphoneRefusal ?? (() => null);
     }
 
     /// <summary>The saved switch, as of the last connect.</summary>
@@ -268,7 +272,15 @@ internal sealed class VoiceSession : IDisposable
             if (microphones <= 0)
             {
                 _state = State.NoMicrophone;
-                Detail = AudioSupport.Available ? "no wave-in device" : AudioSupport.Unavailable;
+                Detail = AudioSupport.NoMicrophoneDetail;
+                return;
+            }
+
+            if (_microphoneRefusal() is { } refusal)
+            {
+                // macOS: the terminal's microphone permission is off. Said now, not after a session of hearing zeros.
+                _state = State.NoMicrophone;
+                Detail = refusal;
                 return;
             }
 

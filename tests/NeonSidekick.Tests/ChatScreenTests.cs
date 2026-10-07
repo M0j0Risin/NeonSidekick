@@ -489,6 +489,20 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_voice.IsReady);
     }
 
+    /// <summary>The Mac twin (2026-10-07).</summary>
+    [MacFact]
+    public async Task Connect_VoiceOn_NoMicrophone_Warns_Mac()
+    {
+        VoiceOn();
+        _microphones = 0;
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ! " + VoiceSession.NoMicrophoneLine("no input device"), output);
+        Assert.False(_voice.IsReady);
+    }
+
     // ── Turns ───────────────────────────────────────────────────────────────
 
     [Fact]
