@@ -126,6 +126,23 @@ internal static class ImageFixtures
         return [0xFF, 0xD8, 0xFF, 0xE1, (byte)(length >> 8), (byte)length, .. app1, .. jpeg.AsSpan(2).ToArray()];
     }
 
+    /// <summary>
+    /// <see cref="Quadrants"/> as a JPEG stored <paramref name="width"/>×<paramref name="height"/> with an EXIF orientation spliced in
+    /// after its start marker (2026-10-07): a phone's sideways photo. Orientation 6 displays it turned a quarter clockwise, so the
+    /// stored bottom-left (blue) shows top-left.
+    /// </summary>
+    public static byte[] SidewaysJpeg(int width, int height, int orientation = 6)
+    {
+        var settings = new ProcessImageSettings();
+        settings.TrySetEncoderFormat("image/jpeg");
+        using var output = new MemoryStream();
+        MagicImageProcessor.ProcessImage(Quadrants(width, height), output, settings);
+        byte[] jpeg = output.ToArray();
+        byte[] app1 = [.. "Exif\0\0"u8.ToArray(), .. MetadataStripper.OrientationTiff(orientation)];
+        int length = app1.Length + 2;
+        return [0xFF, 0xD8, 0xFF, 0xE1, (byte)(length >> 8), (byte)length, .. app1, .. jpeg.AsSpan(2).ToArray()];
+    }
+
     /// <summary>Whether a picture's bytes carry <see cref="Copyright"/> anywhere (EXIF or XMP).</summary>
     public static bool HasCopyright(byte[] picture) => picture.AsSpan().IndexOf(System.Text.Encoding.ASCII.GetBytes(Copyright)) >= 0;
 
@@ -580,6 +597,21 @@ public sealed class ImageEditorTests
         var info = ImageEditor.Info(ImageFixtures.Quadrants(30, 20))!;
         Assert.Equal(("BMP", 30, 20, 1, false, Orientation.Normal), (info.Label, info.Width, info.Height, info.Frames, info.HasAlpha, info.Orientation));
         Assert.Equal("a.bmp: BMP, 30×20, " + NeonSidekick.Files.FileText.Size(info.Bytes), ImageText.Info("a.bmp", info));
+    }
+
+    [WindowsFact]
+    public void Info_OfASidewaysPhoto_IsUpright_AndAnEditPlansAgainstThatSize()
+    {
+        // 2026-10-07: MagicScaler reports the upright size already; Info swapped it a second time, so a sideways photo read as
+        // its stored size and a crop of its displayed size was refused as outside it.
+        var source = ImageFixtures.SidewaysJpeg(32, 16);
+        var info = ImageEditor.Info(source)!;
+        Assert.Equal((16, 32, Orientation.Rotate90), (info.Width, info.Height, info.Orientation));
+
+        var (result, bytes) = Edit(source, new ImageEditRequest { Crop = new Rectangle(0, 0, 16, 32) });
+        Assert.Equal((16, 32, 16, 32), (result.Width, result.Height, result.SourceWidth, result.SourceHeight));
+        Assert.True(ImageFixtures.Near(ImageFixtures.Blue, ImageFixtures.Pixel(bytes, 2, 2), 40));
+        Assert.True(ImageFixtures.Near(ImageFixtures.Red, ImageFixtures.Pixel(bytes, 13, 2), 40));
     }
 
     [WindowsFact]

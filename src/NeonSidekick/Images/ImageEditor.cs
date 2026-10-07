@@ -89,19 +89,17 @@ public static class ImageEditor
                 return null;
             }
 
+            // MagicScaler's frame size is already the upright one (2026-10-07, found decompiling ImageFileInfo for the Mac's
+            // codecs: it swaps the sides itself for a quarter-turn orientation). A second swap here had image_info name a
+            // sideways photo's stored size as upright and image_edit plan crops and sizes against the wrong sides.
             var frame = info.Frames[0];
-            var (width, height) = Upright(frame.Width, frame.Height, frame.ExifOrientation);
-            return new ImageInfo(info.MimeType, width, height, info.Frames.Count, frame.HasAlpha, frame.ExifOrientation, bytes.LongLength);
+            return new ImageInfo(info.MimeType, frame.Width, frame.Height, info.Frames.Count, frame.HasAlpha, frame.ExifOrientation, bytes.LongLength);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             return null;
         }
     }
-
-    /// <summary>The size a picture displays at: the stored size, the sides swapped for an orientation that turns it a quarter.</summary>
-    public static (int Width, int Height) Upright(int width, int height, Orientation orientation) =>
-        orientation is Orientation.Transpose or Orientation.Rotate90 or Orientation.Transverse or Orientation.Rotate270 ? (height, width) : (width, height);
 
     /// <summary>
     /// The geometry for <paramref name="request"/> over an upright source of <paramref name="sourceWidth"/>×<paramref name="sourceHeight"/>,
