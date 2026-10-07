@@ -91,8 +91,24 @@ public partial class ChatScreenTests
     private void Dump(string output) =>
         File.WriteAllText(@"C:/Users/cnels/AppData/Local/Temp/claude/D--Repo-NeonSidekick/e2513b71-3e43-4d3a-9ccd-4e1839dace2b/scratchpad/screen.txt", output + Environment.NewLine + "=====" + Environment.NewLine + string.Join(Environment.NewLine + "----" + Environment.NewLine, _chat.Requests.Select(r => string.Join(Environment.NewLine, r.SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Select(x => x.Result)))));
 
+    /// <summary>The approval pane's title-row button after its title (2026-10-07): the whole command's view.</summary>
+    private static readonly string ApprovalButtons = InfoPane.LabelSeparator + " " + ShellText.ViewButton + " ";
+
     private static string ToolResult(IReadOnlyList<ChatMessage> request, string callId) =>
         (string)Assert.Single(request.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), r => r.CallId == callId).Result!;
+
+    /// <summary>v on the approval (2026-10-07) shows the whole command in a view; ESC there comes back to the question, which still decides.</summary>
+    [WindowsFact]
+    public async Task RunCommand_VShowsTheWholeCommand_AndEscComesBackToTheQuestion()
+    {
+        ShellFixture([Keys.Char('v'), Keys.Escape, Keys.Down, Keys.Enter], "It said hi.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ShellText.WholeCommandLabel(new CommandRequest("cmd", "echo hi", ["echo"])), output);
+        Assert.True(output.Split(Titled(ShellText.ApprovalTitle + ApprovalButtons)).Length - 1 >= 2);   // the question before the view and again after it
+        Assert.Contains("It said hi.", output);   // Allow once: it ran
+    }
 
     [WindowsFact]
     public async Task RunCommand_ThePaneAsksUnderTheSpinner_AllowOnce_RunsIt_AndTheNoteIsTheHeader()
@@ -102,7 +118,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         // The pane over the reply: the title, the command as the caption, the four rows with Deny under the cursor, the keys.
-        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle) + "\ncmd › echo hi\n \n▸ Deny\n  Allow once\n  Allow \"echo\" for this session\n  Allow \"echo\" always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle + ApprovalButtons) + "\ncmd › echo hi\n \n▸ Deny\n  Allow once\n  Allow \"echo\" for this session\n  Allow \"echo\" always (saved to the profile)\n", output);
         Assert.Contains(" " + ScreenPane.BusyRow(RunCommandTool.ToolName, TimeSpan.Zero, ShellText.ApprovalKeys), output);
         // The quiet note: the result's header, never the tool's name or the output.
         Assert.Contains("🛠️ exit 0 in 0.0 s (cmd): echo hi\n", output);
@@ -128,7 +144,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         // The pane over the reply: the title, the command as the caption, the four rows with Deny under the cursor, the keys.
-        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle) + "\nzsh › echo hi\n \n▸ Deny\n  Allow once\n  Allow \"echo\" for this session\n  Allow \"echo\" always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle + ApprovalButtons) + "\nzsh › echo hi\n \n▸ Deny\n  Allow once\n  Allow \"echo\" for this session\n  Allow \"echo\" always (saved to the profile)\n", output);
         Assert.Contains(" " + ScreenPane.BusyRow(RunCommandTool.ToolName, TimeSpan.Zero, ShellText.ApprovalKeys), output);
         // The quiet note: the result's header, never the tool's name or the output.
         Assert.Contains("🛠️ exit 0 in 0.0 s (zsh): echo hi\n", output);
@@ -418,7 +434,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(ShellText.UseNative("type", ReadFileTool.ToolName), ToolResult(_chat.Requests[1], "c1"));
         Assert.Equal("Error: the command was denied by the user: type notes.txt; do not retry it or work around the refusal", ToolResult(_chat.Requests[2], "c2"));
-        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle) + "\ncmd › type notes.txt\n", output);   // the second was put to the pane
+        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle + ApprovalButtons) + "\ncmd › type notes.txt\n", output);   // the second was put to the pane
         Assert.Contains("Call run_command only for what no other tool does: read_file and search_files", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
@@ -432,7 +448,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(ShellText.UseNative("cat", ReadFileTool.ToolName), ToolResult(_chat.Requests[1], "c1"));
         Assert.Equal("Error: the command was denied by the user: cat notes.txt; do not retry it or work around the refusal", ToolResult(_chat.Requests[2], "c2"));
-        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle) + "\nzsh › cat notes.txt\n", output);   // the second was put to the pane
+        Assert.Contains("\n" + Titled(ShellText.ApprovalTitle + ApprovalButtons) + "\nzsh › cat notes.txt\n", output);   // the second was put to the pane
         Assert.Contains("Call run_command only for what no other tool does: read_file and search_files", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
@@ -605,7 +621,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle) + "\npowershell · 2 lines · first line: $d = Invoke-NeonTool get_working_directory\n \n▸ Deny\n  Allow once\n  Allow powershell scripts for this session\n  Allow powershell scripts always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npowershell · 2 lines · first line: $d = Invoke-NeonTool get_working_directory\n \n▸ Deny\n  Allow once\n  Allow powershell scripts for this session\n  Allow powershell scripts always (saved to the profile)\n", output);
         Assert.Contains("(🔓 allowed for this session: code:powershell)\n", output);
         Assert.DoesNotContain("first line: Write-Output again", output);   // the second script rode the session's allow
         string first = ToolResult(_chat.Requests[1], "c1");
@@ -654,7 +670,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle) + "\npython · 3 lines · first line: import neon_tools\n \n▸ Deny\n  Allow once\n  Allow python scripts for this session\n  Allow python scripts always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npython · 3 lines · first line: import neon_tools\n \n▸ Deny\n  Allow once\n  Allow python scripts for this session\n  Allow python scripts always (saved to the profile)\n", output);
         Assert.Contains("(🔓 allowed for this session: code:python)\n", output);
         Assert.DoesNotContain("first line: print('again')", output);
         Assert.Equal("exit 0 in 0.0 s (python, 1 tool call): import neon_tools\nseen: True", ToolResult(_chat.Requests[1], "c1"));

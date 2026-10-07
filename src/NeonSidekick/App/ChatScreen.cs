@@ -1232,7 +1232,8 @@ internal sealed partial class ChatScreen
         // The question tool's pane and the tool itself: built always (the /sys Tools tab
         // lists it either way), offered only while the setting Ask user and the pane say so (RunTurnAsync).
         _questionMenu = new QuestionMenu(_menuPane, _input);
-        _approvalMenu = new CommandApprovalMenu(_menuPane);
+        // The approval's whole-command view (2026-10-07): the info pane over the question, which comes back on ESC.
+        _approvalMenu = new CommandApprovalMenu(_menuPane, (label, lines, ct) => _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(string.Join('\n', lines)))], 0, ct));
         _cameraMenu = new CameraMenu(_menuPane);
         _askTools = AskTools(AskUserAsync, _effective);
         _planMenu = new PlanApprovalMenu(_menuPane, _input);

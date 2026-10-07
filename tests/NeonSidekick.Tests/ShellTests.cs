@@ -464,5 +464,15 @@ public sealed class ShellTests
         Assert.Equal(new Dictionary<char, int> { ['d'] = 0, ['o'] = 1, ['s'] = 2, ['a'] = 3 }, App.CommandApprovalMenu.Hotkeys);
         Assert.Equal([CommandChoice.Deny, CommandChoice.Once, CommandChoice.Session, CommandChoice.Permanent], App.CommandApprovalMenu.Choices);
         Assert.Equal("Run this script?", App.CommandApprovalMenu.Page(script).Title);
+
+        // The whole command (2026-10-07): the view's label and lines, a script's numbered, and the button on the title row.
+        Assert.Equal([ShellText.ViewButton], App.CommandApprovalMenu.Page(script).Buttons!.Select(b => b.Title));
+        var long12 = new CommandRequest("python", string.Join("\r\n", Enumerable.Range(1, 12).Select(i => "print(" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")")), [], IsScript: true);
+        Assert.Equal("Run this script? › python · 12 lines", ShellText.WholeCommandLabel(long12));
+        var numbered = ShellText.WholeCommandLines(long12);
+        Assert.Equal(" 1  print(1)", numbered[0]);
+        Assert.Equal("12  print(12)", numbered[11]);
+        Assert.Equal("Run this command? › cmd", ShellText.WholeCommandLabel(new CommandRequest("cmd", "echo hi", ["echo"])));
+        Assert.Equal(["echo hi"], ShellText.WholeCommandLines(new CommandRequest("cmd", "echo hi", ["echo"])));
     }
 }

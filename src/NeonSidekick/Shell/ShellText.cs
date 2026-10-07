@@ -494,7 +494,46 @@ public static class ShellText
     public const string ScriptApprovalTitle = "Run this script?";
     public const string DenyRow = "Deny";
     public const string OnceRow = "Allow once";
-    public const string ApprovalKeys = "d / o / s / a = pick · Enter = choose · ESC = deny";
+    public const string ApprovalKeys = "d / o / s / a = pick · v = view · Enter = choose · ESC = deny";
+
+    /// <summary>
+    /// The approval pane's title-row button (2026-10-07, the user's ask: the caption cut a long command at three rows and showed a
+    /// script's first line alone, so part of what was approved could go unseen): the whole command in a scrolling view. Pinned.
+    /// </summary>
+    public const string ViewButton = "≡ view";
+
+    /// <summary>The key that is <see cref="ViewButton"/>.</summary>
+    public const char ViewKey = 'v';
+
+    /// <summary>The view's label: <c>Run this command? › powershell</c>, the script's language and size for a script. Pinned.</summary>
+    public static string WholeCommandLabel(CommandRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!request.IsScript)
+        {
+            return ApprovalTitle + " › " + request.Kind;
+        }
+
+        int lines = request.Command.Split('\n').Length;
+        return ScriptApprovalTitle + " › " + request.Kind + " · " + Count(lines) + (lines == 1 ? " line" : " lines");
+    }
+
+    /// <summary>
+    /// The view's lines: a command as it is (the view wraps it); a script's lines numbered, the numbers right-aligned, so a line the
+    /// view wraps still reads as one. Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> WholeCommandLines(CommandRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var lines = request.Command.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        if (!request.IsScript)
+        {
+            return lines;
+        }
+
+        int width = lines.Length.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+        return lines.Select((line, i) => (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(width) + "  " + line).ToList();
+    }
 
     /// <summary>The pane's caption: <c>powershell › git push origin main</c>; a script's names the language and its size. Pinned.</summary>
     public static string Caption(CommandRequest request)
