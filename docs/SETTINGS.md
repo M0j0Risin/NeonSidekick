@@ -424,7 +424,7 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 
 | Setting | What it does | Default |
 |---|---|---|
-| STT input | Turns the microphone on: the push-to-talk key records a message (`/stt`). | off |
+| STT input | Turns the microphone on: the push-to-talk key records a message (`/stt`). On a Mac, macOS asks once whether your terminal app may use the microphone (System Settings › Privacy & Security › Microphone), and a MacBook's own microphone is off while its lid is closed. | off |
 | STT destination | `chat` sends what you say straight to the model; `draft` adds it to the input line for you to edit and send. Under `draft`, push-to-talk and the wake word work with text on the line (except a push-to-talk key of `Home`, `End`, `PageUp` or `PageDown`, which still move the cursor). | `chat` |
 | STT wake | Saying the wake phrase at the idle line starts listening (`/wake`). | off |
 | STT wake phrase | One to three words; also the interrupt phrase. | `hey neon` |
