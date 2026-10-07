@@ -141,7 +141,7 @@ public static partial class SmokeChecks
         results.Add(PicturesHere ? ProbeImageResize() : NotWindows("image:resize"));
         results.Add(PicturesHere ? ProbeImageEdit() : NotWindows("image:edit"));
         results.Add(OperatingSystem.IsMacOS() ? ProbeImageIO() : new SmokeCheck("image:imageio", true, "skipped: not macOS"));
-        results.Add(OperatingSystem.IsWindows() ? ProbeViewerWindow() : NotWindows("viewer:window"));
+        results.Add(PicturesHere ? ProbeViewerWindow() : NotWindows("viewer:window"));
         results.Add(ProbeViewerDrag());
         results.Add(ProbeLogWindow());
         results.Add(ProbeThumbsWindow());
@@ -703,7 +703,9 @@ public static partial class SmokeChecks
     /// <c>viewer:window</c> (2026-09-27): the picture viewer's Win32 layer in the published binary — the class registered, a
     /// hidden window made, a private message answered through the <c>[UnmanagedCallersOnly]</c> window procedure, the window
     /// destroyed (<see cref="Viewer.PictureWindow.Probe"/>) — and the decode it draws from: the fixture BMP through
-    /// <see cref="Viewer.ViewerImage.Decode"/> into GDI's 32-bit order. Nothing is shown.
+    /// <see cref="Viewer.ViewerImage.Decode"/> into GDI's 32-bit order. Nothing is shown. On a Mac (2026-10-07) the AppKit layer
+    /// instead: on the main thread through the app's host, a hidden window of the app's class answering a method of ours, a
+    /// CGImage on its layer (<c>MacPictureWindows.Probe</c>); "skipped: no window server" where there is none (over SSH).
     /// </summary>
     public static SmokeCheck ProbeViewerWindow()
     {

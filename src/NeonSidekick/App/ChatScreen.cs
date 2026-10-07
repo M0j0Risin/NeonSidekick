@@ -7816,7 +7816,7 @@ internal sealed partial class ChatScreen
         var open = folder ? _openViewer : _viewPicture;
         if (open is null)
         {
-            _flow.Error(ViewerText.Unavailable);
+            _flow.Error(ViewerText.UnavailableHere);
             return;
         }
 
@@ -7824,7 +7824,7 @@ internal sealed partial class ChatScreen
         {
             open(full);
             _flow.Notice(ViewerText.Opened(folder ? full : Path.GetDirectoryName(full) ?? full));
-            _flow.Notice(ViewerText.Keys);
+            _flow.Notice(ViewerText.KeysHere);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException or ArgumentException)
         {
@@ -14412,7 +14412,7 @@ internal sealed partial class ChatScreen
     {
         if (_openViewer is null)
         {
-            _flow.Error(ViewerText.Unavailable);
+            _flow.Error(ViewerText.UnavailableHere);
             return;
         }
 
@@ -14431,7 +14431,7 @@ internal sealed partial class ChatScreen
             if (notice)
             {
                 _flow.Notice(ViewerText.Opened(full));
-                _flow.Notice(ViewerText.Keys);
+                _flow.Notice(ViewerText.KeysHere);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)

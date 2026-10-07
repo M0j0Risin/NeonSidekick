@@ -70,8 +70,12 @@ public static class PictureWindow
     /// <summary>Told the camera window's corner as it closes (<see cref="Placed"/>'s twin). It must not block.</summary>
     public static Action<int, int>? LivePlaced { get; set; }
 
-    /// <summary>Whether a window can be opened here at all: Windows only.</summary>
-    public static bool IsAvailable => OperatingSystem.IsWindows();
+    /// <summary>
+    /// Whether a window can be opened here at all: on Windows, and on a Mac since 2026-10-07 (the windows over AppKit,
+    /// <see cref="MacPictureWindows"/>) when the app's main thread is AppKit's and a window server is there to draw on
+    /// (<see cref="AppKitHost.Enable"/>; not over SSH).
+    /// </summary>
+    public static bool IsAvailable => OperatingSystem.IsWindows() || (OperatingSystem.IsMacOS() && AppKitHost.IsEnabled);
 
     /// <summary>
     /// The window on <paramref name="folder"/> (a full path that exists): opened, or the open one pointed at it and brought
@@ -111,7 +115,7 @@ public static class PictureWindow
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(closed);
-        if (!IsAvailable)
+        if (!OperatingSystem.IsWindows())   // the camera's live window on a Mac is a later round (2026-10-07)
         {
             throw new PlatformNotSupportedException(ViewerText.Unavailable);
         }
@@ -139,7 +143,13 @@ public static class PictureWindow
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         if (!IsAvailable)
         {
-            throw new PlatformNotSupportedException(ViewerText.Unavailable);
+            throw new PlatformNotSupportedException(ViewerText.UnavailableHere);
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            MacPictureWindows.Open(folder, select, activate);
+            return;
         }
 
         lock (s_gate)
@@ -163,6 +173,12 @@ public static class PictureWindow
     public static void Follow(string picture)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(picture);
+        if (OperatingSystem.IsMacOS())
+        {
+            MacPictureWindows.Follow(picture);
+            return;
+        }
+
         lock (s_gate)
         {
             if (s_open is { Alive: true } open)
@@ -182,10 +198,16 @@ public static class PictureWindow
         ArgumentException.ThrowIfNullOrWhiteSpace(picture);
         if (!IsAvailable)
         {
-            throw new PlatformNotSupportedException(ViewerText.Unavailable);
+            throw new PlatformNotSupportedException(ViewerText.UnavailableHere);
         }
 
         string folder = Path.GetDirectoryName(picture) ?? throw new ArgumentException($"{picture} has no folder", nameof(picture));
+        if (OperatingSystem.IsMacOS())
+        {
+            MacPictureWindows.ShowQuietly(picture, folder);
+            return;
+        }
+
         lock (s_gate)
         {
             if (s_open is { Alive: true } open)
@@ -211,6 +233,11 @@ public static class PictureWindow
     /// </summary>
     public static bool CloseViewer()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return AppKitHost.IsRunning && MacPictureWindows.CloseViewer();
+        }
+
         PictureWindowThread? open;
         lock (s_gate)
         {
@@ -226,6 +253,17 @@ public static class PictureWindow
     /// <summary>The open windows closed — the picture viewer and the camera's — each waited for briefly; nothing without one.</summary>
     public static void CloseAll()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            // The host closes the Mac's at the run's end, while its loop still runs; after it, nothing is open.
+            if (AppKitHost.IsRunning)
+            {
+                MacPictureWindows.CloseViewer();
+            }
+
+            return;
+        }
+
         PictureWindowThread? open;
         PictureWindowThread? live;
         lock (s_gate)
@@ -248,6 +286,11 @@ public static class PictureWindow
     /// </summary>
     public static (bool Ok, string Detail) Probe()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacPictureWindows.Probe();
+        }
+
         if (!IsAvailable)
         {
             return (true, "skipped: not Windows");

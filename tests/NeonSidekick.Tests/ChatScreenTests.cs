@@ -13308,7 +13308,7 @@ public partial class ChatScreenTests : IDisposable
         string folder = Path.GetDirectoryName(ComfyPicture("x.png"))!;
         Assert.Equal(folder, Assert.Single(viewed));
         Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(folder), output);
-        Assert.Contains(NeonSidekick.Viewer.ViewerText.Keys, output);
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.KeysHere, output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/comfy"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -13335,7 +13335,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(Path.Combine(files, "docs", "square.bmp"), Assert.Single(viewed));
         Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(Path.Combine(files, "docs")), output);
-        Assert.Contains(NeonSidekick.Viewer.ViewerText.Keys, output);
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.KeysHere, output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/view"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -15060,7 +15060,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);
-        Assert.Contains("  ✗ " + NeonSidekick.Viewer.ViewerText.Unavailable, output);
+        Assert.Contains("  ✗ " + NeonSidekick.Viewer.ViewerText.UnavailableHere, output);
     }
 
     [Theory]
@@ -15656,7 +15656,7 @@ public partial class ChatScreenTests : IDisposable
         }
         else
         {
-            Assert.Contains(NeonSidekick.Viewer.ViewerText.Unavailable, output);
+            Assert.Contains(NeonSidekick.Viewer.ViewerText.UnavailableHere, output);
         }
     }
 

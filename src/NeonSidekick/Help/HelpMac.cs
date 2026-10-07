@@ -7,7 +7,7 @@ namespace NeonSidekick.Help;
 /// before the first Mac release: a Mac user never reads Windows wording). A layer over <see cref="HelpSettings"/> and
 /// <see cref="HelpCommands"/>, used only when <see cref="OperatingSystem.IsMacOS"/>, so Windows' sentences stay byte for byte as
 /// they were (many are pinned). A setting or a form missing here keeps its one text, true on both systems. A feature that needs
-/// Windows (the camera, the picture viewer, printing, <c>/keycheck</c>, <c>/terminal</c>) says so, in its area's own words where
+/// Windows (the camera, printing, <c>/keycheck</c>, <c>/terminal</c>) says so, in its area's own words where
 /// it has them. The embedded LLM runs on a Mac since 2026-10-07 (Metal), so its rows here say how it differs, not that it is missing; pictures
 /// came the same day (ImageIO), so <c>Embedded vision</c> needs no Mac text any more.
 /// <c>HelpMacTests</c> pins that every key still names a setting or a form the tables hold, so the layer cannot go stale.
@@ -23,11 +23,11 @@ public static class HelpMac
         [SettingsField.ShellOutputMaxChars] = "The most output one result carries back (2000–500000). Past that, the start and end are kept, and the whole text goes to `.shell/<id>.log` under the working directory, where `read_file` can reach it.",
         [SettingsField.SqlSetPassword] = "Pick a connection that takes a password (`sql`) and type it, masked. It is saved to that connection's store: encrypted in its `sql.json`, or in the macOS Keychain. `windows` sign-in (Kerberos) needs none.",
         [SettingsField.ComfyOutputFolder] = "The folder under the working directory the pictures are saved in (`comfy_images/pony-txt2img-1234.png`). Empty uses the working directory itself.",
-        [SettingsField.ImageEditor] = "Where a double-clicked picture opens. Empty or `system`: the app macOS opens the file type with (Preview unless you chose another); the built-in picture viewer needs Windows. Anything else is a command, with the file's path appended (`open -a Preview`).",
+        [SettingsField.ImageEditor] = "Where a double-clicked picture opens. Empty: the built-in picture viewer (with no desktop to draw on, over SSH, the app macOS opens the file type with). `system`: the app macOS opens the file type with (Preview unless you chose another). Anything else is a command, with the file's path appended (`open -a Preview`).",
         [SettingsField.ClaudeCliExecutable] = "The Claude Code CLI to run. Blank looks for `claude` on the PATH, then `~/.local/bin/claude` (where the native installer puts it). A path you set must exist; it is never swapped for another.",
         [SettingsField.AnthropicApiKey] = "Your Anthropic API key (`sk-ant-…`), saved encrypted under the app's key in your macOS Keychain and shown as `(set, encrypted)`. Typing replaces it; an empty entry clears it.",
         [SettingsField.OpenAIApiKey] = "Your OpenAI API key (`sk-…`), saved encrypted under the app's key in your macOS Keychain and shown as `(set, encrypted)`. Typing (masked) replaces it; an empty entry clears it. It goes only to api.openai.com, never to a local server or the Anthropic API.",
-        [SettingsField.ThemedExternalWindows] = "The app's own windows (the picture viewer, the camera's live window and the log window) wear the theme. Those windows need Windows, so on a Mac it changes nothing.",
+        [SettingsField.ThemedExternalWindows] = "The app's own windows wear the theme: on a Mac the picture viewer, in the theme's background with a dark or light title bar to match. When off, it stays black.",
         [SettingsField.HomeAssistantToken] = "A long-lived access token (in Home Assistant: your profile → Security → Long-lived access tokens). It is typed into a masked field and saved encrypted under the app's key in your macOS Keychain; empty clears it. Never written to the log.",
         [SettingsField.YouTubeApiKey] = "Your YouTube Data API v3 key, for searching. Make one in the Google Cloud Console: create a project, enable YouTube Data API v3 (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed into a masked field and saved encrypted under the app's key in your macOS Keychain; empty clears it. `/keycopy` copies it and a plain `/profile reset` keeps it. Never written to the log.",
         [SettingsField.PdfEngine] = "What makes a PDF for `convert_to_pdf` and `/pdf`. `auto` and `browser`: Edge, Chrome, Brave or Chromium from `/Applications`. `printer` (Microsoft Print to PDF) needs Windows.",
@@ -56,7 +56,7 @@ public static class HelpMac
         ["/camera"] = "Open the camera pane and take a photo. The camera needs Windows for now: this build has no camera support.",
         ["/camera list"] = "List the cameras in a pane, numbered, the chosen one marked. The camera needs Windows for now.",
         ["/keycheck"] = Hotkeys.KeyCheckText.Unsupported,
-        ["/view <image>|<folder>"] = Viewer.ViewerText.Unavailable,
+        ["/view <image>|<folder>"] = "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. In the viewer the arrows, the mouse wheel or a two-finger swipe up and down step through the pictures; ⌃⌘F is full screen (F11 too, if macOS's Show Desktop shortcut is turned off), ⌫ twice deletes, Esc or ⌘W closes. It needs the Mac's desktop (not over SSH). Works while a reply runs.",
         ["/view <image>|<folder> --thumbs"] = Viewer.ThumbsText.Unavailable,
         ["/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]"] = Printing.PrintText.NeedsWindows,
         ["/print reply [<options>]"] = Printing.PrintText.NeedsWindows,
