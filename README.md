@@ -96,7 +96,8 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
 **On a Mac?** There's a preview build for Apple Silicon Macs (M1 and later): chat, tools, MCP, git, the database tools, sessions,
-headless mode and the embedded model (on Metal), without voice, pictures or the app's own windows yet. Download it as below, or
+headless mode, the embedded model (on Metal) and pictures (drag in a PNG, JPEG or iPhone HEIC; the model's image tools), without voice,
+the camera or the app's own windows yet. Download it as below, or
 [build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:
