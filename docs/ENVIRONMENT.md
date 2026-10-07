@@ -47,7 +47,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_EMBEDDED_BACKEND` | Embedded backend | `auto`, `cuda`, `vulkan`, `cpu`. |
+| `NEONSIDEKICK_EMBEDDED_BACKEND` | Embedded backend | `auto`, `cuda`, `vulkan`, `cpu`; on a Mac `auto`, `metal`. |
 | `NEONSIDEKICK_EMBEDDED_CONTEXT` | Embedded context size | Tokens: 0 (fit) or 512–262144. |
 
 ## Shell

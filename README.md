@@ -49,7 +49,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network (LM Studio, Ollama, llama.cpp, vLLM…), or takes a URL.
-* **Embedded LLM:** No server needed — install Gemma, Qwen or Muse models from `/settings` › Embedded and the app runs them on a built-in llama.cpp, backed by CUDA, Vulkan or CPU. Every model supports vision and tool-calling. Quants run Q4 and up, chosen to fit GPUs with 8–32 GB of VRAM. Several NVFP4 quants are included for Nvidia GPUs.
+* **Embedded LLM:** No server needed — install Gemma, Qwen or Muse models from `/settings` › Embedded and the app runs them on a built-in llama.cpp, backed by CUDA, Vulkan or CPU (Metal on a Mac). Every model supports vision and tool-calling. Quants run Q4 and up, chosen to fit GPUs with 8–32 GB of VRAM. Several NVFP4 quants are included for Nvidia GPUs.
 * **Docker servers:** your vLLM or SGLang containers as `/server` choices, one running at a time.
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or your Claude Code install. All off until you turn them on.
 * **Context control:** automatic compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
@@ -95,8 +95,8 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal** is recommended (it comes with Windows 11); the app is designed for it.
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
-**On a Mac?** There's a preview build for Apple Silicon Macs (M1 and later): chat, tools, MCP, git, the database tools, sessions
-and headless mode, without voice, pictures, the app's own windows or the embedded model yet. Download it as below, or
+**On a Mac?** There's a preview build for Apple Silicon Macs (M1 and later): chat, tools, MCP, git, the database tools, sessions,
+headless mode and the embedded model (on Metal), without voice, pictures or the app's own windows yet. Download it as below, or
 [build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:
