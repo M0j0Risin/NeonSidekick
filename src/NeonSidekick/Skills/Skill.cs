@@ -15,6 +15,9 @@ public sealed record Skill(string Name, string Description, SkillScope Scope, st
 
     /// <summary>The folder's own name (equals <see cref="Name"/> for a conforming skill).</summary>
     public string FolderName => Path.GetFileName(Directory);
+
+    /// <summary>Locked by the user when the catalog scanned (2026-10-07, <see cref="SkillLock"/>); never for an external skill.</summary>
+    public bool Locked { get; init; }
 }
 
 /// <summary>A folder the catalog skipped and why: no description, no fence, unreadable.</summary>

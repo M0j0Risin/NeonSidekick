@@ -283,6 +283,7 @@ public static class SkillRecordText
             SkillRevertOutcome.NoRevision => (false, VersionGoneError(name)),
             SkillRevertOutcome.Unchanged => (false, UnchangedNotice(name)),
             SkillRevertOutcome.NotKept => (false, NotKeptError(name, revert.Revision?.Path ?? SkillCatalog.FileName)),
+            SkillRevertOutcome.Locked => (false, LockedNotice(name)),
             _ => (false, RevertFailedError(name, revert.Edit?.Detail ?? "")),
         };
     }
@@ -327,6 +328,29 @@ public static class SkillRecordText
     /// <summary><c>Skill versions forgotten: global/haiku, 9</c>. Pinned.</summary>
     public static string VersionsForgottenLogLine(SkillScope scope, string folder, int count) =>
         "Skill versions forgotten: " + Key(scope, folder) + ", " + count.ToString(CultureInfo.InvariantCulture);
+
+    // ── The lock (2026-10-07, the user's ask: SkillLock) ───────
+
+    /// <summary>The lock's glyph, on the Offered tab's version cell, the notices and the footer.</summary>
+    public const string LockGlyph = "🔒";
+
+    /// <summary>The unlock's glyph, its notice's.</summary>
+    public const string UnlockGlyph = "🔓";
+
+    /// <summary>A change refused on the pane because the skill is locked: <c>(🔒 haiku is locked: unlock it first)</c>. Pinned.</summary>
+    public static string LockedNotice(string name) => "(" + LockGlyph + " " + name + " is locked: unlock it first)";
+
+    /// <summary>After the page's lock row: <c>(🔒 locked haiku)</c> / <c>(🔓 unlocked haiku)</c>. Pinned.</summary>
+    public static string LockSetNotice(string name, bool locked) => "(" + (locked ? LockGlyph + " locked " : UnlockGlyph + " unlocked ") + name + ")";
+
+    /// <summary>The lock file could not be written or removed. Pinned.</summary>
+    public static string LockFailedError(string name, string detail) => "Could not change the lock of " + name + ": " + detail;
+
+    /// <summary>The Offered tab's footer line under a locked skill's description. Pinned.</summary>
+    public const string LockedFooter = LockGlyph + " Locked: only you can change it; unlock it on its page.";
+
+    /// <summary><c>Skill locked: profile/haiku</c> / <c>Skill unlocked: …</c>. Pinned.</summary>
+    public static string LockedLogLine(SkillScope scope, string folder, bool locked) => "Skill " + (locked ? "locked: " : "unlocked: ") + Key(scope, folder);
 
     /// <summary>The undo glyph the revert's notices wear.</summary>
     public const string RevertGlyph = "↩️ ";

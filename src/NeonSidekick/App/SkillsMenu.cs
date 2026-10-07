@@ -46,7 +46,7 @@ namespace NeonSidekick.App;
 internal sealed class SkillsMenu
 {
     // The key hints. Pinned.
-    public const string LoadedKeys = "Enter = move, rename, edit, revert or delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03
+    public const string LoadedKeys = "Enter = move, rename, edit, revert, lock or delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03; lock since 2026-10-07
     public const string OtherKeys = "←/→ tabs · ESC = close";
     public const string ScopeKeys = SettingsMenu.PickKeys;
 
@@ -159,6 +159,25 @@ internal sealed class SkillsMenu
 
     /// <summary>The scope page's row before delete (2026-10-02; always since 2026-10-04, opening the version list). Pinned.</summary>
     public static string RevertRow => Markup.Escape(SkillRecordText.RevertWord.PadRight(9)) + Theme.DimMarkup("pick an earlier version to put back");
+
+    /// <summary>The lock row's words (2026-10-07, the user's ask: <see cref="SkillLock"/>). Pinned.</summary>
+    public const string LockWord = "lock";
+    public const string UnlockWord = "unlock";
+
+    /// <summary>The skill page's lock row, between revert and delete: <c>lock</c> on an unlocked skill, <c>unlock</c> on a locked one. Pinned.</summary>
+    public static string LockRow(bool locked) => locked
+        ? Markup.Escape(UnlockWord.PadRight(9)) + Theme.DimMarkup("let it be changed again")
+        : Markup.Escape(LockWord.PadRight(9)) + Theme.DimMarkup("keep the model, reflection and updates from changing it");
+
+    /// <summary>
+    /// The Offered footer's last line for <paramref name="skill"/>: its warning, and on a locked skill <see cref="SkillRecordText.LockedFooter"/>
+    /// (2026-10-07), the two joined when both; null for neither.
+    /// </summary>
+    public static string? LockedLast(Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        return !skill.Locked ? skill.Warning : skill.Warning is { } warning ? warning + " · " + SkillRecordText.LockedFooter : SkillRecordText.LockedFooter;
+    }
 
     /// <summary>The version list's title: <c>Skills › haiku › revert</c> (2026-10-04).</summary>
     public static string VersionsTitle(string name) => ScopeTitle(name) + " › " + SkillRecordText.RevertWord;
@@ -308,7 +327,7 @@ internal sealed class SkillsMenu
             // blank there while every row cuts its description at the pane's edge); the off, none and problem rows name none.
             Footer = (t, row) => t is OptionsTab or ReflectionTab
                 ? row < SettingsFields(t).Count ? menu.FieldFooter(SettingsFields(t)[row], saved) : null
-                : row < loaded.Count && loaded[row].Skill is { } skill ? new MenuFooter(skill.Description, skill.Warning) : null,
+                : row < loaded.Count && loaded[row].Skill is { } skill ? new MenuFooter(skill.Description, LockedLast(skill)) : null,
         };
     }
 
@@ -444,12 +463,30 @@ internal sealed class SkillsMenu
             rows.Add(RevertRow);
         }
 
+        // The lock row (2026-10-07, the user's ask), between revert and delete; its own index, so the delete below is the last row only.
+        int lockRow = rows.Count;
+        rows.Add(LockRow(skill.Locked));
+        int deleteRow = rows.Count;
         rows.Add(DeleteRow);
 
         var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = _usage(skill.Name) };
         var picked = await _pane.PickAsync(page, IndexOf(ScopeRows, skill.Scope), cancellationToken).ConfigureAwait(false);
         if (picked is not { Row: var row })
         {
+            return false;
+        }
+
+        if (row == lockRow)
+        {
+            return SetLocked(skill, !skill.Locked);
+        }
+
+        // A locked skill (2026-10-07): rename, move and delete refused before any question; edit (the user's own editor) and the
+        // revert list (its d and c) still open.
+        bool changes = row == ScopeRows.Count || row == deleteRow || (row < ScopeRows.Count && ScopeRows[row] != skill.Scope);
+        if (changes && skill.Locked)
+        {
+            Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
             return false;
         }
 
@@ -469,7 +506,7 @@ internal sealed class SkillsMenu
             return await PickVersionAsync(skill, cancellationToken).ConfigureAwait(false);
         }
 
-        if (row > ScopeRows.Count + 1)
+        if (row == deleteRow)
         {
             if (!await ConfirmAsync(DeletePrompt(skill.Name, skill.Scope), cancellationToken).ConfigureAwait(false))
             {
@@ -531,6 +568,23 @@ internal sealed class SkillsMenu
                 Sink.Error(MoveFailedError(moved.Detail));
                 return false;
         }
+    }
+
+    /// <summary>
+    /// The lock row's act (2026-10-07): <see cref="SkillRecords.SetLocked"/> (the lock file and its event), or the file alone without the
+    /// records; at once, no yes/no (nothing is lost), the notice on the list's status line. True when it changed (the facts are stale).
+    /// </summary>
+    private bool SetLocked(Skill skill, bool locked)
+    {
+        string? error = _records is { } records ? records.SetLocked(skill, locked) : SkillLock.Set(skill.Directory, locked, TimeProvider.System.GetUtcNow());
+        if (error is not null)
+        {
+            Sink.Error(SkillRecordText.LockFailedError(skill.Name, error));
+            return false;
+        }
+
+        Sink.Notice(SkillRecordText.LockSetNotice(skill.Name, locked));
+        return true;
     }
 
     /// <summary>
@@ -604,6 +658,14 @@ internal sealed class SkillsMenu
                     Sink.Notice(all ? SkillRecordText.VersionsClearedNotice(skill.Name, forgotten) : SkillRecordText.VersionRemovedNotice(skill.Name, label));
                 }
 
+                continue;
+            }
+
+            if (skill.Locked)
+            {
+                // Locked (2026-10-07): nothing put back; the list stays, its d and c still forgetting kept versions.
+                Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
+                cursor = picked;
                 continue;
             }
 

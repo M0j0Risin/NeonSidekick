@@ -42,6 +42,12 @@ public static class SkillEventKinds
     /// <summary>The Skills pane's revert put a kept version back (<c>/skills revert</c> until 2026-10-04).</summary>
     public const string Reverted = "reverted";
 
+    /// <summary>The user locked it on its page in <c>/skills</c> (2026-10-07, <see cref="SkillLock"/>).</summary>
+    public const string Locked = "locked";
+
+    /// <summary>The user unlocked it.</summary>
+    public const string Unlocked = "unlocked";
+
     /// <summary>The kinds that changed the skill's files.</summary>
     public static readonly IReadOnlyList<string> Written = [Created, Updated, File];
 }

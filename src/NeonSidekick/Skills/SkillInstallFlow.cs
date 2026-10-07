@@ -220,6 +220,10 @@ public sealed class SkillInstallFlow
                 case SkillInstallOption.ExternalReadOnly:
                     host.Error(SkillInstallText.ExternalReadOnlyError(candidate.Name));
                     return false;
+                case SkillInstallOption.Update when check.Scope is { } held && SkillLock.IsLocked(Path.Combine(roots.Of(held), candidate.Name)):
+                    // A locked skill is never replaced (2026-10-07, SkillLock): an update swaps the whole folder.
+                    host.Error(SkillInstallText.LockedError(candidate.Name));
+                    return false;
             }
 
             // An update over what reflections changed says so before the question (2026-10-02, Reflection downloaded skills = allow-and-mark).

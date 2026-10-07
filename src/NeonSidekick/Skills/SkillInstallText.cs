@@ -188,6 +188,9 @@ public static class SkillInstallText
     public static string TakenError(string name, SkillScope scope) =>
         $"A skill named '{name}' is already in the {SkillScopes.Name(scope)} skills and did not come from this source; rename or delete it on /skills first";
 
+    public static string LockedError(string name) =>
+        $"Skill '{name}' is locked: unlock it on /skills (its page's unlock row) to update it";
+
     public static string ExternalReadOnlyError(string name) =>
         $"A skill named '{name}' is in the external folder, which the app never writes; switch Use external skills off or remove it there first";
 

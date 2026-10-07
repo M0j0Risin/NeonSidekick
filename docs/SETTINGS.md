@@ -489,7 +489,7 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 
 ### Offered
 
-The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see Skill history), or delete it after a confirmation.
+The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see Skill history), lock or unlock it (see Locking a skill), or delete it after a confirmation. A locked skill's version reads `🔒v4`, and its footer says it is locked.
 
 ### Reflection
 
@@ -556,6 +556,16 @@ A reflection must `load_skill` a skill before rewriting its instructions or a su
 - **Reverting:** on `/skills`, Enter or a double-click on a skill, then `revert`, lists every kept version, newest first: `before the model's change at …`, `not there before …` (putting it back removes the file), `your edit of …`, `before a revert at …`, the one the file holds now marked `· current`. Each kept text carries its version number, counted as the skill list's (the oldest kept `v1`; the caption says which version the skill is at now), and a `not there before …` row has none. Enter (or a double-click) puts the pick back after a yes, No on the cursor. The file's current text is kept first as a version, so nothing is lost and you can go back and forth. Only a current text over 256 KB, which can't be kept, refuses. A skill keeps its newest 10 versions; the oldest goes when another is kept.
 - **Removing versions:** on the version list, `d` (or **✖ remove**) removes the highlighted version and `c` (or **⊠ clear all**) removes every kept version, each after a yes with No on the cursor. The text in place stays, and so do the skill's record and use; a removed version can no longer be put back.
 - The history lives in `skills.db`, so it survives purged sessions, renamed skills and *Session logging* off.
+
+### Locking a skill
+
+On `/skills`, Enter on a skill, then `lock`, keeps it as it is until you choose `unlock` on the same page. While it is locked:
+
+- **The model and reflection** can load it but not change it: `skill_editor` refuses any update or file write, and the skill list the model sees marks it as locked. A reflection that wanted to change it is told to make a companion skill instead.
+- **Your own actions** on its page refuse with "unlock it first": rename, move, delete, and putting back a kept version (the version list still opens, so `d` and `c` still remove kept versions). `edit` still opens `SKILL.md` in your editor.
+- **`/skills add`** refuses to update it, and **`/skills purge`** leaves it out.
+- **The lock** is a small `.neon-lock` file in the skill's folder, so it moves with the folder; `load_skill` doesn't list it and `skill_editor` can't write it. It is the app's refusal, not a file-system guard: a shell command or script can still reach the folder.
+- Locking and unlocking are logged in the skill's history.
 
 ## Tools settings (`/tools`)
 

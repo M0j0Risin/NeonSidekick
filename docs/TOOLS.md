@@ -873,7 +873,7 @@ Get-Content job.txt | NeonSidekick.exe --headless --profile work
 | Tool | Arguments | What it does |
 |---|---|---|
 | `load_skill` | `name, file?` | Loads a skill's instructions (the list is in the system prompt), or one of its files, up to 64,000 characters. Offered only while a skill is installed. |
-| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under `profile` (default) or `global`. For supporting files, `write_file` writes a whole file and `edit_file` swaps `old_text` for `new_text`; `path` is relative to the skill folder. Never touches `.neon-source.json`, `.git` or `node_modules`, never edits external skills, and never deletes. |
+| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | `create` or `update` a skill under `profile` (default) or `global`. For supporting files, `write_file` writes a whole file and `edit_file` swaps `old_text` for `new_text`; `path` is relative to the skill folder. Never touches `.neon-source.json`, `.git` or `node_modules`, never edits external skills or a skill you [locked](SETTINGS.md#locking-a-skill), and never deletes. |
 
 ### Sessions
 

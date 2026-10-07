@@ -33,6 +33,9 @@ public static class SkillsPrompt
     public const string EditorSentence =
         "To keep a procedure for later sessions, or improve one, call " + SkillEditorTool.ToolName + ": the " + SkillScopes.ProfileName + " scope is for this profile only, " + SkillScopes.GlobalName + " for every profile.";
 
+    /// <summary>A locked skill's line in its catalog entry (2026-10-07): the user locked it, and <c>skill_editor</c> refuses any change to it. Pinned.</summary>
+    public const string LockedTag = "<locked>the user locked this skill: it can be loaded, not changed</locked>";
+
     public const string CatalogOpen = "<available_skills>";
     public const string CatalogClose = "</available_skills>";
 
@@ -68,6 +71,12 @@ public static class SkillsPrompt
             sb.Append("\n  <skill>");
             sb.Append("\n    <name>").Append(Escape(skill.Name)).Append("</name>");
             sb.Append("\n    <description>").Append(Escape(skill.Description)).Append("</description>");
+            if (skill.Locked)
+            {
+                // The user's lock (2026-10-07, SkillLock): said up front, so neither the model nor a reflection spends a call finding out.
+                sb.Append("\n    ").Append(LockedTag);
+            }
+
             if (usage is not null && usage.TryGetValue(skill.Name, out var line) && line.Length > 0)
             {
                 sb.Append("\n    <usage>").Append(Escape(line)).Append("</usage>");

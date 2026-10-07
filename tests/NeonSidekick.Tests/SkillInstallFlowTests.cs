@@ -274,6 +274,25 @@ public class SkillInstallFlowTests : IDisposable
         Assert.Equal(SkillInstallText.SkillsOffWarning, _host.Warnings.Single());
     }
 
+    /// <summary>A locked skill is never updated (2026-10-07, SkillLock): the update would swap its whole folder.</summary>
+    [Fact]
+    public async Task AnUpdateOfALockedSkill_IsRefused_BeforeTheQuestion()
+    {
+        Archive("anthropics/skills", SkillZip.Repo("pdf", "docx"));
+        _host.Answer = SkillScope.Profile;
+        Assert.True(await Run("anthropics/skills/pdf"));
+        string folder = Path.Combine(_host.Roots.Profile, "pdf");
+        Assert.Null(SkillLock.Set(folder, true, DateTimeOffset.UnixEpoch));
+        int asked = _host.Asked.Count;
+
+        Assert.False(await Run("anthropics/skills/pdf"));
+
+        Assert.Equal(SkillInstallText.LockedError("pdf"), _host.Errors[^1]);
+        Assert.Equal(asked, _host.Asked.Count);
+        Assert.True(SkillLock.IsLocked(folder));
+        Assert.Equal("Skill 'pdf' is locked: unlock it on /skills (its page's unlock row) to update it", SkillInstallText.LockedError("pdf"));
+    }
+
     [Fact]
     public async Task ABadSearchAnswer_AndTheNetworkMode_AreErrors()
     {

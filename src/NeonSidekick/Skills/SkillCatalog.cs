@@ -143,7 +143,10 @@ public sealed class SkillCatalog
                     continue;
                 }
 
-                var skill = new Skill(entry.Frontmatter.Name, Cap(entry.Frontmatter.Description), scope, directory, Warn(entry.Frontmatter, Path.GetFileName(directory)));
+                var skill = new Skill(entry.Frontmatter.Name, Cap(entry.Frontmatter.Description), scope, directory, Warn(entry.Frontmatter, Path.GetFileName(directory)))
+                {
+                    Locked = scope != SkillScope.External && SkillLock.IsLocked(directory),
+                };
                 if (seen.TryGetValue(skill.Name, out var winner))
                 {
                     shadowed.Add(skill with { ShadowedBy = winner.Scope });
@@ -375,7 +378,9 @@ public sealed class SkillCatalog
         foreach (var file in Directory.EnumerateFiles(directory))
         {
             // The SKILL.md itself, and the sidecar /skills add writes (2026-09-26): the app's, never the skill's.
-            if (depth == 0 && (string.Equals(Path.GetFileName(file), FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(file), SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)))
+            // The lock (2026-10-07) is the app's too.
+            if (depth == 0 && (string.Equals(Path.GetFileName(file), FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(file), SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Path.GetFileName(file), SkillLock.FileName, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }

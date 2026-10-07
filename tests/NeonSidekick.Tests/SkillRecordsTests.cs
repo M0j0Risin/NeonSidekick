@@ -595,6 +595,42 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal(["old-unused", "used-long-ago"], stale.Select(r => r.Folder));   // oldest first; ada's never in neon's view
     }
 
+    /// <summary>
+    /// The lock (2026-10-07): SetLocked writes the sidecar and a locked/unlocked event by the user; a locked skill is never stale, so
+    /// /skills purge never lists it; a revert of a locked skill keeps nothing and writes nothing.
+    /// </summary>
+    [Fact]
+    public void SetLocked_RecordsIt_PurgeLeavesItOut_AndARevertIsRefused()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        var editor = Editor(SkillActors.Model);
+        editor.Describe("update", "", "haiku", null, "Version one.");
+        var skill = SkillOf("haiku");
+        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        string text = File.ReadAllText(path);
+        long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
+        var later = _time.GetUtcNow().AddDays(60);
+
+        Assert.Single(_records.UnusedSince(later), r => r.Folder == "haiku");
+        Assert.Null(_records.SetLocked(skill, true));
+        Assert.True(SkillLock.IsLocked(skill.Directory));
+        Assert.DoesNotContain(_records.UnusedSince(later), r => r.Folder == "haiku");
+
+        int kept = _records.Revisions(skill).Count;
+        var revert = _records.Restore(skill, _records.Revisions(skill)[0]);
+        Assert.Equal(SkillRevertOutcome.Locked, revert.Outcome);
+        Assert.Equal((false, SkillRecordText.LockedNotice("haiku")), SkillRecordText.RevertText("haiku", revert, _time.LocalTimeZone));
+        Assert.Equal(kept, _records.Revisions(skill).Count);
+        Assert.Equal(text, File.ReadAllText(path));
+
+        Assert.Null(_records.SetLocked(skill, false));
+        Assert.False(SkillLock.IsLocked(skill.Directory));
+        Assert.Equal([SkillEventKinds.Locked, SkillEventKinds.Unlocked], _store.Events(id).Where(e => e.Kind is SkillEventKinds.Locked or SkillEventKinds.Unlocked).Select(e => e.Kind));
+        Assert.All(_store.Events(id).Where(e => e.Kind is SkillEventKinds.Locked or SkillEventKinds.Unlocked), e => Assert.Equal(SkillActors.User, e.Actor));
+        Assert.Equal("Skill locked: profile/haiku", SkillRecordText.LockedLogLine(SkillScope.Profile, "haiku", true));
+    }
+
     /// <summary>The dry run's table (2026-09-30, the user's ask): a header, one row per skill, every column padded to its widest cell.</summary>
     [Fact]
     public void Table_LinesTheColumnsUp()

@@ -163,6 +163,13 @@ public static class SkillText
     public static string ExternalReadOnly(string name) =>
         $"Error: skill '{name}' exists in the external skills ({SkillRoots.ExternalDirectoryName}\\{SkillRoots.DirectoryName}), which this app never writes; edit it by hand or pick another name";
 
+    /// <summary>
+    /// Any change refused for a locked skill (2026-10-07, <see cref="SkillLock"/>), the model's and a reflection's alike: the user locked
+    /// it, and only they unlock it. Pinned.
+    /// </summary>
+    public static string Locked(string name) =>
+        $"Error: skill '{name}' is locked by the user; it cannot be changed until they unlock it on /skills. To keep what these turns taught, create a companion skill (a new name) instead";
+
     /// <summary>A reflection's write refused for an installed skill under <c>Reflection downloaded skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
     public static string InstalledReadOnly(string name, string origin) =>
         $"Error: skill '{name}' was installed from {(string.IsNullOrWhiteSpace(origin) ? "a skill source" : origin)}, and a reflection leaves an installed skill as it is; to keep what these turns taught, create a companion skill (a new name) instead";
@@ -299,6 +306,7 @@ public static class SkillText
             SkillEditOutcome.Unparseable => Unparseable(result.Name, result.Scope, result.Detail),
             SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited or SkillEditOutcome.FileRefused => InSkill(result),
             SkillEditOutcome.ProtectedFile => ProtectedFile(result.Name, result.Path),
+            SkillEditOutcome.Locked => Locked(result.Name),
             _ => CouldNot("write", result.Name, result.Detail),
         };
     }

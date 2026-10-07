@@ -45,6 +45,9 @@ public enum SkillEditOutcome
 
     /// <summary>A file action the file layer refused (outside the folder, too long, <c>old_text</c> not found…); the detail is its sentence.</summary>
     FileRefused,
+
+    /// <summary>The skill is locked (2026-10-07, <see cref="SkillLock"/>): no change of any kind until the user unlocks it.</summary>
+    Locked,
 }
 
 /// <summary>
@@ -197,6 +200,11 @@ public static class SkillEditor
             }
         }
 
+        if (SkillLock.IsLocked(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, name, scope);
+        }
+
         bool hasDescription = !string.IsNullOrWhiteSpace(description);
         bool hasInstructions = !string.IsNullOrWhiteSpace(instructions);
         if (!hasDescription && !hasInstructions)
@@ -257,6 +265,11 @@ public static class SkillEditor
         if (scope == SkillScope.External)
         {
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+        }
+
+        if (SkillLock.IsLocked(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, name, scope);
         }
 
         bool skillFile = string.Equals(path, SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase);
@@ -374,6 +387,11 @@ public static class SkillEditor
         }
 
         string directory = Path.Combine(roots.Of(scope), name);
+        if (SkillLock.IsLocked(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, name, scope);
+        }
+
         var files = new WorkingDirectory(() => directory, time);
         var resolved = files.Resolve(relative, forWrite: true, out string full);
         if (resolved != FileOutcome.Ok)
@@ -422,7 +440,8 @@ public static class SkillEditor
 
         var segments = relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length == 1
-            && (string.Equals(segments[0], SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(segments[0], SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)))
+            && (string.Equals(segments[0], SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(segments[0], SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(segments[0], SkillLock.FileName, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
@@ -447,6 +466,11 @@ public static class SkillEditor
         if (skill.Scope == SkillScope.External || to == SkillScope.External)
         {
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
+        }
+
+        if (SkillLock.IsLocked(skill.Directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, skill.Name, skill.Scope);
         }
 
         if (to == skill.Scope)
@@ -493,6 +517,11 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
         }
 
+        if (SkillLock.IsLocked(skill.Directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, skill.Name, skill.Scope);
+        }
+
         if (!IsUnderItsRoot(roots, skill))
         {
             return new SkillEditResult(SkillEditOutcome.Missing, skill.Name, skill.Scope);
@@ -536,6 +565,11 @@ public static class SkillEditor
         if (skill.Scope == SkillScope.External)
         {
             return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
+        }
+
+        if (SkillLock.IsLocked(skill.Directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, skill.Name, skill.Scope);
         }
 
         if (!SkillFrontmatter.IsValidName(newName))

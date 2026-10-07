@@ -68,18 +68,42 @@ public static class SkillsText
     public static string VersionLabel(int? version) =>
         version is { } v ? "v" + v.ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
 
-    /// <summary>The version column's width: the widest label among the listed skills, at least two; 0 without a version source (no column).</summary>
+    /// <summary>
+    /// What the version cell says for <paramref name="skill"/> (2026-10-07, the user's pick): its <see cref="VersionLabel"/>, led by the
+    /// lock (<c>🔒v4</c>) when it is locked, and by the lock's two blank cells (<c>  v1</c>) when another listed skill is, so the numbers
+    /// stay in one column; with none locked, the label alone. Empty without a version source. Pinned.
+    /// </summary>
+    public static string VersionText(SkillsFacts facts, Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(skill);
+        if (facts.Version is not { } version)
+        {
+            return "";
+        }
+
+        string lead = !facts.Skills.Any(s => s.Locked) ? "" : skill.Locked ? SkillRecordText.LockGlyph : new string(' ', TextCells.Width(SkillRecordText.LockGlyph));
+        return lead + VersionLabel(version(skill));
+    }
+
+    /// <summary>The version column's width in cells: the widest cell among the listed skills, at least two; 0 without a version source (no column).</summary>
     public static int VersionWidth(SkillsFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        return facts.Version is not { } version ? 0 : Math.Max(2, facts.Skills.Select(s => VersionLabel(version(s)).Length).DefaultIfEmpty(0).Max());
+        return facts.Version is null ? 0 : Math.Max(2, facts.Skills.Select(s => TextCells.Width(VersionText(facts, s))).DefaultIfEmpty(0).Max());
     }
 
-    /// <summary><paramref name="skill"/>'s version cell: its label padded to <paramref name="width"/> and two spaces; empty when there is no column.</summary>
+    /// <summary><paramref name="skill"/>'s version cell: <see cref="VersionText"/> padded to <paramref name="width"/> cells and two spaces; empty when there is no column.</summary>
     public static string VersionCell(SkillsFacts facts, Skill skill, int width)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        return width == 0 || facts.Version is not { } version ? "" : VersionLabel(version(skill)).PadRight(width) + "  ";
+        if (width == 0 || facts.Version is null)
+        {
+            return "";
+        }
+
+        string text = VersionText(facts, skill);
+        return text + new string(' ', Math.Max(0, width - TextCells.Width(text))) + "  ";
     }
 
     /// <summary>A shadowed skill's row: the name, its scope, the scope that hides it. Pinned.</summary>

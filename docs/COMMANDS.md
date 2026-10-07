@@ -135,7 +135,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/settings`, `//` | Edits and saves the settings. A letter typed on a tab searches every setting. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by its name, tab or description; Enter edits the row found. |
 | `/settings changed` | Lists the settings that are not their defaults, with each default; Enter edits, R puts the row back to its default. A changed value reads in the accent colour on every settings tab. |
-| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab each skill shows its version after the scope (`v1` as written, one more for each older text kept in `skills.db`; blank for an external skill), and typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
+| `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab each skill shows its version after the scope (`v1` as written, one more for each older text kept in `skills.db`; blank for an external skill; `🔒v1` for a [locked](SETTINGS.md#locking-a-skill) one), and typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) from the web after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | `list` lists the skills unused for that long; `commit` deletes them, folder and record, after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/speak [<file> [<n>]\|<n>]` | Reads a text file from the working directory aloud. Alone it resumes; a number starts at that sentence. |
@@ -504,6 +504,7 @@ Every list pane works the same way (2026-10-07): ↑/↓ move, Enter picks the h
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/process` | Enter opens the window · `k` kills (asks) |
+| `/skills` › a skill | Enter on a row: move, rename, edit, revert, `lock`/`unlock`, delete (asks); a locked skill refuses rename, move and delete |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
 | `/youtube saved` | Enter plays · `d` removes (asks) · type to filter |

@@ -35,6 +35,9 @@ public enum SkillRevertOutcome
 
     /// <summary>The editor could not write it back; the edit result's detail says why.</summary>
     Failed,
+
+    /// <summary>The skill is locked (2026-10-07, <see cref="SkillLock"/>): nothing kept, nothing written.</summary>
+    Locked,
 }
 
 /// <summary>The outcome, the revision it read (null for none) and the editor's result when it wrote.</summary>
@@ -430,6 +433,12 @@ public sealed class SkillRecords
     {
         ArgumentNullException.ThrowIfNull(skill);
         ArgumentNullException.ThrowIfNull(revision);
+        if (SkillLock.IsLocked(skill.Directory))
+        {
+            // Before the current text is kept as a version (2026-10-07): a locked skill's revert changes nothing at all.
+            return new SkillRevert(SkillRevertOutcome.Locked, revision, null);
+        }
+
         var listed = Revisions(skill);
         if (!listed.Any(r => r.Id == revision.Id))
         {
@@ -539,6 +548,30 @@ public sealed class SkillRecords
         string profile = CurrentProfile;
         _store.Move(skill.Scope, profile, skill.FolderName, skill.Scope, profile, name, name);
         DiagnosticLog.Debug(SkillCatalog.Category, SkillRecordText.RenamedLogLine(skill.Scope, skill.FolderName, name));
+    }
+
+    /// <summary>
+    /// The skill locked or unlocked (2026-10-07, the skill's page in <c>/skills</c>): <see cref="SkillLock.Set"/> at the clock's moment,
+    /// then a <see cref="SkillEventKinds.Locked"/> or <see cref="SkillEventKinds.Unlocked"/> event by the user, so its history says when.
+    /// Null when done, else the file layer's message (no event then).
+    /// </summary>
+    public string? SetLocked(Skill skill, bool locked)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        var now = _time.GetUtcNow();
+        if (SkillLock.Set(skill.Directory, locked, now) is { } error)
+        {
+            return error;
+        }
+
+        if (skill.Scope != SkillScope.External)
+        {
+            string profile = CurrentProfile;
+            _store.AddEvent(skill.Scope, profile, skill.FolderName, locked ? SkillEventKinds.Locked : SkillEventKinds.Unlocked, SkillActors.User, profile, now);
+            DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.LockedLogLine(skill.Scope, skill.FolderName, locked));
+        }
+
+        return null;
     }
 
     /// <summary>The skill's folder was deleted (the pane, a purge): its row goes.</summary>
@@ -677,8 +710,14 @@ public sealed class SkillRecords
 
     /// <summary>
     /// The skills in the current profile's view (global and the profile's own) not used since <paramref name="cutoff"/>,
-    /// measured by <see cref="SkillRecord.Reference"/>, oldest first.
+    /// measured by <see cref="SkillRecord.Reference"/>, oldest first. A locked skill is never one (2026-10-07, <see cref="SkillLock"/>):
+    /// <c>/skills purge</c> neither lists nor deletes it.
     /// </summary>
-    public IReadOnlyList<SkillRecord> UnusedSince(DateTimeOffset cutoff) =>
-        _store.List(CurrentProfile).Where(r => r.Reference < cutoff).OrderBy(r => r.Reference).ThenBy(r => r.Folder, StringComparer.OrdinalIgnoreCase).ToList();
+    public IReadOnlyList<SkillRecord> UnusedSince(DateTimeOffset cutoff)
+    {
+        var roots = _roots();
+        return _store.List(CurrentProfile)
+            .Where(r => r.Reference < cutoff && !SkillLock.IsLocked(Path.Combine(roots.Of(r.Scope), r.Folder)))
+            .OrderBy(r => r.Reference).ThenBy(r => r.Folder, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 }
