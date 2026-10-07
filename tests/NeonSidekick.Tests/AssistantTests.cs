@@ -1369,6 +1369,9 @@ public class AssistantTests
         // A model that calls the clock itself on the first turn: both pairs, distinct ids, and
         // the opening pairs never count against the iteration budget.
         var (client, _, assistant) = BuildWithOpening();
+        // 25, as StopsAfterMaxToolIterations: at the 10,000 default the loop raced the file's 10 s turn budget, and GitHub's macOS
+        // runner (2026-10-06, the first two-platform run) hit the budget at 7,731 requests before the cap.
+        assistant.MaxToolIterations = 25;
         for (int i = 0; i < assistant.MaxToolIterations + 2; i++)
         {
             client.Enqueue(FakeChatClient.Call($"c{i}", "echo", new Dictionary<string, object?> { ["text"] = "again" }));

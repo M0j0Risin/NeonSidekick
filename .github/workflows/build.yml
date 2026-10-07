@@ -7,8 +7,20 @@ name: Build & Test
 # Both platforms since 2026-10-06 (the macOS build): Windows x64 and macOS Apple Silicon, each built on its own runner, since
 # NativeAOT cannot publish across operating systems. Cost: the repo is private, and GitHub bills Windows minutes at 2x and
 # macOS minutes at 10x; a run is about 25 minutes on each.
+#
+# The run asks which platform (later on 2026-10-06, the user's call): both by default, or one alone, so a fix for one platform
+# is checked without paying for the other's runner. release.yml always builds both.
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Which platform to build
+        type: choice
+        options:
+          - both
+          - windows
+          - macos
+        default: both
 
 permissions:
   contents: read
@@ -18,11 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-          - os: macos-latest
-            rid: osx-arm64
+        include: ${{ fromJSON(inputs.platform == 'windows' && '[{"os":"windows-latest","rid":"win-x64"}]' || inputs.platform == 'macos' && '[{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]') }}
     runs-on: ${{ matrix.os }}
     name: Build, Test, Publish, Smoke, Package (${{ matrix.rid }})
     # A cold restore, build, coverage run and NativeAOT publish is 20-30 minutes on a hosted
