@@ -1072,6 +1072,13 @@ public sealed class SidekickApp
                 // /print (2026-09-28): ahead of the server check too — only /print reply needs a reply to print.
                 if (SlashCommands.Parse(text) is (SlashCommand.Print, var printArgs))
                 {
+                    // On a Mac the TUI's answer (2026-10-07, the docs pass): there was only the null spooler's "no printer" here.
+                    if (OperatingSystem.IsMacOS())
+                    {
+                        await HeadlessLineAsync("[error] " + Printing.PrintText.NeedsWindows).ConfigureAwait(false);
+                        continue;
+                    }
+
                     var printResult = await Printing.PrintCommand.RunAsync(print, printArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken).ConfigureAwait(false);
                     foreach (string printLine in printResult.Lines)
                     {

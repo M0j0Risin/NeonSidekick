@@ -347,7 +347,7 @@ public partial class SidekickAppTests : IDisposable
     }
 
     /// <summary><c>/print</c> headless (2026-09-28): no spooler handed in, so no printers; a failure is an <c>[error]</c> line, and it needs no server.</summary>
-    [Fact]
+    [WindowsFact]
     public async Task Headless_Print_ListsThePrinters_AndSaysWhy()
     {
         string output = await Headless("/print printers\n/print nope.txt\n/print reply\n");
@@ -355,6 +355,16 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains(NeonSidekick.Printing.PrintText.NoPrinters + Environment.NewLine, output);
         Assert.Contains("[error] " + FileText.Missing("nope.txt"), output);
         Assert.Contains("[error] " + NeonSidekick.Printing.PrintText.NoReply, output);
+    }
+
+    /// <summary><c>/print</c> headless on a Mac (2026-10-07): the TUI's answer, printing needs Windows, for every form; no server needed.</summary>
+    [MacFact]
+    public async Task Headless_Print_NeedsWindows_Mac()
+    {
+        string output = await Headless("/print printers\n/print nope.txt\n");
+
+        Assert.Equal(2, output.Split("[error] " + NeonSidekick.Printing.PrintText.NeedsWindows).Length - 1);
+        Assert.DoesNotContain(NeonSidekick.Printing.PrintText.NoPrinters, output);
     }
 
     [Fact]

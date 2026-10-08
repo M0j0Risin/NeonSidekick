@@ -59,6 +59,9 @@ public sealed class EnvironmentOverrides
     public const string DockerPipeVariable = Prefix + "DOCKER_PIPE";
     public const string YouTubeApiKeyVariable = Prefix + "YOUTUBE_API_KEY";
 
+    /// <summary>The terminal's own variable, read by <see cref="TerminalProgram"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
+    public const string TerminalProgramVariable = "TERM_PROGRAM";
+
     /// <summary>Every variable this class reads, for documentation.</summary>
     public static readonly string[] AllVariables =
     {
@@ -261,6 +264,13 @@ public sealed class EnvironmentOverrides
         ArgumentNullException.ThrowIfNull(name);
         return Read(name);
     }
+
+    /// <summary>
+    /// <c>TERM_PROGRAM</c>, the terminal app the app runs in (<c>Apple_Terminal</c>, <c>iTerm.app</c>…), or null: what a Mac's
+    /// cell widths, the microphone's sentences and the windows' hand-back read (2026-10-07, moved here from three direct reads
+    /// in <c>Program</c> so this class stays the one door).
+    /// </summary>
+    public string? TerminalProgram => Read(TerminalProgramVariable);
 
     /// <summary>The names of the variables that are currently set to a usable value.</summary>
     public IReadOnlyList<string> ActiveVariables()

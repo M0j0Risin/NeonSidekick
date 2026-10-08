@@ -35,7 +35,7 @@ public static class HelpCommands
         ]),
         new("/camera",
         [
-            new("/camera", "Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. See Camera."),
+            new("/camera", "Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, `r` takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. See Camera."),
             new("/camera snap", "Take a photo at once and put it on the input line."),
             new("/camera list", "List the cameras Windows sees in a pane, numbered, the chosen one marked."),
             new("/camera use <n>|<name>", "Choose the camera by its number in the list, its name, or the start of its name (*Camera device*)."),
@@ -303,7 +303,7 @@ public static class HelpCommands
         [
             new("/settings", "Edit and save the settings (`//` too). Ctrl+/ runs it too. A letter typed on a tab searches every setting."),
             new("/settings <words>", "Search every setting (/settings, /tools, /skills, /mcp) by its name, tab or description; Enter edits the row found."),
-            new("/settings changed", "The settings that are not their defaults, with each default; Enter edits, R puts the row back to its default."),
+            new("/settings changed", "The settings that are not their defaults, with each default; Enter edits, `r` puts the row back to its default."),
         ]),
         new("/shortcut",
         [

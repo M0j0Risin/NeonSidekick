@@ -110,11 +110,11 @@ public static class CameraText
     public const string RetakeRow = "Take it again";
     public const string CancelRow = "Cancel";
 
-    /// <summary>The title row's buttons: Space takes the photo, R takes it again.</summary>
+    /// <summary>The title row's buttons: Space takes the photo, r takes it again.</summary>
     public const string SnapButton = "␣ snap";
     public const string RetakeButton = "r retake";
 
-    public const string PaneHint = "Space takes the photo · R takes it again · Enter picks · ESC cancels";
+    public const string PaneHint = "Space takes the photo · r takes it again · Enter picks · ESC cancels";
 
     /// <summary>The status line before a shot: the camera still opening, or on and ready.</summary>
     public static string Waiting(string? device) => device is null ? "The camera is opening…" : $"{device} is on: frame the shot, then press Space.";

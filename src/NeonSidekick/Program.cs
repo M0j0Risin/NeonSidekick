@@ -70,16 +70,19 @@ catch
     // Leave the runtime default in place.
 }
 
+// The environment is read through one injectable reader so nothing else in the process ever
+// calls Environment.GetEnvironmentVariable directly; tests hand the same class a dictionary.
+var environment = new EnvironmentOverrides(Environment.GetEnvironmentVariable);
+// Terminal.app (and iTerm2 on the alternate screen) draws ⚙️, 🛠️ and the other text-default emoji with U+FE0F one cell wide where other terminals draw two
+// (2026-10-06, measured there): the cell arithmetic follows the terminal, or the toolbar's clicks land on the wrong button.
+NeonSidekick.UI.TextCells.NarrowSelectorSequences = NeonSidekick.UI.TextCells.ForTerminal(environment.TerminalProgram);
+// The app macOS asks about the microphone (2026-10-07, sound on a Mac): the terminal, named in the permission's sentences.
+NeonSidekick.Audio.MicrophoneText.Terminal = NeonSidekick.Audio.MicrophoneText.TerminalName(environment.TerminalProgram);
+
 // stdout as a FrameWriter (2026-09-29, the user's report: the hint row, the toolbar and the performance bar flickered at
 // every turn's end): it flushes every write as the console's own writer did, and the pane holds each synchronized frame
 // and lets it go as one write. Installed with SetOut before the Spectre console, which takes Console.Out and asks whether
 // its writer is stdout's for its width and terminal detection.
-// Terminal.app (and iTerm2 on the alternate screen) draws ⚙️, 🛠️ and the other text-default emoji with U+FE0F one cell wide where other terminals draw two
-// (2026-10-06, measured there): the cell arithmetic follows the terminal, or the toolbar's clicks land on the wrong button.
-NeonSidekick.UI.TextCells.NarrowSelectorSequences = NeonSidekick.UI.TextCells.ForTerminal(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
-// The app macOS asks about the microphone (2026-10-07, sound on a Mac): the terminal, named in the permission's sentences.
-NeonSidekick.Audio.MicrophoneText.Terminal = NeonSidekick.Audio.MicrophoneText.TerminalName(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
-
 var frames = new FrameWriter(Console.OpenStandardOutput());
 Console.SetOut(frames);
 
@@ -133,9 +136,6 @@ if (options.LogPath is { } logPath)
 
 using var logSinkScope = logSink;
 
-// The environment is read through one injectable reader so nothing else in the process ever
-// calls Environment.GetEnvironmentVariable directly; tests hand the same class a dictionary.
-var environment = new EnvironmentOverrides(Environment.GetEnvironmentVariable);
 string home = AppSettings.ResolveStorageDirectory(environment.Home);
 
 // The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over, headless, "default", over the
@@ -268,7 +268,7 @@ NeonSidekick.Viewer.PictureMenu.Reported = app.PictureReported;
 // The app's own windows hand back what they have no use for (2026-10-03): TAB brings the terminal forward, found now, while
 // it is still the window in front, and a Ctrl or Alt chord is queued on the console input as though typed there.
 // On a Mac (2026-10-07) the terminal app is found from this process's parents and TERM_PROGRAM, and a chord goes to the termios reader.
-NeonSidekick.Viewer.TerminalHandoff.Remember(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
+NeonSidekick.Viewer.TerminalHandoff.Remember(environment.TerminalProgram);
 NeonSidekick.Viewer.TerminalHandoff.Passed = windowsInput is not null ? windowsInput.Inject : OperatingSystem.IsMacOS() && unixInput is not null ? unixInput.Inject : null;
 // The viewer opens where it last closed (2026-09-28): the profile keeps the corner, written only when it moved, so a close
 // in place logs no change. On the viewer's thread; Update is locked and nothing listens to Changed.
