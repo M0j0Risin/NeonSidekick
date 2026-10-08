@@ -209,8 +209,17 @@ public class PerfBarTests
         var first = source.Sample(PerfReads.All);
         Assert.Null(first.Cpu);                                         // no previous reading yet
         Assert.InRange(first.Ram!.Value, 1, 100);
-        Thread.Sleep(50);
-        var second = source.Sample(PerfReads.Cpu | PerfReads.Ram);
+        // The tick counters can stand still across a short gap (2026-10-07: one run in three failed at 50 ms; an idle Apple Silicon
+        // core is tickless, and no ticks moved is no reading), so the test reads again until they move, for up to two seconds.
+        PerfSnapshot second;
+        var until = Environment.TickCount64 + 2000;
+        do
+        {
+            Thread.Sleep(50);
+            second = source.Sample(PerfReads.Cpu | PerfReads.Ram);
+        }
+        while (second.Cpu is null && Environment.TickCount64 < until);
+
         Assert.InRange(second.Cpu!.Value, 0, 100);
         Assert.Null(second.Gpu);                                        // not asked for
         Assert.Null(second.NetDown);
