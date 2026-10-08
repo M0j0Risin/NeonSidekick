@@ -97,7 +97,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 
 **On a Mac?** There's a preview build for Apple Silicon Macs (M1 and later): chat, tools, MCP, git, the database tools, sessions,
 headless mode, the embedded model (on Metal), pictures (drag in a PNG, JPEG or iPhone HEIC; the model's image tools) and voice
-(Kokoro speech, push-to-talk, the wake word), the picture viewer, the thumbnail browser, the picture menu, the log and process windows, the performance bar, pasting a copied picture (Ctrl+V), screen capture (`/screen`; the terminal needs the Screen Recording permission) and the camera (`/camera`, the built-in one, a USB webcam or an iPhone; the terminal needs the Camera permission). Download it as below, or
+(Kokoro speech, push-to-talk, the wake word), the picture viewer, the thumbnail browser, the picture menu, the log and process windows, the performance bar, pasting a copied picture (Ctrl+V), screen capture (`/screen`; the terminal needs the Screen Recording permission), the camera (`/camera`, the built-in one, a USB webcam or an iPhone; the terminal needs the Camera permission) and YouTube playback (`/youtube`, macOS 14 or later). Download it as below, or
 [build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:

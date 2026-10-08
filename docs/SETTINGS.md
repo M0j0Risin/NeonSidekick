@@ -847,7 +847,7 @@ The Oracle, MySQL and UNC tabs work like the SQL tab, over `oracle.json`, `mysql
 
 | Setting | What it does | Default |
 |---|---|---|
-| YouTube tools | Offers the YouTube tools: `youtube_search` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has). Playing by a video's id or link needs no key. Headless offers the search alone. | off |
+| YouTube tools | Offers the YouTube tools: `youtube_search` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's id or link needs no key. Headless offers the search alone. | off |
 | YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI); sent only to www.googleapis.com, in a header, never in a URL. `/keycopy` copies it; a plain `/profile reset` keeps it. | (none) |
 | YouTube search max results | How many videos a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
 | YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |

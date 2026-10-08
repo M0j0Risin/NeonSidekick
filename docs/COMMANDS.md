@@ -171,7 +171,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/window` | Shows the terminal window's size. |
 | `/youtube` | Says what the video window is playing. |
 | `/youtube <words>` | Searches YouTube (with a *YouTube API key*; 100 quota units a search) and opens a picker of the videos found; Enter plays one in the video window. Words that start with a verb below search too, unless what follows fits the verb; `/youtube search <words>` searches whatever they are. |
-| `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. |
+| `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. The video window is Windows' WebView2 or, on a Mac (macOS 14 or later), WebKit; see [YouTube](TOOLS.md#youtube) for its keys. |
 | `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: carry on, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
 
 ## Command details
