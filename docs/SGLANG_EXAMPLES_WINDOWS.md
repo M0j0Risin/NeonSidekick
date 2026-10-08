@@ -5,6 +5,8 @@ Windows 11, through Docker Desktop on WSL2 (Ubuntu).
 
 > **Tested on:** NVIDIA RTX 5090 (32 GB VRAM), 64 GB system RAM.
 
+Not for Macs: Docker servers need Windows and an NVIDIA GPU. Back to the [README](../README.md).
+
 ## Prerequisites
 
 - Docker Desktop with the WSL2 backend and GPU support

@@ -1,12 +1,14 @@
-# SearXNG Setup
+# SearXNG with Docker (Windows)
+
+A local SearXNG for the web tools. Back to the [README](../README.md).
 
 ## Prerequisite
 
-- Docker Desktop installed on Windows
+- Docker Desktop (Windows, or a Mac)
 
 ## Prepare directory
 
-Use WSL (Ubuntu) on Windows. Start in your home directory (~).
+Use WSL (Ubuntu) on Windows. Start in your home directory (~). On a Mac, run the same commands in Terminal with Docker Desktop; skip WSL.
 
 ```bash
 mkdir -p ~/searxng/core-config/
@@ -30,7 +32,7 @@ nano .env
 
 ### .ENV content
 
-Uncomment and change `SEARXNG_PORT` to your port of choice. Commonly `8080` or `8888`.
+Uncomment `SEARXNG_PORT` and set your port (the tests below use `8888`).
 
 ## Generate secret key
 
@@ -47,7 +49,7 @@ cd ~/searxng/core-config
 
 curl -fsSL -O https://raw.githubusercontent.com/searxng/searxng/master/container/settings.template.yml
 cp -i settings.template.yml settings.yml
-sudo nano settings.yml
+nano settings.yml
 ```
 
 ### settings.yml content
@@ -82,6 +84,10 @@ botdetection:
 ```bash
 docker compose up
 ```
+
+## Using it in NeonSidekick
+
+On `/tools` › Web, set *Web search method* to `searxng` and *Web SearXNG URL* to `http://localhost:8888` (or set `NEONSIDEKICK_SEARXNG_URL`). The `json` format above is required.
 
 ## Test output types
 

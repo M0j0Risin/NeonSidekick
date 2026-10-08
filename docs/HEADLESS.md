@@ -3,21 +3,26 @@
 `NeonSidekick.exe --headless` runs Neon as a plain stdin/stdout REPL: no TUI, no voice, no timers,
 no approval pane. It reads one line at a time from stdin, answers each on stdout, and exits
 at `/exit` or at the end of input: code 0, or 3 if a shell command was refused along the way
-(see [When a command is refused](#when-a-command-is-refused)). Everything below assumes the published exe
-(`publish\output\NeonSidekick.exe`) is on `PATH`; from a checkout, swap in
-`dotnet run --project src\NeonSidekick -- --headless …`.
+(see [When a command is refused](#when-a-command-is-refused)). Everything below assumes the published executable is on
+`PATH` (`publish\output\NeonSidekick.exe` on Windows, `publish/output/NeonSidekick` on a Mac); from a checkout, swap in
+`dotnet run --project src/NeonSidekick -- --headless …`.
 
 A fresh profile offers the model no tools and looks for no server: *File tools*, *Web tools* and the other tool groups
 are off, *Shell command policy* is `off` and *LLM server scan mode* is `disabled`. The examples below assume a profile set up in
 the TUI beforehand (`/tools`, `/settings`) or its `profile.json` edited: a server saved or given with `--url`, and the
 tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` sets the shell policy for one run.
-On macOS (preview, [Building on a Mac](BUILD.md#building-on-a-mac)) `run_command` runs in `zsh` unless the profile names another shell.
-The SQL, Oracle, MySQL, UNC and ComfyUI tools also offer nothing until entries are ticked in their *… offered* lists (the
-`/tools` tabs, or an add wizard's offer row; in `profile.json`, `SqlConnectionsOffered`, `OracleConnectionsOffered`,
-`MySqlConnectionsOffered`, `UncSharesOffered`, `ComfyWorkflowsOffered`); headless has no way to tick them.
+The SQL, Oracle, MySQL, PostgreSQL, SQLite, UNC (Windows only) and ComfyUI tools also offer nothing until entries are ticked
+in their *… offered* lists (the `/tools` tabs, or an add wizard's offer row; in `profile.json`, `SqlConnectionsOffered`,
+`OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `UncSharesOffered`,
+`ComfyWorkflowsOffered`); headless has no way to tick them. SQLite files in the working directory need no ticking.
 The SQLite, PostgreSQL, MySQL, SQL and Oracle tools only read headless: `sqlite_execute` (*SQLite mode* `read-write`), `postgres_execute`
 (*PostgreSQL mode* `read-write`), `mysql_execute` (*MySQL mode* `read-write`), `sql_execute` (*SQL mode* `read-write`) and
 `oracle_execute` (*Oracle mode* `read-write`) are never offered, since each change waits for an allow on a pane and there is none.
+
+**On a Mac** ([Building on a Mac](BUILD.md#building-on-a-mac)) the executable is `NeonSidekick`, with no `.exe`, and
+`run_command` runs in `zsh` unless the profile names another shell. The examples carry over to zsh:
+`echo "Ping." | NeonSidekick --headless --cwd ~/src/myapp`, `NeonSidekick --headless < job.txt > out.txt`,
+`NEONSIDEKICK_COMMAND_POLICY=yolo NeonSidekick --headless …`. In `pwsh` they work as written, without the `.exe`.
 
 ## What the output looks like
 
@@ -38,8 +43,8 @@ You:
   and `[category] message` lines are notices and diagnostics (warnings and errors only; use `--log`
   for the rest).
 - Each **line** of input is one message. A multi-line prompt has to be joined into one line.
-- Headless understands only nine slash commands; any other `/…` line goes to the model as ordinary
-  text. See the next section.
+- Headless understands only the slash commands in the next section; any other `/…` line goes to the
+  model as ordinary text.
 
 ---
 
@@ -53,19 +58,19 @@ You:
 | `/new` | Forgets the conversation. The next message starts a new stored session. Prints `Neon: ` and the new-conversation notice. |
 | `/clear` | Same as `/new` (there is no screen to clear). Prints `Neon: (conversation cleared)`. |
 | `/splash` | Same as `/clear` (there is no splash picture to show). |
-| `/rewind [n]` | Goes back n messages (1 by default): the nth-last message you sent and everything after it leave the conversation, and the stored session loses the same turns. There is no picker and no input row, so it happens at once and the dropped message is printed as a `[notice] the message was: …` line for you to send again. Prints `Neon: (↩️ rewound n messages: "…")`, plus a `[notice]` naming any tool in those turns that changes things (files written, commands run): rewinding does not undo what they did. With nothing to go back to it prints `Neon: (↩️ nothing to rewind)`; a count that is not a whole number from 1 to the messages held prints `[error] …`. Works with no LLM server. |
+| `/rewind [n]` | Goes back n messages (1 by default), at once (there is no picker): the nth-last message you sent and everything after it leave the conversation and the stored session, and the dropped message is printed as a `[notice] the message was: …` line to send again. Prints `Neon: (↩️ rewound n messages: "…")`, plus a `[notice]` naming any tool in those turns that changed things (rewinding does not undo them). With nothing to go back to it prints `Neon: (↩️ nothing to rewind)`; a bad count prints `[error] …`. Works with no LLM server. |
 | `/compact [focus]` | Shrinks the conversation now; a focus steers the summary. Prints the outcome, plus `[notice]` detail lines. Needs a connected server. |
-| `/plan <requirement>` | Starts plan mode and sends the requirement: the model gets only the read-only tools and `present_plan`. There is no approval pane, so a presented plan is saved as `.neon/plans/<name>.md` under the working directory and a `[notice]` line names it once the reply ends. While planning: `/plan` or `/plan show` prints where it stands; `/plan approve` marks the file approved and sends the turn that carries it out, with every tool; `/plan approve --fresh` forgets the conversation first and sends the plan's text with that message; `/plan cancel` leaves (the file is kept, marked cancelled); any other `/plan <text>` is sent as more detail. A planning reply that looks like a plan but was never presented gets a `[notice]` hint, and `/plan save [name]` saves it (approve with `/plan approve`). After approval, a `[notice]` line says when every step is ticked (the file marked `done`) or how many are left (`incomplete`, with `progress: d/t`). `/plan open <name>` picks up a plan under `.neon/plans/` and sends a turn asking the model to read it; `/plan open` alone lists them. `/new` and `/clear` leave plan mode. A misused word prints `Neon: [error] …`. Needs *LLM offer tools* on and a connected server. |
+| `/plan <requirement>` | Starts plan mode and sends the requirement, as in the TUI (see `/plan` in [COMMANDS.md](COMMANDS.md#all-commands)): the model gets only the read-only tools and `present_plan`. There is no approval pane, so a presented plan is saved as `.neon/plans/<name>.md` under the working directory and a `[notice]` line names it. Then `/plan approve [--fresh]` carries it out, `/plan cancel` leaves (the file is kept), `/plan` or `/plan show` prints where it stands, `/plan save [<name>]` saves a plan the model wrote but never presented, and `/plan open [<name>]` picks one up (alone, it lists them); any other `/plan <text>` is more detail. After approval, `[notice]` lines report the steps done. `/new` and `/clear` leave plan mode; a misused word prints `Neon: [error] …`. Needs *LLM offer tools* on and a connected server. |
 | `/claude <message>` | Sends the message to Claude Code, as in the TUI (see [`/claude`](COMMANDS.md#claude-code-from-the-chat)). The reply streams after `Claude: `; each tool Claude uses is a `[tool] Claude › Read …` line; a `[notice]` says which tools *Claude CLI slash command permissions* denied, and a last `[notice]` gives the cost and tokens. The exchange joins the conversation, so the next message to the local model can build on it, and the next `/claude` resumes the same Claude conversation. `/claude new` starts another (so do `/new` and `/clear`). Nothing is ever asked: whatever the level does not allow is denied (`NEONSIDEKICK_CLAUDE_CLI_PERMISSIONS=edit` for a run that may edit files). A missing CLI or a failed run prints `[error] …`. Works with no LLM server. |
 | `/ha [on\|off\|toggle <name> [n%] \| scene <name> \| tv … \| states [filter] \| say <sentence>]` | Drives Home Assistant directly, as in the TUI (see `/ha` in [COMMANDS.md](COMMANDS.md#all-commands)): each line of the answer is printed as it is (`light.turn_on → Den · 40%`, the overview's lines), a failure as `[error] …`. It is your own command, so *Home Assistant action policy* never applies. Works with no LLM server; needs *Home Assistant URL* and *Home Assistant API key* (or the two variables below). |
-| `/docker [ps \| status \| logs <container> [lines] \| stats [container] \| start\|stop\|restart\|pause\|unpause <container>]` | Drives Docker Desktop directly, as in the TUI (see [Docker](TOOLS.md#docker)): the bare word lists the containers (there is no pane), and each line of the answer is printed as it is (`Docker: 8 containers (6 running, 2 exited)`, `stopped mysql_dev`), a failure as `[error] …` (`[error] Error: Docker Desktop is not running …`). It is your own command, so *Docker writes* never applies, and every change is logged. Works with no LLM server; reaches the engine on *Docker engine pipe* (or the variable below). The model's Docker changes are always refused headless: each waits for a yes on a pane, and there is none. |
-| `/camera list` | Lists the cameras Windows sees, numbered, the chosen one (*Camera device*) marked, a failure as `[error] …`. It opens no camera. Every other `/camera` word (the bare word, `snap`, `use`, `live`, `watch`, `off`) answers `[error] /camera needs the app's screen for that; in headless mode only /camera list works.`: a photo needs the panes. The model's `camera_capture` is never offered headless, and *Botchat camera* and watch mode don't apply. |
-| `/youtube <words>` | Searches YouTube with the *YouTube API key* (or `NEONSIDEKICK_YOUTUBE_API_KEY`) and prints what it finds: a `YouTube: N videos for "…":` line, then one numbered line per video with its id; a failure (no key, the quota spent, the key refused) as `[error] …`. `/youtube save <id|link>` saves a video to the profile's saved videos, `/youtube unsave <n|id|link>` takes one off, and `/youtube saved` prints them numbered (`Saved YouTube videos (N); …`, then one line per video with where it was left and its id); a bare `/youtube save` has no window to save from and answers `[error] No video is open to save; give its id or a link.` Every other `/youtube` form answers `[error] /youtube plays videos in the app's video window, which a headless run has none of; /youtube <words> lists what a search finds.` The model's `youtube_search` is offered headless under *YouTube tools* with a key, and `youtube_saved` and `youtube_save` with or without one; `youtube_play`, `youtube_control` and `youtube_status` never are. |
-| `/screen list` | Lists the monitors and the windows, front to back, with the target that names each (`monitor:2`, `window:1234`), a failure as `[error] …`. Every other `/screen` form answers `[error] /screen needs the app's screen for that; in headless mode only /screen list works.`: a screenshot goes on the input line. The model's `screen_capture` and `screen_list` are never offered headless. |
-| `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape] \| reply \| printers` | Prints a file of the working directory, the last reply, or lists the printers, as in the TUI (see [Printing](TOOLS.md#printing)): the answer's lines are printed as they are (`Printed notes.md: 2 pages to Office Laser`), a failure as `[error] …`. It is your own command, so *Print action policy* never applies (the model's `print_file` is refused headless under `ask`). Works with no LLM server. |
-| `/pdf <file> \| https://… \| reply [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory, as in the TUI (see [Making PDFs](TOOLS.md#making-pdfs)): the answer is printed as it is (`Made notes.pdf (182 KB) from notes.md with msedge`), a failure as `[error] …`. It is your own command, so *File tools* and *Web tools* need not be on; *Web browser network mode* still judges a web page. Works with no LLM server. |
+| `/docker [ps \| status \| logs <container> [lines] \| stats [container] \| start\|stop\|restart\|pause\|unpause <container>]` | Windows only (on a Mac it answers `[error] …` saying so). Drives Docker Desktop directly, as in the TUI (see [Docker](TOOLS.md#docker)): the bare word lists the containers (there is no pane), and each line of the answer is printed as it is (`Docker: 8 containers (6 running, 2 exited)`, `stopped mysql_dev`), a failure as `[error] …` (`[error] Error: Docker Desktop is not running …`). It is your own command, so *Docker writes* never applies, and every change is logged. Works with no LLM server; reaches the engine on *Docker engine pipe* (or the variable below). The model's Docker changes are always refused headless: each waits for a yes on a pane, and there is none. |
+| `/camera list` | Lists the cameras the system sees, numbered, the chosen one (*Camera device*) marked, a failure as `[error] …`. It opens no camera. Every other `/camera` word (the bare word, `snap`, `use`, `live`, `watch`, `off`) answers `[error] /camera needs the app's screen for that; in headless mode only /camera list works.`: a photo needs the panes. The model's `camera_capture` is never offered headless, and *Botchat camera* and watch mode don't apply. |
+| `/youtube <words>` | Searches YouTube with the *YouTube API key* (or `NEONSIDEKICK_YOUTUBE_API_KEY`): a `YouTube: N videos for "…":` line, then one numbered line per video with its id; a failure (no key, the quota spent, the key refused) as `[error] …`. `/youtube save <id|link>`, `/youtube unsave <n|id|link>` and `/youtube saved` manage the profile's saved videos (a bare `/youtube save` has no window to save from and is an error). Every other form plays a video and answers `[error] …`: a headless run has no video window. The model gets `youtube_search` (with a key), `youtube_saved` and `youtube_save`, never the playing tools. |
+| `/screen list` | Lists the monitors and the windows, front to back, with the target that names each (`monitor:2`, `window:1234`), a failure as `[error] …`. Every other `/screen` form answers `[error] /screen needs the app's screen for that; in headless mode only /screen list works.`: a screenshot goes on the input line. The model's `screen_capture` and `screen_list` are never offered headless. On a Mac without the terminal app's Screen Recording permission it lists the monitors and says why the windows are missing. |
+| `/print <file> [printer=<name>] [copies=N] [pages=1-3] [landscape] \| reply \| printers` | Windows only. Prints a file of the working directory, the last reply, or lists the printers, as in the TUI (see [Printing](TOOLS.md#printing)): the answer's lines are printed as they are (`Printed notes.md: 2 pages to Office Laser`), a failure as `[error] …`. It is your own command, so *Print action policy* never applies (the model's `print_file` is refused headless under `ask`). Works with no LLM server. |
+| `/pdf <file> \| https://… \| reply [to=<out.pdf>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF in the working directory, as in the TUI (see [Making PDFs](TOOLS.md#making-pdfs)): the answer is printed as it is (`Made notes.pdf (182 KB) from notes.md with msedge`), a failure as `[error] …`. It is your own command, so *File tools* and *Web tools* need not be on; *Web browser network mode* still judges a web page. On a Mac the `browser` engine uses Edge, Chrome, Brave or Chromium from `/Applications`; the `printer` engine needs Windows. Works with no LLM server. |
 | `/test [id \| reasoning \| structured \| long \| all \| history]` | Runs the benchmark tests against the connected model, as in the TUI (see [Benchmark tests](COMMANDS.md#benchmark-tests)). A run first forgets the conversation, as `/clear` does: a `[notice]` line per test as it finishes (a failure's answer on a second `[notice]` line), then the results table as markdown after `Neon: `. The run is saved in the profile's `tests.json`. Alone it prints the tests with their last verdicts for the connected model; `history` prints the saved runs. An unknown name prints `[error] …`. The listing and `history` work with no LLM server; a run needs one. |
-| `/skills add <source> [--global \| --profile] [--yes]` | Installs an Agent Skill, as in the TUI (see [Installing skills](SETTINGS.md#installing-skills)). The source is search words (skills.sh), `owner/repo`, `owner/repo/skill`, a github.com link or an https `.zip` link. A GitHub repository is listed through the GitHub API and only the needed files fetched (the whole zip only as a fallback), so large repositories work; a repository of more than 100 skills needs one named. Several search hits, or several skills in one repository, are printed as `[notice]` lines of ids to type back (`/skills add anthropics/skills/pdf`). One skill is previewed as plain lines. Without `--yes` nothing is written and a `[notice]` says so; with it the skill goes to the profile's skills, or the global ones with `--global`, and a `[notice]` names the folder. Reinstalling from the same source updates it where it is. Errors print as `[error] …`. Works with no LLM server. |
+| `/skills add <source> [--global \| --profile] [--yes]` | Installs an Agent Skill, as in the TUI (see [Installing skills](SETTINGS.md#installing-skills)): search words (skills.sh), `owner/repo`, `owner/repo/skill`, a github.com link or an https `.zip` link. Several matches print as `[notice]` lines of ids to type back (`/skills add anthropics/skills/pdf`); one skill is previewed as plain lines. Without `--yes` nothing is written; with it the skill goes to the profile's skills (or the global ones with `--global`) and a `[notice]` names the folder. Reinstalling from the same source updates it. Errors print as `[error] …`. Works with no LLM server. |
 
 Automatic compaction also runs headless: before a message, if the last reply used more of the
 context than the *LLM auto compact (%)* setting allows, the conversation is compacted first and
@@ -76,7 +81,7 @@ Rules for these commands:
 - Case doesn't matter (`/EXIT` works). Spaces around the line are ignored.
 - `/exit`, `/new`, `/clear` and `/splash` must be alone on the line. `/exit now` or `/new please` is not
   recognised, so it goes to the model as a message.
-- With no server connected, `/exit`, `/new`, `/clear`, `/splash`, `/rewind`, `/claude`, `/skills add`, `/ha`, `/docker`, `/camera list`, `/print`, `/pdf` and `/test`'s listing and `history` still work. `/compact`, `/plan` and every
+- With no server connected, `/exit`, `/new`, `/clear`, `/splash`, `/rewind`, `/claude`, `/skills add`, `/ha`, `/docker`, `/camera list`, `/screen list`, `/youtube` (search and the saved videos), `/print`, `/pdf` and `/test`'s listing and `history` still work. `/compact`, `/plan` and every
   message get the "no assistant" reply instead.
 
 ### Everything else goes to the model as text
@@ -94,8 +99,8 @@ What to use instead:
 | `/reasoning [level]` | `NEONSIDEKICK_LLM_REASONING` |
 | `/sampling [field value]` | `NEONSIDEKICK_LLM_SAMPLING`; the profile's saved sampling for the model applies too. |
 | `/cwd [path]` | `--cwd <path>` |
-| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` need the TUI, or the files under `<home>\profiles`. |
-| `/settings`, `//`, `/tools`, `/skills` (the pane, its revert and `/skills purge`; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. A key typed into `profile.json` in plain text (LLM, Claude or Home Assistant API key) is encrypted (DPAPI) the next time the profile loads. Environment variables override some values for one run. |
+| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` need the TUI, or the files under `<home>/profiles`. |
+| `/settings`, `//`, `/tools`, `/skills` (the pane, its revert and `/skills purge`; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. A key typed into `profile.json` in plain text (the LLM, Anthropic, OpenAI, Home Assistant or YouTube key) is encrypted the next time the profile loads (DPAPI on Windows, the Keychain on a Mac). Environment variables override some values for one run. |
 | `/remember <text>` | Ask in a message ("Remember that …"); the model has the `save_memory` tool. |
 | `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. `/memory read-write` / `read-only` / `disabled` need the TUI, or `MemoryMode` in `profile.json`. |
 | `/sessions` | Ask the model to search past sessions (the sessions tool is offered when *Session tool* is on). Restoring a session needs the TUI. |
@@ -215,11 +220,17 @@ $env:NEONSIDEKICK_OPENAI_API_KEY = (Get-Secret OpenAIKey -AsPlainText)
 "Summarise this repo's README." | NeonSidekick.exe --headless --url https://api.openai.com --model gpt-5.4-mini
 ```
 
-The embedded LLM: `--url embedded` runs a model the app downloaded, on its own llama.cpp server, with no other server needed. `--model` names the model's id (`gemma-4-12b`, `gemma-4-12b-q5`, `gemma-4-12b-q6`, `gemma-4-12b-bf16`, `gemma-4-12b-qat`, `gemma-4-12b-qat-uncensored`, `gemma-4-26b-a4b`, `gemma-4-26b-a4b-q5`, `gemma-4-26b-a4b-q6`, `gemma-4-26b-a4b-qat`, `gemma-4-26b-a4b-qat-uncensored`, `gemma-4-26b-a4b-uncensored`, `gemma-4-26b-a4b-uncensored-q5`, `gemma-4-26b-a4b-uncensored-q6`, `gemma-4-31b`, `gemma-4-31b-q5`, `gemma-4-31b-qat`, `gemma-4-31b-qat-uncensored`, `gemma-4-e2b`, `gemma-4-e2b-q5`, `gemma-4-e2b-q6`, `gemma-4-e2b-q8`, `gemma-4-e2b-bf16`, `gemma-4-e2b-uncensored`, `gemma-4-e4b`, `gemma-4-e4b-q5`, `gemma-4-e4b-q6`, `gemma-4-e4b-q8`, `gemma-4-e4b-bf16`, `gemma-4-e4b-qat`, `gemma-4-e4b-uncensored`, `qwen3.6-35b-a3b`, `qwen3.6-35b-a3b-q5`, `qwen3.6-35b-a3b-uncensored`, `qwen3.8-27b`, `qwen3.8-27b-q5`, `qwen3.8-27b-q6`, `qwen3.8-27b-nvfp4-very-low`, `qwen3.8-27b-nvfp4-compact-low`, `qwen3.8-27b-nvfp4-low`, `qwen3.8-27b-nvfp4-medium`, `qwen3.8-27b-nvfp4-mid-high`, `qwen3.8-27b-nvfp4-high`, `qwen3.8-27b-nvfp4-very-high`, `qwen3.8-27b-nvfp4-highest`, `qwen3.8-27b-uncensored`, `qwen3.8-27b-uncensored-q5`); without it, the first one installed runs, in that order. A headless run never downloads a model: install it once in the app (*Install* in the **Embedded models** catalog on `/settings` › Embedded), or the run ends with an error saying it isn't installed. It does download the llama.cpp runtime on a first run (577 MB for CUDA, 33 MB for Vulkan), and loading the model takes a few seconds before the first answer. The server stops when the run ends. The profile's *Embedded servers enabled* must be on (it is by default); off, `embedded` counts as no URL. With *Embedded drafter* on (the default) a model with a drafter drafts ahead, and a Gemma 4 model installed before drafters were added fetches its small drafter at its first start. The profile's *Embedded VRAM budget* applies too (91 % by default), and an *Embedded context size* of 0 (the default) fits the context to the GPU. With *Embedded VRAM only* on (the default for a new profile), a model that does not fit in VRAM with every layer on the GPU is refused, and the run ends with that error rather than running partly from system RAM.
+The embedded LLM: `--url embedded` runs a model the app downloaded, on its own llama.cpp server, with no other server needed.
+
+- `--model` names an installed model's id (`gemma-4-e2b`; the catalog is in [SETTINGS.md](SETTINGS.md#embedded)); without it, the first one installed runs, in catalog order.
+- A headless run never downloads a model: install it once in the app (*Install* in the **Embedded models** catalog on `/settings` › Embedded), or the run ends with an error saying it isn't installed. It does download the llama.cpp runtime on a first run (577 MB for CUDA, 33 MB for Vulkan, 12 MB for a Mac's Metal), and loading the model takes a few seconds before the first answer. The server stops when the run ends.
+- The profile's *Embedded servers enabled* must be on (it is by default); off, `embedded` counts as no URL.
+- With *Embedded drafter* on (the default) a model with a drafter drafts ahead, fetching the drafter at its first start if it was installed without one.
+- *Embedded VRAM budget* (91 % by default) and *Embedded context size* (0, the default, fits the context to the GPU) apply. With *Embedded VRAM only* on (the default for a new profile), a model that doesn't fit in VRAM with every layer on the GPU is refused and the run ends with that error. On a Mac, VRAM is the share of memory macOS lets the GPU use.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --url embedded --model gemma-4-e2b
-$env:NEONSIDEKICK_EMBEDDED_BACKEND = "cpu"   # no GPU on this box
+$env:NEONSIDEKICK_EMBEDDED_BACKEND = "cpu"   # Windows, no GPU on this box (a Mac has only auto or metal)
 "Ping." | NeonSidekick.exe --headless --url embedded
 ```
 
@@ -235,7 +246,7 @@ $env:NEONSIDEKICK_CLAUDE_CLI_SERVER = "on"
 Get-Content job.txt | NeonSidekick.exe --headless --url claude-cli --model haiku --cwd D:\work
 ```
 
-A Docker server: `--url docker:<container>` switches to one of the profile's chosen Docker containers (see
+A Docker server (Windows only): `--url docker:<container>` switches to one of the profile's chosen Docker containers (see
 [Docker servers](TOOLS.md#docker-servers)): every other chosen container is stopped first, this one is started, and the run waits until its
 `/v1/models` answers, printing each step once as a `[notice]` line (`🐳 stopping …`, `🐳 starting …`). The profile's
 *Docker servers enabled* must be on and the container ticked in *Docker server containers*; otherwise the URL counts as
@@ -398,7 +409,7 @@ The shell command policy for a run comes from, in order: the `--yolo` flag, the
 profile's saved *Shell command policy*. Neither the flag nor the variable is ever saved. What each
 policy means headless:
 
-- `off` (the default since 2026-09-29): the shell tools aren't offered at all.
+- `off` (the default): the shell tools aren't offered at all.
 - `ask`: nothing can ask, so only commands whose prefixes are on the profile's
   *Shell allowed commands* list run. See [When a command is refused](#when-a-command-is-refused) below.
 - `yolo`: every `run_command` command and `execute_code` script runs without asking.
@@ -408,11 +419,9 @@ a command that names a path outside the working directory is still refused, and 
 with exit code 3. Keep `--cwd` narrow, or see [Turning off the path police](#turning-off-the-path-police).
 The same holds for the profile's *Shell police forbidden strings*: while the police is on, a command,
 script or `process` write containing one (case and spacing ignored) is refused and counts toward exit code 3.
-And while *SQLite tools* is on, so is a command, script or `process` write that reaches SQLite (the word `sqlite`, a
-`.db`/`.sqlite` file, a database sqlite.json names, or a script file the line runs that does): the SQLite tools are the way in.
-Likewise while *SQL tools*, *Oracle tools*, *MySQL tools* or *PostgreSQL tools* is on, for a command, script or `process` write
-that reaches that family (its clients and drivers — sqlcmd, sqlplus, mysql, psql, pyodbc, psycopg… — or a host its connections
-name, a loopback one only with its port): its tools are the way in.
+And while a database family's tools are on (*SQLite*, *SQL*, *Oracle*, *MySQL* or *PostgreSQL tools*), a command, script or
+`process` write that reaches that database some other way (its client or driver, its files, a host its connections name) is
+refused too: the tools are the way in.
 
 ### With the flag
 
@@ -461,10 +470,11 @@ launch. The toolbar shows 🔓, and the *Shell command policy* row names `--yolo
 Useful when a wrapper sets the policy once for many runs, or when you can't change the command line.
 Set it for a single command, so it doesn't stay set for the rest of your session:
 
-**Git Bash / WSL-style shells.** The prefix form applies to that one command only:
+**bash or zsh (macOS, Git Bash, WSL).** The prefix form applies to that one command only:
 
 ```bash
-NEONSIDEKICK_COMMAND_POLICY=yolo NeonSidekick.exe --headless --cwd /d/Repo/MyApp < job.txt
+NEONSIDEKICK_COMMAND_POLICY=yolo NeonSidekick.exe --headless --cwd /d/Repo/MyApp < job.txt   # Git Bash
+NEONSIDEKICK_COMMAND_POLICY=yolo NeonSidekick --headless --cwd ~/src/myapp < job.txt          # macOS
 ```
 
 **PowerShell.** `$env:` changes persist in the session, so set it and remove it in `try`/`finally`:
@@ -523,7 +533,7 @@ exit $LASTEXITCODE
 ### Turning off the path police
 
 The path police refuses any command, script or `process` write that names a path outside the
-working directory (`C:\…`, a `..` that climbs out, `~`, `%USERPROFILE%`, `$env:TEMP`…). It's a
+working directory (`C:\…` or `/…`, a `..` that climbs out, `~`, `%USERPROFILE%`, `$env:TEMP`, `$HOME`…). It's a
 separate switch from the command policy, so `--yolo` leaves it on. Its setting for a run comes
 from, in order: the `--no-police` flag, the `NEONSIDEKICK_SHELL_POLICE` variable (`on`/`off`, also
 `true`/`false`, `1`/`0`, `yes`/`no`), then the profile's saved *Shell police*.
@@ -690,6 +700,8 @@ $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday
 Register-ScheduledTask -TaskName "Neon morning news" -Action $action -Trigger $trigger
 ```
 
+On a Mac, run a shell script doing the same from `cron` or a `launchd` agent; the exit codes are the same.
+
 Driving it from another program (Python), one message per line:
 
 ```python
@@ -728,11 +740,11 @@ Flags beat variables; variables beat the profile's saved values. [ENVIRONMENT.md
 | `NEONSIDEKICK_LLM_SAMPLING` | Sampling for the run, a JSON object in wire names: `{"temperature":0.2,"top_k":20,"seed":42}`. It is laid over the profile's saved values for every model; a bad value is logged and the variable ignored. |
 | `NEONSIDEKICK_COMMAND_POLICY` | `off` (the default: no shell tools), `ask` (only allow-listed commands run, since nothing can ask), or `yolo` (every command runs; use only when you trust the job and the folder). `--yolo` outranks it. |
 | `NEONSIDEKICK_SHELL_POLICE` | `off` lets shell commands name paths outside the working directory for the run; `on` turns the police back on over a saved `off`. `--no-police` outranks it. |
-| `NEONSIDEKICK_SHELL_NATIVE` | `off` lets a single `cat`, `dir`, `git status`, `curl`… go to the shell as written for the run, instead of being sent back once a turn to the native tool that does it (*Shell prefer native tools*, on by default); `on` turns it back on over a saved `off`. A line sent back is not a refusal: it never makes the run exit 3. |
+| `NEONSIDEKICK_SHELL_NATIVE` | `off` lets a single `cat`, `ls`, `git status`, `curl`… go to the shell as written for the run, instead of being sent back once a turn to the native tool that does it (*Shell prefer native tools*, on by default); `on` turns it back on over a saved `off`. A line sent back is not a refusal: it never makes the run exit 3. |
 | `NEONSIDEKICK_CLAUDE_CLI_EXE` / `NEONSIDEKICK_CLAUDE_CLI_PERMISSIONS` | The Claude Code CLI for `/claude`, and what it may do on its own for the run: `read-only` (default), `edit` or `full`. |
 | `NEONSIDEKICK_CLAUDE_CLI_ADVISOR` | `on` offers the model `claude_advisor_cli` for the run: it may ask Claude Code for advice on its own, read-only. Each tool Claude uses is a `[tool] Claude › …` line, the cost a `[notice]`, and the answer the tool's `[tool] claude_advisor_cli -> …` line. With *Claude CLI advisor tool confirm* on in the profile, every call is refused (`Error: claude_advisor_cli needs the user's yes …`), since nothing can ask. |
 | `NEONSIDEKICK_SEARXNG_URL`, `NEONSIDEKICK_OBSIDIAN_VAULT`, `NEONSIDEKICK_COMFY_URL` | The web search instance, notes vault and image server for the run. |
-| `NEONSIDEKICK_DOCKER_PIPE` | The Docker engine's pipe for the run (*Docker engine pipe*): a bare name, `\\.\pipe\name` or `npipe:////./pipe/name`, so a `DOCKER_HOST` value can be passed as it is. The model's Docker reads work headless; its changes are refused (no pane to ask on). |
+| `NEONSIDEKICK_DOCKER_PIPE` | The Docker engine's pipe for the run (*Docker engine pipe*): a bare name, `\\.\pipe\name` or `npipe:////./pipe/name`, so a `DOCKER_HOST` value can be passed as it is. The model's Docker reads work headless; its changes are refused (no pane to ask on). Windows only. |
 | `NEONSIDEKICK_HA_URL` / `NEONSIDEKICK_HA_TOKEN` | The Home Assistant server and a long-lived access token for the run (the token is never logged). The model's Home Assistant tools follow *Home Assistant action policy*, but there is no pane to ask on: under `ask` the safe services (lights, scenes, the TV, to-do lists) run and anything else is refused, with the model told so. |
 
 ## Flags that don't combine with `--headless`
@@ -743,4 +755,5 @@ any mode runs.
 
 `--mcp-relay <address> <key>` is not for you to run: it is how Claude Code, started as the Claude CLI server, reaches
 this app's tools (it starts the app's own executable in this mode as its MCP server). It takes exactly those two
-arguments, touches no settings and prints nothing but MCP traffic.
+arguments, touches no settings and prints nothing but MCP traffic. `--llama-guard …` is likewise the app's own: on a Mac the
+embedded LLM's server runs under it.

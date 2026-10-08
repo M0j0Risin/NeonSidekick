@@ -2,7 +2,7 @@
 
 Back to the [README](../README.md). In the app, `/tools` switches these and shows what each one does.
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *Claude CLI advisor tool*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *YouTube tools*, *Claude CLI advisor tool*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 ## Contents
 
@@ -49,7 +49,7 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
 |---|---|---|
 | `get_current_time` | `zone?` | The current date, time, weekday and time zone. Seeded at the start of every conversation. |
 | `shift_date` | `date, days?, weeks?, months?, years?` | Moves a date by days, weeks, months or years and gives its weekday. |
-| `date_difference` | `from, to` | The days from one date to another (negative when the second is earlier), and in years, months and days once the gap is a month or more. `days_between` until 2026-10-05. |
+| `date_difference` | `from, to` | The days from one date to another (negative when the second is earlier), and in years, months and days once the gap is a month or more. |
 
 ### Timers
 
@@ -92,7 +92,7 @@ Every path is relative to the working directory; nothing outside it can be reach
 
 ### GitLib
 
-Git inside the app (LibGit2Sharp), for when the shell is off or the model should never run `git.exe`. Turn *GitLib tools* off to leave git to the shell.
+Git inside the app (LibGit2Sharp), for when the shell is off or the model should never run `git`. Turn *GitLib tools* off to leave git to the shell.
 
 * Local only: no `fetch`, `pull`, `push` or `clone`.
 * The repository's root must be the working directory or under it. Every tool takes an optional `path`, the file or folder it targets, which also picks the repository.
@@ -144,14 +144,14 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 
 ### Managing connections
 
-* **SQL add/edit connection** (the SQL tab of `/tools`) walks through a new connection one page per choice. With connections already saved, its first page lists them: **+ New connection**, or one to edit, which opens on its summary, prefilled: Enter on a row changes it (its file stays; the stored password is kept unless you type another; a rename carries its place in the offered list). Its summary can **test** the draft (`SELECT @@VERSION`, nothing written) and saves it with the file's comments kept, offered or hidden until ticked. It asks for the access too (`read` or `readwrite`). ESC steps back (on its first page, back to the list).
+* **SQL add/edit connection** (the SQL tab of `/tools`) walks through a new connection one page per choice, access (`read`/`readwrite`) included. With connections saved, its first page lists them: **+ New connection**, or one to edit, opened prefilled on its summary (Enter on a row changes it; the stored password is kept unless you type another). The summary can **test** the draft (`SELECT @@VERSION`, nothing written) and saves it with the file's comments kept. ESC steps back.
 * **SQL set password** updates a password.
-* Or edit `%USERPROFILE%\.neonsidekick\sql.json` (global) or `…\profiles\<profile>\sql.json` directly (comments and trailing commas allowed).
+* Or edit `sql.json` directly: `%USERPROFILE%\.neonsidekick\sql.json` (global; `~/.neonsidekick/sql.json` on a Mac) or `…/profiles/<profile>/sql.json` (comments and trailing commas allowed).
 
 ```json
 {
   "connections": {
-    // SQL Auth: Password encrypted in-place by DPAPI after first read
+    // SQL Auth: password encrypted in place after the first read
     "adventureworks": {
       "server": "127.0.0.1,1433",
       "database": "AdventureWorks2022",
@@ -245,7 +245,7 @@ The SQL tools' twin for Oracle, through ODP.NET Core (fully managed; no Oracle C
 ```json
 {
   "connections": {
-    // Password encrypted in place by DPAPI after first read
+    // Password encrypted in place after the first read
     "hr": {
       "dataSource": "localhost:1521/FREEPDB1",
       "user": "hr_reader",
@@ -253,7 +253,7 @@ The SQL tools' twin for Oracle, through ODP.NET Core (fully managed; no Oracle C
       "schema": "HR",
       "description": "The sample human-resources schema"
     },
-    // A full descriptor, the password in Windows Credential Manager
+    // A full descriptor, the password in the system's credential store (credman)
     "ledger": {
       "dataSource": "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dbhost01.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=LEDGER)))",
       "user": "ledger_ro",
@@ -306,7 +306,7 @@ With *Oracle mode* set to `read-write`, the model gets `oracle_execute` beside t
    | reading | `SELECT`: never asks, and runs as `oracle_query` does (read-only, rolled back) once its gate passes it too; a table made a moment ago is read again after 3 s (ORA-01466) | ✓ |
 
 2. **The gate.** One statement per call, lexed by the same rules as the reading gate. A PL/SQL unit (an anonymous block, or a `CREATE` of a procedure, function, package, trigger or type) is one whatever `;`s its body holds and keeps its final `;`; a trailing `/` is dropped, and a `/` with more text after it makes a second statement. An allow-list: a statement it doesn't know is refused. Always refused: `COMMIT`/`ROLLBACK`/`SAVEPOINT` (each call is its own transaction), `SET`, `ALTER SESSION`/`SYSTEM`, `GRANT`/`REVOKE`/`AUDIT`/`ADMINISTER`, users, roles, profiles, anything `PUBLIC`, tablespaces, directories, databases and database links, libraries and Java, `LOCK TABLE`, `PURGE`, `FLASHBACK`, and anywhere (bodies included) `@dblink`, the denied packages (`UTL_FILE`, `UTL_HTTP`, `DBMS_SQL`, `DBMS_SCHEDULER`…), `EXECUTE IMMEDIATE`, `WITH FUNCTION`, `BFILENAME` and `EXTERNAL(`; outside PL/SQL, `RETURNING … INTO`. `NEXTVAL` is allowed here. `SYS` stays refused.
-3. **Your allow.** Every change asks on a pane that names the connection and schema and shows the statement (`v` shows the whole of it, its lines numbered): **Deny**, **Allow once**, or **Allow for this session** (that connection and schema only, until `/new`, `/clear` or a profile switch). A statement that qualifies a name with anything but the schema (`hr.employees`, `t.col`; not `seq.NEXTVAL` or `:NEW.x`) is asked about every time, whatever was allowed.
+3. **Your allow.** Every change asks on the pane, as for [SQL](#changes); *Allow for this session* covers that connection and schema only. A statement that qualifies a name with anything but the schema (`hr.employees`, `t.col`; not `seq.NEXTVAL` or `:NEW.x`) is asked about every time, whatever was allowed.
 4. **The run.** A session of its own (no pooling, so never one a read left `READ_ONLY`), `CURRENT_SCHEMA` set, and no transaction of the app's: the statement commits as it runs (DDL commits anyway). A failed, timed-out or cancelled statement changes nothing.
 5. **The log.** Every change is written to the log: the connection and schema, the rows changed and the statement.
 6. **The account.** It's still the real guard. Give a `readwrite` connection an account with only the privileges you want the model to use.
@@ -386,8 +386,8 @@ With *MySQL mode* set to `read-write`, the model gets `mysql_execute` beside the
    | procedures and triggers | `CALL`, and `CREATE`/`ALTER` of a procedure, function or trigger: code whose effects can't be read from the statement, so it's off by default |  |
    | reading | `SELECT`: never asks, and runs as `mysql_query` does (read-only, rolled back) once its gate passes it too | ✓ |
 
-2. **The gate.** One statement per call, lexed by the same rules as the reading gate (executable comments still refused). A `CREATE PROCEDURE`, `FUNCTION` or `TRIGGER` body between `BEGIN` and its `END` may hold its own `;`s (the body is read as MySQL reads it: blocks open only where a statement starts, so a body it can't read for sure — a column, parameter or label named `begin` or `end`, which MySQL allows — is refused until the name is in backticks). An allow-list: a statement it doesn't know is refused. Always refused: `START TRANSACTION`/`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`XA` (each call is its own transaction), `GRANT`/`REVOKE`, users and roles, `DEFINER =`, `SET`/`USE`, `PREPARE`/`EXECUTE`, `LOAD DATA`, `INTO OUTFILE`/`DUMPFILE`, `HANDLER`, `DO`, `LOCK`/`UNLOCK`, `FLUSH`, `KILL`, `SHUTDOWN`, `RESET`, `PURGE`, `INSTALL`, `CREATE`/`DROP` of a database, server, tablespace or event, and the reading gate's denied functions (MariaDB's `NEXTVAL`/`SETVAL` are allowed here).
-3. **Your allow.** Every change asks on a pane that names the connection and database and shows the statement (`v` shows the whole of it, its lines numbered): **Deny**, **Allow once**, or **Allow for this session** (that connection and database only, until `/new`, `/clear` or a profile switch). A statement that qualifies a name with anything but the database (`payroll.salaries`, and so a table's `t.col` too) is asked about every time, whatever was allowed.
+2. **The gate.** One statement per call, lexed by the same rules as the reading gate (executable comments still refused). A `CREATE PROCEDURE`, `FUNCTION` or `TRIGGER` body between `BEGIN` and its `END` may hold its own `;`s; a body with a column, parameter or label named `begin` or `end` is refused until the name is in backticks. An allow-list: a statement it doesn't know is refused. Always refused: `START TRANSACTION`/`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`XA` (each call is its own transaction), `GRANT`/`REVOKE`, users and roles, `DEFINER =`, `SET`/`USE`, `PREPARE`/`EXECUTE`, `LOAD DATA`, `INTO OUTFILE`/`DUMPFILE`, `HANDLER`, `DO`, `LOCK`/`UNLOCK`, `FLUSH`, `KILL`, `SHUTDOWN`, `RESET`, `PURGE`, `INSTALL`, `CREATE`/`DROP` of a database, server, tablespace or event, and the reading gate's denied functions (MariaDB's `NEXTVAL`/`SETVAL` are allowed here).
+3. **Your allow.** Every change asks on the pane, as for [SQL](#changes); *Allow for this session* covers that connection and database only. A statement that qualifies a name with anything but the database (`payroll.salaries`, and so a table's `t.col` too) is asked about every time, whatever was allowed.
 4. **The run.** The session starts as for a read (`sql_mode` without `NO_BACKSLASH_ESCAPES`/`ANSI_QUOTES`, the statement cap) but with no transaction of the app's: the statement commits as it runs (autocommit; DDL commits anyway). MariaDB caps every statement's run time; MySQL caps a `SELECT` only, and the query timeout stops the rest. A failed, timed-out or cancelled statement changes nothing.
 5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
 6. **The account.** It's still the real guard. Give a `readwrite` connection an account with only the grants you want the model to use.
@@ -420,8 +420,7 @@ The four reading tools stay read-only whatever *SQLite mode* says:
 | `sqlite_databases` | — | The named databases (file, description), the default marked, and whether working-directory files may be named. Opens nothing. |
 | `sqlite_tables` | `database?, pattern?` | Tables and views with their kind. |
 | `sqlite_describe` | `table, database?` | One table or view: columns (type, nullability, primary key, default; generated and hidden columns marked), foreign keys both ways, indexes (their columns in order, an expression shown as `(expression)`) and the `CREATE` statement. |
-| `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name`, `$name` or `#name`, as SQLite reads them (a `$` inside a name, as in `@a$b`, is part of it), each given by its name after the mark (`{"id": 5}` or `{":id": 5}` for `:id`; a TCL form whole, `{"a(1)": 5}` for `$a(1)`); one `params` does not give is NULL; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
-
+| `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name`, `$name` or `#name`, keyed by the name with or without its mark (`{"id": 5}` or `{":id": 5}`); a TCL form is given whole (`{"a(1)": 5}`); an unbound one is NULL; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
 | `sqlite_execute` | `sql, database?, params?, max_rows?, create?` | Only under *SQLite mode* `read-write`. One statement that may change the database, of a kind *SQLite statements allowed* ticks (`RETURNING` allowed). `create: true` (with creating ticked) makes a new database file at `database`, a path in the working directory ending `.db`, `.sqlite`, `.sqlite3` or `.db3`. Answers with the rows changed and any rows the statement returned. |
 
 `--sqlite-check <database>` proves the tools against a real file on the published exe (it opens and counts, every storage class, the gate, a write refused, the interrupt).
@@ -517,7 +516,7 @@ With *PostgreSQL mode* set to `read-write`, the model gets `postgres_execute` be
    | reading | `SELECT`, `VALUES`, `TABLE`: never asks, and runs as `postgres_query` does (read-only, rolled back) once its gate passes it too | ✓ |
 
 2. **The gate.** One statement per call, lexed by the same rules as the reading gate (a function's or `DO` block's body is dollar-quoted, so its `;`s don't count). An allow-list: a statement it doesn't know is refused. Always refused: `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` (each call is its own transaction), `GRANT`/`REVOKE`, roles, users, policies and `OWNER TO`, `SET`/`RESET`/`DISCARD`, `PREPARE`/`EXECUTE`, `COPY`, `LOAD`, `LOCK`, `LISTEN`/`NOTIFY`, `CHECKPOINT`, `CREATE`/`DROP` of a database, tablespace, extension, server, foreign table or language, `ALTER SYSTEM`, and the reading gate's denied functions (`nextval`/`setval` are allowed here).
-3. **Your allow.** Every change asks on a pane that names the connection and database and shows the statement (`v` shows the whole of it, its lines numbered): **Deny**, **Allow once**, or **Allow for this session** (that connection and database only, until `/new`, `/clear` or a profile switch).
+3. **Your allow.** Every change asks on the pane, as for [SQL](#changes); *Allow for this session* covers that connection and database only.
 4. **The run.** The session starts as for a read but without the read-only default; `statement_timeout`, `lock_timeout` and `standard_conforming_strings` stay. There's no transaction of the app's, so the statement commits as it runs, atomically, and `VACUUM` can run. A failed, timed-out or cancelled statement changes nothing.
 5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
 6. **The account.** It's still the real guard: give a `readwrite` connection a role with only the grants you want the model to use.
@@ -611,7 +610,7 @@ The Docker tools use the engine's own API on its named pipe (*Docker engine pipe
 
 ### Docker servers
 
-Containers serving an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time so two models never fight over the GPU. Tick them in *Docker server containers* on `/settings` › Docker and turn on *Docker servers enabled*. This needs neither the Docker tools nor *Docker writes*, and touches only the ticked containers.
+Containers serving an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time so two models never fight over the GPU. Tick them in *Docker server containers* on `/settings` › Docker and turn on *Docker servers enabled*. This needs neither the Docker tools nor *Docker writes*, and touches only the ticked containers. **Windows only**, like the Docker tools: on a Mac `/server` lists no Docker rows. Working `docker run` commands: [vLLM](VLLM_EXAMPLES_WINDOWS.md) and [SGLang](SGLANG_EXAMPLES_WINDOWS.md).
 
 * **Rows:** `/server` lists one **Docker** row per chosen container with its state, image and ports (`running · vllm/vllm-openai:latest · :8000`). `/server docker` lists them alone; `docker:<container>` (also for `--url` and `NEONSIDEKICK_LLM_URL`) picks one.
 * **Switching:** picking one stops every other chosen container still running (waiting up to *Docker server stop timeout* plus 15 s each), waits *Docker server post-stop delay*, then starts or unpauses it. If a stop fails, nothing starts. The spinner shows each step; Ctrl+C or a double-click on it cancels.
@@ -664,7 +663,7 @@ The Home Assistant tools control your own Home Assistant over its REST API with 
 * **An HTML file** is printed as the page, after its scripts, frames and embeds are taken out; its stylesheets and pictures come from the working directory only.
 * **A web page** is printed as the browser shows it, after *Web browser network mode* allows its address (the page's own requests are not checked beyond that). It keeps its own layout, so paper and landscape are not taken.
 * **The pages:** US Letter by default (`paper=` A4 or Legal), portrait unless landscape, with the title at the top left and *page N of M* at the top right.
-* **The engine** (*PDF engine*): Edge, Chrome or Brave (*Web browser path*, else the first found) prints the page; it gets a minute. Without one, or when it fails under `auto`, **Microsoft Print to PDF** draws Markdown, text and pictures as `/print` would: black and white, two fonts, on the driver's paper. HTML and web pages need the browser.
+* **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium (*Web browser path*, else the first found) prints the page; it gets a minute. Without one, or when it fails under `auto`, **Microsoft Print to PDF** draws Markdown, text and pictures as `/print` would: black and white, two fonts, on the driver's paper. HTML and web pages need the browser.
 * **The output** goes beside the source with `.pdf` (a web page or Markdown text at the top: `example.com-intro.pdf`, `reply-2026-10-03-1405.pdf`), or where `to` says (a file, or a folder). An existing PDF is replaced only with `overwrite`. A PDF, or a file that is neither text nor a picture, is refused.
 * `convert_to_pdf` is a file tool, so *File tools* decides; a `url` needs *Web tools* as well. `/pdf` needs neither.
 
@@ -780,13 +779,13 @@ These are file tools: *File tools* offers them, and they reach only the working 
 
 #### Editing pictures
 
-`image_edit` changes a picture in the working directory with the system's own codecs, through MagicScaler (already in the app; nothing new is installed): Windows' WIC codecs, or Apple's ImageIO on a Mac. The resizing, colour, blur and border steps are MagicScaler's on both, so an edit looks the same on either. `image_info` reads a picture's facts first.
+`image_edit` changes a picture in the working directory with the system's own codecs (WIC on Windows, ImageIO on a Mac; nothing to install), and an edit looks the same on either. `image_info` reads a picture's facts first.
 
 * **One pass, in this order:** crop, resize, rotate, flip, colour, blur, border; then one encode, so a JPEG loses quality once.
 * **Size:** `width` and/or `height` (one alone keeps the aspect) or `scale`. With both sides, `fit` is `contain` (the default; may enlarge), `cover` (fills and cuts at `anchor`), `pad` (fills the rest with `background`), `stretch`, or `shrink` (never enlarges). Enlarging is interpolation, not AI. `interpolation=nearest` keeps pixel art sharp.
 * **Geometry:** a crop in the picture's pixels as it displays (`crop_x`, `crop_y`, `crop_width`, `crop_height`, all four), `rotate` by quarter turns only (90, 180, 270 clockwise), `flip` horizontal or vertical. Width and height always mean the final picture's sides.
 * **Colour:** `filter` (grey, sepia, negative, polaroid), `brightness`, `contrast`, `saturation` (−100 to 100), `hue` (degrees), `tint` toward a colour by `tint_amount`, `blur`, `sharpen` (true firm, false none; a light one after a resize by default), and a `pad` border in `background` (white by default; `transparent` works for PNG).
-* **Formats:** PNG, JPEG, GIF, BMP and TIFF; JPEG XL and HEIF when Windows has their extensions (`image_info` says which). WebP and AVIF read but never write: Windows has no encoder for them, so a WebP comes out as PNG. JPEG takes `quality` and `chroma` (444 keeps text crisp); PNG and GIF take `colors` (a palette, much smaller) and `dither`; PNG takes `interlace`; any format takes `dpi`. An option the format cannot take is refused, not ignored.
+* **Formats on Windows:** PNG, JPEG, GIF, BMP and TIFF; JPEG XL and HEIF when Windows has their extensions (`image_info` says which). WebP and AVIF read but never write: Windows has no encoder for them, so a WebP comes out as PNG. JPEG takes `quality` and `chroma` (444 keeps text crisp); PNG and GIF take `colors` (a palette, much smaller) and `dither`; PNG takes `interlace`; any format takes `dpi`. An option the format cannot take is refused, not ignored.
 * **On a Mac:** it reads PNG, JPEG, GIF, BMP, TIFF, WebP, HEIC/HEIF (iPhone photos), AVIF and JPEG XL, and writes PNG, JPEG, GIF, BMP, TIFF and HEIF (no JPEG XL, WebP or AVIF). `quality`, `dpi` and `interlace` work; `chroma`, `colors` and `dither` are refused, since ImageIO's encoders have no such setting. A HEIC photo's orientation is read as a JPEG's is.
 * **`max_kb`:** lowers the quality (lossy formats, down to 30), then shrinks the picture, until the file fits; nothing is written when it cannot.
 * **Metadata** is dropped unless asked for (*Image edit metadata*, or `metadata` per call); the EXIF orientation is always baked into the pixels. `metadata: none` with nothing else is a **lossless strip** of a JPEG, PNG, WebP or GIF: the file's metadata segments are left out and every other byte copied, so the picture is not re-encoded and a WebP stays a WebP. EXIF (with its GPS position and thumbnail), XMP, IPTC, comments, timestamps, vendor data and anything after the picture's end (a motion photo's video, an Ultra HDR gain map) go; the colour profile stays, and a turned photo keeps its orientation as a bare tag. The result says what went and the sizes before and after; a picture with nothing to strip writes nothing. An animated picture gives its first frame, and the result says so.
@@ -808,13 +807,13 @@ On Windows the camera is Media Foundation's; on a Mac (macOS 14 or later) AVFoun
 | `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see [Screen capture](COMMANDS.md#screen-capture)), after your yes under *Screen capture ask* `ask`. The screenshot is saved in *Screen capture output folder* and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
 | `screen_list` | (none) | Lists the monitors and the windows with the target that names each. Titles and sizes only. Allowed in plan mode. |
 
-On Windows the pictures come from GDI; on a Mac (macOS 14 or later) from Apple's ScreenCaptureKit, at the screen's full pixels (a Retina screen at twice its points). A Mac needs the *Screen Recording* permission for the terminal app the app runs in (System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen the terminal). Without it `screen_capture` sends no picture, only the sentence saying how to turn it on, and `screen_list` lists the monitors and that sentence instead of the windows. See [Screen capture](COMMANDS.md#screen-capture) for the targets on each system.
+On Windows the pictures come from GDI; on a Mac (macOS 14 or later) from ScreenCaptureKit, at full pixels (a Retina screen at twice its points). A Mac needs Screen Recording for your terminal app (System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen the terminal); without it no picture is sent, only the sentence saying how to turn it on, and `screen_list` gives the monitors without the windows.
 
 ### YouTube
 
 Under *YouTube tools*. Videos play in the app's own video window: a Windows window hosting the Microsoft Edge WebView2 Runtime (Windows 11 has it) on YouTube's embedded player. It opens where it last closed without taking the keyboard from the terminal; F11 is full screen, Esc leaves full screen and then closes it, and Ctrl and Alt chords go to the chat. YouTube's own keys (Space, ← →, M, F) work once you click into the video. One window: a new video replaces the one playing. A video whose uploader turned embedding off, or that is private, age-restricted or gone, is refused, and the answer points at `open_url`.
 
-On a Mac (macOS 14 or later, on the Mac's desktop) the window plays the same page through Safari's WebKit, nothing to install. It opens and remembers its place the same way; ⌃⌘F is full screen (F11 too, if macOS's Show Desktop shortcut is off), Esc leaves full screen and then closes it, as ⌘W does, TAB brings the terminal forward, and Ctrl and Option chords go to the chat. A link in the player (the YouTube logo, the title) opens in your default browser. The player's own full-screen button fills the screen in a Space of its own, as in Safari (Esc brings it back; TAB reaches the terminal again once it has); ⌃⌘F is the window's full screen in place. What YouTube keeps between runs lives in a store of the app's own, one per home, under `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`, apart from Safari's. WebKit blocks the embedded player's third-party cookies, so a consent YouTube asks for inside the player may be asked again on the next run.
+On a Mac (macOS 14 or later, not over SSH) the window plays the same page through WebKit, nothing to install. ⌃⌘F is full screen (F11 too if macOS's Show Desktop shortcut is off); Esc leaves full screen, then closes the window, as ⌘W does; Tab brings the terminal forward; Ctrl and Option chords go to the chat. Links in the player open in your default browser, and its own full-screen button fills a Space of its own (Esc brings it back). YouTube's data is kept per home under `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`, apart from Safari's; WebKit blocks the player's third-party cookies, so a consent asked inside the player may be asked again next run.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -849,6 +848,10 @@ Runs commands on your machine, starting in the working directory (`workdir` pick
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --yolo --cwd D:\Repo\MyApp
 Get-Content job.txt | NeonSidekick.exe --headless --profile work
+```
+
+```zsh
+cat job.txt | ./NeonSidekick --headless --profile work   # macOS
 ```
 
 | Tool | Arguments | What it does |
