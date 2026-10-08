@@ -3,23 +3,23 @@
 ![License](https://img.shields.io/github/license/M0j0Risin/NeonSidekick)
 ![.NET 10](https://img.shields.io/badge/.NET-10.0-512bd4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
-![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20preview-000000?logo=apple&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)
 
 Neon Sidekick is an agentic terminal client built first and foremost for local LLMs. Point it at LM Studio, Ollama, llama.cpp or vLLM, or let it download a model and run it itself. When you want a frontier model too, it connects to the OpenAI and Anthropic APIs with your own key, or to your Claude Code install.
 
-It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together the features I liked most in each, plus many they don't have. It's Windows-first, with a preview build for Apple Silicon Macs, built on .NET 10, and meant as a stable base for building and testing new agentic tools.
+It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together the features I liked most in each, plus many they don't have. It runs on Windows and Apple Silicon Macs, is built on .NET 10, and is meant as a stable base for building and testing new agentic tools.
 
 <p align="center">
-  <img src="assets/screenshots/screen_markdown.png" alt="The model writing and editing a Rust file: folded tool calls and thinking, the file's diffs, then the highlighted code" width="49%">
-  <img src="assets/screenshots/screen_vision.png" alt="A pasted picture described by an embedded Qwen3.8 model, with three good and three bad points" width="49%">
+  <img src="assets/screenshots/screen_markdown.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="49%">
+  <img src="assets/screenshots/screen_settings.png" alt="The settings pane on its General tab: profile, working directory, input line, transcript, screen and outside-app settings" width="49%">
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/screen_menus.png" alt="The settings pane on its General tab, above the toolbar and performance bar" width="49%">
-  <img src="assets/screenshots/screen_tools.png" alt="The tools pane's Offered tab: every tool by group, each switched on or off, with its description" width="49%">
+  <img src="assets/screenshots/screen_tools.png" alt="The tools pane's Offered tab: tools by group (Camera, Clock, ComfyUI, Docker, Files), each switched on or off, with its description" width="49%">
+  <img src="assets/screenshots/screen_skills.png" alt="The skills pane's Offered tab: profile and global skills with their versions, some locked, each with its description" width="49%">
 </p>
 
-<p align="center"><b><a href="https://github.com/M0j0Risin/NeonSidekick/releases/latest">Download the latest release</a></b> · Windows x64 · macOS on Apple Silicon (preview) · unpack and run</p>
+<p align="center"><b><a href="https://github.com/M0j0Risin/NeonSidekick/releases/latest">Download the latest release</a></b> · Windows x64 · macOS on Apple Silicon · unpack and run</p>
 
 ## Contents
 
@@ -97,7 +97,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal** is recommended (it comes with Windows 11); the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full colour).
 * **A language model** for it to talk to. The app can download one for you (see below), or use one you already run.
 
-**On a Mac?** A preview build runs on Apple Silicon Macs (M1 and later) in Terminal or iTerm2. Everything above works except printing, `\\server` shares, Docker, `/shortcut` and `/keycheck`. Screen capture, the camera and YouTube playback need macOS 14 or later, and macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
+**On a Mac?** It runs on Apple Silicon Macs (M1 and later) in Terminal or iTerm2. Everything above works except printing, `\\server` shares, Docker, `/shortcut` and `/keycheck`. Screen capture, the camera and YouTube playback need macOS 14 or later, and macOS asks your terminal app for the Microphone, Camera or Screen Recording permission the first time. Download it as below, or [build it yourself](docs/BUILD.md#building-on-a-mac).
 
 Only for some features:
 * **Running a model inside the app:** an NVIDIA graphics card (driver 580 or newer) or any card that supports Vulkan. Without one it still works, but slowly. On a Mac it runs on the Apple Silicon GPU; a 16 GB Mac suits the smaller Gemma models.
@@ -110,7 +110,7 @@ Only for some features:
 1. Download `NeonSidekick-v<version>-win-x64.zip` from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases).
 2. Unzip it into any folder and run `NeonSidekick.exe`. Keep everything in the folder together.
 
-On a Mac (preview):
+On a Mac:
 1. Download `NeonSidekick-v<version>-osx-arm64.tar.gz` from the same page and unpack it (double-click it, or `tar -xzf` in Terminal).
 2. The build isn't notarized, so clear macOS's quarantine once: `xattr -dr com.apple.quarantine NeonSidekick-v<version>-osx-arm64`.
 3. In Terminal (or iTerm2), go into that folder and run `./NeonSidekick`. Keep everything in the folder together.
@@ -211,6 +211,6 @@ A few settings can be overridden for one launch by a [command-line option](docs/
 
 **Why "Neon":** early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck.
 
-**What's next:** stronger coding tools, the rest of macOS, and Linux.
+**What's next:** stronger coding tools, printing, Docker and shares on macOS, and Linux.
 
 **Licence:** GPLv3; see [LICENSE](LICENSE). Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).
