@@ -22,6 +22,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
   - [Camera](#camera)
   - [Screen capture](#screen-capture)
   - [Profiles](#profiles)
+  - [Desktop shortcuts](#desktop-shortcuts)
   - [Custom themes](#custom-themes)
   - [Voice presets](#voice-presets)
   - [Pane keys](#pane-keys)
@@ -135,6 +136,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/settings`, `//` | Edits and saves the settings. A letter typed on a tab searches every setting. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by its name, tab or description; Enter edits the row found. |
 | `/settings changed` | Lists the settings that are not their defaults, with each default; Enter edits, R puts the row back to its default. A changed value reads in the accent colour on every settings tab. |
+| `/shortcut [<profile>] [--log]` | Puts a shortcut on the desktop that starts NeonSidekick on the loaded profile, or the one named; `--log` adds a log beside the exe. Windows only. See [Desktop shortcuts](#desktop-shortcuts). |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab each skill shows its version after the scope (`v1` as written, one more for each older text kept in `skills.db`; blank for an external skill; `🔒v1` for a [locked](SETTINGS.md#locking-a-skill) one), and typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) from the web after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | `list` lists the skills unused for that long; `commit` deletes them, folder and record, after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
@@ -388,6 +390,23 @@ A monitor, every monitor or one window, through Windows' own GDI; nothing to ins
 * A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude CLI executable, Obsidian vault, ComfyUI URL, Home Assistant URL, Home Assistant API key and YouTube API key; `--all` resets those too. `default` can only be reset while loaded.
 * `push <name>` copies the loaded profile's settings over another's; `pull <name>` the other way. Both ask first. Only `profile.json` is copied (the target keeps its working directory); a pull clears the conversation.
 * The API keys in `profile.json` are encrypted for your Windows account (DPAPI, `dpapi:…`); a key typed into the file by hand is encrypted at the next load. Only the same Windows user on the same machine can read them.
+
+### Desktop shortcuts
+
+`/shortcut` writes a Windows shortcut (`.lnk`) to your desktop that starts this `NeonSidekick.exe` on a profile:
+
+| Typed | The shortcut runs |
+|---|---|
+| `/shortcut` | `NeonSidekick.exe --profile <loaded profile>` |
+| `/shortcut --log` | `NeonSidekick.exe --profile <loaded profile> --log "<exe folder>\logs\neon-{ts}.log"` |
+| `/shortcut jason` | `NeonSidekick.exe --profile jason` |
+| `/shortcut jason --log` | `NeonSidekick.exe --profile jason --log "<exe folder>\logs\neon-{ts}.log"` |
+
+* It is called `NeonSidekick (<profile>)`, with or without the log, and uses the app's icon. One already there is replaced, and the notice says so.
+* Its *Start in* is the exe's folder. The app's working directory is still the profile's *Working directory* setting (`/cwd`).
+* The log path is written out in full, so it still works if you change the shortcut's *Start in*. `{ts}` is left as it is: each launch replaces it with its start time (`20261007-142530`), so every run gets a log of its own. The `logs` folder is made on the first launch that logs.
+* The profile must exist (Tab lists them, and `--log`). The shortcut points at the exe that is running, so make it from the copy you mean to keep.
+* Windows only for now. Headless has no `/shortcut`.
 
 ### Custom themes
 

@@ -139,6 +139,12 @@ public enum SlashCommand
     /// </summary>
     Terminal,
 
+    /// <summary>
+    /// <c>/shortcut [profile] [--log]</c> (2026-10-07, the user's ask): a desktop shortcut that starts this exe on the loaded profile,
+    /// or the one named, with <c>--log</c> a stamped log beside the exe too (<see cref="Shortcuts.DesktopShortcut"/>). Windows only.
+    /// </summary>
+    Shortcut,
+
     /// <summary><c>/copy</c>: copy the last exchange to the clipboard as markdown, or <c>/copy &lt;n&gt;</c> | <c>all</c>.</summary>
     Copy,
 
@@ -387,6 +393,7 @@ public static class SlashCommands
             new("/server", "pick or set the LLM server"),
             new("/sessions", "restore, rename or purge sessions"),
             new("/settings", "edit, search and save settings", "//"),
+            new("/shortcut", "put a launch shortcut on the desktop"),
             new("/skills", "manage and install skills"),
             new("/speak", "read a text file aloud"),
             new("/splash", "start over with the splash screen"),
@@ -500,7 +507,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/srvcopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/cmdcopy", "/keycheck", "/keycopy", "/srvcopy", "/cmdclear", "/cmdlist", "/police", "/persona", "/operata", "/vocalia", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -589,6 +596,7 @@ public static class SlashCommands
             "/vault" => SlashCommand.Vault,
             "/explore" => SlashCommand.Explore,
             "/terminal" => SlashCommand.Terminal,
+            "/shortcut" => SlashCommand.Shortcut,
             "/view" => SlashCommand.View,
             "/imagine" => SlashCommand.Imagine,
             "/comfy" => SlashCommand.Comfy,
@@ -643,7 +651,7 @@ public static class SlashCommands
         or SlashCommand.Learn
         or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.SrvCopy or SlashCommand.Profile or SlashCommand.Timer
-        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
+        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find;

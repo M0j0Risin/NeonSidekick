@@ -967,6 +967,7 @@ internal sealed partial class ChatScreen
         Func<bool>? closeViewer = null,
         Action<string>? openTerminal = null,
         Screen.IScreenSystem? screenSystem = null, Hotkeys.IHotkeyProbe? hotkeyProbe = null,
+        Shortcuts.IShortcutWriter? shortcutWriter = null,
         Action<string, string?>? openThumbs = null,
         Action<string>? followThumbs = null,
         Action<string>? showInViewer = null,
@@ -1075,6 +1076,8 @@ internal sealed partial class ChatScreen
         // The screen (2026-10-04): screenshots into the Screen capture output folder; the model's asks on the pane per Screen capture ask.
         _screenSystem = screenSystem;
         _hotkeyProbe = hotkeyProbe;
+        // /shortcut (2026-10-07): the shell's ShellLink in the app on Windows, a fake in tests, none elsewhere.
+        _shortcutWriter = shortcutWriter;
         _screenCapture = screenSystem is null ? null : new Screen.ScreenCapture(screenSystem, () => _files, () => _effective().ScreenOutputFolder, _time);
         _screenTools = ScreenTools(CaptureForModelAsync, screenSystem);
         // The YouTube tools (2026-10-05): the Data API over the web tools' client, the video window when there is one.
@@ -4149,6 +4152,9 @@ internal sealed partial class ChatScreen
                 var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile));
                 return MentionCompleter.Matches(targets.Select(name => new CompletionItem(name, note)).ToList(), argText);
             }
+
+            case SlashCommand.Shortcut:
+                return ShortcutItems(argText, sources.Profiles(), sources.LoadedProfile);
 
             case SlashCommand.Cwd:
                 return MentionCompleter.Matches([new(CwdHomeWord, CwdDefaultNote), new(CwdBrowseWord, FolderText.BrowseNote)], argText);
@@ -11043,6 +11049,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Terminal:
                 HandleTerminal(args);
+                return false;
+
+            case SlashCommand.Shortcut:
+                HandleShortcut(args);
                 return false;
 
             case SlashCommand.GitUser:

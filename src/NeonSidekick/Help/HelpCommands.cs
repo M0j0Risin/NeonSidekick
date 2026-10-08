@@ -305,6 +305,10 @@ public static class HelpCommands
             new("/settings <words>", "Search every setting (/settings, /tools, /skills, /mcp) by its name, tab or description; Enter edits the row found."),
             new("/settings changed", "The settings that are not their defaults, with each default; Enter edits, R puts the row back to its default."),
         ]),
+        new("/shortcut",
+        [
+            new("/shortcut [<profile>] [--log]", "Put a shortcut on the desktop that starts NeonSidekick in the exe's folder on the loaded profile, or the one named (as `--profile <name>`). With `--log` it also writes a log, `logs\\neon-{ts}.log` beside the exe, the time it starts in the name. It is called `NeonSidekick (<profile>)`, with or without the log; one already there is replaced. Windows only."),
+        ]),
         new("/skills",
         [
             new("/skills", "List the skills (Enter moves, renames, edits, reverts, locks or deletes one; a locked skill can't be changed by the model, a reflection, an update or a rename, move, revert or delete until it is unlocked on the same page; revert lists the kept versions to pick one to put back after a yes, d removing the highlighted one and c all of them, each after a yes) and edit the skill, reflection and project-file settings. On the Offered tab, type to narrow the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),

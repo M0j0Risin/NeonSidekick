@@ -61,6 +61,9 @@ public static class NoticeGlyphs
     /// <summary><c>/terminal</c>'s notice (2026-10-03).</summary>
     public const string Terminal = "💻 ";
 
+    /// <summary><c>/shortcut</c>'s notice (2026-10-07).</summary>
+    public const string Shortcut = "🔗 ";
+
     /// <summary><c>/gituser</c>'s written identity (the toolbar's tools).</summary>
     public const string Git = ChatScreen.ToolsToolGlyph + " ";
 

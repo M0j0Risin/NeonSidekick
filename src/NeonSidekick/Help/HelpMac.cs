@@ -57,6 +57,7 @@ public static class HelpMac
         ["/print printers"] = Printing.PrintText.NeedsWindows,
         ["/pdf <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]"] = "Make a PDF in the working directory from a file: Markdown keeps its headings, tables, lists, links, coloured code and the pictures beside it; text and code become a coloured listing; HTML is printed as the page, its scripts and anything outside the working directory left out; a picture is fitted to one page. The PDF goes beside the file unless `to=` names a file or folder; an existing one is replaced only with `overwrite`. Options go anywhere. Edge, Chrome, Brave or Chromium makes it. On its own, `/pdf` shows how to use it. See Making PDFs.",
         ["/terminal [<folder>]"] = ChatScreen.MacTerminalUnavailableError,
+        ["/shortcut [<profile>] [--log]"] = Shortcuts.ShortcutText.NeedsWindows,
     };
 
     /// <summary><paramref name="field"/>'s text on a Mac, or null where <see cref="HelpSettings"/>' own serves both.</summary>
