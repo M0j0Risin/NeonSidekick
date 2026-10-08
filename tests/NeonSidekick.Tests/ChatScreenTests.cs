@@ -13128,6 +13128,9 @@ public partial class ChatScreenTests : IDisposable
             {
                 PushLine("and then?");
                 PushLine("/profile work");
+                // Both in the queue before the reply goes on (the v0.5.0 release run, 2026-10-07: a loaded runner's watcher
+                // had not read them when it ended, so they met the idle line and nothing counted two).
+                Assert.True(SpinWait.SpinUntil(() => _running!.QueuedCount == 2, TimeSpan.FromSeconds(5)), "the two never queued");
             }
         });
         _chat.EnqueueText("Second.");
@@ -13875,7 +13878,9 @@ public partial class ChatScreenTests : IDisposable
             if (i == 1)
             {
                 PushLine("later");
-                await Task.Delay(60, CancellationToken.None);   // queued
+                // Queued, and below the pane read before the reply goes on, not after fixed delays (the v0.5.0 release run,
+                // 2026-10-07: a loaded runner's reply ended first and the script ran dry at the idle line).
+                Assert.True(SpinWait.SpinUntil(() => _running!.QueuedCount == 1, TimeSpan.FromSeconds(5)), "never queued");
                 _time.Advance(ScreenPane.Tick);                  // the tick redraws the busy row with the count (the clock is manual here)
                 _scripted!.PushClick(column + 1, 102);
                 _scripted.PushClick(column + 2, 102);
@@ -13883,6 +13888,7 @@ public partial class ChatScreenTests : IDisposable
             else if (i == 2)
             {
                 _scripted!.Push(Keys.Escape);
+                Assert.True(SpinWait.SpinUntil(() => !_scripted.IsAvailable, TimeSpan.FromSeconds(5)), "the clicks and ESC were never read");
             }
 
             await Task.Delay(40, CancellationToken.None);

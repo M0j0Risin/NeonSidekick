@@ -520,12 +520,22 @@ public sealed class CameraSessionTests : IDisposable
         _time.Advance(CameraSession.Linger - TimeSpan.FromMilliseconds(1));
         Assert.Equal(0, _system.Closes);
         _time.Advance(TimeSpan.FromMilliseconds(1));
-        await Until(() => _system.Closes == 1 && _session.State == CameraState.Off);
+        // The handler's Off too (the v0.5.0 release run, 2026-10-07): the session sets State under its lock and raises Changed
+        // after, so a loaded runner saw State Off with the list's last entry still On.
+        await Until(() => _system.Closes == 1 && _session.State == CameraState.Off && LastIsOff());
         Assert.False(_session.Live);
         lock (states)
         {
             Assert.Contains(CameraState.On, states);
             Assert.Equal(CameraState.Off, states[^1]);
+        }
+
+        bool LastIsOff()
+        {
+            lock (states)
+            {
+                return states.Count > 0 && states[^1] == CameraState.Off;
+            }
         }
     }
 

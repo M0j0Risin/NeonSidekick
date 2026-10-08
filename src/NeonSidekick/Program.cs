@@ -35,10 +35,15 @@ using Spectre.Console;
 CulturePin.Apply();
 
 // Pictures on a Mac (2026-10-07): ImageIO registered as MagicScaler's codecs before anything touches MagicScaler, which fixes
-// its codec list on first use (Images/ImageIOCodecs). Windows keeps WIC and never calls this.
+// its codec list on first use (Images/ImageIOCodecs). Windows keeps WIC and never calls this. Without the console echo (the v0.5.0
+// release run, 2026-10-07): no sink is open this early, so its line went to stdout, ahead of --version's (the package step refused
+// it) and onto --headless's stdout and --mcp-relay's pipe.
 if (OperatingSystem.IsMacOS())
 {
+    bool echo = DiagnosticLog.EchoToConsole;
+    DiagnosticLog.EchoToConsole = false;
     NeonSidekick.Images.ImageIOCodecs.Register();
+    DiagnosticLog.EchoToConsole = echo;
 }
 
 // The Claude CLI server's MCP relay (2026-09-30): this executable started by the claude CLI as its MCP server

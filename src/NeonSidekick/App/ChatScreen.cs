@@ -751,6 +751,11 @@ internal sealed partial class ChatScreen
     // The messages queued while a reply runs (2026-09-18): the screen's, never a profile's, so a
     // switch drops rather than rebinds it. Enqueued on the watcher task, drained by the idle loop.
     private readonly MessageQueue _queue = new();
+
+    /// <summary>How many are queued, any thread (the queue's own lock): what a mid-turn test waits for instead of a fixed delay
+    /// (the v0.5.0 release run, 2026-10-07, where the watcher had not queued a line yet when the reply ended).</summary>
+    internal int QueuedCount => _queue.Count;
+
     private readonly QueueMenu _queueMenu;
     private readonly SkillsMenu _skillsMenu;
     private readonly ToolsMenu _toolsMenu;
