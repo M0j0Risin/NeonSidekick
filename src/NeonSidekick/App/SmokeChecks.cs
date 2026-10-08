@@ -148,6 +148,7 @@ public static partial class SmokeChecks
         results.Add(ProbePictureMenu());
         results.Add(ProbeVideoWebView2());
         results.Add(ProbeCameraMf());
+        results.Add(ProbeCameraAvf());
         results.Add(PicturesHere ? ProbeCameraEncode() : NotWindows("camera:encode"));
         results.Add(ProbeScreenGdi());
         results.Add(ProbeScreenWindows());

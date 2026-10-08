@@ -115,7 +115,12 @@ public static class PictureWindow
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(closed);
-        if (!OperatingSystem.IsWindows())   // the camera's live window on a Mac is a later round (2026-10-07)
+        if (OperatingSystem.IsMacOS() && AppKitHost.IsEnabled)
+        {
+            return MacLiveWindows.Show(title, closed);   // the camera's live window over AppKit (2026-10-07)
+        }
+
+        if (!OperatingSystem.IsWindows())
         {
             throw new PlatformNotSupportedException(ViewerText.Unavailable);
         }
@@ -302,7 +307,7 @@ public static class PictureWindow
 }
 
 /// <summary>One viewer window and the thread that pumps its messages (<see cref="PictureWindow"/>).</summary>
-internal sealed unsafe class PictureWindowThread
+internal sealed unsafe class PictureWindowThread : ILiveWindow
 {
     private const uint ChangedMessage = WmApp + 1;
     private const uint LoadedMessage = WmApp + 2;

@@ -500,6 +500,63 @@ internal static unsafe partial class AppKitNative
     [UnmanagedCallersOnly]
     private static void ReleasePixels(nint info, void* data, nuint size) => GCHandle.FromIntPtr(info).Free();
 
+    /// <summary>
+    /// <see cref="CGImage(byte[], int, int, uint)"/> that hands <paramref name="pixels"/> to <paramref name="released"/> once
+    /// CoreGraphics lets go of them (2026-10-07, the camera's live window): Core Animation may still be drawing a layer's old
+    /// contents after <c>setContents:</c> replaces them, so a frame's array is reused only from here. <paramref name="released"/>
+    /// runs on whichever thread drops the image last and must be thread-safe.
+    /// </summary>
+    public static nint CGImage(byte[] pixels, int width, int height, uint bitmapInfo, Action<byte[]> released)
+    {
+        ArgumentNullException.ThrowIfNull(pixels);
+        ArgumentNullException.ThrowIfNull(released);
+        if (s_srgb == 0)
+        {
+            nint name = Marshal.ReadIntPtr(NativeLibrary.GetExport(NativeLibrary.Load(CoreGraphics), "kCGColorSpaceSRGB"));
+            s_srgb = CGColorSpaceCreateWithName(name);   // kept for the process
+        }
+
+        var held = new HeldPixels(pixels, released);
+        var info = GCHandle.Alloc(held);
+        nint provider = CGDataProviderCreateWithData(GCHandle.ToIntPtr(info), (void*)held.Pin.AddrOfPinnedObject(), (nuint)pixels.Length, &ReleaseHeld);
+        if (provider == 0)
+        {
+            held.Pin.Free();
+            info.Free();
+            return 0;
+        }
+
+        nint image = CGImageCreate((nuint)width, (nuint)height, 8, 32, (nuint)(width * 4), s_srgb, bitmapInfo, provider, null, 1, 0);
+        CGDataProviderRelease(provider);
+        return image;
+    }
+
+    private sealed class HeldPixels(byte[] pixels, Action<byte[]> released)
+    {
+        public GCHandle Pin { get; } = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+
+        public byte[] Pixels { get; } = pixels;
+
+        public Action<byte[]> Released { get; } = released;
+    }
+
+    [UnmanagedCallersOnly]
+    private static void ReleaseHeld(nint info, void* data, nuint size)
+    {
+        var handle = GCHandle.FromIntPtr(info);
+        var held = (HeldPixels)handle.Target!;
+        held.Pin.Free();
+        handle.Free();
+        try
+        {
+            held.Released(held.Pixels);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Diagnostics.DiagnosticLog.Warn("Viewer", "A released picture could not be reused: " + ex.Message);
+        }
+    }
+
     /// <summary>Whether a window server is there to draw on (a desktop session; none over SSH or on a headless box).</summary>
     public static bool HasWindowServer()
     {

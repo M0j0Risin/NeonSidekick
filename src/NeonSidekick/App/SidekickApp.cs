@@ -233,8 +233,9 @@ public sealed class SidekickApp
         // The screen (2026-10-04): GDI in the app on Windows, a fake in tests, none elsewhere.
         _screenSystem = screenSystem;
         _hotkeyProbe = hotkeyProbe;
-        // The camera (2026-10-02): Media Foundation in the app on Windows, a fake in tests, none elsewhere; its previews in the
-        // picture viewer (live, and a shot opened without the keyboard), none in tests.
+        // The camera (2026-10-02): Media Foundation in the app on Windows, AVFoundation on macOS 14 and later (2026-10-07), a fake
+        // in tests, none elsewhere; its previews in the picture viewer (live, and a shot opened without the keyboard; on a Mac through
+        // the AppKit host), none in tests.
         _camera = camera;
         _liveView = liveView;
         _showShot = showShot;

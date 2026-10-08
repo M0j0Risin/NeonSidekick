@@ -40,12 +40,15 @@ public static class CameraFormats
             .First();
     }
 
-    /// <summary>NV12 0, YUY2 1, MJPG 2, anything else 3.</summary>
+    /// <summary>
+    /// NV12 0, YUY2 1, MJPG 2, anything else 3. A Mac's FourCCs rank with their Windows twins (2026-10-07): <c>420v</c>/<c>420f</c>
+    /// are NV12's bi-planar 4:2:0, <c>yuvs</c>/<c>2vuy</c> packed 4:2:2 as YUY2, <c>dmb1</c> Motion JPEG. Windows never names them.
+    /// </summary>
     public static int SubtypeRank(string subtype) => subtype switch
     {
-        "NV12" => 0,
-        "YUY2" => 1,
-        "MJPG" => 2,
+        "NV12" or "420v" or "420f" => 0,
+        "YUY2" or "yuvs" or "2vuy" => 1,
+        "MJPG" or "dmb1" => 2,
         _ => 3,
     };
 

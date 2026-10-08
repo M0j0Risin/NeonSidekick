@@ -7,8 +7,9 @@ namespace NeonSidekick.Help;
 /// before the first Mac release: a Mac user never reads Windows wording). A layer over <see cref="HelpSettings"/> and
 /// <see cref="HelpCommands"/>, used only when <see cref="OperatingSystem.IsMacOS"/>, so Windows' sentences stay byte for byte as
 /// they were (many are pinned). A setting or a form missing here keeps its one text, true on both systems. A feature that needs
-/// Windows (the camera, printing, <c>/keycheck</c>, <c>/terminal</c>) says so, in its area's own words where
-/// it has them. The embedded LLM runs on a Mac since 2026-10-07 (Metal), so its rows here say how it differs, not that it is missing; pictures
+/// Windows (printing, <c>/keycheck</c>, <c>/terminal</c>) says so, in its area's own words where
+/// it has them. The camera works on a Mac since 2026-10-07 (AVFoundation), so its rows say where macOS differs: the devices it lists
+/// and the permission that is the terminal's. The embedded LLM runs on a Mac since 2026-10-07 (Metal), so its rows here say how it differs, not that it is missing; pictures
 /// came the same day (ImageIO), so <c>Embedded vision</c> needs no Mac text any more.
 /// <c>HelpMacTests</c> pins that every key still names a setting or a form the tables hold, so the layer cannot go stale.
 /// </summary>
@@ -46,7 +47,7 @@ public static class HelpMac
         [SettingsField.EmbeddedVramOnly] = "Keeps the embedded model on the GPU. Every layer goes on the GPU (whatever *Embedded GPU layers* says; with *Embedded context size* 0 the context shrinks to fit instead). If llama.cpp still leaves layers on the CPU, or a buffer could not be allocated, the app stops the server and the connect fails with what to lower. On a Mac the GPU shares the computer's memory, so this checks where the layers went, not which memory holds them. Refused when llama-server does not report where it put the layers, so the load cannot be checked. A profile saved while the default was off keeps it off.",
         [SettingsField.ImageEditQuality] = "The quality `image_edit` writes a JPEG or HEIF at when the model gives none (1–100), and where `max_kb` starts lowering it from. A Mac's ImageIO writes no JPEG XL.",
         [SettingsField.DockerEnginePipe] = "The Docker engine's named pipe (Docker Desktop on Windows). The Docker tools need Windows for now, so on a Mac it changes nothing.",
-        [SettingsField.CameraDevice] = "The camera the camera tool and `/camera` use. The camera needs Windows for now, so on a Mac it changes nothing.",
+        [SettingsField.CameraDevice] = "The camera, by the name macOS lists it under (the built-in FaceTime camera, a USB webcam, an iPhone as Continuity Camera), picked from the ones connected. `(first camera)` uses the first; a MacBook's own camera lists last while its lid is closed. A camera that is not connected uses the first, with a notice.",
         [SettingsField.ScreenTools] = "Offers `screen_capture` and `screen_list`, which let the model see a monitor, every monitor or one window. Never offered without the pane, headless, or to an embedded model without its vision projector. `/screen` works either way. On a Mac the terminal app the app runs in (Terminal, iTerm2…) needs the Screen Recording permission: macOS asks once, at the first capture; turn it on in " + Screen.ScreenText.PermissionPage + ", then quit and reopen the terminal. Without it nothing is captured and the windows aren't listed.",
         [SettingsField.PostgresSetPassword] = "Pick a connection and type its password (masked); it is saved encrypted in postgres.json or in the macOS Keychain, as the connection says.",
     };
@@ -61,8 +62,8 @@ public static class HelpMac
     /// <summary>The command forms whose text differs on a Mac, by syntax as <see cref="HelpCommands"/> writes it.</summary>
     public static readonly IReadOnlyDictionary<string, string> Forms = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["/camera"] = "Open the camera pane and take a photo. The camera needs Windows for now: this build has no camera support.",
-        ["/camera list"] = "List the cameras in a pane, numbered, the chosen one marked. The camera needs Windows for now.",
+        ["/camera"] = "Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, R takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. The first use asks macOS whether your terminal may use the camera; a refusal is changed in System Settings › Privacy & Security › Camera. See Camera.",
+        ["/camera list"] = "List the cameras macOS sees in a pane (the built-in camera, USB webcams, an iPhone as Continuity Camera), numbered, the chosen one marked.",
         ["/keycheck"] = Hotkeys.KeyCheckText.Unsupported,
         ["/view <image>|<folder>"] = "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. In the viewer the arrows, the mouse wheel or a two-finger swipe up and down step through the pictures, and a right-click (or Control-click) opens the picture menu (rotate, flip, colour, resize, convert, shrink, copy the path, show in Finder, attach, delete; edits go where *Image edit mode* says); ⌃⌘F is full screen (F11 too, if macOS's Show Desktop shortcut is turned off), ⌫ twice deletes, Esc or ⌘W closes. Drag the picture out to copy its file; TAB brings the terminal forward, and a Ctrl or Option chord runs in the chat. It needs the Mac's desktop (not over SSH). Works while a reply runs.",
         ["/view <image>|<folder> --thumbs"] = "Open the folder (an image's folder, with the image selected) as thumbnails in a window of its own, in step with the picture viewer and the picture strip: a click shows the picture in the viewer, a double-click or Enter opens it there, and the viewer's own moves select it here. New pictures go on the end, so nothing moves. The tiles fit the window; + and −, ⌘ with the wheel or a pinch resize them, F5 lists and fits again. A right-click (or Control-click) opens the picture menu, as in the viewer. `--thumbs` can be the first or last word. It needs the Mac's desktop (not over SSH). Works while a reply runs.",

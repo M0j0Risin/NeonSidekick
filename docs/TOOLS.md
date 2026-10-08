@@ -799,6 +799,8 @@ These are file tools: *File tools* offers them, and they reach only the working 
 |---|---|---|
 | `camera_capture` | `prompt` | Shows the model's request ("Hold the label up to the camera."), then waits for you to take the photo (*Camera shutter* `user`) or for your permission (`model`). The photo is saved in *Camera output folder* and attached after the result; a decline isn't retried that turn. Allowed in plan mode. |
 
+On Windows the camera is Media Foundation's; on a Mac (macOS 14 or later) AVFoundation's: the built-in camera, a USB webcam, or an iPhone as Continuity Camera. A Mac asks once whether your terminal may use the camera (System Settings › Privacy & Security › Camera holds the answer); until it is allowed the tool's result says so, never a black picture.
+
 ### Screen
 
 | Tool | Arguments | What it does |

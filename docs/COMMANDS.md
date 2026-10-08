@@ -360,13 +360,14 @@ Otherwise it is read-only: scroll, follow, select and copy as in the log window,
 
 ### Camera
 
-A USB or built-in webcam through Windows' Media Foundation; nothing to install. Windows only.
+A USB or built-in webcam through Windows' Media Foundation or, on a Mac (macOS 14 or later), Apple's AVFoundation; nothing to install.
 
-* **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go. A photo waits about a second for the exposure to settle.
+* **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go. A photo waits about a second for the exposure to settle (a MacBook's own camera about three: its first picture comes late and its exposure ramps over thirty frames).
 * **📷 on the hint row** shows whenever the camera is on (with its light and Windows' indicator); double-click it to end `/camera live` and watch mode.
 * **Photos** are JPEGs in *Camera output folder* (`camera_images` by default), named by time (`20261002-140203.jpg`); a retaken or declined one is deleted. Botchat and watch pictures aren't saved, but double-clicking a watch thumbnail writes it to the folder's `.watch` subfolder, which is cleared when watch mode stops and on every profile load.
 * **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.
 * **Failures** say why: Windows' *Let desktop apps access your camera* is off (Settings › Privacy & security › Camera), another app has the camera, it was unplugged, or Media Foundation is missing (Windows N needs the Media Feature Pack).
+* **On a Mac** the cameras are the built-in FaceTime camera, USB webcams and an iPhone as Continuity Camera (Desk View is left out). A MacBook's own camera is off while its lid is closed: it lists last, and choosing it says so. The permission is your terminal's (Terminal, iTerm2…): the first photo makes macOS ask, and a refusal says to turn the terminal on in System Settings › Privacy & Security › Camera. The live view is a window of its own over AppKit, with ⌃⌘F for full screen and ⌘W or Esc to close it.
 * **Watching** uses stills: each picture is compared on your machine with the last one the model saw, and sent only when enough changed.
 
 ### Screen capture

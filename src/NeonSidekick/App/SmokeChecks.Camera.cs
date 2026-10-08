@@ -35,6 +35,30 @@ public static partial class SmokeChecks
     }
 
     /// <summary>
+    /// <c>camera:avf</c> (2026-10-07, the camera on macOS; <c>camera:mf</c>'s twin): AVFoundation's capture classes bound, the runtime
+    /// delegate class answering its selector, the permission's global block made and the status read (never a request: no question
+    /// on a runner or a headless box), a 32BGRA pixel buffer's rows copied as a frame's are, and the cameras listed without opening
+    /// one (no LED). "No camera listed" passes (GitHub's macOS runner). Skipped off macOS and before macOS 14 (no external type).
+    /// </summary>
+    public static SmokeCheck ProbeCameraAvf()
+    {
+        const string name = "camera:avf";
+        if (!OperatingSystem.IsMacOSVersionAtLeast(14))
+        {
+            return new SmokeCheck(name, true, OperatingSystem.IsMacOS() ? "skipped: macOS 14 or later needed" : "skipped: not macOS");
+        }
+
+        try
+        {
+            return new SmokeCheck(name, true, MacCameraSystem.Probe());
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
+        }
+    }
+
+    /// <summary>
     /// <c>camera:encode</c> (2026-10-02): a made-up 64×48 BGRX frame (red left, blue right) through <see cref="CameraJpeg"/>
     /// — MagicScaler from the pixels, the X byte dropped — must come out a JPEG that <see cref="ImageFile.TryLoad"/> keeps
     /// byte for byte, and decode red on the left; the change detector must see no change in a frame against itself.

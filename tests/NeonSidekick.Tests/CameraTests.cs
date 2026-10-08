@@ -41,6 +41,22 @@ public sealed class CameraPureTests
     }
 
     [Fact]
+    public void Pick_RanksAMacsFourCcs_AsTheirWindowsTwins()
+    {
+        // The StreamCam's 1280x720 as AVFoundation lists it (2026-10-07): packed yuvs and bi-planar 420v at 30, 420v at 60 too.
+        var size = new CameraSize(1280, 720);
+        var formats = new[] { F(1280, 720, 30.00003, "yuvs"), F(1280, 720, 30.00003, "420v"), F(1280, 720, 60.00024, "420v") };
+
+        var picked = CameraFormats.Pick(formats, size)!;
+
+        Assert.Equal("420v", picked.Subtype);
+        Assert.Equal(30.00003, picked.Fps);
+        Assert.Equal(0, CameraFormats.SubtypeRank("420f"));
+        Assert.Equal(1, CameraFormats.SubtypeRank("2vuy"));
+        Assert.Equal(2, CameraFormats.SubtypeRank("dmb1"));
+    }
+
+    [Fact]
     public void Attributes_PackAndUnpack_AndSubtypesReadAsTheirFourCc()
     {
         var size = new CameraSize(1920, 1080);
@@ -92,6 +108,29 @@ public sealed class CameraPureTests
         Assert.Equal(topDown, into);
         Assert.Throws<ArgumentOutOfRangeException>(() => CameraPixels.CopyTopDown(topDown, 0, 4, 2, 2, into));
         Assert.Throws<ArgumentException>(() => CameraPixels.CopyTopDown(topDown, 0, 8, 2, 2, new byte[8]));
+    }
+
+    [Fact]
+    public void CopyTopDown_ReadsAMacPixelBuffersPaddedRows()
+    {
+        // A 32BGRA CVPixelBuffer 6 pixels wide came back with 64-byte rows (24 needed) in the smoke on 2026-10-07: the row's tail
+        // is padding, never pixels.
+        const int width = 6, height = 3, rowBytes = 64;
+        var buffer = new byte[rowBytes * height];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < rowBytes; x++)
+            {
+                buffer[(y * rowBytes) + x] = x < width * 4 ? (byte)((y * 24) + x) : (byte)0xEE;
+            }
+        }
+
+        var into = new byte[width * height * 4];
+        CameraPixels.CopyTopDown(buffer, 0, rowBytes, width, height, into);
+
+        Assert.Equal(Enumerable.Range(0, width * height * 4).Select(i => (byte)i), into);
+        Assert.DoesNotContain((byte)0xEE, into);
+        Assert.Throws<ArgumentOutOfRangeException>(() => CameraPixels.CopyTopDown(buffer[..(rowBytes * 2)], 0, rowBytes, width, height, into));
     }
 
     [Fact]
@@ -187,10 +226,12 @@ public sealed class CameraPureTests
         Assert.Equal(CameraFailure.Unplugged, CameraText.FailureOf(unchecked((int)0xC00DABE0)));
         Assert.Equal(CameraFailure.Failed, CameraText.FailureOf(unchecked((int)0x80004005)));
         Assert.Equal("0x80004005", CameraText.Hresult(unchecked((int)0x80004005)));
-        Assert.Contains("Let desktop apps access your camera", CameraText.Failure(CameraFailure.Blocked, null));
-        Assert.Contains("Another app", CameraText.Failure(CameraFailure.InUse, null));
-        Assert.Equal("The camera failed. (0x80004005 from ReadSample)", CameraText.Failure(CameraFailure.Failed, "0x80004005 from ReadSample"));
-        Assert.All(Enum.GetValues<CameraFailure>(), f => Assert.False(string.IsNullOrWhiteSpace(CameraText.Failure(f, null))));
+        Assert.Contains("Let desktop apps access your camera", CameraText.Failure(CameraFailure.Blocked, null, mac: false));
+        Assert.Contains("Another app", CameraText.Failure(CameraFailure.InUse, null, mac: false));
+        Assert.Equal("The camera failed. (0x80004005 from ReadSample)", CameraText.Failure(CameraFailure.Failed, "0x80004005 from ReadSample", mac: false));
+        Assert.All(Enum.GetValues<CameraFailure>(), f => Assert.False(string.IsNullOrWhiteSpace(CameraText.Failure(f, null, mac: false))));
+        Assert.All(Enum.GetValues<CameraFailure>(), f => Assert.False(string.IsNullOrWhiteSpace(CameraText.Failure(f, null, mac: true))));
+        Assert.Equal(CameraText.Failure(CameraFailure.Blocked, null, OperatingSystem.IsMacOS()), CameraText.Failure(CameraFailure.Blocked, null));
         var error = new CameraException(CameraFailure.NoCamera, null);
         Assert.Equal(CameraFailure.NoCamera, error.Failure);
         Assert.Equal("No camera is connected.", error.Message);
