@@ -180,6 +180,9 @@ public partial class ChatScreenTests
                     break;
                 case 2 when Output.Contains("· " + ComfyText.Drained(1), StringComparison.Ordinal):
                     step++;
+                    // The job's own cancellation posts the delete after the drain's notice (the second v0.5.0 release run on the
+                    // Mac runner, 2026-10-08: /exit went first and the request was never made), so wait for it before leaving.
+                    Assert.True(SpinWait.SpinUntil(Deleted, TimeSpan.FromSeconds(5)), "the queued prompt was never deleted");
                     PushLine(input, "/exit");
                     break;
             }
@@ -189,8 +192,16 @@ public partial class ChatScreenTests
 
         Assert.Equal(1, CountOf(output, "· " + ComfyText.Cancelled));   // the drain's notice, not a second from the job's end
         Assert.DoesNotContain("generated 1 picture", output);
-        Assert.Contains(stub.Requests, r => r.Uri.AbsolutePath == "/queue" && r.Body == "{\"delete\":[\"p-5\"]}");
+        Assert.True(Deleted());
         Assert.Contains("› /exit", output);
+
+        bool Deleted()
+        {
+            lock (stub.Requests)
+            {
+                return stub.Requests.Any(r => r.Uri.AbsolutePath == "/queue" && r.Body == "{\"delete\":[\"p-5\"]}");
+            }
+        }
     }
 
     /// <summary>A generation behind the line that fails: its error at the idle line, when it ends.</summary>
