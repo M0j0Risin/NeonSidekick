@@ -46,7 +46,7 @@ public enum YouTubeSaveOutcome
 
 /// <summary>
 /// The profile's saved YouTube videos (2026-10-07, the user's ask: bookmarks, added and removed by the user's <c>/youtube save</c>,
-/// <c>unsave</c> and <c>saved</c> pane or the model's <c>youtube_save</c>, each resuming where it was left — <see cref="YouTubeResume"/>
+/// <c>unsave</c> and <c>list</c> pane or the model's <c>youtube_save</c>, each resuming where it was left — <see cref="YouTubeResume"/>
 /// keeps the place, <see cref="ResumeAt"/> hands it to a play), in <see cref="FileName"/> beside <c>memory.json</c>. The
 /// <c>BenchHistory</c> shape: missing is empty, unreadable is empty with a warning (the next save writes over it), a save is a temp
 /// file moved over the old one, and a failed save is logged and reported, never thrown. Read on each use, never kept in memory:
@@ -178,7 +178,7 @@ public sealed class YouTubeLibrary
     }
 
     /// <summary>
-    /// Every saved video taken off the list (2026-10-08, the user's ask: <c>/youtube saved --clear</c> and the pane's clear all): how
+    /// Every saved video taken off the list (2026-10-08, the user's ask: <c>/youtube list --clear</c> and the pane's clear all): how
     /// many went, 0 with none saved (nothing written), or null when the file could not be written (logged; nothing changed).
     /// </summary>
     public int? Clear()

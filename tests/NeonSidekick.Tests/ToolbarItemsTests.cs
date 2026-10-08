@@ -16,7 +16,7 @@ public sealed class ToolbarItemsTests
         [
             "settings", "profile", "themes", "tools", "mcp", "skills", "sys", "sessions", "usage", "memory", "cmdlist", "police",
             "shell", "files", "web", "claude", "docker", "obsidian", "sql", "oracle", "mysql", "sqlite", "postgres", "unc", "ha", "comfy", "camera", "print",
-            "log", "process", "liveview", "comfyview", "comfythumbs", "perf", "path",
+            "log", "process", "youtube", "comfyview", "comfythumbs", "perf", "path",
         ], ToolbarItems.Names);
         Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 💾 🔒 👮 🐚 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 📺 🎞️ 🪟 📈 📂", string.Join(" ", ToolbarItems.Names.Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
@@ -97,7 +97,7 @@ public sealed class ToolbarItemsTests
         Assert.Equal("[[ ]] 🎨  ComfyUI                 " + Theme.DimMarkup("/tools comfy"), ToolbarItems.Label("comfy", false));
         Assert.Equal("[[ ]] 📄  Log                     " + Theme.DimMarkup("/log"), ToolbarItems.Label("log", false));
         Assert.Equal("[[ ]] ⚡  Process                 " + Theme.DimMarkup("/process"), ToolbarItems.Label("process", false));   // 2026-10-05, the user's ask
-        Assert.Equal("[[ ]] 📺  Camera live viewer      " + Theme.DimMarkup("/camera live"), ToolbarItems.Label("liveview", false));
+        Assert.Equal("[[ ]] 📺  YouTube                 " + Theme.DimMarkup("/youtube list"), ToolbarItems.Label("youtube", false));   // the Camera live viewer's place until 2026-10-08
         Assert.Equal("[[ ]] 🎞️  Comfy viewer            " + Theme.DimMarkup("/comfy view"), ToolbarItems.Label("comfyview", false));
     }
 }

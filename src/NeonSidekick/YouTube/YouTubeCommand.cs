@@ -24,13 +24,16 @@ public enum YouTubeVerb
     /// <summary><c>save</c> (the video in the window) or <c>save &lt;id|link&gt;</c> (2026-10-07).</summary>
     Save,
 
-    /// <summary><c>saved</c>: the saved videos' pane (2026-10-07).</summary>
+    /// <summary>
+    /// <c>list</c>: the saved videos' pane (2026-10-07). The word was <c>saved</c> until 2026-10-08 (the user's call), which is now
+    /// words to search for like any other.
+    /// </summary>
     Saved,
 
     /// <summary><c>unsave &lt;n|id|link&gt;</c>: a saved video taken off the list (2026-10-07).</summary>
     Unsave,
 
-    /// <summary><c>saved --clear</c>: every saved video taken off the list, after a yes (2026-10-08, the user's ask).</summary>
+    /// <summary><c>list --clear</c>: every saved video taken off the list, after a yes (2026-10-08, the user's ask).</summary>
     ClearSaved,
 
     /// <summary>A verb without the argument it needs (the error is the usage).</summary>
@@ -49,17 +52,17 @@ public static class YouTubeCommand
 {
     public const string Word = "/youtube";
 
-    /// <summary>The switch after <c>saved</c> that empties the list (2026-10-08, the user's word).</summary>
+    /// <summary>The switch after <c>list</c> that empties the list (2026-10-08, the user's word).</summary>
     public const string ClearSwitch = "--clear";
 
-    /// <summary>The completion's note for <c>saved --clear</c>.</summary>
+    /// <summary>The completion's note for <c>list --clear</c>.</summary>
     public const string ClearNote = "take every saved video off the list, after a yes";
 
-    /// <summary>The words in the order the completion offers them, with their notes; save and saved first (2026-10-08, the user's ask).</summary>
+    /// <summary>The words in the order the completion offers them, with their notes; save and list first (2026-10-08, the user's ask).</summary>
     public static readonly IReadOnlyList<(string Word, string Note)> Words =
     [
         ("save", "save the video playing, or /youtube save <id|link>; it resumes where it is left"),
-        ("saved", "the saved videos: Enter plays one where it was left; /youtube saved --clear empties it"),
+        ("list", "the saved videos: Enter plays one where it was left; /youtube list --clear empties it"),
         ("play", "play a video: /youtube play <id|link> [<time>]; alone, carry on playing"),
         ("pause", "pause the video"),
         ("resume", "carry on playing"),
@@ -128,9 +131,9 @@ public static class YouTubeCommand
                 return new YouTubeCommandLine(YouTubeVerb.Save);
             case "save" when YouTubeIds.TryParse(rest, out string saving, out _):
                 return new YouTubeCommandLine(YouTubeVerb.Save, rest, saving);
-            case "saved" when rest.Length == 0:
+            case "list" when rest.Length == 0:
                 return new YouTubeCommandLine(YouTubeVerb.Saved);
-            case "saved" when rest.Equals(ClearSwitch, StringComparison.OrdinalIgnoreCase):
+            case "list" when rest.Equals(ClearSwitch, StringComparison.OrdinalIgnoreCase):
                 return new YouTubeCommandLine(YouTubeVerb.ClearSaved);
             case "unsave" when rest.Length == 0:
                 return Usage();
@@ -146,14 +149,14 @@ public static class YouTubeCommand
 
     /// <summary>
     /// The input line's argument list after <c>/youtube </c>: the verbs while the first word is typed; past it, nothing (a search's
-    /// words are free) but <see cref="ClearSwitch"/> after <c>saved</c> (2026-10-08).
+    /// words are free) but <see cref="ClearSwitch"/> after <c>list</c> (2026-10-08).
     /// </summary>
     public static IReadOnlyList<UI.CompletionItem> Complete(string argText)
     {
         ArgumentNullException.ThrowIfNull(argText);
-        if (argText.StartsWith("saved ", StringComparison.OrdinalIgnoreCase))
+        if (argText.StartsWith("list ", StringComparison.OrdinalIgnoreCase))
         {
-            return UI.MentionCompleter.Matches([new("saved " + ClearSwitch, ClearNote)], argText);
+            return UI.MentionCompleter.Matches([new("list " + ClearSwitch, ClearNote)], argText);
         }
 
         return argText.Contains(' ', StringComparison.Ordinal) ? [] : UI.MentionCompleter.Matches(Words.Select(w => new UI.CompletionItem(w.Word, w.Note)).ToList(), argText);

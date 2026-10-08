@@ -738,7 +738,7 @@ public sealed class MenuPane : INoticeSink
                 }
 
                 // A button's key wins while nothing is typed (2026-10-07: a list with keyed buttons that filters too, /docker's r = refresh,
-                // /youtube saved's c = clear all); once a filter is under way every character goes on it.
+                // /youtube list's d = remove and c = clear all); once a filter is under way every character goes on it.
                 bool buttonKey = page.Filter is { Length: 0 } && page.Tabs is null && page.Buttons is { Count: > 0 } offered
                     && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar) && ButtonFor(offered, k.KeyChar) is not null;
                 if (!buttonKey && page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceFlips) is { } typed)
@@ -891,7 +891,7 @@ public sealed class MenuPane : INoticeSink
 
     /// <summary>
     /// An empty list's pane (2026-10-07, the user's call in the consistency pass: <c>/sessions</c>, <c>/queue</c>, <c>/process</c> and
-    /// <c>/youtube saved</c> printed a line and never opened, while <c>/memory</c> opened on one dim row): <paramref name="title"/> over
+    /// <c>/youtube list</c> printed a line and never opened, while <c>/memory</c> opened on one dim row): <paramref name="title"/> over
     /// <paramref name="line"/> dim, until ESC; Enter on the row does nothing. The pane closes as it ends.
     /// </summary>
     public async Task ShowEmptyAsync(string title, string line, CancellationToken cancellationToken)

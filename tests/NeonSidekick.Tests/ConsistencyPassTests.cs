@@ -59,11 +59,11 @@ public class ConsistencyPassTests
         }
     }
 
-    /// <summary>While a filter is typed the letter keys go on it, so the hint stops offering them (<c>c = clear all</c> on /youtube saved).</summary>
+    /// <summary>While a filter is typed the letter keys go on it, so the hint stops offering them (<c>d = remove</c> and <c>c = clear all</c> on /youtube list).</summary>
     [Fact]
     public void AFiltersHint_DropsTheLetterKeys_ItTakes()
     {
-        Assert.Equal("Enter = play · c = clear all · " + MenuFilter.TypeAndCloseKeys, MenuFilter.Hint(YouTubeText.SavedKeys, ""));
+        Assert.Equal("Enter = play · d = remove · c = clear all · " + MenuFilter.TypeAndCloseKeys, MenuFilter.Hint(YouTubeText.SavedKeys, ""));
         Assert.Equal("Enter = play · " + MenuFilter.FilteringKeys, MenuFilter.Hint(YouTubeText.SavedKeys, "c"));
         Assert.Equal("Enter = remove · " + MenuFilter.FilteringKeys, MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, "git"));
         Assert.Equal("Enter = choose · " + MenuFilter.FilteringKeys, MenuFilter.HintBeforeEsc("Enter = choose · d / h / c = browser mode · ESC = keep", "x"));

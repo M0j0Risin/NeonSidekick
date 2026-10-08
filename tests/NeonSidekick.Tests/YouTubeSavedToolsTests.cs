@@ -98,6 +98,27 @@ public sealed class YouTubeSavedToolsTests : IDisposable
     }
 
     /// <summary>The list fills in the titles still missing before it answers (2026-10-07); one still not found keeps its id.</summary>
+    /// <summary>
+    /// The pane's rows in uniform columns (2026-10-08, the user's ask): title, channel and place each starting in one column, the widths
+    /// the widest over the list, a title past <see cref="YouTubeText.SavedTitleWidth"/> cut with an ellipsis; no channel column with none.
+    /// </summary>
+    [Fact]
+    public void SavedPaneRows_LineUpInColumns_CuttingALongTitle()
+    {
+        var bunny = new YouTubeSaved { Id = Bunny, Title = new string('b', 70), Author = "Blender", Duration = 635, Position = 341 };
+        var zoo = new YouTubeSaved { Id = Zoo, Title = "Me at the zoo", Author = "jawed" };
+        var untitled = new YouTubeSaved { Id = Zoo, Watched = true };
+
+        var columns = YouTubeText.SavedColumns([bunny, zoo, untitled]);
+
+        Assert.Equal((YouTubeText.SavedTitleWidth, 7), columns);
+        Assert.Equal(new string('b', YouTubeText.SavedTitleWidth - 1) + "…  Blender  at 5:41 of 10:35", YouTubeText.SavedPaneRow(bunny, columns.Title, columns.Channel));
+        Assert.Equal("Me at the zoo".PadRight(YouTubeText.SavedTitleWidth) + "  jawed    not played yet", YouTubeText.SavedPaneRow(zoo, columns.Title, columns.Channel));
+        Assert.Equal(("video " + Zoo).PadRight(YouTubeText.SavedTitleWidth) + new string(' ', 2 + 7 + 2) + "watched", YouTubeText.SavedPaneRow(untitled, columns.Title, columns.Channel));
+        Assert.Equal("Me at the zoo  not played yet", YouTubeText.SavedPaneRow(zoo with { Author = null }, 13, 0));
+        Assert.Equal((0, 0), YouTubeText.SavedColumns([]));
+    }
+
     [Fact]
     public async Task Saved_LooksUpTheTitlesStillMissing_First()
     {

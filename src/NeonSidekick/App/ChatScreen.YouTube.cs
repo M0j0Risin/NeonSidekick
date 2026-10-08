@@ -208,7 +208,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/youtube saved</c> (2026-10-07): the saved videos on <see cref="YouTubeSavedMenu"/>'s pane, Enter playing one where it was
+    /// <c>/youtube list</c> (2026-10-07): the saved videos on <see cref="YouTubeSavedMenu"/>'s pane, Enter playing one where it was
     /// left; without the pane, the rows as notices through <paramref name="sink"/>.
     /// </summary>
     private Task ShowSavedVideosAsync(INoticeSink sink, CancellationToken cancellationToken)
@@ -236,7 +236,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/youtube saved --clear</c> (2026-10-08, the user's ask): one yes/no (<see cref="ConfirmAsync"/>, <c>/cmdclear</c>'s), then every
+    /// <c>/youtube list --clear</c> (2026-10-08, the user's ask): one yes/no (<see cref="ConfirmAsync"/>, <c>/cmdclear</c>'s), then every
     /// saved video taken off the list; nothing saved is <see cref="YouTubeText.NoneSaved"/>, asked nothing.
     /// </summary>
     private async Task ClearSavedVideosAsync(INoticeSink sink, CancellationToken cancellationToken)

@@ -2004,8 +2004,8 @@ public sealed class SidekickApp
     private YouTube.YouTubeLibrary HeadlessYouTubeLibrary() => new(_settings.ProfileDirectory, _time);
 
     /// <summary>
-    /// Headless <c>/youtube save &lt;id|link&gt;</c>, <c>unsave &lt;n|id|link&gt;</c> and <c>saved</c> (2026-10-07): the answer's lines, a
-    /// refusal led by <c>Error: </c>. With no window, a bare <c>save</c> has nothing to save. <c>saved --clear</c> (2026-10-08) asks
+    /// Headless <c>/youtube save &lt;id|link&gt;</c>, <c>unsave &lt;n|id|link&gt;</c> and <c>list</c> (2026-10-07; <c>saved</c> until 2026-10-08): the answer's lines, a
+    /// refusal led by <c>Error: </c>. With no window, a bare <c>save</c> has nothing to save. <c>list --clear</c> (2026-10-08) asks
     /// nothing: there is no pane to ask on, and the switch typed is the act.
     /// </summary>
     private async Task<IReadOnlyList<string>> HeadlessSavedVideosAsync(YouTube.YouTubeCommandLine line, CancellationToken cancellationToken)

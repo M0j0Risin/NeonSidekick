@@ -89,29 +89,35 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The saved videos (2026-10-07): <c>/youtube save</c> keeps the one playing, <c>save &lt;link&gt;</c> another; the <c>saved</c> pane
-    /// lists them and <c>c</c> clears them all after a yes (2026-10-08; it was <c>d</c>, one removed); <c>unsave &lt;n&gt;</c> takes one
-    /// off by its number.
+    /// The saved videos (2026-10-07): <c>/youtube save</c> keeps the one playing, <c>save &lt;link&gt;</c> another; the <c>list</c> pane
+    /// lists them in columns, <c>d</c> removes the highlighted one and <c>c</c> clears them all, each after a yes (2026-10-08);
+    /// <c>unsave &lt;n&gt;</c> takes one off by its number.
     /// </summary>
     [Fact]
-    public async Task YouTube_Save_TheSavedPane_ClearsAll_AndUnsaveTakesOneOff()
+    public async Task YouTube_Save_TheSavedPane_RemovesOne_ClearsAll_AndUnsaveTakesOneOff()
     {
         YouTubeFixture(key: false);
         _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/youtube play aqz-KE-bpKQ");
         PushLine("/youtube save");
         PushLine("/youtube save https://youtu.be/jNQXAC9IVRw");
-        PushLine("/youtube saved");
+        PushLine("/youtube list");
         _console.Input.PushKey(Keys.Char('c'));
         _console.Input.PushKey(Keys.Enter);                // No: kept, the list again
+        _console.Input.PushKey(Keys.Down);                 // the zoo
+        _console.Input.PushKey(Keys.Char('d'));
+        _console.Input.PushKey(Keys.Down);                 // Yes: the zoo gone, the pane kept on the bunny
+        _console.Input.PushKey(Keys.Enter);
         _console.Input.PushKey(Keys.Escape);
+        PushLine("/youtube save https://youtu.be/jNQXAC9IVRw");
         PushLine("/youtube unsave 1");
-        PushLine("/youtube saved");
+        PushLine("/youtube list");
         _console.Input.PushKey(Keys.Char('c'));
         _console.Input.PushKey(Keys.Down);                 // Yes: the list emptied, the pane closed
         _console.Input.PushKey(Keys.Enter);
-        PushLine("/youtube saved");
+        PushLine("/youtube list");
         _console.Input.PushKey(Keys.Escape);               // the empty list opens its pane too (2026-10-07)
         PushLine("/exit");
 
@@ -120,9 +126,12 @@ public partial class ChatScreenTests
         Assert.Contains("  · Saved \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\"; it resumes where it is left.", output);
         Assert.Contains("  · Saved \"Me at the zoo\"; it resumes where it is left.", output);   // looked up by its link (oEmbed)
         Assert.Contains(YouTubeText.SavedCaption(2), output);
-        Assert.Contains("Me at the zoo — jawed · not played yet", output);
+        Assert.Contains("Big Buck Bunny 60fps 4K - Official Blender Foundation S…  Blender  ", output);   // uniform columns (2026-10-08)
+        Assert.Contains("Me at the zoo" + new string(' ', 43) + "  jawed    not played yet", output);
         Assert.Contains(YouTubeText.ClearPrompt(2), output);
         Assert.Contains(ChatScreen.KeptNotice, output);
+        Assert.Contains("📺 Remove \"Me at the zoo\" from the saved videos?", output);
+        Assert.Contains("Removed \"Me at the zoo\" from the saved videos.", output);
         Assert.Contains("  · Removed \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\" from the saved videos.", output);
         Assert.Contains(YouTubeText.SavedCaption(1), output);
         Assert.Contains(YouTubeText.ClearPrompt(1), output);
@@ -131,7 +140,7 @@ public partial class ChatScreenTests
         Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
     }
 
-    /// <summary><c>/youtube saved --clear</c> (2026-10-08): a yes/no first; No keeps the list, Yes empties it, and an empty list asks nothing.</summary>
+    /// <summary><c>/youtube list --clear</c> (2026-10-08): a yes/no first; No keeps the list, Yes empties it, and an empty list asks nothing.</summary>
     [Fact]
     public async Task YouTube_SavedClear_AsksFirst_ThenEmptiesTheList()
     {
@@ -141,12 +150,12 @@ public partial class ChatScreenTests
         var library = new YouTubeLibrary(_settings.ProfileDirectory);
         library.Add("aqz-KE-bpKQ", "Big Buck Bunny", "Blender");
         library.Add("jNQXAC9IVRw", "Me at the zoo", "jawed");
-        PushLine("/youtube saved --clear");
+        PushLine("/youtube list --clear");
         _console.Input.PushKey(Keys.Enter);                // No
-        PushLine("/youtube saved --clear");
+        PushLine("/youtube list --clear");
         _console.Input.PushKey(Keys.Down);                 // Yes
         _console.Input.PushKey(Keys.Enter);
-        PushLine("/youtube saved --clear");
+        PushLine("/youtube list --clear");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -156,6 +165,29 @@ public partial class ChatScreenTests
         Assert.Contains("  · " + YouTubeText.Cleared(2), output);
         Assert.Contains("  · " + YouTubeText.NoneSaved, output);
         Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
+    }
+
+    /// <summary>The toolbar's 📺 (2026-10-08, the user's ask; the Camera live viewer's until then): a double-click opens the saved videos, as <c>/youtube list</c>.</summary>
+    [Fact]
+    public async Task YouTube_TheToolbarsItem_OpensTheSavedVideos()
+    {
+        YouTubeFixture(key: false);
+        new YouTubeLibrary(_settings.ProfileDirectory).Add("jNQXAC9IVRw", "Me at the zoo", "jawed");
+        _settings.Update(d => d.ToolbarItems = [ToolbarItems.YouTube]);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // an empty line: row 100, the rule 101, the hint row 102, the toolbar 103
+        StepsWhenIdle(
+            input => { input.PushClick(0, 103); input.PushClick(0, 103); },   // 📺
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.SavedCaption(1), output);
+        Assert.Contains("Me at the zoo  jawed  not played yet", output);   // one video: the columns its own widths
+        Assert.Empty(_videoPlayer!.Plays);
+        Assert.Empty(_chat.Requests);
     }
 
     /// <summary>In a search's picker, s saves the highlighted video without playing it (2026-10-07), the picker kept open.</summary>

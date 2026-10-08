@@ -171,15 +171,27 @@ public static class YouTubeText
     /// <summary>The saved-videos pane's label. Pinned.</summary>
     public const string SavedLabel = "📺 Saved videos";
 
-    /// <summary>The saved-videos pane's hint row (type to filter since 2026-10-07; <c>c = clear all</c> for <c>d = remove</c> since 2026-10-08). Pinned.</summary>
-    public const string SavedKeys = "Enter = play · c = clear all · " + UI.MenuFilter.TypeAndCloseKeys;
+    /// <summary>
+    /// The saved-videos pane's hint row (type to filter since 2026-10-07; <c>c = clear all</c> for <c>d = remove</c> on 2026-10-08, and
+    /// later that day both, the user's ask). Pinned.
+    /// </summary>
+    public const string SavedKeys = "Enter = play · d = remove · c = clear all · " + UI.MenuFilter.TypeAndCloseKeys;
 
     /// <summary>
-    /// A list's remove button: the highlighted row taken off after a yes/no (the saved-videos pane's until 2026-10-08, when its
-    /// button became clear all; the skills' version list's still). Two spaces after the glyph, as <c>ProcessMenu.KillButton</c>'s:
+    /// A list's remove button: the highlighted row taken off after a yes/no (the skills' version list's; the saved-videos pane's until
+    /// 2026-10-08, which has <see cref="RemoveSelectedButton"/> since). Two spaces after the glyph, as <c>ProcessMenu.KillButton</c>'s:
     /// Windows Terminal draws ✖ two cells wide over the one space after it.
     /// </summary>
     public const string RemoveButton = "✖  remove";
+
+    /// <summary>
+    /// The saved-videos pane's remove (2026-10-08, the user's ask and word: back beside clear all the same day it went): the highlighted
+    /// video taken off after a yes/no. Pinned.
+    /// </summary>
+    public const string RemoveSelectedButton = "✖  remove selected";
+
+    /// <summary>The key that is <see cref="RemoveSelectedButton"/>.</summary>
+    public const char RemoveKey = 'd';
 
     /// <summary>The search picker's title-row button: the highlighted hit saved without playing it. Pinned.</summary>
     public const string SaveButton = "+ save";
@@ -202,7 +214,7 @@ public static class YouTubeText
     /// <summary>The spinner's label while <c>/youtube save &lt;id|link&gt;</c> looks the video up (2026-10-07).</summary>
     public const string LookingUp = "Looking the video up on YouTube…";
 
-    /// <summary>The spinner's label while <c>/youtube saved</c> looks up the titles still missing (2026-10-07).</summary>
+    /// <summary>The spinner's label while <c>/youtube list</c> looks up the titles still missing (2026-10-07).</summary>
     public const string LookingUpTitles = "Looking up the saved videos' titles…";
 
     /// <summary>The list could not be written (the log has why).</summary>
@@ -238,6 +250,51 @@ public static class YouTubeText
         ArgumentNullException.ThrowIfNull(video);
         string title = video.Title ?? "video " + video.Id;
         return title + (video.Author is { Length: > 0 } author ? " — " + author : "") + " · " + Place(video);
+    }
+
+    /// <summary>The saved pane's title column at most (2026-10-08): a longer title is cut with an ellipsis, the footer showing it whole. Pinned.</summary>
+    public const int SavedTitleWidth = 56;
+
+    /// <summary>The saved pane's channel column at most (2026-10-08), cut the same way.</summary>
+    public const int SavedChannelWidth = 24;
+
+    /// <summary>
+    /// The saved pane's title and channel columns over <paramref name="videos"/> (2026-10-08, the user's ask: uniform columns): the
+    /// widest of each in cells, capped at <see cref="SavedTitleWidth"/> and <see cref="SavedChannelWidth"/>. Taken over the whole list,
+    /// so a filter typed leaves the columns where they are.
+    /// </summary>
+    public static (int Title, int Channel) SavedColumns(IReadOnlyList<YouTubeSaved> videos)
+    {
+        ArgumentNullException.ThrowIfNull(videos);
+        int title = videos.Count == 0 ? 0 : videos.Max(v => UI.TextCells.Width(SavedTitle(v)));
+        int channel = videos.Count == 0 ? 0 : videos.Max(v => UI.TextCells.Width(v.Author ?? ""));
+        return (Math.Min(title, SavedTitleWidth), Math.Min(channel, SavedChannelWidth));
+    }
+
+    /// <summary>
+    /// A saved video as the pane's row (2026-10-08, the user's ask: uniform columns; <see cref="SavedRow"/> until then, which the printed
+    /// list keeps): the title and the channel each padded to its column of <see cref="SavedColumns"/> (cut with an ellipsis past it),
+    /// then the place, two blanks between; no channel column when no video has one. Pinned.
+    /// </summary>
+    public static string SavedPaneRow(YouTubeSaved video, int titleWidth, int channelWidth)
+    {
+        ArgumentNullException.ThrowIfNull(video);
+        string row = Cell(SavedTitle(video), titleWidth) + "  ";
+        if (channelWidth > 0)
+        {
+            row += Cell(video.Author ?? "", channelWidth) + "  ";
+        }
+
+        return row + Place(video);
+    }
+
+    private static string SavedTitle(YouTubeSaved video) => video.Title ?? "video " + video.Id;
+
+    /// <summary><paramref name="text"/> in exactly <paramref name="width"/> cells: cut with an ellipsis, or padded with blanks.</summary>
+    private static string Cell(string text, int width)
+    {
+        string fitted = UI.ScreenPane.Fit(text, width);
+        return fitted + new string(' ', Math.Max(0, width - UI.TextCells.Width(fitted)));
     }
 
     /// <summary>
@@ -310,7 +367,10 @@ public static class YouTubeText
     /// <summary>A saved video taken off the list.</summary>
     public static string Unsaved(YouTubeSaved video) => $"Removed {Name(video)} from the saved videos.";
 
-    /// <summary>The question before the pane's clear all and <c>/youtube saved --clear</c> (2026-10-08). Pinned.</summary>
+    /// <summary>The question before the pane's remove selected.</summary>
+    public static string RemovePrompt(YouTubeSaved video) => $"📺 Remove {Name(video)} from the saved videos?";
+
+    /// <summary>The question before the pane's clear all and <c>/youtube list --clear</c> (2026-10-08). Pinned.</summary>
     public static string ClearPrompt(int count) => count == 1
         ? "📺 Remove the one saved video? Where it was left goes with it."
         : $"📺 Remove all {Videos(count)}? Where each was left goes with them.";

@@ -72,7 +72,7 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.Equal([Zoo], Library().List().Select(v => v.Id));
     }
 
-    /// <summary><c>/youtube saved --clear</c> and the pane's clear all (2026-10-08): every video goes; with none, nothing is written.</summary>
+    /// <summary><c>/youtube list --clear</c> and the pane's clear all (2026-10-08): every video goes; with none, nothing is written.</summary>
     [Fact]
     public void Clear_TakesThemAllOff_AndWithNoneWritesNothing()
     {

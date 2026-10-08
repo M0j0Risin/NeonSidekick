@@ -9206,7 +9206,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPolice));   // the same text either way
         Assert.True(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = false }));
         Assert.False(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCliAdvisor = true }));
-        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "liveview", "comfyview", "comfythumbs", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
+        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "youtube", "comfyview", "comfythumbs", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
         // The disk on the slab while Memory is off (later on 2026-10-03, the user's ask: always drawn, telling which).
         Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "disabled" }));
         Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-only" }));   // 2026-10-04: read-only is still memory
@@ -10979,7 +10979,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/tools ha", ChatScreen.ToolbarWord(ChatScreen.HaToolGlyph));
         Assert.Equal("/tools print", ChatScreen.ToolbarWord(ChatScreen.PrintToolGlyph));
         Assert.Equal("/log", ChatScreen.ToolbarWord(ChatScreen.LogToolGlyph));
-        Assert.Equal("/camera live", ChatScreen.ToolbarWord(ChatScreen.LiveViewToolGlyph));
+        Assert.Equal("/youtube list", ChatScreen.ToolbarWord(ChatScreen.YouTubeToolGlyph));   // the Camera live viewer's until 2026-10-08
+        Assert.False(ChatScreen.TogglesWindow("/youtube list") || ChatScreen.TogglesWindow("/camera live"));
         Assert.Equal("/comfy view", ChatScreen.ToolbarWord(ChatScreen.ComfyViewToolGlyph));
         // The abacus and the window (2026-10-04, the user's ask): the theme picker, which wears it, and /comfy thumbs' browser.
         Assert.Equal("🧮", ChatScreen.ThemeToolGlyph);
@@ -10996,7 +10997,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the picture strip's button, one source
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
         Assert.All(ToolsText.SwitchWords, word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));
-        Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/camera live") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
+        Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
         Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log --file") || ChatScreen.TogglesWindow(null));
         Assert.Null(ChatScreen.ToolbarWord("📂"));
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));

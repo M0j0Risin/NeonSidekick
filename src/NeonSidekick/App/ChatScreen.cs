@@ -1448,13 +1448,13 @@ internal sealed partial class ChatScreen
     public const string PrintToolGlyph = "🖨️";
 
     /// <summary>
-    /// The windows (2026-10-03, the user's picks): the log, <c>/camera live</c>'s window and the picture viewer (the picture
-    /// strip's button glyph), always drawn; a double-click opens the window, or closes it while it is open, as Ctrl+Alt+G, V
-    /// and U do (<see cref="CloseByChord"/>). The Comfy thumb viewer after them (2026-10-04, the user's ask): <c>/comfy thumbs</c>'
-    /// browser, opened or closed the same way, though no chord runs it. Pinned.
+    /// The windows (2026-10-03, the user's picks): the log and the picture viewer (the picture strip's button glyph), always drawn;
+    /// a double-click opens the window, or closes it while it is open, as Ctrl+Alt+G and U do (<see cref="CloseByChord"/>).
+    /// <c>/camera live</c>'s window had one too (📺) until 2026-10-08, the user's call: Ctrl+Alt+V and the typed line still open it.
+    /// The Comfy thumb viewer after them (2026-10-04, the user's ask): <c>/comfy thumbs</c>' browser, opened or closed the same way,
+    /// though no chord runs it. Pinned.
     /// </summary>
     public const string LogToolGlyph = "📄";
-    public const string LiveViewToolGlyph = "📺";
     public const string ComfyViewToolGlyph = ViewerText.StripButton;
     public const string ComfyThumbsToolGlyph = "🪟";
 
@@ -1465,14 +1465,22 @@ internal sealed partial class ChatScreen
     /// </summary>
     public const string ProcessToolGlyph = TranscriptRenderer.ProcessMark;
 
+    /// <summary>
+    /// The YouTube item (2026-10-08, the user's ask): <see cref="YouTubeToolLine"/>, the saved videos' pane, in the place and with the
+    /// glyph the Camera live viewer had — a pane like ⚡'s, so a second double-click off it closes it. Pinned.
+    /// </summary>
+    public const string YouTubeToolGlyph = "📺";
+
     /// <summary>The lines the window items run (2026-10-03): the typed commands their chords run. Pinned.</summary>
     public const string LogToolLine = "/log";
-    public const string LiveViewToolLine = "/camera live";
+
+    /// <summary>The line the YouTube item runs (2026-10-08): <c>/youtube list</c>, the saved videos.</summary>
+    public const string YouTubeToolLine = YouTube.YouTubeCommand.Word + " list";
     public const string ComfyViewToolLine = "/comfy " + ViewerText.ViewWord;
     public const string ComfyThumbsToolLine = "/comfy " + ThumbsText.ThumbsWord;
 
-    /// <summary>Whether <paramref name="line"/> is a window item's (<see cref="LogToolLine"/>, the two viewers' and the thumb viewer's): its double-click closes the window while it is open, as the chord's second press does.</summary>
-    public static bool TogglesWindow(string? line) => line is LogToolLine or LiveViewToolLine or ComfyViewToolLine or ComfyThumbsToolLine;
+    /// <summary>Whether <paramref name="line"/> is a window item's (<see cref="LogToolLine"/>, the picture viewer's and the thumb viewer's): its double-click closes the window while it is open, as the chord's second press does.</summary>
+    public static bool TogglesWindow(string? line) => line is LogToolLine or ComfyViewToolLine or ComfyThumbsToolLine;
 
     /// <summary>
     /// The glyphs every item checked always draws, in strip order: all but the lock and the officer, which come and go with
@@ -1910,7 +1918,7 @@ internal sealed partial class ChatScreen
         PrintToolGlyph => ToolsText.SwitchLine(ToolbarItems.Print),
         LogToolGlyph => LogToolLine,
         ProcessToolGlyph => ProcessWindowText.Word,
-        LiveViewToolGlyph => LiveViewToolLine,
+        YouTubeToolGlyph => YouTubeToolLine,
         ComfyViewToolGlyph => ComfyViewToolLine,
         ComfyThumbsToolGlyph => ComfyThumbsToolLine,
         _ => null,

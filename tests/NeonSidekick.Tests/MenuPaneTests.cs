@@ -42,7 +42,7 @@ public class MenuPaneTests : IDisposable
     }
 
     /// <summary>
-    /// A list that filters and has keyed buttons (2026-10-07: /docker's r = refresh, /youtube saved's c = clear all): a button's key is the
+    /// A list that filters and has keyed buttons (2026-10-07: /docker's r = refresh, /youtube list's d = remove and c = clear all): a button's key is the
     /// button while nothing is typed, any other character starts the filter, and once a filter is under way every character goes on it.
     /// </summary>
     [Fact]
