@@ -75,8 +75,16 @@ public class DesktopShortcutTests
     [Fact]
     public void Made_SaysPutOrReplaced_AndTheCommandLine()
     {
-        Assert.Equal("(🔗 put NeonSidekick (jason) on the desktop: --profile jason)", ShortcutText.Made(@"C:\Users\me\Desktop\NeonSidekick (jason).lnk", "--profile jason", replaced: false));
+        Assert.Equal("(🔗 put NeonSidekick (jason) on the desktop: --profile jason)", ShortcutText.Made("NeonSidekick (jason).lnk", "--profile jason", replaced: false));
         Assert.Equal("(🔗 replaced NeonSidekick (jason) on the desktop: --profile jason)", ShortcutText.Made("NeonSidekick (jason).lnk", "--profile jason", replaced: true));
+    }
+
+    /// <summary>The writer hands over the link's full Windows path (2026-10-07, found in the first Mac run of main's
+    /// /shortcut): off Windows Path does not split on <c>\</c>, and /shortcut needs Windows there anyway.</summary>
+    [WindowsFact]
+    public void Made_NamesTheLink_FromItsFullPath()
+    {
+        Assert.Equal("(🔗 put NeonSidekick (jason) on the desktop: --profile jason)", ShortcutText.Made(@"C:\Users\me\Desktop\NeonSidekick (jason).lnk", "--profile jason", replaced: false));
     }
 
     [Fact]
