@@ -91,7 +91,7 @@ public sealed class SidekickApp
     /// <summary>The <c>/keycheck</c> probe (2026-10-04): <see cref="Hotkeys.WindowsHotkeyProbe"/> on Windows, null elsewhere.</summary>
     private readonly Hotkeys.IHotkeyProbe? _hotkeyProbe;
 
-    /// <summary>The <c>/shortcut</c> writer (2026-10-07): <see cref="Shortcuts.WindowsShortcutWriter"/> on Windows, null elsewhere.</summary>
+    /// <summary>The <c>/shortcut</c> writer (2026-10-07): <see cref="Shortcuts.WindowsShortcutWriter"/> on Windows, <see cref="Shortcuts.MacShortcutWriter"/> on a Mac (2026-10-08), null elsewhere.</summary>
     private readonly Shortcuts.IShortcutWriter? _shortcutWriter;
     private readonly Func<string, Action, Viewer.ILiveView>? _liveView;
     private readonly Action<string>? _showShot;

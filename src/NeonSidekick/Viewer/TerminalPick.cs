@@ -1,5 +1,8 @@
 namespace NeonSidekick.Viewer;
 
+/// <summary>A terminal app on a Mac: its bundle's path when it was found among the ancestors (null otherwise) and its bundle id.</summary>
+public readonly record struct TerminalApp(string? BundlePath, string BundleId);
+
 /// <summary>
 /// Which app TAB brings forward from the app's own windows on a Mac (2026-10-07, Stage 2 phase 4; <see cref="TerminalHandoff"/>'s
 /// Mac side). Measured that day: <c>TERM_PROGRAM</c> said <c>Apple_Terminal</c> in a shell started from Terminal while iTerm2 was
@@ -79,17 +82,34 @@ public static class TerminalPick
     /// </summary>
     public static IReadOnlyList<string> OpenTerminalArguments(IReadOnlyList<string?> ancestorPaths, string? termProgram, string folder)
     {
-        ArgumentNullException.ThrowIfNull(ancestorPaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        var app = AppFor(ancestorPaths, termProgram);
+        return app.BundlePath is { } bundle ? ["-a", bundle, folder] : ["-b", app.BundleId, folder];
+    }
+
+    /// <summary>
+    /// The terminal app <c>/terminal</c> opens and <c>/shortcut</c>'s <c>.command</c> file opens in (2026-10-08, the user's pick: the
+    /// same rule for both): the first ancestor inside an app bundle when that is Terminal or iTerm2 (by its path, so a second copy
+    /// elsewhere is not the one meant), Terminal for any other app; with no bundle among the ancestors (tmux, ssh),
+    /// <paramref name="termProgram"/>'s iTerm2 or else Terminal, by bundle id. Pure.
+    /// </summary>
+    public static TerminalApp AppFor(IReadOnlyList<string?> ancestorPaths, string? termProgram)
+    {
+        ArgumentNullException.ThrowIfNull(ancestorPaths);
         foreach (string? path in ancestorPaths)
         {
             if (AppBundleOf(path) is { } bundle)
             {
-                return Path.GetFileName(bundle) is "Terminal.app" or "iTerm.app" ? ["-a", bundle, folder] : ["-b", TerminalBundle, folder];
+                return Path.GetFileName(bundle) switch
+                {
+                    "Terminal.app" => new TerminalApp(bundle, TerminalBundle),
+                    "iTerm.app" => new TerminalApp(bundle, ITermBundle),
+                    _ => new TerminalApp(null, TerminalBundle),
+                };
             }
         }
 
-        return ["-b", BundleFor(termProgram) == ITermBundle ? ITermBundle : TerminalBundle, folder];
+        return new TerminalApp(null, BundleFor(termProgram) == ITermBundle ? ITermBundle : TerminalBundle);
     }
 
     /// <summary>

@@ -307,7 +307,7 @@ public static class HelpCommands
         ]),
         new("/shortcut",
         [
-            new("/shortcut [<profile>] [--log]", "Put a shortcut on the desktop that starts NeonSidekick in the exe's folder on the loaded profile, or the one named (as `--profile <name>`). With `--log` it also writes a log, `logs\\neon-{ts}.log` beside the exe, the time it starts in the name. It is called `NeonSidekick (<profile>)`, with or without the log; one already there is replaced. Windows only."),
+            new("/shortcut [<profile>] [--log]", "Put a shortcut on the desktop that starts NeonSidekick in the exe's folder on the loaded profile, or the one named (as `--profile <name>`). With `--log` it also writes a log, `logs\\neon-<profile>-{ts}.log` beside the exe, the time it starts in the name. It is called `NeonSidekick (<profile>)`, with or without the log; one already there is replaced. On a Mac it is a `.command` file instead."),
         ]),
         new("/skills",
         [

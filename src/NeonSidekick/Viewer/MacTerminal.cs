@@ -54,6 +54,9 @@ internal static unsafe partial class MacTerminal
     /// </summary>
     public static IReadOnlyList<string> OpenArguments(string folder) => TerminalPick.OpenTerminalArguments(s_ancestorPaths, s_termProgram, folder);
 
+    /// <summary>The terminal app <c>/terminal</c> opens, for <c>/shortcut</c>'s <c>.command</c> file to open in (2026-10-08). Any thread, no AppKit.</summary>
+    public static TerminalApp App() => TerminalPick.AppFor(s_ancestorPaths, s_termProgram);
+
     /// <summary>The terminal brought forward (main thread); false when none was found.</summary>
     public static bool Focus()
     {

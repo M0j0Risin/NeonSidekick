@@ -1081,7 +1081,7 @@ internal sealed partial class ChatScreen
         // The screen (2026-10-04): screenshots into the Screen capture output folder; the model's asks on the pane per Screen capture ask.
         _screenSystem = screenSystem;
         _hotkeyProbe = hotkeyProbe;
-        // /shortcut (2026-10-07): the shell's ShellLink in the app on Windows, a fake in tests, none elsewhere.
+        // /shortcut (2026-10-07): the shell's ShellLink in the app on Windows, a .command file on a Mac (2026-10-08), a fake in tests, none elsewhere.
         _shortcutWriter = shortcutWriter;
         _screenCapture = screenSystem is null ? null : new Screen.ScreenCapture(screenSystem, () => _files, () => _effective().ScreenOutputFolder, _time);
         _screenTools = ScreenTools(CaptureForModelAsync, screenSystem);

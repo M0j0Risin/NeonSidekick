@@ -258,4 +258,22 @@ public sealed class MacWindowsTests
         Assert.Null(TerminalPick.AppBundleOf("Terminal.app/Contents/MacOS/Terminal"));   // not a full path
         Assert.Null(TerminalPick.AppBundleOf(null));
     }
+
+    /// <summary>
+    /// /shortcut's .command file opens in /terminal's terminal (2026-10-08, the user's pick): the bundle found among the ancestors by
+    /// its path, Terminal for any other app, else TERM_PROGRAM's iTerm2 or Terminal by bundle id.
+    /// </summary>
+    [Fact]
+    public void TerminalPick_AppFor_IsTheTerminalTheAppRunsIn_ByPathOrId()
+    {
+        string?[] terminal = ["/bin/zsh", "/usr/bin/login", "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal"];
+        string?[] iterm = ["/bin/zsh", "/Applications/iTerm.app/Contents/MacOS/iTerm2"];
+        string?[] vscode = ["/bin/zsh", "/Applications/Visual Studio Code.app/Contents/MacOS/Electron"];
+
+        Assert.Equal(new TerminalApp("/System/Applications/Utilities/Terminal.app", TerminalPick.TerminalBundle), TerminalPick.AppFor(terminal, "iTerm.app"));
+        Assert.Equal(new TerminalApp("/Applications/iTerm.app", TerminalPick.ITermBundle), TerminalPick.AppFor(iterm, null));
+        Assert.Equal(new TerminalApp(null, TerminalPick.TerminalBundle), TerminalPick.AppFor(vscode, "vscode"));
+        Assert.Equal(new TerminalApp(null, TerminalPick.ITermBundle), TerminalPick.AppFor(["/bin/zsh", null], "iTerm.app"));
+        Assert.Equal(new TerminalApp(null, TerminalPick.TerminalBundle), TerminalPick.AppFor([], null));
+    }
 }

@@ -60,7 +60,7 @@ public class DesktopShortcutTests
         Assert.Equal(exe, plain.Target);
         Assert.Equal(exeFolder, plain.WorkingDirectory);
         Assert.Equal("--profile samuel", plain.Arguments);
-        Assert.Equal("--profile samuel --log " + DesktopShortcut.Quote(Path.Combine(exeFolder, "logs", "neon-{ts}.log")), logged.Arguments);
+        Assert.Equal("--profile samuel --log " + DesktopShortcut.Quote(Path.Combine(exeFolder, "logs", "neon-samuel-{ts}.log")), logged.Arguments);
         Assert.Equal("NeonSidekick on profile samuel", plain.Description);
     }
 
@@ -68,7 +68,8 @@ public class DesktopShortcutTests
     public void TheLogsStampIsTheOneTheLaunchReplaces()
     {
         // {ts} stays as typed in the shortcut; --log stamps it at each launch (SidekickOptions.WithLogStamp).
-        Assert.Contains(SidekickOptions.LogStampToken, DesktopShortcut.LogFileName, StringComparison.Ordinal);
+        Assert.Equal("neon-samuel-" + SidekickOptions.LogStampToken + ".log", DesktopShortcut.LogFileName("samuel"));
+        Assert.Equal("neon-default-{ts}.log", DesktopShortcut.LogFileName("default"));
         Assert.Equal("--log", DesktopShortcut.LogSwitch);
     }
 
@@ -100,6 +101,101 @@ public class DesktopShortcutTests
         Assert.Equal(["jason --log"], ChatScreen.ShortcutItems("jason ", profiles, "samuel").Select(i => i.Text));
         Assert.Equal(["--log default", "--log jason", "--log samuel"], ChatScreen.ShortcutItems("--log ", profiles, "samuel").Select(i => i.Text));
         Assert.Empty(ChatScreen.ShortcutItems("jason --log", profiles, "samuel"));
+    }
+
+    [Theory]
+    [InlineData("/Users/me/x", "'/Users/me/x'")]
+    [InlineData("/a b/it's/$HOME/\"q\"/`x`/\\/{ts}!", "'/a b/it'\\''s/$HOME/\"q\"/`x`/\\/{ts}!'")]
+    [InlineData("", "''")]
+    public void ShellQuote_IsOneZshWord_NothingExpanded(string value, string quoted)
+    {
+        Assert.Equal(quoted, DesktopShortcut.ShellQuote(value));
+    }
+
+    [Fact]
+    public void For_ACommandFile_IsNamedDotCommand_ItsLogQuotedForZsh()
+    {
+        const string exe = "/Users/me/Neon App/NeonSidekick";
+        var spec = DesktopShortcut.For(exe, "/Users/me/Desktop", "samuel", log: true, ShortcutKind.Command);
+
+        Assert.Equal("/Users/me/Desktop/NeonSidekick (samuel).command", spec.LinkPath.Replace('\\', '/'));
+        Assert.Equal("NeonSidekick (samuel).command", DesktopShortcut.LinkName("samuel", ShortcutKind.Command));
+        Assert.Equal("--profile samuel --log " + DesktopShortcut.ShellQuote(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(exe))!, "logs", "neon-samuel-{ts}.log")), spec.Arguments);
+        Assert.Equal("--profile samuel", DesktopShortcut.Arguments("samuel", null, ShortcutKind.Command));
+    }
+
+    [Fact]
+    public void CommandScript_MovesToTheExesFolder_AndExecsIt_OrSaysItHasGone()
+    {
+        var spec = new ShortcutSpec("/d/NeonSidekick (sam).command", "/opt/it's here/NeonSidekick", "--profile sam --log '/opt/it'\\''s here/logs/neon-{ts}.log'", "/opt/it's here", "NeonSidekick on profile sam");
+
+        Assert.Equal(
+            "#!/bin/zsh\n"
+            + "# NeonSidekick on profile sam. " + ShortcutText.ScriptNote + "\n"
+            + "if [[ ! -x '/opt/it'\\''s here/NeonSidekick' ]]; then\n"
+            + "  print -r -- '" + ShortcutText.ScriptGone + "' '/opt/it'\\''s here/NeonSidekick'\n"
+            + "  read -k1 '?" + ShortcutText.ScriptPressAKey + "'\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "cd -- '/opt/it'\\''s here' || exit 1\n"
+            + "exec '/opt/it'\\''s here/NeonSidekick' --profile sam --log '/opt/it'\\''s here/logs/neon-{ts}.log'\n",
+            DesktopShortcut.CommandScript(spec));
+    }
+
+    /// <summary>
+    /// The script run by zsh as Finder would run it (2026-10-08): from the home folder, with <c>/bin/echo</c> copied into an odd folder
+    /// as the exe, so its output is the command line it got, word by word; and with the exe gone, the line and exit code 1.
+    /// </summary>
+    [MacFact]
+    public void CommandScript_RunByZsh_StartsTheExeInItsFolder_WithItsArguments()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;   // [MacFact] skips it; the guard is for the platform analyzer (File.SetUnixFileMode)
+        }
+
+        string folder = Path.Combine(Path.GetTempPath(), "neon-command-" + Guid.NewGuid().ToString("N"), "it's $HOME \"x\"");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            string exe = Path.Combine(folder, "fake-neon");
+            File.WriteAllText(exe, "#!/bin/zsh\nprint -r -- \"$PWD\"; for a in \"$@\"; do print -r -- \"<$a>\"; done\n");
+            File.SetUnixFileMode(exe, (UnixFileMode)0b111_101_101);
+            var spec = DesktopShortcut.For(exe, folder, "sam", log: true, ShortcutKind.Command);
+            File.WriteAllText(spec.LinkPath, DesktopShortcut.CommandScript(spec));
+
+            var (code, output) = RunZsh(spec.LinkPath);
+            Assert.Equal(0, code);
+            Assert.Equal(
+                [Path.GetFullPath(folder), "<--profile>", "<sam>", "<--log>", "<" + Path.Combine(Path.GetFullPath(folder), "logs", "neon-sam-{ts}.log") + ">"],
+                output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Replace("/private/var/", "/var/", StringComparison.Ordinal)).ToArray(),
+                StringComparer.Ordinal);
+
+            File.Delete(exe);
+            (code, output) = RunZsh(spec.LinkPath);
+            Assert.Equal(1, code);
+            Assert.StartsWith(ShortcutText.ScriptGone + " " + exe, output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
+    }
+
+    private static (int Code, string Output) RunZsh(string script)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("/bin/zsh", [script])
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        };
+        using var zsh = System.Diagnostics.Process.Start(start)!;
+        zsh.StandardInput.Close();
+        string output = zsh.StandardOutput.ReadToEnd();
+        Assert.True(zsh.WaitForExit(10_000));
+        return (zsh.ExitCode, output);
     }
 
     [WindowsFact]

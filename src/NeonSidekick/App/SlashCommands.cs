@@ -141,7 +141,8 @@ public enum SlashCommand
 
     /// <summary>
     /// <c>/shortcut [profile] [--log]</c> (2026-10-07, the user's ask): a desktop shortcut that starts this exe on the loaded profile,
-    /// or the one named, with <c>--log</c> a stamped log beside the exe too (<see cref="Shortcuts.DesktopShortcut"/>). Windows only.
+    /// or the one named, with <c>--log</c> a stamped log beside the exe too (<see cref="Shortcuts.DesktopShortcut"/>). Windows, and a Mac
+    /// since 2026-10-08 (a <c>.command</c> file).
     /// </summary>
     Shortcut,
 

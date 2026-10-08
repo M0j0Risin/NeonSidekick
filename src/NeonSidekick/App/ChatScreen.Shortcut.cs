@@ -9,7 +9,10 @@ namespace NeonSidekick.App;
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>Writes <c>/shortcut</c>'s desktop shortcut (<see cref="WindowsShortcutWriter"/> in the app, a fake in tests); null off Windows.</summary>
+    /// <summary>
+    /// Writes <c>/shortcut</c>'s desktop shortcut (<see cref="WindowsShortcutWriter"/>, <see cref="MacShortcutWriter"/> since 2026-10-08,
+    /// a fake in tests); null elsewhere.
+    /// </summary>
     private readonly IShortcutWriter? _shortcutWriter;
 
     /// <summary>
@@ -17,13 +20,13 @@ internal sealed partial class ChatScreen
     /// or the one named (as the profile list spells it), and with <c>--log</c> a stamped log beside the exe
     /// (<see cref="DesktopShortcut"/> decides the name, the command line and the folder it starts in). One already there is
     /// replaced and the notice says so. A temporary profile is allowed: <c>--profile</c> opens one, only the pointer never lands
-    /// there. Off Windows, an error.
+    /// there. On a Mac (2026-10-08) a <c>.command</c> file in the same place, with the same command line; elsewhere, an error.
     /// </summary>
     private void HandleShortcut(string args)
     {
         if (_shortcutWriter is not { } writer)
         {
-            _transcript.Error(ShortcutText.NeedsWindows);
+            _transcript.Error(ShortcutText.NotHere);
             return;
         }
 
@@ -51,7 +54,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var spec = DesktopShortcut.For(exe, writer.DesktopFolder, profile, request.Log);
+        var spec = DesktopShortcut.For(exe, writer.DesktopFolder, profile, request.Log, writer.Kind);
         bool replaced = File.Exists(spec.LinkPath);
         try
         {

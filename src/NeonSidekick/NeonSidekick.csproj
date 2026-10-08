@@ -232,6 +232,9 @@
     <!-- The repository's LICENSE (GPL-3.0 since 2026-09-20) rides inside the exe too: /about's License tab
          reads it from the manifest (AboutText.LicenseText), so the pane and the file can never disagree. -->
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="LICENSE" Visible="false" />
+    <!-- The icon a Mac's /shortcut gives its .command file (2026-10-08, MacShortcutWriter): ApplicationIcon is a Win32
+         resource only, so a Mac build reads the same file from here. -->
+    <EmbeddedResource Include="Assets\app.ico" LogicalName="app.ico" Visible="false" />
     <!-- The execute_code bridge modules (2026-09-21): written beside a run's script so the interpreter finds them
          (Shell/Bridge/CodeLaunch); one per language, plain text, no package to install on the user's side. -->
     <EmbeddedResource Include="Shell\Bridge\neon_tools.py" LogicalName="bridge/neon_tools.py" />

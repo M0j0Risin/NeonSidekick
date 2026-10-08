@@ -29,9 +29,10 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string exeFolder = Path.GetDirectoryName(ShortcutExe)!;
-        string log = " --log " + DesktopShortcut.Quote(Path.Combine(exeFolder, "logs", "neon-{ts}.log"));
+        string Log(string profile) => " --log " + DesktopShortcut.Quote(Path.Combine(exeFolder, "logs", "neon-" + profile + "-{ts}.log"));
+        string log = Log("default");
         Assert.Equal(
-            ["--profile default", "--profile default" + log, "--profile Jason", "--profile Jason" + log],
+            ["--profile default", "--profile default" + log, "--profile Jason", "--profile Jason" + Log("Jason")],
             writer.Written.Select(s => s.Arguments));
         Assert.All(writer.Written, s => Assert.Equal(ShortcutExe, s.Target));
         Assert.All(writer.Written, s => Assert.Equal(exeFolder, s.WorkingDirectory));
@@ -41,6 +42,23 @@ public partial class ChatScreenTests
         Assert.Contains("  · " + ShortcutText.Made(writer.Written[2].LinkPath, "--profile Jason", replaced: false), output);
         Assert.Equal(2, Directory.GetFiles(writer.DesktopFolder).Length);
         Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>A Mac's writer (2026-10-08): the same forms as a .command file, its log quoted for zsh.</summary>
+    [Fact]
+    public async Task Shortcut_AMacsWriter_MakesACommandFile_ItsLogQuotedForZsh()
+    {
+        var writer = _shortcutWriter = new FakeShortcutWriter(Path.Combine(_dir, "Desktop"), ShortcutExe, ShortcutKind.Command);
+        PushLine("/shortcut --log");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string exeFolder = Path.GetDirectoryName(ShortcutExe)!;
+        var spec = Assert.Single(writer.Written);
+        Assert.Equal(Path.Combine(writer.DesktopFolder, "NeonSidekick (default).command"), spec.LinkPath);
+        Assert.Equal("--profile default --log " + DesktopShortcut.ShellQuote(Path.Combine(exeFolder, "logs", "neon-default-{ts}.log")), spec.Arguments);
+        Assert.Contains("  · " + ShortcutText.Made(spec.LinkPath, spec.Arguments, replaced: false), output.Replace("\n", "", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -93,13 +111,13 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Shortcut_WithoutAWriter_NeedsWindows()
+    public async Task Shortcut_WithoutAWriter_IsNotHere()
     {
         PushLine("/shortcut");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ShortcutText.NeedsWindows, output);
+        Assert.Contains("  ✗ " + ShortcutText.NotHere, output);
     }
 }

@@ -59,7 +59,7 @@ Besides `--smoke`, the published exe has checks for real hardware and servers: `
 
 ## Building on a Mac
 
-The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: printing, Docker (the tools, `/docker` and Docker servers), UNC shares, `/shortcut` and `/keycheck`. Everything else works; see [The Mac build](#the-mac-build) for what differs.
+The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: printing, Docker (the tools, `/docker` and Docker servers), UNC shares and `/keycheck`. Everything else works; see [The Mac build](#the-mac-build) for what differs.
 
 NativeAOT can't build a Mac binary from Windows, so build on the Mac itself. You need:
 
@@ -118,7 +118,8 @@ A downloaded build isn't notarized, so macOS quarantines it. Clear that once aft
 | YouTube playback | Works (macOS 14+, WebKit) | Its data is kept per home under `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`. |
 | Performance bar | Works | VRAM reads as GMEM: the GPU's share of the Mac's memory. |
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
-| Printing, Docker, UNC shares, `/shortcut`, `/keycheck` | Left out | `/tools` shows the groups as *off: it needs Windows*; the UNC and Docker tabs still show their rows. |
+| `/shortcut` | Works | A `.command` file on the Desktop with the app's icon, opening in iTerm2 or Terminal as `/terminal` does. |
+| Printing, Docker, UNC shares, `/keycheck` | Left out | `/tools` shows the groups as *off: it needs Windows*; the UNC and Docker tabs still show their rows. |
 | `convert_to_pdf` and `/pdf` | Works, browser only | Edge, Chrome, Brave or Chromium from `/Applications`; the `printer` engine needs Windows. |
 
 ### What differs from Windows

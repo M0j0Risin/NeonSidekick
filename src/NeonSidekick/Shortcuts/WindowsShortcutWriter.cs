@@ -12,6 +12,8 @@ namespace NeonSidekick.Shortcuts;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsShortcutWriter : IShortcutWriter
 {
+    public ShortcutKind Kind => ShortcutKind.Lnk;
+
     public string DesktopFolder => Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
 
     public string? Executable => Environment.ProcessPath is { Length: > 0 } path ? path : null;

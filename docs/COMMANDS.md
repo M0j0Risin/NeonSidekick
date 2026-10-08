@@ -137,7 +137,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/settings`, `//` | Edits and saves the settings. A letter typed on a tab searches every setting. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by its name, tab or description; Enter edits the row found. |
 | `/settings changed` | Lists the settings that are not their defaults, with each default; Enter edits, `r` puts the row back to its default. A changed value reads in the accent colour on every settings tab. |
-| `/shortcut [<profile>] [--log]` | Puts a shortcut on the desktop that starts NeonSidekick on the loaded profile, or the one named; `--log` adds a log beside the exe. Windows only. See [Desktop shortcuts](#desktop-shortcuts). |
+| `/shortcut [<profile>] [--log]` | Puts a shortcut on the desktop that starts NeonSidekick on the loaded profile, or the one named; `--log` adds a log beside the exe. On a Mac it is a `.command` file. See [Desktop shortcuts](#desktop-shortcuts). |
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab each skill shows its version after the scope (`v1` as written, one more for each older text kept in `skills.db`; blank for an external skill; `🔒v1` for a [locked](SETTINGS.md#locking-a-skill) one), and typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) from the web after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | `list` lists the skills unused for that long; `commit` deletes them, folder and record, after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
@@ -416,15 +416,21 @@ A picture on the clipboard goes onto the input line as `[Image #n]` with the lin
 | Typed | The shortcut runs |
 |---|---|
 | `/shortcut` | `NeonSidekick.exe --profile <loaded profile>` |
-| `/shortcut --log` | `NeonSidekick.exe --profile <loaded profile> --log "<exe folder>\logs\neon-{ts}.log"` |
+| `/shortcut --log` | `NeonSidekick.exe --profile <loaded profile> --log "<exe folder>\logs\neon-<loaded profile>-{ts}.log"` |
 | `/shortcut jason` | `NeonSidekick.exe --profile jason` |
-| `/shortcut jason --log` | `NeonSidekick.exe --profile jason --log "<exe folder>\logs\neon-{ts}.log"` |
+| `/shortcut jason --log` | `NeonSidekick.exe --profile jason --log "<exe folder>\logs\neon-jason-{ts}.log"` |
 
 * It is called `NeonSidekick (<profile>)`, with or without the log, and uses the app's icon. One already there is replaced, and the notice says so.
 * Its *Start in* is the exe's folder. The app's working directory is still the profile's *Working directory* setting (`/cwd`).
 * The log path is written out in full, so it still works if you change the shortcut's *Start in*. `{ts}` is left as it is: each launch replaces it with its start time (`20261007-142530`), so every run gets a log of its own. The `logs` folder is made on the first launch that logs.
 * The profile must exist (Tab lists them, and `--log`). The shortcut points at the exe that is running, so make it from the copy you mean to keep.
-* Windows only for now. Headless has no `/shortcut`.
+* Headless has no `/shortcut`.
+
+On a Mac, `/shortcut` writes `NeonSidekick (<profile>).command` to your Desktop instead: a zsh script that Finder runs in a terminal when you double-click it. It takes the same forms, and the log goes to `logs/neon-<profile>-{ts}.log` beside the app.
+
+* It moves to the app's folder (a `.command` file starts in your home folder) and runs the app there with the same `--profile` and `--log`. If the app has since been moved or deleted, the window says so and waits for a key.
+* It has the app's icon and opens in the terminal `/terminal` opens: iTerm2 when the app is running in iTerm2, otherwise Terminal. That choice is saved on the file alone, so other `.command` files keep their own; Get Info › Open with changes it.
+* One already there is deleted and written again, so a new `/shortcut` replaces the old file's terminal and icon too.
 
 ### Custom themes
 
