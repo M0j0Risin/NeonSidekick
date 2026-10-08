@@ -65,7 +65,7 @@ public sealed class InfoPane
     /// </summary>
     public static string FindHint(string find, int index, int count) =>
         count > 0
-            ? $"find: {find} · {(index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = next · Shift+Enter = back · ESC = clear"
+            ? $"find: {find} · {(index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = next · {FindBack} = back · ESC = clear"
             : $"find: {find} · no match · Backspace = erase · ESC = clear";
 
     /// <summary>The rows above the content when the strip fits one row: the strip and the spacer; a strip that takes more rows (<see cref="TabStripLayout"/>) adds them.</summary>
@@ -533,6 +533,16 @@ public sealed class InfoPane
         ConsoleKey.PageUp => -Math.Max(1, _shown),
         _ => null,
     };
+
+    /// <summary>
+    /// The key the finds' hints name for a step back (<see cref="FindHint"/>, <see cref="TranscriptFind.Hint"/>): Shift+Enter,
+    /// but a Mac terminal sends Shift+Enter as a plain CR, so there it is Shift+F3, which <see cref="FindStep"/> reads too
+    /// (2026-10-07, the user's pick after the docs pass; no new key). Pure, so both spellings are pinned on any OS.
+    /// </summary>
+    internal static string FindBackKey(bool mac) => mac ? "Shift+F3" : "Shift+Enter";
+
+    /// <summary><see cref="FindBackKey"/> for this machine.</summary>
+    internal static string FindBack => FindBackKey(OperatingSystem.IsMacOS());
 
     /// <summary>The find's step: +1 for Enter or F3, −1 with Shift; null for every other key (Ctrl+Enter, a line break elsewhere, among them).</summary>
     internal static int? FindStep(ConsoleKeyInfo key) =>

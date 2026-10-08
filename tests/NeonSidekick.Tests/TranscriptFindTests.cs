@@ -93,7 +93,7 @@ public class TranscriptFindTests : IDisposable
         Assert.All(tops, top => Assert.Equal(-1, top));
         Assert.Contains(TranscriptFind.Hint(0, 0), _console.Output);
         Assert.Equal("no match · Backspace = erase · ESC = done", TranscriptFind.Hint(0, 0));
-        Assert.Equal("1 of 2 · Enter = older · Shift+Enter = newer · PgUp/PgDn = scroll · ESC = done", TranscriptFind.Hint(1, 2));
+        Assert.Equal($"1 of 2 · Enter = older · {InfoPane.FindBack} = newer · PgUp/PgDn = scroll · ESC = done", TranscriptFind.Hint(1, 2));
         Assert.Equal("type = find · ESC = done", TranscriptFind.EmptyHint);
     }
 
@@ -159,6 +159,22 @@ public class TranscriptFindTests : IDisposable
     {
         Assert.Equal("/find", Keys.ShortcutLine(new ConsoleKeyInfo('\x06', ConsoleKey.F, shift: true, alt: false, control: true)));
         Assert.Equal("/perfbar", Keys.ShortcutLine(Keys.CtrlF));
+    }
+
+    /// <summary>
+    /// The step back the hints name (2026-10-07): Shift+Enter, Shift+F3 on a Mac, whose terminal sends Shift+Enter as a plain
+    /// Enter; both step back, and the Mac's plain Enter steps on.
+    /// </summary>
+    [Fact]
+    public void TheHintsStepBack_ShiftEnter_ShiftF3OnAMac()
+    {
+        Assert.Equal("Shift+Enter", InfoPane.FindBackKey(mac: false));
+        Assert.Equal("Shift+F3", InfoPane.FindBackKey(mac: true));
+        Assert.Contains(" · " + InfoPane.FindBack + " = newer · ", TranscriptFind.Hint(1, 2));
+        Assert.Contains(" · " + InfoPane.FindBack + " = back · ", InfoPane.FindHint("b", 0, 1));
+        Assert.Equal(-1, InfoPane.FindStep(new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: true, alt: false, control: false)));
+        Assert.Equal(-1, InfoPane.FindStep(new ConsoleKeyInfo('\0', ConsoleKey.F3, shift: true, alt: false, control: false)));
+        Assert.Equal(1, InfoPane.FindStep(new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false)));
     }
 
     [Fact]

@@ -27,7 +27,7 @@ public sealed class TranscriptFind
     /// </summary>
     public static string Hint(int ordinal, int count) =>
         count > 0
-            ? $"{ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = older · Shift+Enter = newer · PgUp/PgDn = scroll · ESC = done"
+            ? $"{ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)} of {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} · Enter = older · {InfoPane.FindBack} = newer · PgUp/PgDn = scroll · ESC = done"
             : "no match · Backspace = erase · ESC = done";
 
     /// <summary>The find row: the label, the text and a bar where the next character goes.</summary>

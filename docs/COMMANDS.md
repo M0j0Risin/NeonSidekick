@@ -556,5 +556,5 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/server`, `/model` | Enter chooses · type to filter |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · ESC denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · ESC denies |
-| `/find` (the transcript) | type to find · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · ESC done, back at the bottom |
-| Info panes (`/help`, `/sys`, `/about`, `/tree`, a `v` view…) | ↑/↓ PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find: Enter or F3 the next match, Shift+Enter or Shift+F3 the one before, Backspace erases, the first ESC clears the find · ESC closes |
+| `/find` (the transcript) | type to find · Enter or F3 older · Shift+Enter or Shift+F3 newer (Shift+F3 on a Mac) · PgUp/PgDn scroll · ESC done, back at the bottom |
+| Info panes (`/help`, `/sys`, `/about`, `/tree`, a `v` view…) | ↑/↓ PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find: Enter or F3 the next match, Shift+Enter or Shift+F3 the one before (Shift+F3 on a Mac), Backspace erases, the first ESC clears the find · ESC closes |

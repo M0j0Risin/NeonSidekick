@@ -724,7 +724,7 @@ public class InfoPaneTests : IDisposable
         int erased = Output.IndexOf(InfoPane.FindHint("b", 0, 1), none, StringComparison.Ordinal);
         Assert.True(none > 0 && erased > none, Output);
         Assert.Equal("find: bz · no match · Backspace = erase · ESC = clear", InfoPane.FindHint("bz", 0, 0));
-        Assert.Equal("find: b · 1 of 1 · Enter = next · Shift+Enter = back · ESC = clear", InfoPane.FindHint("b", 0, 1));
+        Assert.Equal($"find: b · 1 of 1 · Enter = next · {InfoPane.FindBack} = back · ESC = clear", InfoPane.FindHint("b", 0, 1));
         Assert.True(Output.IndexOf(InfoPane.SingleTabHintText, erased, StringComparison.Ordinal) > erased, Output);   // all erased: the pane's own hint
         Assert.False(pane.OverlayOpen);
     }
