@@ -34,6 +34,9 @@ public class YouTubeCommandTests
     [InlineData("save the whales", YouTubeVerb.Search, "save the whales", null, null)]
     [InlineData("saved", YouTubeVerb.Saved, "", null, null)]
     [InlineData("saved by the bell", YouTubeVerb.Search, "saved by the bell", null, null)]
+    [InlineData("saved --clear", YouTubeVerb.ClearSaved, "", null, null)]                         // 2026-10-08
+    [InlineData("saved --CLEAR", YouTubeVerb.ClearSaved, "", null, null)]
+    [InlineData("saved --clear now", YouTubeVerb.Search, "saved --clear now", null, null)]
     [InlineData("unsave 2", YouTubeVerb.Unsave, "2", null, null)]
     [InlineData("unsave aqz-KE-bpKQ", YouTubeVerb.Unsave, "aqz-KE-bpKQ", null, null)]
     [InlineData("unsave the date", YouTubeVerb.Search, "unsave the date", null, null)]
@@ -61,6 +64,18 @@ public class YouTubeCommandTests
         Assert.Equal(["pause", "play"], YouTubeCommand.Complete("p").Select(c => c.Text).Order());
         Assert.Equal(YouTubeCommand.Words.Count, YouTubeCommand.Complete("").Count);
         Assert.Empty(YouTubeCommand.Complete("lofi b"));
+        Assert.Equal(["save", "saved"], YouTubeCommand.Complete("").Take(2).Select(c => c.Text));   // first (2026-10-08, the user's ask)
+    }
+
+    /// <summary>After <c>saved</c> the one switch, <c>--clear</c> (2026-10-08); after any other verb, nothing.</summary>
+    [Fact]
+    public void Complete_OffersClear_AfterSaved()
+    {
+        Assert.Equal(["saved --clear"], YouTubeCommand.Complete("saved ").Select(c => c.Text));
+        Assert.Equal(["saved --clear"], YouTubeCommand.Complete("saved --c").Select(c => c.Text));
+        Assert.Empty(YouTubeCommand.Complete("saved --clear"));   // complete: the list closes
+        Assert.Empty(YouTubeCommand.Complete("saved b"));
+        Assert.Empty(YouTubeCommand.Complete("save "));
     }
 
     [Fact]

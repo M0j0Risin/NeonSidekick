@@ -30,6 +30,9 @@ public enum YouTubeVerb
     /// <summary><c>unsave &lt;n|id|link&gt;</c>: a saved video taken off the list (2026-10-07).</summary>
     Unsave,
 
+    /// <summary><c>saved --clear</c>: every saved video taken off the list, after a yes (2026-10-08, the user's ask).</summary>
+    ClearSaved,
+
     /// <summary>A verb without the argument it needs (the error is the usage).</summary>
     Unknown,
 }
@@ -46,9 +49,17 @@ public static class YouTubeCommand
 {
     public const string Word = "/youtube";
 
-    /// <summary>The words in the order the completion offers them, with their notes.</summary>
+    /// <summary>The switch after <c>saved</c> that empties the list (2026-10-08, the user's word).</summary>
+    public const string ClearSwitch = "--clear";
+
+    /// <summary>The completion's note for <c>saved --clear</c>.</summary>
+    public const string ClearNote = "take every saved video off the list, after a yes";
+
+    /// <summary>The words in the order the completion offers them, with their notes; save and saved first (2026-10-08, the user's ask).</summary>
     public static readonly IReadOnlyList<(string Word, string Note)> Words =
     [
+        ("save", "save the video playing, or /youtube save <id|link>; it resumes where it is left"),
+        ("saved", "the saved videos: Enter plays one where it was left; /youtube saved --clear empties it"),
         ("play", "play a video: /youtube play <id|link> [<time>]; alone, carry on playing"),
         ("pause", "pause the video"),
         ("resume", "carry on playing"),
@@ -58,8 +69,6 @@ public static class YouTubeCommand
         ("unmute", "unmute the video"),
         ("close", "close the video window"),
         ("status", "what the video window plays"),
-        ("save", "save the video playing, or /youtube save <id|link>; it resumes where it is left"),
-        ("saved", "the saved videos: Enter plays one where it was left"),
         ("unsave", "take a saved video off the list: /youtube unsave <n|id|link>"),
         ("search", "search for words that start with one of these: /youtube search <words>"),
     ];
@@ -121,6 +130,8 @@ public static class YouTubeCommand
                 return new YouTubeCommandLine(YouTubeVerb.Save, rest, saving);
             case "saved" when rest.Length == 0:
                 return new YouTubeCommandLine(YouTubeVerb.Saved);
+            case "saved" when rest.Equals(ClearSwitch, StringComparison.OrdinalIgnoreCase):
+                return new YouTubeCommandLine(YouTubeVerb.ClearSaved);
             case "unsave" when rest.Length == 0:
                 return Usage();
             case "unsave" when rest.All(char.IsAsciiDigit) || YouTubeIds.TryParse(rest, out _, out _):
@@ -133,10 +144,18 @@ public static class YouTubeCommand
             : new YouTubeCommandLine(YouTubeVerb.Search, text);
     }
 
-    /// <summary>The input line's argument list after <c>/youtube </c>: the verbs while the first word is typed; past it, nothing (a search's words are free).</summary>
+    /// <summary>
+    /// The input line's argument list after <c>/youtube </c>: the verbs while the first word is typed; past it, nothing (a search's
+    /// words are free) but <see cref="ClearSwitch"/> after <c>saved</c> (2026-10-08).
+    /// </summary>
     public static IReadOnlyList<UI.CompletionItem> Complete(string argText)
     {
         ArgumentNullException.ThrowIfNull(argText);
+        if (argText.StartsWith("saved ", StringComparison.OrdinalIgnoreCase))
+        {
+            return UI.MentionCompleter.Matches([new("saved " + ClearSwitch, ClearNote)], argText);
+        }
+
         return argText.Contains(' ', StringComparison.Ordinal) ? [] : UI.MentionCompleter.Matches(Words.Select(w => new UI.CompletionItem(w.Word, w.Note)).ToList(), argText);
     }
 

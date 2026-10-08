@@ -1,4 +1,3 @@
-using NeonSidekick.Llm.Tools;
 using NeonSidekick.UI;
 using NeonSidekick.YouTube;
 using Spectre.Console;
@@ -10,14 +9,16 @@ namespace NeonSidekick.App;
 /// were saved, each row <see cref="YouTubeText.SavedRow"/>'s (a watched one dim) under the count (<see cref="YouTubeText.SavedCaption"/>).
 /// Enter or a double-click plays the highlighted one in the video window — where it was left (<see cref="YouTubeLibrary.ResumeAt"/>,
 /// through the play the screen hands in) — the pane kept open with the player's answer on its status line; the
-/// <see cref="YouTubeText.RemoveButton"/> (a click, or <see cref="YouTubeText.RemoveKey"/>) takes it off the list after a yes/no (the
-/// cursor on No). The <see cref="ProcessMenu"/> shape, the list read again after every act. Without the pane the screen prints the
-/// rows instead (<c>ChatScreen.ListSavedVideos</c>).
+/// <see cref="QueueMenu.ClearAllButton"/> (a click, or <see cref="QueueMenu.ClearAllKey"/>; 2026-10-08, the user's call: it was the
+/// highlighted video's remove, and one at a time is <c>/youtube unsave</c>'s) takes every saved video off the list after a yes/no (the
+/// cursor on No), the whole list whatever the filter shows, and closes the pane with <see cref="YouTubeText.Cleared"/> on the
+/// transcript — <c>/queue</c>'s clear all. The <see cref="ProcessMenu"/> shape, the list read again after every act. Without the pane
+/// the screen prints the rows instead (<c>ChatScreen.ShowSavedVideosAsync</c>).
 /// </summary>
 internal sealed class YouTubeSavedMenu
 {
-    /// <summary>The page's buttons: the one.</summary>
-    public static readonly IReadOnlyList<MenuButton> Buttons = [new(YouTubeText.RemoveButton, YouTubeText.RemoveKey)];
+    /// <summary>The page's buttons: clear all, the queue pane's (2026-10-08).</summary>
+    public static readonly IReadOnlyList<MenuButton> Buttons = [new(QueueMenu.ClearAllButton, QueueMenu.ClearAllKey)];
 
     private readonly Func<YouTubeLibrary> _library;
     private readonly INoticeSink _transcript;
@@ -87,33 +88,41 @@ internal sealed class YouTubeSavedMenu
                     continue;
                 }
 
-                if (pick.Row < 0 || pick.Row >= shown.Count)
+                if (pick.Row >= 0 && pick.Row < shown.Count)
                 {
-                    continue;   // the no-match row
+                    cursor = shown[pick.Row];
                 }
 
-                cursor = shown[pick.Row];
-                var video = videos[cursor];
-                if (pick.Button < 0)
+                if (pick.Button >= 0)
                 {
-                    Say(_play is null ? "Error: " + YouTubeText.NoWindow : await _play(video, cancellationToken).ConfigureAwait(false));
-                }
-                else if (await ConfirmAsync(YouTubeText.RemovePrompt(video), cancellationToken).ConfigureAwait(false))
-                {
-                    string removed = YouTubeSaveTool.Remove(_library(), null, video.Id);
-                    if (_library().List().Count == 0)
+                    // Clear all (2026-10-08): the whole list, asked about by its count; a yes closes the pane, so the line goes to the transcript.
+                    if (await ConfirmAsync(YouTubeText.ClearPrompt(_library().List().Count), cancellationToken).ConfigureAwait(false))
                     {
-                        // The last one gone: the pane closes, so the line goes to the transcript.
-                        _transcript.Notice(removed);
+                        string cleared = YouTubeText.ClearAnswer(_library().Clear());
+                        if (cleared.StartsWith(ErrorPrefix, StringComparison.Ordinal))
+                        {
+                            _transcript.Error(cleared[ErrorPrefix.Length..]);
+                        }
+                        else
+                        {
+                            _transcript.Notice(cleared);
+                        }
+
                         return;
                     }
 
-                    Say(removed);
+                    _pane.Notice(ChatScreen.KeptNotice);
+                }
+                else if (pick.Row < 0 || pick.Row >= shown.Count)
+                {
+                    continue;   // the no-match row
                 }
                 else
                 {
-                    _pane.Notice(ChatScreen.KeptNotice);
+                    Say(_play is null ? "Error: " + YouTubeText.NoWindow : await _play(videos[cursor], cancellationToken).ConfigureAwait(false));
                 }
+
+                var video = cursor >= 0 && cursor < videos.Count ? videos[cursor] : null;
 
                 // The list again (a play fills in a title and moves a place; the model may save one meanwhile), the cursor on the same
                 // video wherever it moved to, or on the row it stood on once it is gone.
@@ -124,7 +133,7 @@ internal sealed class YouTubeSavedMenu
                     return;
                 }
 
-                int same = videos.ToList().FindIndex(v => v.Id == video.Id);
+                int same = video is null ? -1 : videos.ToList().FindIndex(v => v.Id == video.Id);
                 cursor = same >= 0 ? same : Math.Clamp(cursor, 0, videos.Count - 1);
             }
         }
@@ -134,13 +143,14 @@ internal sealed class YouTubeSavedMenu
         }
     }
 
+    private const string ErrorPrefix = "Error: ";
+
     /// <summary>An answer on the pane's status line: an error as one, anything else a notice.</summary>
     private void Say(string result)
     {
-        const string Prefix = "Error: ";
-        if (result.StartsWith(Prefix, StringComparison.Ordinal))
+        if (result.StartsWith(ErrorPrefix, StringComparison.Ordinal))
         {
-            _pane.Error(result[Prefix.Length..]);
+            _pane.Error(result[ErrorPrefix.Length..]);
         }
         else
         {

@@ -1024,7 +1024,7 @@ public sealed class SidekickApp
                 if (SlashCommands.Parse(text) is (SlashCommand.YouTube, var youTubeArgs))
                 {
                     var youTubeLine = YouTube.YouTubeCommand.Parse(youTubeArgs);
-                    if (youTubeLine.Verb is YouTube.YouTubeVerb.Save or YouTube.YouTubeVerb.Unsave or YouTube.YouTubeVerb.Saved)
+                    if (youTubeLine.Verb is YouTube.YouTubeVerb.Save or YouTube.YouTubeVerb.Unsave or YouTube.YouTubeVerb.Saved or YouTube.YouTubeVerb.ClearSaved)
                     {
                         foreach (string savedRow in await HeadlessSavedVideosAsync(youTubeLine, cancellationToken).ConfigureAwait(false))
                         {
@@ -2005,7 +2005,8 @@ public sealed class SidekickApp
 
     /// <summary>
     /// Headless <c>/youtube save &lt;id|link&gt;</c>, <c>unsave &lt;n|id|link&gt;</c> and <c>saved</c> (2026-10-07): the answer's lines, a
-    /// refusal led by <c>Error: </c>. With no window, a bare <c>save</c> has nothing to save.
+    /// refusal led by <c>Error: </c>. With no window, a bare <c>save</c> has nothing to save. <c>saved --clear</c> (2026-10-08) asks
+    /// nothing: there is no pane to ask on, and the switch typed is the act.
     /// </summary>
     private async Task<IReadOnlyList<string>> HeadlessSavedVideosAsync(YouTube.YouTubeCommandLine line, CancellationToken cancellationToken)
     {
@@ -2019,6 +2020,11 @@ public sealed class SidekickApp
         if (line.Verb == YouTube.YouTubeVerb.Unsave)
         {
             return [Llm.Tools.YouTubeSaveTool.Remove(library, null, line.Text)];
+        }
+
+        if (line.Verb == YouTube.YouTubeVerb.ClearSaved)
+        {
+            return [YouTube.YouTubeText.ClearAnswer(library.Clear())];
         }
 
         await YouTube.YouTubeTitles.FillMissingAsync(library, lookup, cancellationToken).ConfigureAwait(false);

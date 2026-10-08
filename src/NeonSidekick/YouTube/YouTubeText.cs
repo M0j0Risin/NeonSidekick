@@ -164,24 +164,22 @@ public static class YouTubeText
     public const string HelpSummary = "search and play YouTube videos";
 
     /// <summary>A <c>/youtube</c> verb without what it needs.</summary>
-    public const string CommandUsage = "/youtube [<words> | play <id|link> [<time>] | pause | resume | seek <time> | volume <0-100> | mute | unmute | close | status | save [<id|link>] | saved | unsave <n|id|link> | search <words>]";
+    public const string CommandUsage = "/youtube [<words> | play <id|link> [<time>] | pause | resume | seek <time> | volume <0-100> | mute | unmute | close | status | save [<id|link>] | saved [--clear] | unsave <n|id|link> | search <words>]";
 
     // ── The saved videos (2026-10-07, the user's ask) ─────────────────────────
 
     /// <summary>The saved-videos pane's label. Pinned.</summary>
     public const string SavedLabel = "📺 Saved videos";
 
-    /// <summary>The saved-videos pane's hint row (type to filter since 2026-10-07). Pinned.</summary>
-    public const string SavedKeys = "Enter = play · d = remove · " + UI.MenuFilter.TypeAndCloseKeys;
+    /// <summary>The saved-videos pane's hint row (type to filter since 2026-10-07; <c>c = clear all</c> for <c>d = remove</c> since 2026-10-08). Pinned.</summary>
+    public const string SavedKeys = "Enter = play · c = clear all · " + UI.MenuFilter.TypeAndCloseKeys;
 
     /// <summary>
-    /// The saved-videos pane's title-row button: the highlighted video taken off the list after a yes/no. Two spaces after the
-    /// glyph, as <c>ProcessMenu.KillButton</c>'s: Windows Terminal draws ✖ two cells wide over the one space after it.
+    /// A list's remove button: the highlighted row taken off after a yes/no (the saved-videos pane's until 2026-10-08, when its
+    /// button became clear all; the skills' version list's still). Two spaces after the glyph, as <c>ProcessMenu.KillButton</c>'s:
+    /// Windows Terminal draws ✖ two cells wide over the one space after it.
     /// </summary>
     public const string RemoveButton = "✖  remove";
-
-    /// <summary>The key that is <see cref="RemoveButton"/>.</summary>
-    public const char RemoveKey = 'd';
 
     /// <summary>The search picker's title-row button: the highlighted hit saved without playing it. Pinned.</summary>
     public const string SaveButton = "+ save";
@@ -312,8 +310,27 @@ public static class YouTubeText
     /// <summary>A saved video taken off the list.</summary>
     public static string Unsaved(YouTubeSaved video) => $"Removed {Name(video)} from the saved videos.";
 
-    /// <summary>The question before the pane's remove.</summary>
-    public static string RemovePrompt(YouTubeSaved video) => $"📺 Remove {Name(video)} from the saved videos?";
+    /// <summary>The question before the pane's clear all and <c>/youtube saved --clear</c> (2026-10-08). Pinned.</summary>
+    public static string ClearPrompt(int count) => count == 1
+        ? "📺 Remove the one saved video? Where it was left goes with it."
+        : $"📺 Remove all {Videos(count)}? Where each was left goes with them.";
+
+    /// <summary>Every saved video taken off the list (2026-10-08). Pinned.</summary>
+    public static string Cleared(int count) => $"Removed {Videos(count)}.";
+
+    /// <summary>
+    /// What a clear answers, from <see cref="YouTubeLibrary.Clear"/>'s count: <see cref="Cleared"/>, <see cref="NoneSaved"/> for none
+    /// (another clear got there first), or the write's failure led by <c>Error: </c>.
+    /// </summary>
+    public static string ClearAnswer(int? cleared) => cleared switch
+    {
+        null => "Error: " + SaveFailed,
+        0 => NoneSaved,
+        _ => Cleared(cleared.Value),
+    };
+
+    private static string Videos(int count) =>
+        $"{count.ToString(CultureInfo.InvariantCulture)} saved video{(count == 1 ? "" : "s")}";
 
     /// <summary>What names no saved video.</summary>
     public static string NotSaved(string? text) => $"Error: \"{text}\" is no saved video: give its number in the saved list, its id or a link to it.";

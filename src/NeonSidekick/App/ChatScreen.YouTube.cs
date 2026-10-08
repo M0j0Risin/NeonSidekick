@@ -115,6 +115,9 @@ internal sealed partial class ChatScreen
             case YouTubeVerb.Unsave:
                 Show(YouTubeSaveTool.Remove(YouTubeLibraryNow(), _videoPlayer, line.Text), sink);
                 return;
+            case YouTubeVerb.ClearSaved:
+                await ClearSavedVideosAsync(sink, cancellationToken).ConfigureAwait(false);
+                return;
             case YouTubeVerb.Saved:
             {
                 // Any still untitled are looked up first (2026-10-07), under the spinner.
@@ -230,6 +233,29 @@ internal sealed partial class ChatScreen
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// <c>/youtube saved --clear</c> (2026-10-08, the user's ask): one yes/no (<see cref="ConfirmAsync"/>, <c>/cmdclear</c>'s), then every
+    /// saved video taken off the list; nothing saved is <see cref="YouTubeText.NoneSaved"/>, asked nothing.
+    /// </summary>
+    private async Task ClearSavedVideosAsync(INoticeSink sink, CancellationToken cancellationToken)
+    {
+        var library = YouTubeLibraryNow();
+        int count = library.List().Count;
+        if (count == 0)
+        {
+            sink.Notice(YouTubeText.NoneSaved);
+            return;
+        }
+
+        if (!await ConfirmAsync(YouTubeText.ClearPrompt(count), cancellationToken).ConfigureAwait(false))
+        {
+            sink.Notice(KeptNotice);
+            return;
+        }
+
+        Show(YouTubeText.ClearAnswer(library.Clear()), sink);
     }
 
     private async Task<string> PlayVideoAsync(IVideoPlayer player, string id, double? start, CancellationToken cancellationToken)

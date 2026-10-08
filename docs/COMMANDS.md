@@ -179,7 +179,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. The video window is Windows' WebView2 or, on a Mac (macOS 14 or later), WebKit; see [YouTube](TOOLS.md#youtube) for its keys. |
 | `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: carry on, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos (`youtube.json`); its title is looked up without a key where possible. A saved video resumes a few seconds before where it was left; a time you give wins, and one watched to the end starts over. In a search's picker, `s` saves the highlighted one. |
-| `/youtube saved` | The saved videos on the pane, each with where it was left (`at 12:34 of 45:00`, `watched`, `not played yet`); Enter plays one from there, `d` removes one after a yes. Any still without a title are looked up first. |
+| `/youtube saved` | The saved videos on the pane, each with where it was left (`at 12:34 of 45:00`, `watched`, `not played yet`); Enter plays one from there, `c` clears the whole list after a yes. Any still without a title are looked up first. |
+| `/youtube saved --clear` | Takes every saved video off the list, after a yes (headless: straight away). To take off one, use `/youtube unsave`. |
 | `/youtube unsave <n>\|<id>\|<link>` | Takes a saved video off the list, by its number in `/youtube saved`, its id or a link. |
 
 ## Command details
@@ -543,7 +544,7 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/skills` › a skill | Enter on a row: move, rename, edit, revert, `lock`/`unlock`, delete (asks); a locked skill refuses rename, move and delete |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
-| `/youtube saved` | Enter plays · `d` removes (asks) · type to filter |
+| `/youtube saved` | Enter plays · `c` clear all (asks) · type to filter |
 | `/cmdlist` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |
 | *Shell police forbidden strings* | the top row adds · Enter removes (asks) |
 | `/police` | `s` the forbidden strings |

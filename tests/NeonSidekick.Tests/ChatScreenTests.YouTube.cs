@@ -90,10 +90,11 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// The saved videos (2026-10-07): <c>/youtube save</c> keeps the one playing, <c>save &lt;link&gt;</c> another; the <c>saved</c> pane
-    /// lists them and <c>d</c> removes one after a yes; <c>unsave &lt;n&gt;</c> takes one off by its number.
+    /// lists them and <c>c</c> clears them all after a yes (2026-10-08; it was <c>d</c>, one removed); <c>unsave &lt;n&gt;</c> takes one
+    /// off by its number.
     /// </summary>
     [Fact]
-    public async Task YouTube_Save_TheSavedPane_RemovesOne_AndUnsaveTakesOneOff()
+    public async Task YouTube_Save_TheSavedPane_ClearsAll_AndUnsaveTakesOneOff()
     {
         YouTubeFixture(key: false);
         _console.Profile.Height = 40;
@@ -102,14 +103,14 @@ public partial class ChatScreenTests
         PushLine("/youtube save");
         PushLine("/youtube save https://youtu.be/jNQXAC9IVRw");
         PushLine("/youtube saved");
-        _console.Input.PushKey(Keys.Down);                 // the zoo
-        _console.Input.PushKey(Keys.Char('d'));
-        _console.Input.PushKey(Keys.Down);                 // Yes
-        _console.Input.PushKey(Keys.Enter);
-        _console.Input.PushKey(Keys.Escape);
-        PushLine("/youtube saved");
+        _console.Input.PushKey(Keys.Char('c'));
+        _console.Input.PushKey(Keys.Enter);                // No: kept, the list again
         _console.Input.PushKey(Keys.Escape);
         PushLine("/youtube unsave 1");
+        PushLine("/youtube saved");
+        _console.Input.PushKey(Keys.Char('c'));
+        _console.Input.PushKey(Keys.Down);                 // Yes: the list emptied, the pane closed
+        _console.Input.PushKey(Keys.Enter);
         PushLine("/youtube saved");
         _console.Input.PushKey(Keys.Escape);               // the empty list opens its pane too (2026-10-07)
         PushLine("/exit");
@@ -120,11 +121,40 @@ public partial class ChatScreenTests
         Assert.Contains("  · Saved \"Me at the zoo\"; it resumes where it is left.", output);   // looked up by its link (oEmbed)
         Assert.Contains(YouTubeText.SavedCaption(2), output);
         Assert.Contains("Me at the zoo — jawed · not played yet", output);
-        Assert.Contains(YouTubeText.RemovePrompt(new YouTubeSaved { Id = "jNQXAC9IVRw", Title = "Me at the zoo" }), output);
-        Assert.Contains("Removed \"Me at the zoo\" from the saved videos.", output);
-        Assert.Contains(YouTubeText.SavedCaption(1), output);
+        Assert.Contains(YouTubeText.ClearPrompt(2), output);
+        Assert.Contains(ChatScreen.KeptNotice, output);
         Assert.Contains("  · Removed \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\" from the saved videos.", output);
+        Assert.Contains(YouTubeText.SavedCaption(1), output);
+        Assert.Contains(YouTubeText.ClearPrompt(1), output);
+        Assert.Contains("  · " + YouTubeText.Cleared(1), output);
         Assert.Contains("▸ " + YouTubeText.NoneSaved + "\n", output);
+        Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
+    }
+
+    /// <summary><c>/youtube saved --clear</c> (2026-10-08): a yes/no first; No keeps the list, Yes empties it, and an empty list asks nothing.</summary>
+    [Fact]
+    public async Task YouTube_SavedClear_AsksFirst_ThenEmptiesTheList()
+    {
+        YouTubeFixture(key: false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var library = new YouTubeLibrary(_settings.ProfileDirectory);
+        library.Add("aqz-KE-bpKQ", "Big Buck Bunny", "Blender");
+        library.Add("jNQXAC9IVRw", "Me at the zoo", "jawed");
+        PushLine("/youtube saved --clear");
+        _console.Input.PushKey(Keys.Enter);                // No
+        PushLine("/youtube saved --clear");
+        _console.Input.PushKey(Keys.Down);                 // Yes
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/youtube saved --clear");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.ClearPrompt(2), output);
+        Assert.Contains("  · " + ChatScreen.KeptNotice, output);
+        Assert.Contains("  · " + YouTubeText.Cleared(2), output);
+        Assert.Contains("  · " + YouTubeText.NoneSaved, output);
         Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
     }
 

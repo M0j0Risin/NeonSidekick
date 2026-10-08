@@ -177,6 +177,19 @@ public sealed class YouTubeLibrary
         }
     }
 
+    /// <summary>
+    /// Every saved video taken off the list (2026-10-08, the user's ask: <c>/youtube saved --clear</c> and the pane's clear all): how
+    /// many went, 0 with none saved (nothing written), or null when the file could not be written (logged; nothing changed).
+    /// </summary>
+    public int? Clear()
+    {
+        lock (_gate)
+        {
+            int count = Load().Count;
+            return count == 0 ? 0 : Save([]) ? count : null;
+        }
+    }
+
     /// <summary>The saved video <paramref name="id"/> changed by <paramref name="change"/>; false when it is not saved (nothing written) or the write failed.</summary>
     public bool Update(string id, Func<YouTubeSaved, YouTubeSaved> change)
     {
