@@ -114,6 +114,29 @@ public static class MacKeys
         return action is LogViewAction.Copy or LogViewAction.SelectAll ? LogViewAction.None : action;
     }
 
+    /// <summary>
+    /// What a key does in the video window on a Mac (2026-10-07, YouTube playback on macOS): ⌘W closes and ⌃⌘F is full screen (the
+    /// other windows' extras; F11 is macOS's Show Desktop by default), nothing else with ⌘ or ⌥ held, else
+    /// <see cref="VideoKeys.ActionFor"/>'s answer — Esc out of full screen and then closing. What is left goes to the terminal when
+    /// <see cref="TerminalHandoff.Decide"/> wants it (TAB, a Control chord) and to the player otherwise (Space, the arrows, K, M). Pure.
+    /// </summary>
+    public static VideoKeyAction VideoAction(ushort keyCode, ulong flags, bool fullScreen)
+    {
+        int vk = ToVirtualKey(keyCode);
+        bool command = (flags & CommandFlag) != 0;
+        bool control = (flags & ControlFlag) != 0;
+        bool option = (flags & OptionFlag) != 0;
+        if (command)
+        {
+            return option ? VideoKeyAction.None
+                : vk == 'W' && !control ? VideoKeyAction.Close
+                : vk == 'F' && control ? VideoKeyAction.ToggleFullScreen
+                : VideoKeyAction.None;
+        }
+
+        return VideoKeys.ActionFor(vk, fullScreen, control, option);
+    }
+
     private static Dictionary<ushort, int> Build()
     {
         var keys = new Dictionary<ushort, int>

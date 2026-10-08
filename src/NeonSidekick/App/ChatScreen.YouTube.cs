@@ -70,7 +70,7 @@ internal sealed partial class ChatScreen
 
         if (_videoPlayer is not { } player)
         {
-            sink.Error(YouTubeText.NoWindow);
+            sink.Error(OperatingSystem.IsMacOS() ? YouTubeText.NoWindowMac : YouTubeText.NoWindow);
             return;
         }
 

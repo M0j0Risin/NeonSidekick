@@ -14,6 +14,15 @@ public static class VideoText
     /// <summary>Off Windows: no window to play in.</summary>
     public const string Unavailable = "The video window needs Windows; open_url can open the video in the browser instead.";
 
+    /// <summary>
+    /// On a Mac with no window to play in (2026-10-07): no window server (over SSH), a headless run, or macOS before 14 (the window's
+    /// data store needs 14).
+    /// </summary>
+    public const string UnavailableMac = "The video window needs a desktop session and macOS 14 or later; open_url can open the video in the browser instead.";
+
+    /// <summary>A Mac's video page whose web content process ended (a crash, or macOS took it back): the window closes with this as its failure.</summary>
+    public const string ContentEnded = "The video window's web page stopped (its WebKit process ended); play the video again to reopen the window.";
+
     /// <summary>No WebView2 Runtime installed (it ships with Windows 11; Windows 10 may lack it).</summary>
     public const string NoRuntime = "The video window needs the Microsoft Edge WebView2 Runtime, which is not installed (Windows 11 has it; on Windows 10 it is a free download from Microsoft). open_url can open the video in the browser instead.";
 
