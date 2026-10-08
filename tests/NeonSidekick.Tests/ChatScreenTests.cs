@@ -10219,7 +10219,7 @@ public partial class ChatScreenTests : IDisposable
         string raw = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled("About │ General · Components · Licence ") + "\n \n";
+        string strip = rule + "\n" + Titled(AboutText.Label + " │ General · Components · Licence ") + "\n \n";
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         string output = string.Join("\n", raw.Split('\n').Select(l => l.TrimEnd()));
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.

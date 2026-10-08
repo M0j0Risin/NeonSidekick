@@ -20,6 +20,14 @@ public class AboutTextTests
         @"C:\Users\chris\.neonsidekick\profiles\default",
         @"C:\Users\chris\.neonsidekick\models");
 
+    [Fact]
+    public void Label_LeadsWithTheInfoGlyph_ASpaceAfterIt()
+    {
+        // 2026-10-07 (the user's ask): ℹ️ is U+2139 + U+FE0F, two cells as Windows Terminal draws it, then a real space.
+        Assert.Equal("ℹ️ About", AboutText.Label);
+        Assert.Equal(2 + 1 + "About".Length, NeonSidekick.UI.TextCells.Width(AboutText.Label));
+    }
+
     /// <summary>The repository root: the folder above the test binaries that holds the solution file.</summary>
     private static string RepoRoot()
     {

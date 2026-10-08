@@ -62,8 +62,11 @@ public sealed record Component(string Name, string Version, string License, stri
 /// </summary>
 public static class AboutText
 {
-    /// <summary>The info pane's strip label.</summary>
-    public const string Label = "About";
+    /// <summary>
+    /// The info pane's strip label. ℹ️ since 2026-10-07 (the user's ask): a text-default letter carrying U+FE0F, two cells to
+    /// <see cref="UI.TextCells"/> as Windows Terminal draws it, so the space after it stays a real cell.
+    /// </summary>
+    public const string Label = "ℹ️ About";
 
     /// <summary>The tab titles.</summary>
     public const string AboutTabTitle = "General";
