@@ -1466,8 +1466,9 @@ internal sealed partial class ChatScreen
     public const string ProcessToolGlyph = TranscriptRenderer.ProcessMark;
 
     /// <summary>
-    /// The YouTube item (2026-10-08, the user's ask): <see cref="YouTubeToolLine"/>, the saved videos' pane, in the place and with the
-    /// glyph the Camera live viewer had — a pane like ⚡'s, so a second double-click off it closes it. Pinned.
+    /// The YouTube item (2026-10-08, the user's ask): <see cref="YouTubeToolLine"/>, the saved videos' pane, with the glyph the Camera
+    /// live viewer had (in its place too until later that day, then after 🪟, the user's ask) — a pane like ⚡'s, so a second
+    /// double-click off it closes it. Pinned.
     /// </summary>
     public const string YouTubeToolGlyph = "📺";
 
@@ -1918,9 +1919,9 @@ internal sealed partial class ChatScreen
         PrintToolGlyph => ToolsText.SwitchLine(ToolbarItems.Print),
         LogToolGlyph => LogToolLine,
         ProcessToolGlyph => ProcessWindowText.Word,
-        YouTubeToolGlyph => YouTubeToolLine,
         ComfyViewToolGlyph => ComfyViewToolLine,
         ComfyThumbsToolGlyph => ComfyThumbsToolLine,
+        YouTubeToolGlyph => YouTubeToolLine,
         _ => null,
     };
 

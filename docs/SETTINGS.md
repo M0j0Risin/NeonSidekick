@@ -129,9 +129,9 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
-| 📺 | always | `/youtube list`, the saved videos |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
 | 🪟 | always | `/comfy thumbs`, the thumbnail browser on the ComfyUI output folder |
+| 📺 | always | `/youtube list`, the saved videos |
 | 📈 | always | `/perfbar`: hides or shows the performance bar |
 | working directory (right edge) | always | `/cwd browse` |
 | blank space | — | `/settings` |

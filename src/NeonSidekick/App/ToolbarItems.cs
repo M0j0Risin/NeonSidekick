@@ -20,7 +20,8 @@ namespace NeonSidekick.App;
 /// closing the thumbnail browser) — 🪟 was SQL's until then, which took 🛢️. One more on 2026-10-05 (the user's ask): ⚡ Process
 /// after the log, <c>/process</c>'s list of the model's background processes (a pane, not a window). 📺 YouTube in the Camera live
 /// viewer's place on 2026-10-08 (the user's ask: the live viewer's item gone, <c>/camera live</c> and Ctrl+Alt+V still open its window),
-/// <c>/youtube list</c>'s saved videos (a pane); a saved <c>liveview</c> is an unknown word, dropped as any is.
+/// <c>/youtube list</c>'s saved videos (a pane); a saved <c>liveview</c> is an unknown word, dropped as any is. Later that day (the
+/// user's ask) 📺 moved behind 🪟, the two viewers together again.
 /// </summary>
 public static class ToolbarItems
 {
@@ -61,22 +62,23 @@ public static class ToolbarItems
     // The windows (2026-10-03, the user's ask): each opens or closes its window as its Ctrl+Alt chord does.
     public const string Log = "log";
     public const string Process = "process";         // 2026-10-05, the user's ask: ⚡, /process's list (a pane)
-    public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; liveview's place)
     public const string ComfyView = "comfyview";
     public const string ComfyThumbs = "comfythumbs"; // 2026-10-04, the user's ask: 🪟, /comfy thumbs
+    public const string YouTube = "youtube";         // 2026-10-08, the user's ask: 📺, /youtube list (a pane; after 🪟 later that day)
     public const string Path = "path";
 
     /// <summary>
     /// Every item in strip order, the path last (it sits at the row's right). The order is the user's (2026-10-03): the panes,
     /// the disk, the lock and the officer, the tool switches, the log, the two viewers, the chart (the last glyph, later on
     /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04); Process
-    /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08). Pinned.
+    /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
+    /// (the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
         Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
-        Log, Process, YouTube, ComfyView, ComfyThumbs, Perf, Path,
+        Log, Process, ComfyView, ComfyThumbs, YouTube, Perf, Path,
     ];
 
     /// <summary>
@@ -126,9 +128,9 @@ public static class ToolbarItems
         Print => ChatScreen.PrintToolGlyph,
         Log => ChatScreen.LogToolGlyph,
         Process => ChatScreen.ProcessToolGlyph,
-        YouTube => ChatScreen.YouTubeToolGlyph,
         ComfyView => ChatScreen.ComfyViewToolGlyph,
         ComfyThumbs => ChatScreen.ComfyThumbsToolGlyph,
+        YouTube => ChatScreen.YouTubeToolGlyph,
         Path => FolderText.FolderGlyph,
         _ => "",
     };
@@ -167,9 +169,9 @@ public static class ToolbarItems
         Print => "Print",
         Log => "Log",
         Process => "Process",
-        YouTube => "YouTube",
         ComfyView => "Comfy viewer",
         ComfyThumbs => "Comfy thumb viewer",
+        YouTube => "YouTube",
         Path => "Working directory path",
         _ => id,
     };
@@ -195,9 +197,9 @@ public static class ToolbarItems
         Police => "/police",
         Log => ChatScreen.LogToolLine,
         Process => Viewer.ProcessWindowText.Word,
-        YouTube => ChatScreen.YouTubeToolLine,
         ComfyView => ChatScreen.ComfyViewToolLine,
         ComfyThumbs => ChatScreen.ComfyThumbsToolLine,
+        YouTube => ChatScreen.YouTubeToolLine,
         Path => "/cwd browse",
         _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
