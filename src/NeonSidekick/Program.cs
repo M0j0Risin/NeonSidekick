@@ -34,12 +34,27 @@ using Spectre.Console;
 // is off since SqlClient refuses it, and this keeps what the flag gave (App/CulturePin.cs).
 CulturePin.Apply();
 
+// Pictures on a Mac (2026-10-07): ImageIO registered as MagicScaler's codecs before anything touches MagicScaler, which fixes
+// its codec list on first use (Images/ImageIOCodecs). Windows keeps WIC and never calls this.
+if (OperatingSystem.IsMacOS())
+{
+    NeonSidekick.Images.ImageIOCodecs.Register();
+}
+
 // The Claude CLI server's MCP relay (2026-09-30): this executable started by the claude CLI as its MCP server
 // (NeonSidekick --mcp-relay <address> <key>), copying the CLI's stdio to the app's loopback listener. Before anything
 // touches the console: stdout is the MCP pipe, not a screen.
 if (NeonSidekick.Claude.McpRelay.Asked(args))
 {
     return await NeonSidekick.Claude.McpRelay.RunAsync(args[1], args[2]);
+}
+
+// The embedded LLM's guard on a Mac (2026-10-07): this executable started by LlamaServerHost to start llama-server and kill it
+// when this process's stdin closes — which the kernel does when the app dies, however it dies. Before anything touches the
+// console: stdout and stderr are the app's pipes, shared with llama-server's lines.
+if (NeonSidekick.EmbeddedLlm.LlamaGuard.Asked(args))
+{
+    return await NeonSidekick.EmbeddedLlm.LlamaGuard.RunAsync(args);
 }
 
 // Force UTF-8 console output. On Windows the NativeAOT build (InvariantGlobalization) falls back
@@ -62,6 +77,8 @@ catch
 // Terminal.app (and iTerm2 on the alternate screen) draws ⚙️, 🛠️ and the other text-default emoji with U+FE0F one cell wide where other terminals draw two
 // (2026-10-06, measured there): the cell arithmetic follows the terminal, or the toolbar's clicks land on the wrong button.
 NeonSidekick.UI.TextCells.NarrowSelectorSequences = NeonSidekick.UI.TextCells.ForTerminal(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
+// The app macOS asks about the microphone (2026-10-07, sound on a Mac): the terminal, named in the permission's sentences.
+NeonSidekick.Audio.MicrophoneText.Terminal = NeonSidekick.Audio.MicrophoneText.TerminalName(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
 
 var frames = new FrameWriter(Console.OpenStandardOutput());
 Console.SetOut(frames);
@@ -157,7 +174,17 @@ using var shutdown = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
     e.Cancel = true;
-    shutdown.Cancel();
+    try
+    {
+        shutdown.Cancel();
+    }
+    catch (ObjectDisposedException)
+    {
+        // The app is already on its way out (2026-10-07, the user's Mac run: Ctrl+C twice to quit mid-reply). The token is
+        // disposed as Main returns, the handler stays registered until the process is gone, and once raw mode is put back the
+        // terminal turns a late Ctrl+C into SIGINT: unhandled here, it aborted the exit (SIGABRT, crash.log). Nothing is left
+        // to cancel.
+    }
 };
 
 // The bottom pane needs to know where the cursor is; a console that cannot say (redirected
@@ -183,7 +210,12 @@ if (OperatingSystem.IsMacOS() && interactive && geometry is not null && windowsI
 
 using var unixInputScope = unixInput;
 
-// The clipboard: Win32's on Windows, pbcopy/pbpaste on macOS (2026-10-06, the user's call), text only there.
+// The app's own windows on a Mac (2026-10-07, over AppKit): AppKit runs only on the process's main thread, this one, which the
+// run below gives up to it (AppKitHost.Run) for the interactive screen and the smoke. Checked here, before the app is made,
+// since the windows are offered to it only when this is the main thread and a window server is there (none over SSH).
+bool appKit = OperatingSystem.IsMacOS() && (interactive || options.Smoke) && NeonSidekick.Viewer.AppKitHost.Enable();
+
+// The clipboard: Win32's on Windows, the general pasteboard on macOS (pbcopy/pbpaste from 2026-10-06; NSPasteboard, pictures too, since 2026-10-07).
 Func<string?> readClipboard = WindowsClipboard.TryReadText;
 Func<string, bool> copyToClipboard = WindowsClipboard.TrySetText;
 Func<byte[]?> readClipboardImage = WindowsClipboard.TryReadImage;
@@ -194,13 +226,13 @@ if (OperatingSystem.IsMacOS())
     readClipboardImage = MacClipboard.TryReadImage;
 }
 IAnsiConsoleInput? consoleInput = (IAnsiConsoleInput?)windowsInput ?? unixInput;
-var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: readClipboard, copyToClipboard: copyToClipboard, clipboardImage: readClipboardImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : null, liveView: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, openProcessWindow: NeonSidekick.Viewer.ProcessWindow.IsAvailable ? NeonSidekick.Viewer.ProcessWindow.Show : null, closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : null, shortcutWriter: OperatingSystem.IsWindows() ? new NeonSidekick.Shortcuts.WindowsShortcutWriter() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null, videoPlayer: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.VideoWindow.Player : null);
+var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: readClipboard, copyToClipboard: copyToClipboard, clipboardImage: readClipboardImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Camera.MacCameraSystem() : null, liveView: OperatingSystem.IsWindows() || NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, openProcessWindow: NeonSidekick.Viewer.ProcessWindow.IsAvailable ? NeonSidekick.Viewer.ProcessWindow.Show : null, closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Screen.MacScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : null, shortcutWriter: OperatingSystem.IsWindows() ? new NeonSidekick.Shortcuts.WindowsShortcutWriter() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null, videoPlayer: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.VideoWindow.Player : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacVideoWindows.IsAvailable ? NeonSidekick.Viewer.MacVideoWindows.Player : null);
 
 // The console window closed by its X button (2026-10-02, the user's report: Docker server stop on exit never ran then).
 // SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, and Windows ends the
 // process about 5 s on, so the handler does the exit's work itself, on the console's control thread, the process alive
 // until it returns. Cancel stays unset: the window still closes. Ctrl+C, Ctrl+Break and /exit take the usual way out.
-using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGHUP, _ =>
+void OnClosing(System.Runtime.InteropServices.PosixSignalContext _)
 {
     app.ConsoleClosing();
     // The debounced save the normal exit flushes below, as the quarter-second rule asks. A failure must not throw here.
@@ -212,7 +244,15 @@ using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Creat
     {
         DiagnosticLog.Warn(AppSettings.Category, "Settings flush on window close: " + ex.Message);
     }
-});
+}
+
+using var closing = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGHUP, OnClosing);
+
+// On a Mac (2026-10-07, the embedded LLM there) a SIGTERM or SIGQUIT — `kill`, a logout, Activity Monitor's Quit — ends the
+// process with no ProcessExit and no finally (measured that day on .NET 10), so it takes the window close's way out too:
+// the embedded servers killed, the settings flushed. Windows keeps its own (its console has no such signals to send).
+using var terminating = OperatingSystem.IsMacOS() ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, OnClosing) : null;
+using var quitting = OperatingSystem.IsMacOS() ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGQUIT, OnClosing) : null;
 
 // The Themed external windows switch (later on 2026-09-27 for the viewer; every window of ours since 2026-10-03), read from the effective settings on the window's thread.
 NeonSidekick.Viewer.PictureWindow.Themed = () => app.EffectiveSettings.ThemedExternalWindows;
@@ -227,8 +267,9 @@ NeonSidekick.Viewer.PictureMenu.Print = app.PrintPicture;
 NeonSidekick.Viewer.PictureMenu.Reported = app.PictureReported;
 // The app's own windows hand back what they have no use for (2026-10-03): TAB brings the terminal forward, found now, while
 // it is still the window in front, and a Ctrl or Alt chord is queued on the console input as though typed there.
-NeonSidekick.Viewer.TerminalHandoff.Remember();
-NeonSidekick.Viewer.TerminalHandoff.Passed = windowsInput is null ? null : windowsInput.Inject;
+// On a Mac (2026-10-07) the terminal app is found from this process's parents and TERM_PROGRAM, and a chord goes to the termios reader.
+NeonSidekick.Viewer.TerminalHandoff.Remember(Environment.GetEnvironmentVariable("TERM_PROGRAM"));
+NeonSidekick.Viewer.TerminalHandoff.Passed = windowsInput is not null ? windowsInput.Inject : OperatingSystem.IsMacOS() && unixInput is not null ? unixInput.Inject : null;
 // The viewer opens where it last closed (2026-09-28): the profile keeps the corner, written only when it moved, so a close
 // in place logs no change. On the viewer's thread; Update is locked and nothing listens to Changed.
 NeonSidekick.Viewer.PictureWindow.Position = () => settings.Current is { ViewerLeft: int x, ViewerTop: int y } ? (x, y) : null;
@@ -313,10 +354,49 @@ if (OperatingSystem.IsWindows())
     };
 }
 
+// On a Mac (2026-10-07) the video window keeps the same place, and its WebKit data store is named for the home
+// (WebKitPage.StoreId; WebKit keeps it under ~/Library/WebKit/NeonSidekick/WebsiteDataStore/).
+if (OperatingSystem.IsMacOSVersionAtLeast(14) && appKit)
+{
+    NeonSidekick.Viewer.MacVideoWindows.Home = home;
+    NeonSidekick.Viewer.MacVideoWindows.Position = () => settings.Current is { VideoWindowLeft: int x, VideoWindowTop: int y } ? (x, y) : null;
+    NeonSidekick.Viewer.MacVideoWindows.Placed = (x, y) =>
+    {
+        if (settings.Current is not { VideoWindowLeft: int left, VideoWindowTop: int top } || left != x || top != y)
+        {
+            settings.Update(d =>
+            {
+                d.VideoWindowLeft = x;
+                d.VideoWindowTop = y;
+            });
+        }
+    };
+}
+
+// AppKit's own quit (a logout, an Apple event) ends the app as Ctrl+C would, never by AppKit's exit() past the flush below.
+if (OperatingSystem.IsMacOS() && appKit)
+{
+    NeonSidekick.Viewer.AppKitHost.QuitRequested = () =>
+    {
+        try
+        {
+            shutdown.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already on the way out.
+        }
+    };
+}
+
 int exitCode;
 try
 {
-    exitCode = await app.RunAsync(options, shutdown.Token).ConfigureAwait(false);
+    // On a Mac with windows (2026-10-07) the run goes to the pool and this thread runs AppKit's loop until it ends; the windows
+    // still open are closed at its end, and everything below runs here as before.
+    exitCode = OperatingSystem.IsMacOS() && appKit
+        ? NeonSidekick.Viewer.AppKitHost.Run(() => app.RunAsync(options, shutdown.Token))
+        : await app.RunAsync(options, shutdown.Token).ConfigureAwait(false);
 }
 catch (Exception ex) when (ex is not OperationCanceledException)
 {

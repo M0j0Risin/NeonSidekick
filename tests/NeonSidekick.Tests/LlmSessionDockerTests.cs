@@ -203,7 +203,8 @@ public sealed class LlmSessionDockerTests
     [Fact]
     public async Task AProfileSwitch_ToTheEmbeddedModel_WithDockerOff_StopsTheOldProfilesContainer_BeforeTheLoad()
     {
-        if (!EmbeddedLlm.EmbeddedEndpoint.Offered)
+        // Docker servers are Windows-only; the embedded model is offered on a Mac too since 2026-10-07.
+        if (!EmbeddedLlm.EmbeddedEndpoint.Offered || !OperatingSystem.IsWindows())
         {
             return;
         }

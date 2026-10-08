@@ -91,4 +91,34 @@ public sealed class TextCellsNarrowTests
         // Spaced, the strip is as wide in Terminal.app as it is elsewhere unspaced: two cells a glyph, one a gap.
         Assert.Equal(Cells("⚙️ 🛠️ 🎓 💾", narrow: false), Cells(TextCells.SpaceSelectorSequences("⚙️ 🛠️ 🎓 💾", narrow: true), narrow: true));
     }
+
+    /// <summary>
+    /// The panes' titles in Terminal.app and iTerm2 (2026-10-07, the user's screenshot: <c>🛠️Tools</c>, <c>⚙️Settings</c>): the label is
+    /// spaced as the toolbar is, and the strip's layout counts the extra cell, so the tabs and their clicks move with it. The static
+    /// switch is set here and put back: the suite runs serially (<c>AssemblyInfo.cs</c>).
+    /// </summary>
+    [Fact]
+    public void PaneTitles_AreSpaced_WhenTheTerminalDrawsTheGlyphNarrow()
+    {
+        string[] tabs = ["Offered", "Ask"];
+        int wideIndent = InfoPane.TabStripLayout("🛠️ Tools", tabs, 200).Places[0].Column;
+        bool was = TextCells.NarrowSelectorSequences;
+        try
+        {
+            TextCells.NarrowSelectorSequences = true;
+            Assert.Contains("🛠️  Tools", InfoPane.TabStripMarkup("🛠️ Tools", tabs, 0), StringComparison.Ordinal);
+            Assert.Contains("🛠️  Tools", InfoPane.TabStripRows("🛠️ Tools", tabs, 0, 200)[0], StringComparison.Ordinal);
+            Assert.Contains("⚙️  Settings", MenuPane.TitleMarkup("⚙️ Settings"), StringComparison.Ordinal);
+            // One cell narrower glyph, one more space: the first tab stays where it is elsewhere, and so do the clicks.
+            Assert.Equal(wideIndent, InfoPane.TabStripLayout("🛠️ Tools", tabs, 200).Places[0].Column);
+            Assert.Equal(0, InfoPane.TabAt("🛠️ Tools", tabs, wideIndent));
+        }
+        finally
+        {
+            TextCells.NarrowSelectorSequences = was;
+        }
+
+        Assert.Contains("🛠️ Tools", InfoPane.TabStripMarkup("🛠️ Tools", tabs, 0), StringComparison.Ordinal);
+        Assert.DoesNotContain("🛠️  Tools", InfoPane.TabStripMarkup("🛠️ Tools", tabs, 0), StringComparison.Ordinal);
+    }
 }

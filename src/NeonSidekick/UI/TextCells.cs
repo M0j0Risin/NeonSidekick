@@ -29,6 +29,13 @@ public static class TextCells
     /// Terminal.app), where it paints the picture over the cell after it (2026-10-06, the user's ask: the toolbar's ⚙️ 🛠️ 🎓 ran
     /// together there) — so the gap after it is a real cell again, as after a two-cell emoji. Unchanged when not narrow. Pure.
     /// </summary>
+    /// <summary>
+    /// <see cref="SpaceSelectorSequences(string, bool)"/> for this terminal (<see cref="NarrowSelectorSequences"/>): the panes'
+    /// titles too (2026-10-07, the user's iTerm2 screenshot: <c>🛠️Tools</c> and <c>⚙️Settings</c> ran together, the toolbar's fix
+    /// had not reached the tab strip). Unchanged on Windows.
+    /// </summary>
+    public static string Spaced(string text) => SpaceSelectorSequences(text, NarrowSelectorSequences);
+
     public static string SpaceSelectorSequences(string text, bool narrow)
     {
         ArgumentNullException.ThrowIfNull(text);

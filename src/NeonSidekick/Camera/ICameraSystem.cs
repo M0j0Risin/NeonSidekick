@@ -47,6 +47,15 @@ public enum CameraFailure
 
     /// <summary>Anything else; the detail carries the HRESULT.</summary>
     Failed,
+
+    /// <summary>A Mac's camera is suspended: the MacBook's own with its lid closed (2026-10-07).</summary>
+    Suspended,
+
+    /// <summary>macOS is asking the user whether the terminal may use the camera, and had no answer yet (2026-10-07).</summary>
+    Asking,
+
+    /// <summary>A Mac's camera is restricted by a configuration profile or Screen Time (2026-10-07).</summary>
+    Restricted,
 }
 
 /// <summary>A camera failure with its kind; the message is the sentence the user sees.</summary>
@@ -82,8 +91,8 @@ public sealed class CameraException : Exception
 }
 
 /// <summary>
-/// The seam over the platform's cameras (2026-10-02): <see cref="MediaFoundationCameraSystem"/> on Windows, a fake in the
-/// tests, null where there is none. <see cref="CameraSession"/> is the only caller; it opens a stream on a thread of its own
+/// The seam over the platform's cameras (2026-10-02): <see cref="MediaFoundationCameraSystem"/> on Windows,
+/// <see cref="MacCameraSystem"/> over AVFoundation on macOS 14 and later (2026-10-07), a fake in the tests, null where there is none. <see cref="CameraSession"/> is the only caller; it opens a stream on a thread of its own
 /// and reads it there, so an implementation may tie the stream to the opening thread.
 /// </summary>
 public interface ICameraSystem
@@ -103,6 +112,13 @@ public readonly record struct CameraWarmup(int Frames, TimeSpan Time)
 {
     /// <summary>A webcam's: ten frames and 800 ms (the MX Brio settled at its tenth frame, 2026-10-02).</summary>
     public static readonly CameraWarmup Webcam = new(10, TimeSpan.FromMilliseconds(800));
+
+    /// <summary>
+    /// Apple's own cameras on a Mac, the MacBook's built-in one and an iPhone as Continuity Camera (2026-10-07, measured at
+    /// 1280x720): thirty frames and 800 ms. Their first frame comes 0.9–2.1 s after the open, past the 800 ms, and their exposure
+    /// (and the iPhone's focus) settles over the next twenty or so frames, so the frames decide (<see cref="MacCameraRules.WarmupFor"/>).
+    /// </summary>
+    public static readonly CameraWarmup Apple = new(30, TimeSpan.FromMilliseconds(800));
 
     /// <summary>No warm-up: every frame is settled (a fake camera).</summary>
     public static readonly CameraWarmup None = new(0, TimeSpan.Zero);

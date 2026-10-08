@@ -56,8 +56,49 @@ public class VtInputParserTests
         Assert.Equal(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false), keys[3]);
         Assert.True(Keys.IsLineBreak(keys[4]));
         Assert.Equal(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, false), keys[5]);
-        Assert.Equal(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true), keys[6]);
+        Assert.Equal(new ConsoleKeyInfo('\b', ConsoleKey.H, false, false, true), keys[6]);   // Ctrl+H since 2026-10-07, not Ctrl+Backspace
         Assert.Equal(ConsoleKey.Tab, keys[7].Key);
+    }
+
+    /// <summary>
+    /// The chords a Mac terminal sends as control bytes past Ctrl+Z (2026-10-07, the user's finds): BS is Ctrl+H (<c>/help</c>),
+    /// US Ctrl+/ (<c>/settings</c>), GS Ctrl+] (a Mac's <c>/terminal</c>), each with Alt after an ESC; DEL stays Backspace and
+    /// ESC DEL (Option+Delete) Backspace with Alt. The chords' lines are what <see cref="Keys.ShortcutLine"/> makes of them.
+    /// </summary>
+    [Fact]
+    public void BsGsAndUs_AreCtrlH_CtrlBracket_AndCtrlSlash()
+    {
+        var keys = Parse("\b\x1f\x1d\x1b\b\x1b\x7f").Select(Key).ToList();
+
+        Assert.Equal(new ConsoleKeyInfo('\b', ConsoleKey.H, false, false, true), keys[0]);
+        Assert.Equal(new ConsoleKeyInfo('\x1f', ConsoleKey.Oem2, false, false, true), keys[1]);
+        Assert.Equal(new ConsoleKeyInfo('\x1d', ConsoleKey.Oem6, false, false, true), keys[2]);
+        Assert.Equal(new ConsoleKeyInfo('\b', ConsoleKey.H, false, true, true), keys[3]);
+        Assert.Equal(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, true, false), keys[4]);
+        Assert.Equal("/help", Keys.ShortcutLine(keys[0]));
+        Assert.Equal("/settings", Keys.ShortcutLine(keys[1]));
+        Assert.Equal("/header", Keys.ShortcutLine(keys[3]));
+        Assert.Equal(OperatingSystem.IsMacOS() ? "/terminal" : null, Keys.ShortcutLine(keys[2]));
+    }
+
+    /// <summary>
+    /// The Mac's stand-ins for chords its terminals cannot send (2026-10-07, the user's picks): Ctrl+] for Ctrl+. (<c>/terminal</c>),
+    /// Ctrl+D for Ctrl+M (<c>/model</c>, CR being Enter) and Ctrl+Option+A for Ctrl+Alt+M (<c>/memory</c>, ESC CR being Alt+Enter),
+    /// only on a Mac; plain Ctrl+A is still no chord (the line's select-all).
+    /// </summary>
+    [Fact]
+    public void TheMacStandIns_AreChordsOnAMacOnly()
+    {
+        var keys = Parse("\x1d\x04\x1b\x01\x01").Select(Key).ToList();
+        bool mac = OperatingSystem.IsMacOS();
+
+        Assert.Equal(mac ? "/terminal" : null, Keys.ShortcutLine(keys[0]));
+        Assert.Equal(mac ? "/model" : null, Keys.ShortcutLine(keys[1]));
+        Assert.Equal(new ConsoleKeyInfo('\x01', ConsoleKey.A, false, true, true), keys[2]);
+        Assert.Equal(mac ? "/memory" : null, Keys.ShortcutLine(keys[2]));
+        Assert.Null(Keys.ShortcutLine(keys[3]));
+        Assert.Equal("/model", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.M)));   // Windows' own chords stay, everywhere
+        Assert.Equal("/terminal", Keys.ShortcutLine(Keys.CtrlPeriod));
     }
 
     [Fact]

@@ -40,6 +40,9 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests : IDisposable
 {
+    /// <summary>The picture tools a Unix twin's file-tool counts add where there are codecs (2026-10-07: a Mac, through ImageIO).</summary>
+    private static int Pictures => Files.ImageCodecs.Available ? 3 : 0;
+
     private const string TtsHttpUrl = "http://localhost:8880/v1";
 
     /// <summary>The voice a fresh profile sends: the default primary at the default mix over the default second voice (2026-09-16).</summary>
@@ -484,6 +487,20 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  ! " + VoiceSession.NoMicrophoneLine("no wave-in device"), output);
+        Assert.False(_voice.IsReady);
+    }
+
+    /// <summary>The Mac twin (2026-10-07).</summary>
+    [MacFact]
+    public async Task Connect_VoiceOn_NoMicrophone_Warns_Mac()
+    {
+        VoiceOn();
+        _microphones = 0;
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ! " + VoiceSession.NoMicrophoneLine("no input device"), output);
         Assert.False(_voice.IsReady);
     }
 
@@ -3919,7 +3936,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRule, output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab()
     {
         _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
@@ -3940,7 +3957,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
-    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab_Unix()
     {
@@ -3955,7 +3972,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
-        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading($"Files ({14 + Pictures})", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
@@ -4091,7 +4108,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(request, m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen()
     {
         // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
@@ -4125,7 +4142,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
-    /// <summary>The Unix twin of <see cref="Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen_Unix()
     {
@@ -4156,11 +4173,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);   // the pane on: the Markdown rule and the ask rule ride too, so the rule alone is pinned here
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (12)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03
+        Assert.Matches(ToolsHeading($"Files ({12 + Pictures})", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve()
     {
         // delete off by name on /tools (opt-out since later on 2026-09-21; the fresh-profile default from 2026-09-20 until then): the file rule
@@ -4190,7 +4207,7 @@ public partial class ChatScreenTests : IDisposable
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
 
-    /// <summary>The Unix twin of <see cref="Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve_Unix()
     {
@@ -4216,7 +4233,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("delete removes", prompt);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (11)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03
+        Assert.Matches(ToolsHeading($"Files ({11 + Pictures})", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03
         Assert.DoesNotContain("delete removes", output);
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
@@ -4293,7 +4310,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(AskUserTool.ToolName, _chat.Requests[0][0].Text!);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task WithGeometry_SysPromptWithAToolOff_SaysSo_OnThePromptTab_AndTheToolsTabLeavesItOut()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = ["get_working_directory", "read_file", "recall_memory"]; });
@@ -4317,7 +4334,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
     }
 
-    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptWithAToolOff_SaysSo_OnThePromptTab_AndTheToolsTabLeavesItOut"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptWithAToolOff_SaysSo_OnThePromptTab_AndTheToolsTabLeavesItOut"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task WithGeometry_SysPromptWithAToolOff_SaysSo_OnThePromptTab_AndTheToolsTabLeavesItOut_Unix()
     {
@@ -4336,7 +4353,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
         Assert.Contains("── Operating rules ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
-        Assert.Matches(ToolsHeading("Files (12)", null, "search_files"), output);
+        Assert.Matches(ToolsHeading($"Files ({12 + Pictures})", null, "search_files"), output);
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
         Assert.Matches(ToolsHeading("Memory (1)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
@@ -4615,7 +4632,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    /// <summary>The Unix twin of <see cref="WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs_Unix()
     {
@@ -5022,7 +5039,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Tools_WithoutThePane_PrintsTheFiveTabs()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = ["zip"]; });
@@ -5069,7 +5086,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    /// <summary>The Unix twin of <see cref="Tools_WithoutThePane_PrintsTheFiveTabs"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="Tools_WithoutThePane_PrintsTheFiveTabs"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task Tools_WithoutThePane_PrintsTheFiveTabs_Unix()
     {
@@ -5081,7 +5098,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   Camera (1)", output);   // the groups alphabetical since 2026-10-04
         Assert.Contains("  ·   Clock (3)\n  ·     get_current_time      on   ", output);
-        Assert.Contains("  ·   Files (13 of 14)\n", output);
+        Assert.Contains($"  ·   Files ({13 + Pictures} of {14 + Pictures})\n", output);
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  · Options\n  ·   $-mention enabled: on\n", output);
@@ -6358,7 +6375,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Opening working-directory call", output);   // /sys shows the system message alone since 2026-09-26; the request above carries the new path
     }
 
-    [WindowsFact]
+    [Fact]
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
@@ -6367,14 +6384,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
 
-    /// <summary>The Unix twin of <see cref="QuietTools_AreTheMemoryClockTimerAndFileTools"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="QuietTools_AreTheMemoryClockTimerAndFileTools"/> (2026-10-06, the macOS build): zsh the default shell.</summary>
     [UnixFact]
     public void QuietTools_AreTheMemoryClockTimerAndFileTools_Unix()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
         string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.All, ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
-        Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
+        Assert.Equal(expected.Distinct().Order(), ChatScreen.QuietTools.Order());   // FileToolNames.All holds the picture tools where there are codecs (a Mac since 2026-10-07)
     }
 
     [Fact]
@@ -7672,7 +7689,7 @@ public partial class ChatScreenTests : IDisposable
         }
     });
 
-    [WindowsFact]
+    [Fact]
     public async Task Loop_Imagine_RunsTheCommandCountTimes_WithoutTheModel()
     {
         var stub = ComfyServer();
@@ -7689,7 +7706,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>Only the last pass's picture rides with the next message; what /imagine queued before the loop stays.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task Loop_Imagine_OnlyTheLastPassRidesWithTheNextMessage()
     {
         ComfyServer();
@@ -9924,16 +9941,19 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \nEnter", output);
-        // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04) + the gap of 2.
-        Assert.Contains("Ctrl+Home                scroll to the top of the transcript", output);
-        Assert.Contains("Ctrl+End                 scroll to the bottom of the transcript", output);
-        Assert.Contains("Ctrl+C                   copy the selection · stop the speech · cancel the reply · press twice to exit", output);
+        // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04; on a Mac, 2026-10-07,
+        // "Ctrl+Left / Right", Option+Delete standing for it) + the gap of 2.
+        int width = ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Max(r => r.Key.Length) + 2;
+        Assert.Equal(OperatingSystem.IsMacOS() ? 19 : 25, width);
+        Assert.Contains("Ctrl+Home".PadRight(width) + "scroll to the top of the transcript", output);
+        Assert.Contains("Ctrl+End".PadRight(width) + "scroll to the bottom of the transcript", output);
+        Assert.Contains("Ctrl+C".PadRight(width) + "copy the selection · stop the speech · cancel the reply · press twice to exit", output);
         // The command in a column of its own (2026-10-05, the user's pick), after the widest meaning and the gap; none for Ctrl+L.
         var keys = output[output.LastIndexOf("\n \nEnter", StringComparison.Ordinal)..];
         int column = keys.Split('\n').Single(l => l.StartsWith("Ctrl+H ", StringComparison.Ordinal)).IndexOf("/help", StringComparison.Ordinal);
-        Assert.Matches(@"\nCtrl\+H {19}open the help {2,}/help\s*\n", keys);
+        Assert.Matches(@"\nCtrl\+H {" + (width - 6) + @"}open the help {2,}/help\s*\n", keys);
         Assert.Equal(column, keys.Split('\n').Single(l => l.StartsWith("Ctrl+Alt+Q ", StringComparison.Ordinal)).IndexOf("/queue clear", StringComparison.Ordinal));
-        Assert.Matches(@"\nCtrl\+L {19}cancel a background learning turn\s*\n", keys);
+        Assert.Matches(@"\nCtrl\+L {" + (width - 6) + @"}cancel a background learning turn\s*\n", keys);
         Assert.DoesNotContain("F4", output[output.IndexOf("Help │ Basic · Advanced · Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
@@ -9998,7 +10018,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
@@ -10038,7 +10058,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
     }
 
-    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt_Unix()
     {
@@ -10067,7 +10087,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
-        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading($"Files ({14 + Pictures})", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (4)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
@@ -10159,7 +10179,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotMatch(GroupHeading("Memory"), output);   // not offered: left out of the tab (2026-09-26)
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task WithoutGeometry_SysPromptPrintsTheSummary()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -10181,7 +10201,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 
-    /// <summary>The Unix twin of <see cref="WithoutGeometry_SysPromptPrintsTheSummary"/> (2026-10-06, the macOS build): no picture codecs, so three file tools fewer; zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="WithoutGeometry_SysPromptPrintsTheSummary"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
     public async Task WithoutGeometry_SysPromptPrintsTheSummary_Unix()
     {
@@ -10198,7 +10218,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Memory — read-write, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
-        Assert.Contains("  · Files (14)", output);
+        Assert.Contains($"  · Files ({14 + Pictures})", output);
         Assert.Contains("  ·   " + "read_file".PadRight(22) + "Reads a text file", output);
         Assert.DoesNotContain("Questions (1)", output);   // no pane, no ask_user: left out of the tool lines (2026-09-26)
         Assert.DoesNotContain(InfoPane.HintText, output);
@@ -11153,13 +11173,37 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.SwitchForGlyph("x"));
     }
 
+    /// <summary>
+    /// The Keys tab on a Mac (2026-10-07, the user's picks): Windows' list with Option+Delete for Ctrl+Backspace (its BS is Ctrl+H
+    /// there), and Ctrl+], Ctrl+D and Ctrl+Alt+A beside the chords a Mac terminal cannot send, whose rows say where they still work.
+    /// </summary>
+    [Fact]
+    public void KeyRows_OnAMac_AddTheStandIns()
+    {
+        var windows = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: false);
+        var mac = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: true);
+
+        Assert.Equal(windows.Length + 3, mac.Length);
+        Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[8]);
+        string[] keys = mac.Select(r => r.Key).ToArray();
+        Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
+        Assert.Equal("Ctrl+Alt+A", keys[Array.IndexOf(keys, "Ctrl+Alt+C") - 1]);
+        Assert.Equal(new KeyRow("Ctrl+]", "open a terminal in the working directory", "/terminal"), mac.Single(r => r.Key == "Ctrl+]"));
+        Assert.Equal(new KeyRow("Ctrl+D", "open the model picker", "/model"), mac.Single(r => r.Key == "Ctrl+D"));
+        Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
+        Assert.Equal("open the model picker (in the app's windows; Ctrl+D in the terminal)", mac.Single(r => r.Key == "Ctrl+M").Meaning);
+        Assert.Equal(new KeyRow("Ctrl+V / Alt+V", "paste text or pictures (Cmd+V is the terminal's: text only)"), mac[12]);   // pictures off the pasteboard, 2026-10-07
+        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V")),
+            mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A" or "Ctrl+V / Alt+V")));
+    }
+
     [Theory]
     [InlineData(false, false, 51)]   // Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G, U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
     [InlineData(true, false, 52)]
     [InlineData(true, true, 53)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
-        var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon");
+        var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
 
         // The editing keys, then the transcript's scroll (2026-10-05, the user's picks: Ctrl+A, C and X and Alt+V moved up beside
         // the editing keys, Ctrl+Home and End beside PgUp / PgDn, the commands out of the meanings, every meaning verb first).
@@ -13415,7 +13459,7 @@ public partial class ChatScreenTests : IDisposable
         string folder = Path.GetDirectoryName(ComfyPicture("x.png"))!;
         Assert.Equal(folder, Assert.Single(viewed));
         Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(folder), output);
-        Assert.Contains(NeonSidekick.Viewer.ViewerText.Keys, output);
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.KeysHere, output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/comfy"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -13442,7 +13486,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(Path.Combine(files, "docs", "square.bmp"), Assert.Single(viewed));
         Assert.Contains(NeonSidekick.Viewer.ViewerText.Opened(Path.Combine(files, "docs")), output);
-        Assert.Contains(NeonSidekick.Viewer.ViewerText.Keys, output);
+        Assert.Contains(NeonSidekick.Viewer.ViewerText.KeysHere, output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/view"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -14608,7 +14652,7 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/log");
         PushLine("/exit");
         string output = await RunAsync();
-        Assert.Contains("  ✗ " + LogViewText.Unavailable, output);
+        Assert.Contains("  ✗ " + LogViewText.UnavailableHere, output);
 
         _openLogWindow = () => throw new InvalidOperationException("no thread");
         PushLine("/log");
@@ -15153,7 +15197,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>With no viewer (not Windows) a picture is drawn in the transcript as <c>--chat</c> draws it, and a folder is an error.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task View_WithoutAViewer_DrawsThePicture_AndAFolderIsAnError()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15167,7 +15211,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);
-        Assert.Contains("  ✗ " + NeonSidekick.Viewer.ViewerText.Unavailable, output);
+        Assert.Contains("  ✗ " + NeonSidekick.Viewer.ViewerText.UnavailableHere, output);
     }
 
     [Theory]
@@ -15346,7 +15390,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>ComfyUI show prompts (later still on 2026-09-24, the user's ask): off, the picture's line alone; on, the prompt and negative sent, in full, under it — the model's pictures and /imagine alike.</summary>
-    [WindowsTheory]
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task ShowPrompts_PutsWhatWasSentUnderThePicturesLine_OnlyWhenOn(bool on)
@@ -15385,7 +15429,7 @@ public partial class ChatScreenTests : IDisposable
     private string ComfyPicture(string name) => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", name);
 
     /// <summary>The model's picture and an /imagine one gather in the strip, the newest leftmost: → takes the newest, → again the older, Enter opens it.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_GathersTheSessionsPictures_TheArrowsWalkIt_AndEnterOpensTheHighlighted()
     {
         ComfyServer();
@@ -15410,7 +15454,7 @@ public partial class ChatScreenTests : IDisposable
     /// The strip's keys under a reply (2026-09-28, the user's report: the arrows did nothing until the turn ended): → at the
     /// empty line highlights the picture and Enter opens it, the reply running on, and nothing is sent.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_TheArrowsAndEnter_WorkUnderAReply()
     {
         ComfyServer();
@@ -15441,7 +15485,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A double-click on a strip tile opens it, as one on a transcript picture does: the tile sits on the strip's bottom rows, over the upper rule.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_ATileDoubleClicked_Opens()
     {
         ComfyServer();
@@ -15459,7 +15503,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>
     /// One click on a strip tile highlights it (2026-09-28, the user's ask) and moves an open viewer to it; nothing opens.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_ATileClickedOnce_IsHighlighted_AndTheViewerFollows()
     {
         ComfyServer();
@@ -15478,7 +15522,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A double-click on a strip tile highlights it at the first click and opens it at the second (2026-09-28).</summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_ATileDoubleClicked_IsHighlighted_AndOpened()
     {
         ComfyServer();
@@ -15497,7 +15541,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>The same under a reply (2026-09-28): the watcher's click hook highlights the tile at the first click and opens it at the second, the reply running on.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_ATileDoubleClicked_UnderAReply_IsHighlighted_AndOpened()
     {
         ComfyServer();
@@ -15535,7 +15579,7 @@ public partial class ChatScreenTests : IDisposable
     /// as a dropped file does — an <c>[Image #1]</c> token, the picture beside the message — and the hint row said
     /// <see cref="InputLine.DropOnLineHint"/> while the drag lasted. The input row at 100, the tile at (1–4, 97–98).
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_ATileDraggedOntoTheLine_IsAttached()
     {
         ComfyServer();
@@ -15557,7 +15601,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A tile dragged and let go anywhere but the input rows is nothing: no token, only the /imagine note's picture; a press and a release in place is no drag either.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_ATileLetGoOffTheLine_IsNothing()
     {
         ComfyServer();
@@ -15583,7 +15627,7 @@ public partial class ChatScreenTests : IDisposable
     /// The same drag under a reply (2026-09-28): the live row takes the press, the drag and the drop, the picture waits on
     /// the draft, and the line sends it once the reply is done.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_ATileDraggedOntoTheLine_UnderAReply_IsAttached()
     {
         ComfyServer();
@@ -15648,7 +15692,7 @@ public partial class ChatScreenTests : IDisposable
     /// to the viewer. The input row at 100, the upper rule at 99, the strip's own rule with the
     /// button at its left edge (2026-09-28), <see cref="ScreenPane.StripPaneRows"/> over the upper rule.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_TheViewerButton_OneClick_OpensTheOutputFolder()
     {
         ComfyServer();
@@ -15666,7 +15710,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>With no viewer to open (not Windows) the strip's rule is bare, and a click there opens nothing.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_WithoutAViewer_HasNoButton()
     {
         ComfyServer();
@@ -15684,7 +15728,7 @@ public partial class ChatScreenTests : IDisposable
     /// The close × at the right of the strip's rule (2026-09-28, the user's ask): one click puts the strip away — the arrows
     /// and the Enter are the line's again, nothing opens — until the next picture, which brings it back with both.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_TheCloseX_OneClick_HidesItUntilTheNextPicture()
     {
         ComfyServer();
@@ -15712,7 +15756,7 @@ public partial class ChatScreenTests : IDisposable
     /// The 🎞️ the upper rule carries while the × has the strip put away (2026-10-03, the user's ask): one click brings the
     /// strip back with its pictures, so → and Enter open one again with no new picture made.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_TheUpperRulesFilm_OneClick_BringsAClosedStripBack()
     {
         ComfyServer();
@@ -15763,7 +15807,7 @@ public partial class ChatScreenTests : IDisposable
         }
         else
         {
-            Assert.Contains(NeonSidekick.Viewer.ViewerText.Unavailable, output);
+            Assert.Contains(NeonSidekick.Viewer.ViewerText.UnavailableHere, output);
         }
     }
 
@@ -15803,7 +15847,7 @@ public partial class ChatScreenTests : IDisposable
     /// the strip, then a picture the strip does not hold is ignored — the highlight stays, so → (which would take the newest
     /// from nothing) stays on the oldest. Always, since the strip sync setting went (later that day, the user's call).
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_TheViewersKeys_HighlightTheSamePicture()
     {
         ComfyServer();
@@ -15830,7 +15874,7 @@ public partial class ChatScreenTests : IDisposable
     /// The strip's arrows move an open viewer (2026-09-28; always since the strip sync setting went later that day): →
     /// hands the highlighted picture's full path over; ← off the newest lets go and hands nothing.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task PictureStrip_TheArrows_MoveTheViewer()
     {
         ComfyServer();
@@ -18372,7 +18416,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A dropped image goes to the model as an image part beside the text, stays in the history for the next turn, and /copy quotes its label.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task ADroppedImage_IsAnImagePart_ThatStaysInTheHistory()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18407,7 +18451,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A picture pasted off the clipboard is the same image part, thumbnail and label as a dropped file, under its clipboard name.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task APastedClipboardPicture_IsAnImagePart_LikeADroppedFile()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18435,7 +18479,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>Two pictures on one line are tiled side by side under it, a gap between.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task TwoDroppedImages_AreTiledUnderTheLine()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18453,7 +18497,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>Several files dropped at once — one paste, a path per line — are a token each, sent as one part each, tiled under the line.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task SeveralImagesDroppedAtOnce_AreEachAPart_AndTiled()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -18472,7 +18516,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› [Image #1] [Image #2]\n  ▀▀▀▀  ▀▀▀▀\n  ▀▀▀▀  ▀▀▀▀\n", output);
     }
     /// <summary>With the General toggle off the picture is sent and labelled as ever, and nothing is drawn under the line.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task ADroppedImage_WithThumbnailsOff_DrawsNoBlock()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; });
@@ -18492,7 +18536,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("● A pink square.", output);
     }
     /// <summary>The thumbnail is scaled to the size setting's box: a wide picture fills its columns (64 at medium, 48 at small), one half-block row at 2 px tall.</summary>
-    [WindowsTheory]
+    [Theory]
     [InlineData("tiny", 32)]
     [InlineData("small", 48)]
     [InlineData("medium", 64)]
@@ -18519,7 +18563,7 @@ public partial class ChatScreenTests : IDisposable
     /// two-cell margin since 2026-10-03; a second one no longer fits beside it, so it wraps to a row of its own below the first
     /// rather than sharing the row.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task DroppedImages_AtFullSize_FillTheWindow_AndStackBelowEachOther()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageThumbnailSize = "fullsize"; });
@@ -18541,7 +18585,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A hand-edited size that is none of the four warns once and draws small.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task ADroppedImage_WithAnUnknownSizeSaved_WarnsAndDrawsSmall()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageThumbnailSize = "huge"; });
@@ -18558,7 +18602,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A /command sent with an image on the line runs as typed; the picture is dropped with a notice.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task AnImage_OnACommandLine_IsIgnoredWithANotice()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -19163,7 +19207,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>The model's own way to a picture: the 🛠️ note, the thumbnail under it, the carrier after the tool message, and the picture still there for a follow-up.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task Turn_ModelViewsAnImage_ShowsTheNoteAndTheThumbnail_AndTheCarrierFollowsTheResult()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -19198,7 +19242,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>A batch in one call: one 🛠️ line per path, both thumbnails side by side, one carrier with two parts.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task Turn_ModelViewsTwoImagesInOneCall_DrawsBothThumbnails_OneCarrier()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -19221,7 +19265,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ConversationHistory.ImageCarrierText(["a.bmp", "b.bmp"]), carrier.Text);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Turn_ModelViewsAnImage_WithThumbnailsOff_DrawsNoBlock()
     {
         _settings.Update(d =>
@@ -22758,7 +22802,7 @@ public partial class ChatScreenTests : IDisposable
         }
     };
 
-    [WindowsFact]
+    [Fact]
     public async Task APictureDoubleClicked_OpensInTheImageEditor_TheSettingsCommandPassed_AndNoLinePrinted()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = "mspaint"; });
@@ -22784,7 +22828,7 @@ public partial class ChatScreenTests : IDisposable
     /// setting empty and a viewer to open, the picture's full path goes to it and the registered app is not started;
     /// <c>system</c> sends it to the registered app (the old empty); a viewer that will not start falls back to that app.
     /// </summary>
-    [WindowsTheory]
+    [Theory]
     [InlineData("", false, true)]
     [InlineData("System", false, false)]
     [InlineData("", true, false)]
@@ -22831,7 +22875,7 @@ public partial class ChatScreenTests : IDisposable
     /// A <c>/loop</c> wait keeps the mouse (2026-09-24, the user's ask: the pictures froze while a loop
     /// waited): a picture double-clicked in the wait opens, and ESC after it still ends the loop.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task APictureDoubleClicked_DuringALoopWait_Opens_AndEscStillEndsTheLoop()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageEditor = "mspaint"; });

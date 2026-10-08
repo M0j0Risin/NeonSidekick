@@ -125,6 +125,7 @@ public sealed class SidekickApp
     private volatile ChatScreen? _screen;
     private readonly string _externalSkills;
     private readonly Func<int> _inputDeviceCount;
+    private readonly Func<string?> _microphoneRefusal;
     private readonly Func<string, string, IWakeWordDetector> _wakeDetectorFactory;
     private readonly TimeProvider _time;
     private readonly ScreenGeometry? _geometry;
@@ -149,13 +150,13 @@ public sealed class SidekickApp
     /// <param name="probe">Endpoint discovery; defaults to a real <see cref="HttpClient"/>. Tests pass one over a stub handler.</param>
     /// <param name="contextProbe">The context-window probe run after each connect; defaults to a real <see cref="HttpClient"/>. Tests pass one over the same stub.</param>
     /// <param name="chatClientFactory">Builds the chat client for a resolved endpoint; defaults to <see cref="OpenAICompatibleChatClient"/>. Tests return a fake.</param>
-    /// <param name="playbackFactory">Builds the speaker output for a format; defaults to <see cref="WinMmAudioPlayback"/>. Tests return a fake.</param>
+    /// <param name="playbackFactory">Builds the speaker output for a format; defaults to <see cref="AudioSupport.DefaultPlayback"/> (WinMM on Windows, AudioQueue on macOS). Tests return a fake.</param>
     /// <param name="synthesizerFactory">Builds the synthesizer for a <see cref="SynthesizerRequest"/>; defaults to <see cref="KokoroHttpSynthesizer"/> over a URL and <see cref="KokoroInProcessSynthesizer"/> over a model path. Tests return a fake.</param>
-    /// <param name="captureFactory">Builds the microphone for a format; defaults to <see cref="WinMmAudioCapture"/>. Tests return a fake.</param>
+    /// <param name="captureFactory">Builds the microphone for a format; defaults to <see cref="AudioSupport.DefaultCapture"/> (WinMM on Windows, AudioQueue on macOS). Tests return a fake.</param>
     /// <param name="recognizerFactory">Builds the recognizer for a model path; defaults to <see cref="WhisperNetTranscriber"/>.</param>
     /// <param name="vadFactory">Builds the voice activity detector for a model path; defaults to <see cref="SileroVad"/>.</param>
     /// <param name="modelHttpClient">Downloads model files; defaults to a client with no timeout (a 500 MB model over a slow link must not be cut at 100 s).</param>
-    /// <param name="inputDeviceCount">How many microphones there are; defaults to <see cref="WinMmAudioCapture.InputDeviceCount"/>.</param>
+    /// <param name="inputDeviceCount">How many microphones there are; defaults to <see cref="AudioSupport.DefaultInputDeviceCount"/>, and with that default the voice session also reads <see cref="AudioSupport.MicrophoneRefusal"/> (macOS's permission). A count passed in (tests) comes with no refusal.</param>
     /// <param name="wakeDetectorFactory">Builds the wake-word recogniser for a model directory and phrase; defaults to <see cref="VoskWakeWordDetector"/>.</param>
     /// <param name="time">The clock the tools and the timers read; defaults to <see cref="TimeProvider.System"/>. Tests pass a manual one.</param>
     /// <param name="geometry">Where the console's cursor is, for the chat screen's bottom pane; <c>Program.cs</c> passes <see cref="ScreenGeometry.ForConsole"/>, tests a scripted one or (the default) none, which draws the input line where the transcript ends.</param>
@@ -237,8 +238,9 @@ public sealed class SidekickApp
         _screenSystem = screenSystem;
         _hotkeyProbe = hotkeyProbe;
         _shortcutWriter = shortcutWriter;
-        // The camera (2026-10-02): Media Foundation in the app on Windows, a fake in tests, none elsewhere; its previews in the
-        // picture viewer (live, and a shot opened without the keyboard), none in tests.
+        // The camera (2026-10-02): Media Foundation in the app on Windows, AVFoundation on macOS 14 and later (2026-10-07), a fake
+        // in tests, none elsewhere; its previews in the picture viewer (live, and a shot opened without the keyboard; on a Mac through
+        // the AppKit host), none in tests.
         _camera = camera;
         _liveView = liveView;
         _showShot = showShot;
@@ -298,6 +300,7 @@ public sealed class SidekickApp
         _vadFactory = vadFactory ?? ((path, options) => new SileroVad(path, options));
         _modelHttpClient = modelHttpClient ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _inputDeviceCount = inputDeviceCount ?? AudioSupport.DefaultInputDeviceCount;
+        _microphoneRefusal = inputDeviceCount is null ? AudioSupport.MicrophoneRefusal : () => null;
         _wakeDetectorFactory = wakeDetectorFactory ?? ((directory, phrase) => new VoskWakeWordDetector(directory, phrase));
         _time = time ?? TimeProvider.System;
         // The web tools' client and browser, one for the app: the screen and headless share the page cache.
@@ -353,7 +356,7 @@ public sealed class SidekickApp
 
     /// <summary>A voice session over this app's factories and models directory; the caller owns it. Never built in headless mode.</summary>
     private VoiceSession BuildVoiceSession() =>
-        new(_captureFactory, _recognizerFactory, _vadFactory, new ModelStore(ModelsDirectory, _modelHttpClient), _inputDeviceCount, _wakeDetectorFactory);
+        new(_captureFactory, _recognizerFactory, _vadFactory, new ModelStore(ModelsDirectory, _modelHttpClient), _inputDeviceCount, _wakeDetectorFactory, _microphoneRefusal);
 
     /// <summary>The assembly version as <c>major.minor.patch</c>.</summary>
     public static string Version
@@ -1000,7 +1003,7 @@ public sealed class SidekickApp
                     IReadOnlyList<string> screenLines;
                     try
                     {
-                        screenLines = Screen.ScreenText.List(screenSystem.Monitors(), screenSystem.OwnMonitor(), screenSystem.Windows(), screenSystem.OwnWindow());
+                        screenLines = Screen.ScreenCapture.Listing(screenSystem);
                     }
                     catch (Screen.ScreenException e)
                     {
@@ -1928,9 +1931,16 @@ public sealed class SidekickApp
     /// <c>SIGHUP</c> registration, which is <c>CTRL_CLOSE_EVENT</c> on Windows, calls this on the console's control thread,
     /// and the process lives until it returns — no <c>finally</c> of the run's will. With <c>Docker server stop on exit</c> on
     /// and a container in use, the stop is asked under <see cref="CloseBudget"/>. Blocks; never throws. Nothing when no run is live.
+    /// On a Mac (2026-10-07, the embedded LLM there) it also takes <c>SIGTERM</c> and <c>SIGQUIT</c>, and kills the embedded
+    /// servers first (<see cref="KillEmbeddedAtExit"/>): no job object ends them with the app there.
     /// </summary>
     public void ConsoleClosing()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            KillEmbeddedAtExit();
+        }
+
         if (_liveSession is not { } session || !EffectiveSettings.DockerServerStopOnExit || session.DockerInUse is not { } name)
         {
             return;
@@ -1947,6 +1957,27 @@ public sealed class SidekickApp
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+        }
+    }
+
+    /// <summary>
+    /// The embedded servers killed as the process is told to go (2026-10-07, the Mac port; the first of the three layers that
+    /// keep a <c>llama-server</c> from outliving the app there, <see cref="EmbeddedLlm.LlamaGuard"/>): the kill switch's own
+    /// <see cref="EmbeddedLlm.IEmbeddedLlm.Kill"/>, main and extras, at once. Windows needs none of it: its kill-on-close job
+    /// (<see cref="EmbeddedLlm.ChildJob"/>) ends them however the app ends. Never throws.
+    /// </summary>
+    private void KillEmbeddedAtExit()
+    {
+        try
+        {
+            if (_liveSession?.Embedded is { } embedded && embedded.Kill() is { Count: > 0 } killed)
+            {
+                DiagnosticLog.Info(ChatScreen.AppCategory, "Signalled to exit: unloaded " + string.Join(", ", killed) + ".");
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn(ChatScreen.AppCategory, "Embedded servers at exit: " + Llm.Assistant.Explain(ex));
         }
     }
 
@@ -2054,7 +2085,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

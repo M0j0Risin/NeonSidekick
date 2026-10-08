@@ -774,19 +774,20 @@ These are file tools: *File tools* offers them, and they reach only the working 
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `view_image` | `path?, paths?` | Attaches images to the next message, up to *File view image max (per call)*. |
+| `view_image` | `path?, paths?` | Attaches images to the next message, up to *File view image max (per call)*. On a Mac it also takes HEIC/HEIF, TIFF and AVIF, sent to the model as JPEG (TIFF as PNG). |
 | `image_info` | `path?, paths?` | A picture's format, upright size, file size, frames, transparency, EXIF orientation and the metadata it carries (EXIF, GPS, XMP, data after the picture…), read from its header (nothing goes to the model), then the formats `image_edit` can write here and its defaults. |
 | `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x/y/width/height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, turns, recolours and converts a picture in one pass and writes a new file (see Editing pictures); `metadata: none` alone strips a JPEG, PNG, WebP or GIF losslessly. `view` attaches the result. Not in plan mode. |
 
 #### Editing pictures
 
-`image_edit` changes a picture in the working directory with Windows' own codecs (through MagicScaler, already in the app; nothing new is installed). `image_info` reads a picture's facts first.
+`image_edit` changes a picture in the working directory with the system's own codecs, through MagicScaler (already in the app; nothing new is installed): Windows' WIC codecs, or Apple's ImageIO on a Mac. The resizing, colour, blur and border steps are MagicScaler's on both, so an edit looks the same on either. `image_info` reads a picture's facts first.
 
 * **One pass, in this order:** crop, resize, rotate, flip, colour, blur, border; then one encode, so a JPEG loses quality once.
 * **Size:** `width` and/or `height` (one alone keeps the aspect) or `scale`. With both sides, `fit` is `contain` (the default; may enlarge), `cover` (fills and cuts at `anchor`), `pad` (fills the rest with `background`), `stretch`, or `shrink` (never enlarges). Enlarging is interpolation, not AI. `interpolation=nearest` keeps pixel art sharp.
 * **Geometry:** a crop in the picture's pixels as it displays (`crop_x`, `crop_y`, `crop_width`, `crop_height`, all four), `rotate` by quarter turns only (90, 180, 270 clockwise), `flip` horizontal or vertical. Width and height always mean the final picture's sides.
 * **Colour:** `filter` (grey, sepia, negative, polaroid), `brightness`, `contrast`, `saturation` (−100 to 100), `hue` (degrees), `tint` toward a colour by `tint_amount`, `blur`, `sharpen` (true firm, false none; a light one after a resize by default), and a `pad` border in `background` (white by default; `transparent` works for PNG).
 * **Formats:** PNG, JPEG, GIF, BMP and TIFF; JPEG XL and HEIF when Windows has their extensions (`image_info` says which). WebP and AVIF read but never write: Windows has no encoder for them, so a WebP comes out as PNG. JPEG takes `quality` and `chroma` (444 keeps text crisp); PNG and GIF take `colors` (a palette, much smaller) and `dither`; PNG takes `interlace`; any format takes `dpi`. An option the format cannot take is refused, not ignored.
+* **On a Mac:** it reads PNG, JPEG, GIF, BMP, TIFF, WebP, HEIC/HEIF (iPhone photos), AVIF and JPEG XL, and writes PNG, JPEG, GIF, BMP, TIFF and HEIF (no JPEG XL, WebP or AVIF). `quality`, `dpi` and `interlace` work; `chroma`, `colors` and `dither` are refused, since ImageIO's encoders have no such setting. A HEIC photo's orientation is read as a JPEG's is.
 * **`max_kb`:** lowers the quality (lossy formats, down to 30), then shrinks the picture, until the file fits; nothing is written when it cannot.
 * **Metadata** is dropped unless asked for (*Image edit metadata*, or `metadata` per call); the EXIF orientation is always baked into the pixels. `metadata: none` with nothing else is a **lossless strip** of a JPEG, PNG, WebP or GIF: the file's metadata segments are left out and every other byte copied, so the picture is not re-encoded and a WebP stays a WebP. EXIF (with its GPS position and thumbnail), XMP, IPTC, comments, timestamps, vendor data and anything after the picture's end (a motion photo's video, an Ultra HDR gain map) go; the colour profile stays, and a turned photo keeps its orientation as a bare tag. The result says what went and the sizes before and after; a picture with nothing to strip writes nothing. An animated picture gives its first frame, and the result says so.
 * **The output** goes beside the source (or into *Image edit output folder*) as `photo-edited.png`, or `photo.png` for a format change alone, with `-2`, `-3` on a clash; or where `to` says. An existing file, the source included, is replaced only with `overwrite`. With *Image edit mode* `overwrite-original` and no `to`, the result replaces the source instead, and a format change writes `photo.jpg` and deletes `photo.png`.
@@ -798,6 +799,8 @@ These are file tools: *File tools* offers them, and they reach only the working 
 |---|---|---|
 | `camera_capture` | `prompt` | Shows the model's request ("Hold the label up to the camera."), then waits for you to take the photo (*Camera shutter* `user`) or for your permission (`model`). The photo is saved in *Camera output folder* and attached after the result; a decline isn't retried that turn. Allowed in plan mode. |
 
+On Windows the camera is Media Foundation's; on a Mac (macOS 14 or later) AVFoundation's: the built-in camera, a USB webcam, or an iPhone as Continuity Camera. A Mac asks once whether your terminal may use the camera (System Settings › Privacy & Security › Camera holds the answer); until it is allowed the tool's result says so, never a black picture.
+
 ### Screen
 
 | Tool | Arguments | What it does |
@@ -805,9 +808,13 @@ These are file tools: *File tools* offers them, and they reach only the working 
 | `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see [Screen capture](COMMANDS.md#screen-capture)), after your yes under *Screen capture ask* `ask`. The screenshot is saved in *Screen capture output folder* and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
 | `screen_list` | (none) | Lists the monitors and the windows with the target that names each. Titles and sizes only. Allowed in plan mode. |
 
+On Windows the pictures come from GDI; on a Mac (macOS 14 or later) from Apple's ScreenCaptureKit, at the screen's full pixels (a Retina screen at twice its points). A Mac needs the *Screen Recording* permission for the terminal app the app runs in (System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen the terminal). Without it `screen_capture` sends no picture, only the sentence saying how to turn it on, and `screen_list` lists the monitors and that sentence instead of the windows. See [Screen capture](COMMANDS.md#screen-capture) for the targets on each system.
+
 ### YouTube
 
 Under *YouTube tools*. Videos play in the app's own video window: a Windows window hosting the Microsoft Edge WebView2 Runtime (Windows 11 has it) on YouTube's embedded player. It opens where it last closed without taking the keyboard from the terminal; F11 is full screen, Esc leaves full screen and then closes it, and Ctrl and Alt chords go to the chat. YouTube's own keys (Space, ← →, M, F) work once you click into the video. One window: a new video replaces the one playing. A video whose uploader turned embedding off, or that is private, age-restricted or gone, is refused, and the answer points at `open_url`.
+
+On a Mac (macOS 14 or later, on the Mac's desktop) the window plays the same page through Safari's WebKit, nothing to install. It opens and remembers its place the same way; ⌃⌘F is full screen (F11 too, if macOS's Show Desktop shortcut is off), Esc leaves full screen and then closes it, as ⌘W does, TAB brings the terminal forward, and Ctrl and Option chords go to the chat. A link in the player (the YouTube logo, the title) opens in your default browser. The player's own full-screen button fills the screen in a Space of its own, as in Safari (Esc brings it back; TAB reaches the terminal again once it has); ⌃⌘F is the window's full screen in place. What YouTube keeps between runs lives in a store of the app's own, one per home, under `~/Library/WebKit/NeonSidekick/WebsiteDataStore/`, apart from Safari's. WebKit blocks the embedded player's third-party cookies, so a consent YouTube asks for inside the player may be asked again on the next run.
 
 | Tool | Arguments | What it does |
 |---|---|---|

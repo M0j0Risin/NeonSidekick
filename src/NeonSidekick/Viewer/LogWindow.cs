@@ -29,8 +29,8 @@ public static class LogWindow
     /// <summary>Told the window's corner as it closes (<see cref="PictureWindow.Placed"/>'s twin), on its thread. It must not block.</summary>
     public static Action<int, int>? Placed { get; set; }
 
-    /// <summary>Whether a window can be opened here at all: Windows only.</summary>
-    public static bool IsAvailable => OperatingSystem.IsWindows();
+    /// <summary>Whether a window can be opened here at all: on Windows, and on a Mac with a window server since 2026-10-07 (<see cref="MacLineWindows"/>).</summary>
+    public static bool IsAvailable => OperatingSystem.IsWindows() || (OperatingSystem.IsMacOS() && AppKitHost.IsEnabled);
 
     /// <summary>
     /// The window on <paramref name="buffer"/>: opened at the bottom, following, and brought forward — or the open one brought
@@ -41,7 +41,13 @@ public static class LogWindow
         ArgumentNullException.ThrowIfNull(buffer);
         if (!IsAvailable)
         {
-            throw new PlatformNotSupportedException(LogViewText.Unavailable);
+            throw new PlatformNotSupportedException(LogViewText.UnavailableHere);
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            MacLineWindows.ShowLog(buffer);
+            return;
         }
 
         lock (s_gate)
@@ -63,6 +69,11 @@ public static class LogWindow
     /// </summary>
     public static bool Close()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacLineWindows.CloseLog();
+        }
+
         LogWindowThread? open;
         lock (s_gate)
         {
@@ -82,6 +93,11 @@ public static class LogWindow
     /// </summary>
     public static (bool Ok, string Detail) Probe()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacLineWindows.Probe();
+        }
+
         if (!IsAvailable)
         {
             return (true, "skipped: not Windows");

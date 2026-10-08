@@ -23,6 +23,19 @@ public sealed class ViewerTests : IDisposable
         }
     }
 
+    // The six tests that read a title (2026-10-07, the viewer on a Mac): the folder in this system's spelling, so the name the title
+    // takes from a path is the same on both; they were Windows-only for D:\'s backslashes.
+    private static readonly string Pics = OperatingSystem.IsWindows() ? @"D:\pics" : "/pics";
+
+    private static string P(string name) => Path.Combine(Pics, name);
+
+    private static ViewerState ThreePicturesHere()
+    {
+        var state = new ViewerState();
+        state.Reset(Pics, [new(P("c.png"), T0.AddMinutes(3)), new(P("a.png"), T0.AddMinutes(1)), new(P("b.png"), T0.AddMinutes(2))]);
+        return state;
+    }
+
     private static ViewerState ThreePictures()
     {
         var state = new ViewerState();
@@ -30,15 +43,15 @@ public sealed class ViewerTests : IDisposable
         return state;
     }
 
-    [WindowsFact]
+    [Fact]
     public void Reset_SortsOldestFirst_AndIsLive_OnTheNewest()
     {
-        var state = ThreePictures();
+        var state = ThreePicturesHere();
 
-        Assert.Equal([@"D:\pics\a.png", @"D:\pics\b.png", @"D:\pics\c.png"], state.Pictures.Select(p => p.Path));
+        Assert.Equal([P("a.png"), P("b.png"), P("c.png")], state.Pictures.Select(p => p.Path));
         Assert.True(state.Live);
         Assert.Equal(2, state.Index);
-        Assert.Equal(@"D:\pics\c.png", state.Current);
+        Assert.Equal(P("c.png"), state.Current);
         Assert.Equal("c.png — 1/3 (live) · NeonSidekick pictures", state.Title());   // the newest counts 1, as the strip does (2026-10-03)
     }
 
@@ -73,14 +86,14 @@ public sealed class ViewerTests : IDisposable
         Assert.True(state.Live);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Add_WhileHeld_OnlyCountsIt()
     {
-        var state = ThreePictures();
+        var state = ThreePicturesHere();
         Assert.True(state.Browse(ViewerAction.Older));
 
-        Assert.False(state.Add(@"D:\pics\d.png", T0.AddMinutes(4)));
-        Assert.Equal(@"D:\pics\b.png", state.Current);
+        Assert.False(state.Add(P("d.png"), T0.AddMinutes(4)));
+        Assert.Equal(P("b.png"), state.Current);
         Assert.False(state.Live);
         Assert.Equal("b.png — 3/4 (paused) · NeonSidekick pictures", state.Title());   // d, c, b: the third from the newest
     }
@@ -166,18 +179,18 @@ public sealed class ViewerTests : IDisposable
     }
 
     /// <summary>Newest at the left since 2026-10-03 (the user's ask, the strip's way): → older, ← newer, End the oldest, Home the newest and live.</summary>
-    [WindowsFact]
+    [Fact]
     public void Browse_WalksAndClamps_AndTheNewestFollowsAgain()
     {
-        var state = ThreePictures();
+        var state = ThreePicturesHere();
 
         Assert.False(state.Browse(ViewerState.ActionFor(ViewerState.VkLeft, false)));   // ← : already the newest, live
         Assert.True(state.Browse(ViewerState.ActionFor(ViewerState.VkRight, false)));   // → : older
-        Assert.Equal(@"D:\pics\b.png", state.Current);
+        Assert.Equal(P("b.png"), state.Current);
         Assert.False(state.Live);
         Assert.Equal("b.png — 2/3 (paused) · NeonSidekick pictures", state.Title());
         Assert.True(state.Browse(ViewerState.ActionFor(ViewerState.VkEnd, false)));   // End: the oldest
-        Assert.Equal(@"D:\pics\a.png", state.Current);
+        Assert.Equal(P("a.png"), state.Current);
         Assert.Equal("a.png — 3/3 (paused) · NeonSidekick pictures", state.Title());
         Assert.False(state.Browse(ViewerAction.Older));   // clamped at the oldest
         Assert.True(state.Browse(ViewerAction.Newer));
@@ -185,7 +198,7 @@ public sealed class ViewerTests : IDisposable
         Assert.True(state.Live);
         Assert.True(state.Browse(ViewerAction.Oldest));
         Assert.True(state.Browse(ViewerState.ActionFor(ViewerState.VkHome, false)));   // Home: the newest, live again
-        Assert.Equal(@"D:\pics\c.png", state.Current);
+        Assert.Equal(P("c.png"), state.Current);
         Assert.True(state.Live);
         Assert.False(state.Browse(ViewerAction.ToggleFullScreen));
     }
@@ -378,10 +391,10 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(ViewerAction.ToggleSlideShow, ViewerState.ActionFor(ViewerState.VkF9, fullScreen, slideShow: true));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Slides_F10Toggles_UpDownStepAndClamp_OnlyWhileRunning()
     {
-        var state = ThreePictures();
+        var state = ThreePicturesHere();
 
         Assert.False(state.Slides(ViewerAction.LongerSlides));   // the show off: nothing
         Assert.Equal(ViewerState.DefaultSlideSeconds, state.SlideSeconds);
@@ -415,10 +428,10 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal("c.png — 1/3 (live) · NeonSidekick pictures", state.Title());
     }
 
-    [WindowsFact]
+    [Fact]
     public void Slides_TheDelHint_WinsOverTheSlideShowTail()
     {
-        var state = ThreePictures();
+        var state = ThreePicturesHere();
         state.Slides(ViewerAction.ToggleSlideShow);
         state.PressDelete(1_000);
 
@@ -546,16 +559,16 @@ public sealed class ViewerTests : IDisposable
         Assert.True(ViewerState.IsAutoRepeat(unchecked((long)0xFFFFFFFFC0530001)));  // as a sign-extended IntPtr carries it
     }
 
-    [WindowsFact]
+    [Fact]
     public void PressDelete_FirstArms_TheSecondInTimeGivesThePath()
     {
-        var state = ThreePictures();
+        var state = ThreePicturesHere();
 
         Assert.Null(state.PressDelete(1_000));
         Assert.True(state.DeleteArmed);
         Assert.Equal("c.png — 1/3 (live) · Del again to delete", state.Title());
 
-        Assert.Equal(@"D:\pics\c.png", state.PressDelete(1_000 + ViewerState.DeleteArmMilliseconds));
+        Assert.Equal(P("c.png"), state.PressDelete(1_000 + ViewerState.DeleteArmMilliseconds));
         Assert.False(state.DeleteArmed);
         Assert.Equal("c.png — 1/3 (live) · NeonSidekick pictures", state.Title());
     }
@@ -642,7 +655,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal("▶ 5 s · random", ViewerText.SlideShowTail(5, true));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Decode_ABmp_IsBgrx_TopRowFirst()
     {
         var bitmap = ViewerImage.Decode(SmokeChecks.SolidBmp(8, 2), "x.bmp");
@@ -653,7 +666,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal([0xC8, 0x40, 0xFF], bitmap.Bgrx[..3]);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Decode_OverTheMaxSide_IsDownscaled()
     {
         var bitmap = ViewerImage.Decode(SmokeChecks.SolidBmp(ViewerImage.MaxSide * 2, 4), "wide.bmp");
@@ -674,7 +687,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal([100, 50, 0, 0, 0, 0, 0, 0], ViewerImage.ToBgrx([200, 100, 0, 128, 255, 255, 255, 0], 4));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task LoadAsync_ReadsAPicture()
     {
         string path = Path.Combine(_dir, "a.bmp");
@@ -698,7 +711,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Equal(ViewerImage.Attempts - 1, waits);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task LoadAsync_OfAFileThatFinishesBetweenTries_ShowsIt()
     {
         string path = Path.Combine(_dir, "late.bmp");
@@ -722,7 +735,7 @@ public sealed class ViewerTests : IDisposable
         Assert.Null(await ViewerImage.LoadAsync(path, new CancellationToken(canceled: true)));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Probe_MakesAHiddenWindow_ThatAnswers()
     {
         var check = SmokeChecks.ProbeViewerWindow();

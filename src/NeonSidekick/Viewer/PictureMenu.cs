@@ -84,9 +84,13 @@ public static class PictureMenu
         rows.Add(new ContextMenuItem(PictureMenuText.StripMetadata, (int)PictureCommand.StripMetadata, Enabled: MetadataStripper.ContainerOfPath(path) is not null));
         rows.Add(ContextMenuItem.Separator);
         rows.Add(Row(PictureMenuText.CopyPath, PictureCommand.CopyPath));
-        rows.Add(Row(PictureMenuText.ShowInExplorer, PictureCommand.ShowInExplorer));
+        rows.Add(Row(OperatingSystem.IsMacOS() ? PictureMenuText.ShowInFinder : PictureMenuText.ShowInExplorer, PictureCommand.ShowInExplorer));
         rows.Add(Row(PictureMenuText.Attach, PictureCommand.Attach));
-        rows.Add(Row(PictureMenuText.Print, PictureCommand.Print));
+        if (!OperatingSystem.IsMacOS())
+        {
+            rows.Add(Row(PictureMenuText.Print, PictureCommand.Print));   // printing needs Windows (2026-10-07: the Mac's menu leaves it out)
+        }
+
         rows.Add(ContextMenuItem.Separator);
         rows.Add(Row(PictureMenuText.Delete, PictureCommand.Delete));
         rows.Add(ContextMenuItem.Separator);
@@ -132,7 +136,7 @@ public static class PictureMenu
         switch (command)
         {
             case PictureCommand.CopyPath:
-                if (NeonSidekick.UI.WindowsClipboard.TrySetText(path))
+                if (OperatingSystem.IsMacOS() ? NeonSidekick.UI.MacClipboard.TrySetText(path) : NeonSidekick.UI.WindowsClipboard.TrySetText(path))
                 {
                     Report(PictureMenuText.Copied(path), false);
                 }
@@ -143,7 +147,15 @@ public static class PictureMenu
 
                 return true;
             case PictureCommand.ShowInExplorer:
-                ShowInExplorer(path);
+                if (OperatingSystem.IsMacOS())
+                {
+                    MacPictureMenu.ShowInFinder(path);   // Finder on the picture (2026-10-07), on the main thread the menu ran on
+                }
+                else
+                {
+                    ShowInExplorer(path);
+                }
+
                 return true;
             case PictureCommand.Attach:
                 Hand(Attach, path, "attach");

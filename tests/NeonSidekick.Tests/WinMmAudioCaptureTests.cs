@@ -3,8 +3,9 @@ using NeonSidekick.Audio;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The device-bound facts run only where a microphone exists. The plain facts pin the lifecycle
-/// contract every implementation of <see cref="IAudioCapture"/> must honour.
+/// The device-bound facts run only where a microphone exists (and, on macOS, the terminal may use it), on the platform's
+/// own backend (<see cref="AudioSupport.DefaultCapture"/>: WinMM on Windows, AudioQueue on macOS since 2026-10-07). They
+/// pin the lifecycle contract every implementation of <see cref="IAudioCapture"/> must honour.
 /// </summary>
 public class WinMmAudioCaptureTests
 {
@@ -50,7 +51,7 @@ public class WinMmAudioCaptureTests
     [AudioInputDeviceFact]
     public async Task Start_DeliversBuffersOfTheExpectedSize()
     {
-        using var capture = new WinMmAudioCapture(PcmFormat.Whisper);
+        using var capture = AudioSupport.DefaultCapture(PcmFormat.Whisper);
         var sizes = new List<int>();
         capture.DataAvailable += (_, count) => { lock (sizes) { sizes.Add(count); } };
 
@@ -80,7 +81,7 @@ public class WinMmAudioCaptureTests
     [AudioInputDeviceFact]
     public async Task Stop_EndsDelivery_AndStartWorksAgain()
     {
-        using var capture = new WinMmAudioCapture(PcmFormat.Whisper);
+        using var capture = AudioSupport.DefaultCapture(PcmFormat.Whisper);
         int delivered = 0;
         capture.DataAvailable += (_, _) => Interlocked.Increment(ref delivered);
 
@@ -104,7 +105,7 @@ public class WinMmAudioCaptureTests
     [AudioInputDeviceFact]
     public void Dispose_StopsCapture()
     {
-        var capture = new WinMmAudioCapture(PcmFormat.Whisper);
+        var capture = AudioSupport.DefaultCapture(PcmFormat.Whisper);
         capture.Start();
         capture.Dispose();
         Assert.False(capture.IsCapturing);
@@ -113,6 +114,12 @@ public class WinMmAudioCaptureTests
     [AudioInputDeviceFact]
     public void ProbeDefaultDevice_OpensAndCloses()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Equal(0, AudioQueueCapture.ProbeDefaultDevice(PcmFormat.Whisper));
+            return;
+        }
+
         Assert.Equal(WinMmNative.MmsyserrNoError, WinMmAudioCapture.ProbeDefaultDevice(PcmFormat.Whisper));
     }
 }

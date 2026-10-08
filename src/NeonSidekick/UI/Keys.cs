@@ -144,6 +144,10 @@ public static class Keys
     /// Later on 2026-10-05 (the user's ask): Ctrl+Alt+R the bare <c>/rename</c> (the rename box; the chord the NVIDIA overlay held until
     /// the user freed it on 2026-10-04), Ctrl+Q <c>/queue</c> (the queue pane; the key that quit once, a plain key since) and
     /// Ctrl+Alt+Q <c>/queue clear</c>. AltGr+Q (a German layout's <c>@</c>) brings its character, so it types as before.
+    /// On 2026-10-07 (the user's picks) three chords a Mac terminal cannot send got Mac-only stand-ins: Ctrl+. sends a bare ".", so
+    /// Ctrl+] (GS) is <c>/terminal</c> there; Ctrl+M sends CR, which is Enter, so Ctrl+D (EOT; nothing in the app used it) is
+    /// <c>/model</c>; Ctrl+Alt+M sends ESC CR, Alt+Enter, so Ctrl+Option+A (ESC SOH) is <c>/memory</c> — plain Ctrl+A stays the
+    /// line's select-all. Windows' chords are unchanged and these are not Windows' (each arm is guarded).
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -176,6 +180,8 @@ public static class Keys
                 (ConsoleKey.Z, '\0' or '\x1a') => "/theme",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 (ConsoleKey.OemPeriod, '\0') => "/terminal",
+                (ConsoleKey.Oem6, '\0' or '\x1d') when OperatingSystem.IsMacOS() => "/terminal",
+                (ConsoleKey.D, '\0' or '\x04') when OperatingSystem.IsMacOS() => "/model",
                 _ => null,
             };
         }
@@ -214,6 +220,7 @@ public static class Keys
             (ConsoleKey.O, '\0' or '\x0f') => "/police",
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
             (ConsoleKey.V, '\0' or '\x16') => "/camera live",
+            (ConsoleKey.A, '\0' or '\x01') when OperatingSystem.IsMacOS() => "/memory",
             _ => null,
         };
     }

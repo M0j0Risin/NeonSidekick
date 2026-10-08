@@ -171,7 +171,7 @@ public sealed class ScreenPureTests
         Assert.Equal(default, ScreenRect.Union([]));
     }
 
-    [WindowsFact]
+    [Fact]
     public void AScreenshot_IsMarked_AndAStoredSessionKeepsALineNamingIt_UnlessKept()
     {
         var image = ScreenCapture.Attachment(new ScreenFrame(4000, 1000, new byte[4000 * 1000 * 4])) with { Path = "D:\\w\\screen_images\\a.jpg" };
@@ -295,7 +295,7 @@ public sealed class ScreenCaptureTests : IDisposable
 
     private ScreenCapture Capture() => new(_screen, () => _files, () => _settings.ScreenOutputFolder, _time);
 
-    [WindowsFact]
+    [Fact]
     public async Task AShot_IsSavedUnderTheOutputFolder_StampedLocally_AndAClashNumbered()
     {
         var capture = Capture();
@@ -321,7 +321,7 @@ public sealed class ScreenCaptureTests : IDisposable
         Assert.Equal("area 0,0 1920x1080", _screen.Captures[^1]);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task AFailure_IsTheSentence_AndASaveOutsideTheSandboxIsRefused()
     {
         var capture = Capture();
@@ -334,7 +334,7 @@ public sealed class ScreenCaptureTests : IDisposable
         Assert.StartsWith("The screenshot could not be saved: ", e.Message);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheTool_AnswersEachOutcome_AndReadsItsArguments()
     {
         string? target = null;
@@ -375,7 +375,49 @@ public sealed class ScreenCaptureTests : IDisposable
         Assert.Equal("screen_list", new ScreenListTool(null).Name);
     }
 
-    [WindowsFact]
+    [Fact]
+    public async Task ARefusal_StopsTheAim_AsksTheSystem_AndCapturesNothing()
+    {
+        _screen.Refused = ScreenText.NoPermission("Terminal");
+        var capture = Capture();
+
+        var e = await Assert.ThrowsAsync<ScreenException>(() => capture.AimAsync(new ScreenTarget(ScreenTargetKind.Screen), CancellationToken.None));
+
+        Assert.Equal(ScreenText.NoPermission("Terminal"), e.Message);
+        Assert.Equal([true], _screen.Asked);
+        Assert.Empty(_screen.Captures);
+        Assert.Empty(Directory.GetFileSystemEntries(_dir));
+    }
+
+    [Fact]
+    public async Task TheListing_WhileRefused_IsTheMonitorsAndTheRefusal_WithoutAsking()
+    {
+        Assert.Equal(ScreenText.List(_screen.Monitors(), 2, _screen.Windows(), 100), ScreenCapture.Listing(_screen));
+        _screen.Refused = ScreenText.NoPermission(null);
+
+        string listed = (string)(await new ScreenListTool(_screen).InvokeAsync(new AIFunctionArguments()))!;
+
+        Assert.Equal(
+            "Monitors:\n  monitor:1  1920x1080 at 0,0, primary\n  monitor:2  2560x1440 at 1920,0, this app's\n" +
+            "Windows: not listed. Screen Recording is off for your terminal app, so macOS would show only the wallpaper; nothing was captured. " +
+            "Turn your terminal app on in System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen your terminal app.",
+            listed);
+        Assert.Equal([false, false], _screen.Asked);
+    }
+
+    [Fact]
+    public void TheMacSentences_ArePinned_AndWindowsKeepsItsOwn()
+    {
+        Assert.Equal(
+            "Screen Recording is off for iTerm2, so macOS would show only the wallpaper; nothing was captured. " +
+            "Turn iTerm2 on in System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen iTerm2.",
+            ScreenText.NoPermission("iTerm2"));
+        Assert.Equal(
+            OperatingSystem.IsMacOS() ? "There is no screen capture on this Mac: it needs macOS 14 or later." : "There is no screen capture on this system (Windows only).",
+            ScreenText.Unsupported);
+    }
+
+    [Fact]
     public void Jpeg_FromBareRows_MatchesTheFrameOverload()
     {
         var pixels = new byte[8 * 6 * 4];

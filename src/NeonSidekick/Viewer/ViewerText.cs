@@ -80,6 +80,16 @@ public static class ViewerText
     public const string Keys = "(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · F11 full screen · DEL twice delete · TAB terminal · ESC close)";
 
     /// <summary>
+    /// The viewer's keys on a Mac (2026-10-07, the viewer over AppKit): the Mac's extras in (⌫ for Del, ⌘W beside ESC, and ⌃⌘F for
+    /// full screen in F11's place: macOS keeps F11 for Show Desktop unless the user frees it, which still works then) and, since
+    /// phase 4, TAB to the terminal as on Windows. Pinned.
+    /// </summary>
+    public const string KeysMac = "(← or wheel up newer · → or wheel down older · Home newest · End oldest · right-click picture menu · F9 slide show · F10 random · ↑ ↓ slide time · ⌃⌘F full screen · ⌫ twice delete · TAB terminal · ESC or ⌘W close)";
+
+    /// <summary>The keys line for this system: <see cref="KeysMac"/> on a Mac, <see cref="Keys"/> elsewhere.</summary>
+    public static string KeysHere => OperatingSystem.IsMacOS() ? KeysMac : Keys;
+
+    /// <summary>
     /// The <c>Image viewer</c> setting's word for the app Windows registers (2026-09-27, the user's call): an empty setting
     /// opens a double-clicked picture in this viewer, this word in the registered editor or viewer as before, any other text
     /// runs as a command. Matched ignoring case. Pinned.
@@ -88,6 +98,15 @@ public static class ViewerText
 
     /// <summary>The transcript's error when there is no window to open (not Windows). Pinned.</summary>
     public const string Unavailable = "The picture viewer needs Windows.";
+
+    /// <summary>
+    /// The same error on a Mac (2026-10-07: the viewer works there over AppKit, but only with a window server — not over SSH, not
+    /// on a headless box). Pinned.
+    /// </summary>
+    public const string UnavailableMac = "The picture viewer needs the Mac's desktop: there is no window server here (over SSH, say).";
+
+    /// <summary>The error for this system: <see cref="UnavailableMac"/> on a Mac, <see cref="Unavailable"/> elsewhere.</summary>
+    public static string UnavailableHere => OperatingSystem.IsMacOS() ? UnavailableMac : Unavailable;
 
     /// <summary>The transcript's error when the output folder could not be made or opened. Pinned.</summary>
     public static string Failed(string folder, string detail) => $"Could not open the picture viewer on {folder}: {detail}";

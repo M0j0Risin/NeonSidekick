@@ -22,6 +22,18 @@ public sealed class ThumbsTests
         return state;
     }
 
+    // The tests that read a title (2026-10-07, the browser on a Mac): the folder in this system's spelling, so the name the title takes
+    // from a path is the same on both; they were Windows-only for D:\'s backslashes.
+    private static readonly string Pics = OperatingSystem.IsWindows() ? @"D:\pics" : "/pics";
+
+    private static ThumbsState GridHere(int count)
+    {
+        var state = new ThumbsState();
+        state.Reset(Pics, Enumerable.Range(0, count).Select(i => new ThumbEntry(Path.Combine(Pics, $"{i:D3}.png"), T0.AddMinutes(i))));
+        state.Relayout(1000, 800, 96, 20);
+        return state;
+    }
+
     [Fact]
     public void Reset_SortsOldestFirst_TheNameBreakingATie_NothingSelected()
     {
@@ -280,10 +292,10 @@ public sealed class ThumbsTests
     public void ActionFor_MapsTheKeys(int key, bool control, bool shift, bool fullScreen, ThumbsAction expected) =>
         Assert.Equal(expected, ThumbsState.ActionFor(key, control, shift, fullScreen));
 
-    [WindowsFact]
+    [Fact]
     public void PressDelete_ArmsTheSelected_ThenDeletesIt_OnASecondWithinTheWindow()
     {
-        var state = Grid(3);
+        var state = GridHere(3);
         Assert.Null(state.PressDelete(1_000));   // nothing selected: nothing armed
         Assert.False(state.DeleteArmed);
 
@@ -292,7 +304,7 @@ public sealed class ThumbsTests
         Assert.True(state.DeleteArmed);
         Assert.Equal("001.png — 2/3 · " + ViewerText.DeleteArmedHint, state.Title());
 
-        Assert.Equal(@"D:\pics\001.png", state.PressDelete(1_000 + ViewerState.DeleteArmMilliseconds));
+        Assert.Equal(Path.Combine(Pics, "001.png"), state.PressDelete(1_000 + ViewerState.DeleteArmMilliseconds));
         Assert.False(state.DeleteArmed);
         Assert.Equal("001.png — 2/3 · NeonSidekick thumbnails", state.Title());
     }
@@ -483,13 +495,18 @@ public sealed class ThumbsTests
     {
         var rows = PictureMenu.Build(thumbs: true, @"D:\pics\cat.png", "beside-original");
 
+        // A Mac's file rows (2026-10-07): Show in Finder, and no Print (printing needs Windows).
+        string[] files = OperatingSystem.IsMacOS()
+            ? [PictureMenuText.CopyPath, PictureMenuText.ShowInFinder, PictureMenuText.Attach]
+            : [PictureMenuText.CopyPath, PictureMenuText.ShowInExplorer, PictureMenuText.Attach, PictureMenuText.Print];
         Assert.Equal(
             [PictureMenuText.OpenInViewer, "", PictureMenuText.Rotate, PictureMenuText.Colour, PictureMenuText.Resize, PictureMenuText.Convert, PictureMenuText.Shrink,
-             PictureMenuText.StripMetadata, "", PictureMenuText.CopyPath, PictureMenuText.ShowInExplorer, PictureMenuText.Attach, PictureMenuText.Print, "", PictureMenuText.Delete, "",
+             PictureMenuText.StripMetadata, "", .. files, "", PictureMenuText.Delete, "",
              "Edits: beside-original"],
             rows.Select(r => r.Label));
         Assert.False(rows[^1].Selectable);
-        Assert.Equal((int)PictureCommand.Delete, rows[14].Command);
+        Assert.Equal((int)PictureCommand.Delete, rows[10 + files.Length].Command);
+        Assert.Equal((int)PictureCommand.ShowInExplorer, rows[10].Command);
         Assert.Equal((int)PictureCommand.StripMetadata, rows[7].Command);
         Assert.True(rows[7].Enabled);   // a PNG: the strip reads it
         Assert.False(PictureMenu.Build(thumbs: true, @"D:\pics\cat.bmp", "beside-original")[7].Enabled);
@@ -517,7 +534,7 @@ public sealed class ThumbsTests
         Assert.Equal(ViewerStyle.ColorRef(palette.Primary), ThumbsStyle.For(palette).Selected);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Wording_IsPinned()
     {
         Assert.Equal(@"NeonSidekick thumbnails — D:\p", ThumbsText.Title(@"D:\p", 0, null, 0));
@@ -536,7 +553,7 @@ public sealed class ThumbsTests
         Assert.Equal("Under 500 KB", PictureMenuText.Under(500));
         Assert.Equal("Under 1 MB", PictureMenuText.Under(1024));
         Assert.Equal("(\U0001F5BC\uFE0F deleted cat.png)", PictureMenuText.Deleted("cat.png"));
-        var state = Grid(2);
+        var state = GridHere(2);
         state.SelectIndex(1);
         Assert.Equal("001.png — 2/2 · NeonSidekick thumbnails", state.Title());
     }
@@ -559,7 +576,7 @@ public sealed class ThumbsTests
         Assert.Equal("viewer:menu", check.Name);
     }
 
-    [WindowsFact]
+    [Fact]
     public void DecodeThumbnail_BringsTheLongestSideDown_NeverUp()
     {
         var big = ViewerImage.DecodeThumbnail(SmokeChecks.SolidBmp(400, 200), "big.bmp", 128);

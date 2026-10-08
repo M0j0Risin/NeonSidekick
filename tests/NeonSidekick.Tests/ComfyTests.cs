@@ -324,7 +324,7 @@ public sealed class ComfyTests : IDisposable
     /// taken out of ComfyUI's queue and interrupted by id — the tool tells the model the user cancelled, and a generation
     /// started after the drain runs.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task Drain_CancelsTheRunningGeneration_DeletesAndInterruptsItsPrompt_AndTheNextOneRuns()
     {
         Workflow("pony-txt2img", Txt2Img);
@@ -385,7 +385,7 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("comfy_images\\pony-txt2img-7-2.png", Assert.Single(result.Images).Path);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task GenerateImage_Img2Img_UploadsTheOriginal_AndPicksTheImageWorkflow()
     {
         Workflow("pony-txt2img", Txt2Img);
@@ -420,7 +420,7 @@ public sealed class ComfyTests : IDisposable
     }
 
     /// <summary>A narrowed tool chooses from every installed workflow (later on 2026-09-27): one not offered is described and run.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task GenerateImage_Narrowed_UsesAnInstalledWorkflow_ThatIsNotOffered()
     {
         Workflow("pony-txt2img", Txt2Img);
@@ -486,7 +486,7 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("", Parse("faceswap", FaceSwap).Fill(new ComfyValues("", "", 1, Images: ["only.png"]))["14"]!["inputs"]!["image"]!.GetValue<string>());
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task GenerateImage_AFaceSwap_UploadsBothInOrder_NeedsNoPrompt_AndPicksByCount()
     {
         Workflow("pony-txt2img", Txt2Img);
@@ -563,7 +563,7 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal(["the target", ""], Parse("faceswap", FaceSwap, sidecar).ImageRoles);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task GenerateImage_APastedPicturesLabel_SavesItsOriginalOnce_UploadsIt_AndSaysWhere()
     {
         // A paste as the input (later still on 2026-09-24, the user's ask): [Image #1] is the paste at full size, written
@@ -597,7 +597,7 @@ public sealed class ComfyTests : IDisposable
         new(new ComfyWorkflowCatalog(() => [_profileComfy, _globalComfy]), _files, () => _settings,
             url => new ComfyClient(url, new HttpClient(_stub), TimeSpan.FromMilliseconds(1)), new Random(7), pasted, time ?? new ManualTimeProvider());
 
-    [WindowsFact]
+    [Fact]
     public async Task GenerateImage_APastedPicture_WithNoOutputFolder_GoesInPasted_UnderTheWorkingDirectory_AndADroppedFileKeepsItsName()
     {
         Workflow("restyle", Img2Img);
@@ -694,7 +694,7 @@ public sealed class ComfyTests : IDisposable
 
     // ── the splash tool ─────────────────────────────────────────────────────
 
-    [WindowsFact]
+    [Fact]
     public void SetSplashImage_CopiesIntoTheSplashFolder_WarnsWhenItIsTheOnlyOne_AndNeverOverwrites()
     {
         string splash = Path.Combine(_dir, "profile", "splash");
@@ -805,7 +805,7 @@ public sealed class ComfyTests : IDisposable
         }
         """;
 
-    [WindowsFact]
+    [Fact]
     public async Task Offered_TheModelSeesTheTickedOnly_ImagineMayNameAny()
     {
         Workflow("pony-txt2img", Txt2Img);
@@ -1052,7 +1052,7 @@ public sealed class ComfyTests : IDisposable
     }
 
     /// <summary>ComfyUI max pictures per call (later on 2026-09-24, the user's ask; a fixed 4 before): the tool, its schema and /imagine all read it; a hand-edited value clamps.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task MaxPictures_IsASetting_TheToolTheSchemaAndImagineReadIt()
     {
         Workflow("pony-txt2img", Txt2Img);

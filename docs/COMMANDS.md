@@ -21,6 +21,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
   - [Process window](#process-window)
   - [Camera](#camera)
   - [Screen capture](#screen-capture)
+  - [Pasting a picture](#pasting-a-picture)
   - [Profiles](#profiles)
   - [Desktop shortcuts](#desktop-shortcuts)
   - [Custom themes](#custom-themes)
@@ -144,7 +145,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
-| `/terminal [<folder>]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. On a Mac it needs Windows for now: open Terminal or iTerm2 yourself. |
+| `/terminal [<folder>]` | Opens a new Windows Terminal window in the working directory, or in a folder under it (Tab completes the folder). Without Windows Terminal it opens a console window there. On a Mac (2026-10-07) it opens a new Terminal window there, or a new tab in iTerm2's front window when the app runs in iTerm2 (iTerm2's own choice; its settings can make it a window); another terminal app opens Terminal. Ctrl+. runs it, Ctrl+] on a Mac. |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
 | `/theme [<name>]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. |
 | `/theme export <name> [<new-name>]` | Writes a theme to the `themes` folder as a file to edit (see [Custom themes](#custom-themes)). |
@@ -175,7 +176,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/window` | Shows the terminal window's size. |
 | `/youtube` | Says what the video window is playing. |
 | `/youtube <words>` | Searches YouTube (with a *YouTube API key*; 100 quota units a search) and opens a picker of the videos found; Enter plays one in the video window. Words that start with a verb below search too, unless what follows fits the verb; `/youtube search <words>` searches whatever they are. |
-| `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. |
+| `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. The video window is Windows' WebView2 or, on a Mac (macOS 14 or later), WebKit; see [YouTube](TOOLS.md#youtube) for its keys. |
 | `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: carry on, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos (`youtube.json` in the profile folder). One named by its id or link is looked up for its title and channel first: YouTube's oEmbed, which needs no key, then the Data API when that fails and a *YouTube API key* is set (1 quota unit); found nowhere, it is saved by its id and named the first time it plays. A saved video resumes where it was left the next time it plays, a few seconds back; a time you give wins, and one seen to the end starts over. In a search's picker, `s` saves the highlighted video. |
 | `/youtube saved` | The saved videos on the pane, each with where it was left (`at 12:34 of 45:00`, `watched`, `not played yet`); Enter plays one from there, `d` removes one after a yes. Any still without a title are looked up first. |
@@ -279,7 +280,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 ### Picture viewer
 
-The picture viewer is a window of its own (Windows only; elsewhere the file's registered app opens, and `/view` draws in the transcript). It opens from:
+The picture viewer is a window of its own, on Windows and on a Mac (where it needs the desktop: over SSH the file's registered app opens, and `/view` draws in the transcript). It opens from:
 
 * **A double-click on a picture in the transcript**, on that picture's folder. A picture with no file (a paste, the built-in splash) is written to `%TEMP%\NeonSidekick\pictures` first. *Image viewer* can send these to another program.
 * **`/view <image or folder>`**: the image, or a folder's newest picture, following new ones.
@@ -306,16 +307,18 @@ The picture viewer is a window of its own (Windows only; elsewhere the file's re
 * It reopens where it was last closed (saved in the profile), at the default size.
 * It, the thumbnail browser and the ComfyUI picture strip follow each other: browsing the viewer highlights the same picture in the strip and the browser, and picking one on the strip or in the browser moves the viewer to it without bringing it forward.
 * **The picture menu** (a right-click on the picture, here and in the thumbnail browser) is drawn in the theme: *Rotate and flip* (right, left, 180°, horizontally, vertically), *Colour* (greyscale, sepia, negative, polaroid), *Resize* (50%, 25%, or fit in 3840, 1920, 1280, 1024 or 512 px, never enlarging), *Convert to* PNG, JPEG, GIF or BMP, *Shrink the file* under 2 MB, 1 MB, 500 KB or 200 KB, *Strip metadata (lossless)* (JPEG, PNG, WebP and GIF only: EXIF, GPS, XMP, comments and data after the picture go, the pixels are copied untouched, the orientation is kept), then *Copy the path*, *Show in Explorer*, *Attach to the chat* (pasted onto the input line as a picture), *Print*, and *Delete* (permanent, no confirmation). Its last row shows *Image edit mode*: `beside-original` writes `photo-edited.png` beside the picture and shows it, `overwrite-original` replaces the picture (a conversion writes the new file and deletes the old). An edit that would change nothing says so and writes nothing. What each row did is a line in the chat. Edits use *Image edit quality* and *Image edit metadata*, as `image_edit` does; *Strip metadata* always takes it all.
+* **On a Mac** (2026-10-07) it is an AppKit window, with no Dock icon or menu bar of its own. The keys are the same, plus: ⌫ (delete) works as Del, ⌘W closes, ⌃⌘F is full screen (F11 is macOS's Show Desktop unless you turn that shortcut off in System Settings › Keyboard › Keyboard Shortcuts › Mission Control), a two-finger swipe up or down on a trackpad steps like the wheel, Control-click is a right-click, and Option chords are never the viewer's. Full screen covers the screen and hides the Dock and menu bar while the viewer is in front, on the same desktop (not a full-screen Space). The picture menu is the Mac's own menu, dark or light with the window; its rows are the same but *Show in Finder* stands for *Show in Explorer* and *Print* is left out (printing needs Windows). Dragging the picture out copies its file where it is dropped (Finder, the desktop, any app that takes a file). Tab brings the terminal app forward (the one that started the app, found from its parent processes, else from `TERM_PROGRAM`), and a Ctrl or Option chord runs in the chat as on Windows (Ctrl+Option+U closes the viewer); ⌘ chords stay the Mac's. Its place is kept in points from the top-left of the screen with the menu bar; a place on a screen that is gone, or partly off one, is brought back onto a screen.
 * The camera's live view (*Camera preview* `live`, `/camera live`) is a separate window, so both can be open. It shows the camera mirrored, then the photo, never takes the keyboard, answers only F11, a double-click and Esc (plus Tab and the chords that go to the chat, as in the viewer; Ctrl+Alt+V closes it), and remembers its own place.
 
 ### Thumbnail browser
 
-`/view <folder or image> --thumbs` (a folder of the working directory, or an image's folder with the image selected), `/comfy thumbs` or the toolbar's **🪟** (the ComfyUI output folder) opens the folder's pictures as thumbnails in a window of their own (Windows only), oldest first.
+`/view <folder or image> --thumbs` (a folder of the working directory, or an image's folder with the image selected), `/comfy thumbs` or the toolbar's **🪟** (the ComfyUI output folder) opens the folder's pictures as thumbnails in a window of their own (on Windows, and on a Mac with its desktop), oldest first.
 
 * **In step:** a click on a thumbnail moves the picture viewer to it without taking the keyboard (opening the viewer when it is closed); the viewer's own keys and the strip's arrows move the selection here.
 * **No jumping:** new pictures go on the end and nothing already shown moves. A view scrolled to the bottom of a long folder stays at the bottom as pictures arrive.
 * **Size:** the thumbnails are as large as fits every picture in the window (down to a smallest size, then the window scrolls), chosen when it opens, is resized or goes full screen, and on F5. + and − (or Ctrl+wheel) make them bigger or smaller for the session; F5 fits them again.
 * **The picture menu:** a right-click on a thumbnail (or the Apps key, Shift+F10) opens the same menu as in the viewer, with *Open in the viewer* first.
+* **On a Mac** (2026-10-07) the keys are the same, plus ⌫ for Del, ⌘= and ⌘− (or ⌘ with the wheel, or a pinch) for the size, ⌃⌘F for full screen and ⌘W to close; Control-click is a right-click, and two fingers scroll. The thumbnails are read at the screen's scale, so they are sharp on a Retina screen. Tab and the chords to the chat work as in the viewer.
 
 | Key | Action |
 |---|---|
@@ -334,7 +337,7 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 
 ### Log window
 
-`/log` opens this run's diagnostic log in a window of its own (Windows only), every line from the start, Trace and up, with or without `--log`. It keeps the newest 20,000 lines, coloured by level, and wraps long lines.
+`/log` opens this run's diagnostic log in a window of its own (on Windows, and on a Mac with its desktop), every line from the start, Trace and up, with or without `--log`. It keeps the newest 20,000 lines, coloured by level, and wraps long lines.
 
 * **Following:** at the bottom it follows new lines; scroll up and it holds still (the title says *paused*). Back at the bottom, Ctrl+E or Ctrl+End follows again.
 * **Copying:** drag to select (Shift+click extends), Ctrl+A selects all, Ctrl+C copies.
@@ -352,9 +355,11 @@ Like the viewer, it follows the theme, reopens where it was closed, and closes w
 
 Like the viewer, it follows the theme, reopens where it was closed, and closes with the app. A second `/log` brings it forward; `/log --file` opens the `--log` file instead.
 
+**On a Mac** (2026-10-07) the text is the system's own text view in its monospaced font: scrolling, selection and copying are the Mac's, with ⌘A to select all and ⌘C to copy (Ctrl+A and Ctrl+C are not the window's there). ⌘↑ goes to the top and ⌘↓ to the bottom beside Ctrl+Home and Ctrl+End or Ctrl+E, ⌃⌘F is full screen (F11 is macOS's Show Desktop), and ⌘W or Esc closes it. A double-click selects a word rather than going full screen. Tab brings the terminal forward and a Ctrl or Option chord runs in the chat (Ctrl+Option+G closes the window); since ⌘C copies here, Ctrl+C goes to the chat too, where it cancels a reply.
+
 ### Process window
 
-`/process <id>` shows a background process's output live (Windows only): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⚡) lists the processes, and Enter or a double-click on one there opens it here.
+`/process <id>` shows a background process's output live (on Windows, and on a Mac with its desktop, as the log window there): the log window's look and keys over the process's last 5,000 lines, stderr in the warning colour, the title its id, command and state (`running`, `exited 0`, `stopped by you`). It opens only when you ask; `/process` alone (or the toolbar's ⚡) lists the processes, and Enter or a double-click on one there opens it here.
 
 * **One window:** `/process` with another id switches it to that process, in the same place on screen, without closing it.
 * **Stopping:** Ctrl+K arms the stop (the title asks for a second press), and a second Ctrl+K within 3 seconds stops the process and everything it started. The chat prints `proc_… was stopped by you`, and the model hears of it on its next turn. Once the process has ended, Ctrl+K goes on to the chat as any other key. The `/process` list's **✖ kill** button (or `k`) stops the highlighted one the same way, after a yes/no.
@@ -363,24 +368,36 @@ Otherwise it is read-only: scroll, follow, select and copy as in the log window,
 
 ### Camera
 
-A USB or built-in webcam through Windows' Media Foundation; nothing to install. Windows only.
+A USB or built-in webcam through Windows' Media Foundation or, on a Mac (macOS 14 or later), Apple's AVFoundation; nothing to install.
 
-* **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go. A photo waits about a second for the exposure to settle.
-* **📷 on the hint row** shows whenever the camera is on (with its light and Windows' indicator); double-click it to end `/camera live` and watch mode.
+* **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go. A photo waits about a second for the exposure to settle (a MacBook's own camera or an iPhone about three: their first picture comes late and their exposure and focus settle over thirty frames).
+* **📷 on the hint row** shows whenever the camera is on (with its light and Windows' indicator, or a Mac's green dot and menu-bar camera icon); double-click it to end `/camera live` and watch mode.
 * **Photos** are JPEGs in *Camera output folder* (`camera_images` by default), named by time (`20261002-140203.jpg`); a retaken or declined one is deleted. Botchat and watch pictures aren't saved, but double-clicking a watch thumbnail writes it to the folder's `.watch` subfolder, which is cleared when watch mode stops and on every profile load.
 * **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.
 * **Failures** say why: Windows' *Let desktop apps access your camera* is off (Settings › Privacy & security › Camera), another app has the camera, it was unplugged, or Media Foundation is missing (Windows N needs the Media Feature Pack).
+* **On a Mac** the cameras are the built-in FaceTime camera, USB webcams and an iPhone as Continuity Camera (Desk View is left out). A MacBook's own camera is off while its lid is closed: it lists last, and choosing it says so. The permission is your terminal's (Terminal, iTerm2…): the first photo makes macOS ask, and a refusal says to turn the terminal on in System Settings › Privacy & Security › Camera. The live view is a window of its own over AppKit, with ⌃⌘F for full screen and ⌘W or Esc to close it.
 * **Watching** uses stills: each picture is compared on your machine with the last one the model saw, and sent only when enough changed.
 
 ### Screen capture
 
-A monitor, every monitor or one window, through Windows' own GDI; nothing to install. Windows only.
+A monitor, every monitor or one window, through Windows' own GDI or, on a Mac (macOS 14 or later), Apple's ScreenCaptureKit; nothing to install.
 
 * **Targets:** `screen` (the monitor the app is on, the default), `all`, `monitor:N`, `window:<id or title words>` (a title's words, or its process name; an id from `screen_list` or `/screen list` when several match) and `behind` (the window right behind the app's).
 * **A window** is drawn by itself, so it comes out whole even when another covers it; a minimized one must be restored first. Protected video and some HDR content come out black: Windows keeps it out of every screenshot.
 * **Screenshots** are JPEGs in *Screen capture output folder* (`screen_images` by default), named by time, scaled to 2048 pixels on the longer side at most.
 * **Asking:** under *Screen capture ask* `ask` the pane says what would be captured and the model's reason; a denial isn't retried that turn, and *Allow for this session* lasts until the session ends.
 * **Stored sessions** keep a line instead of the picture unless *Screen capture keep in sessions* is on: a screenshot can hold anything that was on the screen.
+* **On a Mac:**
+  * **The permission.** macOS lets an app record the screen only with the *Screen Recording* permission, and the app holds it through the terminal it runs in (Terminal, iTerm2…). At the first capture macOS asks once; after that, turn the terminal on in System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen the terminal (macOS applies it only then). Without it nothing is captured, the model is told why, and `/screen list` shows the monitors and that sentence instead of the windows. To ask again from scratch: `tccutil reset ScreenCapture com.apple.Terminal` (or `com.googlecode.iterm2`).
+  * **Retina** screens are captured at their full pixels (a 5K screen at 5120x2880), and the sizes in `/screen list` are pixels too. With screens of different sharpness side by side, the sizes are counted at the sharpest one's scale: a plain screen beside a Retina one lists at twice its pixels, is captured alone at its own, and is scaled up inside `all`.
+  * **Windows** are the ones on the screen on the normal layer (not the menu bar, the Dock or Notification Center), titled and visible. A window on another desktop (Space), or minimized, isn't listed and must be brought up first. The pointer isn't drawn.
+  * **`behind`** is the window right behind the terminal window the app runs in.
+
+### Pasting a picture
+
+A picture on the clipboard goes onto the input line as `[Image #n]` with the line's own paste: a right-click on the input line, Alt+V, or Ctrl+V where the terminal passes it (Windows Terminal keeps Ctrl+V and pastes text). The picture comes first; with none, the clipboard's text is pasted.
+
+**On a Mac** (2026-10-07) Cmd+V is the terminal's paste and pastes text only, so a copied picture pastes nothing with it. Use **Ctrl+V**, **Option+V** (with Option set to act as Meta) or a right-click. A screenshot copied with ⌃⇧⌘4 and a picture copied in Preview, Safari or another app all paste; Preview's copy, a TIFF that can hold the picture at more than one size, is sent at its largest as a PNG. A picture *file* copied in Finder pastes as its path and is attached by its name, as if dropped (Finder's copy also carries the file's icon, which is never the one attached).
 
 ### Profiles
 

@@ -2267,7 +2267,7 @@ public class InputLineTests : IDisposable
         return path;
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ADroppedImage_IsAToken_SentBesideTheText_AndTheTranscriptKeepsTheLabel()
     {
         var (line, keys) = PaneLine();
@@ -2294,7 +2294,7 @@ public class InputLineTests : IDisposable
     }
 
     /// <summary>Several files dropped at once are one paste of their paths, one per line: a token each, a space between.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task SeveralDroppedImages_AreATokenEach()
     {
         var (line, keys) = PaneLine();
@@ -2315,7 +2315,7 @@ public class InputLineTests : IDisposable
     }
 
     /// <summary>A file among several that cannot be read stays on the line as its path, with the notice; the others are tokens.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task ADroppedImageThatCannotBeRead_AmongOthers_StaysAsItsPath()
     {
         _console.Profile.Height = 10;
@@ -2335,7 +2335,7 @@ public class InputLineTests : IDisposable
         Assert.Contains("(image not attached: ", _console.Output);
         Assert.Equal(1, line.Pastes.ImageCount);
     }
-    [WindowsFact]
+    [Fact]
     public async Task ImagesAndLongPastes_NumberSeparately_AndBackspaceRemovesAnImageWhole()
     {
         var (line, keys) = PaneLine();
@@ -2392,7 +2392,7 @@ public class InputLineTests : IDisposable
         Assert.Equal(0, line.Pastes.Count);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ACopiedPath_PastedByARightClick_IsAnImageToo()
     {
         string path = Bmp("clip.bmp");
@@ -2418,7 +2418,7 @@ public class InputLineTests : IDisposable
         return (new InputLine(pane, new KeySource(scripted, TimeSpan.FromMilliseconds(1)), clipboard, notices: new TranscriptRenderer(pane), clipboardImage: picture), scripted);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task CtrlV_KeepsTheClipboardsOwnBytes_ForGenerateImage_WhileTheModelGetsTheDownscale()
     {
         // A paste as generate_image's input (later still on 2026-09-24): the store keeps the picture as it was.
@@ -2434,7 +2434,7 @@ public class InputLineTests : IDisposable
         Assert.Null(original.FileName);   // a clipboard picture has no name: the saver stamps one
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task CtrlV_PastesTheClipboardPicture_AsAnImageToken()
     {
         var (line, keys) = PictureLine(() => SmokeChecks.SolidBmp(4, 3));
@@ -2452,7 +2452,7 @@ public class InputLineTests : IDisposable
         Assert.Equal(1, line.Pastes.ImageCount);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task AltV_PastesThePicture_AndTypesNoV()
     {
         var (line, keys) = PictureLine(() => SmokeChecks.SolidBmp(4, 4));
@@ -2464,7 +2464,7 @@ public class InputLineTests : IDisposable
         Assert.Single(submitted.Images);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ThePicture_WinsOverTheText_OnTheClipboard()
     {
         var (line, keys) = PictureLine(() => SmokeChecks.SolidBmp(4, 4), () => "some words");
@@ -2492,7 +2492,7 @@ public class InputLineTests : IDisposable
         Assert.Equal("x", nothing.Text);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ARightClick_PastesThePicture_Too()
     {
         var (line, keys) = PictureLine(() => SmokeChecks.SolidBmp(4, 4), () => "text instead");
@@ -2504,7 +2504,7 @@ public class InputLineTests : IDisposable
         Assert.Equal("clipboard-1.png", Assert.Single(submitted.Images).Path);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ACorruptPicture_IsANotice_AndNothingOnTheLine()
     {
         var (line, keys) = PictureLine(() => "not a picture"u8.ToArray());
@@ -2532,7 +2532,7 @@ public class InputLineTests : IDisposable
         Assert.Equal(0, line.Pastes.ImageCount);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ThePicture_ReplacesTheSelection()
     {
         var (line, keys) = PictureLine(() => SmokeChecks.SolidBmp(4, 4));
@@ -2543,7 +2543,7 @@ public class InputLineTests : IDisposable
         Assert.Equal("a[Image #1]", submitted.Text);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ImageNumbers_CountFilesAndTheClipboardTogether()
     {
         string path = Bmp("first.bmp");

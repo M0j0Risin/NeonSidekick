@@ -668,6 +668,24 @@ public static class EmbeddedModelCatalog
             MtpHead: true),
     ];
 
+    /// <summary>
+    /// Whether <paramref name="model"/> is an NVFP4 build (2026-10-07): NVIDIA's FP4 format, which wants the CUDA build on a
+    /// Blackwell GPU — so a Mac's Metal build cannot run it well, if at all.
+    /// </summary>
+    public static bool IsNvfp4(EmbeddedModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        return model.Id.Contains("-nvfp4", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The models this machine is offered (2026-10-07, the Mac port): <see cref="Models"/> on Windows, and on a Mac the same
+    /// without the NVFP4 builds (<see cref="IsNvfp4"/>), the user's call. <see cref="Find"/> still knows them all, so a profile
+    /// saved on Windows names its model as it is.
+    /// </summary>
+    public static IReadOnlyList<EmbeddedModel> ForThisMachine { get; } =
+        OperatingSystem.IsMacOS() ? Models.Where(m => !IsNvfp4(m)).ToList() : Models;
+
     /// <summary>Where every file is fetched from: <c>https://huggingface.co/&lt;repo&gt;/resolve/&lt;commit&gt;/&lt;file&gt;</c>.</summary>
     public const string HuggingFaceBase = "https://huggingface.co/";
 

@@ -33,6 +33,15 @@ public sealed class ProcessWindowTests : IDisposable
     private ProcessSession Start(string command, bool notify = false) =>
         _registry.Start(ShellCommandLine.For(ShellKind.Cmd, command, _interpreters.Locate(ShellKind.Cmd)!, _dir), notify);
 
+    // The feed's tests on this system's shell (2026-10-07, the process window on a Mac): cmd on Windows, zsh elsewhere, a long
+    // command and an exit code in each one's spelling. They were Windows-only for cmd alone.
+    private static readonly ShellKind Here = OperatingSystem.IsWindows() ? ShellKind.Cmd : ShellKind.Zsh;
+    private static readonly string Long = OperatingSystem.IsWindows() ? "ping -n 30 127.0.0.1 >nul" : "sleep 30";
+    private static readonly string Exit4 = OperatingSystem.IsWindows() ? "exit /b 4" : "exit 4";
+
+    private ProcessSession StartHere(string command) =>
+        _registry.Start(ShellCommandLine.For(Here, command, _interpreters.Locate(Here)!, _dir), notify: false);
+
     private static async Task Exit(ProcessSession session)
     {
         await session.Exited.WaitAsync(TimeSpan.FromSeconds(60));
@@ -120,16 +129,16 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal(6, state.NextSeq);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Feed_RaisesOnALine_AndAtTheExit_AndItsTitleFollowsTheState()
     {
-        var session = Start("ping -n 30 127.0.0.1 >nul");
+        var session = StartHere(Long);
         using var feed = new ProcessFeed(session, _ => { }, _time);
         int raised = 0;
         feed.Appended += () => Interlocked.Increment(ref raised);
 
-        Assert.Equal(session.Id + " · ping -n 30 127.0.0.1 >nul — running", feed.Title(following: true));
-        Assert.Equal(session.Id + " · ping -n 30 127.0.0.1 >nul — running (paused: Ctrl+E follows)", feed.Title(following: false));
+        Assert.Equal(session.Id + " · " + Long + " — running", feed.Title(following: true));
+        Assert.Equal(session.Id + " · " + Long + " — running (paused: Ctrl+E follows)", feed.Title(following: false));
         Assert.Equal("No output yet.", feed.Empty);
 
         session.Output.Append("a line", isError: false);   // as a pump would
@@ -138,7 +147,7 @@ public sealed class ProcessWindowTests : IDisposable
         session.Kill();
         await Exit(session);
         Assert.True(Volatile.Read(ref raised) >= 2);
-        Assert.Equal(session.Id + " · ping -n 30 127.0.0.1 >nul — killed", feed.Title(following: true));
+        Assert.Equal(session.Id + " · " + Long + " — killed", feed.Title(following: true));
 
         feed.Dispose();
         int before = Volatile.Read(ref raised);
@@ -146,27 +155,27 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.Equal(before, Volatile.Read(ref raised));   // disposed: no more news
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Feed_TitleSaysExitedN_OrStoppedByYou()
     {
-        var done = Start("exit /b 4");
+        var done = StartHere(Exit4);
         await Exit(done);
         using (var feed = new ProcessFeed(done, _ => { }, _time))
         {
-            Assert.Equal(done.Id + " · exit /b 4 — exited 4", feed.Title(following: true));
+            Assert.Equal(done.Id + " · " + Exit4 + " — exited 4", feed.Title(following: true));
         }
 
-        var stopped = Start("ping -n 30 127.0.0.1 >nul");
+        var stopped = StartHere(Long);
         using var stoppedFeed = new ProcessFeed(stopped, _ => { }, _time);
         Assert.True(_registry.StopByUser(stopped));
         await Exit(stopped);
-        Assert.Equal(stopped.Id + " · ping -n 30 127.0.0.1 >nul — stopped by you", stoppedFeed.Title(following: true));
+        Assert.Equal(stopped.Id + " · " + Long + " — stopped by you", stoppedFeed.Title(following: true));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Feed_CtrlKTwice_Stops_TheFirstArmsTheTitle_AndItLapses()
     {
-        var session = Start("ping -n 30 127.0.0.1 >nul");
+        var session = StartHere(Long);
         var stops = new List<ProcessSession>();
         using var feed = new ProcessFeed(session, stops.Add, _time);
         int raised = 0;
@@ -181,7 +190,7 @@ public sealed class ProcessWindowTests : IDisposable
 
         _time.Advance(TimeSpan.FromSeconds(4));                     // the window lapses: the title goes back, and the window is told
         Assert.True(raised >= 1);
-        Assert.Equal(session.Id + " · ping -n 30 127.0.0.1 >nul — running", feed.Title(following: true));
+        Assert.Equal(session.Id + " · " + Long + " — running", feed.Title(following: true));
 
         Assert.True(feed.Key(ProcessFeed.VkK, control: true, repeat: false));     // armed again
         _time.Advance(TimeSpan.FromSeconds(1));
@@ -196,10 +205,10 @@ public sealed class ProcessWindowTests : IDisposable
         Assert.DoesNotContain("Press Ctrl+K", feed.Title(following: true), StringComparison.Ordinal);
     }
 
-    [WindowsFact]
+    [Fact]
     public void Feed_HeldCtrlK_IsOnePress_TheRepeatTakenButNeverFiring()
     {
-        var session = Start("ping -n 30 127.0.0.1 >nul");
+        var session = StartHere(Long);
         var stops = new List<ProcessSession>();
         using var feed = new ProcessFeed(session, stops.Add, _time);
         try
@@ -220,10 +229,10 @@ public sealed class ProcessWindowTests : IDisposable
         }
     }
 
-    [WindowsFact]
+    [Fact]
     public void Feed_DisposedTwice_IsHarmless()
     {
-        var session = Start("ping -n 30 127.0.0.1 >nul");
+        var session = StartHere(Long);
         var feed = new ProcessFeed(session, _ => { }, _time);
         feed.Dispose();
         feed.Dispose();

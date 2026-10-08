@@ -129,8 +129,16 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     }
 
     /// <summary>The app's service: the real catalog and runtimes under the two folders, a download client with no timeout (gigabytes), the real host.</summary>
-    public static EmbeddedLlmService Create(string embeddedModelsDirectory, string llamaDirectory) =>
-        new(new EmbeddedModels(embeddedModelsDirectory, llamaDirectory, new HttpClient { Timeout = Timeout.InfiniteTimeSpan }), new LlamaServerHost());
+    /// <remarks>On a Mac (2026-10-07) it also sweeps, off the start's path, the servers an app that is gone left running (<see cref="LlamaRecords.Sweep"/>).</remarks>
+    public static EmbeddedLlmService Create(string embeddedModelsDirectory, string llamaDirectory)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            _ = Task.Run(() => LlamaRecords.Sweep(llamaDirectory));
+        }
+
+        return new(new EmbeddedModels(embeddedModelsDirectory, llamaDirectory, new HttpClient { Timeout = Timeout.InfiniteTimeSpan }), new LlamaServerHost());
+    }
 
     public IReadOnlyList<EmbeddedModel> Catalog => _files.Catalog;
 
@@ -413,14 +421,17 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             throw new EmbeddedLlmException(EmbeddedLlmText.RuntimeFailed(runtime.Detail), runtimeMissing: true);
         }
 
-        // The projector with Embedded vision on and the file there.
+        // The projector with Embedded vision on and the file there — and pictures readable on this machine (2026-10-07, the
+        // user's call for the Mac): without codecs (ImageCodecs) no picture can reach the model, so the projector would hold
+        // about 1 GB of unified memory for nothing. A Mac has codecs since the same day (ImageIO behind MagicScaler), so there it
+        // loads as on Windows; a Mac whose ImageIO failed to register still gets a blind server, which the screen handles.
         string mmproj = _files.MmprojPath(model);
         var (drafter, mtp) = await MtpAsync(model, effective, phase, cancellationToken).ConfigureAwait(false);
         var launch = new LlamaLaunch(
             _files.Executable(backend),
             backend,
             _files.WeightsPath(model),
-            effective.EmbeddedVision && File.Exists(mmproj) ? mmproj : null,
+            effective.EmbeddedVision && Files.ImageCodecs.Available && File.Exists(mmproj) ? mmproj : null,
             model.Id,
             EmbeddedContextSize.Effective(effective.EmbeddedContextSize),
             vramOnly ? EmbeddedGpuLayers.All : EmbeddedGpuLayers.Effective(effective.EmbeddedGpuLayers),

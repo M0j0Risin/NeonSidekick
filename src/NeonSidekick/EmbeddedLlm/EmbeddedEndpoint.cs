@@ -51,9 +51,12 @@ public static class EmbeddedEndpoint
 
     /// <summary>
     /// Whether the embedded model is offered at all: llama.cpp's Windows x64 builds are the ones pinned
-    /// (<see cref="LlamaRelease"/>), so another OS or an Arm64 machine sees no embedded rows.
+    /// (<see cref="LlamaRelease"/>), and since 2026-10-07 its macOS arm64 (Metal) build, so an Apple Silicon Mac has the rows
+    /// too. Another OS, Windows on Arm and an Intel Mac see none.
     /// </summary>
-    public static bool Offered => OperatingSystem.IsWindows() && RuntimeInformation.OSArchitecture == Architecture.X64;
+    public static bool Offered =>
+        RuntimeInformation.OSArchitecture == (OperatingSystem.IsWindows() ? Architecture.X64 : Architecture.Arm64)
+        && (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS());
 
     /// <summary>
     /// Whether <paramref name="effective"/> has the embedded model switched off (<c>Embedded servers enabled</c>, 2026-09-29, the

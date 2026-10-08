@@ -106,6 +106,12 @@ public static class ProcessWindowText
     /// <summary><c>/process &lt;id&gt;</c> where no window can be made (not Windows, or headless). Pinned.</summary>
     public const string Unavailable = "The process window needs Windows; the model's process tool can still read a process's output.";
 
+    /// <summary>The same error on a Mac (2026-10-07): the window works there, but only with a window server. Pinned.</summary>
+    public const string UnavailableMac = "The process window needs the Mac's desktop (there is no window server here, over SSH, say); the model's process tool can still read a process's output.";
+
+    /// <summary>The error for this system: <see cref="UnavailableMac"/> on a Mac, <see cref="Unavailable"/> elsewhere.</summary>
+    public static string UnavailableHere => OperatingSystem.IsMacOS() ? UnavailableMac : Unavailable;
+
     /// <summary><c>/process &lt;id&gt;</c> when the window could not be made. Pinned.</summary>
     public static string WindowFailedError(string detail) => $"Could not open the process window: {detail}";
 

@@ -41,6 +41,22 @@ public sealed class CameraPureTests
     }
 
     [Fact]
+    public void Pick_RanksAMacsFourCcs_AsTheirWindowsTwins()
+    {
+        // The StreamCam's 1280x720 as AVFoundation lists it (2026-10-07): packed yuvs and bi-planar 420v at 30, 420v at 60 too.
+        var size = new CameraSize(1280, 720);
+        var formats = new[] { F(1280, 720, 30.00003, "yuvs"), F(1280, 720, 30.00003, "420v"), F(1280, 720, 60.00024, "420v") };
+
+        var picked = CameraFormats.Pick(formats, size)!;
+
+        Assert.Equal("420v", picked.Subtype);
+        Assert.Equal(30.00003, picked.Fps);
+        Assert.Equal(0, CameraFormats.SubtypeRank("420f"));
+        Assert.Equal(1, CameraFormats.SubtypeRank("2vuy"));
+        Assert.Equal(2, CameraFormats.SubtypeRank("dmb1"));
+    }
+
+    [Fact]
     public void Attributes_PackAndUnpack_AndSubtypesReadAsTheirFourCc()
     {
         var size = new CameraSize(1920, 1080);
@@ -95,6 +111,29 @@ public sealed class CameraPureTests
     }
 
     [Fact]
+    public void CopyTopDown_ReadsAMacPixelBuffersPaddedRows()
+    {
+        // A 32BGRA CVPixelBuffer 6 pixels wide came back with 64-byte rows (24 needed) in the smoke on 2026-10-07: the row's tail
+        // is padding, never pixels.
+        const int width = 6, height = 3, rowBytes = 64;
+        var buffer = new byte[rowBytes * height];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < rowBytes; x++)
+            {
+                buffer[(y * rowBytes) + x] = x < width * 4 ? (byte)((y * 24) + x) : (byte)0xEE;
+            }
+        }
+
+        var into = new byte[width * height * 4];
+        CameraPixels.CopyTopDown(buffer, 0, rowBytes, width, height, into);
+
+        Assert.Equal(Enumerable.Range(0, width * height * 4).Select(i => (byte)i), into);
+        Assert.DoesNotContain((byte)0xEE, into);
+        Assert.Throws<ArgumentOutOfRangeException>(() => CameraPixels.CopyTopDown(buffer[..(rowBytes * 2)], 0, rowBytes, width, height, into));
+    }
+
+    [Fact]
     public void Fit_NeverEnlarges_AndKeepsTheAspect()
     {
         Assert.Equal((640, 480), CameraPixels.Fit(640, 480, 1024));
@@ -125,7 +164,7 @@ public sealed class CameraPureTests
         Assert.Equal(76, CameraPixels.Luma(0, 0, 255));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Encode_IsAJpeg_ScaledToFit_ThatTryLoadKeepsByteForByte_RedStayingRed()
     {
         var size = new CameraSize(320, 240);
@@ -187,10 +226,12 @@ public sealed class CameraPureTests
         Assert.Equal(CameraFailure.Unplugged, CameraText.FailureOf(unchecked((int)0xC00DABE0)));
         Assert.Equal(CameraFailure.Failed, CameraText.FailureOf(unchecked((int)0x80004005)));
         Assert.Equal("0x80004005", CameraText.Hresult(unchecked((int)0x80004005)));
-        Assert.Contains("Let desktop apps access your camera", CameraText.Failure(CameraFailure.Blocked, null));
-        Assert.Contains("Another app", CameraText.Failure(CameraFailure.InUse, null));
-        Assert.Equal("The camera failed. (0x80004005 from ReadSample)", CameraText.Failure(CameraFailure.Failed, "0x80004005 from ReadSample"));
-        Assert.All(Enum.GetValues<CameraFailure>(), f => Assert.False(string.IsNullOrWhiteSpace(CameraText.Failure(f, null))));
+        Assert.Contains("Let desktop apps access your camera", CameraText.Failure(CameraFailure.Blocked, null, mac: false));
+        Assert.Contains("Another app", CameraText.Failure(CameraFailure.InUse, null, mac: false));
+        Assert.Equal("The camera failed. (0x80004005 from ReadSample)", CameraText.Failure(CameraFailure.Failed, "0x80004005 from ReadSample", mac: false));
+        Assert.All(Enum.GetValues<CameraFailure>(), f => Assert.False(string.IsNullOrWhiteSpace(CameraText.Failure(f, null, mac: false))));
+        Assert.All(Enum.GetValues<CameraFailure>(), f => Assert.False(string.IsNullOrWhiteSpace(CameraText.Failure(f, null, mac: true))));
+        Assert.Equal(CameraText.Failure(CameraFailure.Blocked, null, OperatingSystem.IsMacOS()), CameraText.Failure(CameraFailure.Blocked, null));
         var error = new CameraException(CameraFailure.NoCamera, null);
         Assert.Equal(CameraFailure.NoCamera, error.Failure);
         Assert.Equal("No camera is connected.", error.Message);
@@ -719,7 +760,7 @@ public sealed class CameraCaptureTests : IDisposable
 
     private CameraCapture Capture() => new(_session, () => _files, () => _settings.CameraOutputFolder, () => CameraSettings.Options(_settings), _time);
 
-    [WindowsFact]
+    [Fact]
     public async Task ASnap_IsSavedUnderCamera_StampedLocally_AClashNumbered_AndADiscardDeletesIt()
     {
         var capture = Capture();
@@ -744,7 +785,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal("20260911-140530", CameraCapture.Stem(new DateTimeOffset(2026, 9, 11, 14, 5, 30, TimeSpan.Zero)));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ASnap_GoesToTheOutputFolderSetting_EvenComfysOrTheWorkingDirectoryItself()
     {
         var capture = Capture();
@@ -777,7 +818,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal(".watch", CameraWatch.FolderFor(""));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ASnap_IsScaledToTheResolutionsLongerSide()
     {
         _system.Size = new CameraSize(1920, 1080);
@@ -790,7 +831,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal((640, 360), (shot.Image.Width, shot.Image.Height));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ASaveTheSandboxRefuses_IsACameraFailure()
     {
         await File.WriteAllTextAsync(Path.Combine(_dir, "camera_images"), "a file where the folder goes");
@@ -802,7 +843,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.StartsWith("The camera failed. (The photo could not be saved: Error:", error.Message);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheTool_HasItsSchema_ReadsThePromptLeniently_AndAnswersEachOutcome()
     {
         var shot = await Capture().SnapAsync(_session.Acquire("test"), CancellationToken.None);
@@ -861,7 +902,7 @@ public sealed class CameraCaptureTests : IDisposable
         Assert.Equal(CameraText.Failure(CameraFailure.NoCamera, null), Assert.Single(lines).Text);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Watch_KeepsTheFirstFrame_ThenOnlyAChange_AndStopsOnRevoke()
     {
         long frameNo = 0;

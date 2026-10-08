@@ -24,7 +24,12 @@ public static class PerfText
     public const string CpuLabel = "CPU";
     public const string RamLabel = "RAM";
     public const string GpuLabel = "GPU";
-    public const string VramLabel = "VRAM";
+    /// <summary>
+    /// The GPU memory meter (2026-09-29). On a Mac (2026-10-07, the user's pick) <c>GMEM</c>: a Mac's GPU has no memory of its own,
+    /// so the meter is the GPU's share of unified memory (<see cref="MacGpu"/>), and "VRAM" would promise a card. Four cells and no
+    /// space, as <c>VRAM</c>, so <c>GMEM 43%</c> reads as one meter. Pinned.
+    /// </summary>
+    public static string VramLabel => OperatingSystem.IsMacOS() ? "GMEM" : "VRAM";
 
     /// <summary>
     /// The network's share of the link (2026-09-30). <c>NET%</c> until 2026-10-01, when the <c>%</c> went (the user's ask: the
@@ -44,8 +49,8 @@ public static class PerfText
     // The checklist's notes beside each meter (2026-09-30, App.PerfBarItems.Describe).
     public const string CpuNote = "processor load";
     public const string RamNote = "memory in use";
-    public static string GpuNote => OperatingSystem.IsMacOS() ? "GPU load (needs Windows for now)" : "GPU load (NVIDIA, else Windows counters)";   // the Mac's, 2026-10-06
-    public const string VramNote = "GPU memory in use";
+    public static string GpuNote => OperatingSystem.IsMacOS() ? "GPU load" : "GPU load (NVIDIA, else Windows counters)";   // the Mac's, 2026-10-06; read since 2026-10-07
+    public static string VramNote => OperatingSystem.IsMacOS() ? "GPU's share of unified memory" : "GPU memory in use";   // the Mac's GMEM, 2026-10-07
     public const string NetNote = "network use, % of the link";
     public const string NetDownNote = "download rate (bits/s)";
     public const string NetUpNote = "upload rate (bits/s)";

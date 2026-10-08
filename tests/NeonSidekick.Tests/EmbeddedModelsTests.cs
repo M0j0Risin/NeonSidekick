@@ -404,7 +404,7 @@ public class EmbeddedModelsTests : IDisposable
         var launch = Assert.Single(host.Launches);
         Assert.Equal(_files.Executable(LlamaBackend.Cuda), launch.Executable);
         Assert.Equal(_files.WeightsPath(_model), launch.ModelPath);
-        Assert.Equal(_files.MmprojPath(_model), launch.MmprojPath);
+        Assert.Equal(Files.ImageCodecs.Available ? _files.MmprojPath(_model) : null, launch.MmprojPath);   // no projector where pictures cannot be read (2026-10-07)
         Assert.Equal("tiny-model", launch.Alias);
         Assert.Equal(8192, launch.ContextSize);
         Assert.Equal("all", launch.GpuLayers);
@@ -737,7 +737,7 @@ public class EmbeddedModelsTests : IDisposable
         Assert.False(files.RuntimeInstalled(LlamaBackend.Vulkan));
     }
 
-    [Fact]
+    [WindowsFact]   // "cuda" is no backend on a Mac, where it reads as auto (2026-10-07)
     public async Task ForcedCuda_ThatFailsToStart_Fails()
     {
         InstallByHand();

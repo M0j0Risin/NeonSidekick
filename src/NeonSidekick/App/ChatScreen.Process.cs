@@ -72,7 +72,7 @@ internal sealed partial class ChatScreen
     {
         if (_openProcessWindow is null)
         {
-            sink.Error(ProcessWindowText.Unavailable);
+            sink.Error(ProcessWindowText.UnavailableHere);
             return false;
         }
 

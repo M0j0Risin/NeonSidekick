@@ -28,7 +28,7 @@ public partial class SidekickAppTests
         Assert.Contains("[error] " + CameraText.Failure(CameraFailure.Unsupported, null), output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task CameraCheck_OverTheFake_PassesEveryLine()
     {
         _console.Profile.Width = 300;   // the check's lines unwrapped
@@ -45,7 +45,7 @@ public partial class SidekickAppTests
         Assert.Contains("CAMERA CHECK PASS  5 checks", _console.Output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task CameraCheck_ABlackPicture_IsSaid_AndNoCameraFails()
     {
         _console.Profile.Width = 300;   // the check's lines unwrapped

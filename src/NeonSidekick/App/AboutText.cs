@@ -152,7 +152,7 @@ public static class AboutText
         new("Vosk", "0.3.38", "Apache-2.0", "the wake-word recogniser in-process"),
         new("Vosk models", Unversioned, "Apache-2.0", "wake-word models, downloaded on first use"),
         new("Silero VAD", "6.2.0", "MIT", "the voice-activity model, downloaded on first use"),
-        new("PhotoSauce.MagicScaler", "0.15.0", "MIT", "image decode and downscale through Windows' WIC codecs" + WindowsOnlyNote),
+        new("PhotoSauce.MagicScaler", "0.15.0", "MIT", OperatingSystem.IsMacOS() ? "image decode, edit and downscale through Apple's ImageIO codecs" : "image decode and downscale through Windows' WIC codecs" + WindowsOnlyNote),
         new("Markdig", "1.3.2", "BSD-2-Clause", "the Markdown reader behind the styled transcript"),
         new("Microsoft.Web.WebView2", "1.0.4258.31", "BSD-3-Clause", "the video window's WebView2 loader; the browser is Windows' WebView2 Runtime" + WindowsOnlyNote),   // 2026-10-05
         new("llama.cpp (llama-server)", EmbeddedLlm.LlamaRelease.Tag, "MIT", "embedded LLM server, downloaded on first use"),   // 2026-09-29; the user's wording 2026-10-03

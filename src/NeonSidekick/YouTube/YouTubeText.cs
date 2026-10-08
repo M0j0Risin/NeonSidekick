@@ -340,6 +340,11 @@ public static class YouTubeText
     /// <summary>No video window to play in (not Windows).</summary>
     public const string NoWindow = "There is no video window here (it needs Windows); /youtube <words> still searches.";
 
+    /// <summary>
+    /// <see cref="NoWindow"/> on a Mac (2026-10-07: the window plays there too, but needs a desktop session and macOS 14 or later).
+    /// </summary>
+    public const string NoWindowMac = "There is no video window here (it needs a desktop session and macOS 14 or later); /youtube <words> still searches.";
+
     /// <summary>The window closed.</summary>
     public const string Closed = "Closed the video window.";
 

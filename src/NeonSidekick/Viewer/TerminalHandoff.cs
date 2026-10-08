@@ -74,9 +74,19 @@ public static class TerminalHandoff
     public static ConsoleKeyInfo ToKey(int virtualKey, bool control, bool alt, bool shift) =>
         new('\0', (ConsoleKey)virtualKey, shift, alt, control);
 
-    /// <summary>The terminal's window found and kept (once, at startup, before any window opens). Windows only; nothing elsewhere.</summary>
-    public static void Remember()
+    /// <summary>
+    /// The terminal's window found and kept (once, at startup, before any window opens). On a Mac (2026-10-07) this process's
+    /// ancestors and <paramref name="termProgram"/> (<c>TERM_PROGRAM</c>) are kept instead, and the terminal app is picked from them
+    /// when TAB first asks (<see cref="MacTerminal"/>, <see cref="TerminalPick"/>). Nothing elsewhere.
+    /// </summary>
+    public static void Remember(string? termProgram = null)
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            MacTerminal.Remember(termProgram);
+            return;
+        }
+
         if (!OperatingSystem.IsWindows())
         {
             return;
@@ -106,6 +116,36 @@ public static class TerminalHandoff
                 return true;
             case WindowKey.Pass when Passed is { } passed:
                 passed(ToKey(virtualKey, control, alt, shift));
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// A key a Mac window had no use for, on the main thread (2026-10-07, Stage 2 phase 4): <see cref="Decide"/> over the key's own
+    /// modifiers, Option standing for Alt — TAB brings the terminal app forward, a Ctrl or Option chord goes to <see cref="Passed"/>
+    /// (<c>UnixConsoleInput.Inject</c>). ⌘ chords are never decided here: they stay AppKit's. True when it was taken.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    internal static bool TakeMac(MacKeyEvent key)
+    {
+        if ((key.Flags & MacKeys.CommandFlag) != 0)
+        {
+            return false;
+        }
+
+        int vk = MacKeys.ToVirtualKey(key.KeyCode);
+        bool control = (key.Flags & MacKeys.ControlFlag) != 0;
+        bool alt = (key.Flags & MacKeys.OptionFlag) != 0;
+        bool shift = (key.Flags & MacKeys.ShiftFlag) != 0;
+        switch (vk == 0 ? WindowKey.None : Decide(vk, control, alt))
+        {
+            case WindowKey.Focus:
+                MacTerminal.Focus();
+                return true;
+            case WindowKey.Pass when Passed is { } passed:
+                passed(ToKey(vk, control, alt, shift));
                 return true;
             default:
                 return false;

@@ -61,7 +61,7 @@ public sealed class FileToolsTests : IDisposable
         File.WriteAllText(full, text);
     }
 
-    [WindowsFact]
+    [Fact]
     public void FileTools_AreTheSixteen_InOrder_AllQuiet()
     {
         Assert.Equal(FileToolNames.WithoutPdf, _tools.Select(t => t.Name));
@@ -71,19 +71,22 @@ public sealed class FileToolsTests : IDisposable
         Assert.All(_tools, t => Assert.Equal("object", t.JsonSchema.GetProperty("type").GetString()));
     }
 
-    /// <summary>The Unix twin of <see cref="FileTools_AreTheSixteen_InOrder_AllQuiet"/> (2026-10-06, the macOS build): no picture codecs, thirteen tools.</summary>
+    /// <summary>
+    /// The Unix twin of <see cref="FileTools_AreTheSixteen_InOrder_AllQuiet"/> (2026-10-06, the macOS build): thirteen tools where there
+    /// are no picture codecs, the sixteen on a Mac since 2026-10-07 (ImageIO behind MagicScaler).
+    /// </summary>
     [UnixFact]
-    public void FileTools_AreTheThirteen_WithoutThePictureTools_OffWindows()
+    public void FileTools_OffWindows_HaveThePictureTools_OnlyWithCodecs()
     {
         Assert.Equal(FileToolNames.WithoutPdf, _tools.Select(t => t.Name));
-        Assert.Equal(13, _tools.Count);
-        Assert.DoesNotContain(ViewImageTool.ToolName, _tools.Select(t => t.Name));
+        Assert.Equal(Files.ImageCodecs.Available ? 16 : 13, _tools.Count);
+        Assert.Equal(Files.ImageCodecs.Available, _tools.Any(t => t.Name == ViewImageTool.ToolName));
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));
     }
 
     /// <summary><c>view_image</c>'s case of <see cref="Schemas_ArePinned"/>, on its own (2026-10-06): the macOS build has no picture codecs and no such tool.</summary>
-    [WindowsFact]
+    [Fact]
     public void Schemas_ArePinned_ViewImage() => Schemas_ArePinned(ViewImageTool.ToolName, "path,paths", "");
 
     [Theory]
@@ -617,7 +620,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => new WorkingDirectory(() => _root, null!));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ViewImage_ReturnsAToolImageResult_OrTheErrorSentence()
     {
         Directory.CreateDirectory(_root);
@@ -643,7 +646,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.EndsWith(FileText.ViewImageHint, FileText.NotText("square.bmp"), StringComparison.Ordinal);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ViewImage_Paths_FetchesABatch_OneLinePerPath_FailuresInline()
     {
         Directory.CreateDirectory(_root);
@@ -747,7 +750,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(10, Rows(await Invoke(search, ("order", "modified"))));
     }
 
-    [WindowsFact]
+    [Fact]
     public void ViewImage_Cap_IsTheSetting_Clamped_AndQuotedByTheDescriptionAndTheSchema()
     {
         var view = Tool<ViewImageTool>();

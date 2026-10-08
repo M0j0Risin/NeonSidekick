@@ -85,4 +85,84 @@ public static partial class SmokeChecks
             return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
         }
     }
+
+    /// <summary>
+    /// <c>screen:cg</c> (2026-10-07, a Mac's screen capture): the displays through <c>CGGetActiveDisplayList</c> and their modes, the
+    /// window list through <c>CGWindowListCopyWindowInfo</c> and its dictionaries, the permission through
+    /// <c>CGPreflightScreenCaptureAccess</c> (never the request: no prompt in a smoke). Nothing is captured. Without the permission
+    /// (GitHub's macOS runner) the windows are counted as rows, since their titles are hidden; skipped off macOS 14+ and with no
+    /// window server.
+    /// </summary>
+    public static SmokeCheck ProbeScreenCg()
+    {
+        const string name = "screen:cg";
+        if (!OperatingSystem.IsMacOSVersionAtLeast(14))
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS 14+");
+        }
+
+        try
+        {
+            if (!Viewer.AppKitNative.HasWindowServer())
+            {
+                return new SmokeCheck(name, true, "skipped: no window server");
+            }
+
+            var screen = new MacScreenSystem();
+            var monitors = screen.Monitors();
+            var first = monitors[0].Bounds;
+            string windows = screen.Refusal(ask: false) is null
+                ? $"{screen.Windows().Count} window(s) listed"
+                : "no Screen Recording permission, so no windows listed (the refusal names the terminal)";
+            return new SmokeCheck(name, true, $"{monitors.Count} display(s), the first {first.Width}x{first.Height}; {windows}");
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <c>screen:sck</c> (2026-10-07): ScreenCaptureKit bound — its classes and the two class methods the capture calls answer —
+    /// and, with the permission, <c>getShareableContentWithCompletionHandler:</c> run through the hand-built completion block (the
+    /// one piece no unit test can reach), counting the displays and windows. Never a screenshot. Skipped off macOS 14+, with no
+    /// window server, and (the call, not the binding) without the permission.
+    /// </summary>
+    public static SmokeCheck ProbeScreenSck()
+    {
+        const string name = "screen:sck";
+        if (!OperatingSystem.IsMacOSVersionAtLeast(14))
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS 14+");
+        }
+
+        try
+        {
+            nint content = MacScreenNative.TryClass("SCShareableContent"), manager = MacScreenNative.TryClass("SCScreenshotManager");
+            bool bound = content != 0 && manager != 0 && MacScreenNative.TryClass("SCContentFilter") != 0 && MacScreenNative.TryClass("SCStreamConfiguration") != 0
+                && MacScreenNative.class_getClassMethod(content, Viewer.AppKitNative.Sel("getShareableContentWithCompletionHandler:")) != 0
+                && MacScreenNative.class_getClassMethod(manager, Viewer.AppKitNative.Sel("captureImageWithFilter:configuration:completionHandler:")) != 0;
+            if (!bound)
+            {
+                return new SmokeCheck(name, false, "ScreenCaptureKit's classes or methods are missing");
+            }
+
+            if (!Viewer.AppKitNative.HasWindowServer())
+            {
+                return new SmokeCheck(name, true, "bound; the call skipped: no window server");
+            }
+
+            if (new MacScreenSystem().Refusal(ask: false) is not null)
+            {
+                return new SmokeCheck(name, true, "bound; the call skipped: no Screen Recording permission");
+            }
+
+            var (displays, windows) = MacScreenSystem.ShareableCounts();
+            return new SmokeCheck(name, displays > 0, $"bound; the completion block answered: {displays} display(s), {windows} window(s)");
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
+        }
+    }
 }

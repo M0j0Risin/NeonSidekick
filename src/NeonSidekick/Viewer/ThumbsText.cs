@@ -48,11 +48,26 @@ public static class ThumbsText
     /// <summary>The window's keys and mouse, the line under <see cref="Opened"/>. Pinned.</summary>
     public const string Keys = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − or Ctrl+wheel size · Del twice deletes · F5 refresh · F11 full screen · TAB terminal · ESC close)";
 
+    /// <summary>
+    /// The browser's keys on a Mac (2026-10-07, phase 2): ⌘ for the size beside + −, a pinch, ⌫ for Del, ⌃⌘F for full screen (F11 is
+    /// macOS's Show Desktop), ⌘W beside ESC; Control-click is a right-click; TAB to the terminal since phase 4. Pinned.
+    /// </summary>
+    public const string KeysMac = "(click shows a picture in the viewer · double-click or Enter opens it · arrows move · right-click for the picture menu · + − ⌘+wheel or pinch size · ⌫ twice deletes · F5 refresh · ⌃⌘F full screen · TAB terminal · ESC or ⌘W close)";
+
+    /// <summary>The keys line for this system: <see cref="KeysMac"/> on a Mac, <see cref="Keys"/> elsewhere.</summary>
+    public static string KeysHere => OperatingSystem.IsMacOS() ? KeysMac : Keys;
+
     /// <summary>The transcript's line after the toolbar's 🪟 closed the window (2026-10-04), <see cref="ViewerText.Closed"/>'s twin. Pinned.</summary>
     public const string Closed = "(🖼️ thumbnails closed)";
 
     /// <summary>The transcript's error when there is no window to open (not Windows). Pinned.</summary>
     public const string Unavailable = "The thumbnail browser needs Windows.";
+
+    /// <summary>The same error on a Mac (2026-10-07): the browser works there, but only with a window server. Pinned.</summary>
+    public const string UnavailableMac = "The thumbnail browser needs the Mac's desktop: there is no window server here (over SSH, say).";
+
+    /// <summary>The error for this system: <see cref="UnavailableMac"/> on a Mac, <see cref="Unavailable"/> elsewhere.</summary>
+    public static string UnavailableHere => OperatingSystem.IsMacOS() ? UnavailableMac : Unavailable;
 
     /// <summary>The transcript's error when the folder could not be opened. Pinned.</summary>
     public static string Failed(string folder, string detail) => $"Could not open the thumbnail browser on {folder}: {detail}";

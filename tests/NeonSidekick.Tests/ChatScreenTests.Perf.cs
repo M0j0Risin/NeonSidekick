@@ -24,7 +24,7 @@ public partial class ChatScreenTests
             input.OnWait = null;
             _time.Advance(ScreenPane.Tick);   // the sampler's first reading
             _time.Advance(ScreenPane.Tick);   // the pane's tick draws it
-            shown = Output.Contains("CPU  34% · VRAM  91%", StringComparison.Ordinal);   // RAM unchecked, GPU unread
+            shown = Output.Contains("CPU  34% · " + Perf.PerfText.VramLabel + "  91%", StringComparison.Ordinal);   // RAM unchecked, GPU unread
             _settings.Update(d => d.PerformanceBarItems = []);
             _time.Advance(ScreenPane.Tick);   // the row goes, the sampler stops
             PushLine(input, "/exit");
@@ -65,7 +65,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Equal(["CPU, RAM, GPU, VRAM · led", "CPU, RAM, GPU, VRAM · gauge", "off", "CPU, RAM, GPU, VRAM · gauge"], shown);
+        Assert.Equal(["CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led", "CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · gauge", "off", "CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · gauge"], shown);
         Assert.Contains(PerfText.BarNotice("led"), output);   // the default look, led since 2026-10-02
         Assert.Contains(PerfText.BarNotice("off"), output);
         Assert.Contains(PerfText.BarNotice("gauge"), output);

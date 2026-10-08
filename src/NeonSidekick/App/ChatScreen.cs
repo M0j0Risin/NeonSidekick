@@ -531,7 +531,7 @@ internal sealed partial class ChatScreen
     private readonly bool _ownsMcp;
     private readonly Action<string> _openFile;
 
-    /// <summary>Opens a new terminal window in a folder (<c>/terminal</c>, 2026-10-03): <see cref="PersonaFile.OpenTerminal"/> in the app on Windows; null = <c>/terminal</c> answers <see cref="TerminalUnavailableError"/>.</summary>
+    /// <summary>Opens a new terminal window in a folder (<c>/terminal</c>, 2026-10-03): <see cref="PersonaFile.OpenTerminal"/> in the app on Windows and, since 2026-10-07, on a Mac; null = <c>/terminal</c> answers <see cref="TerminalUnavailableError"/>.</summary>
     private readonly Action<string>? _openTerminal;
 
     /// <summary>The <c>--log</c> file, full path (2026-09-22): <c>/log --file</c> opens it (the bare <c>/log</c> until 2026-10-02, and only a command while it was set). Null = started without <c>--log</c>.</summary>
@@ -919,7 +919,7 @@ internal sealed partial class ChatScreen
     /// <param name="environment">Reads a system variable for the shell probe (<c>PATH</c>, <c>PATHEXT</c>; <see cref="EnvironmentOverrides.System"/> in the app, 2026-09-21); null = no PATH at all, which still finds <c>cmd.exe</c> and Windows PowerShell under the system folder (the tests' deterministic pair).</param>
     /// <param name="perfSource">What the performance bar reads the machine with (2026-09-29): <see cref="Perf.PerfSources.CreateDefault"/> in the app; opened while <c>Show performance bar</c> is on, closed when it goes off; null = <see cref="Perf.NullPerfSource"/>, a bar with no meters (the tests pass a fake).</param>
     /// <param name="frames">Where the pane's synchronized frames are held and let go as one write (2026-09-29, the user's report: the hint row, the toolbar and the performance bar flickered at every turn's end): the <see cref="FrameWriter"/> <c>Program.cs</c> made stdout; null = no holding (the tests).</param>
-    /// <param name="openTerminal">Opens a new terminal window in a folder without waiting for it (<c>/terminal</c> and Ctrl+., 2026-10-03): <see cref="PersonaFile.OpenTerminal"/> in the app on Windows; tests record the call; a throw is reported as an error line; null = <c>/terminal</c> is refused.</param>
+    /// <param name="openTerminal">Opens a new terminal window in a folder without waiting for it (<c>/terminal</c> and Ctrl+., 2026-10-03): <see cref="PersonaFile.OpenTerminal"/> in the app on Windows and a Mac; tests record the call; a throw is reported as an error line; null = <c>/terminal</c> is refused.</param>
     /// <param name="logFile">The <c>--log</c> file, full path (2026-09-22): <c>/log</c> opens it with <paramref name="openFile"/>, and only while it is given is <c>/log</c> a command, in <c>/help</c> and in the completion list; null = started without <c>--log</c> (and the tests).</param>
     public ChatScreen(
         IAnsiConsole console,
@@ -2110,8 +2110,14 @@ internal sealed partial class ChatScreen
     /// run E to Z; each row's command left its meaning for <see cref="KeyRow.Command"/>, a column of its own on the tab; and every
     /// meaning starts with its verb ("open the … pane" or "… picker" for a pane, "show or hide …" for anything toggled, "the
     /// transcript" for the chat area). The labels are unchanged: <c>/keycheck</c> parses them and <c>neon_help</c> finds a key by one.
+    /// On a Mac (2026-10-07) Ctrl+], Ctrl+D and Ctrl+Alt+A stand beside Ctrl+., Ctrl+M and Ctrl+Alt+M (<see cref="Keys.ShortcutLine"/>),
+    /// and Option+Delete for Ctrl+Backspace, whose BS is Ctrl+H there; Windows' rows are unchanged.
     /// </summary>
-    public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase)
+    public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase) =>
+        KeyRows(voiceOn, pushToTalk, wakeReady, wakePhrase, OperatingSystem.IsMacOS());
+
+    /// <summary><see cref="KeyRows(bool, ConsoleKey, bool, string)"/> for a Mac or not, whatever this machine is, so the tests pin both lists.</summary>
+    public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase, bool mac)
     {
         var rows = new List<KeyRow>
         {
@@ -2123,12 +2129,14 @@ internal sealed partial class ChatScreen
             new("Left / Right", "switch tabs in menus · hold Shift to select text"),
             new("Home / End", "go to the start or end of the line · hold Shift to select"),
             new("Ctrl+Left / Right", "move a word back or forward · hold Shift to select words"),   // 2026-10-04, the UI review
-            new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
+            mac
+                ? new("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)")
+                : new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
             // The editing chords beside the editing keys (2026-10-05, the user's pick), out of the Ctrl letters.
             new("Ctrl+A", "select all the text on the line"),
             new("Ctrl+C", "copy the selection · stop the speech · cancel the reply · press twice to exit"),
             new("Ctrl+X", "cut the selection"),
-            new("Alt+V", "paste text or pictures"),
+            mac ? new("Ctrl+V / Alt+V", "paste text or pictures (Cmd+V is the terminal's: text only)") : new("Alt+V", "paste text or pictures"),
             // The transcript's scroll together (2026-10-05).
             new("PgUp / PgDn", "scroll the transcript a page at a time"),
             new("Ctrl+Home", "scroll to the top of the transcript"),
@@ -2147,13 +2155,25 @@ internal sealed partial class ChatScreen
         // The first bare F-key chords (2026-10-05, the user's pick: the Ctrl+Alt letters were running low), after the talk keys.
         rows.Add(new("F9", "take a photo with the camera and attach it", "/camera snap"));
         rows.Add(new("F10", "capture the screen and attach it", "/screen"));
-        rows.Add(new("Ctrl+.", "open a terminal in the working directory", "/terminal"));
+        // A Mac's stand-ins (2026-10-07, the user's picks) for the chords its terminals cannot send; the originals still work in the
+        // app's own windows, which hand their chords on.
+        rows.Add(new("Ctrl+.", mac ? "open a terminal (in the app's windows; Ctrl+] in the terminal)" : "open a terminal in the working directory", "/terminal"));
+        if (mac)
+        {
+            rows.Add(new("Ctrl+]", "open a terminal in the working directory", "/terminal"));
+        }
+
         rows.Add(new("Ctrl+/", "open the settings", "/settings"));
+        if (mac)
+        {
+            rows.Add(new("Ctrl+D", "open the model picker", "/model"));
+        }
+
         rows.Add(new("Ctrl+E", "open the working directory in the file browser", "/explore"));
         rows.Add(new("Ctrl+F", "show or hide the performance bar", "/perfbar"));
         rows.Add(new("Ctrl+H", "open the help", "/help"));
         rows.Add(new("Ctrl+L", "cancel a background learning turn"));
-        rows.Add(new("Ctrl+M", "open the model picker", "/model"));
+        rows.Add(new("Ctrl+M", mac ? "open the model picker (in the app's windows; Ctrl+D in the terminal)" : "open the model picker", "/model"));
         rows.Add(new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking"));
         rows.Add(new("Ctrl+P", "open the profile pane", "/profile"));
         rows.Add(new("Ctrl+Q", "open the queue pane", "/queue"));
@@ -2163,13 +2183,18 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+U", "open the usage pane", "/usage"));
         rows.Add(new("Ctrl+Y", "open the system prompt pane", "/sys"));
         rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
+        if (mac)
+        {
+            rows.Add(new("Ctrl+Alt+A", "open the memory pane", "/memory"));
+        }
+
         rows.Add(new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"));
         rows.Add(new("Ctrl+Alt+D", "open the MCP pane", "/mcp"));
         rows.Add(new("Ctrl+Alt+E", "open the sessions pane", "/sessions"));
         rows.Add(new("Ctrl+Alt+G", "show or hide the log window", "/log"));
         rows.Add(new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"));
         rows.Add(new("Ctrl+Alt+L", "open the allowed commands list", "/cmdlist"));
-        rows.Add(new("Ctrl+Alt+M", "open the memory pane", "/memory"));
+        rows.Add(new("Ctrl+Alt+M", mac ? "open the memory pane (in the app's windows; Ctrl+Alt+A in the terminal)" : "open the memory pane", "/memory"));
         rows.Add(new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"));
         rows.Add(new("Ctrl+Alt+O", "open the shell police setting", "/police"));
         rows.Add(new("Ctrl+Alt+P", "start a new conversation with the splash", "/splash"));
@@ -4850,7 +4875,7 @@ internal sealed partial class ChatScreen
     {
         if (_openLogWindow is null)
         {
-            _transcript.Error(LogViewText.Unavailable);
+            _transcript.Error(LogViewText.UnavailableHere);
             return;
         }
 
@@ -7603,23 +7628,24 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/terminal</c> notice: the folder as the file tools name it (blank = the working directory). Pinned.</summary>
     public static string TerminalOpenedNotice(string relative) => "(" + NoticeGlyphs.Terminal + "opened a terminal in " + FileText.Name(relative) + ")";
 
-    /// <summary><c>/terminal</c> where the screen was given no terminal opener (a non-Windows build). Pinned.</summary>
+    /// <summary>
+    /// <c>/terminal</c> where the screen was given no terminal opener: a build for neither Windows nor a Mac (a Mac has one since
+    /// 2026-10-07, <c>open</c> starting Terminal or iTerm2, so its own sentence of 2026-10-06 went). Pinned.
+    /// </summary>
     public const string TerminalUnavailableError = "/terminal opens Windows Terminal, which this system does not have.";
-
-    /// <summary><see cref="TerminalUnavailableError"/> on macOS (2026-10-06): no opener there yet — one would be a new process-start site, a design call. Pinned.</summary>
-    public const string MacTerminalUnavailableError = "/terminal needs Windows for now; open Terminal or iTerm2 yourself in the working directory.";
 
     /// <summary>
     /// <c>/terminal [folder]</c> (2026-10-03, the user's ask: "similar to /explore"): a new terminal window in the working
     /// directory, or in a folder under it, resolved through the sandbox exactly as <see cref="HandleExplore"/> resolves its own —
     /// a file, a path outside the root or missing, and an opener that throws are the same errors. The opener is
-    /// <see cref="PersonaFile.OpenTerminal"/>: a new Windows Terminal window, else a console window.
+    /// <see cref="PersonaFile.OpenTerminal"/>: a new Windows Terminal window, else a console window; on a Mac (2026-10-07) a new
+    /// Terminal window or iTerm2 tab.
     /// </summary>
     private void HandleTerminal(string args)
     {
         if (_openTerminal is not { } openTerminal)
         {
-            _transcript.Error(OperatingSystem.IsMacOS() ? MacTerminalUnavailableError : TerminalUnavailableError);
+            _transcript.Error(TerminalUnavailableError);
             return;
         }
 
@@ -7946,7 +7972,7 @@ internal sealed partial class ChatScreen
         var open = folder ? _openViewer : _viewPicture;
         if (open is null)
         {
-            _flow.Error(ViewerText.Unavailable);
+            _flow.Error(ViewerText.UnavailableHere);
             return;
         }
 
@@ -7954,7 +7980,7 @@ internal sealed partial class ChatScreen
         {
             open(full);
             _flow.Notice(ViewerText.Opened(folder ? full : Path.GetDirectoryName(full) ?? full));
-            _flow.Notice(ViewerText.Keys);
+            _flow.Notice(ViewerText.KeysHere);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException or ArgumentException)
         {
@@ -14561,7 +14587,7 @@ internal sealed partial class ChatScreen
     {
         if (_openViewer is null)
         {
-            _flow.Error(ViewerText.Unavailable);
+            _flow.Error(ViewerText.UnavailableHere);
             return;
         }
 
@@ -14580,7 +14606,7 @@ internal sealed partial class ChatScreen
             if (notice)
             {
                 _flow.Notice(ViewerText.Opened(full));
-                _flow.Notice(ViewerText.Keys);
+                _flow.Notice(ViewerText.KeysHere);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)

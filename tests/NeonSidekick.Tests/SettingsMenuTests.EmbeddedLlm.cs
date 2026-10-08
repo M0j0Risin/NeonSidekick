@@ -492,12 +492,13 @@ public partial class SettingsMenuTests
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto
-        Push(Keys.Down, Keys.Down, Keys.Enter); // vulkan
+        bool mac = OperatingSystem.IsMacOS();   // a Mac's picker is auto and metal (2026-10-07)
+        Push(mac ? new[] { Keys.Down, Keys.Enter } : new[] { Keys.Down, Keys.Down, Keys.Enter }); // vulkan, or metal
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal("vulkan", _settings.Current.EmbeddedBackend);
+        Assert.Equal(mac ? "metal" : "vulkan", _settings.Current.EmbeddedBackend);
         pane.Dispose();
     }
 

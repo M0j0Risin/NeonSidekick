@@ -59,7 +59,7 @@ public class KeyCheckTests
         var rows = ChatScreen.KeyRows(voiceOn: true, ConsoleKey.F4, wakeReady: true, "hey neon");
         var chords = KeyCheck.Chords(rows.Select(r => r.Pair), ConsoleKey.F4);
         Assert.Contains(chords, c => c.Label == "F4" && !c.Chord.HasModifier);
-        Assert.Contains(chords, c => c.Label == "Ctrl+Alt+M" && c.Chord == CtrlAlt(ConsoleKey.M) && c.Meaning == "open the memory pane (/memory)");
+        Assert.Contains(chords, c => c.Label == "Ctrl+Alt+M" && c.Chord == CtrlAlt(ConsoleKey.M) && c.Meaning == (OperatingSystem.IsMacOS() ? "open the memory pane (in the app's windows; Ctrl+Alt+A in the terminal) (/memory)" : "open the memory pane (/memory)"));
         Assert.DoesNotContain(chords, c => c.Label is "Enter" or "ESC" or "Up / Down" or "PgUp / PgDn");
         Assert.Equal(rows.Where(r => KeyChord.TryParse(r.Key, out var k) && k.HasModifier).Select(r => r.Key), chords.Where(c => c.Chord.HasModifier).Select(c => c.Label));   // the tab's order
 
@@ -74,7 +74,7 @@ public class KeyCheckTests
     public void EveryChordTheKeysAnswerTo_IsOnTheKeysTab()
     {
         var listed = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Select(r => r.Pair), null).Select(c => c.Chord).ToHashSet();
-        var keys = Enumerable.Range('A', 26).Select(c => (ConsoleKey)c).Append(ConsoleKey.Oem2).Append(ConsoleKey.OemPeriod);
+        var keys = Enumerable.Range('A', 26).Select(c => (ConsoleKey)c).Append(ConsoleKey.Oem2).Append(ConsoleKey.OemPeriod).Append(ConsoleKey.Oem6);   // Ctrl+], a Mac's /terminal, 2026-10-07
         foreach (var key in keys)
         {
             foreach (bool alt in new[] { false, true })

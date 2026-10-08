@@ -121,17 +121,90 @@ public static partial class SmokeChecks
     private static string Reading(double? value) => value is { } v ? v.ToString("0", CultureInfo.InvariantCulture) + "%" : "n/a";
 
     /// <summary>
+    /// <c>perf:mach</c> (2026-10-07, the bar on a Mac): the CPU and RAM readers in the published binary — Mach's
+    /// <c>HOST_CPU_LOAD_INFO</c> twice a moment apart and <c>HOST_VM_INFO64</c> with <c>hw.memsize</c> and <c>hw.pagesize</c>, the
+    /// memory in use read back within the machine's memory, which proves the buffers' offsets and the stubs under AOT.
+    /// </summary>
+    public static SmokeCheck ProbePerfMach()
+    {
+        const string name = "perf:mach";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        try
+        {
+            using var source = new MacPerfSource();
+            if (source.ReadCpu() is not { } before)
+            {
+                return new SmokeCheck(name, false, "HOST_CPU_LOAD_INFO did not answer");
+            }
+
+            Thread.Sleep(50);
+            var after = source.ReadCpu() ?? before;
+            double? cpu = PerfMath.MachCpuPercent(before.User, before.System, before.Idle, before.Nice, after.User, after.System, after.Idle, after.Nice);
+            if (source.ReadUsedBytes() is not { } used || source.MemoryBytes is not { } total)
+            {
+                return new SmokeCheck(name, false, "HOST_VM_INFO64 or hw.memsize did not answer");
+            }
+
+            bool sane = used > 0 && used <= total;
+            return new SmokeCheck(name, sane, string.Create(CultureInfo.InvariantCulture,
+                $"cpu {Reading(cpu)}, memory used {used / 1_048_576:0} of {total / 1_048_576} MB{(sane ? "" : ": a reading out of range")}"));
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <c>perf:iokit</c> (2026-10-07): the GPU reader in the published binary — the IOAccelerator service found, its
+    /// <c>PerformanceStatistics</c> read through IOKit and CoreFoundation, the load within 0–100 and the memory in use within
+    /// Metal's working set's order. A Mac with no such statistics (a CI virtual machine's paravirtual GPU) passes as not
+    /// exercised: the frameworks loaded and answered.
+    /// </summary>
+    public static SmokeCheck ProbePerfIOKit()
+    {
+        const string name = "perf:iokit";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        try
+        {
+            using var gpu = MacGpu.TryOpen();
+            if (gpu is null)
+            {
+                return new SmokeCheck(name, true, "not exercised: no IOAccelerator statistics");
+            }
+
+            var (load, inUse) = gpu.ReadRaw();
+            bool sane = load is >= 0 and <= 100 && inUse is >= 0;
+            return new SmokeCheck(name, sane, string.Create(CultureInfo.InvariantCulture,
+                $"load {(load is { } l ? l + "%" : "n/a")}, in use {(inUse is { } b ? (b / 1_048_576).ToString(CultureInfo.InvariantCulture) + " MiB" : "n/a")}, working set {(gpu.WorkingSetBytes is { } w ? (w / 1_048_576).ToString(CultureInfo.InvariantCulture) + " MiB" : "n/a")}{(sane ? "" : ": a reading out of range")}"));
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// <c>perf:network</c> (2026-09-30): the performance bar's network meters in the published binary — .NET's own adapter
     /// counters (<see cref="NetworkCounters"/>: <c>NetworkInterface</c>, the adapters that are up with a gateway, their byte
     /// totals and link speeds) read twice a moment apart through <see cref="NetworkMeter"/>, which proves the runtime's path
-    /// survives trimming. A machine with no adapter carrying traffic passes, saying so.
+    /// survives trimming. A machine with no adapter carrying traffic passes, saying so. On a Mac (2026-10-07) the counts are
+    /// <see cref="MacNetworkCounters"/>' 64-bit ones, so the sysctl behind them is proved too.
     /// </summary>
     public static SmokeCheck ProbePerfNetwork()
     {
         const string name = "perf:network";
         try
         {
-            var counters = new NetworkCounters();
+            INetworkCounters counters = OperatingSystem.IsMacOS() ? new MacNetworkCounters() : new NetworkCounters();
             var adapters = counters.Read();
             var meter = new NetworkMeter(counters);
             meter.Sample();

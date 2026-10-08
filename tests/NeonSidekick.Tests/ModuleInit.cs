@@ -8,6 +8,7 @@ namespace NeonSidekick.Tests;
 /// so does this, before any test runs, or a machine's own culture would leak into formats the app never sees.
 /// <para>On a Mac the secrets the tests encrypt use a Keychain key of their own, <c>NeonSidekick.Tests</c> (later on 2026-10-06): under
 /// the app's name the suite made the app's real key in the login Keychain, trusting <c>dotnet</c>.</para>
+/// <para>On a Mac ImageIO is registered as MagicScaler's codecs (2026-10-07), as <c>Program.cs</c> does, before any test touches a picture.</para>
 /// <para>Synthwave is put in force too (2026-10-05): the app starts on <see cref="UI.ThemeName.Default"/>, collider since that day,
 /// but the suite's renders pin synthwave's colours, and <see cref="Fakes.ThemeScope"/> puts it back after every theme test.</para>
 /// </summary>
@@ -23,6 +24,7 @@ internal static class ModuleInit
         if (OperatingSystem.IsMacOS())
         {
             Sql.MacKeychain.KeyService = TestKeychainService;
+            Images.ImageIOCodecs.Register();
         }
 
         UI.Theme.Use(Fakes.ShippedThemes.Synthwave);

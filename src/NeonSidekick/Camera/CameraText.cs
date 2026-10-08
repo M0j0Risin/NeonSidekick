@@ -8,7 +8,7 @@ namespace NeonSidekick.Camera;
 /// </summary>
 public static class CameraText
 {
-    /// <summary>A device Windows lists without a friendly name.</summary>
+    /// <summary>A device the system lists without a friendly name.</summary>
     public const string UnnamedCamera = "Camera";
 
     /// <summary>The HRESULT an unmapped failure prints, <c>0x80004005</c>.</summary>
@@ -24,7 +24,38 @@ public static class CameraText
     };
 
     /// <summary>The sentence for a failure, the detail (an HRESULT and the call, a device name) after it where it helps. Pinned.</summary>
-    public static string Failure(CameraFailure failure, string? detail) => failure switch
+    public static string Failure(CameraFailure failure, string? detail) => Failure(failure, detail, OperatingSystem.IsMacOS());
+
+    /// <summary>
+    /// <see cref="Failure(CameraFailure, string?)"/> for Windows' wording or, with <paramref name="mac"/>, a Mac's (2026-10-07): the
+    /// permission is the terminal's there (<see cref="MacBlocked"/>), a MacBook's own camera is off with its lid closed, and no Media
+    /// Foundation is involved. Both are pinned on every system.
+    /// </summary>
+    public static string Failure(CameraFailure failure, string? detail, bool mac) => mac ? MacFailure(failure, detail) : WindowsFailure(failure, detail);
+
+    /// <summary>System Settings' page holding the camera permission on macOS 13 and later.</summary>
+    public const string MacSettingsPath = "System Settings › Privacy & Security › Camera";
+
+    /// <summary>The Mac's sentence when the terminal is refused the camera. Pinned.</summary>
+    public static string MacBlocked(string terminal) =>
+        $"Camera access is off for {terminal}, so the camera cannot be used. Turn {terminal} on in {MacSettingsPath}, then try again.";
+
+    /// <summary>The Mac's sentence while its question is unanswered. Pinned.</summary>
+    public static string MacAsking(string terminal) =>
+        $"macOS is asking whether {terminal} may use the camera: answer its question, then try again.";
+
+    private static string MacFailure(CameraFailure failure, string? detail) => failure switch
+    {
+        CameraFailure.Blocked => MacBlocked(Audio.MicrophoneText.Terminal),
+        CameraFailure.Asking => MacAsking(Audio.MicrophoneText.Terminal),
+        CameraFailure.Restricted => "Camera access is restricted on this Mac (a configuration profile or Screen Time), so the camera cannot be used.",
+        CameraFailure.Suspended => $"{(string.IsNullOrEmpty(detail) ? "The camera" : detail)} is off while the MacBook's lid is closed: open the lid, or pick another camera (/camera use).",
+        CameraFailure.InUse => "Another app is holding the camera; close it (a video call, Photo Booth) and try again.",
+        CameraFailure.Unsupported => "There is no camera support on this Mac (it needs macOS 14 or later).",
+        _ => WindowsFailure(failure, detail),
+    };
+
+    private static string WindowsFailure(CameraFailure failure, string? detail) => failure switch
     {
         CameraFailure.NoCamera => "No camera is connected.",
         CameraFailure.Blocked => "Windows is blocking the camera for desktop apps: turn on Settings › Privacy & security › Camera › \"Let desktop apps access your camera\".",
@@ -33,6 +64,9 @@ public static class CameraText
         CameraFailure.NoMediaFoundation => "Windows' Media Foundation is not installed (Windows N needs the Media Feature Pack), so the camera cannot be read.",
         CameraFailure.NoFrames => "The camera sent no picture.",
         CameraFailure.Unsupported => "There is no camera support on this system (Windows only).",
+        CameraFailure.Suspended => "The camera is suspended." + Tail(detail),
+        CameraFailure.Asking => "The system is asking whether the camera may be used: answer its question, then try again.",
+        CameraFailure.Restricted => "Camera access is restricted on this system, so the camera cannot be used.",
         _ => "The camera failed." + Tail(detail),
     };
 

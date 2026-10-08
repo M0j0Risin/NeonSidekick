@@ -78,7 +78,10 @@ public interface ILlamaServerHost : IAsyncDisposable
 /// <see cref="LlamaArguments"/>, the runtime folder as the working directory, no window — so Ctrl+C in the TUI never
 /// reaches it;</item>
 /// <item>the process joins the app's kill-on-close job (<see cref="ChildJob"/>) at once, so it dies with the app
-/// however the app dies;</item>
+/// however the app dies; on a Mac (2026-10-07), which has no such job, the app starts its own executable as the server's
+/// guard (<see cref="LlamaGuard"/>, which ends the server when the app's end closes its stdin) and the guard records it
+/// (<see cref="LlamaRecords"/>, swept before every start); a stop there closes the guard's stdin first, so the guard kills the
+/// server and removes the record itself;</item>
 /// <item>both output streams are drained for the process's whole life (a full pipe would stall the server) into
 /// <see cref="DiagnosticLog"/> at Debug, the last lines kept for error messages;</item>
 /// <item>ready is <c>GET /health</c> answering 200 (503 while the model loads — the spinner then says "loading"),
@@ -113,6 +116,8 @@ public sealed class LlamaServerHost : ILlamaServerHost
     private readonly Queue<string> _tail = new();
 
     private Process? _process;
+    private bool _guarded;          // a Mac's: _process is the guard, whose stdin closing stops the server
+    private string? _record;        // a Mac's unguarded start (a test host): the record this host wrote itself
     private LlamaLaunch? _launch;
     private EmbeddedServerInfo? _info;
     private LlamaLoadReport? _report;   // a VRAM-only start's, until its check
@@ -135,6 +140,12 @@ public sealed class LlamaServerHost : ILlamaServerHost
     /// allowance and a clean load reads as a spill. Past it the check runs on what came.
     /// </summary>
     public TimeSpan LoadLinesWait { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The guard's executable on a Mac (2026-10-07, <see cref="LlamaGuard"/>): this app's own by default; null — a test host's
+    /// — starts the server directly and records it here. Unused on Windows.
+    /// </summary>
+    public string? GuardExecutable { get; init; } = LlamaGuard.DefaultExecutable();
 
     public EmbeddedServerInfo? Running
     {
@@ -222,17 +233,29 @@ public sealed class LlamaServerHost : ILlamaServerHost
     {
         int port = FreeLoopbackPort();
         string key = RandomNumberGenerator.GetHexString(32, lowercase: true);
-        var start = new ProcessStartInfo(launch.Executable)
+        var arguments = LlamaArguments.Build(launch, port, key);
+
+        // A Mac (2026-10-07): servers an app that is gone left behind are killed first, and this one starts under the guard.
+        bool mac = OperatingSystem.IsMacOS();
+        string records = LlamaRecords.Folder(Path.GetDirectoryName(launch.WorkingDirectory) ?? launch.WorkingDirectory);
+        string? guard = mac ? GuardExecutable : null;
+        if (mac)
+        {
+            LlamaRecords.Sweep(Path.GetDirectoryName(launch.WorkingDirectory) ?? launch.WorkingDirectory);
+        }
+
+        var start = new ProcessStartInfo(guard ?? launch.Executable)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
+            RedirectStandardInput = guard is not null,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = new UTF8Encoding(false),
             StandardErrorEncoding = new UTF8Encoding(false),
             WorkingDirectory = launch.WorkingDirectory,
         };
-        foreach (var argument in LlamaArguments.Build(launch, port, key))
+        foreach (var argument in guard is not null ? LlamaGuard.Arguments(records, launch.Executable, arguments) : arguments)
         {
             start.ArgumentList.Add(argument);
         }
@@ -254,7 +277,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
         {
             if (!process.Start())
             {
-                throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed("llama-server.exe did not start"));
+                throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(Path.GetFileName(launch.Executable) + " did not start"));
             }
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -264,11 +287,14 @@ public sealed class LlamaServerHost : ILlamaServerHost
         }
 
         ChildJob.Assign(process);
+        string? record = mac && guard is null ? LlamaRecords.Write(records, Environment.ProcessId, process, launch.Executable) : null;
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         lock (_state)
         {
             _process = process;
+            _guarded = guard is not null;
+            _record = record;
             _launch = launch;
         }
 
@@ -277,7 +303,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
             await WaitReadyAsync(process, port, model, phase, cancellationToken).ConfigureAwait(false);
             if (launch.VramOnly)
             {
-                await CheckVramAsync(process.Id, cancellationToken).ConfigureAwait(false);
+                await CheckVramAsync(process.Id, launch.Backend, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException && Killed(process))
@@ -321,7 +347,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
     /// Embedded VRAM only's check of a server that came up: waits for the load's last line (<see cref="LoadLinesWait"/>),
     /// then throws when the load spilled into system memory or could not be checked.
     /// </summary>
-    private async Task CheckVramAsync(int pid, CancellationToken cancellationToken)
+    private async Task CheckVramAsync(int pid, LlamaBackend backend, CancellationToken cancellationToken)
     {
         Task loaded;
         lock (_state)
@@ -345,7 +371,9 @@ public sealed class LlamaServerHost : ILlamaServerHost
             report = _report ?? new LlamaLoadReport();
         }
 
-        if (shared is null)
+        // Metal (2026-10-07) has no shared GPU memory to read — the memory is unified, and llama.cpp sees every buffer it puts
+        // on MTL0 — so the layer line alone decides there, and nothing is missing to warn about.
+        if (shared is null && backend != LlamaBackend.Metal)
         {
             DiagnosticLog.Warn(Category, EmbeddedLlmText.VramSharedNotRead);
         }
@@ -454,10 +482,16 @@ public sealed class LlamaServerHost : ILlamaServerHost
     private void StopCore()
     {
         Process? process;
+        bool guarded;
+        string? record;
         lock (_state)
         {
             process = _process;
+            guarded = _guarded;
+            record = _record;
             _process = null;
+            _guarded = false;
+            _record = null;
             _launch = null;
             _info = null;
         }
@@ -471,8 +505,20 @@ public sealed class LlamaServerHost : ILlamaServerHost
         {
             if (!process.HasExited)
             {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(5000);
+                // A Mac's guard (2026-10-07): its stdin closed, it kills the server and removes the record; the tree's kill
+                // stays for a guard that does not go.
+                if (guarded)
+                {
+                    process.StandardInput.Close();
+                    process.WaitForExit(5000);
+                }
+
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(5000);
+                }
+
                 DiagnosticLog.Info(Category, "Stopped llama-server.");
             }
         }
@@ -482,6 +528,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
         }
         finally
         {
+            LlamaRecords.Remove(record);
             process.Dispose();
         }
     }

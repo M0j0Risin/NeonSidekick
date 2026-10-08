@@ -74,7 +74,7 @@ internal sealed partial class ChatScreen
     {
         if (_openThumbs is null)
         {
-            _flow.Error(ThumbsText.Unavailable);
+            _flow.Error(ThumbsText.UnavailableHere);
             return;
         }
 
@@ -103,7 +103,7 @@ internal sealed partial class ChatScreen
     {
         if (_openThumbs is null)
         {
-            _flow.Error(ThumbsText.Unavailable);
+            _flow.Error(ThumbsText.UnavailableHere);
             return;
         }
 
@@ -111,7 +111,7 @@ internal sealed partial class ChatScreen
         {
             _openThumbs(folder, select);
             _flow.Notice(ThumbsText.Opened(folder));
-            _flow.Notice(ThumbsText.Keys);
+            _flow.Notice(ThumbsText.KeysHere);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException or ArgumentException)
         {

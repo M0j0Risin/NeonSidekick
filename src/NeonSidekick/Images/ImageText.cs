@@ -59,13 +59,18 @@ public static class ImageText
         "Error: the result would be " + N(width) + "×" + N(height) + "; at most " + N(ImageEditor.MaxSide) + " a side and " + N(ImageEditor.MaxPixels / 1_000_000) + " megapixels";
 
     public static string NoEncoder(ImageFormat format, IReadOnlyList<ImageFormat> writable) =>
-        "Error: this Windows has no " + format.Label + " encoder; it can write " + Names(writable);
+        "Error: this " + (OperatingSystem.IsMacOS() ? "Mac" : "Windows") + " has no " + format.Label + " encoder; it can write " + Names(writable);
 
     public static string OptionNotFor(string option, ImageFormat format, string formats) =>
         "Error: " + option + " does not apply to " + format.Label + "; it is for " + formats;
 
+    /// <summary>An encoder option ImageIO has no setting for (2026-10-07, macOS: chroma, colors, dither). Pinned.</summary>
+    public static string OptionNotOnMac(string option) =>
+        "Error: " + option + " is not available on macOS; its ImageIO encoders have no such setting";
+
     public static string CannotFit(long maxKb, long smallest, ImageFormat format) =>
-        "Error: could not get under " + N(maxKb) + " KB, so nothing was written; the smallest tried was " + FileText.Size(smallest) + (format.Lossy ? "" : ". Try \"colors\" (fewer colours) or a lossy format such as jpeg");
+        "Error: could not get under " + N(maxKb) + " KB, so nothing was written; the smallest tried was " + FileText.Size(smallest)
+        + (format.Lossy ? "" : OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colours) or a lossy format such as jpeg");
 
     public static string Failed(string detail) => "Error: the picture could not be edited: " + detail;
 

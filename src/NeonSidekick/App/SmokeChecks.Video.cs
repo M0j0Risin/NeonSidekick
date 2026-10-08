@@ -27,4 +27,31 @@ public static partial class SmokeChecks
             return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
         }
     }
+
+    /// <summary>
+    /// <c>video:webkit</c> (2026-10-07, YouTube playback on macOS): the Mac video window's WebKit in the published binary — the
+    /// framework loaded, the delegate class made at runtime, a WKWebView over a store that keeps nothing (never the user's), a tiny
+    /// page loaded with the https base URL whose first message comes back through the <c>chrome.webview</c> bridge and the script
+    /// handler from the page's own origin, a message sent in and echoed, a navigation off the host refused
+    /// (<see cref="Viewer.MacVideoWindows.Probe"/>). No network and nothing shown. Skipped off macOS, before macOS 14, and with no
+    /// window server.
+    /// </summary>
+    public static SmokeCheck ProbeVideoWebKit()
+    {
+        const string name = "video:webkit";
+        if (!OperatingSystem.IsMacOS())
+        {
+            return new SmokeCheck(name, true, "skipped: not macOS");
+        }
+
+        try
+        {
+            var (ok, detail) = Viewer.MacVideoWindows.Probe(TimeSpan.FromSeconds(20));
+            return new SmokeCheck(name, ok, detail);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
+        }
+    }
 }

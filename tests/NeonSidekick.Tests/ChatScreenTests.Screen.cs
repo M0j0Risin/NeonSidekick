@@ -55,7 +55,7 @@ public partial class ChatScreenTests
         };
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ScreenTool_Ask_AllowOnce_SendsTheWindow_TheViewerShowsIt()
     {
         ScreenToolFixture([Keys.Char('o'), Keys.Enter], "It says: file not found.");
@@ -85,7 +85,7 @@ public partial class ChatScreenTests
         Assert.Empty(_screenSystem!.Captures);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ScreenTool_Ask_AllowForTheSession_TakesTwoWithoutAskingAgain()
     {
         ScreenToolFixture([Keys.Char('s'), Keys.Enter], "Two.", calls: 2);
@@ -128,7 +128,7 @@ public partial class ChatScreenTests
         Assert.Equal(offered, names.Contains(ScreenListTool.ToolName));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task ScreenCommand_PutsTheShotOnTheLine_ListsTheTargets_AndABadTargetIsAnError()
     {
         _screenSystem = new FakeScreenSystem();
@@ -148,7 +148,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>F10 is <c>/screen</c> (2026-10-05, the user's pick): the app's monitor captured and put on the line, as typed.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task F10_CapturesTheScreen_ToTheLine()
     {
         _screenSystem = new FakeScreenSystem();
@@ -163,6 +163,21 @@ public partial class ChatScreenTests
         string shot = Assert.Single(ScreenFiles());
         Assert.Contains(ScreenText.Attached(Path.Combine("screen_images", Path.GetFileName(shot))), output);
         Assert.Single(_screenSystem.Captures);
+    }
+
+    [Fact]
+    public async Task ScreenTool_Refused_IsTheSentence_BeforeAnyPane_AndSendsNoPicture()
+    {
+        ScreenToolFixture([Keys.Char('o'), Keys.Enter], "Then I cannot see it.");
+        _screenSystem!.Refused = ScreenText.NoPermission("Terminal");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(ScreenText.AllowTitle, output);
+        Assert.Equal("Error: " + ScreenText.NoPermission("Terminal"), Assert.Single(Results(_chat.Requests[^1])).Result);
+        Assert.DoesNotContain(_chat.Requests[^1], m => m.Contents.OfType<DataContent>().Any());
+        Assert.Empty(_screenSystem.Captures);
+        Assert.Empty(ScreenFiles());
     }
 
     [Fact]

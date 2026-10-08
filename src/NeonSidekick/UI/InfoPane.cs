@@ -169,7 +169,7 @@ public sealed class InfoPane
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         int budget = width - 1 - ScreenPane.TrailerGap - TextCells.Width(ScreenPane.CloseGlyph);
-        int indent = TextCells.Width(label) + LabelGap;
+        int indent = TextCells.Width(TextCells.Spaced(label)) + LabelGap;
         var places = new (int Row, int Column)[titles.Count];
         int row = 0;
         int column = indent;
@@ -225,7 +225,7 @@ public sealed class InfoPane
         for (int r = 0; r < rows; r++)
         {
             // A later row starts with the label's width of spaces and the bar, so its first title lands in the first title's column.
-            lines[r] = new System.Text.StringBuilder(r == 0 ? $"[{Theme.Label.ToMarkup()}]{Markup.Escape(label)}[/]" : new string(' ', TextCells.Width(label)));
+            lines[r] = new System.Text.StringBuilder(r == 0 ? $"[{Theme.Label.ToMarkup()}]{Markup.Escape(TextCells.Spaced(label))}[/]" : new string(' ', TextCells.Width(TextCells.Spaced(label))));
             if (titles.Count > 0)
             {
                 lines[r].Append(bar);

@@ -99,6 +99,12 @@ public class EmbeddedLlmLiveTests
             Assert.StartsWith("limit flags 0x2000", job.Detail);
         }
 
+        // The Mac's (2026-10-07): the tar unpack, Metal's working set and the records; each says skipped where it does not apply.
+        foreach (var probe in new[] { SmokeChecks.ProbeTarUnpack(), SmokeChecks.ProbeMetal(), SmokeChecks.ProbeRecords() })
+        {
+            Assert.True(probe.Passed, probe.Name + ": " + probe.Detail);
+        }
+
         string home = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
         try
         {
@@ -107,23 +113,34 @@ public class EmbeddedLlmLiveTests
             Assert.True(empty.Passed);
             Assert.StartsWith("not exercised:", empty.Detail);
 
-            string folder = LlamaRelease.Folder(Path.Combine(home, "llama"), LlamaBackend.Vulkan);
+            // A Mac looks at its Metal folder alone, a Mach-O executable (2026-10-07); Windows at its own, a PE one.
+            var backend = OperatingSystem.IsMacOS() ? LlamaBackend.Metal : LlamaBackend.Vulkan;
+            string folder = LlamaRelease.Folder(Path.Combine(home, "llama"), backend);
             Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, LlamaRelease.ServerExecutable), "MZ fake");
+            string server = Path.Combine(folder, LlamaRelease.ServerFile(backend));
+            if (backend == LlamaBackend.Metal)
+            {
+                File.WriteAllBytes(server, [0xCF, 0xFA, 0xED, 0xFE, 0x0C]);
+            }
+            else
+            {
+                File.WriteAllText(server, "MZ fake");
+            }
+
             var partial = SmokeChecks.ProbeLlamaServer(models);
             Assert.False(partial.Passed);
             Assert.Contains("is missing some of", partial.Detail);
 
-            foreach (var file in LlamaRelease.RequiredFiles(LlamaBackend.Vulkan).Skip(1))
+            foreach (var file in LlamaRelease.RequiredFiles(backend).Skip(1))
             {
                 File.WriteAllText(Path.Combine(folder, file), "x");
             }
 
             var complete = SmokeChecks.ProbeLlamaServer(models);
             Assert.True(complete.Passed, complete.Detail);
-            Assert.Equal("llama.cpp b11258: vulkan complete", complete.Detail);
+            Assert.Equal("llama.cpp b11258: " + LlamaRelease.Name(backend) + " complete", complete.Detail);
 
-            File.WriteAllText(Path.Combine(folder, LlamaRelease.ServerExecutable), "not a PE");
+            File.WriteAllText(server, "not a PE");
             Assert.False(SmokeChecks.ProbeLlamaServer(models).Passed);
         }
         finally
@@ -225,12 +242,17 @@ public class EmbeddedLlmLiveTests
         var info = await service.StartAsync(model, settings, null, CancellationToken.None);
 
         Assert.Equal(model.Id, info.ModelId);
-        Assert.True(info.Vision);
+        Assert.Equal(Files.ImageCodecs.Available, info.Vision);   // a Mac loads no projector while it cannot read pictures (2026-10-07)
         using (var client = Client(info))
         {
             // Gemma 4 thinks by default (llama.cpp's --reasoning auto): a budget of 64 was spent on the thinking alone (finish "length", no answer).
             var reply = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Reply with the single word: pong")], new ChatOptions { MaxOutputTokens = 1024 });
             Assert.Contains("pong", reply.Text, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (Files.ImageCodecs.Available)
+        {
+            using var client = Client(info);
 
             var picture = ImageFile.Load(SmokeChecks.SolidBmp(64, 64), "red.bmp", out string? error);
             Assert.True(picture is not null, error);

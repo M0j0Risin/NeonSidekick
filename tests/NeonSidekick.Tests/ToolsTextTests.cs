@@ -129,7 +129,7 @@ public class ToolsTextTests : IDisposable
         Assert.All(notes, n => Assert.Equal(n.Value, ToolsText.ToolFooter(noSkill, n.Key)!.Last));
     }
 
-    [WindowsFact]
+    [Fact]
     public void OfferedRows_ListEveryGroup_WithHeadingsAndOnOff_TheToolBesideItsRow()
     {
         var facts = Facts();
@@ -153,8 +153,8 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(facts.Groups.SelectMany(g => g.Tools).Select(t => t.Name), rows.Where(r => r.Tool is not null).Select(r => r.Tool));
     }
 
-    /// <summary>The Unix twin of <see cref="OfferedRows_ListEveryGroup_WithHeadingsAndOnOff_TheToolBesideItsRow"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="OfferedRows_ListEveryGroup_WithHeadingsAndOnOff_TheToolBesideItsRow"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void OfferedRows_ListEveryGroup_WithHeadingsAndOnOff_TheToolBesideItsRow_Unix()
     {
         var facts = Facts();
@@ -178,7 +178,7 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(facts.Groups.SelectMany(g => g.Tools).Select(t => t.Name), rows.Where(r => r.Tool is not null).Select(r => r.Tool));
     }
 
-    [WindowsFact]
+    [Fact]
     public void OfferedRows_UnderAFilter_KeepTheToolsWhoseNameOrDescriptionHoldsIt_TheEmptyGroupsGo()
     {
         // 2026-10-03 (the user's ask): case folded, the name or the description; a group with no match goes with its gap and
@@ -206,8 +206,8 @@ public class ToolsTextTests : IDisposable
         Assert.EndsWith(MenuFilter.TypeAndCloseKeys, ToolsText.OfferedKeys, StringComparison.Ordinal);
     }
 
-    /// <summary>The Unix twin of <see cref="OfferedRows_UnderAFilter_KeepTheToolsWhoseNameOrDescriptionHoldsIt_TheEmptyGroupsGo"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="OfferedRows_UnderAFilter_KeepTheToolsWhoseNameOrDescriptionHoldsIt_TheEmptyGroupsGo"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void OfferedRows_UnderAFilter_KeepTheToolsWhoseNameOrDescriptionHoldsIt_TheEmptyGroupsGo_Unix()
     {
         // 2026-10-03 (the user's ask): case folded, the name or the description; a group with no match goes with its gap and
@@ -235,7 +235,7 @@ public class ToolsTextTests : IDisposable
         Assert.EndsWith(MenuFilter.TypeAndCloseKeys, ToolsText.OfferedKeys, StringComparison.Ordinal);
     }
 
-    [WindowsFact]
+    [Fact]
     public void OfferedRows_ADisabledTool_ReadsOff_DimWithItsNote_AndTheHeadingCountsTheRest()
     {
         var facts = Facts(["read_file", "web_search"]);
@@ -248,8 +248,8 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(OnRow(ToolNamed(facts, WriteFileTool.ToolName), true), rows.Single(r => r.Tool == WriteFileTool.ToolName).Markup);
     }
 
-    /// <summary>The Unix twin of <see cref="OfferedRows_ADisabledTool_ReadsOff_DimWithItsNote_AndTheHeadingCountsTheRest"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="OfferedRows_ADisabledTool_ReadsOff_DimWithItsNote_AndTheHeadingCountsTheRest"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void OfferedRows_ADisabledTool_ReadsOff_DimWithItsNote_AndTheHeadingCountsTheRest_Unix()
     {
         var facts = Facts(["read_file", "web_search"]);
@@ -262,7 +262,7 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(OnRow(ToolNamed(facts, WriteFileTool.ToolName), true), rows.Single(r => r.Tool == WriteFileTool.ToolName).Markup);
     }
 
-    [WindowsFact]
+    [Fact]
     public void OfferedRows_AGroupOff_SuffixesTheHeading_DimsItsRows_NotTheHeading_AndTheValuesStillRead()
     {
         var facts = Facts(["copy"], filesEnabled: false, askEnabled: false);
@@ -283,8 +283,8 @@ public class ToolsTextTests : IDisposable
         Assert.Equal("", ToolsText.HeadingSuffix(Facts(toolsEnabled: false).Groups[2], toolsEnabled: false));   // the off line says it once
     }
 
-    /// <summary>The Unix twin of <see cref="OfferedRows_AGroupOff_SuffixesTheHeading_DimsItsRows_NotTheHeading_AndTheValuesStillRead"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="OfferedRows_AGroupOff_SuffixesTheHeading_DimsItsRows_NotTheHeading_AndTheValuesStillRead"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void OfferedRows_AGroupOff_SuffixesTheHeading_DimsItsRows_NotTheHeading_AndTheValuesStillRead_Unix()
     {
         var facts = Facts(["copy"], filesEnabled: false, askEnabled: false);
@@ -305,7 +305,7 @@ public class ToolsTextTests : IDisposable
         Assert.Equal("", ToolsText.HeadingSuffix(Facts(toolsEnabled: false).Groups[2], toolsEnabled: false));   // the off line says it once
     }
 
-    [WindowsFact]
+    [Fact]
     public void OfferedRows_LlmToolsOff_OpenWithTheOffLine_EveryToolRowDim_TheHeadingsNot_TheValuesStillRead()
     {
         var facts = Facts(["zip"], toolsEnabled: false);
@@ -319,8 +319,8 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(2, ToolsText.FirstToolRow(rows));
     }
 
-    /// <summary>The Unix twin of <see cref="OfferedRows_LlmToolsOff_OpenWithTheOffLine_EveryToolRowDim_TheHeadingsNot_TheValuesStillRead"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="OfferedRows_LlmToolsOff_OpenWithTheOffLine_EveryToolRowDim_TheHeadingsNot_TheValuesStillRead"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void OfferedRows_LlmToolsOff_OpenWithTheOffLine_EveryToolRowDim_TheHeadingsNot_TheValuesStillRead_Unix()
     {
         var facts = Facts(["zip"], toolsEnabled: false);
@@ -345,7 +345,7 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(Heading("Skills", "2"), rows.First(r => r.Heading && r.Markup.Contains("Skills", StringComparison.Ordinal)).Markup);
     }
 
-    [WindowsFact]
+    [Fact]
     public void OfferedLines_AreTheGroupsAsPlainLines_WithOnOffAndTheNotes()
     {
         var facts = Facts(["read_file"], askEnabled: false);
@@ -360,8 +360,8 @@ public class ToolsTextTests : IDisposable
         Assert.Equal(ToolsText.OffLine, ToolsText.OfferedLines(Facts(toolsEnabled: false)).First());
     }
 
-    /// <summary>The Unix twin of <see cref="OfferedLines_AreTheGroupsAsPlainLines_WithOnOffAndTheNotes"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools.</summary>
-    [UnixFact]
+    /// <summary>The Unix twin of <see cref="OfferedLines_AreTheGroupsAsPlainLines_WithOnOffAndTheNotes"/> (2026-10-06, the macOS build): no picture codecs, so thirteen file tools; only where there are none since a Mac has ImageIO (2026-10-07).</summary>
+    [NoPictureCodecsFact]
     public void OfferedLines_AreTheGroupsAsPlainLines_WithOnOffAndTheNotes_Unix()
     {
         var facts = Facts(["read_file"], askEnabled: false);

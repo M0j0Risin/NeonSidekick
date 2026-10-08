@@ -11,8 +11,11 @@ namespace NeonSidekick.UI;
 /// <list type="bullet">
 /// <item>UTF-8 text, a character per key, split across reads as it may be. Control bytes are Ctrl+letter keys with the byte
 /// as the character, as Windows' console reports them (Ctrl+C is <c>'\x03'</c> with <see cref="ConsoleKey.C"/>); CR is Enter,
-/// LF (Ctrl+J, what some terminals send for Ctrl+Enter) is Enter with Control, the app's line break; DEL is Backspace,
-/// BS (Ctrl+H) Backspace with Control.</item>
+/// LF (Ctrl+J, what some terminals send for Ctrl+Enter) is Enter with Control, the app's line break; DEL is Backspace.
+/// BS is Ctrl+H (2026-10-07, the user's find: Ctrl+H, <c>/help</c>, did nothing on a Mac): it was Ctrl+Backspace until then, but
+/// a Mac terminal's Delete sends DEL and a Mac deletes a word with Option+Delete (ESC DEL, Backspace with Alt), so BS is the
+/// chord. GS (Ctrl+]) and US (Ctrl+/) are those keys with Control the same day: they were dropped, so <c>/settings</c>' Ctrl+/
+/// never ran, and Ctrl+] is a Mac's <c>/terminal</c> (Ctrl+. sends a bare ".").</item>
 /// <item>ESC then a key is that key with Alt (Option as Meta). A lone ESC is ESC, but only once the bytes stop:
 /// ESC also opens every sequence below, so the reader calls <see cref="Flush"/> when nothing more came within its timeout.</item>
 /// <item>CSI and SS3 keys (arrows, Home/End, Insert/Delete, PageUp/Down, F1–F12, Shift+Tab) with xterm's modifier
@@ -385,7 +388,11 @@ public sealed class VtInputParser
             case '\x7f':
                 return new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, alt, false);
             case '\b':
-                return new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, alt, true);
+                return new ConsoleKeyInfo('\b', ConsoleKey.H, false, alt, true);
+            case '\x1d':
+                return new ConsoleKeyInfo('\x1d', ConsoleKey.Oem6, false, alt, true);
+            case '\x1f':
+                return new ConsoleKeyInfo('\x1f', ConsoleKey.Oem2, false, alt, true);
             case '\0':
                 return new ConsoleKeyInfo('\0', ConsoleKey.Spacebar, false, alt, true);
             case ' ':

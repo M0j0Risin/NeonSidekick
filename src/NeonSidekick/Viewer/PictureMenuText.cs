@@ -29,6 +29,9 @@ public static class PictureMenuText
     public const string StripMetadata = "Strip metadata (lossless)";
     public const string CopyPath = "Copy the path";
     public const string ShowInExplorer = "Show in Explorer";
+
+    /// <summary>The same row on a Mac (2026-10-07): Finder opened on the picture.</summary>
+    public const string ShowInFinder = "Show in Finder";
     public const string Attach = "Attach to the chat";
     public const string Print = "Print";
     public const string Delete = "Delete";

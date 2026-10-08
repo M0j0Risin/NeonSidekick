@@ -240,7 +240,7 @@ public class PasteBlocksTests
         Assert.Throws<ArgumentNullException>(() => blocks.ImagesIn(null!));
     }
 
-    [WindowsFact]
+    [Fact]
     public void Original_IsTheClipboardsOwnBytes_NotTheDownscale_NamedByWhatTheyAre()
     {
         // generate_image's input (later still on 2026-09-24): the paste before the 2048 downscale the model was shown.

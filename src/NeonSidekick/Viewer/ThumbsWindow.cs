@@ -37,8 +37,8 @@ public static class ThumbsWindow
     /// <summary>Told the window's corner as it closes, on its thread. It must not block.</summary>
     public static Action<int, int>? Placed { get; set; }
 
-    /// <summary>Whether a window can be opened here at all: Windows only.</summary>
-    public static bool IsAvailable => OperatingSystem.IsWindows();
+    /// <summary>Whether a window can be opened here at all: on Windows, and on a Mac with a window server since 2026-10-07 (<see cref="MacThumbsWindows"/>).</summary>
+    public static bool IsAvailable => OperatingSystem.IsWindows() || (OperatingSystem.IsMacOS() && AppKitHost.IsEnabled);
 
     /// <summary>
     /// The window on <paramref name="folder"/> (a full path that exists), <paramref name="select"/> selected when given: opened, or
@@ -50,7 +50,13 @@ public static class ThumbsWindow
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         if (!IsAvailable)
         {
-            throw new PlatformNotSupportedException(ThumbsText.Unavailable);
+            throw new PlatformNotSupportedException(ThumbsText.UnavailableHere);
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            MacThumbsWindows.Open(folder, select);
+            return;
         }
 
         lock (s_gate)
@@ -70,6 +76,12 @@ public static class ThumbsWindow
     public static void Follow(string picture)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(picture);
+        if (OperatingSystem.IsMacOS())
+        {
+            MacThumbsWindows.Follow(picture);
+            return;
+        }
+
         lock (s_gate)
         {
             if (s_open is { Alive: true } open)
@@ -82,6 +94,11 @@ public static class ThumbsWindow
     /// <summary>The open window closed and waited for briefly. True when one was open.</summary>
     public static bool Close()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return MacThumbsWindows.Close();
+        }
+
         ThumbsWindowThread? open;
         lock (s_gate)
         {
@@ -98,7 +115,8 @@ public static class ThumbsWindow
     /// <c>viewer:thumbs</c> for the smoke: the class registered, a hidden window answering through its <c>[UnmanagedCallersOnly]</c>
     /// procedure, a caption measured in Segoe UI and a tile drawn into a memory DC with <c>StretchDIBits</c>. Nothing is shown.
     /// </summary>
-    public static (bool Ok, string Detail) Probe() => IsAvailable ? ThumbsWindowThread.Probe() : (true, "skipped: not Windows");
+    public static (bool Ok, string Detail) Probe() =>
+        OperatingSystem.IsMacOS() ? MacThumbsWindows.Probe() : IsAvailable ? ThumbsWindowThread.Probe() : (true, "skipped: not Windows");
 }
 
 /// <summary>The thumbnail browser and the thread that pumps its messages (<see cref="ThumbsWindow"/>).</summary>

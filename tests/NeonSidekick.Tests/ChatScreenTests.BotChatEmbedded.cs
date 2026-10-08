@@ -28,7 +28,7 @@ public partial class ChatScreenTests
         return embedded;
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Multi_ParentServer_NothingRunning_TheFirstEmbeddedBotStarts_TheNextSharesWithAWarning()
     {
         var embedded = EmbeddedBotsFixture("parent-server");
@@ -45,7 +45,7 @@ public partial class ChatScreenTests
         Assert.Contains(BotChat.LinkNotice("bob", EmbeddedEndpoint.BaseUrl, "gemma-4-e2b", "none"), output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Multi_MultiServer_EachModelGetsItsServer_StoppedWhenTheChatEnds()
     {
         var embedded = EmbeddedBotsFixture("multi-server");
@@ -61,7 +61,7 @@ public partial class ChatScreenTests
         Assert.Empty(embedded.Extras);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Multi_MultiServer_KillOff_KeepsTheExtras_ForTheNextBotchat()
     {
         var embedded = EmbeddedBotsFixture("multi-server");
@@ -76,7 +76,7 @@ public partial class ChatScreenTests
         Assert.Equal(0, embedded.ExtraStops);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task BotChat_Multi_MultiServer_AnExtraThatFails_SitsItsBotOut()
     {
         var embedded = EmbeddedBotsFixture("multi-server");

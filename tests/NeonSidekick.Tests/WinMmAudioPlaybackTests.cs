@@ -18,7 +18,8 @@ public class PcmFormatTests
 }
 
 /// <summary>
-/// The device-bound facts run only where a wave-out device exists. The plain facts pin the
+/// The device-bound facts run only where an output device exists, on the platform's own backend
+/// (<see cref="AudioSupport.DefaultPlayback"/>: WinMM on Windows, AudioQueue on macOS since 2026-10-07). They pin the
 /// lifecycle contract every implementation of <see cref="IAudioPlayback"/> must honour.
 /// </summary>
 public class WinMmAudioPlaybackTests
@@ -66,7 +67,7 @@ public class WinMmAudioPlaybackTests
     [AudioDeviceFact]
     public async Task Tone_DrainsToZero_OnTheDefaultDevice()
     {
-        using var playback = new WinMmAudioPlayback(PcmFormat.Kokoro);
+        using var playback = AudioSupport.DefaultPlayback(PcmFormat.Kokoro);
         var tone = AudioCheck.Tone(PcmFormat.Kokoro, 300, AudioCheck.ToneHz, AudioCheck.ToneAmplitude);
 
         playback.Start();
@@ -81,7 +82,7 @@ public class WinMmAudioPlaybackTests
     [AudioDeviceFact]
     public void ClearBuffer_DropsQueuedBytesImmediately()
     {
-        using var playback = new WinMmAudioPlayback(PcmFormat.Kokoro);
+        using var playback = AudioSupport.DefaultPlayback(PcmFormat.Kokoro);
         var tone = AudioCheck.Tone(PcmFormat.Kokoro, 2000, AudioCheck.ToneHz, AudioCheck.ToneAmplitude);
 
         playback.Start();
@@ -97,7 +98,7 @@ public class WinMmAudioPlaybackTests
     [AudioDeviceFact]
     public async Task StopThenStart_PlaysAgain()
     {
-        using var playback = new WinMmAudioPlayback(PcmFormat.Kokoro);
+        using var playback = AudioSupport.DefaultPlayback(PcmFormat.Kokoro);
         var tone = AudioCheck.Tone(PcmFormat.Kokoro, 200, AudioCheck.ToneHz, AudioCheck.ToneAmplitude);
 
         playback.Start();
@@ -117,6 +118,12 @@ public class WinMmAudioPlaybackTests
     [AudioDeviceFact]
     public void ProbeDefaultDevice_OpensAndCloses()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Equal(0, AudioQueuePlayback.ProbeDefaultDevice(PcmFormat.Kokoro));
+            return;
+        }
+
         Assert.Equal(WinMmNative.MmsyserrNoError, WinMmAudioPlayback.ProbeDefaultDevice(PcmFormat.Kokoro));
     }
 }

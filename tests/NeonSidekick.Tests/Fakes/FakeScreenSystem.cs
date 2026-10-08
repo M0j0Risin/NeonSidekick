@@ -28,6 +28,12 @@ public sealed class FakeScreenSystem : IScreenSystem
 
     public string? Fail { get; set; }
 
+    /// <summary>The system's refusal (2026-10-07, a Mac without Screen Recording): null lets captures go ahead.</summary>
+    public string? Refused { get; set; }
+
+    /// <summary>Every <see cref="Refusal"/> call's <c>ask</c>, in order.</summary>
+    public List<bool> Asked { get; } = [];
+
     public List<string> Captures { get; } = [];
 
     public IReadOnlyList<ScreenMonitor> Monitors() => MonitorList;
@@ -37,6 +43,12 @@ public sealed class FakeScreenSystem : IScreenSystem
     public long? OwnWindow() => Own;
 
     public int? OwnMonitor() => OwnNumber;
+
+    public string? Refusal(bool ask)
+    {
+        Asked.Add(ask);
+        return Refused;
+    }
 
     public ScreenFrame CaptureArea(ScreenRect area)
     {

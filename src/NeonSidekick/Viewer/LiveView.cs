@@ -42,6 +42,17 @@ public static class LiveViewState
     public static bool Due(TimeSpan sinceLast) => sinceLast >= TimeSpan.FromSeconds(1.0 / Fps) - TimeSpan.FromMilliseconds(2);
 }
 
+/// <summary>
+/// The window a live use posts to (2026-10-07, the camera's live window on a Mac): <see cref="PictureWindowThread"/> on Windows,
+/// <see cref="MacLiveWindow"/> over AppKit. Both take a frame, a held shot or a title from any thread, the newest replacing one waiting.
+/// </summary>
+internal interface ILiveWindow
+{
+    void PostLiveFrame(LiveView view, ViewerBitmap? frame, string? title);
+
+    void EndLive(LiveView view);
+}
+
 /// <summary>One live use of the window (<see cref="PictureWindow.ShowLive"/>): its title, its held shot, its spare buffers, the callback when it ends.</summary>
 internal sealed class LiveView : ILiveView
 {
@@ -57,7 +68,7 @@ internal sealed class LiveView : ILiveView
         _closed = closed;
     }
 
-    public PictureWindowThread? Window { get; set; }
+    public ILiveWindow? Window { get; set; }
 
     public string Title { get; private set; }
 

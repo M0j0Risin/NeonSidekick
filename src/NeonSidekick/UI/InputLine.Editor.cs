@@ -611,9 +611,11 @@ public sealed partial class InputLine
                         break;
                     }
 
-                    if (control)
+                    if (control || (alt && OperatingSystem.IsMacOS()))
                     {
                         // Ctrl+Backspace (2026-10-04): the word before the cursor and the blanks after it, as Ctrl+← would cross them.
+                        // On a Mac (2026-10-07) Option+Delete too, the Mac's own word delete: a Mac terminal's Ctrl+Delete sends BS,
+                        // which is Ctrl+H (/help) since that day.
                         int from = DraftWords.PreviousStart(_text.ToString(), _cursor);
                         _text.Remove(from, _cursor - from);
                         _cursor = from;

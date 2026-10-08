@@ -89,6 +89,19 @@ public class VoiceCheckTests : IDisposable
         Assert.Contains(VoiceCheck.NoTranscriptLine, _console.Output);
     }
 
+    /// <summary>The Mac twin (2026-10-07).</summary>
+    [MacFact]
+    public async Task NoMicrophone_ExitsOne_WithTheStatusLine_Mac()
+    {
+        var voice = new VoiceSession(_ => _capture, _ => _recognizer, (_, _) => _vad, new ModelStore(Path.Combine(_dir, "models"), new HttpClient(_http)), () => 0, (_, _) => _wake);
+
+        int code = await VoiceCheck.RunAsync(_console, voice, new AppSettingsData(), Quick);
+
+        Assert.Equal(1, code);
+        Assert.Contains(VoiceSession.NoMicrophoneLine("no input device"), _console.Output);
+        Assert.Contains(VoiceCheck.NoTranscriptLine, _console.Output);
+    }
+
     [Fact]
     public async Task DownloadProgress_IsPrintedOnce_WithoutPercentages()
     {
