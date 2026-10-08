@@ -114,10 +114,11 @@ public readonly record struct CameraWarmup(int Frames, TimeSpan Time)
     public static readonly CameraWarmup Webcam = new(10, TimeSpan.FromMilliseconds(800));
 
     /// <summary>
-    /// A MacBook's built-in camera (2026-10-07, measured at 1280x720): thirty frames and 800 ms. Its first frame comes 1.75 s
-    /// after the open and its exposure ramps over the next second, so the frames decide (<see cref="MacCameraRules.WarmupFor"/>).
+    /// Apple's own cameras on a Mac, the MacBook's built-in one and an iPhone as Continuity Camera (2026-10-07, measured at
+    /// 1280x720): thirty frames and 800 ms. Their first frame comes 0.9–2.1 s after the open, past the 800 ms, and their exposure
+    /// (and the iPhone's focus) settles over the next twenty or so frames, so the frames decide (<see cref="MacCameraRules.WarmupFor"/>).
     /// </summary>
-    public static readonly CameraWarmup MacBuiltIn = new(30, TimeSpan.FromMilliseconds(800));
+    public static readonly CameraWarmup Apple = new(30, TimeSpan.FromMilliseconds(800));
 
     /// <summary>No warm-up: every frame is settled (a fake camera).</summary>
     public static readonly CameraWarmup None = new(0, TimeSpan.Zero);

@@ -362,8 +362,8 @@ Otherwise it is read-only: scroll, follow, select and copy as in the log window,
 
 A USB or built-in webcam through Windows' Media Foundation or, on a Mac (macOS 14 or later), Apple's AVFoundation; nothing to install.
 
-* **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go. A photo waits about a second for the exposure to settle (a MacBook's own camera about three: its first picture comes late and its exposure ramps over thirty frames).
-* **📷 on the hint row** shows whenever the camera is on (with its light and Windows' indicator); double-click it to end `/camera live` and watch mode.
+* **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go. A photo waits about a second for the exposure to settle (a MacBook's own camera or an iPhone about three: their first picture comes late and their exposure and focus settle over thirty frames).
+* **📷 on the hint row** shows whenever the camera is on (with its light and Windows' indicator, or a Mac's green dot and menu-bar camera icon); double-click it to end `/camera live` and watch mode.
 * **Photos** are JPEGs in *Camera output folder* (`camera_images` by default), named by time (`20261002-140203.jpg`); a retaken or declined one is deleted. Botchat and watch pictures aren't saved, but double-clicking a watch thumbnail writes it to the folder's `.watch` subfolder, which is cleared when watch mode stops and on every profile load.
 * **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.
 * **Failures** say why: Windows' *Let desktop apps access your camera* is off (Settings › Privacy & security › Camera), another app has the camera, it was unplugged, or Media Foundation is missing (Windows N needs the Media Feature Pack).

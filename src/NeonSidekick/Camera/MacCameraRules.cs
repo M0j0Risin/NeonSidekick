@@ -25,14 +25,16 @@ public static class MacCameraRules
     public static readonly string[] DeviceTypes = [BuiltInType, ExternalType];
 
     /// <summary>
-    /// The warm-up for a device of <paramref name="deviceType"/>. Measured on 2026-10-07 at 1280x720: the built-in camera's first
-    /// frame came 1.75 s after <c>startRunning</c> returned, two black, then its exposure ramped to frame ~30 (brightness 37 to 86,
-    /// 95% by frame 28) — the session's 800 ms had long passed by then, so only the frames count and
-    /// <see cref="CameraWarmup.Webcam"/>'s ten gave a dark shot; <see cref="CameraWarmup.MacBuiltIn"/>. The Logitech StreamCam
+    /// The warm-up for a device of <paramref name="deviceType"/>, <paramref name="continuity"/> for an iPhone as Continuity Camera
+    /// (AVFoundation's <c>isContinuityCamera</c>; its type is the USB webcam's). Measured on 2026-10-07 at 1280x720: the built-in
+    /// camera's first frame came 1.75 s after <c>startRunning</c> returned, two black, then its exposure ramped to frame ~30
+    /// (brightness 37 to 86, 95% by frame 28); the iPhone's (an iPhone 15 Pro, still) came 0.9–2.1 s after, out of focus until
+    /// frame ~15 and its brightness settling by frame ~25. The session's 800 ms had passed by then, so only the frames count and
+    /// <see cref="CameraWarmup.Webcam"/>'s ten gave a dark or soft shot: <see cref="CameraWarmup.Apple"/>. The Logitech StreamCam
     /// looked settled by frame ~20, where <see cref="CameraWarmup.Webcam"/>'s 800 ms ends, so a USB camera keeps the webcam's.
     /// </summary>
-    public static CameraWarmup WarmupFor(string? deviceType) =>
-        string.Equals(deviceType, BuiltInType, StringComparison.Ordinal) ? CameraWarmup.MacBuiltIn : CameraWarmup.Webcam;
+    public static CameraWarmup WarmupFor(string? deviceType, bool continuity) =>
+        continuity || string.Equals(deviceType, BuiltInType, StringComparison.Ordinal) ? CameraWarmup.Apple : CameraWarmup.Webcam;
 
     /// <summary>A CoreMedia subtype as its four characters (<c>420v</c>, <c>yuvs</c>), or <c>0x…</c> when they are not printable.</summary>
     public static string FourCc(uint code)

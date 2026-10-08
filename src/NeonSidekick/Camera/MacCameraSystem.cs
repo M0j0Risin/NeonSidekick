@@ -214,7 +214,8 @@ public sealed class MacCameraSystem : ICameraSystem
         }
 
         string? deviceType = FromNSString(Send(captureDevice, Sel("deviceType")));
-        var stream = new Stream(device.Name, captureDevice, MacCameraRules.WarmupFor(deviceType));
+        bool continuity = SendBool(captureDevice, Sel("isContinuityCamera")) != 0;   // macOS 13 and later; this layer needs 14
+        var stream = new Stream(device.Name, captureDevice, MacCameraRules.WarmupFor(deviceType, continuity));
         try
         {
             stream.Start(target);

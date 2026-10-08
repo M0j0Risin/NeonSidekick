@@ -36,12 +36,13 @@ public sealed class MacCameraRulesTests
         Assert.Equal(expected, MacCameraRules.DurationFor(min, max));
 
     [Fact]
-    public void WarmupFor_TheBuiltInCameraCountsThirtyFrames_AUsbOneTheWebcams()
+    public void WarmupFor_ApplesCamerasCountThirtyFrames_AUsbOneTheWebcams()
     {
-        Assert.Equal(CameraWarmup.MacBuiltIn, MacCameraRules.WarmupFor(MacCameraRules.BuiltInType));
-        Assert.Equal(30, CameraWarmup.MacBuiltIn.Frames);
-        Assert.Equal(CameraWarmup.Webcam, MacCameraRules.WarmupFor(MacCameraRules.ExternalType));
-        Assert.Equal(CameraWarmup.Webcam, MacCameraRules.WarmupFor(null));
+        Assert.Equal(CameraWarmup.Apple, MacCameraRules.WarmupFor(MacCameraRules.BuiltInType, continuity: false));
+        Assert.Equal(CameraWarmup.Apple, MacCameraRules.WarmupFor(MacCameraRules.ExternalType, continuity: true));   // an iPhone
+        Assert.Equal(30, CameraWarmup.Apple.Frames);
+        Assert.Equal(CameraWarmup.Webcam, MacCameraRules.WarmupFor(MacCameraRules.ExternalType, continuity: false));
+        Assert.Equal(CameraWarmup.Webcam, MacCameraRules.WarmupFor(null, continuity: false));
         Assert.Equal([MacCameraRules.BuiltInType, MacCameraRules.ExternalType], MacCameraRules.DeviceTypes);
     }
 
