@@ -367,6 +367,7 @@ internal sealed class MacVideoWindow : AppKitWindow, IWebPageSink
     private nint _delegate;
     private bool _pageReady;
     private string? _shownTitle;
+    private readonly VideoLoadSettle _settle = new();
 
     public MacVideoWindow(VideoRequest first, string storeId)
     {
@@ -497,6 +498,7 @@ internal sealed class MacVideoWindow : AppKitWindow, IWebPageSink
 
         if (request is not null)
         {
+            _settle.Loaded();
             MacWebKit.Run(_web, WebKitPage.DeliverScript(VideoMessages.Load(request)));
             ShowTitle(null);
         }
@@ -514,6 +516,11 @@ internal sealed class MacVideoWindow : AppKitWindow, IWebPageSink
         lock (_gate)
         {
             (kind, snapshot) = VideoMessages.Apply(_snapshot, text);
+            if (!_settle.Accept(kind, snapshot))
+            {
+                return;   // the old video stopping under the new one's id (VideoLoadSettle)
+            }
+
             if (kind is VideoPageEvent.State or VideoPageEvent.Error)
             {
                 snapshot = snapshot with { Version = MacVideoWindows.NextVersion() };
