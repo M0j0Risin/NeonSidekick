@@ -73,9 +73,10 @@ public sealed class YouTubePlayTool : AIFunction
         }
 
         long before = _player.Snapshot?.Version ?? -1;
+        bool autoplay = _effective().YouTubeAutoplay;
         try
         {
-            _player.Play(new VideoRequest(id, start, _effective().YouTubeAutoplay));
+            _player.Play(new VideoRequest(id, start, autoplay));
         }
         catch (InvalidOperationException e)
         {
@@ -84,8 +85,12 @@ public sealed class YouTubePlayTool : AIFunction
 
         // Started, cued, ended at once or refused: anything but the window's own opening, and on the video asked for (its error
         // too, not a late one for the video before). The page holds its every-second report from a load until the player's next
-        // change (player.html), so a replay of the same video at another time is not answered with the old position.
-        var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.VideoId == id && s.State is VideoState.Playing or VideoState.Paused or VideoState.Cued or VideoState.Ended, YouTubeWait.Play, _time, cancellationToken, video: id).ConfigureAwait(false);
+        // change (player.html), so a replay of the same video at another time is not answered with the old position. Cued is an
+        // answer only when the play asked for none (2026-10-07, found in the Mac live run and confirmed on Windows): a new window's
+        // first report comes from the player's ready event, just before its playVideo shows, and read "Cued (press play to start)"
+        // to the model and the saved session while the video started a second later. A play the browser keeps from starting stays
+        // cued and is answered so at the wait's cap.
+        var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.VideoId == id && (s.State is VideoState.Playing or VideoState.Paused or VideoState.Ended || (s.State == VideoState.Cued && !autoplay)), YouTubeWait.Play, _time, cancellationToken, video: id).ConfigureAwait(false);
         return snapshot is null ? YouTubeText.ClosedMeanwhile : YouTubeText.Status(snapshot);
     }
 }

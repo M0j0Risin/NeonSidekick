@@ -136,6 +136,38 @@ public class YouTubeToolsTests
         Assert.DoesNotContain(Before, result);
     }
 
+    /// <summary>
+    /// A new window's first report is the player's ready one, cued, just before its play shows (2026-10-07, found in the Mac live run
+    /// and confirmed on Windows): with autoplay on it is not the answer; the playing report after it is.
+    /// </summary>
+    [Fact]
+    public async Task Play_WithAutoplay_TheReadyReportsCued_IsNotTheAnswer()
+    {
+        _player.Behave = false;
+
+        var call = Call(Play(), ("video", Bunny));
+        var opening = _player.Snapshot!;
+        _player.Report(new VideoSnapshot(VideoState.Cued, Bunny, "Big Buck Bunny", "Blender", 0, 635, Version: opening.Version + 1));
+        Assert.False(call.IsCompleted);                                                         // the ready report: not yet playing
+        _player.Report(new VideoSnapshot(VideoState.Playing, Bunny, "Big Buck Bunny", "Blender", 0.01, 635, Version: opening.Version + 2));
+
+        Assert.StartsWith("Playing \"Big Buck Bunny\"", await call, StringComparison.Ordinal);
+    }
+
+    /// <summary>A play the browser keeps from starting stays cued: at the cap that is the answer, and the truth.</summary>
+    [Fact]
+    public async Task Play_WithAutoplay_ThatStaysCued_AnswersCuedAtTheCap()
+    {
+        _player.Behave = false;
+
+        var call = Call(Play(), ("video", Bunny));
+        _player.Report(new VideoSnapshot(VideoState.Cued, Bunny, "Big Buck Bunny", "Blender", 0, 635, Version: _player.Snapshot!.Version + 1));
+        Assert.False(call.IsCompleted);
+        _time.Advance(YouTubeWait.Play);
+
+        Assert.StartsWith("Cued (press play to start) \"Big Buck Bunny\"", await call, StringComparison.Ordinal);
+    }
+
     /// <summary>A player that never starts: at the cap the newest report answers (still opening, so status says to look later).</summary>
     [Fact]
     public async Task Play_AWindowThatNeverStarts_AnswersAtTheCap()
