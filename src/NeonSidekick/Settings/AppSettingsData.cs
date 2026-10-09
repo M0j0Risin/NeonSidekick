@@ -2210,10 +2210,12 @@ public sealed class AppSettingsData
     /// and <c>--no-police</c> stop it too. The model is told it was refused, never which string (the user's call: a named
     /// string is one to spell around); the transcript's 👮 line and the log name it for the user. A tripwire, not a sandbox:
     /// a model that builds the text in pieces gets past it. Kept as typed, the user's case, no duplicates ignoring case
-    /// (<see cref="Shell.ForbiddenStrings.Add"/>); empty by default. The Shell tab's row and <c>/police</c>' strings button
-    /// (S) edit it. Read at each call. No variable.
+    /// (<see cref="Shell.ForbiddenStrings.Add"/>). Empty by default until 2026-10-08, when <see cref="Shell.ForbiddenStrings.Defaults"/>
+    /// became a fresh profile's list (the user's call: disk wipes, power, security switched off, persistence, credentials, piped
+    /// installers, force-push, per system); a saved list stands, so a profile from before keeps its empty one until the user adds
+    /// to it. The Shell tab's row and <c>/police</c>' strings button (S) edit it. Read at each call. No variable.
     /// </summary>
-    public List<string> ShellPoliceForbiddenStrings { get; set; } = [];
+    public List<string> ShellPoliceForbiddenStrings { get; set; } = Shell.ForbiddenStrings.Defaults;
 
     /// <summary>
     /// Whether the shell steps aside for a native tool (2026-09-26, the user's ask: the model kept reaching for

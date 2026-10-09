@@ -419,6 +419,8 @@ a command that names a path outside the working directory is still refused, and 
 with exit code 3. Keep `--cwd` narrow, or see [Turning off the path police](#turning-off-the-path-police).
 The same holds for the profile's *Shell police forbidden strings*: while the police is on, a command,
 script or `process` write containing one (case and spacing ignored) is refused and counts toward exit code 3.
+A new profile starts with a list of harmful actions (disk wipes, shutdown, `| bash`, `push --force`, `reset --hard`…;
+see [SETTINGS.md](SETTINGS.md#shell-guards)), so a job that force-pushes or resets hard is refused even under `--yolo`.
 And while a database family's tools are on (*SQLite*, *SQL*, *Oracle*, *MySQL* or *PostgreSQL tools*), a command, script or
 `process` write that reaches that database some other way (its client or driver, its files, a host its connections name) is
 refused too: the tools are the way in.

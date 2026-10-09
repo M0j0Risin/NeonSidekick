@@ -752,14 +752,36 @@ public class AppSettingsTests : IDisposable
             Assert.Null(settings.Current.ToolbarItems);
             Assert.Equal(defaults.ToolsDisabled, settings.Current.ToolsDisabled);
             Assert.Empty(settings.Current.ShellCommandAllowed);
-            Assert.Empty(settings.Current.ShellPoliceForbiddenStrings);
+            Assert.Equal(defaults.ShellPoliceForbiddenStrings, settings.Current.ShellPoliceForbiddenStrings);
             Assert.Equal(defaults.ShellCodeLanguages, settings.Current.ShellCodeLanguages);
             Assert.Empty(settings.Current.McpServersDisabled);
             settings.Update(d => d.TtsSpeed = 1.2);
             Assert.Null(Shell.ForbiddenStrings.Find("rm -rf /", settings.Current.ShellPoliceForbiddenStrings));
         }
 
-        Assert.Empty(Profiles.ReadProfileFile(path).ShellPoliceForbiddenStrings);
+        Assert.Equal(defaults.ShellPoliceForbiddenStrings, Profiles.ReadProfileFile(path).ShellPoliceForbiddenStrings);
+    }
+
+    /// <summary>
+    /// The forbidden strings' defaults (2026-10-08) are a fresh profile's alone: a profile saved before, its list empty, keeps
+    /// it empty (the fresh <c>ToolsDisabled</c>'s way); one saved without the field gets the defaults.
+    /// </summary>
+    [Fact]
+    public void ProfileFile_ASavedEmptyForbiddenList_StaysEmpty_AMissingOneGetsTheDefaults()
+    {
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        string path = Profiles.ProfileFile(_dir, Profiles.DefaultName);
+        File.WriteAllText(path, "{ \"SchemaVersion\": 2, \"ShellPoliceForbiddenStrings\": [] }");
+        using (var settings = new AppSettings(_dir))
+        {
+            Assert.Empty(settings.Current.ShellPoliceForbiddenStrings);
+        }
+
+        File.WriteAllText(path, "{ \"SchemaVersion\": 2 }");
+        using (var settings = new AppSettings(_dir))
+        {
+            Assert.Equal(Shell.ForbiddenStrings.Defaults, settings.Current.ShellPoliceForbiddenStrings);
+        }
     }
 
     [Fact]
@@ -1534,7 +1556,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(1, AppSettingsData.MinShellCodeTimeoutSeconds);
         Assert.Equal(3600, AppSettingsData.MaxShellCodeTimeoutSeconds);
         Assert.False(s.ShellToolBridge);   // later on 2026-09-21: a script does everything itself unless asked
-        Assert.Empty(s.ShellPoliceForbiddenStrings);   // 2026-10-03: nothing forbidden until the user types it
+        Assert.Equal(NeonSidekick.Shell.ForbiddenStrings.Defaults, s.ShellPoliceForbiddenStrings);   // 2026-10-08 (the user's call): the shared and this system's defaults; empty from 2026-10-03, nothing forbidden until the user typed it
         Assert.True(s.ShellPolice);   // 2026-09-22: a command, a script or text to a process stays under the working directory unless the user turns it off
         Assert.True(s.ShellPreferNative);   // 2026-09-26: a line a native tool covers goes back to that tool unless the user turns it off
         Assert.Equal(50, s.ShellCodeMaxToolCalls);

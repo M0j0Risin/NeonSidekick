@@ -4582,6 +4582,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 80;
         _geometry = new ScreenGeometry(() => null);
@@ -4636,6 +4637,7 @@ public partial class ChatScreenTests : IDisposable
     [UnixFact]
     public async Task WithGeometry_BareTools_OpensTheToolsMenu_OnNineTabs_Unix()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 80;
         _geometry = new ScreenGeometry(() => null);
@@ -9089,6 +9091,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Police_OpensTheOnOffPage_UnderTheToolsCrumb_PickingSaves_EscCloses()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => d.TtsOutput = false);
         Assert.True(_settings.Current.ShellPolice);   // on by default
         _console.Profile.Height = 40;
@@ -9311,6 +9314,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task TheToolbarDisk_AndTheOfficer_FollowMemory_AndShellPolice_AndTheOfficersPairIsThePolicePage()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });   // Memory, ask and the police: the defaults
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
@@ -10426,6 +10430,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
@@ -10500,6 +10505,7 @@ public partial class ChatScreenTests : IDisposable
     [UnixFact]
     public async Task ADoubleClickOnAToolbarGlyph_OpensItsPane_OnThePath_TheBrowser_AndTheDraftComesBack_Unix()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
@@ -10606,6 +10612,7 @@ public partial class ChatScreenTests : IDisposable
     [WindowsFact]
     public async Task UnderAPane_ADoubleClickOnItsOwnToolbarGlyph_ClosesIt_OnAnothers_SwitchesToThatPane()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
@@ -10693,6 +10700,7 @@ public partial class ChatScreenTests : IDisposable
     [UnixFact]
     public async Task UnderAPane_ADoubleClickOnItsOwnToolbarGlyph_ClosesIt_OnAnothers_SwitchesToThatPane_Unix()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;

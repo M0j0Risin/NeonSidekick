@@ -12,6 +12,134 @@ namespace NeonSidekick.Shell;
 /// </summary>
 public static class ForbiddenStrings
 {
+    /// <summary>
+    /// The entries a fresh profile starts with on either system (2026-10-08, the user's call, from the review in
+    /// <c>.notes/RECOMMENDED_FORBIDDEN_STRINGS.md</c>): actions that do harm wherever they run, worded so ordinary agent work
+    /// almost never contains them, since a match has no pane and no yolo. A pipe into a shell is spelled both ways because
+    /// <see cref="Normalize"/> never adds or removes a space. PowerShell's (<c>-EncodedCommand</c>, <c>| iex</c>,
+    /// <c>DownloadString(</c>) stay on a Mac too: pwsh may be installed, and they match nothing otherwise.
+    /// </summary>
+    public static string[] SharedDefaults =>
+    [
+        "shutdown -",
+        ".ssh/id_",
+        "| bash",
+        "|bash",
+        "-EncodedCommand",
+        "DownloadString(",
+        "| iex",
+        "|iex",
+        "push --force",
+        "reset --hard",
+    ];
+
+    /// <summary>
+    /// Windows' own defaults beside <see cref="SharedDefaults"/>: disks, boot and backups; power; Defender and the firewall;
+    /// scheduled tasks, services and accounts; credentials, the app's own DPAPI secrets among them (the Win32 call and .NET's
+    /// wrapper from C# and PowerShell, never a bare <c>ProtectedData</c>, which Microsoft.Extensions.AI's
+    /// <c>TextReasoningContent.ProtectedData</c> would trip); the event logs. <c>of=/dev/sd</c>/<c>nvme</c> are dd under WSL or
+    /// Git Bash (a bare <c>of=/dev/</c> would refuse <c>of=/dev/null</c>); <c>PhysicalDrive</c> is <c>\\.\PhysicalDrive0</c>
+    /// in any backslash spelling.
+    /// </summary>
+    public static string[] WindowsDefaults =>
+    [
+        "format c:",
+        "Format-Volume",
+        "Clear-Disk",
+        "Initialize-Disk",
+        "diskpart",
+        "bcdedit",
+        "vssadmin delete",
+        "shadowcopy delete",
+        "wbadmin delete",
+        "cipher /w",
+        "mkfs",
+        "of=/dev/sd",
+        "of=/dev/nvme",
+        "PhysicalDrive",
+        "shutdown /",
+        "Stop-Computer",
+        "Restart-Computer",
+        "Set-MpPreference",
+        "Add-MpPreference",
+        "netsh advfirewall",
+        "Set-NetFirewallProfile",
+        "schtasks /create",
+        "Register-ScheduledTask",
+        "New-Service",
+        "New-LocalUser",
+        "Add-LocalGroupMember",
+        "net localgroup",
+        "mimikatz",
+        "sekurlsa",
+        "lsass",
+        "reg save hklm",
+        "cmdkey /list",
+        "vaultcmd",
+        "CryptUnprotectData",
+        "ProtectedData.Unprotect",
+        "ProtectedData]::Unprotect",
+        @".ssh\id_",
+        "wevtutil cl",
+        "Clear-EventLog",
+    ];
+
+    /// <summary>
+    /// The Mac's own defaults beside <see cref="SharedDefaults"/>: diskutil's erasing verbs, <c>newfs_</c>, dd onto a disk,
+    /// Time Machine's deletes; <c>nvram</c>; Gatekeeper, the firewalls and the privacy database; launchd, login hooks, cron
+    /// and the account tools; the Keychain (the app's own <c>keychain:</c> key is a generic password, <c>Sql/MacKeychain</c>)
+    /// and password prompts; a pipe into zsh; <c>log erase</c>. Left out: <c>csrutil</c> (Recovery only, so it guards nothing)
+    /// and <c>com.apple.quarantine</c> (the app's own README asks the user to clear it).
+    /// </summary>
+    public static string[] MacDefaults =>
+    [
+        "diskutil erase",
+        "diskutil zeroDisk",
+        "diskutil secureErase",
+        "diskutil partitionDisk",
+        "diskutil apfs delete",
+        "newfs_",
+        "of=/dev/disk",
+        "of=/dev/rdisk",
+        "tmutil delete",
+        "tmutil disable",
+        "nvram",
+        "spctl --master-disable",
+        "spctl --global-disable",
+        "spctl --add",
+        "socketfilterfw",
+        "pfctl -d",
+        "tccutil reset",
+        "TCC.db",
+        "LaunchAgents",
+        "LaunchDaemons",
+        "launchctl load",
+        "launchctl bootstrap",
+        "launchctl submit",
+        "LoginHook",
+        "crontab",
+        "dscl",
+        "sysadminctl",
+        "dseditgroup",
+        "generic-password",
+        "internet-password",
+        "dump-keychain",
+        ".keychain-db",
+        "hidden answer",
+        "with administrator privileges",
+        "sudo -S",
+        "| zsh",
+        "|zsh",
+        "log erase",
+    ];
+
+    /// <summary>
+    /// What <see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/> starts as: <see cref="SharedDefaults"/> and this
+    /// system's own list (Windows', else the Mac's), <see cref="Sorted"/> as the editor saves it. Only a fresh profile gets it; a
+    /// saved list stands, the fresh <c>ToolsDisabled</c>'s way, so a profile from before keeps its own (empty) list.
+    /// </summary>
+    public static List<string> Defaults => Sorted([.. SharedDefaults, .. OperatingSystem.IsWindows() ? WindowsDefaults : MacDefaults]);
+
     /// <summary><paramref name="text"/> with every run of whitespace one space, trimmed: the form both sides are compared in.</summary>
     public static string Normalize(string text)
     {

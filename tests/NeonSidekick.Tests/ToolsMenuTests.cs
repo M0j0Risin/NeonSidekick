@@ -1258,6 +1258,7 @@ public partial class ToolsMenuTests : IDisposable
     [WindowsFact]
     public async Task OnThePane_TheShellTab_SitsBetweenFilesAndAsk_PolicyAndShellArePickers_TheListRemoves()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => d.ShellCommandAllowed = ["git push", "dotnet build"]);
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Ask, Web, Shell
@@ -1290,6 +1291,7 @@ public partial class ToolsMenuTests : IDisposable
     [UnixFact]
     public async Task OnThePane_TheShellTab_SitsBetweenFilesAndAsk_PolicyAndShellArePickers_TheListRemoves_Unix()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => d.ShellCommandAllowed = ["git push", "dotnet build"]);
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Ask, Web, Shell
@@ -1341,6 +1343,7 @@ public partial class ToolsMenuTests : IDisposable
     [WindowsFact]
     public async Task OnThePane_ThePoliceRow_IsAPicker_NoReconnect()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Shell
         Push(Keys.Down, Keys.Down, Keys.Enter);                 // Shell police: the picker opens on on
@@ -1362,6 +1365,7 @@ public partial class ToolsMenuTests : IDisposable
     [UnixFact]
     public async Task OnThePane_ThePoliceRow_IsAPicker_NoReconnect_Unix()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));   // Shell
         Push(Keys.Down, Keys.Down, Keys.Enter);                 // Shell police: the picker opens on on
@@ -2156,6 +2160,7 @@ public partial class ToolsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_TheForbiddenStringsRow_AddsTyped_RefusesADuplicate_EnterRemoves()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.ShellTabTitle));
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // under Shell police: the list, on its add row
@@ -2200,6 +2205,7 @@ public partial class ToolsMenuTests : IDisposable
     [Fact]
     public async Task ShowPolice_TheStringsButton_OpensTheList_AndComesBack()
     {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Char('s'), Keys.Enter);
         Push(Typed("shutdown"));
@@ -2235,7 +2241,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowPoliceAsync(CancellationToken.None);
 
         Assert.Contains("  · Shell police: on\n  · Shell police forbidden strings\n  ·   Format\n  ·   rm -rf\n", Output);
-        Assert.Equal(["Shell police forbidden strings", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.ForbiddenStringLines(new AppSettingsData()));
+        Assert.Equal(["Shell police forbidden strings", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.ForbiddenStringLines(new AppSettingsData { ShellPoliceForbiddenStrings = [] }));
         pane.Dispose();
     }
 
