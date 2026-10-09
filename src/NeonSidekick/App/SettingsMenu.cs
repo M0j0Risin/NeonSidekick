@@ -824,7 +824,7 @@ public enum SettingsField
     /// <summary>Typed: the most rows of an edit's diff the transcript shows, 0 (the header alone) to 500 (<see cref="Settings.AppSettingsData.DiffMaxLines"/>). The Options tab of <c>/tools</c>, under <see cref="ShowFileDiffs"/> (2026-10-03); no reconnect. Last in the enum, as every newcomer.</summary>
     DiffMaxLines,
 
-    /// <summary>A list the user types into: the strings the shell police refuses (<see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/>), its top row adding one and Enter on one removing it. The Shell tab, under <see cref="ShellPolice"/>, whose switch it rides (2026-10-03, the user's idea); also <c>/police</c>' strings button. No reconnect (read at each call). Last in the enum, as every newcomer.</summary>
+    /// <summary>A list the user types into: the strings the shell police refuses (<see cref="Settings.AppSettingsData.ShellPoliceForbiddenStrings"/>), its top row adding one and Enter on one removing it. The Shell tab, under <see cref="ShellPolice"/>, whose switch it rides (2026-10-03, the user's idea); also the police page's strings button. No reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     ShellPoliceForbiddenStrings,
 
     /// <summary>A picker over <see cref="Pdf.PdfEngine.Names"/>: what makes a PDF (<see cref="Settings.AppSettingsData.PdfEngine"/>). The Print tab of <c>/tools</c>, after <see cref="PrintFontSize"/> (2026-10-03, the user's ask); no reconnect (read at each PDF). Last in the enum, as every newcomer.</summary>
@@ -3023,7 +3023,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The allowed-commands list's first title-row button (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
-    /// list <c>/cmdlist</c> opens, without going through the Shell tab's picker): the policy to <c>ask</c>, at once. The bare word:
+    /// list <c>/cmdlist</c> opened — <c>/tools shell allowed</c> since 2026-10-09 —, without going through the Shell tab's picker): the policy to <c>ask</c>, at once. The bare word:
     /// the toolbar lock's glyph here would be a second lock on the screen, a click on it no click on the toolbar's. A check before
     /// it since 2026-10-03 (the user's ask: every header button a glyph to its left, monochrome as the checklists' ⊞ ⊠ ⊡). Pinned.
     /// </summary>
@@ -3060,7 +3060,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The yes/no asked before <c>Shell police</c> goes from on to off (2026-10-02, the user's ask), on its
-    /// on/off page wherever that opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Tools pane's Shell tab; a move
+    /// on/off page wherever that opens — <c>/tools shell police</c> (<c>/police</c> until 2026-10-09) and the picker's P button, Ctrl+Alt+O, the toolbar's officer, the Tools pane's Shell tab; a move
     /// to on never asks. Pinned.
     /// </summary>
     public const string PoliceOffConfirmQuestion = "Disable shell police (scripts run unchecked)?";
@@ -3112,7 +3112,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The police's on/off page's button (2026-10-03, the user's pick): the forbidden-strings list, opened from wherever that page
-    /// opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. The list glyph before it since later on
+    /// opens — <c>/tools shell police</c> (<c>/police</c> until 2026-10-09), Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. The list glyph before it since later on
     /// 2026-10-03. The word the button's title starts with since 2026-10-04 (<see cref="PoliceStringsTitle"/>). Pinned.
     /// </summary>
     public const string PoliceStringsButton = "≡ strings";
@@ -3135,6 +3135,42 @@ internal sealed partial class SettingsMenu
     /// lit while the list holds any and dim while it is empty (2026-10-04, the user's call; it still opens the list, never switches). Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> PoliceButtons(int count) => [new(PoliceStringsTitle(count), PoliceStringsKey, count > 0)];
+
+    /// <summary>
+    /// The command-policy picker's first button (2026-10-09, the user's call: <c>/cmdlist</c> folded under <c>/tools shell</c>):
+    /// the allowed-commands list, ESC there coming back to the picker — the police page's strings button's shape. The word the
+    /// title starts with (<see cref="PolicyAllowedTitle"/>). Pinned.
+    /// </summary>
+    public const string PolicyAllowedButton = "≡ allowed";
+
+    /// <summary><see cref="PolicyAllowedButton"/> with the count: <c>≡ allowed (3)</c>, or <c>≡ allowed (none)</c>. Pinned.</summary>
+    public static string PolicyAllowedTitle(int count) =>
+        PolicyAllowedButton + " (" + (count == 0 ? "none" : count.ToString(CultureInfo.InvariantCulture)) + ")";
+
+    /// <summary>The key that is <see cref="PolicyAllowedButton"/>.</summary>
+    public const char PolicyAllowedKey = 'c';
+
+    /// <summary>The command-policy picker's second button (2026-10-09, <c>/police</c> folded in): the police's on/off page, ESC there coming back. Pinned.</summary>
+    public const string PolicyPoliceButton = "≡ police";
+
+    /// <summary><see cref="PolicyPoliceButton"/> with the police's state: <c>≡ police (on)</c>. Pinned.</summary>
+    public static string PolicyPoliceTitle(bool on) => PolicyPoliceButton + (on ? " (on)" : " (off)");
+
+    /// <summary>The key that is <see cref="PolicyPoliceButton"/>.</summary>
+    public const char PolicyPoliceKey = 'p';
+
+    /// <summary>The command-policy picker's hint on the pane, where the two buttons are (2026-10-09). Pinned.</summary>
+    public const string CommandPolicyPageKeys = "Enter = choose · c = allowed · p = police · ESC = back";
+
+    /// <summary>
+    /// The command-policy picker's buttons (2026-10-09): <see cref="PolicyAllowedTitle"/> for <paramref name="allowed"/> prefixes, lit
+    /// while any is allowed, and <see cref="PolicyPoliceTitle"/>, lit while <paramref name="police"/> is on. Each opens its page. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> CommandPolicyPageButtons(int allowed, bool police) =>
+    [
+        new(PolicyAllowedTitle(allowed), PolicyAllowedKey, allowed > 0),
+        new(PolicyPoliceTitle(police), PolicyPoliceKey, police),
+    ];
 
     /// <summary>
     /// The offered button of the ComfyUI, SQL, Oracle, MySQL, SQLite, PostgreSQL and UNC tool pages (2026-10-05, the user's ask:
@@ -6535,7 +6571,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     /// <summary>
     /// A toggle's on/off page opened straight, over the saved values (2026-09-22, for <see cref="ToolsMenu.ShowPoliceAsync"/>:
-    /// <c>/police</c>, the toolbar's officer) — the page its row's Enter opens, under whatever <see cref="Root"/> the caller set.
+    /// <c>/tools shell police</c>, the toolbar's officer) — the page its row's Enter opens, under whatever <see cref="Root"/> the caller set.
     /// Police going off asks <see cref="PoliceOffConfirmQuestion"/> on the same pane first (2026-10-02). The police's page carries
     /// <see cref="PoliceButtons"/> (2026-10-03): S opens the forbidden-strings list, ESC there comes back here. The Web tools page
     /// carries <see cref="WebModeButtons"/> (2026-10-04, the user's ask): D, H and C switch <c>Web browser mode</c> at once, wherever
@@ -7374,12 +7410,35 @@ internal sealed partial class SettingsMenu
     /// The command-policy picker under the settings list (2026-09-21): one <see cref="CommandPolicyLabel"/> row per
     /// <see cref="Shell.CommandPolicy.Names"/> entry, the saved one under the cursor. A move into <c>yolo</c> asks
     /// <see cref="YoloConfirmQuestion"/> on the same pane first (2026-10-03, with the toolbar's shell: every way into yolo asks,
-    /// as the allowed-commands list's button does); No or ESC leaves the policy.
+    /// as the allowed-commands list's button does); No or ESC leaves the policy. Since 2026-10-09 (the user's call:
+    /// <c>/cmdlist</c> and <c>/police</c> folded under <c>/tools shell</c>) the title row carries <see cref="CommandPolicyPageButtons"/>
+    /// — C the allowed-commands list, P the police's page — each coming back here on ESC, the police page's strings-button shape.
     /// </summary>
     private async Task<bool> PickCommandPolicyAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandPolicy)), Shell.CommandPolicy.Names.Select(CommandPolicyLabel).ToList(), PickKeys);
-        int? picked = await PickAsync(page, Array.IndexOf(Shell.CommandPolicy.Names, saved.ShellCommandPolicy), cancellationToken).ConfigureAwait(false);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandPolicy)), Shell.CommandPolicy.Names.Select(CommandPolicyLabel).ToList(), _pane.Enabled ? CommandPolicyPageKeys : PickKeys);
+        int cursor = Array.IndexOf(Shell.CommandPolicy.Names, saved.ShellCommandPolicy);
+        int? picked;
+        while (true)
+        {
+            // Read again at each pass: a page the buttons open may have changed the list, the police or (the list's ask and yolo) the policy.
+            var current = _settings.Current;
+            var buttons = CommandPolicyPageButtons(Shell.CommandAllowList.Merge(current.ShellCommandAllowed, []).Count, current.ShellPolice);
+            var pressed = await PickChecklistAsync(page, cursor, cancellationToken, buttons).ConfigureAwait(false);
+            if (pressed is { Button: >= 0 } button)
+            {
+                cursor = button.Row;
+                _ = button.Button == 0
+                    ? await EditAllowedCommandsAsync(cancellationToken).ConfigureAwait(false)
+                    : await EditToggleAsync(SettingsField.ShellPolice, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            picked = pressed?.Row;
+            break;
+        }
+
+        saved = _settings.Current;
         if (picked is not { } index)
         {
             return Unchanged();
@@ -7579,7 +7638,7 @@ internal sealed partial class SettingsMenu
     /// good, Enter removing it (the list re-shown until ESC); <see cref="NoAllowedCommandsRow"/> alone
     /// while it is empty. The session's own allows are not here: they live in the process, not the file.
     /// True when anything was removed. Internal since later on 2026-09-21 for <see cref="ToolsMenu.ShowAllowedCommandsAsync"/>,
-    /// which opens it straight under the Tools crumb (<c>/cmdlist</c>, the toolbar lock). Since 2026-10-02 (the user's ask) its
+    /// which opens it straight under the Tools crumb (<c>/tools shell allowed</c>, <c>/cmdlist</c> until 2026-10-09; the toolbar lock). Since 2026-10-02 (the user's ask) its
     /// title row carries <see cref="CommandPolicyButtons"/>, the saved <c>Shell command policy</c> lit: <c>ask</c> saves at once,
     /// <c>yolo</c> after a yes to <see cref="YoloConfirmQuestion"/> asked on the same pane (not <see cref="ConfirmAsync"/>, which
     /// closes it), so the save shows on the list's status line; the lit one saves nothing. They work on the empty list too.

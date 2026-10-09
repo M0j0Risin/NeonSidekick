@@ -142,7 +142,7 @@ internal sealed partial class ChatScreen
     /// profile's file, nothing the turn holds —, so the word never changes the class; the standalone
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
     /// <c>/cmdclear</c>'s (2026-09-25) confirmation (<c>/emptytrash</c>'s too until 2026-10-01) and the <c>/reasoning</c>
-    /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as is <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police</c> row the same way); the four speech switches, <c>/reasoning</c>
+    /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as were <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police</c> row the same way) until they became <c>/tools shell allowed|police</c> (2026-10-09), panes with <c>/tools</c>; the four speech switches, <c>/reasoning</c>
     /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/remember</c>, <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c>, <c>/comfy view</c> (2026-09-27, the string form of this policy) and an unknown
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19), <c>/rewind</c> (2026-09-30: it rewrites the history the turn appends to, so the reply stops and the picker opens at the idle line) and <c>/exit</c> cancel; the rest
     /// (<c>/profile</c>, <c>/theme</c> (2026-09-23, the user's call: a theme change waits for the reply to end, like its <c>Theme</c> row on the settings pane — it cancelled the reply as <c>/splash</c> does until later that day), <c>/server</c>, <c>/model</c>, <c>/compact</c>, <c>/cwd</c>, <c>/tree</c>, <c>/vault</c> (2026-09-22, as <c>/tree</c>),
@@ -150,7 +150,7 @@ internal sealed partial class ChatScreen
     /// <para>Later on 2026-09-27 (the user's picks): "refused" became <see cref="MidTurnClass.Deferred"/> — the line runs when the
     /// reply ends instead of being dropped (so <c>/learn</c> reflects on the reply it waited for); <c>/window</c> and the bare
     /// <c>/cwd</c> are quick notices; <c>/tree</c> and <c>/vault</c> are panes (the info pane, never the transcript the turn
-    /// owns); <c>/cmdcopy</c> and the three prompt files' words are panes — they write another profile or a file the running
+    /// owns); <c>/cmdcopy</c> and the three prompt files' words (<c>/sys persona</c> and its siblings since 2026-10-09) are panes — they write another profile or a file the running
     /// turn's prompt was built from already, and ask their yes/no on the pane. <c>/keycopy</c> (2026-09-28) was one the same
     /// way, and <c>/srvcopy</c>, until all three became <c>/profile push|pull</c>'s sections on 2026-10-09: deferred with
     /// <c>/profile</c> since (a pull changes the loaded profile, which must wait for the reply). <c>/perfbar</c> (later on 2026-09-29) is quick: display only.</para>
@@ -166,8 +166,8 @@ internal sealed partial class ChatScreen
     {
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
-            or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
-            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
+            or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.Tools
+            or SlashCommand.Tree or SlashCommand.Vault
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -408,6 +408,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.Help:
                 await _info.ShowAsync(InfoPane.Title, HelpTabs(), 0, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Sys when args.Trim().Length > 0:
+                // /sys persona|operata|vocalia (2026-10-09; /persona and its siblings until then, panes the same way): a file the
+                // running turn's prompt was read from already; the yes/no is a pane and every line goes through the flow sink.
+                await HandleSysFileAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Sys:
                 await _info.ShowAsync(SystemPromptSummary.Label, SysPromptTabs(), 0, cancellationToken).ConfigureAwait(false);
                 break;
@@ -435,14 +440,19 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Tools when args.Trim().Length > 0:
                 // /tools <group> (2026-10-03, the toolbar's tool switches): the switch alone, which /tools edits under a reply already;
-                // a flip is read at the next turn. A word that is no group is its error through the flow sink.
-                if (ToolsText.SwitchField(args) is { } field)
+                // a flip is read at the next turn. /tools shell allowed|police (2026-10-09, /cmdlist and /police folded in): those rows
+                // alone the same way. A word that is no group is its error through the flow sink.
+                if (ToolsText.ShellSub(args) is { } shellSub)
+                {
+                    await _toolsMenu.ShowShellSubAsync(shellSub, cancellationToken).ConfigureAwait(false);
+                }
+                else if (ToolsText.SwitchField(args) is { } field)
                 {
                     await _toolsMenu.ShowSwitchAsync(field, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
-                    _flow.Error(ToolsText.SwitchUsageError);
+                    _flow.Error(ToolsText.UsageErrorFor(args));
                 }
 
                 break;
@@ -454,14 +464,6 @@ internal sealed partial class ChatScreen
             case SlashCommand.Sampling:
                 // /sampling (2026-09-28): an edit saves and is read at the next turn; nothing reconnects.
                 await _samplingMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
-                break;
-            case SlashCommand.Police:
-                // /police (2026-09-22): the Shell police row alone, which /tools edits under a reply already; a flip is read at the next call.
-                await _toolsMenu.ShowPoliceAsync(cancellationToken).ConfigureAwait(false);
-                break;
-            case SlashCommand.CmdList:
-                // /cmdlist (2026-09-21): the allowed-commands row alone, which /tools edits under a reply already; a removal is read at the next approval.
-                await _toolsMenu.ShowAllowedCommandsAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Mcp:
                 // /mcp (2026-09-20): a tool flip saves for the next turn and the edit rows open the files; a server flip, a retry, a reload and the master switch are refused under the reply.
@@ -501,18 +503,6 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Vault:
                 await ShowWalkAsync(VaultLines(args, out string? vaultError), vaultError, TreeText.PaneLabel("/vault", args), _flow, cancellationToken).ConfigureAwait(false);
-                break;
-            case SlashCommand.Persona:
-                // The prompt files (later on 2026-09-27): one the running turn's prompt was read from already; the yes/no is a
-                // pane and every line goes through the flow sink. /cmdcopy, /keycopy and /srvcopy were panes here for another
-                // profile's file until 2026-10-09, when they became /profile push|pull's sections and wait for the reply as /profile does.
-                await HandlePromptFileAsync(_persona, "/persona", args, PersonaCreatedNotice, PersonaOpenedNotice, PersonaOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);
-                break;
-            case SlashCommand.Operata:
-                await HandlePromptFileAsync(_operata, "/operata", args, OperataCreatedNotice, OperataOpenedNotice, OperataOpenFailedError, spoken: false, cancellationToken, CurrentOperatingRules).ConfigureAwait(false);
-                break;
-            case SlashCommand.Vocalia:
-                await HandlePromptFileAsync(_vocalia, "/vocalia", args, VocaliaCreatedNotice, VocaliaOpenedNotice, VocaliaOpenFailedError, spoken: true, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Reasoning:
                 if (await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false))

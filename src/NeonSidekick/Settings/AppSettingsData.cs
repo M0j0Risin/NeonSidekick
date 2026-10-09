@@ -324,7 +324,7 @@ public sealed class AppSettingsData
     /// row comes back once): ids from <see cref="App.ToolbarItems.Names"/>. The pane glyphs sit at its left (a
     /// double-click opens <c>/settings</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/sys</c>, <c>/sessions</c>,
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
-    /// <c>/cmdlist</c> that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPolice"/>
+    /// <c>/tools shell allowed</c> (<c>/cmdlist</c> until 2026-10-09) that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPolice"/>
     /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
     /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, Tools, Skills, Memory, Shell
     /// allowed commands, Shell police, the Shell, Files and Web switches and the path since 2026-10-05 (the user's pick; the last
@@ -2218,7 +2218,7 @@ public sealed class AppSettingsData
     /// under the working directory. It is a lexical guard — the text the model sends, not what runs: a
     /// script that computes a path is not seen. Off, any path goes — and nothing tells the model it
     /// may leave (neither wording says a command can reach outside), so it does not try unless asked.
-    /// The toolbar wears 👮 while it is on (later that day); its double-click is <c>/police</c>, this row's on/off page (later still that day).
+    /// The toolbar wears 👮 while it is on (later that day); its double-click is <c>/police</c>, this row's on/off page (later still that day; <c>/tools shell police</c> since 2026-10-09).
     /// While it is off the toolbar wears 🥷 in the officer's place (2026-10-02, the user's ask), the same double-click; neither under policy off.
     /// Read at each call and at each turn's prompt, no reconnect. <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
     /// outranks it for a launch, and <c>--no-police</c> outranks both (2026-09-26). <c>ShellPoliceOutsidePaths</c> ("Shell police
@@ -2232,14 +2232,14 @@ public sealed class AppSettingsData
     /// <c>execute_code</c> script or the text <c>process</c> writes that contains one (<see cref="Shell.ForbiddenStrings.Find"/>:
     /// case ignored, every run of whitespace one space, so <c>rm -rf</c> catches <c>RM   -RF</c>) is refused before the gate
     /// is asked — <c>yolo</c> never skips it. Under the police's own switch (the user's call): enforced only while
-    /// <see cref="ShellPolice"/> is on, so <c>/police</c> off, <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
+    /// <see cref="ShellPolice"/> is on, so the police switched off, <see cref="EnvironmentOverrides.ShellPoliceVariable"/>
     /// and <c>--no-police</c> stop it too. The model is told it was refused, never which string (the user's call: a named
     /// string is one to spell around); the transcript's 👮 line and the log name it for the user. A tripwire, not a sandbox:
     /// a model that builds the text in pieces gets past it. Kept as typed, the user's case, no duplicates ignoring case
     /// (<see cref="Shell.ForbiddenStrings.Add"/>). Empty by default until 2026-10-08, when <see cref="Shell.ForbiddenStrings.Defaults"/>
     /// became a fresh profile's list (the user's call: disk wipes, power, security switched off, persistence, credentials, piped
     /// installers, force-push, per system); a saved list stands, so a profile from before keeps its empty one until the user adds
-    /// to it. The Shell tab's row and <c>/police</c>' strings button (S) edit it. Read at each call. No variable.
+    /// to it. The Shell tab's row and the police page's strings button (S) edit it. Read at each call. No variable.
     /// </summary>
     public List<string> ShellPoliceForbiddenStrings { get; set; } = Shell.ForbiddenStrings.Defaults;
 

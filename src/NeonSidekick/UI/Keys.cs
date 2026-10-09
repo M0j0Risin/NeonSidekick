@@ -92,7 +92,7 @@ public static class Keys
     /// key that types a character (ć, ń, ś on some layouts) stays that character. Null for every other key.
     /// Eleven more came later on 2026-09-30 (the user's ask), each its bare command as typed: Ctrl+Alt+T <c>/tools</c>, K
     /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c> (plain Ctrl+Y since 2026-10-03, below), G <c>/usage</c>, E <c>/perfbar</c> (the performance bar shown or hidden),
-    /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page) and B <c>/toolbar</c> (the
+    /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page; <c>/tools shell allowed</c> and <c>/tools shell police</c> since 2026-10-09, the words folded under the shell's switch) and B <c>/toolbar</c> (the
     /// toolbar shown or hidden). Under a reply each goes where its typed line would: a pane over the reply, <c>/perfbar</c> and
     /// <c>/toolbar</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
     /// EOT, FF, SI, STX) count as no character, as ETX does for C; an AltGr key that types one (€ on AltGr+E, ł, ó) is still
@@ -216,8 +216,8 @@ public static class Keys
             (ConsoleKey.M, '\0' or '\r') => "/memory",
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",
             (ConsoleKey.E, '\0' or '\x05') => "/sessions",
-            (ConsoleKey.L, '\0' or '\x0c') => "/cmdlist",
-            (ConsoleKey.O, '\0' or '\x0f') => "/police",
+            (ConsoleKey.L, '\0' or '\x0c') => "/tools shell allowed",
+            (ConsoleKey.O, '\0' or '\x0f') => "/tools shell police",
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
             (ConsoleKey.V, '\0' or '\x16') => "/camera live",
             (ConsoleKey.A, '\0' or '\x01') when OperatingSystem.IsMacOS() => "/memory",
@@ -243,7 +243,7 @@ public static class Keys
     /// Ctrl+L, the background learning's cancel (2026-10-04, the user's ask: "cancels a running background learning turn") — what a
     /// double-click on the strip's 🧠 does, from the keyboard. A chord with no command, so never a <see cref="ShortcutLine"/>:
     /// <see cref="KeySource.LearnCancel"/> spends it wherever the key is read, <see cref="IsKillSwitch"/>'s way, so it never waits
-    /// for a reply or a pane and a pane stays open. Control held, Alt and Shift not (Ctrl+Alt+L is still <c>/cmdlist</c>), and no
+    /// for a reply or a pane and a pane stays open. Control held, Alt and Shift not (Ctrl+Alt+L is still the allowed-commands list), and no
     /// character but the console's own FF (<c>'\x0c'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>), so a typed "L" stays an "L".
     /// One press: a cancelled reflection costs nothing to start again (<c>/learn</c>).
     /// </summary>

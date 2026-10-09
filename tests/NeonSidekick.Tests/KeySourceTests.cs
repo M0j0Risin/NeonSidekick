@@ -297,7 +297,7 @@ public class KeySourceTests
         Assert.Equal('c', ((IAnsiConsoleInput)keys).ReadKey(intercept: true)!.Value.KeyChar);
         Assert.Equal((3, 1), (cancels, kills));
 
-        // Ctrl+Alt+L is /cmdlist's chord, never the cancel.
+        // Ctrl+Alt+L is the allowed-commands list's chord, never the cancel.
         input.PushKey(Keys.CtrlAlt(ConsoleKey.L));
         Assert.Equal(new InputEvent.Key(Keys.CtrlAlt(ConsoleKey.L)), await keys.ReadInputAsync(CancellationToken.None));
 

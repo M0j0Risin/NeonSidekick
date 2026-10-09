@@ -69,8 +69,8 @@ public class KeysTests
     [InlineData(ConsoleKey.S, '\x13', "/skills")]   // from Ctrl+Alt+K later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.M, '\r', "/memory")]
     [InlineData(ConsoleKey.D, '\x04', "/mcp")]
-    [InlineData(ConsoleKey.L, '\x0c', "/cmdlist")]
-    [InlineData(ConsoleKey.O, '\x0f', "/police")]
+    [InlineData(ConsoleKey.L, '\x0c', "/tools shell allowed")]   // /cmdlist until 2026-10-09
+    [InlineData(ConsoleKey.O, '\x0f', "/tools shell police")]    // /police until 2026-10-09
     [InlineData(ConsoleKey.H, '\x08', "/header")]   // later still on 2026-10-01 (the user's ask), free since /help moved to Ctrl+H
     [InlineData(ConsoleKey.E, '\x05', "/sessions")]   // later on 2026-10-03 (the user's ask), free since /perfbar moved to Ctrl+F
     [InlineData(ConsoleKey.R, '\x12', "/rename")]   // 2026-10-05 (the user's ask): the rename box
@@ -80,7 +80,7 @@ public class KeysTests
         // Ctrl alone, Alt alone and an AltGr key that types a character are no chord.
         Assert.Equal(line, Keys.ShortcutLine(Keys.CtrlAlt(key)));
         Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: true, control: true)));
-        Assert.Contains(line, NeonSidekick.App.SlashCommands.Words);
+        Assert.Contains(line.Split(' ')[0], NeonSidekick.App.SlashCommands.Words);   // the command's word: /tools shell allowed|police since 2026-10-09
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: true, control: true)));
         Assert.NotEqual(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));   // Ctrl+E alone is /explore, Ctrl+M /model
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
@@ -280,12 +280,12 @@ public class KeysTests
     [Fact]
     public void IsLearnCancel_IsPlainCtrlL_AndNeverAShortcutLine()
     {
-        // 2026-10-04 (the user's ask): the test factory's '\0' and the console's FF count; Ctrl+Alt+L (/cmdlist), Shift, and a
+        // 2026-10-04 (the user's ask): the test factory's '\0' and the console's FF count; Ctrl+Alt+L (the allowed-commands list), Shift, and a
         // typed L (Spectre's test input marks a capital with Control) do not. A chord with no command: never a ShortcutLine.
         Assert.True(Keys.IsLearnCancel(Keys.CtrlL));
         Assert.True(Keys.IsLearnCancel(Keys.Ctrl(ConsoleKey.L)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
-        Assert.Equal("/cmdlist", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.L)));
+        Assert.Equal("/tools shell allowed", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.L)));
         Assert.False(Keys.IsLearnCancel(Keys.CtrlAlt(ConsoleKey.L)));
         Assert.False(Keys.IsLearnCancel(new ConsoleKeyInfo('\x0c', ConsoleKey.L, shift: true, alt: false, control: true)));
         Assert.False(Keys.IsLearnCancel(new ConsoleKeyInfo('L', ConsoleKey.L, shift: true, alt: false, control: true)));

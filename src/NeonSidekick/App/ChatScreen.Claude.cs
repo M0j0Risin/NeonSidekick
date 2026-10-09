@@ -292,7 +292,7 @@ internal sealed partial class ChatScreen
             string line = SlashLine(prompt);
             _log.Add(line, reply.ToString());
             _lastReply = reply.ToString();
-            LogClaudeTurn(line, reply.ToString(), result?.Usage ?? default, cancelled, effective);
+            LogSideTurn(line, reply.ToString(), result?.Usage ?? default, cancelled, effective);
         }
 
         return default;
@@ -302,10 +302,11 @@ internal sealed partial class ChatScreen
     private static string SlashLine(string prompt) => "/claude " + prompt;
 
     /// <summary>
-    /// A <c>/claude</c> exchange into the store as a turn (<see cref="LogTurn"/>'s shape without a local-model trace): the row
-    /// begun at the first one, the tokens Claude's, the history saved with the Claude id. Nothing while <c>Session logging</c> is off.
+    /// A <c>/claude</c> exchange or a <c>/cmd</c> run (2026-10-09; <c>LogClaudeTurn</c> until then) into the store as a turn
+    /// (<see cref="LogTurn"/>'s shape without a local-model trace): the row begun at the first one, the tokens Claude's (none for
+    /// a shell line), the history saved with the Claude id. Nothing while <c>Session logging</c> is off.
     /// </summary>
-    private void LogClaudeTurn(string line, string reply, Llm.TokenUsage usage, bool cancelled, AppSettingsData effective)
+    private void LogSideTurn(string line, string reply, Llm.TokenUsage usage, bool cancelled, AppSettingsData effective)
     {
         if (!effective.SessionLogging)
         {

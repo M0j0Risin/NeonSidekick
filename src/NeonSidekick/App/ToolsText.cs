@@ -31,8 +31,9 @@ public static class ToolsText
 
     /// <summary>
     /// <c>/tools &lt;group&gt;</c>'s words (2026-10-03, the user's ask: the toolbar's tool switches): each opens its group's
-    /// switch straight, as <c>/police</c> opens Shell police's page — <c>shell</c> the <c>Shell command policy</c> picker, the
-    /// others their on/off page. In the toolbar's order; each is also its toolbar item's id. Pinned.
+    /// switch straight — <c>shell</c> the <c>Shell command policy</c> picker (its allowed-commands and police buttons since
+    /// 2026-10-09, and <see cref="ShellSubWords"/> after it), the others their on/off page. In the toolbar's order; each is also
+    /// its toolbar item's id. Pinned.
     /// </summary>
     public static readonly string[] SwitchWords =
     [
@@ -79,6 +80,51 @@ public static class ToolsText
 
     /// <summary><c>/tools</c> given a word that is no group. Pinned.</summary>
     public static readonly string SwitchUsageError = "/tools takes one of " + string.Join(", ", SwitchWords) + ", or nothing for the pane.";
+
+    /// <summary>
+    /// <c>/tools shell allowed</c>'s word (2026-10-09, the user's call: <c>/cmdlist</c> folded in): the <c>Shell allowed commands</c>
+    /// list straight, the toolbar lock's and Ctrl+Alt+L's. Pinned.
+    /// </summary>
+    public const string ShellAllowedWord = "allowed";
+
+    /// <summary><c>/tools shell police</c>'s word (2026-10-09, <c>/police</c> folded in): the <c>Shell police</c> page straight, the officer's and Ctrl+Alt+O's. Pinned.</summary>
+    public const string ShellPoliceWord = "police";
+
+    /// <summary>The words after <c>/tools shell</c>, in the order completion offers them. Pinned.</summary>
+    public static readonly string[] ShellSubWords = [ShellAllowedWord, ShellPoliceWord];
+
+    /// <summary>
+    /// The word after <c>shell</c> in <c>/tools</c>' argument (<c>shell police</c> → <c>police</c>, any case and spacing); null for
+    /// anything else, a bare <c>shell</c> among them. Pinned.
+    /// </summary>
+    public static string? ShellSub(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        var words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length != 2 || !string.Equals(words[0], ToolbarItems.Shell, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return ShellSubWords.FirstOrDefault(word => string.Equals(word, words[1], StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary><c>/tools shell</c>'s completion hint beside a sub-word: the setting it opens. Pinned.</summary>
+    public static string DescribeShellSub(string word) => SettingsMenu.FieldName(string.Equals(word, ShellPoliceWord, StringComparison.OrdinalIgnoreCase) ? SettingsField.ShellPolice : SettingsField.ShellCommandAllowed);
+
+    /// <summary>The typed line that opens a <see cref="ShellSubWords"/> page: <c>/tools shell police</c>. The lock's and the officer's word. Pinned.</summary>
+    public static string ShellSubLine(string word) => SwitchLine(ToolbarItems.Shell) + " " + word;
+
+    /// <summary><c>/tools shell</c> given a word that is neither sub-word. Pinned.</summary>
+    public static readonly string ShellSubUsageError = "/tools shell takes " + string.Join(" or ", ShellSubWords) + ", or nothing for the policy.";
+
+    /// <summary>The error for a <c>/tools</c> argument no form takes: <see cref="ShellSubUsageError"/> after <c>shell</c>, else <see cref="SwitchUsageError"/>.</summary>
+    public static string UsageErrorFor(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        var words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return words.Length > 1 && string.Equals(words[0], ToolbarItems.Shell, StringComparison.OrdinalIgnoreCase) ? ShellSubUsageError : SwitchUsageError;
+    }
 
     /// <summary>The last tab (second from later on 2026-09-19, the user's ask, until 2026-09-22, the user's ask again): the pane's own settings — the <c>$</c>-mention switch and the two folds — in the <c>/skills</c> Options tab's shape (<see cref="SettingsMenu.ToolsTabFields"/>' last list).</summary>
     public const string OptionsTabTitle = "Options";

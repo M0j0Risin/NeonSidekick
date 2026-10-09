@@ -5,7 +5,7 @@ namespace NeonSidekick.Llm;
 /// <summary>
 /// The editable persona: <c>persona.md</c> in the profile directory. When the file exists and has
 /// text, that text replaces <see cref="Assistant.DefaultPersona"/> (the repo's <c>assets/prompts/persona.md</c>
-/// since 2026-10-03, what <c>/persona</c> seeds the file with) — only the persona;
+/// since 2026-10-03, what <c>/sys persona</c> seeds the file with) — only the persona;
 /// the operating rules follow it (<see cref="Assistant.OperatingRules"/>, or <c>operata.md</c>
 /// through <see cref="OperataFile"/>), so nothing the persona says can switch the clock tools off.
 /// Absent or blank, the default applies. The mechanics are <see cref="PromptFile"/>'s.
@@ -41,7 +41,7 @@ public sealed class PersonaFile : PromptFile
     /// falls back to Notepad when the shell refuses. Does not wait: the operator edits, saves and
     /// asks the next question. Tells an Electron editor not to attach to this console, which would
     /// otherwise fill the transcript with its logging. Throws when neither launch worked; the
-    /// screen prints the detail. <c>/persona</c>, <c>/operata</c>, <c>/vocalia</c>, <c>/explore</c>
+    /// screen prints the detail. <c>/sys persona</c>, <c>/sys operata</c>, <c>/sys vocalia</c>, <c>/explore</c>
     /// and the <c>open</c> tool all come here; a URL goes to <see cref="OpenInBrowser"/>, which
     /// shares <see cref="ShellOpen"/> and never the Notepad fallback.
     /// </summary>

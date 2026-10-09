@@ -79,7 +79,7 @@ public static class ConversationRewind
     /// The text of a turn's user message as the user typed it: its text parts in order. A mid-turn compact's progress note is
     /// left out, both the tagged part and the plain part a restored session has
     /// (<see cref="ConversationCompactor.TurnProgressPreamble"/>). A <c>/claude</c> exchange's <c>[to Claude] </c> tag becomes
-    /// <c>/claude </c> again. Picture labels (<c>[Image #1]</c>) stay in the text.
+    /// <c>/claude </c> again, and a <c>/cmd</c> run's tag the line that runs it again (2026-10-09). Picture labels (<c>[Image #1]</c>) stay in the text.
     /// </summary>
     public static string UserLine(ChatMessage message)
     {
@@ -87,7 +87,7 @@ public static class ConversationRewind
         string text = string.Concat(message.Contents
             .Where(c => c is TextContent text && !ConversationCompactor.IsTurnProgress(c) && !text.Text.StartsWith(ConversationCompactor.TurnProgressPreamble, StringComparison.Ordinal))
             .Select(c => ((TextContent)c).Text));
-        return ClaudeText.HistoryUserPrompt(text) is { } prompt ? "/claude " + prompt : text;
+        return ClaudeText.HistoryUserPrompt(text) is { } prompt ? "/claude " + prompt : Shell.ShellText.CmdHistoryCommand(text) ?? text;
     }
 
     /// <summary>The pictures <paramref name="message"/> carries, in order: what the line takes back to the input.</summary>

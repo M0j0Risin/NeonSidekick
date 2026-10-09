@@ -84,13 +84,13 @@ public abstract class PromptFile
 
     /// <summary>
     /// What is in force without the file, for the middle of a sentence: <c>the default persona</c>; <see cref="VocaliaFile"/>'s is
-    /// <c>no voice directive</c> since it lost its default (2026-10-03). The notices of <c>/persona reset</c> and its siblings and
+    /// <c>no voice directive</c> since it lost its default (2026-10-03). The notices of <c>/sys persona reset</c> and its siblings and
     /// the blank and unreadable log lines name it.
     /// </summary>
     public virtual string DefaultInUse => "the default " + _defaultLabel;
 
     /// <summary>
-    /// Removes the file, so the default applies from the next turn (<c>/persona reset</c> and its
+    /// Removes the file, so the default applies from the next turn (<c>/sys persona reset</c> and its
     /// siblings, after their confirmation). Returns false when there was no file. Throws
     /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> like any delete; the
     /// slash command reports those.
@@ -110,7 +110,7 @@ public abstract class PromptFile
 
     /// <summary>
     /// Copies the file, byte for byte, into <paramref name="directory"/> under its own name
-    /// (<c>/persona copy &lt;profile&gt; [force]</c> and its siblings, 2026-09-21: another profile's
+    /// (<c>/sys persona copy &lt;profile&gt; [force]</c> and its siblings, 2026-09-21: another profile's
     /// folder), creating the directory and replacing a file already there. Whether replacing is
     /// allowed is the caller's rule (the <c>force</c> word, checked before the confirmation); this
     /// just copies. Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>
@@ -195,7 +195,7 @@ public abstract class PromptFile
     /// Creates the file with the default text when it is missing, so an editor opens on what is
     /// being replaced rather than on nothing (empty, for a file with no default: <see cref="VocaliaFile"/>
     /// since 2026-10-03); an existing file is left alone. <paramref name="seed"/>, when given, is written in the default's
-    /// place: the caller's live text (2026-10-04, the user's ask: <c>/operata</c> seeds the operating rules the next reply would
+    /// place: the caller's live text (2026-10-04, the user's ask: <c>/sys operata</c> seeds the operating rules the next reply would
     /// send, its tool sentences included, not the bare <see cref="Assistant.OperatingRules"/>). Returns true when it
     /// was created. Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>
     /// like any write; the slash command reports those.

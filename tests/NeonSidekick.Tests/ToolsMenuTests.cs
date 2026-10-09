@@ -1306,7 +1306,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   powershell\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
@@ -1339,7 +1339,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
         AssertTabEnds("\n" + Titled(Strip) + "\n \n▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell timeout (s)               180\n  Shell foreground cap (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n", 100);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
         Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
@@ -2047,7 +2047,7 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// The allowed-commands list straight (later still on 2026-09-21, /cmdlist and the toolbar's lock):
+    /// The allowed-commands list straight (later still on 2026-09-21, /cmdlist — /tools shell allowed since 2026-10-09 — and the toolbar's lock):
     /// the same list under the same crumb as the Shell tab's row, Enter removing, ESC closing the
     /// pane with the crumb's root put back — the Tools tabs never drawn.
     /// </summary>
@@ -2218,6 +2218,45 @@ public partial class ToolsMenuTests : IDisposable
 
     /// <summary>The forbidden-strings list's title row on the pane: the crumb, then its restore-defaults button (2026-10-08).</summary>
     private static string ForbiddenListTitle => ToolsText.Label + " › Shell police forbidden strings │ " + SettingsMenu.RestoreForbiddenButton + " ";
+
+    /// <summary>
+    /// The command-policy picker's buttons (2026-10-09, the user's call: /cmdlist and /police folded under /tools shell): C opens the
+    /// allowed-commands list and P the police page, ESC on either coming back to the picker, whose buttons say the list's count and
+    /// the police's state as they stand; ESC there closes the pane with the policy unchanged.
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_ThePolicyPicker_COpensTheAllowedList_POpensThePolice_EscComesBack()
+    {
+        _settings.Update(d => { d.ShellCommandPolicy = "ask"; d.ShellCommandAllowed = ["git push"]; });
+        var (menu, pane, settings) = PaneMenu();
+        Push(Keys.Char('c'), Keys.Escape);                      // the list, back
+        Push(Keys.Char('p'), Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // the police page: off picked, yes to the question, back
+        Push(Keys.Escape);                                      // the picker closed
+
+        await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
+
+        string picker(bool police) => Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(1, police).Select(b => b.Title)) + " ");
+        Assert.True(Output.Split(picker(police: true)).Length - 1 >= 2, Output);   // before the list and after it
+        Assert.Contains(picker(police: false), Output);                         // after the police went off
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ") + "\n", Output);
+        Assert.Contains("\n" + ToolsText.Label + " › Shell police │ ", Output);
+        Assert.Contains(SettingsMenu.CommandPolicyPageKeys, Output);
+        Assert.False(_settings.Current.ShellPolice);
+        Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
+        Assert.Equal(SettingsMenu.Title, settings.Root);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>The picker's button wording (2026-10-09): the list's count or none, the police's state, each lit while it holds.</summary>
+    [Fact]
+    public void CommandPolicyPageButtons_Wording()
+    {
+        Assert.Equal(["≡ allowed (none)", "≡ police (on)"], SettingsMenu.CommandPolicyPageButtons(0, police: true).Select(b => b.Title));
+        Assert.Equal(["≡ allowed (3)", "≡ police (off)"], SettingsMenu.CommandPolicyPageButtons(3, police: false).Select(b => b.Title));
+        Assert.Equal([false, true], SettingsMenu.CommandPolicyPageButtons(0, police: true).Select(b => b.On));
+        Assert.Equal(['c', 'p'], SettingsMenu.CommandPolicyPageButtons(1, police: false).Select(b => b.Key!.Value));
+    }
 
     /// <summary>
     /// The restore-defaults button (2026-10-08, the user's ask): R asks first and No keeps the list; Yes replaces it with the

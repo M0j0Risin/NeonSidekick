@@ -33,11 +33,6 @@ public class SlashCommandsTests
     [InlineData("/MEMORY", SlashCommand.Memory)]
     [InlineData("/cmdclear", SlashCommand.CmdClear)]
     [InlineData("/keycheck", SlashCommand.KeyCheck)]   // 2026-10-04
-    [InlineData("/persona", SlashCommand.Persona)]
-    [InlineData("/operata", SlashCommand.Operata)]
-    [InlineData("/OPERATA", SlashCommand.Operata)]
-    [InlineData("/vocalia", SlashCommand.Vocalia)]
-    [InlineData("/VOCALIA", SlashCommand.Vocalia)]
     [InlineData("/sys", SlashCommand.Sys)]   // the name since 2026-09-21; /sysprompt before
     [InlineData("/SYS", SlashCommand.Sys)]
     [InlineData("/test", SlashCommand.Test)]   // 2026-09-28
@@ -82,7 +77,6 @@ public class SlashCommandsTests
     [InlineData("/gituser", SlashCommand.GitUser)]
     [InlineData("/GITUSER", SlashCommand.GitUser)]
     [InlineData("/DRAFT", SlashCommand.Draft)]
-    [InlineData("/PERSONA", SlashCommand.Persona)]
     [InlineData("/exit", SlashCommand.Exit)]
     public void Parse_KnownWords(string line, SlashCommand expected)
     {
@@ -141,9 +135,9 @@ public class SlashCommandsTests
     public void Parse_PromptFileCopyIsTheRestOfTheLine()
     {
         // 2026-09-21: copy <profile> [force] rides on the argument the three took for reset.
-        Assert.Equal((SlashCommand.Persona, "copy work force"), SlashCommands.Parse("/persona copy work force"));
-        Assert.Equal((SlashCommand.Operata, "copy  work"), SlashCommands.Parse("/operata  copy  work "));   // trimmed, not collapsed: the handler splits
-        Assert.Equal((SlashCommand.Vocalia, "copy work"), SlashCommands.Parse("/vocalia copy work"));
+        Assert.Equal((SlashCommand.Sys, "persona copy work force"), SlashCommands.Parse("/sys persona copy work force"));
+        Assert.Equal((SlashCommand.Sys, "operata  copy  work"), SlashCommands.Parse("/sys operata  copy  work "));   // trimmed, not collapsed: the handler splits
+        Assert.Equal((SlashCommand.Sys, "vocalia copy work"), SlashCommands.Parse("/sys vocalia copy work"));
     }
 
     [Fact]
@@ -357,7 +351,6 @@ public class SlashCommandsTests
     [InlineData("/clear everything", "everything")]
     [InlineData("/new everything", "everything")]
     [InlineData("/splash again", "again")]   // 2026-09-19
-    [InlineData("/sys tools", "tools")]
     [InlineData("/usage reset", "reset")]
     [InlineData("/about x", "x")]
     [InlineData("/help me", "me")]
@@ -376,10 +369,10 @@ public class SlashCommandsTests
             SlashCommand.Compact, SlashCommand.Server, SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Sampling, SlashCommand.Theme,   // /theme [name] 2026-09-23; /sampling [field value] 2026-09-28
             SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Wake, SlashCommand.Interrupt, SlashCommand.Speak, SlashCommand.View, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.Echo,   // /imagine 2026-09-24
             SlashCommand.Learn,
-            SlashCommand.Persona, SlashCommand.Operata, SlashCommand.Vocalia,
+            SlashCommand.Sys,   // /sys persona|operata|vocalia 2026-10-09: /persona, /operata and /vocalia (here since 2026-09-16) folded in
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.Profile, SlashCommand.Timer,   // /srvcopy, /cmdcopy and /keycopy here until 2026-10-09 (folded into /profile push|pull); /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Terminal, SlashCommand.Shortcut, SlashCommand.Copy, SlashCommand.Session, SlashCommand.Rename, SlashCommand.GitUser,   // /shortcut [profile] [--log] 2026-10-07; /vault [path] 2026-09-23; /terminal [folder] 2026-10-03; /rename [name] 2026-10-05
-            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.YouTube, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Perf, SlashCommand.Toolbar, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log, SlashCommand.Process, SlashCommand.Tools, SlashCommand.Settings, SlashCommand.Find,   // /find [words] 2026-10-07; /process [id] 2026-10-05; /settings <words> | changed 2026-10-04; /pdf later on 2026-10-03; /tools <group> 2026-10-03; /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /toolbar [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perfbar later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
+            SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Cmd, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.YouTube, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Perf, SlashCommand.Toolbar, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log, SlashCommand.Process, SlashCommand.Tools, SlashCommand.Settings, SlashCommand.Find,   // /cmd <command> 2026-10-09; /find [words] 2026-10-07; /process [id] 2026-10-05; /settings <words> | changed 2026-10-04; /pdf later on 2026-10-03; /tools <group> 2026-10-03; /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /toolbar [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perfbar later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
         {
@@ -388,16 +381,15 @@ public class SlashCommandsTests
     }
 
     [Theory]
-    [InlineData("/persona reset", SlashCommand.Persona, "reset")]
-    [InlineData("/PERSONA  Reset ", SlashCommand.Persona, "Reset")]
-    [InlineData("/persona pirate", SlashCommand.Persona, "pirate")]     // the handler judges the word (the usage line)
-    [InlineData("/operata reset", SlashCommand.Operata, "reset")]
-    [InlineData("/operata strict", SlashCommand.Operata, "strict")]
-    [InlineData("/vocalia reset", SlashCommand.Vocalia, "reset")]
-    [InlineData("/vocalia loud", SlashCommand.Vocalia, "loud")]
+    [InlineData("/sys persona reset", SlashCommand.Sys, "persona reset")]
+    [InlineData("/SYS  Persona  Reset ", SlashCommand.Sys, "Persona  Reset")]
+    [InlineData("/sys persona pirate", SlashCommand.Sys, "persona pirate")]     // the handler judges the word (the usage line)
+    [InlineData("/sys operata reset", SlashCommand.Sys, "operata reset")]
+    [InlineData("/sys vocalia loud", SlashCommand.Sys, "vocalia loud")]
+    [InlineData("/sys nothing", SlashCommand.Sys, "nothing")]   // the handler's usage line
     public void Parse_PromptFilesTakeTheRestOfTheLine(string line, SlashCommand expected, string expectedArgs)
     {
-        // Since 2026-09-16: `reset` removes the file; before, any argument made the line unknown.
+        // Since 2026-09-16: `reset` removes the file; before, any argument made the line unknown. Under /sys since 2026-10-09.
         var (command, args) = SlashCommands.Parse(line);
         Assert.Equal(expected, command);
         Assert.Equal(expectedArgs, args);
@@ -420,14 +412,20 @@ public class SlashCommandsTests
     }
 
     [Fact]
-    public void Police_IsABareCommand_TheOfficersWord()
+    public void ToolsShell_TakesItsTwoPages_ByWord()
     {
-        // /police (2026-09-22): the Shell police page; no argument, so one given is the overloaded error.
-        Assert.Equal((SlashCommand.Police, ""), SlashCommands.Parse("/police"));
-        Assert.Equal((SlashCommand.Overloaded, "off"), SlashCommands.Parse("/police off"));
-        Assert.False(SlashCommands.TakesArgument(SlashCommand.Police));
-        Assert.Equal("/police", SlashCommands.PoliceWord);
-        Assert.DoesNotContain(" on or off", SlashCommands.HelpEntries.Single(e => e.Command == "/police").Summary);   // 2026-10-05: it takes no on|off, so the description never says it does
+        // /tools shell allowed|police (2026-10-09, the user's call: /cmdlist and /police folded under the shell's switch).
+        Assert.Equal((SlashCommand.Tools, "shell police"), SlashCommands.Parse("/tools shell police"));
+        Assert.Equal("allowed", ToolsText.ShellSub("shell allowed"));
+        Assert.Equal("police", ToolsText.ShellSub("  SHELL   Police "));
+        Assert.Null(ToolsText.ShellSub("shell"));
+        Assert.Null(ToolsText.ShellSub("shell strings"));
+        Assert.Null(ToolsText.ShellSub("web police"));
+        Assert.Null(ToolsText.ShellSub("shell police now"));
+        Assert.Equal("/tools shell police", ToolsText.ShellSubLine(ToolsText.ShellPoliceWord));
+        Assert.Equal(ToolsText.ShellSubUsageError, ToolsText.UsageErrorFor("shell strings"));
+        Assert.Equal(ToolsText.SwitchUsageError, ToolsText.UsageErrorFor("nothing"));
+        Assert.Equal("/tools shell takes allowed or police, or nothing for the policy.", ToolsText.ShellSubUsageError);
     }
 
     [Fact]
@@ -520,6 +518,8 @@ public class SlashCommandsTests
             "/perf", "/perf gauge",   // /perfbar since 2026-10-04
             "/thumbs", "/thumbs docs",   // /view <path> --thumbs since later on 2026-10-04
             "/cmdcopy", "/cmdcopy work", "/keycopy work", "/srvcopy", "/srvcopy work",   // /profile push|pull's sections since 2026-10-09
+            "/cmdlist", "/cmdlist all", "/police", "/police off",   // /tools shell allowed|police since 2026-10-09
+            "/persona", "/persona reset", "/operata", "/operata copy work", "/vocalia", "/vocalia reset",   // /sys persona|operata|vocalia since 2026-10-09
         ];
 
         Assert.All(retired, line => Assert.Equal(SlashCommand.Unknown, SlashCommands.Parse(line).Command));
@@ -607,14 +607,14 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(73, SlashCommands.HelpEntries.Count);   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
+        Assert.Equal(69, SlashCommands.HelpEntries.Count);   // /persona, /operata and /vocalia gone 2026-10-09 (into /sys)     // /cmdlist and /police gone 2026-10-09 (into /tools shell)   // /cmd 2026-10-09   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
         Assert.Equal(
         [
-            "/about", "/botchat", "/camera", "/claude", "/clear", "/cmdclear", "/cmdlist", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
+            "/about", "/botchat", "/camera", "/claude", "/clear", "/cmd", "/cmdclear", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/docker", "/draft", "/echo", "/exit", "/expand", "/explore", "/find", "/gituser", "/ha", "/header", "/help", "/imagine", "/interrupt", "/keycheck", "/learn", "/log",
-            "/loop", "/mcp", "/memory", "/model", "/new", "/operata", "/pdf", "/perfbar", "/persona", "/plan", "/police", "/print", "/process", "/profile", "/queue", "/reasoning",
+            "/loop", "/mcp", "/memory", "/model", "/new", "/pdf", "/perfbar", "/plan", "/print", "/process", "/profile", "/queue", "/reasoning",
             "/remember", "/rename", "/rewind", "/sampling", "/screen", "/server", "/sessions", "/settings", "/shortcut", "/skills", "/speak", "/splash", "/stt", "/sys", "/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools",
-            "/tree", "/tts", "/usage", "/vault", "/view", "/vocalia", "/wake", "/window", "/youtube",
+            "/tree", "/tts", "/usage", "/vault", "/view", "/wake", "/window", "/youtube",
         ], SlashCommands.HelpEntries.Select(e => e.Command));
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));
 

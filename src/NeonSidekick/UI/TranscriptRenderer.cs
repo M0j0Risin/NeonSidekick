@@ -443,6 +443,40 @@ public sealed class TranscriptRenderer : INoticeSink
     public void PoliceNote(string text) => ToolLine(PoliceNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, PoliceGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
 
     /// <summary>
+    /// One line a <c>/cmd</c> run printed (2026-10-09): whole — wrapped by the window, never cut — in the body colour, stderr's in
+    /// the warning colour, under <see cref="ToolAnswerIndent"/>. Not a tool's line: a run of them never folds.
+    /// </summary>
+    public void ShellOutput(string text, bool isError)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string markup = ShellOutputMarkup(text, isError);
+        Line(markup, markup);
+    }
+
+    /// <summary>
+    /// <see cref="ShellOutput"/>'s markup: the indent and the line, its tabs as four blanks and every other control character
+    /// (a stray escape, a carriage return) dropped, so the terminal draws only text. Pinned.
+    /// </summary>
+    public static string ShellOutputMarkup(string text, bool isError)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var clean = new System.Text.StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            if (c == '\t')
+            {
+                clean.Append("    ");
+            }
+            else if (!char.IsControl(c))
+            {
+                clean.Append(c);
+            }
+        }
+
+        return Theme.ColorMarkup(isError ? Theme.Warn : Theme.Ink, ToolAnswerIndent + clean.ToString().TrimEnd());
+    }
+
+    /// <summary>
     /// How many lines of a tool run stay while it runs (<c>Tool collapse count</c>, 2026-09-22): read
     /// when a run opens; 0 (the default here, and every console without the pane) folds nothing.
     /// </summary>

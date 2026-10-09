@@ -257,38 +257,12 @@ public sealed class RunCommandTool : AIFunction
         var timeout = TimeSpan.FromSeconds(seconds);
 
         var request = new CommandRequest(ShellKinds.Name(kind), command, CommandPrefix.All(command));
-        // The forbidden strings first (Shell police forbidden strings, 2026-10-03), under the police's own switch: the model is told it was refused, never which string.
-        if (effective.ShellPolice && ForbiddenStrings.Find(command, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+        // The police before the gate (Shell police, 2026-09-22; the forbidden strings, the SQLite and server-database police and an
+        // outside path, in that order, shared with /cmd since 2026-10-09): refused whatever the policy, the pane never asked.
+        if (ShellPoliceChecks.Judge(request, command, workdir, _files, effective) is { } policed)
         {
-            DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(request, forbidden));
             _gate.NoteRefused(request);
-            return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
-        }
-
-        // The SQLite police (2026-10-05, the user's call), under Shell police while the SQLite tools are on: a line, or a script
-        // file it runs, that reaches SQLite is refused whatever the policy, so a database is reached only through the sqlite_ tools.
-        if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Judge(command, workdir, _files.Root, databases) is { } sqlite)
-        {
-            DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite.Token, sqlite.File));
-            _gate.NoteRefused(request);
-            return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite.Token, sqlite.File));
-        }
-
-        // The server-database police (2026-10-05, SQLite's rule mirrored): while a server family's tools are on, a line, or a script
-        // file it runs, that reaches one (its clients, its drivers, its connections' hosts) is refused whatever the policy.
-        if (effective.ShellPolice && _files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Judge(command, workdir, _files.Root, servers) is { } server)
-        {
-            DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(request, server.Family, server.Token, server.File));
-            _gate.NoteRefused(request);
-            return new ToolShownResult(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, server.File));
-        }
-
-        // The police before the gate (Shell police, 2026-09-22): a line naming a path outside the working directory is refused, and the pane is never asked about it.
-        if (effective.ShellPolice && PathPolice.Judge(command, _files, workdir, isScript: false, request.Kind) is { } outside)
-        {
-            DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
-            _gate.NoteRefused(request);
-            return ShellText.OutsidePath(outside);
+            return policed.Shown is { } shown ? new ToolShownResult(policed.ModelText, shown) : policed.ModelText;
         }
 
         // Then a native tool's own line (Shell prefer native tools, 2026-09-26): sent back once a turn, before the pane is asked. A path outside the working directory
@@ -363,27 +337,9 @@ public sealed class RunCommandTool : AIFunction
             int maxChars = Math.Clamp(effective.ShellOutputMaxChars, AppSettingsData.MinShellOutputMaxChars, AppSettingsData.MaxShellOutputMaxChars);
             var lines = session.Output.Lines();
             string body = ShellText.Body(lines);
-            string? spill = body.Length > maxChars ? Spill(session.Id, body) : null;
+            string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body) : null;
             DiagnosticLog.Info(ShellKinds.Category, ShellText.RunLogLine(request.Kind, command, exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed) : "timed out after " + ShellText.Elapsed(timeout), body.Length));
             return ShellText.Result(header, lines, maxChars, spill);
-        }
-    }
-
-    /// <summary>The whole output into <c>.shell\&lt;id&gt;.log</c> under the working directory; the relative path, or null when it could not be written (logged).</summary>
-    private string? Spill(string id, string body)
-    {
-        string relative = Path.Combine(ShellText.SpillFolderName, id + ".log");
-        try
-        {
-            string folder = Path.Combine(_files.Root, ShellText.SpillFolderName);
-            Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, id + ".log"), body);
-            return relative;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            DiagnosticLog.Warn(ShellKinds.Category, $"{id}: could not write {relative} ({ex.Message})");
-            return null;
         }
     }
 

@@ -27,8 +27,9 @@ namespace NeonSidekick.App;
 /// root <c>/expand</c> and <c>/collapse</c> later that day, the user's ask; since 2026-10-03 <c>/tools &lt;group&gt;</c> opens one
 /// group's switch straight (<see cref="ShowSwitchAsync"/>, the toolbar's tool switches).
 /// The Shell tab's allowed-commands row has a door of its own since later on 2026-09-21:
-/// <see cref="ShowAllowedCommandsAsync"/> (<c>/cmdlist</c>, the toolbar's lock glyph); its <c>Shell police</c>
-/// row since 2026-09-22: <see cref="ShowPoliceAsync"/> (<c>/police</c>, the toolbar's officer).
+/// <see cref="ShowAllowedCommandsAsync"/> (the toolbar's lock glyph); its <c>Shell police</c> row since 2026-09-22:
+/// <see cref="ShowPoliceAsync"/> (the toolbar's officer). Their typed words were <c>/cmdlist</c> and <c>/police</c> until
+/// 2026-10-09, <c>/tools shell allowed</c> and <c>/tools shell police</c> since (<see cref="ShowShellSubAsync"/>, the user's call).
 /// </summary>
 internal sealed class ToolsMenu
 {
@@ -218,7 +219,7 @@ internal sealed class ToolsMenu
 
     /// <summary>
     /// The <c>Shell allowed commands</c> row alone, as plain lines for a console without the pane
-    /// (later on 2026-09-21, <c>/cmdlist</c>): the row's name as a heading, each prefix indented under it,
+    /// (later on 2026-09-21, <c>/cmdlist</c>; <c>/tools shell allowed</c> since 2026-10-09): the row's name as a heading, each prefix indented under it,
     /// <see cref="SettingsMenu.NoAllowedCommandsRow"/> while there is none. Pinned.
     /// </summary>
     public static IEnumerable<string> AllowedCommandLines(AppSettingsData saved)
@@ -239,7 +240,7 @@ internal sealed class ToolsMenu
     }
 
     /// <summary>
-    /// <c>/cmdlist</c> and the toolbar's lock (later on 2026-09-21, the user's ask): the Shell tab's
+    /// <c>/tools shell allowed</c> (<c>/cmdlist</c> until 2026-10-09) and the toolbar's lock (later on 2026-09-21, the user's ask): the Shell tab's
     /// <c>Shell allowed commands</c> row opened straight — the same list under the same crumb,
     /// <c>Tools › Shell allowed commands</c>, Enter removing a prefix — with nothing of the Tools pane
     /// around it, so ESC closes the pane rather than landing on the tab (the user's call: a shortcut,
@@ -272,7 +273,17 @@ internal sealed class ToolsMenu
         }
     }
 
-    /// <summary>What <c>/police</c> prints without the pane: the row's name and its value, <c>Shell police: on</c>. Pinned.</summary>
+    /// <summary>
+    /// <c>/tools shell allowed</c> and <c>/tools shell police</c> (2026-10-09, the user's call: <c>/cmdlist</c> and <c>/police</c>
+    /// folded under the shell's switch): <see cref="ShowAllowedCommandsAsync"/> or <see cref="ShowPoliceAsync"/> for a
+    /// <see cref="ToolsText.ShellSubWords"/> word.
+    /// </summary>
+    public Task ShowShellSubAsync(string word, CancellationToken cancellationToken) =>
+        string.Equals(word, ToolsText.ShellPoliceWord, StringComparison.OrdinalIgnoreCase)
+            ? ShowPoliceAsync(cancellationToken)
+            : ShowAllowedCommandsAsync(cancellationToken);
+
+    /// <summary>What <c>/tools shell police</c> (<c>/police</c> until 2026-10-09) prints without the pane: the row's name and its value, <c>Shell police: on</c>. Pinned.</summary>
     public static string PoliceLine(AppSettingsData saved)
     {
         ArgumentNullException.ThrowIfNull(saved);
@@ -281,7 +292,7 @@ internal sealed class ToolsMenu
 
     /// <summary>
     /// The <c>Shell police forbidden strings</c> list as plain lines for a console without the pane (2026-10-03, after
-    /// <see cref="PoliceLine"/> on <c>/police</c>): the row's name as a heading, each string indented under it,
+    /// <see cref="PoliceLine"/> on <c>/police</c>, <c>/tools shell police</c> since 2026-10-09): the row's name as a heading, each string indented under it,
     /// <see cref="SettingsMenu.NoAllowedCommandsRow"/> while there is none — <see cref="AllowedCommandLines"/>' shape. Pinned.
     /// </summary>
     public static IEnumerable<string> ForbiddenStringLines(AppSettingsData saved)
@@ -302,7 +313,7 @@ internal sealed class ToolsMenu
     }
 
     /// <summary>
-    /// <c>/police</c> and the toolbar's officer (2026-09-22, the user's ask): the Shell tab's
+    /// <c>/tools shell police</c> (<c>/police</c> until 2026-10-09) and the toolbar's officer (2026-09-22, the user's ask): the Shell tab's
     /// <c>Shell police</c> row opened straight — its on/off page under the crumb
     /// <c>Tools › Shell police</c> — with nothing of the Tools pane around it, so ESC
     /// closes the pane, as <see cref="ShowAllowedCommandsAsync"/> does for the lock. Picking off asks first
@@ -351,6 +362,15 @@ internal sealed class ToolsMenu
         if (!_pane.Enabled)
         {
             _transcript.Notice(ToolsText.SwitchStateLine(field, _settings.Current));
+            if (field == SettingsField.ShellCommandPolicy)
+            {
+                // The picker's two buttons as lines too (2026-10-09): the allowed commands, the police and its strings.
+                foreach (var line in AllowedCommandLines(_settings.Current).Append(PoliceLine(_settings.Current)).Concat(ForbiddenStringLines(_settings.Current)))
+                {
+                    _transcript.Notice(line);
+                }
+            }
+
             return;
         }
 

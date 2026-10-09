@@ -109,13 +109,13 @@ What to use instead:
 | `/learn` | Not available; the TUI's reflection runs it. |
 | `/timer` | Not available; there are no timers headless (nothing could deliver the alert). |
 | `/tts`, `/stt`, `/wake`, `/interrupt`, `/speak`, `/echo` | Not available; headless never speaks or listens. |
-| `/cmdlist`, `/cmdclear`, `/police` | Not available. Manage the allow list in the TUI; `NEONSIDEKICK_COMMAND_POLICY` sets the policy for a run. |
+| `/cmd`, `/cmdclear`, `/tools shell allowed`, `/tools shell police` | Not available; a `/cmd` line goes to the model as text. Manage the allow list in the TUI; `NEONSIDEKICK_COMMAND_POLICY` sets the policy for a run. |
 | `/profile push\|pull servers` | Not available; copy the server settings in the TUI. `--url`, `--model` and `NEONSIDEKICK_LLM_URL` set the server for a run. |
 | `/profile push\|pull keys` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_HA_TOKEN` and `NEONSIDEKICK_YOUTUBE_API_KEY` set them for a run. |
 | `/usage` | Not available; `--log` records the run. |
 | `/process` | Not available; ask the model, whose `process` tool lists, reads and stops the background processes. |
-| `/sys` | Not available; open `/sys` in the TUI on the same profile to see the prompt. |
-| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/shortcut`, `/theme`, `/perfbar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/queue`, `/rename`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/persona`, `/operata`, `/vocalia` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
+| `/sys` | Not available; open `/sys` in the TUI on the same profile to see the prompt, or `/sys persona`, `/sys operata` or `/sys vocalia` there to edit its files. |
+| `/copy`, `/draft`, `/view`, `/tree`, `/vault`, `/explore`, `/terminal`, `/shortcut`, `/theme`, `/perfbar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/queue`, `/rename`, `/help`, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat` | Not available. They depend on the screen, an editor, the clipboard or a confirmation, or are TUI-only tasks. For `/tree` or `/vault`, ask the model to list the folder with its file or Obsidian tools. |
 
 ---
 
@@ -581,7 +581,7 @@ The variable works both ways: `NEONSIDEKICK_SHELL_POLICE=on` turns the police ba
 on a profile that saved it off.
 
 A third option, if a profile should always run without it: save *Shell police* off
-in that profile (`/police` in the TUI), and pick it with `--profile`. Your everyday profile keeps
+in that profile (`/tools shell police` in the TUI), and pick it with `--profile`. Your everyday profile keeps
 the police on.
 
 ### Checking that it took effect
@@ -599,7 +599,7 @@ Select-String -Path yolo.log -Pattern "--yolo|COMMAND_POLICY|approval: yolo"
 Stay on `ask` and allow-list just the prefixes the job needs (`dotnet build`, `dotnet test`,
 `git status`…). To build the list, run the job once in the TUI on the same profile and answer
 *Allow … always* on the approval pane. Or copy another profile's list over with `/profile pull commands <name>`, and
-trim it with `/cmdlist`. The headless run then executes those commands and refuses anything else,
+trim it with `/tools shell allowed`. The headless run then executes those commands and refuses anything else,
 and exit code 3 tells you if the job needed something the list doesn't cover.
 
 ---

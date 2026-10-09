@@ -1,0 +1,91 @@
+using NeonSidekick.Diagnostics;
+using NeonSidekick.Files;
+using NeonSidekick.Settings;
+
+namespace NeonSidekick.Shell;
+
+/// <summary>
+/// What the police refused a line with: <paramref name="ModelText"/> the model is told, <paramref name="Shown"/> the user's 👮
+/// line — null for an outside path, whose refusal is one sentence for both.
+/// </summary>
+public sealed record ShellPoliceRefusal(string ModelText, string? Shown);
+
+/// <summary>
+/// The police before the gate, in their order (2026-10-09, lifted out of <c>run_command</c> for <c>/cmd</c>, the user's ask: the
+/// user's own line passes the same checks): the forbidden strings (<see cref="ForbiddenStrings"/>), the SQLite police
+/// (<see cref="SqlitePolice"/>, while the SQLite tools are on), the server-database police (<see cref="ServerDatabasePolice"/>,
+/// while a server family's tools are on) and a path outside the working directory (<see cref="PathPolice"/>) — all under the
+/// <c>Shell police</c> switch and whatever the policy. Each refusal logs its line; noting it for the gate's refusals is the caller's.
+/// </summary>
+public static class ShellPoliceChecks
+{
+    /// <summary>The first check <paramref name="command"/> fails, run from <paramref name="workdir"/>; null when it passes them all, or the police are off.</summary>
+    public static ShellPoliceRefusal? Judge(CommandRequest request, string command, string workdir, WorkingDirectory files, AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(workdir);
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(effective);
+        if (!effective.ShellPolice)
+        {
+            return null;
+        }
+
+        // The forbidden strings first (Shell police forbidden strings, 2026-10-03): the model is told it was refused, never which string.
+        if (ForbiddenStrings.Find(command, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(request, forbidden));
+            return new ShellPoliceRefusal(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
+        }
+
+        // The SQLite police (2026-10-05, the user's call), while the SQLite tools are on: a line, or a script
+        // file it runs, that reaches SQLite is refused whatever the policy, so a database is reached only through the sqlite_ tools.
+        if (files.Databases?.Invoke() is { } databases && SqlitePolice.Judge(command, workdir, files.Root, databases) is { } sqlite)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite.Token, sqlite.File));
+            return new ShellPoliceRefusal(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite.Token, sqlite.File));
+        }
+
+        // The server-database police (2026-10-05, SQLite's rule mirrored): while a server family's tools are on, a line, or a script
+        // file it runs, that reaches one (its clients, its drivers, its connections' hosts) is refused whatever the policy.
+        if (files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Judge(command, workdir, files.Root, servers) is { } server)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(request, server.Family, server.Token, server.File));
+            return new ShellPoliceRefusal(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, server.File));
+        }
+
+        // A line naming a path outside the working directory (Shell police, 2026-09-22): refused, the pane never asked about it.
+        if (PathPolice.Judge(command, files, workdir, isScript: false, request.Kind) is { } outside)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.PolicedLogLine(request, outside));
+            return new ShellPoliceRefusal(ShellText.OutsidePath(outside), null);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The whole output into <c>.shell\&lt;id&gt;.log</c> under <paramref name="root"/> (<c>run_command</c>'s and <c>/cmd</c>'s cut
+    /// output); the relative path, or null when it could not be written (logged).
+    /// </summary>
+    public static string? Spill(string root, string id, string body)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(body);
+        string relative = Path.Combine(ShellText.SpillFolderName, id + ".log");
+        try
+        {
+            string folder = Path.Combine(root, ShellText.SpillFolderName);
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, id + ".log"), body);
+            return relative;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            DiagnosticLog.Warn(ShellKinds.Category, $"{id}: could not write {relative} ({ex.Message})");
+            return null;
+        }
+    }
+}

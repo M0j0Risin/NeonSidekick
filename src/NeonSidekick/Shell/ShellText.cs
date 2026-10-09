@@ -572,6 +572,88 @@ public static class ShellText
     /// <summary>The transcript's line after a Permanent pick: <c>(allowed always: git push — the Shell tab of /tools)</c>. Pinned.</summary>
     public static string PermanentAllowedNotice(IReadOnlyList<string> prefixes) => $"({App.NoticeGlyphs.Allowed}allowed always: {string.Join(", ", prefixes)} — the Shell tab of /tools)";
 
+    // ── /cmd (2026-10-09, the user's own line) ──────────────────────────────
+
+    /// <summary><c>/cmd</c>'s word.</summary>
+    public const string CmdWord = "/cmd";
+
+    /// <summary><c>/cmd</c>'s shell option, before the command.</summary>
+    public const string CmdShellOption = "--shell";
+
+    /// <summary>The completion note beside <see cref="CmdShellOption"/>. Pinned.</summary>
+    public const string CmdShellNote = "run it in another shell than Shell default";
+
+    /// <summary>A bare <c>/cmd</c>, or <c>--shell</c> with nothing after its name. Pinned.</summary>
+    public const string CmdUsage = "/cmd takes a shell line: /cmd [--shell <shell>] <command>";
+
+    /// <summary>
+    /// <c>/cmd</c> while <c>Shell command policy</c> is <c>off</c> (the user's pick: off means no shell at all, the user's line
+    /// included). Pinned.
+    /// </summary>
+    public const string CmdPolicyOff = "Shell command policy is off: no command runs. /tools shell sets it to ask or yolo.";
+
+    /// <summary>The user's line, denied on the approval pane (or ESC there). Pinned.</summary>
+    public const string CmdDenied = "not run: denied";
+
+    /// <summary>The user's line under <c>ask</c> with no pane to ask on, and not on the allow list. Pinned.</summary>
+    public const string CmdNotAskable = "not run: Shell command policy is ask and there is no pane to ask on; the profile's Shell allowed commands or yolo would let it run";
+
+    /// <summary>The spinner's label while the line runs: <c>running in powershell…</c>. Pinned.</summary>
+    public static string CmdRunning(string kind) => $"running in {kind}…";
+
+    /// <summary>
+    /// The one notice where the live output stops being drawn (over <c>Shell output max chars</c>): the line runs on, and the
+    /// whole output goes to the spill file at its end. Pinned.
+    /// </summary>
+    public static string CmdOutputCut(int maxChars) =>
+        $"(output over {Count(maxChars)} characters: not shown from here; the whole output goes to {SpillFolderName}{Path.DirectorySeparatorChar} when it ends)";
+
+    /// <summary><c>cancelled after 2.1 s (powershell, killed): ping -n 30 127.0.0.1</c>: a line ESC stopped. Pinned.</summary>
+    public static string CmdCancelledHeader(string kind, TimeSpan elapsed, string label) =>
+        $"cancelled after {Elapsed(elapsed)} ({kind}, killed): {label}";
+
+    /// <summary>What the user's side of a <c>/cmd</c> run opens with in the history.</summary>
+    public const string CmdHistoryHead = "[I ran in the shell";
+
+    /// <summary>
+    /// The user's side of a <c>/cmd</c> run in the history (the user's pick: the model sees it, the <c>/claude</c> shape):
+    /// <c>[I ran in the shell (powershell)] git status</c>, tagged, so the model reads it as the user's own run and not a
+    /// request. Pinned.
+    /// </summary>
+    public static string CmdHistoryUser(string kind, string command) => $"{CmdHistoryHead} ({kind})] {command}";
+
+    /// <summary>The run's side: <c>[shell output] exit 0 in 0.3 s (powershell): git status</c> and the output, as <c>run_command</c> would have it. Pinned.</summary>
+    public static string CmdHistoryReply(string result) => "[shell output] " + result;
+
+    /// <summary>
+    /// <see cref="CmdHistoryUser"/> read back (<c>/rewind</c>): the line that runs it again in the same shell,
+    /// <c>/cmd --shell powershell git status</c> — the shell named, so a changed <c>Shell default</c> runs the same thing — or
+    /// null for any other text. Pinned.
+    /// </summary>
+    public static string? CmdHistoryCommand(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string open = CmdHistoryHead + " (";
+        if (!text.StartsWith(open, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        int close = text.IndexOf(")] ", open.Length, StringComparison.Ordinal);
+        if (close < 0)
+        {
+            return null;
+        }
+
+        string kind = text[open.Length..close];
+        string command = text[(close + 3)..];
+        return $"{CmdWord} {CmdShellOption} {kind} {command}";
+    }
+
+    /// <summary><c>/cmd: powershell "git status" → exit 0 in 1.2 s (2,340 chars)</c>.</summary>
+    public static string CmdLogLine(string kind, string label, string outcome, long chars) =>
+        $"{CmdWord}: {kind} {Quote(label)} → {outcome} ({Count(chars)} chars)";
+
     // ── Formatting ───────────────────────────────────────────────────────────
 
     /// <summary><c>0.4 s</c>, <c>12.0 s</c>, <c>3 m 12 s</c>, <c>1 h 2 m</c>. Pinned.</summary>

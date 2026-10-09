@@ -52,13 +52,14 @@ public static class HelpCommands
         [
             new("/clear", "Start a new conversation and clear the screen."),
         ]),
+        new("/cmd",
+        [
+            new("/cmd <command>", "Run a shell line yourself in the working directory, in *Shell default*'s shell, its output drawn as it prints; ESC kills it. It passes the model's checks: *Shell command policy* off refuses, the shell police refuse what they refuse whatever the policy, and under ask a line not on *Shell allowed commands* is put to the approval pane. The line and its output (cut at *Shell output max chars*, the whole in `.shell\\cmd_….log`) go into the conversation, so the model sees them."),
+            new("/cmd --shell <shell> <command>", "The same in another shell: `powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac."),
+        ]),
         new("/cmdclear",
         [
             new("/cmdclear", "Clear this profile's command history, both stored and in memory, after you confirm."),
-        ]),
-        new("/cmdlist",
-        [
-            new("/cmdlist", "Open the *Shell allowed commands* list. Enter removes a prefix after a yes; the ask and yolo buttons at the top (`a`, `y`) switch *Shell command policy*, yolo after a yes; ESC closes it."),
         ]),
         new("/collapse",
         [
@@ -189,11 +190,6 @@ public static class HelpCommands
         [
             new("/new", "Start a new conversation without clearing the screen."),
         ]),
-        new("/operata",
-        [
-            new("/operata [reset]", "Edit `operata.md` (the operating rules) in your editor — created, when missing, with the rules in use now, the sentences for the tools that are on included — or reset it to the default."),
-            new("/operata copy <profile> [force]", "Copy it to another profile (`force` replaces theirs)."),
-        ]),
         new("/pdf",
         [
             new("/pdf <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]", "Make a PDF in the working directory from a file: Markdown keeps its headings, tables, lists, links, coloured code and the pictures beside it; text and code become a coloured listing; HTML is printed as the page, its scripts and anything outside the working directory left out; a picture is fitted to one page. The PDF goes beside the file unless `to=` names a file or folder; an existing one is replaced only with `overwrite`. Options go anywhere. Edge, Chrome or Brave makes it; without one, Microsoft Print to PDF (Markdown, text and pictures, in black and white). *PDF engine* chooses. On its own, `/pdf` shows how to use it. See Making PDFs."),
@@ -203,11 +199,6 @@ public static class HelpCommands
         new("/perfbar",
         [
             new("/perfbar [off|text|gauge|spark|led]", "Show or hide the performance bar (*Show performance bar*). On its own it hides the bar, or shows it again with the meters it last had (CPU, RAM, GPU and VRAM the first time); `off` hides it; a look name sets that look and shows the bar. Works while a reply runs; the toolbar's 📈 and Ctrl+F run it too."),
-        ]),
-        new("/persona",
-        [
-            new("/persona [reset]", "Edit `persona.md` (the personality) in your editor, or reset it to the default."),
-            new("/persona copy <profile> [force]", "Copy it to another profile (`force` replaces theirs)."),
         ]),
         new("/plan",
         [
@@ -219,10 +210,6 @@ public static class HelpCommands
             new("/plan save [<name>]", "While planning: when a reply looks like a plan but the model never called `present_plan` (a notice says so), keep it as the plan and bring up the approval pane."),
             new("/plan open <name>", "Pick a plan up again, in or out of plan mode (names complete from `.neon/plans/`). Plan mode turns on over that file, the file goes back to `draft`, and the model is asked to read it and ask what should change. `/plan approve` then carries out only the unticked steps."),
             new("/plan open", "List the plans with their status and progress in a pane."),
-        ]),
-        new("/police",
-        [
-            new("/police", "Open the on/off page for *Shell police*. Turning it off asks first."),
         ]),
         new("/print",
         [
@@ -327,6 +314,10 @@ public static class HelpCommands
         new("/sys",
         [
             new("/sys", "Show the system prompt and the tools sent to the model."),
+            new("/sys persona [reset]", "Edit `persona.md` (the personality) in your editor, or reset it to the default."),
+            new("/sys operata [reset]", "Edit `operata.md` (the operating rules) in your editor — created, when missing, with the rules in use now, the sentences for the tools that are on included — or reset it to the default."),
+            new("/sys vocalia [reset]", "Edit `vocalia.md` (the spoken-reply directive: empty by default, its text added last to every spoken reply) in your editor, or remove it."),
+            new("/sys persona|operata|vocalia copy <profile> [force]", "Copy that file to another profile (`force` replaces theirs)."),
         ]),
         new("/terminal",
         [
@@ -353,7 +344,9 @@ public static class HelpCommands
         new("/tools",
         [
             new("/tools", "Switch the model's tools on or off, and edit each tool group's settings on its own tab. On the Offered tab, type to narrow the list to the tools whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
-            new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first), `files`, `web`, `claude` (*Claude CLI advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page; `web`'s carries default, httpclient and chromium buttons (`d`, `h`, `c`) that switch *Web browser mode*). The toolbar's tool items run it."),
+            new("/tools <group>", "Open one group's switch on its own: `shell` (the *Shell command policy* picker; yolo asks first; its allowed and police buttons (`c`, `p`) open those pages and ESC comes back), `files`, `web`, `claude` (*Claude CLI advisor tool*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print` (each tool group's on/off page; `web`'s carries default, httpclient and chromium buttons (`d`, `h`, `c`) that switch *Web browser mode*). The toolbar's tool items run it."),
+            new("/tools shell allowed", "Open the *Shell allowed commands* list. Enter removes a prefix after a yes; the ask and yolo buttons at the top (`a`, `y`) switch *Shell command policy*, yolo after a yes; ESC closes it. The toolbar's lock and Ctrl+Alt+L run it."),
+            new("/tools shell police", "Open the on/off page for *Shell police*; turning it off asks first, and its strings button (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it."),
         ]),
         new("/tree",
         [
@@ -376,11 +369,6 @@ public static class HelpCommands
             new("/view <image>|<folder>", "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. In the viewer the arrows or the mouse wheel step through the pictures, and a right-click opens the picture menu (rotate, flip, colour, resize, convert, shrink, copy the path, show in Explorer, attach, print, delete; edits go where *Image edit mode* says). Works while a reply runs."),
             new("/view <image> --chat", "Draw the image in the transcript instead. `--chat` can be the first or last word."),
             new("/view <image>|<folder> --thumbs", "Open the folder (an image's folder, with the image selected) as thumbnails in a window of its own, in step with the picture viewer and the picture strip: a click shows the picture in the viewer, a double-click or Enter opens it there, and the viewer's own moves select it here. New pictures go on the end, so nothing moves. The tiles fit the window; + and − or Ctrl+wheel resize them, F5 lists and fits again. A right-click opens the picture menu, as in the viewer. `--thumbs` can be the first or last word. Works while a reply runs."),
-        ]),
-        new("/vocalia",
-        [
-            new("/vocalia [reset]", "Edit `vocalia.md` (the spoken-reply directive: empty by default, its text added last to every spoken reply) in your editor, or remove it."),
-            new("/vocalia copy <profile> [force]", "Copy it to another profile (`force` replaces theirs)."),
         ]),
         new("/wake",
         [

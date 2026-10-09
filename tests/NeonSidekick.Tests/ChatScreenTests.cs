@@ -2841,7 +2841,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>A pane's title or strip row as it prints since 2026-09-18: the text, then the × close glyph in column width − 2 (the console's width as the test set it).</summary>
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
-    /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /cmdlist or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
+    /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /tools shell allowed (/cmdlist until 2026-10-09) or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
     private static readonly string AllowedCommandsTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + " │ " + SettingsMenu.PolicyAskButton + " · " + SettingsMenu.PolicyYoloButton + " ";
     /// <summary>The Memory mode row's saved notice for <paramref name="mode"/> (2026-10-04).</summary>
     private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
@@ -5242,7 +5242,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Persona_NoFile_CreatesItWithTheDefault_OpensIt_AndSaysSo()
     {
-        PushLine("/persona");
+        PushLine("/sys persona");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -5260,7 +5260,7 @@ public partial class ChatScreenTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         string path = Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName);
         File.WriteAllText(path, "You are Rex.");
-        PushLine("/persona");
+        PushLine("/sys persona");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -5279,8 +5279,8 @@ public partial class ChatScreenTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         string path = Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName);
         File.WriteAllText(path, "You are Rex.");
-        // /persona reset at the idle line; the pane reads a key per wait: y (the cursor to Yes), Enter (the act).
-        StepsWhenIdle(Line("/persona reset"), Key(Keys.Char('y')), Key(Keys.Enter), Line("/exit"));
+        // /sys persona reset at the idle line; the pane reads a key per wait: y (the cursor to Yes), Enter (the act).
+        StepsWhenIdle(Line("/sys persona reset"), Key(Keys.Char('y')), Key(Keys.Enter), Line("/exit"));
 
         string output = await RunAsync();
 
@@ -5297,7 +5297,7 @@ public partial class ChatScreenTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         string path = Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName);
         File.WriteAllText(path, "You are Rex.");
-        PushLine("/persona reset");
+        PushLine("/sys persona reset");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
         PushLine("/exit");
 
@@ -5311,15 +5311,15 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Persona_Reset_NoFile_SaysTheDefaultIsInUse_AndAnotherWordIsTheUsageLine()
     {
-        PushLine("/persona reset");
-        PushLine("/persona pirate");
-        PushLine("/PERSONA  Reset");
+        PushLine("/sys persona reset");
+        PushLine("/sys persona pirate");
+        PushLine("/SYS  PERSONA  Reset");
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Equal(2, output.Split("  · " + ChatScreen.PromptFileAbsentNotice("persona.md", "the default persona")).Length - 1);
-        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/persona", "persona.md"), output);
+        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/sys persona", "persona.md"), output);
         Assert.Empty(_openedFiles);
         Assert.False(File.Exists(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName)));
     }
@@ -5328,18 +5328,18 @@ public partial class ChatScreenTests : IDisposable
     public void PromptFileText_IsPinned()
     {
         Assert.Equal("reset", ChatScreen.ResetWord);
-        Assert.Equal("/operata takes nothing (open operata.md in your editor), reset, or copy <profile> [force].", ChatScreen.PromptFileUsageError("/operata", "operata.md"));   // copy 2026-09-21
+        Assert.Equal("/sys operata takes nothing (open operata.md in your editor), reset, or copy <profile> [force].", ChatScreen.PromptFileUsageError("/sys operata", "operata.md"));   // copy 2026-09-21
         Assert.Equal("🗣️ Remove vocalia.md and go back to no voice directive?", ChatScreen.PromptFileResetPrompt("vocalia.md", "no voice directive"));
         Assert.Equal("(📋 removed operata.md; the next reply uses the default operating rules)", ChatScreen.PromptFileResetNotice("operata.md", "the default operating rules", spoken: false));
         Assert.Equal("(🗣️ removed vocalia.md; the next spoken reply uses no voice directive)", ChatScreen.PromptFileResetNotice("vocalia.md", "no voice directive", spoken: true));
         Assert.Equal("(📋 operata.md is not there; the default operating rules is already in use)", ChatScreen.PromptFileAbsentNotice("operata.md", "the default operating rules"));
         Assert.Equal("Could not remove persona.md: locked", ChatScreen.PromptFileResetFailedError("persona.md", "locked"));
-        Assert.EndsWith("; /persona reset goes back to the default)", ChatScreen.PersonaCreatedNotice);
-        Assert.EndsWith("; /operata reset goes back to the default)", ChatScreen.OperataCreatedNotice);
-        Assert.EndsWith("; /vocalia reset removes it)", ChatScreen.VocaliaCreatedNotice);
+        Assert.EndsWith("; /sys persona reset goes back to the default)", ChatScreen.PersonaCreatedNotice);
+        Assert.EndsWith("; /sys operata reset goes back to the default)", ChatScreen.OperataCreatedNotice);
+        Assert.EndsWith("; /sys vocalia reset removes it)", ChatScreen.VocaliaCreatedNotice);
     }
 
-    // ── /persona copy <profile> [force] and its siblings (2026-09-21) ───────
+    // ── /sys persona copy <profile> [force] and its siblings (2026-09-21) ───────
 
     private string MyPromptFile(string fileName, string text)
     {
@@ -5354,7 +5354,7 @@ public partial class ChatScreenTests : IDisposable
     {
         Profiles.Create(_dir, "work", PreFlipDefaults.Data());   // no persona.md there
         MyPromptFile(PersonaFile.FileName, "You are Rex.");
-        PushLine("/persona copy work");
+        PushLine("/sys persona copy work");
         PickYes();
         PushLine("/exit");
 
@@ -5373,12 +5373,12 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();   // work holds "You are Rex."
         MyPromptFile(PersonaFile.FileName, "You are Max.");
-        PushLine("/persona copy work");
+        PushLine("/sys persona copy work");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.PromptFileTargetExistsError("/persona", "persona.md", "work"), output);
+        Assert.Contains("  ✗ " + ChatScreen.PromptFileTargetExistsError("/sys persona", "persona.md", "work"), output);
         Assert.DoesNotContain("Copy ", output);
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName)));
     }
@@ -5388,7 +5388,7 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();
         MyPromptFile(PersonaFile.FileName, "You are Max.");
-        PushLine("/persona COPY Work FORCE");
+        PushLine("/sys persona COPY Work FORCE");
         PickYes();
         PushLine("/exit");
 
@@ -5404,7 +5404,7 @@ public partial class ChatScreenTests : IDisposable
     {
         Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         MyPromptFile(PersonaFile.FileName, "You are Max.");
-        PushLine("/persona copy work force");
+        PushLine("/sys persona copy work force");
         PickYes();
         PushLine("/exit");
 
@@ -5421,9 +5421,9 @@ public partial class ChatScreenTests : IDisposable
         WorkProfile();
         Profiles.Create(_dir, "chef", PreFlipDefaults.Data());
         MyPromptFile(PersonaFile.FileName, "You are Max.");
-        PushLine("/persona copy work force");
+        PushLine("/sys persona copy work force");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
-        PushLine("/persona copy chef");
+        PushLine("/sys persona copy chef");
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
@@ -5438,19 +5438,19 @@ public partial class ChatScreenTests : IDisposable
     public async Task Persona_Copy_Refusals_AreOneLineEach_AndAskNothing()
     {
         Profiles.Create(_dir, "work", PreFlipDefaults.Data());
-        PushLine("/persona copy");                 // usage: no profile
-        PushLine("/persona copy work extra");      // usage: a third word that is not force
-        PushLine("/persona copy work force now");  // usage: four words
-        PushLine("/persona copy ghost");
-        PushLine("/persona copy default");
-        PushLine("/persona copy work");            // no persona.md here: the default is in use
+        PushLine("/sys persona copy");                 // usage: no profile
+        PushLine("/sys persona copy work extra");      // usage: a third word that is not force
+        PushLine("/sys persona copy work force now");  // usage: four words
+        PushLine("/sys persona copy ghost");
+        PushLine("/sys persona copy default");
+        PushLine("/sys persona copy work");            // no persona.md here: the default is in use
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(3, output.Split("  ✗ " + ChatScreen.PromptFileUsageError("/persona", "persona.md")).Length - 1);
+        Assert.Equal(3, output.Split("  ✗ " + ChatScreen.PromptFileUsageError("/sys persona", "persona.md")).Length - 1);
         Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
-        Assert.Contains("  ✗ " + ChatScreen.PromptFileCopySelfError("/persona"), output);
+        Assert.Contains("  ✗ " + ChatScreen.PromptFileCopySelfError("/sys persona"), output);
         Assert.Contains("  · " + ChatScreen.PromptFileNothingToCopyNotice("persona.md", "the default persona"), output);
         Assert.DoesNotContain("Copy ", output);
         Assert.False(File.Exists(Path.Combine(ProfileDir("work"), PersonaFile.FileName)));
@@ -5462,7 +5462,7 @@ public partial class ChatScreenTests : IDisposable
     {
         Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         MyPromptFile(OperataFile.FileName, "Answer in haiku.");
-        PushLine("/operata copy work");
+        PushLine("/sys operata copy work");
         PickYes();
         PushLine("/exit");
 
@@ -5478,14 +5478,14 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();   // work holds "Speak like a pirate."
         MyPromptFile(VocaliaFile.FileName, "Whisper.");
-        PushLine("/vocalia copy work");
-        PushLine("/vocalia copy work force");
+        PushLine("/sys vocalia copy work");
+        PushLine("/sys vocalia copy work force");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.PromptFileTargetExistsError("/vocalia", "vocalia.md", "work"), output);
+        Assert.Contains("  ✗ " + ChatScreen.PromptFileTargetExistsError("/sys vocalia", "vocalia.md", "work"), output);
         Assert.Contains("  · (replaced \"work\"'s vocalia.md)", output);
         Assert.Equal("Whisper.", File.ReadAllText(Path.Combine(ProfileDir("work"), VocaliaFile.FileName)));
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir("work"), PersonaFile.FileName)));   // the siblings untouched
@@ -5497,9 +5497,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("copy", ChatScreen.CopyWord);
         Assert.Equal("force", ChatScreen.ForceWord);
         Assert.Equal(ChatScreen.ForceWord, ChatScreen.GitForceWord);
-        Assert.Equal("/persona copy copies into another profile; that one is loaded.", ChatScreen.PromptFileCopySelfError("/persona"));
+        Assert.Equal("/sys persona copy copies into another profile; that one is loaded.", ChatScreen.PromptFileCopySelfError("/sys persona"));
         Assert.Equal("(📋 operata.md is not there; the default operating rules is in use, so there is nothing to copy)", ChatScreen.PromptFileNothingToCopyNotice("operata.md", "the default operating rules"));
-        Assert.Equal("\"work\" already has a vocalia.md; /vocalia copy work force replaces it.", ChatScreen.PromptFileTargetExistsError("/vocalia", "vocalia.md", "work"));
+        Assert.Equal("\"work\" already has a vocalia.md; /sys vocalia copy work force replaces it.", ChatScreen.PromptFileTargetExistsError("/sys vocalia", "vocalia.md", "work"));
         Assert.Equal("Copy persona.md into \"work\"?", ChatScreen.PromptFileCopyPrompt("persona.md", "work", replacing: false));
         Assert.Equal("Replace \"work\"'s persona.md with this one?", ChatScreen.PromptFileCopyPrompt("persona.md", "work", replacing: true));
         Assert.Equal("(copied persona.md into \"work\")", ChatScreen.PromptFileCopiedNotice("persona.md", "work", replacing: false));
@@ -5515,7 +5515,7 @@ public partial class ChatScreenTests : IDisposable
         string path = Path.Combine(_settings.ProfileDirectory, OperataFile.FileName);
         File.WriteAllText(path, "Always rhyme.");
         _chat.EnqueueText("Hello.");
-        PushLine("/operata reset");
+        PushLine("/sys operata reset");
         PickYes();
         PushLine("hi");
         PushLine("/exit");
@@ -5535,7 +5535,7 @@ public partial class ChatScreenTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         string path = Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName);
         File.WriteAllText(path, "Speak like a pirate.");
-        PushLine("/vocalia reset");
+        PushLine("/sys vocalia reset");
         PickYes();
         PushLine("/exit");
 
@@ -5551,7 +5551,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _openFile = _ => throw new System.ComponentModel.Win32Exception("no editor");
         _chat.EnqueueText("Hello.");
-        PushLine("/persona");
+        PushLine("/sys persona");
         PushLine("hi");
         PushLine("/exit");
 
@@ -5566,13 +5566,13 @@ public partial class ChatScreenTests : IDisposable
     public async Task Persona_WithAnotherWord_IsTheUsageLine()
     {
         // Since 2026-09-16 the command takes `reset`; any other word is its own usage line, not the unknown-command one.
-        PushLine("/persona pirate");
+        PushLine("/sys persona pirate");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/persona", "persona.md"), output);
-        Assert.DoesNotContain(ChatScreen.UnknownCommandError("/persona"), output);
+        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/sys persona", "persona.md"), output);
+        Assert.DoesNotContain(ChatScreen.UnknownCommandError("/sys"), output);
         Assert.Empty(_openedFiles);
     }
 
@@ -5662,7 +5662,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Operata_NoFile_CreatesItWithTheRulesInUse_OpensIt_AndSaysSo()
     {
-        PushLine("/operata");
+        PushLine("/sys operata");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -5684,7 +5684,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("One.");
         _chat.EnqueueText("Two.");
-        LinesWhenIdle("hi", "/operata", "again", "/exit");
+        LinesWhenIdle("hi", "/sys operata", "again", "/exit");
 
         await RunAsync();
 
@@ -5705,7 +5705,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmOfferTools = false; });
         _chat.EnqueueText("One.");
-        PushLine("/operata");
+        PushLine("/sys operata");
         PushLine("hi");
         PushLine("/exit");
 
@@ -5723,7 +5723,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.TtsOutput = false);
         _chat.EnqueueText("What should it cover?");
         PushLine("/plan Add a guide");
-        PushLine("/operata");
+        PushLine("/sys operata");
         PushLine("/exit");
 
         await RunAsync();
@@ -5740,7 +5740,7 @@ public partial class ChatScreenTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         string path = Path.Combine(_settings.ProfileDirectory, OperataFile.FileName);
         File.WriteAllText(path, "Answer in haiku.");
-        PushLine("/operata");
+        PushLine("/sys operata");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -5756,7 +5756,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _openFile = _ => throw new System.ComponentModel.Win32Exception("no editor");
         _chat.EnqueueText("Hello.");
-        PushLine("/operata");
+        PushLine("/sys operata");
         PushLine("hi");
         PushLine("/exit");
 
@@ -5771,13 +5771,13 @@ public partial class ChatScreenTests : IDisposable
     public async Task Operata_WithAnotherWord_IsTheUsageLine()
     {
         // Since 2026-09-16 the command takes `reset`; any other word is its own usage line, not the unknown-command one.
-        PushLine("/operata strict");
+        PushLine("/sys operata strict");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/operata", "operata.md"), output);
-        Assert.DoesNotContain(ChatScreen.UnknownCommandError("/operata"), output);
+        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/sys operata", "operata.md"), output);
+        Assert.DoesNotContain(ChatScreen.UnknownCommandError("/sys"), output);
         Assert.Empty(_openedFiles);
     }
 
@@ -5785,7 +5785,7 @@ public partial class ChatScreenTests : IDisposable
     public void OperataStrings_ArePinned()
     {
         Assert.Equal("(📋 opened operata.md in your editor; save it and the next reply uses it)", ChatScreen.OperataOpenedNotice);
-        Assert.Equal("(📋 created operata.md with the rules in use now, tool sentences included, and opened it in your editor. From now on it is used as written: edit and save it, and the next reply uses it; /operata reset goes back to the default)", ChatScreen.OperataCreatedNotice);
+        Assert.Equal("(📋 created operata.md with the rules in use now, tool sentences included, and opened it in your editor. From now on it is used as written: edit and save it, and the next reply uses it; /sys operata reset goes back to the default)", ChatScreen.OperataCreatedNotice);
         Assert.Equal("Could not open operata.md: why", ChatScreen.OperataOpenFailedError("why"));
     }
 
@@ -5839,7 +5839,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Vocalia_NoFile_CreatesItEmpty_OpensIt_AndSaysSo()
     {
-        PushLine("/vocalia");
+        PushLine("/sys vocalia");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -5859,7 +5859,7 @@ public partial class ChatScreenTests : IDisposable
         Directory.CreateDirectory(_settings.ProfileDirectory);
         string path = Path.Combine(_settings.ProfileDirectory, VocaliaFile.FileName);
         File.WriteAllText(path, "Speak like a pirate.");
-        PushLine("/vocalia");
+        PushLine("/sys vocalia");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -5875,7 +5875,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _openFile = _ => throw new System.ComponentModel.Win32Exception("no editor");
         _chat.EnqueueText("Hello.");
-        PushLine("/vocalia");
+        PushLine("/sys vocalia");
         PushLine("hi");
         PushLine("/exit");
 
@@ -5890,13 +5890,13 @@ public partial class ChatScreenTests : IDisposable
     public async Task Vocalia_WithAnotherWord_IsTheUsageLine()
     {
         // Since 2026-09-16 the command takes `reset`; any other word is its own usage line, not the unknown-command one.
-        PushLine("/vocalia loud");
+        PushLine("/sys vocalia loud");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/vocalia", "vocalia.md"), output);
-        Assert.DoesNotContain(ChatScreen.UnknownCommandError("/vocalia"), output);
+        Assert.Contains("  ✗ " + ChatScreen.PromptFileUsageError("/sys vocalia", "vocalia.md"), output);
+        Assert.DoesNotContain(ChatScreen.UnknownCommandError("/sys"), output);
         Assert.Empty(_openedFiles);
     }
 
@@ -5904,7 +5904,7 @@ public partial class ChatScreenTests : IDisposable
     public void VocaliaStrings_ArePinned()
     {
         Assert.Equal("(🗣️ opened vocalia.md in your editor; save it and the next spoken reply uses it)", ChatScreen.VocaliaOpenedNotice);
-        Assert.Equal("(🗣️ created an empty vocalia.md and opened it in your editor; write the voice directive, save, and the next spoken reply uses it; /vocalia reset removes it)", ChatScreen.VocaliaCreatedNotice);
+        Assert.Equal("(🗣️ created an empty vocalia.md and opened it in your editor; write the voice directive, save, and the next spoken reply uses it; /sys vocalia reset removes it)", ChatScreen.VocaliaCreatedNotice);
         Assert.Equal("Could not open vocalia.md: why", ChatScreen.VocaliaOpenFailedError("why"));
     }
 
@@ -7263,7 +7263,7 @@ public partial class ChatScreenTests : IDisposable
         WorkProfile();
         PushLine("/profile work");
         PushLine("/remember They drink coffee.");
-        PushLine("/persona");
+        PushLine("/sys persona");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -7280,7 +7280,7 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();
         PushLine("/profile work");
-        PushLine("/vocalia");
+        PushLine("/sys vocalia");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -7295,7 +7295,7 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();
         PushLine("/profile work");
-        PushLine("/operata");
+        PushLine("/sys operata");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -9268,23 +9268,23 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Keep command history is off: dropped 2 command lines from sessions.db.", ChatScreen.CommandHistoryDroppedLogLine(2));
     }
 
-    // ── /cmdlist (later on 2026-09-21): the allowed-commands list straight, the toolbar lock's word ──
+    // ── /tools shell allowed (/cmdlist from later on 2026-09-21 until 2026-10-09): the allowed-commands list straight, the toolbar lock's word ──
 
     /// <summary>The list under the Tools crumb, as the Shell tab's row opens it: Enter removes the prefix under the cursor and re-shows the list, ESC closes the pane — never the Tools tabs.</summary>
     [Fact]
-    public async Task CmdList_OpensTheAllowedCommandsList_EnterRemoves_EscCloses()
+    public async Task ShellAllowed_OpensTheAllowedCommandsList_EnterRemoves_EscCloses()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ShellCommandAllowed = ["git push", "dotnet build"]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 100;
         _geometry = new ScreenGeometry(() => null, () => 100);
         StepsWhenIdle(
-            Line("/cmdlist"),
+            Line("/tools shell allowed"),
             Key(Keys.Enter),                                       // dotnet build asked about
             Key(Keys.Down),                                        // Yes (asked since 2026-10-07): removed
             Key(Keys.Enter),
             Key(Keys.Escape),                                      // the pane closed
-            Line("/cmdlist"),
+            Line("/tools shell allowed"),
             Key(Keys.Escape),
             Line("/exit"));
 
@@ -9298,24 +9298,29 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>A word after /tools shell that is neither page is its own usage error; the old words are unknown commands (2026-10-09).</summary>
     [Fact]
-    public async Task CmdList_WithAnArgument_IsTheNoArgumentError()
+    public async Task ToolsShell_AnUnknownWord_IsItsUsageError_AndTheOldWordsAreUnknown()
     {
         _settings.Update(d => d.TtsOutput = false);
-        PushLine("/cmdlist all");
+        PushLine("/tools shell everything");
+        PushLine("/cmdlist");
+        PushLine("/police");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.NoArgumentError("/cmdlist"), output);
+        Assert.Contains("  ✗ " + ToolsText.ShellSubUsageError, output);
+        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/cmdlist"), output);
+        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/police"), output);
         Assert.Empty(_chat.Requests);
     }
 
-    // ── /police (2026-09-22): the Shell police page straight, the toolbar officer's word ──
+    // ── /tools shell police (/police from 2026-09-22 until 2026-10-09): the Shell police page straight, the toolbar officer's word ──
 
     /// <summary>The row's on/off page under the Tools crumb, as the Shell tab's Enter opens it: off picked saves, ESC closes the pane — never the Tools tabs.</summary>
     [Fact]
-    public async Task Police_OpensTheOnOffPage_UnderTheToolsCrumb_PickingSaves_EscCloses()
+    public async Task ShellPolice_OpensTheOnOffPage_UnderTheToolsCrumb_PickingSaves_EscCloses()
     {
         _settings.Update(d => d.ShellPoliceForbiddenStrings = []);   // from empty: a fresh profile has the starter list since 2026-10-08
         _settings.Update(d => d.TtsOutput = false);
@@ -9324,16 +9329,16 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Width = 200;
         _geometry = new ScreenGeometry(() => null, () => 100);
         StepsWhenIdle(
-            Line("/police"),
+            Line("/tools shell police"),
             input => input.Push(Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter),   // off picked, yes to the question (2026-10-02): saved, the pane closed
-            Line("/police"),
+            Line("/tools shell police"),
             Key(Keys.Escape),                                      // opened on "off", closed unchanged
             Line("/exit"));
 
         string output = await RunAsync();
 
         string page = "\n" + Titled(PoliceTitle) + "\n \n";
-        Assert.True(output.Split(page).Length - 1 >= 2, output);   // each /police drew it (a save redraws it too)
+        Assert.True(output.Split(page).Length - 1 >= 2, output);   // each opening drew it (a save redraws it too)
         string on = "on  " + SettingsMenu.ToggleDescribe(SettingsField.ShellPolice, true);
         string off = "off " + SettingsMenu.ToggleDescribe(SettingsField.ShellPolice, false);
         Assert.Contains(page + "▸ " + on + "\n  " + off + "\n", output);    // the first time on "on"
@@ -9345,20 +9350,18 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Police_WithAnArgument_IsTheNoArgumentError_AndWithoutThePane_PrintsTheValue()
+    public async Task ShellPolice_WithoutThePane_PrintsTheValue()
     {
         _settings.Update(d => d.TtsOutput = false);
-        PushLine("/police off");
-        PushLine("/police");
+        PushLine("/tools shell police");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.NoArgumentError("/police"), output);
         Assert.Contains("  · Shell police: on\n", output);
         Assert.Equal("Shell police: off", ToolsMenu.PoliceLine(new AppSettingsData { ShellPolice = false }));
         Assert.True(_settings.Current.ShellPolice);
-        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Police, hasArgs: false));   // as /cmdlist: the row is never refused under a reply
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, "shell police"));   // as /tools: the row is never refused under a reply
         Assert.Empty(_chat.Requests);
     }
 
@@ -9388,7 +9391,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
         // The Web page carries the browser-mode buttons on its title row since 2026-10-04 (the user's ask).
         Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools) + " │ " + string.Join(" · ", BrowserMode.Names.Select(SettingsMenu.WebModeButtonTitle)) + " ") + "\n", output);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandPolicy)) + "\n", output);
+        Assert.Contains("\n" + ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandPolicy) + " │ " + SettingsMenu.PolicyAllowedButton, output);   // the allowed and police buttons after it since 2026-10-09
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", output);
         Assert.DoesNotContain(ToolsText.Label + " │ Offered", output);   // the crumb, never the tabs
         Assert.All(new[] { "/tools" }, word => Assert.DoesNotContain("› " + word, output));
@@ -9450,10 +9453,10 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>Without the pane the list prints: the row's name, then each prefix — or the none row.</summary>
     [Fact]
-    public async Task CmdList_WithoutThePane_PrintsTheList()
+    public async Task ShellAllowed_WithoutThePane_PrintsTheList()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ShellCommandAllowed = ["git push", "dotnet build"]; });
-        PushLine("/cmdlist");
+        PushLine("/tools shell allowed");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -9592,7 +9595,7 @@ public partial class ChatScreenTests : IDisposable
         string ninjaRow = "\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false), cwd, 239);
         Assert.True(output.IndexOf(ninjaRow, StringComparison.Ordinal) < output.LastIndexOf(police, StringComparison.Ordinal), output);   // the ninja's pair: the page again
         Assert.True(output.LastIndexOf(settings, StringComparison.Ordinal) < output.LastIndexOf(police, StringComparison.Ordinal), output);   // the click no longer lands on the blanks (/settings until 2026-10-02)
-        Assert.All(new[] { "/memory", "/cmdlist", "/police" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/memory" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Equal(ToolbarItems.Names, _settings.Current.ToolbarItems);   // untouched: every item, as the test set it
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
@@ -10722,7 +10725,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
-        Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Contains("› hi!", output);
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
@@ -10797,7 +10800,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, output.Split("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n").Length - 1);   // the gear and the blanks
         Assert.DoesNotContain(MemoryMenu.EmptyNotice, output);
         Assert.Contains("  · " + FolderText.KeptNotice + "\n", output);
-        Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/settings", "/skills", "/tools", "/mcp", "/sys", "/sessions", "/memory", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Contains("› hi!", output);
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
@@ -10811,9 +10814,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/settings", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.SettingsToolGlyph, 0)));
         Assert.Equal("/sys", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.SysToolGlyph, 12)));
         Assert.Equal("/memory", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.MemoryToolGlyph, 18)));   // the disk, 2026-09-22
-        Assert.Equal("/cmdlist", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.CmdAskToolGlyph, 21)));   // the lock, later still on 2026-09-21 (at 21 behind the disk)
-        Assert.Equal("/cmdlist", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.CmdYoloToolGlyph, 21)));
-        Assert.Equal(SlashCommands.PoliceWord, ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 24)));
+        Assert.Equal("/tools shell allowed", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.CmdAskToolGlyph, 21)));   // the lock, later still on 2026-09-21 (at 21 behind the disk); /cmdlist until 2026-10-09
+        Assert.Equal("/tools shell allowed", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.CmdYoloToolGlyph, 21)));
+        Assert.Equal("/tools shell police", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PoliceToolGlyph, 24)));
         Assert.Equal("/profile", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.ProfileToolGlyph, 3)));   // later on 2026-09-29
         Assert.Equal("/perfbar", ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, ChatScreen.PerfToolGlyph, 24)));   // the officer is /police since later on 2026-09-22 (it named nothing until then)
         Assert.Null(ChatScreen.OffPaneLine(Tool(ScreenPane.ToolbarZone.Glyph, "🧰", 0)));
@@ -10917,7 +10920,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(toolsUnderSys < output.IndexOf(sessions, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(sessions, StringComparison.Ordinal) < output.IndexOf(skills, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(skills, StringComparison.Ordinal) < output.LastIndexOf(sessions, StringComparison.Ordinal), output);
-        Assert.All(new[] { "/settings", "/sys", "/sessions", "/skills", "/memory", "/usage", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/settings", "/sys", "/sessions", "/skills", "/memory", "/usage", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Contains("› hi", output);
         Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
@@ -11005,7 +11008,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(toolsUnderSys < output.IndexOf(sessions, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(sessions, StringComparison.Ordinal) < output.IndexOf(skills, StringComparison.Ordinal), output);
         Assert.True(output.IndexOf(skills, StringComparison.Ordinal) < output.LastIndexOf(sessions, StringComparison.Ordinal), output);
-        Assert.All(new[] { "/settings", "/sys", "/sessions", "/skills", "/memory", "/usage", "/cmdlist", "/police", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/settings", "/sys", "/sessions", "/skills", "/memory", "/usage", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Contains("› hi", output);
         Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
@@ -11161,7 +11164,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
 
-    /// <summary>The toolbar's glyphs, in the user's order, name their commands (2026-09-21): the six pane words (the sessions' later that day) and the chart's /usage (2026-09-29, the seventh), then the disk while Memory is on (2026-09-22) /memory, the lock Shell command policy turns — closed under ask, open under yolo, none under off (later still on 2026-09-21), either /cmdlist — and the officer while Shell police is on (2026-09-22), /police; nothing for anything else (the path's line is /cwd browse); every glyph two cells, whole under the pane's walk at either cell, the columns after the chart moving with the disk.</summary>
+    /// <summary>The toolbar's glyphs, in the user's order, name their commands (2026-09-21): the six pane words (the sessions' later that day) and the chart's /usage (2026-09-29, the seventh), then the disk while Memory is on (2026-09-22) /memory, the lock Shell command policy turns — closed under ask, open under yolo, none under off (later still on 2026-09-21), either /cmdlist (/tools shell allowed since 2026-10-09) — and the officer while Shell police is on (2026-09-22), /police (/tools shell police); nothing for anything else (the path's line is /cwd browse); every glyph two cells, whole under the pane's walk at either cell, the columns after the chart moving with the disk.</summary>
     [Fact]
     public void ToolbarWord_IsPinned()
     {
@@ -11195,10 +11198,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ChatScreen.UsageToolGlyph + " Usage", UsageText.Label);   // the pane wears the toolbar's glyph
         Assert.Equal("/memory", ChatScreen.ToolbarWord(ChatScreen.MemoryToolGlyph));
         Assert.Equal(ChatScreen.MemoryToolGlyph + " Memory", MemoryMenu.Title);   // the pane wears the toolbar's glyph
-        Assert.Equal("/cmdlist", ChatScreen.ToolbarWord(ChatScreen.CmdAskToolGlyph));
-        Assert.Equal("/cmdlist", ChatScreen.ToolbarWord(ChatScreen.CmdYoloToolGlyph));
-        Assert.Equal("/police", ChatScreen.ToolbarWord(ChatScreen.PoliceToolGlyph));   // later on 2026-09-22: nothing until then
-        Assert.Equal("/police", ChatScreen.ToolbarWord(ChatScreen.NinjaToolGlyph));   // 2026-10-02
+        Assert.Equal("/tools shell allowed", ChatScreen.ToolbarWord(ChatScreen.CmdAskToolGlyph));   // /cmdlist until 2026-10-09
+        Assert.Equal("/tools shell allowed", ChatScreen.ToolbarWord(ChatScreen.CmdYoloToolGlyph));
+        Assert.Equal("/tools shell police", ChatScreen.ToolbarWord(ChatScreen.PoliceToolGlyph));   // later on 2026-09-22: nothing until then; /police until 2026-10-09
+        Assert.Equal("/tools shell police", ChatScreen.ToolbarWord(ChatScreen.NinjaToolGlyph));   // 2026-10-02
         Assert.Equal(McpText.Glyph, ChatScreen.McpToolGlyph);
         Assert.Equal("/cwd browse", ChatScreen.CwdBrowseLine);
         Assert.Equal("/settings", ChatScreen.ToolbarWord(ChatScreen.SettingsToolGlyph));
@@ -11510,10 +11513,10 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+E", "open the sessions pane", "/sessions"),   // later on 2026-10-03, the user's ask
             new("Ctrl+Alt+G", "show or hide the log window", "/log"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"),   // later still on 2026-10-01, the user's ask
-            new("Ctrl+Alt+L", "open the allowed commands list", "/cmdlist"),
+            new("Ctrl+Alt+L", "open the allowed commands list", "/tools shell allowed"),   // /cmdlist until 2026-10-09
             new("Ctrl+Alt+M", "open the memory pane", "/memory"),
             new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"),
-            new("Ctrl+Alt+O", "open the shell police setting", "/police"),
+            new("Ctrl+Alt+O", "open the shell police setting", "/tools shell police"),   // /police until 2026-10-09
             new("Ctrl+Alt+P", "start a new conversation with the splash", "/splash"),   // from Ctrl+Alt+S, later still on 2026-10-01
             new("Ctrl+Alt+Q", "clear the message queue", "/queue clear"),   // 2026-10-05, the user's ask
             new("Ctrl+Alt+R", "rename this session", "/rename"),   // 2026-10-05, the user's ask
@@ -12823,7 +12826,6 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Settings, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Tools, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Mcp, false, MidTurnClass.Pane)]
-    [InlineData(SlashCommand.CmdList, false, MidTurnClass.Pane)]   // later on 2026-09-21: the allowed-commands row, which /tools edits under a reply too
     [InlineData(SlashCommand.Sys, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Memory, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Memory, true, MidTurnClass.Pane)]   // 2026-09-22: /memory forget's confirmation is a pane as the list is, so the word never changes the class
@@ -12866,10 +12868,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Process, true, MidTurnClass.Quick)]    // 2026-10-05: the process window, its own thread
     [InlineData(SlashCommand.Perf, false, MidTurnClass.Quick)]     // later on 2026-09-29: display only
     [InlineData(SlashCommand.Perf, true, MidTurnClass.Quick)]
-    [InlineData(SlashCommand.Persona, false, MidTurnClass.Pane)]   // later on 2026-09-27: the prompt was built at the turn's start
-    [InlineData(SlashCommand.Persona, true, MidTurnClass.Pane)]
-    [InlineData(SlashCommand.Operata, false, MidTurnClass.Pane)]
-    [InlineData(SlashCommand.Vocalia, false, MidTurnClass.Pane)]
+    [InlineData(SlashCommand.Sys, true, MidTurnClass.Pane)]   // later on 2026-09-27 as /sys persona and its siblings: the prompt was built at the turn's start; under /sys since 2026-10-09
     [InlineData(SlashCommand.Learn, false, MidTurnClass.Deferred)]   // runs after the reply, over it
     [InlineData(SlashCommand.Skills, false, MidTurnClass.Pane)]
     [InlineData(SlashCommand.Skills, true, MidTurnClass.Deferred)]   // /skills add, 2026-09-26
@@ -13069,7 +13068,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(FolderText.Title + " │ ", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/cwd"), output);
         Assert.Contains("eight.", output);
-        Assert.All(new[] { "/tools", "/sys", "/sessions", "/cmdlist", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/tools", "/sys", "/sessions", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Single(_chat.Requests);
     }
 
@@ -13129,7 +13128,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(FolderText.Title + " │ ", output);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/cwd"), output);
         Assert.Contains("eight.", output);
-        Assert.All(new[] { "/tools", "/sys", "/sessions", "/cmdlist", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
+        Assert.All(new[] { "/tools", "/sys", "/sessions", "/settings", "/cwd" }, word => Assert.DoesNotContain("› " + word, output));
         Assert.Single(_chat.Requests);
     }
 
@@ -13601,7 +13600,25 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests);
     }
 
-    /// <summary><c>/persona</c> under a reply (later on 2026-09-27): the editor opens and its line lands in the reply; the running turn's prompt was built already.</summary>
+    /// <summary>/sys with a word that is none of the three files (2026-10-09) is its usage error; the old words are unknown commands.</summary>
+    [Fact]
+    public async Task Sys_AWordThatIsNoFile_IsItsUsageError_AndTheOldWordsAreUnknown()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/sys tools");
+        PushLine("/persona");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.SysUsageError, output);
+        Assert.Equal("/sys takes persona, operata, vocalia, or nothing for the system prompt.", ChatScreen.SysUsageError);
+        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/persona"), output);
+        Assert.Empty(_openedFiles);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary><c>/sys persona</c> under a reply (later on 2026-09-27): the editor opens and its line lands in the reply; the running turn's prompt was built already.</summary>
     [Fact]
     public async Task MidTurn_Persona_OpensTheEditor_ItsLineInTheReply()
     {
@@ -13609,7 +13626,7 @@ public partial class ChatScreenTests : IDisposable
         {
             if (i == 1)
             {
-                PushLine("/persona");
+                PushLine("/sys persona");
             }
         });
 
@@ -13617,7 +13634,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), _openedFiles);
         Assert.Contains("  · " + ChatScreen.PersonaCreatedNotice, output);
-        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/persona"), output);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/sys"), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -22740,17 +22757,21 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/copy", "all --thinking --", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/copy", "--thinking all ", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/copy", "two ", sources));
-        Assert.Equal([new CompletionItem("reset", ChatScreen.PromptFileResetNote("persona.md"))], ChatScreen.ArgumentItems("/persona", "re", sources));
-        Assert.Equal([new CompletionItem("reset", ChatScreen.PromptFileResetNote("operata.md")), new CompletionItem("copy", ChatScreen.PromptFileCopyNote("operata.md"))], ChatScreen.ArgumentItems("/operata", "", sources));   // copy 2026-09-21
-        Assert.Equal([new CompletionItem("reset", ChatScreen.PromptFileResetNote("vocalia.md")), new CompletionItem("copy", ChatScreen.PromptFileCopyNote("vocalia.md"))], ChatScreen.ArgumentItems("/vocalia", "", sources));
-        Assert.Equal([new CompletionItem("copy", ChatScreen.PromptFileCopyNote("persona.md"))], ChatScreen.ArgumentItems("/persona", "co", sources));
+        // The prompt files under /sys (2026-10-09; /sys persona and its siblings until then): the three words, then each one's reset or copy.
+        Assert.Equal([new CompletionItem("persona", ChatScreen.SysFileNote("persona.md")), new CompletionItem("operata", ChatScreen.SysFileNote("operata.md")), new CompletionItem("vocalia", ChatScreen.SysFileNote("vocalia.md"))], ChatScreen.ArgumentItems("/sys", "", sources));
+        Assert.Equal([new CompletionItem("vocalia", ChatScreen.SysFileNote("vocalia.md"))], ChatScreen.ArgumentItems("/sys", "VO", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/sys", "nothing ", sources));
+        Assert.Equal([new CompletionItem("persona reset", ChatScreen.PromptFileResetNote("persona.md"))], ChatScreen.ArgumentItems("/sys", "persona re", sources));
+        Assert.Equal([new CompletionItem("operata reset", ChatScreen.PromptFileResetNote("operata.md")), new CompletionItem("operata copy", ChatScreen.PromptFileCopyNote("operata.md"))], ChatScreen.ArgumentItems("/sys", "operata ", sources));   // copy 2026-09-21
+        Assert.Equal([new CompletionItem("vocalia reset", ChatScreen.PromptFileResetNote("vocalia.md")), new CompletionItem("vocalia copy", ChatScreen.PromptFileCopyNote("vocalia.md"))], ChatScreen.ArgumentItems("/sys", "vocalia ", sources));
+        Assert.Equal([new CompletionItem("persona copy", ChatScreen.PromptFileCopyNote("persona.md"))], ChatScreen.ArgumentItems("/sys", "persona co", sources));
         // After "copy " every profile but the loaded one; after "copy <name> " the force word; a name that is not a profile offers nothing.
-        Assert.Equal([new CompletionItem("copy chef", ChatScreen.PromptFileCopyTargetNote("persona.md")), new CompletionItem("copy work", ChatScreen.PromptFileCopyTargetNote("persona.md"))], ChatScreen.ArgumentItems("/persona", "copy ", sources));
-        Assert.Empty(ChatScreen.ArgumentItems("/persona", "copy default ", sources));   // not a target: the source
-        Assert.Equal([new CompletionItem("copy work", ChatScreen.PromptFileCopyTargetNote("vocalia.md"))], ChatScreen.ArgumentItems("/vocalia", "copy w", sources));
-        Assert.Equal([new CompletionItem("copy work force", ChatScreen.PromptFileCopyForceNote("operata.md"))], ChatScreen.ArgumentItems("/operata", "copy work ", sources));
-        Assert.Equal([new CompletionItem("copy work force", ChatScreen.PromptFileCopyForceNote("operata.md"))], ChatScreen.ArgumentItems("/operata", "copy WORK f", sources));
-        Assert.Empty(ChatScreen.ArgumentItems("/persona", "copy ghost ", sources));
+        Assert.Equal([new CompletionItem("persona copy chef", ChatScreen.PromptFileCopyTargetNote("persona.md")), new CompletionItem("persona copy work", ChatScreen.PromptFileCopyTargetNote("persona.md"))], ChatScreen.ArgumentItems("/sys", "persona copy ", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/sys", "persona copy default ", sources));   // not a target: the source
+        Assert.Equal([new CompletionItem("vocalia copy work", ChatScreen.PromptFileCopyTargetNote("vocalia.md"))], ChatScreen.ArgumentItems("/sys", "vocalia copy w", sources));
+        Assert.Equal([new CompletionItem("operata copy work force", ChatScreen.PromptFileCopyForceNote("operata.md"))], ChatScreen.ArgumentItems("/sys", "operata copy work ", sources));
+        Assert.Equal([new CompletionItem("operata copy work force", ChatScreen.PromptFileCopyForceNote("operata.md"))], ChatScreen.ArgumentItems("/sys", "operata copy WORK f", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/sys", "persona copy ghost ", sources));
         // /skill took nothing from later on 2026-09-18 (the catalog listed under it from 2026-09-16 until then); edit, then the catalog after it, from 2026-09-21
         // until 2026-09-23 (the scope page's edit row since): nothing again until add came on 2026-09-26, the one word.
         Assert.Equal([new CompletionItem(SkillInstallText.AddWord, SkillInstallText.AddNote), new CompletionItem(SkillRecordText.PurgeWord, SkillRecordText.PurgeNote)], ChatScreen.ArgumentItems("/skills", "", sources));   // purge 2026-09-30; revert 2026-10-02 until 2026-10-04 (the Skills pane's now)

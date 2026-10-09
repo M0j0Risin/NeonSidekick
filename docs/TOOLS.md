@@ -879,6 +879,7 @@ Runs commands on your machine, starting in the working directory (`workdir` pick
 * Commands run hidden, output read as UTF-8 with colours and pagers off, and stdin closed (background processes keep it for `process`).
 * A command that times out is killed with everything it started. Background processes stop when the app closes; a crash leaves running commands running.
 * `/process` lists the background processes, and `/process <id>` watches one's output live in the [process window](COMMANDS.md#process-window), where Ctrl+K twice stops it.
+* `/cmd <command>` runs a line of your own through the same layers: the policy, the police and, under `ask`, the approval pane ([Your own shell line](COMMANDS.md#your-own-shell-line)).
 
 #### Headless runs
 

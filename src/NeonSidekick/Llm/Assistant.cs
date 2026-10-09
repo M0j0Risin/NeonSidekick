@@ -40,7 +40,7 @@ public sealed class Assistant
 {
     /// <summary>
     /// The default persona: the one part of the prompt <c>persona.md</c> (<see cref="PersonaFile"/>)
-    /// replaces, and what <c>/persona</c> seeds that file with. Since 2026-10-03 (the user's ask) it is the repo's
+    /// replaces, and what <c>/sys persona</c> seeds that file with. Since 2026-10-03 (the user's ask) it is the repo's
     /// <c>assets/prompts/persona.md</c>, embedded by the project file as <see cref="DefaultPersonaResourceName"/> and read
     /// once: CRLF folded to LF and trimmed, as <see cref="PersonaFile.Normalize(string)"/> reads a file, so a seeded
     /// <c>persona.md</c> reads back as this text. It was one identity sentence before, joined to the rules with a space;

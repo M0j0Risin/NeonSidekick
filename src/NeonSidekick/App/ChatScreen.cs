@@ -938,7 +938,7 @@ internal sealed partial class ChatScreen
 
     /// <param name="effective">The settings in force (flags over variables over the file), read fresh on every connect and turn.</param>
     /// <param name="overriddenBy">For the menus: the variable or flag that outranks a saved field, or null.</param>
-    /// <param name="openFile">Opens a file in an external editor without waiting for it; <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c> call it with the file's path. The app passes <see cref="PersonaFile.OpenInEditor"/>; tests record the call. A throw is reported as an error line.</param>
+    /// <param name="openFile">Opens a file in an external editor without waiting for it; <c>/sys persona</c>, <c>/sys operata</c> and <c>/sys vocalia</c> call it with the file's path. The app passes <see cref="PersonaFile.OpenInEditor"/>; tests record the call. A throw is reported as an error line.</param>
     /// <param name="renderScreen">Wipes the terminal and draws the start-of-app view (the banner) on the console it is given; <c>/clear</c> calls it with the pane, so the rows are counted. The screen never draws the banner itself.</param>
     /// <param name="time">The clock the clock tools, the timers and the pane's tick read; tests pass a manual one.</param>
     /// <param name="geometry">Where the console's cursor is, for the bottom pane; null (tests, a redirected console) draws the input line where the transcript ends.</param>
@@ -1412,11 +1412,11 @@ internal sealed partial class ChatScreen
     /// 2026-09-21, the user's ask): the closed lock under <c>ask</c>, the open one under <c>yolo</c>,
     /// nothing under <c>off</c> — the row reads the policy at each draw (<see cref="ToolbarStripFor"/>),
     /// so a change on the Tools pane swaps the lock as the pane closes. Either lock's double-click is
-    /// <c>/cmdlist</c>: the <c>Shell allowed commands</c> list opened straight, the typed word too.
+    /// <c>/cmdlist</c> (<c>/tools shell allowed</c> since 2026-10-09): the <c>Shell allowed commands</c> list opened straight, the typed line too.
     /// Two more come and go the same way (2026-09-22, the user's ask): the disk between the balloon
     /// and the lock while <c>Memory</c> is on — its pane's title already wore it — whose double-click
     /// is <c>/memory</c>, the list Enter prunes; and the officer last of all while <c>Shell police</c> is on, the glyph the transcript's refusal line wears, whose double-click is
-    /// <c>/police</c> (later on 2026-09-22, the user's ask: no click of its own until then), that row's
+    /// <c>/police</c> (later on 2026-09-22, the user's ask: no click of its own until then; <c>/tools shell police</c> since 2026-10-09), that row's
     /// on/off page opened straight. Both follow their switch at each draw, so a flip on its pane shows
     /// as the pane closes; the columns after the balloon move with the disk, which the hit-test walk
     /// and the column-keyed pairing take as they come. A seventh fixed glyph since 2026-09-29 (the
@@ -1447,7 +1447,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The police item while <c>Shell police</c> is off (2026-10-02, the user's ask: the item always shown, as the
-    /// lock is, the officer while on and the ninja while off). Its double-click is <c>/police</c> as the officer's is. Pinned.
+    /// lock is, the officer while on and the ninja while off). Its double-click is the officer's (<c>/tools shell police</c>). Pinned.
     /// </summary>
     public const string NinjaToolGlyph = "🥷";
 
@@ -1917,7 +1917,7 @@ internal sealed partial class ChatScreen
         return nextCommand == command && string.Equals(nextArgs.Trim(), args.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The command a double-click on a toolbar glyph runs (2026-09-21), as the typed word; null for anything else. The officer's is <c>/police</c> since later on 2026-09-22 (nothing until then), and the ninja's the same (2026-10-02). A tool switch's is its <c>/tools &lt;group&gt;</c> line and a window's its command (2026-10-03): <see cref="TogglesWindow"/> names the window lines, which close an open window. Pinned.</summary>
+    /// <summary>The command a double-click on a toolbar glyph runs (2026-09-21), as the typed word; null for anything else. The officer's is <c>/police</c> since later on 2026-09-22 (nothing until then), and the ninja's the same (2026-10-02); the lock's and theirs are <c>/tools shell allowed|police</c> since 2026-10-09. A tool switch's is its <c>/tools &lt;group&gt;</c> line and a window's its command (2026-10-03): <see cref="TogglesWindow"/> names the window lines, which close an open window. Pinned.</summary>
     public static string? ToolbarWord(string glyph) => glyph switch
     {
         SettingsToolGlyph => SlashCommands.SettingsWord,
@@ -1931,8 +1931,8 @@ internal sealed partial class ChatScreen
         UsageToolGlyph => SlashCommands.UsageWord,
         PerfToolGlyph => SlashCommands.PerfWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
-        CmdAskToolGlyph or CmdYoloToolGlyph => SlashCommands.CmdListWord,
-        PoliceToolGlyph or NinjaToolGlyph => SlashCommands.PoliceWord,
+        CmdAskToolGlyph or CmdYoloToolGlyph => ToolsText.ShellSubLine(ToolsText.ShellAllowedWord),
+        PoliceToolGlyph or NinjaToolGlyph => ToolsText.ShellSubLine(ToolsText.ShellPoliceWord),
         ShellToolGlyph => ToolsText.SwitchLine(ToolbarItems.Shell),
         FilesToolGlyph => ToolsText.SwitchLine(ToolbarItems.Files),
         WebToolGlyph => ToolsText.SwitchLine(ToolbarItems.Web),
@@ -2239,10 +2239,10 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+E", "open the sessions pane", "/sessions"));
         rows.Add(new("Ctrl+Alt+G", "show or hide the log window", "/log"));
         rows.Add(new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"));
-        rows.Add(new("Ctrl+Alt+L", "open the allowed commands list", "/cmdlist"));
+        rows.Add(new("Ctrl+Alt+L", "open the allowed commands list", ToolsText.ShellSubLine(ToolsText.ShellAllowedWord)));
         rows.Add(new("Ctrl+Alt+M", mac ? "open the memory pane (in the app's windows; Ctrl+Alt+A in the terminal)" : "open the memory pane", "/memory"));
         rows.Add(new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"));
-        rows.Add(new("Ctrl+Alt+O", "open the shell police setting", "/police"));
+        rows.Add(new("Ctrl+Alt+O", "open the shell police setting", ToolsText.ShellSubLine(ToolsText.ShellPoliceWord)));
         rows.Add(new("Ctrl+Alt+P", "start a new conversation with the splash", "/splash"));
         rows.Add(new("Ctrl+Alt+Q", "clear the message queue", "/queue clear"));
         rows.Add(new("Ctrl+Alt+R", "rename this session", "/rename"));
@@ -4128,7 +4128,16 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(PerfBarMode.Words.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
 
             case SlashCommand.Tools:
+            {
+                // After "shell " its two pages (2026-10-09, /cmdlist and /police folded in); else the group words.
+                string shellHead = ToolbarItems.Shell + " ";
+                if (argText.StartsWith(shellHead, StringComparison.OrdinalIgnoreCase))
+                {
+                    return MentionCompleter.Matches(ToolsText.ShellSubWords.Select(word => new CompletionItem(shellHead + word, ToolsText.DescribeShellSub(word))).ToList(), argText);
+                }
+
                 return MentionCompleter.Matches(ToolsText.SwitchWords.Select(word => new CompletionItem(word, ToolsText.DescribeSwitch(word))).ToList(), argText);
+            }
 
             case SlashCommand.Toolbar:
                 return MentionCompleter.Matches(ToolbarItems.Words.Select(word => new CompletionItem(word, ToolbarItems.DescribeWord(word))).ToList(), argText);
@@ -4280,26 +4289,19 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Disabled, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(CopyWord, MemoryCopyNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
-            case SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia:
+            case SlashCommand.Sys:
             {
-                // reset or copy; after "copy " every profile but the loaded one; after "copy <name> " the force word (2026-09-21).
-                string fileName = kind switch { SlashCommand.Persona => PersonaFile.FileName, SlashCommand.Operata => OperataFile.FileName, _ => VocaliaFile.FileName };
-                if (argText.StartsWith(CopyWord + " ", StringComparison.OrdinalIgnoreCase))
+                // The three files (2026-10-09), then each one's reset or copy as /persona and its siblings offered them.
+                foreach (var (word, file) in SysFileWords)
                 {
-                    string rest = argText[(CopyWord.Length + 1)..].TrimStart();
-                    var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile)).ToList();
-                    foreach (var name in targets)
+                    string head = word + " ";
+                    if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (rest.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            return MentionCompleter.Matches([new(CopyWord + " " + name + " " + ForceWord, PromptFileCopyForceNote(fileName))], argText);
-                        }
+                        return PromptFileChoices(file, argText[head.Length..], sources).Select(item => item with { Text = head + item.Text }).ToList();
                     }
-
-                    return MentionCompleter.Matches(targets.Select(name => new CompletionItem(CopyWord + " " + name, PromptFileCopyTargetNote(fileName))).ToList(), argText);
                 }
 
-                return MentionCompleter.Matches([new(ResetWord, PromptFileResetNote(fileName)), new(CopyWord, PromptFileCopyNote(fileName))], argText);
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(SysFileWords.Select(f => new CompletionItem(f.Word, SysFileNote(f.File))).ToList(), argText);
             }
 
             case SlashCommand.Learn:
@@ -4391,6 +4393,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Claude:
                 // new (2026-10-04); a message is free text, and one that does not start with "new" closes the list at its next letter.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(ClaudeText.NewWord, ClaudeText.NewNote)], argText);
+
+            case SlashCommand.Cmd:
+                // --shell, then the shells by name (2026-10-09); the command itself is free text.
+                return CmdChoices(argText);
 
             default:
                 return [];
@@ -4869,7 +4875,7 @@ internal sealed partial class ChatScreen
     /// <c>/log</c> (2026-10-02, the user's ask): the log window — the run's diagnostic lines in memory, following the newest
     /// (<see cref="Viewer.LogWindow"/>) — opened, or brought forward when it is open; in any run, <c>--log</c> or not.
     /// <c>/log --file</c> is what <c>/log</c> was from 2026-09-22: the <c>--log</c> file in the editor Windows associates with
-    /// it, through the same opener as <c>/persona</c> — no wait, the file keeps growing while it is read (the sink shares it
+    /// it, through the same opener as <c>/sys persona</c> — no wait, the file keeps growing while it is read (the sink shares it
     /// for reading and flushes per line) — and without <c>--log</c> there is no file to open. Quick under a reply, as
     /// <c>/explore</c> is: the window has its own thread.
     /// </summary>
@@ -5946,37 +5952,37 @@ internal sealed partial class ChatScreen
     /// <summary>Under the rule <c>/new</c> draws: the conversation is forgotten, the transcript stays. Pinned; headless prints it too.</summary>
     public const string NewConversationNotice = "(new conversation)";
 
-    /// <summary>After <c>/persona</c> opened an existing file. Pinned.</summary>
+    /// <summary>After <c>/sys persona</c> (<c>/persona</c> until 2026-10-09) opened an existing file. Pinned.</summary>
     public const string PersonaOpenedNotice = "(" + NoticeGlyphs.Profile + "opened persona.md in your editor; save it and the next reply uses it)";
 
-    /// <summary>After <c>/persona</c> created the file with the default persona and opened it. Pinned.</summary>
-    public const string PersonaCreatedNotice = "(" + NoticeGlyphs.Profile + "created persona.md with the default persona and opened it in your editor; edit it, save, and the next reply uses it; /persona reset goes back to the default)";
+    /// <summary>After <c>/sys persona</c> created the file with the default persona and opened it. Pinned.</summary>
+    public const string PersonaCreatedNotice = "(" + NoticeGlyphs.Profile + "created persona.md with the default persona and opened it in your editor; edit it, save, and the next reply uses it; /sys persona reset goes back to the default)";
 
     public static string PersonaOpenFailedError(string detail) => $"Could not open persona.md: {detail}";
 
-    /// <summary>After <c>/operata</c> opened an existing file. Pinned.</summary>
+    /// <summary>After <c>/sys operata</c> (<c>/operata</c> until 2026-10-09) opened an existing file. Pinned.</summary>
     public const string OperataOpenedNotice = "(" + NoticeGlyphs.Operata + "opened operata.md in your editor; save it and the next reply uses it)";
 
     /// <summary>
-    /// After <c>/operata</c> created the file with the operating rules in use now (<see cref="CurrentOperatingRules"/>, 2026-10-04) and
+    /// After <c>/sys operata</c> created the file with the operating rules in use now (<see cref="CurrentOperatingRules"/>, 2026-10-04) and
     /// opened it; it says the file stands as written from here, since a tool switched later no longer changes its sentences. Pinned.
     /// </summary>
-    public const string OperataCreatedNotice = "(" + NoticeGlyphs.Operata + "created operata.md with the rules in use now, tool sentences included, and opened it in your editor. From now on it is used as written: edit and save it, and the next reply uses it; /operata reset goes back to the default)";
+    public const string OperataCreatedNotice = "(" + NoticeGlyphs.Operata + "created operata.md with the rules in use now, tool sentences included, and opened it in your editor. From now on it is used as written: edit and save it, and the next reply uses it; /sys operata reset goes back to the default)";
 
     public static string OperataOpenFailedError(string detail) => $"Could not open operata.md: {detail}";
 
-    /// <summary>After <c>/vocalia</c> opened an existing file. Pinned.</summary>
+    /// <summary>After <c>/sys vocalia</c> (<c>/vocalia</c> until 2026-10-09) opened an existing file. Pinned.</summary>
     public const string VocaliaOpenedNotice = "(" + NoticeGlyphs.Vocalia + "opened vocalia.md in your editor; save it and the next spoken reply uses it)";
 
-    /// <summary>After <c>/vocalia</c> created the file, empty since 2026-10-03 (there is no default voice directive), and opened it. Pinned.</summary>
-    public const string VocaliaCreatedNotice = "(" + NoticeGlyphs.Vocalia + "created an empty vocalia.md and opened it in your editor; write the voice directive, save, and the next spoken reply uses it; /vocalia reset removes it)";
+    /// <summary>After <c>/sys vocalia</c> created the file, empty since 2026-10-03 (there is no default voice directive), and opened it. Pinned.</summary>
+    public const string VocaliaCreatedNotice = "(" + NoticeGlyphs.Vocalia + "created an empty vocalia.md and opened it in your editor; write the voice directive, save, and the next spoken reply uses it; /sys vocalia reset removes it)";
 
     public static string VocaliaOpenFailedError(string detail) => $"Could not open vocalia.md: {detail}";
 
-    /// <summary>The word after <c>/persona</c>, <c>/operata</c> or <c>/vocalia</c> that removes the file (2026-09-16).</summary>
+    /// <summary>The word after <c>/sys persona</c>, <c>/sys operata</c> or <c>/sys vocalia</c> (the bare words until 2026-10-09) that removes the file (2026-09-16).</summary>
     public const string ResetWord = "reset";
 
-    /// <summary>The word after <c>/persona</c>, <c>/operata</c> or <c>/vocalia</c> that copies the file into another profile: <c>copy &lt;profile&gt; [force]</c> (2026-09-21).</summary>
+    /// <summary>The word after <c>/sys persona</c>, <c>/sys operata</c> or <c>/sys vocalia</c> that copies the file into another profile: <c>copy &lt;profile&gt; [force]</c> (2026-09-21).</summary>
     public const string CopyWord = "copy";
 
     /// <summary>The usage line for a prompt-file command with words that are neither <see cref="ResetWord"/> nor <c>copy &lt;profile&gt; [force]</c>. Pinned.</summary>
@@ -6001,7 +6007,7 @@ internal sealed partial class ChatScreen
 
     public static string PromptFileCopyFailedError(string fileName, string detail) => $"Could not copy {fileName}: {detail}";
 
-    /// <summary>The question before a <c>/persona reset</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open); <c>y</c> or <c>yes</c> removes, anything else keeps. <paramref name="inUse"/> here and in the notices around it is <see cref="PromptFile.DefaultInUse"/> (<c>the default persona</c>, <c>no voice directive</c> since 2026-10-03). Pinned.</summary>
+    /// <summary>The question before a <c>/sys persona reset</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open); <c>y</c> or <c>yes</c> removes, anything else keeps. <paramref name="inUse"/> here and in the notices around it is <see cref="PromptFile.DefaultInUse"/> (<c>the default persona</c>, <c>no voice directive</c> since 2026-10-03). Pinned.</summary>
     public static string PromptFileResetPrompt(string fileName, string inUse) => $"{NoticeGlyphs.PromptFile(fileName)}Remove {fileName} and go back to {inUse}?";
 
     /// <summary>The notice after the file went; <paramref name="spoken"/> for the voice directive, which only a spoken reply carries. Pinned.</summary>
@@ -6013,12 +6019,12 @@ internal sealed partial class ChatScreen
     public static string PromptFileResetFailedError(string fileName, string detail) => $"Could not remove {fileName}: {detail}";
 
     /// <summary>
-    /// <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c> with their argument: nothing opens the
+    /// <c>/sys persona</c>, <c>/sys operata</c> and <c>/sys vocalia</c> (the bare words until 2026-10-09) with their argument: nothing opens the
     /// file (<see cref="OpenPromptFile"/>); <see cref="ResetWord"/> removes it after a confirmation
     /// (the user's call, 2026-09-16: the file may hold a hand-written text and the profile folder
     /// has no trash) so the default is back at the next turn; <c>copy &lt;profile&gt; [force]</c>
     /// (2026-09-21, the user's ask) is <see cref="CopyPromptFileAsync"/>; any other words are the usage line. <paramref name="seed"/>
-    /// gives a missing file its text in place of the default (<c>/operata</c>'s <see cref="CurrentOperatingRules"/>, 2026-10-04).
+    /// gives a missing file its text in place of the default (<c>/sys operata</c>'s <see cref="CurrentOperatingRules"/>, 2026-10-04).
     /// </summary>
     private async Task HandlePromptFileAsync(PromptFile file, string command, string args, string createdNotice, string openedNotice, Func<string, string> openFailedError, bool spoken, CancellationToken cancellationToken, Func<string>? seed = null)
     {
@@ -6070,7 +6076,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/persona copy &lt;profile&gt; [force]</c> and its siblings (2026-09-21, the user's ask): the loaded
+    /// <c>/sys persona copy &lt;profile&gt; [force]</c> and its siblings (2026-09-21, the user's ask; <c>/persona copy</c> until 2026-10-09): the loaded
     /// profile's file into another profile's folder, byte for byte (<see cref="PromptFile.CopyTo"/>). The
     /// target is named as <c>/profile</c> resolves it and is never the loaded one; no file here is a notice
     /// (the default is in use, nothing to copy); a file already there is an error unless <c>force</c> (the
@@ -6125,7 +6131,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c>: make sure the file exists (seeded with its default, if it has one), then
+    /// <c>/sys persona</c>, <c>/sys operata</c> and <c>/sys vocalia</c>: make sure the file exists (seeded with its default, if it has one), then
     /// hand it to the editor. Nothing waits; the next turn reads whatever was saved. <paramref name="seed"/> is read only when the file is missing.
     /// </summary>
     private void OpenPromptFile(PromptFile file, string createdNotice, string openedNotice, Func<string, string> openFailedError, Func<string>? seed = null)
@@ -7681,7 +7687,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/explore [path]</c>: the working directory (or a folder under it, resolved through the
-    /// sandbox) handed to the same shell-execute opener <c>/persona</c>, <c>/operata</c>, <c>/vocalia</c> and the <c>open</c> tool use —
+    /// sandbox) handed to the same shell-execute opener <c>/sys persona</c>, <c>/sys operata</c>, <c>/sys vocalia</c> and the <c>open</c> tool use —
     /// Explorer on Windows, <c>open</c> / <c>xdg-open</c> elsewhere. A file is refused with the
     /// <c>is a file, not a folder</c> line: this command browses. A path outside the root or missing,
     /// and an opener that throws, are the usual file errors.
@@ -8128,7 +8134,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/comfy edit json|markdown &lt;workflow&gt;</c> (later still on 2026-09-24, the user's ask): the workflow's <c>.json</c>
     /// (its ComfyUI graph) or <c>.md</c> (its settings and tips) — whichever <c>comfy</c> folder holds it — in the editor Windows
-    /// associates with it, as <c>/persona</c> opens <c>persona.md</c>. A workflow with no <c>.md</c> is given one first, its family
+    /// associates with it, as <c>/sys persona</c> opens <c>persona.md</c>. A workflow with no <c>.md</c> is given one first, its family
     /// written in, so there is somewhere to put the settings and tips. <c>md</c> is taken for <c>markdown</c>. Any installed
     /// workflow, offered to the model or not; nothing waits, the next turn reads what was saved.
     /// </summary>
@@ -11134,16 +11140,9 @@ internal sealed partial class ChatScreen
                 await HandleSessionAsync(RenameAsSessionArgs(args), cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.Persona:
-                await HandlePromptFileAsync(_persona, "/persona", args, PersonaCreatedNotice, PersonaOpenedNotice, PersonaOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);
-                return false;
-
-            case SlashCommand.Operata:
-                await HandlePromptFileAsync(_operata, "/operata", args, OperataCreatedNotice, OperataOpenedNotice, OperataOpenFailedError, spoken: false, cancellationToken, CurrentOperatingRules).ConfigureAwait(false);
-                return false;
-
-            case SlashCommand.Vocalia:
-                await HandlePromptFileAsync(_vocalia, "/vocalia", args, VocaliaCreatedNotice, VocaliaOpenedNotice, VocaliaOpenFailedError, spoken: true, cancellationToken).ConfigureAwait(false);
+            case SlashCommand.Sys when args.Trim().Length > 0:
+                // /sys persona|operata|vocalia [reset | copy <profile> [force]] (2026-10-09, the user's ask: /persona, /operata and /vocalia folded in).
+                await HandleSysFileAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Sys:
@@ -11256,6 +11255,10 @@ internal sealed partial class ChatScreen
                 await HandleClaudeAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Cmd:
+                await HandleCmdAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Test:
                 await HandleTestAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
@@ -11353,14 +11356,19 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Tools when args.Trim().Length > 0:
-                // /tools <group> (2026-10-03, the toolbar's tool switches): the group's switch straight, as /police opens its row.
-                if (ToolsText.SwitchField(args) is { } switchField)
+                // /tools <group> (2026-10-03, the toolbar's tool switches): the group's switch straight; /tools shell allowed|police
+                // (2026-10-09, the user's call: /cmdlist and /police folded in) the allowed-commands list or the police page straight.
+                if (ToolsText.ShellSub(args) is { } shellSub)
+                {
+                    await _toolsMenu.ShowShellSubAsync(shellSub, cancellationToken).ConfigureAwait(false);
+                }
+                else if (ToolsText.SwitchField(args) is { } switchField)
                 {
                     await _toolsMenu.ShowSwitchAsync(switchField, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
-                    _transcript.Error(ToolsText.SwitchUsageError);
+                    _transcript.Error(ToolsText.UsageErrorFor(args));
                 }
 
                 return false;
@@ -11369,16 +11377,6 @@ internal sealed partial class ChatScreen
                 // The Tools pane (2026-09-19): every tool on or off by name, the Ask / Files / Web rows after it; the four tabs as lines without the pane.
                 // A reconnect row saved there reconnects once it closes, as /settings would (the Anthropic API's, 2026-09-29 to 2026-10-03; none since).
                 await ApplySettingsChangesAsync(await _toolsMenu.ShowAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
-                return false;
-
-            case SlashCommand.CmdList:
-                // The Shell allowed commands list straight (2026-09-21): the Tools pane's row without the pane around it, the toolbar lock's word.
-                await _toolsMenu.ShowAllowedCommandsAsync(cancellationToken).ConfigureAwait(false);
-                return false;
-
-            case SlashCommand.Police:
-                // The Shell police page straight (2026-09-22): the Tools pane's row without the pane around it, the toolbar officer's word.
-                await _toolsMenu.ShowPoliceAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Mcp:

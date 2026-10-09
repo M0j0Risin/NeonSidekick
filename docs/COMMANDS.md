@@ -11,6 +11,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
   - [Plan mode](#plan-mode)
   - [Bot conversations](#bot-conversations)
   - [Claude Code from the chat](#claude-code-from-the-chat)
+  - [Your own shell line](#your-own-shell-line)
   - [Loops](#loops)
   - [Benchmark tests](#benchmark-tests)
   - [Imagine options](#imagine-options)
@@ -36,10 +37,10 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
 | `/clear` | Starts a new conversation and clears the screen. |
+| `/cmd <command>` | Runs a shell line yourself in the working directory, in *Shell default*'s shell, its output drawn as it prints. It passes the model's checks. See [Your own shell line](#your-own-shell-line). |
+| `/cmd --shell <shell> <command>` | The same in another shell (`powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac). |
 | `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey, the held ones first, in a pane. A held chord never reaches the app. Only hotkeys registered with Windows show; a keyboard hook (AutoHotkey, PowerToys Keyboard Manager) or a Windows Terminal key binding can still take a key. Needs Windows. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
-| `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix after a yes; the ask and yolo buttons (`a`, `y`) switch *Shell command policy*; typing filters the list. |
-| `/police` | Opens the on/off page for *Shell police*; its strings button (`s`) opens *Shell police forbidden strings*. |
 | `/compact [<focus>]` | Shrinks the context; a focus tells the summary what to concentrate on. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply (or the last *n*, or the whole transcript) as Markdown. `--thinking` includes the thinking, quoted under `💭 **Thinking**`. |
 | `/cwd [<path>\|~\|browse]` | Shows or changes the working directory. A path that starts with a drive (`D:\`), or with `/` on a Mac, completes its folders as you type. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
@@ -98,11 +99,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/memory copy <profile> [overwrite]` | Adds them to another profile's memory (or replaces it with `overwrite`), after a confirmation. |
 | `/model [<id>]` | Picks or sets the model. The list is A to Z with the cursor on the model in use; type to narrow it to the ids holding the text (Backspace erases, ESC clears it, the next ESC keeps the model). On the embedded LLM, lists the installed models, and the argument list offers their ids. |
 | `/new` | Starts a new conversation without clearing the screen. |
-| `/operata [reset]` | Edits `operata.md` (the operating rules) in your editor, or resets it. A missing file is created with the rules in use now, the sentences for the tools that are on included; from then on it stands as written. |
-| `/operata copy <profile> [force]` | Copies it to another profile (`force` replaces theirs). |
 | `/perfbar [off\|text\|gauge\|spark\|led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
-| `/persona [reset]` | The same for `persona.md` (the personality; seeded with the built-in persona). |
-| `/persona copy <profile> [force]` | Copies it to another profile (`force` replaces theirs). |
 | `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file from the working directory (see [Printing](TOOLS.md#printing)). The printer matches by name or part of it; quote a name with spaces. *Print action policy* never applies. On a Mac a PDF goes to the printer as it is (no landscape) and an Office file is refused. |
 | `/print reply [<options>]` | Prints the last reply as formatted Markdown. |
 | `/print printers` | Lists the printers in a pane, marking the system's default and *Print default printer* (on a Mac each with the name System Settings shows). `/print` alone shows its usage and the same list. |
@@ -147,6 +144,10 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
+| `/sys persona [reset]` | Edits `persona.md` (the personality; seeded with the built-in persona) in your editor, or resets it to the default after a yes. |
+| `/sys operata [reset]` | The same for `operata.md` (the operating rules). A missing file is created with the rules in use now, the sentences for the tools that are on included; from then on it stands as written. |
+| `/sys vocalia [reset]` | The same for `vocalia.md` (the voice directive, empty by default, added last to every spoken reply); reset removes it. |
+| `/sys persona\|operata\|vocalia copy <profile> [force]` | Copies that file to another profile (`force` replaces theirs). |
 | `/terminal [<folder>]` | Opens a new terminal in the working directory, or in a folder under it (Tab completes the folder): Windows Terminal (else a console window); on a Mac a new Terminal window, or a tab in iTerm2's front window when the app runs in iTerm2. Ctrl+. runs it (Ctrl+] on a Mac). |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
 | `/theme [<name>]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. |
@@ -155,7 +156,9 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/timer stop <name>\|all` | Stops one timer, or every one. |
 | `/toolbar [on\|off]` | Hides the toolbar, or brings it back with its last items (the default ten the first time). |
 | `/tools` | Switches the model's tools on or off, and edits each tool group's settings on its own tab. On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
-| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (`d`, `h`, `c`) for *Web browser mode*; `camera`'s has a **watch** button (`w`) that turns `/camera watch` on or off. |
+| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker, whose **allowed** and **police** buttons (`c`, `p`) open those pages, ESC coming back), `files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (`d`, `h`, `c`) for *Web browser mode*; `camera`'s has a **watch** button (`w`) that turns `/camera watch` on or off. |
+| `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix after a yes; the ask and yolo buttons (`a`, `y`) switch *Shell command policy*; typing filters the list. The toolbar's lock and Ctrl+Alt+L run it. |
+| `/tools shell police` | Opens the on/off page for *Shell police*; its strings button (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
 | `/tts [on\|off]` | Toggles speech output. |
 | `/usage` | Token usage and performance; `~` marks an estimated reasoning count. |
@@ -172,8 +175,6 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/comfy view` | Opens the picture viewer on the output folder. |
 | `/comfy thumbs` | Opens the thumbnail browser on the output folder. |
 | `/comfy purge` | Deletes everything in the output folder, `.pasted` included, after a yes/no. Refused when it is the working directory. |
-| `/vocalia [reset]` | Edits `vocalia.md` (the voice directive, empty by default, added last to every spoken reply), or removes it. |
-| `/vocalia copy <profile> [force]` | Copies it to another profile (`force` replaces theirs). |
 | `/wake [on\|off]` | Toggles the wake word. |
 | `/window` | Shows the terminal window's size. |
 | `/youtube`, `/youtube status` | Says what the video window is playing. |
@@ -237,6 +238,16 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * *Claude CLI slash command permissions* sets what Claude may do; anything more is denied, never asked.
 * ESC or Ctrl+C stops it, keeping the reply so far. Works with no LLM server; refused during a reply.
 * Your own Claude Code setup applies (sign-in, `CLAUDE.md`, skills, MCP servers, hooks). `/usage` shows the cost.
+
+### Your own shell line
+
+`/cmd <command>` runs a line you type in the working directory, as the model's `run_command` would, and draws its output as it prints (stderr in the warning colour).
+
+* **The same checks as the model's line.** *Shell command policy* `off` refuses it. The shell police (forbidden strings, the SQLite and server-database police, a path outside the working directory) refuse what they refuse whatever the policy, behind 👮. Under `ask`, a line whose prefixes are not all on *Shell allowed commands* is put to the approval pane, with its allow-for-this-session and allow-always rows. *Shell prefer native tools* is the model's guidance and does not apply.
+* **The wait** is *Shell timeout (s)*, at most *Shell foreground cap (s)*; ESC kills the line and everything it started.
+* **Output over *Shell output max chars*** stops being drawn at one notice; the line runs on, and the whole output goes to `.shell\cmd_<id>.log` in the working directory.
+* **The model sees it.** The line and its output join the conversation tagged `[I ran in the shell (<shell>)]` and `[shell output]`, the output cut as `run_command`'s would be. `/rewind` puts the line back as `/cmd --shell <shell> <command>`.
+* Plan mode does not stop it, and it waits for a reply to end. Not in headless mode, where the line goes to the model as text.
 
 ### Loops
 
@@ -559,9 +570,10 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/docker` | Enter opens · `r` refresh · type to filter |
 | `/youtube list` | Enter plays · `d` remove selected (asks) · `c` clear all (asks) · type to filter |
 | `/youtube <words>`, `/youtube playlist` | Enter plays (a playlist from the entry, a channel's uploads) · `s` save the highlighted video |
-| `/cmdlist` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |
+| `/tools shell` (*Shell command policy*) | `c` the allowed commands · `p` the police |
+| `/tools shell allowed` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |
 | *Shell police forbidden strings* | the top row adds · Enter removes (asks) · `r` restore defaults (asks) |
-| `/police` | `s` the forbidden strings |
+| `/tools shell police` | `s` the forbidden strings |
 | `/tools web` | `d` default · `h` httpclient · `c` chromium |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | The camera pane | Space takes · `r` retake · Enter attaches · ESC drops |

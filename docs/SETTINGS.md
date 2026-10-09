@@ -67,9 +67,9 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | Ctrl+Alt+D | `/mcp` | opens over the reply |
 | Ctrl+Alt+E | `/sessions` | opens over the reply |
 | Ctrl+Alt+H | `/header` | at once |
-| Ctrl+Alt+L | `/cmdlist` | opens over the reply |
+| Ctrl+Alt+L | `/tools shell allowed` | opens over the reply |
 | Ctrl+Alt+M | `/memory` | opens over the reply |
-| Ctrl+Alt+O | `/police` | opens over the reply |
+| Ctrl+Alt+O | `/tools shell police` | opens over the reply |
 | Ctrl+Alt+R | `/rename`: the rename box | opens over the reply |
 | Ctrl+Alt+S | `/skills` | opens over the reply |
 | Ctrl+Alt+T | `/tools` | opens over the reply |
@@ -94,7 +94,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/cmdlist`, `/police`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/persona`, `/operata`, `/vocalia` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia` |
 | Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
@@ -123,9 +123,9 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 |---|---|---|
 | ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/theme` (the theme picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
 | 💾 | always; on the slab while *Memory mode* is `disabled` | `/memory`: the memories, with **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row |
-| 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/cmdlist` |
-| 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/police` |
-| 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first) |
+| 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
+| 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
+| 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
 | 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
@@ -142,7 +142,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 * `/skills`: agent skills and self-reflection
 * `/tools`: the model's tools, and Claude (`/claude` and the advisor)
 * `/mcp`: external MCP servers
-* `/sys`: a read-only view of what the model is sent
+* `/sys`: a read-only view of what the model is sent; `/sys persona`, `/sys operata` and `/sys vocalia` edit the files it is made from
 * `/usage`: LLM usage statistics (tok/s, time to first token…)
 
 Settings that an environment variable or flag can override for one launch are listed under [Environment variables](ENVIRONMENT.md). Paths here use Windows' `\`; on a Mac read `/`.
@@ -609,9 +609,9 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list goes to the approval pane; refused with no pane) or `yolo` (everything runs). See [Shell guards](#shell-guards). | `off` |
-| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter removes one after a yes; the pane's *Allow … always* adds one. The ask and yolo buttons (`a`, `y`) switch the policy. `/cmdlist` opens it; `/profile push commands` copies it to another profile. | none |
-| Shell police | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first, and also stops the forbidden strings and the SQLite rule; `/police` opens it. See [Shell guards](#shell-guards). | on |
-| Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police* is on. The top row adds one, Enter removes one after a yes; `/police`'s strings button (`s`) opens it too. A new profile starts with a list of harmful actions for its system; a profile from before keeps its own. The list's **↺ restore defaults** button (`r`) puts that starter list back after a yes, replacing what's there. `/profile push policestrings` copies it to another profile. See [Shell guards](#shell-guards). | the starter list (49 on Windows, 48 on a Mac) |
+| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`, `python`). Enter removes one after a yes; the pane's *Allow … always* adds one. The ask and yolo buttons (`a`, `y`) switch the policy. `/tools shell allowed` opens it; `/profile push commands` copies it to another profile. | none |
+| Shell police | Refuses a command, script or process input naming a path outside the working directory, before it runs or asks. Turning it off asks first, and also stops the forbidden strings and the SQLite rule; `/tools shell police` opens it. See [Shell guards](#shell-guards). | on |
+| Shell police forbidden strings | Strings the police refuses outright in a command, script or process input, case and spacing ignored. Enforced only while *Shell police* is on. The top row adds one, Enter removes one after a yes; The police page's strings button (`s`) opens it too. A new profile starts with a list of harmful actions for its system; a profile from before keeps its own. The list's **↺ restore defaults** button (`r`) puts that starter list back after a yes, replacing what's there. `/profile push policestrings` copies it to another profile. See [Shell guards](#shell-guards). | the starter list (49 on Windows, 48 on a Mac) |
 | Shell prefer native tools | Steers the model to the app's own tools: a lone shell command one of them covers is sent back (once a turn). See [Shell guards](#shell-guards). | on |
 | Shell default | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd`, or `bash` (Git Bash). On macOS: `zsh`, `bash` or `powershell` (pwsh, if installed). | `powershell` (`zsh` on macOS) |
 | Shell timeout (s) | How long a foreground command without its own `timeout` may run (1–3600). | 180 |
@@ -923,7 +923,7 @@ Every connected server's tools, as `<server>__<tool>`, with the server's descrip
 
 ## System prompt (`/sys`)
 
-A read-only view of exactly what the next reply sends.
+A read-only view of exactly what the next reply sends. `/sys persona`, `/sys operata` and `/sys vocalia` open its three files in your editor (`reset` takes one back to the default, `copy <profile>` sends it to another profile).
 
 ### Prompt
 

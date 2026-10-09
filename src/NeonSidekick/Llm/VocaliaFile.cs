@@ -6,7 +6,7 @@ namespace NeonSidekick.Llm;
 /// no directive whatever the file says, and headless never speaks.
 ///
 /// <para>No default since 2026-10-03 (the user's call): absent or blank, a spoken turn carries no
-/// directive at all, and <c>/vocalia</c> creates the file empty. The built-in directive it replaced
+/// directive at all, and <c>/sys vocalia</c> creates the file empty. The built-in directive it replaced
 /// ("shown on screen and also read aloud … keep it short and in plain spoken language") opened with
 /// a sentence exempting the tool channel, and that lesson is worth keeping for whoever writes one: a
 /// directive that restricts what the model says reads, to a small model, as a rule a tool call could
