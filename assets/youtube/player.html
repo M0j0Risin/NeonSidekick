@@ -42,6 +42,8 @@ let current = null;
 let settled = true;
 let list = null;
 let seek = null;
+let seekStart = 0;
+let seekCue = false;
 
 function videoData() {
   try { return player.getVideoData() || {}; } catch { return {}; }
@@ -55,14 +57,20 @@ function entry() {
   try { const i = player.getPlaylistIndex(); return typeof i === 'number' && i >= 0 ? i : null; } catch { return null; }
 }
 
-// A playlist loaded with a video named: once the player has the list, start at that video (once).
+// A playlist loaded with a video named: once the player has the list, start at that video (once), at the link's time, cued
+// when the load was (2026-10-09, the review: playVideoAt started the video at 0 and played a cued list; the time had gone to the
+// list's first entry).
 function findSought() {
   if (!seek) return;
   const ids = entries();
   if (ids.length === 0) return;
   const i = ids.indexOf(seek);
+  const at = seekStart;
   seek = null;
-  if (i >= 0 && i !== entry()) player.playVideoAt(i);
+  seekStart = 0;
+  if (i < 0 || (i === entry() && at <= 0)) return;
+  const args = { list, listType: 'playlist', index: i, startSeconds: at };
+  if (seekCue) player.cuePlaylist(args); else player.loadPlaylist(args);
 }
 
 function report(why) {
@@ -91,7 +99,7 @@ function failed(code) {
 }
 
 function create(m) {
-  const vars = { playsinline: 1, rel: 0, start: Math.floor(m.start || 0), origin: location.origin };
+  const vars = { playsinline: 1, rel: 0, start: seek ? 0 : Math.floor(m.start || 0), origin: location.origin };
   if (m.list) {
     vars.listType = 'playlist';
     vars.list = m.list;
@@ -120,11 +128,13 @@ function load(m) {
   current = m.id || null;
   list = m.list || null;
   seek = m.list && m.id ? m.id : null;
+  seekStart = seek ? (m.start || 0) : 0;
+  seekCue = m.autoplay === false;
   if (!api) { pending = m; return; }
   if (!player) { create(m); return; }
   settled = false;
   if (m.list) {
-    const args = { list: m.list, listType: 'playlist', index: m.index || 0, startSeconds: m.start || 0 };
+    const args = { list: m.list, listType: 'playlist', index: m.index || 0, startSeconds: seek ? 0 : (m.start || 0) };
     if (m.autoplay === false) player.cuePlaylist(args); else player.loadPlaylist(args);
     return;
   }

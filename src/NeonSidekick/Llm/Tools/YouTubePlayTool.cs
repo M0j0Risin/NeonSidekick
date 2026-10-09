@@ -141,7 +141,7 @@ public sealed class YouTubePlayTool : AIFunction
     {
         if (!YouTubeIds.TryParsePlaylist(named, out string list, out int linkEntry, out string? linkVideo, out double linkStart))
         {
-            return YouTubeText.NotAPlaylist(named);
+            return YouTubeIds.NamesMix(named) ? YouTubeText.Mix(named) : YouTubeText.NotAPlaylist(named);
         }
 
         if (entry is < 1)

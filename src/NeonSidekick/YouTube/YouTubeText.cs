@@ -136,6 +136,10 @@ public static class YouTubeText
     public const string NoVideo = "No video is open; youtube_play opens one.";
 
     /// <summary>A playlist named no way youtube_play reads (2026-10-08).</summary>
+    /// <summary>A mix asked for as a playlist (2026-10-09, the review): YouTube's embedded player cannot play one as a list. Pinned.</summary>
+    public static string Mix(string? text) =>
+        $"Error: \"{text}\" is a YouTube mix, made for one viewer as they watch; the embedded player cannot play it as a list. Play its video (the link's v=) or a playlist (PL…) instead.";
+
     public static string NotAPlaylist(string? text) => $"Error: \"{text}\" names no YouTube playlist: give its id (PL…), a link with list=, or a channel's id (UC…) or link for its uploads.";
 
     /// <summary>next, previous or entry with no playlist in the window (2026-10-08). Pinned.</summary>

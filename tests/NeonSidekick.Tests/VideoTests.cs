@@ -110,6 +110,10 @@ public class VideoTests
         Assert.Contains("player.playVideoAt(m.i)", page);
         Assert.Contains("player.loadPlaylist(args)", page);
         Assert.Contains("player.cuePlaylist(args)", page);
+        // A playlist link's named video starts at its own time, cued when the load was (2026-10-09, the review): never playVideoAt there.
+        Assert.Contains("startSeconds: seek ? 0 : (m.start || 0)", page);
+        Assert.Contains("const args = { list, listType: 'playlist', index: i, startSeconds: at };", page);
+        Assert.DoesNotContain("if (i >= 0 && i !== entry()) player.playVideoAt(i);", page);
         // A playlist's player is made with no videoId key: the API throws on one there but undefined (2026-10-09, the silent window).
         Assert.Contains("if (!m.list) options.videoId = m.id;", page);
         Assert.DoesNotContain("videoId: m.list", page);

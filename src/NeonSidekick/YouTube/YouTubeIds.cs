@@ -80,7 +80,8 @@ public static partial class YouTubeIds
     /// a link with <c>list=</c> (<c>/playlist?list=</c>, <c>/watch?v=…&amp;list=…</c>, <c>youtu.be/…?list=…</c>), or a channel — its id
     /// <c>UC…</c> or a <c>/channel/UC…</c> link — as its uploads list (<c>UU…</c>, <see cref="Uploads"/>). The entry is a link's
     /// <c>index=</c> (1-based there, 0-based here); without one, a watch link's video is where to start (<paramref name="videoId"/>),
-    /// and the start its <c>t=</c>. False when it names no playlist, a plain video link among them.
+    /// and the start its <c>t=</c>. False when it names no playlist, a plain video link among them — and a mix (<see cref="IsMix"/>,
+    /// the review of 2026-10-09): a video shared from one carries <c>&amp;list=RD…&amp;start_radio=1</c>, and such a link plays its video.
     /// </summary>
     public static bool TryParsePlaylist(string? text, out string list, out int entry, out string? videoId, out double start)
     {
@@ -103,7 +104,7 @@ public static partial class YouTubeIds
         if (VideoRequest.IsPlaylistId(text))
         {
             list = text;
-            return true;
+            return !IsMix(text);
         }
 
         string link = text.Contains("://", StringComparison.Ordinal) ? text : "https://" + text;
@@ -126,7 +127,7 @@ public static partial class YouTubeIds
         }
 
         var query = Query(uri.Query);
-        if (query.GetValueOrDefault("list") is not { } named || !VideoRequest.IsPlaylistId(named))
+        if (query.GetValueOrDefault("list") is not { } named || !VideoRequest.IsPlaylistId(named) || IsMix(named))
         {
             return false;
         }
@@ -143,6 +144,30 @@ public static partial class YouTubeIds
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="list"/> is a mix or radio (<c>RD…</c>, 2026-10-09, the review): YouTube makes one for the viewer as they
+    /// watch, and the embedded player cannot load it as a list (the wait for its entry ran to the cap), so it is never played as one.
+    /// </summary>
+    public static bool IsMix(string? list) => list?.StartsWith("RD", StringComparison.Ordinal) == true;
+
+    /// <summary>Whether <paramref name="text"/> names a mix: its id, or a link whose <c>list=</c> is one.</summary>
+    public static bool NamesMix(string? text)
+    {
+        text = text?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        if (IsMix(text) && VideoRequest.IsPlaylistId(text))
+        {
+            return true;
+        }
+
+        string link = text.Contains("://", StringComparison.Ordinal) ? text : "https://" + text;
+        return Uri.TryCreate(link, UriKind.Absolute, out var uri) && IsMix(Query(uri.Query).GetValueOrDefault("list"));
     }
 
     /// <summary>

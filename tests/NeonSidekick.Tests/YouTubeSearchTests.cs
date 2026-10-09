@@ -63,6 +63,8 @@ public class YouTubeSearchTests
     [InlineData("aqz-KE-bpKQ")]                                          // a video id
     [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ")]          // a video link
     [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ&list=WL")] // Watch Later: no public list
+    [InlineData("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1")]   // a mix: its video plays (the review, 2026-10-09)
+    [InlineData("RDdQw4w9WgXcQ")]
     [InlineData("https://example.com/playlist?list=PLabcdefghijklmnopq")]
     [InlineData("https://www.youtube.com/@Blender")]
     [InlineData("lofi beats")]
@@ -70,6 +72,18 @@ public class YouTubeSearchTests
     public void TryParsePlaylist_RefusesWhatNamesNoPlaylist(string? text)
     {
         Assert.False(YouTubeIds.TryParsePlaylist(text, out _, out _, out _, out _));
+    }
+
+    [Fact]
+    public void AMix_IsNoPlaylist_ButItsLinkStillNamesItsVideo()
+    {
+        const string Shared = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1&t=42";
+        Assert.True(YouTubeIds.NamesMix(Shared));
+        Assert.True(YouTubeIds.NamesMix("RDdQw4w9WgXcQ"));
+        Assert.False(YouTubeIds.NamesMix("https://www.youtube.com/playlist?list=PLabcdefghijklmnopq"));
+        Assert.True(YouTubeIds.TryParse(Shared, out string id, out double start));
+        Assert.Equal(("dQw4w9WgXcQ", 42d), (id, start));
+        Assert.StartsWith("Error: \"RDdQw4w9WgXcQ\" is a YouTube mix", YouTubeText.Mix("RDdQw4w9WgXcQ"));
     }
 
     [Fact]
