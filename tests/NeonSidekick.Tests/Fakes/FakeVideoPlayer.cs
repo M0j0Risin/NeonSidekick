@@ -6,7 +6,9 @@ namespace NeonSidekick.Tests.Fakes;
 /// A video window for the tests (2026-10-05, the YouTube plan): every play and command recorded, a play that fails on demand,
 /// and a page made up — <see cref="Report"/> raises a snapshot as the real window's page would, <see cref="Behave"/> answers each
 /// command with one (playing after a play, paused after a pause, the position after a seek…) unless switched off, and
-/// <see cref="CloseByUser"/> is the user's Esc. Raised on the caller's thread, where the real one raises on the window's.
+/// <see cref="CloseByUser"/> is the user's Esc. Raised on the caller's thread, where the real one raises on the window's. A playlist
+/// (2026-10-08) plays <see cref="PlaylistVideos"/>: from the entry asked for (or the video named in it), and next, previous and an
+/// entry move through them as YouTube's player would.
 /// </summary>
 public sealed class FakeVideoPlayer : IVideoPlayer
 {
@@ -32,6 +34,9 @@ public sealed class FakeVideoPlayer : IVideoPlayer
 
     public double Duration { get; set; } = 635;
 
+    /// <summary>The videos any playlist played holds, in order.</summary>
+    public List<string> PlaylistVideos { get; } = ["aqz-KE-bpKQ", "jNQXAC9IVRw", "dQw4w9WgXcQ"];
+
     public VideoSnapshot? Snapshot
     {
         get
@@ -53,12 +58,38 @@ public sealed class FakeVideoPlayer : IVideoPlayer
         }
 
         Plays.Add(request);
-        Report(VideoSnapshot.Opening(request.VideoId) with { Version = (Snapshot?.Version ?? 0) + 1 });
-        if (Behave)
+        Report(VideoSnapshot.Opening(request) with { Version = (Snapshot?.Version ?? 0) + 1 });
+        if (!Behave)
         {
-            Report(new VideoSnapshot(request.Autoplay ? VideoState.Playing : VideoState.Cued, request.VideoId, Title, Author, request.Start, Duration, Snapshot?.Volume ?? 100, Snapshot?.Muted ?? false));
+            return;
         }
+
+        var state = request.Autoplay ? VideoState.Playing : VideoState.Cued;
+        if (request.PlaylistId is { } list)
+        {
+            int named = request.VideoId is { } id ? PlaylistVideos.IndexOf(id) : -1;
+            int entry = named >= 0 ? named : Math.Min(request.Entry, PlaylistVideos.Count - 1);
+            Report(Entry(new VideoSnapshot(state, null, Volume: Snapshot?.Volume ?? 100, Muted: Snapshot?.Muted ?? false, PlaylistId: list), entry) with { State = state, Position = named >= 0 ? request.Start : 0 });
+            return;
+        }
+
+        Report(new VideoSnapshot(state, request.VideoId, Title, Author, request.Start, Duration, Snapshot?.Volume ?? 100, Snapshot?.Muted ?? false));
     }
+
+    // The playlist's entry <paramref name="entry"/>, playing from its start.
+    private VideoSnapshot Entry(VideoSnapshot current, int entry) => current with
+    {
+        State = VideoState.Playing,
+        VideoId = PlaylistVideos[entry],
+        Title = Title + " " + (entry + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        Author = Author,
+        Position = 0,
+        Duration = Duration,
+        Error = null,
+        Skipping = false,
+        PlaylistEntry = entry,
+        PlaylistCount = PlaylistVideos.Count,
+    };
 
     public bool Send(VideoCommand command)
     {
@@ -79,6 +110,9 @@ public sealed class FakeVideoPlayer : IVideoPlayer
                 VideoCommandKind.Volume => current with { Volume = (int)command.Value, Muted = command.Value == 0 && current.Muted },
                 VideoCommandKind.Mute => current with { Muted = true },
                 VideoCommandKind.Unmute => current with { Muted = false },
+                VideoCommandKind.Next when current is { PlaylistId: not null, PlaylistEntry: { } at } && at + 1 < PlaylistVideos.Count => Entry(current, at + 1),
+                VideoCommandKind.Previous when current is { PlaylistId: not null, PlaylistEntry: { } at } => Entry(current, Math.Max(0, at - 1)),
+                VideoCommandKind.PlayAt when current.PlaylistId is not null && (int)command.Value < PlaylistVideos.Count => Entry(current, (int)command.Value),
                 _ => current,
             });
         }

@@ -15,12 +15,21 @@ public enum YouTubeLive
     Upcoming,
 }
 
+/// <summary>What a search looks for, and what a hit is (2026-10-08): a video, a playlist, or a channel.</summary>
+public enum YouTubeKind
+{
+    Video,
+    Playlist,
+    Channel,
+}
+
 /// <summary>
 /// One video a search found: its id, title and channel, when it was published, how long it runs (null for a live broadcast,
 /// which has no length, or when the details call failed), how often it was watched (null when the owner hides it), and
-/// whether it is live.
+/// whether it is live. Or a playlist or a channel (2026-10-08, <see cref="Kind"/>): its id in <see cref="Id"/>, how many videos
+/// it holds (<see cref="Count"/>) and, for a channel, its subscribers (null when hidden or unknown).
 /// </summary>
-public sealed record YouTubeHit(string Id, string Title, string Channel, DateTimeOffset? Published, TimeSpan? Duration, long? Views, YouTubeLive Live = YouTubeLive.None);
+public sealed record YouTubeHit(string Id, string Title, string Channel, DateTimeOffset? Published, TimeSpan? Duration, long? Views, YouTubeLive Live = YouTubeLive.None, YouTubeKind Kind = YouTubeKind.Video, long? Count = null, long? Subscribers = null);
 
 /// <summary>Why a search found nothing to show.</summary>
 public enum YouTubeFailure
@@ -48,6 +57,12 @@ public enum YouTubeFailure
     /// <summary>No answer within <see cref="YouTubeDataApi.Timeout"/>.</summary>
     Timeout,
 
+    /// <summary>A filter YouTube refused (2026-10-08: 400 <c>invalidRegionCode</c>, <c>invalidRelevanceLanguage</c>, <c>invalidParameter</c>…).</summary>
+    BadFilter,
+
+    /// <summary>No such public playlist (2026-10-08: 404 <c>playlistNotFound</c>, or none listed: private, a mix, removed).</summary>
+    NotFound,
+
     /// <summary>Anything else: a status and YouTube's own message.</summary>
     Failed,
 }
@@ -66,11 +81,37 @@ public sealed record YouTubeVideoInfo(string Id, string Title, string Author, do
 /// <summary>A video's title looked up by its id (2026-10-07): <see cref="IYouTubeSearch.LookupAsync"/> with the key in force; null when none was found.</summary>
 public delegate Task<YouTubeVideoInfo?> YouTubeLookup(string videoId, CancellationToken cancellationToken);
 
+/// <summary>A public playlist (2026-10-08): its id, title, channel and how many entries YouTube counts in it.</summary>
+public sealed record YouTubePlaylist(string Id, string Title, string Channel, int Count);
+
+/// <summary>
+/// One entry of a playlist (2026-10-08): its place (0-based, as the player counts), the video, its title and channel. A deleted
+/// or private video stays in a list as YouTube's "Deleted video" or "Private video" with no channel: <see cref="Available"/> false.
+/// </summary>
+public sealed record YouTubePlaylistEntry(int Position, string VideoId, string Title, string Channel, bool Available = true);
+
+/// <summary>A playlist's listing (2026-10-08): the playlist and its first entries, or why there is none (<see cref="YouTubeSearchOutcome"/>'s failures).</summary>
+public sealed record YouTubePlaylistOutcome(YouTubePlaylist? Playlist, IReadOnlyList<YouTubePlaylistEntry> Entries, YouTubeFailure Failure = YouTubeFailure.None, string Detail = "")
+{
+    public bool Ok => Failure == YouTubeFailure.None && Playlist is not null;
+
+    public static YouTubePlaylistOutcome Failed(YouTubeFailure failure, string detail = "") => new(null, [], failure, detail);
+}
+
 /// <summary>The search seam (2026-10-05): <see cref="YouTubeDataApi"/>, the official API with the user's key; a stub in tests.</summary>
 public interface IYouTubeSearch
 {
-    /// <summary>At most <paramref name="max"/> videos for <paramref name="query"/>, asked with <paramref name="apiKey"/>.</summary>
-    Task<YouTubeSearchOutcome> SearchAsync(string query, int max, string apiKey, CancellationToken cancellationToken);
+    /// <summary>
+    /// At most <paramref name="max"/> hits for <paramref name="query"/> under <paramref name="filters"/> (2026-10-08: videos, playlists
+    /// or channels, filtered), asked with <paramref name="apiKey"/>.
+    /// </summary>
+    Task<YouTubeSearchOutcome> SearchAsync(string query, int max, YouTubeSearchFilters filters, string apiKey, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A public playlist and its first <paramref name="max"/> entries (2026-10-08), asked with <paramref name="apiKey"/>: one call for
+    /// the playlist, one per 50 entries.
+    /// </summary>
+    Task<YouTubePlaylistOutcome> PlaylistAsync(string playlistId, int max, string apiKey, CancellationToken cancellationToken);
 
     /// <summary>
     /// One video's title and channel (2026-10-07, a saved video's name): YouTube's oEmbed first, which needs no key, then — when that
@@ -107,6 +148,12 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
     /// <summary>The most one call returns: <c>search.list</c>'s own limit is 50; a tool shows fewer.</summary>
     public const int MaxResults = 50;
 
+    /// <summary>The most entries a playlist listing reads (2026-10-08): four pages of 50, four units.</summary>
+    public const int MaxPlaylistEntries = 200;
+
+    /// <summary>The entries a playlist listing reads unless told otherwise: one page.</summary>
+    public const int DefaultPlaylistEntries = 50;
+
     private const string Category = "YouTube";
     private readonly HttpClient _http;
 
@@ -119,13 +166,92 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
         return Settings.SettingsSecrets.Reveal(effective.YouTubeApiKey) is { Length: > 0 } key && !string.IsNullOrWhiteSpace(key) ? key.Trim() : null;
     }
 
+    /// <summary>The search's count under <paramref name="effective"/>: the setting, held to its range (2026-10-08, one place for the tool, <c>/youtube</c> and headless).</summary>
+    public static int DefaultCount(Settings.AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return Math.Clamp(effective.YouTubeSearchMaxResults, Settings.AppSettingsData.MinYouTubeSearchMaxResults, Settings.AppSettingsData.MaxYouTubeSearchMaxResults);
+    }
+
     /// <summary>The <c>search.list</c> address for <paramref name="query"/> (no key in it). Pinned.</summary>
-    public static Uri SearchUrl(string query, int max) =>
-        new(Endpoint, "search?part=snippet&type=video&videoEmbeddable=true&maxResults=" + Math.Clamp(max, 1, MaxResults).ToString(CultureInfo.InvariantCulture) + "&q=" + Uri.EscapeDataString(query.Trim()));
+    public static Uri SearchUrl(string query, int max) => SearchUrl(query, max, YouTubeSearchFilters.None);
+
+    /// <summary>
+    /// The <c>search.list</c> address for <paramref name="query"/> under <paramref name="filters"/> (2026-10-08): <c>type</c> the kind,
+    /// a video search still only embeddable ones; each filter added only when set (the plain address unchanged), the video-only ones
+    /// (length, live, captions) only on a video search, and safe search only when it is not YouTube's own moderate. Pinned.
+    /// </summary>
+    public static Uri SearchUrl(string query, int max, YouTubeSearchFilters filters)
+    {
+        ArgumentNullException.ThrowIfNull(filters);
+        bool video = filters.Kind == YouTubeKind.Video;
+        var url = new System.Text.StringBuilder("search?part=snippet&type=");
+        url.Append(filters.Kind switch { YouTubeKind.Playlist => "playlist", YouTubeKind.Channel => "channel", _ => "video" });
+        if (video)
+        {
+            url.Append("&videoEmbeddable=true");
+        }
+
+        url.Append("&maxResults=").Append(Math.Clamp(max, 1, MaxResults).ToString(CultureInfo.InvariantCulture)).Append("&q=").Append(Uri.EscapeDataString(query.Trim()));
+        if (YouTubeSearchFilters.ApiOrder(filters.Order) is { } order && order != "relevance")
+        {
+            url.Append("&order=").Append(order);
+        }
+
+        if (filters.Since is { } since)
+        {
+            url.Append("&publishedAfter=").Append(Uri.EscapeDataString(since.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)));
+        }
+
+        if (filters.Region.Length > 0)
+        {
+            url.Append("&regionCode=").Append(filters.Region);
+        }
+
+        if (filters.Language.Length > 0)
+        {
+            url.Append("&relevanceLanguage=").Append(filters.Language);
+        }
+
+        if (video && filters.Length is "short" or "medium" or "long")
+        {
+            url.Append("&videoDuration=").Append(filters.Length);
+        }
+
+        if (video && filters.Live)
+        {
+            url.Append("&eventType=live");
+        }
+
+        if (video && filters.Captions)
+        {
+            url.Append("&videoCaption=closedCaption");
+        }
+
+        if (filters.SafeSearch is "none" or "strict")
+        {
+            url.Append("&safeSearch=").Append(filters.SafeSearch);
+        }
+
+        return new Uri(Endpoint, url.ToString());
+    }
 
     /// <summary>The <c>videos.list</c> address for <paramref name="ids"/>. Pinned.</summary>
     public static Uri VideosUrl(IEnumerable<string> ids) =>
         new(Endpoint, "videos?part=contentDetails,statistics&id=" + string.Join(",", ids));
+
+    /// <summary>The <c>playlists.list</c> address for <paramref name="ids"/>' titles, channels and counts (2026-10-08). Pinned.</summary>
+    public static Uri PlaylistsUrl(IEnumerable<string> ids) =>
+        new(Endpoint, "playlists?part=snippet,contentDetails&id=" + string.Join(",", ids.Select(Uri.EscapeDataString)));
+
+    /// <summary>The <c>channels.list</c> address for <paramref name="ids"/>' subscriber and video counts (2026-10-08). Pinned.</summary>
+    public static Uri ChannelsUrl(IEnumerable<string> ids) =>
+        new(Endpoint, "channels?part=statistics&id=" + string.Join(",", ids.Select(Uri.EscapeDataString)));
+
+    /// <summary>The <c>playlistItems.list</c> address for a page of <paramref name="playlistId"/>'s entries (2026-10-08). Pinned.</summary>
+    public static Uri PlaylistItemsUrl(string playlistId, int max, string? pageToken = null) =>
+        new(Endpoint, "playlistItems?part=snippet&maxResults=" + Math.Clamp(max, 1, MaxResults).ToString(CultureInfo.InvariantCulture)
+            + "&playlistId=" + Uri.EscapeDataString(playlistId) + (string.IsNullOrEmpty(pageToken) ? "" : "&pageToken=" + Uri.EscapeDataString(pageToken)));
 
     /// <summary>YouTube's oEmbed address for <paramref name="videoId"/>'s watch page (2026-10-07): no key. Pinned.</summary>
     public static Uri OEmbedUrl(string videoId) =>
@@ -194,37 +320,108 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
         return null;
     }
 
-    public async Task<YouTubeSearchOutcome> SearchAsync(string query, int max, string apiKey, CancellationToken cancellationToken)
+    public async Task<YouTubeSearchOutcome> SearchAsync(string query, int max, YouTubeSearchFilters filters, string apiKey, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(filters);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             return YouTubeSearchOutcome.Failed(YouTubeFailure.NoKey);
         }
 
-        var (body, failure) = await GetAsync(SearchUrl(query, max), apiKey, cancellationToken).ConfigureAwait(false);
+        var (body, failure) = await GetAsync(SearchUrl(query, max, filters), apiKey, cancellationToken).ConfigureAwait(false);
         if (failure is { } refused)
         {
             DiagnosticLog.Info(Category, $"search \"{query}\": {refused.Failure} {refused.Detail}");
             return refused;
         }
 
-        var hits = ParseSearch(body!);
+        // The details call follows the kind (2026-10-08): a video's length and views, a playlist's count, a channel's subscribers
+        // and videos; one unit whichever.
+        var hits = ParseSearch(body!, filters.Kind);
         if (hits.Count > 0)
         {
-            var (details, detailFailure) = await GetAsync(VideosUrl(hits.Select(h => h.Id)), apiKey, cancellationToken).ConfigureAwait(false);
+            var ids = hits.Select(h => h.Id);
+            var detailsUrl = filters.Kind switch
+            {
+                YouTubeKind.Playlist => PlaylistsUrl(ids),
+                YouTubeKind.Channel => ChannelsUrl(ids),
+                _ => VideosUrl(ids),
+            };
+            var (details, detailFailure) = await GetAsync(detailsUrl, apiKey, cancellationToken).ConfigureAwait(false);
             if (detailFailure is null)
             {
-                hits = WithDetails(hits, ParseVideos(details!));
+                hits = filters.Kind switch
+                {
+                    YouTubeKind.Playlist => WithCounts(hits, ParsePlaylists(details!)),
+                    YouTubeKind.Channel => WithChannels(hits, ParseChannels(details!)),
+                    _ => WithDetails(hits, ParseVideos(details!)),
+                };
             }
             else
             {
-                DiagnosticLog.Info(Category, $"videos.list for \"{query}\": {detailFailure.Failure} {detailFailure.Detail}; the hits kept without lengths.");
+                DiagnosticLog.Info(Category, $"details for \"{query}\": {detailFailure.Failure} {detailFailure.Detail}; the hits kept without them.");
             }
         }
 
-        DiagnosticLog.Info(Category, $"search \"{query}\": {hits.Count.ToString(CultureInfo.InvariantCulture)} videos.");
+        DiagnosticLog.Info(Category, $"search \"{query}\" ({filters.Kind}): {hits.Count.ToString(CultureInfo.InvariantCulture)} found.");
         return new YouTubeSearchOutcome(hits);
+    }
+
+    public async Task<YouTubePlaylistOutcome> PlaylistAsync(string playlistId, int max, string apiKey, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(playlistId);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return YouTubePlaylistOutcome.Failed(YouTubeFailure.NoKey);
+        }
+
+        var (body, failure) = await GetAsync(PlaylistsUrl([playlistId]), apiKey, cancellationToken).ConfigureAwait(false);
+        if (failure is { } refused)
+        {
+            DiagnosticLog.Info(Category, $"playlist {playlistId}: {refused.Failure} {refused.Detail}");
+            return YouTubePlaylistOutcome.Failed(refused.Failure, refused.Detail);
+        }
+
+        // A list playlists.list does not name (a channel's uploads may be one) is still read for its entries; its title is then its id,
+        // its count what was read, and only the entries' own refusal says there is no such list.
+        bool listed = ParsePlaylists(body!).TryGetValue(playlistId, out var playlist);
+        if (!listed)
+        {
+            DiagnosticLog.Info(Category, $"playlist {playlistId}: playlists.list names none; reading its entries anyway.");
+        }
+
+        var entries = new List<YouTubePlaylistEntry>();
+        string? page = null;
+        int want = Math.Clamp(max, 1, MaxPlaylistEntries);
+        do
+        {
+            (body, failure) = await GetAsync(PlaylistItemsUrl(playlistId, want - entries.Count, page), apiKey, cancellationToken).ConfigureAwait(false);
+            if (failure is { } stopped)
+            {
+                DiagnosticLog.Info(Category, $"playlist {playlistId} entries: {stopped.Failure} {stopped.Detail}");
+                if (entries.Count == 0)
+                {
+                    return YouTubePlaylistOutcome.Failed(!listed && stopped.Failure == YouTubeFailure.Failed ? YouTubeFailure.NotFound : stopped.Failure, stopped.Detail);
+                }
+
+                break;   // the pages read so far stand
+            }
+
+            var (read, next) = ParsePlaylistItems(body!);
+            entries.AddRange(read);
+            page = next;
+        }
+        while (page is not null && entries.Count < want);
+
+        if (!listed && entries.Count == 0)
+        {
+            return YouTubePlaylistOutcome.Failed(YouTubeFailure.NotFound);
+        }
+
+        playlist ??= new YouTubePlaylist(playlistId, "", "", entries.Count);
+        DiagnosticLog.Info(Category, $"playlist {playlistId}: {entries.Count.ToString(CultureInfo.InvariantCulture)} of {playlist.Count.ToString(CultureInfo.InvariantCulture)} entries read.");
+        return new YouTubePlaylistOutcome(playlist, entries.Take(want).ToList());
     }
 
     // One GET: the body, or the outcome that says why there is none. No key (oEmbed's) sends no key header.
@@ -294,19 +491,26 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
             _ when Has("keyInvalid", "keyExpired", "API_KEY_INVALID", "API_KEY_EXPIRED") || (status == HttpStatusCode.BadRequest && message.Contains("API key", StringComparison.OrdinalIgnoreCase)) => YouTubeFailure.KeyInvalid,
             _ when Has("accessNotConfigured", "SERVICE_DISABLED") => YouTubeFailure.NotEnabled,
             _ when Has("ipRefererBlocked", "API_KEY_HTTP_REFERRER_BLOCKED", "API_KEY_IP_ADDRESS_BLOCKED", "API_KEY_SERVICE_BLOCKED", "API_KEY_ANDROID_APP_BLOCKED", "API_KEY_IOS_APP_BLOCKED") => YouTubeFailure.KeyRestricted,
+            _ when Has("playlistNotFound", "playlistItemsNotAccessible") => YouTubeFailure.NotFound,
+            _ when Has("invalidRegionCode", "invalidRelevanceLanguage", "invalidPublishedAfter", "invalidParameter", "invalidSearchFilter") => YouTubeFailure.BadFilter,
             _ => YouTubeFailure.Failed,
         };
         string status3 = ((int)status).ToString(CultureInfo.InvariantCulture);
         return YouTubeSearchOutcome.Failed(failure, message.Length > 0 ? $"HTTP {status3}: {message}" : $"HTTP {status3}");
     }
 
-    /// <summary><c>search.list</c>'s <c>items[]</c>: <c>id.videoId</c> and the snippet's title, channel, date and live state. Pure; pinned.</summary>
-    public static IReadOnlyList<YouTubeHit> ParseSearch(string json)
+    /// <summary>
+    /// <c>search.list</c>'s <c>items[]</c> of <paramref name="kind"/> (2026-10-08: a video's <c>id.videoId</c>, a playlist's
+    /// <c>id.playlistId</c>, a channel's <c>id.channelId</c>; any other kind passed over) and the snippet's title, channel, date and
+    /// live state. Pure; pinned.
+    /// </summary>
+    public static IReadOnlyList<YouTubeHit> ParseSearch(string json, YouTubeKind kind = YouTubeKind.Video)
     {
+        string field = kind switch { YouTubeKind.Playlist => "playlistId", YouTubeKind.Channel => "channelId", _ => "videoId" };
         var hits = new List<YouTubeHit>();
         foreach (var item in Items(json))
         {
-            if (!item.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.Object || Text(id, "videoId") is not { Length: > 0 } videoId
+            if (!item.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.Object || Text(id, field) is not { Length: > 0 } videoId
                 || !item.TryGetProperty("snippet", out var snippet) || snippet.ValueKind != JsonValueKind.Object)
             {
                 continue;
@@ -319,10 +523,87 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
                 "upcoming" => YouTubeLive.Upcoming,
                 _ => YouTubeLive.None,
             };
-            hits.Add(new YouTubeHit(videoId, WebUtility.HtmlDecode(Text(snippet, "title")), WebUtility.HtmlDecode(Text(snippet, "channelTitle")), published, null, null, live));
+            hits.Add(new YouTubeHit(videoId, WebUtility.HtmlDecode(Text(snippet, "title")), WebUtility.HtmlDecode(Text(snippet, "channelTitle")), published, null, null, live, kind));
         }
 
         return hits;
+    }
+
+    /// <summary><c>playlists.list</c>'s <c>items[]</c> (2026-10-08): each id's title, channel and <c>contentDetails.itemCount</c>. Pure; pinned.</summary>
+    public static IReadOnlyDictionary<string, YouTubePlaylist> ParsePlaylists(string json)
+    {
+        var playlists = new Dictionary<string, YouTubePlaylist>(StringComparer.Ordinal);
+        foreach (var item in Items(json))
+        {
+            if (Text(item, "id") is not { Length: > 0 } id)
+            {
+                continue;
+            }
+
+            bool hasSnippet = item.TryGetProperty("snippet", out var snippet) && snippet.ValueKind == JsonValueKind.Object;
+            int count = item.TryGetProperty("contentDetails", out var content) && content.ValueKind == JsonValueKind.Object
+                && content.TryGetProperty("itemCount", out var items) && items.ValueKind == JsonValueKind.Number && items.TryGetInt32(out int n) ? n : 0;
+            playlists[id] = new YouTubePlaylist(id, hasSnippet ? WebUtility.HtmlDecode(Text(snippet, "title")) : "", hasSnippet ? WebUtility.HtmlDecode(Text(snippet, "channelTitle")) : "", count);
+        }
+
+        return playlists;
+    }
+
+    /// <summary>
+    /// <c>channels.list</c>'s <c>items[]</c> (2026-10-08): each id's subscribers (null when the channel hides them) and videos. Pure; pinned.
+    /// </summary>
+    public static IReadOnlyDictionary<string, (long? Subscribers, long? Videos)> ParseChannels(string json)
+    {
+        var channels = new Dictionary<string, (long?, long?)>(StringComparer.Ordinal);
+        foreach (var item in Items(json))
+        {
+            if (Text(item, "id") is not { Length: > 0 } id || !item.TryGetProperty("statistics", out var stats) || stats.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            bool hidden = stats.TryGetProperty("hiddenSubscriberCount", out var flag) && flag.ValueKind == JsonValueKind.True;
+            long? subscribers = !hidden && long.TryParse(Text(stats, "subscriberCount"), NumberStyles.None, CultureInfo.InvariantCulture, out long s) ? s : null;
+            long? videos = long.TryParse(Text(stats, "videoCount"), NumberStyles.None, CultureInfo.InvariantCulture, out long v) ? v : null;
+            channels[id] = (subscribers, videos);
+        }
+
+        return channels;
+    }
+
+    /// <summary>
+    /// A <c>playlistItems.list</c> page (2026-10-08): its entries — <c>snippet.position</c>, <c>resourceId.videoId</c>, the title and
+    /// <c>videoOwnerChannelTitle</c>, which a deleted or private video has none of — and the next page's token (null on the last). Pure; pinned.
+    /// </summary>
+    public static (IReadOnlyList<YouTubePlaylistEntry> Entries, string? NextPage) ParsePlaylistItems(string json)
+    {
+        var entries = new List<YouTubePlaylistEntry>();
+        foreach (var item in Items(json))
+        {
+            if (!item.TryGetProperty("snippet", out var snippet) || snippet.ValueKind != JsonValueKind.Object
+                || !snippet.TryGetProperty("resourceId", out var resource) || resource.ValueKind != JsonValueKind.Object
+                || Text(resource, "videoId") is not { Length: > 0 } videoId)
+            {
+                continue;
+            }
+
+            int position = snippet.TryGetProperty("position", out var at) && at.ValueKind == JsonValueKind.Number && at.TryGetInt32(out int p) ? p : entries.Count;
+            string owner = WebUtility.HtmlDecode(Text(snippet, "videoOwnerChannelTitle"));
+            entries.Add(new YouTubePlaylistEntry(position, videoId, WebUtility.HtmlDecode(Text(snippet, "title")), owner, owner.Length > 0));
+        }
+
+        string? next = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            next = doc.RootElement.ValueKind == JsonValueKind.Object && Text(doc.RootElement, "nextPageToken") is { Length: > 0 } token ? token : null;
+        }
+        catch (JsonException)
+        {
+            // Items() said the same: no page.
+        }
+
+        return (entries, next);
     }
 
     /// <summary><c>videos.list</c>'s <c>items[]</c>: each id's length (<c>contentDetails.duration</c>, ISO 8601) and view count. Pure; pinned.</summary>
@@ -360,6 +641,12 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
 
     private static IReadOnlyList<YouTubeHit> WithDetails(IReadOnlyList<YouTubeHit> hits, IReadOnlyDictionary<string, (TimeSpan? Duration, long? Views)> details) =>
         hits.Select(h => details.TryGetValue(h.Id, out var d) ? h with { Duration = d.Duration, Views = d.Views } : h).ToArray();
+
+    private static IReadOnlyList<YouTubeHit> WithCounts(IReadOnlyList<YouTubeHit> hits, IReadOnlyDictionary<string, YouTubePlaylist> playlists) =>
+        hits.Select(h => playlists.TryGetValue(h.Id, out var p) ? h with { Count = p.Count } : h).ToArray();
+
+    private static IReadOnlyList<YouTubeHit> WithChannels(IReadOnlyList<YouTubeHit> hits, IReadOnlyDictionary<string, (long? Subscribers, long? Videos)> channels) =>
+        hits.Select(h => channels.TryGetValue(h.Id, out var c) ? h with { Subscribers = c.Subscribers, Count = c.Videos } : h).ToArray();
 
     private static List<JsonElement> Items(string json)
     {

@@ -21,11 +21,12 @@ internal sealed partial class ChatScreen
     /// The YouTube tools (2026-10-05): <c>youtube_search</c> over <paramref name="search"/>, and — with a video window,
     /// <paramref name="player"/> — <c>youtube_play</c>, <c>youtube_control</c> and <c>youtube_status</c>; with the profile's saved
     /// videos, <paramref name="library"/> (2026-10-07), <c>youtube_saved</c> and <c>youtube_save</c> too, the play resuming a saved one.
-    /// Headless passes no player: the search and the saved videos. Shared with headless.
+    /// <c>youtube_playlist</c> (2026-10-08) beside the search, listing the playing playlist when there is a player. Headless passes no
+    /// player: the search, the playlist listing and the saved videos. Shared with headless.
     /// </summary>
     public static IReadOnlyList<AIFunction> YouTubeTools(IYouTubeSearch search, IVideoPlayer? player, Func<AppSettingsData> effective, TimeProvider? time = null, Func<YouTubeLibrary>? library = null)
     {
-        var tools = new List<AIFunction> { new YouTubeSearchTool(search, effective) };
+        var tools = new List<AIFunction> { new YouTubeSearchTool(search, effective, time), new YouTubePlaylistTool(search, effective, player) };
         if (player is not null)
         {
             tools.AddRange([new YouTubePlayTool(player, effective, time, library), new YouTubeControlTool(player, time), new YouTubeStatusTool(player)]);
@@ -40,11 +41,14 @@ internal sealed partial class ChatScreen
         return tools;
     }
 
-    /// <summary>The YouTube tools a turn may offer under <paramref name="effective"/>: <c>youtube_search</c> only while a key is set (playing needs none).</summary>
+    /// <summary>
+    /// The YouTube tools a turn may offer under <paramref name="effective"/>: <c>youtube_search</c> and <c>youtube_playlist</c> only while a
+    /// key is set (playing needs none).
+    /// </summary>
     public static IReadOnlyList<AIFunction> YouTubeToolsFor(IReadOnlyList<AIFunction> tools, AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(tools);
-        return YouTubeDataApi.Key(effective) is null ? tools.Where(t => t is not YouTubeSearchTool).ToList() : tools;
+        return YouTubeDataApi.Key(effective) is null ? tools.Where(t => t is not (YouTubeSearchTool or YouTubePlaylistTool)).ToList() : tools;
     }
 
     /// <summary>Whether the YouTube group is offered: <c>YouTube tools</c> on and a tool left after the cut (a key, or a window to play in).</summary>
@@ -97,7 +101,13 @@ internal sealed partial class ChatScreen
 
         if (line.Verb == YouTubeVerb.Search)
         {
-            await SearchYouTubeAsync(line.Text, sink, spinner, cancellationToken).ConfigureAwait(false);
+            await SearchYouTubeAsync(line.Text, line.Choices ?? YouTubeSearchChoices.None, sink, spinner, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (line.Verb == YouTubeVerb.Playlist)
+        {
+            await ShowPlaylistAsync(line.PlaylistId, sink, spinner, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -139,11 +149,17 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        string result = line.Verb switch
+        if (line.Verb == YouTubeVerb.Status)
         {
-            YouTubeVerb.Status => YouTubeText.Status(player.Snapshot),
-            YouTubeVerb.Play => await PlayVideoAsync(player, line.VideoId!, line.Number, cancellationToken).ConfigureAwait(false),
-            _ => await ControlVideoAsync(player, line.Verb switch
+            Show(YouTubeText.Status(player.Snapshot), sink);
+            return;
+        }
+
+        ShowWatched(await WatchPlayerAsync(token => line.Verb switch
+        {
+            YouTubeVerb.Play when line.PlaylistId is { } list => PlayPlaylistAsync(player, list, line.Entry, line.VideoId, line.Number, token),
+            YouTubeVerb.Play => PlayVideoAsync(player, line.VideoId!, line.Number, token),
+            _ => ControlVideoAsync(player, line.Verb switch
             {
                 YouTubeVerb.Resume => "play",
                 YouTubeVerb.Pause => "pause",
@@ -151,14 +167,17 @@ internal sealed partial class ChatScreen
                 YouTubeVerb.Volume => "volume",
                 YouTubeVerb.Mute => "mute",
                 YouTubeVerb.Unmute => "unmute",
+                YouTubeVerb.Next => "next",
+                YouTubeVerb.Previous => "previous",
+                YouTubeVerb.Entry => "entry",
                 _ => "close",
-            }, line.Number, cancellationToken).ConfigureAwait(false),
-        };
-        Show(result, sink);
+            }, line.Number, token),
+        }, spinner, cancellationToken).ConfigureAwait(false), sink, cancellationToken);
     }
 
-    // The search: the key's refusal, the hits on the picker (Enter plays), or listed where there is no pane or no window.
-    private async Task SearchYouTubeAsync(string query, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
+    // The search: the key's refusal, the hits on the picker (Enter plays), or listed where there is no pane or no window. Its switches
+    // (2026-10-08) are checked over the saved choices first; a playlist plays from its first entry and a channel its uploads.
+    private async Task SearchYouTubeAsync(string query, YouTubeSearchChoices choices, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
     {
         var effective = _effective();
         if (YouTubeDataApi.Key(effective) is not { } key)
@@ -167,8 +186,15 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        int count = Math.Clamp(effective.YouTubeSearchMaxResults, AppSettingsData.MinYouTubeSearchMaxResults, AppSettingsData.MaxYouTubeSearchMaxResults);
-        var search = () => _youTubeSearch.SearchAsync(query, count, key, cancellationToken);
+        var (filters, error) = choices.Resolve(effective, _time.GetUtcNow());
+        if (filters is null)
+        {
+            Show(error!, sink);
+            return;
+        }
+
+        int count = YouTubeDataApi.DefaultCount(effective);
+        var search = () => _youTubeSearch.SearchAsync(query, count, filters, key, cancellationToken);
         var outcome = spinner ? await _transcript.WithSpinnerAsync(YouTubeText.Searching, search).ConfigureAwait(false) : await search().ConfigureAwait(false);
         if (!outcome.Ok)
         {
@@ -179,7 +205,7 @@ internal sealed partial class ChatScreen
         var hits = outcome.Hits.Take(count).ToList();
         if (hits.Count == 0 || !_pane.Enabled || _videoPlayer is not { } player)
         {
-            foreach (string row in YouTubeText.Results(query, hits).Split('\n'))
+            foreach (string row in YouTubeText.Results(query, hits, filters.Kind).Split('\n'))
             {
                 sink.Notice(row);
             }
@@ -187,23 +213,112 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // Enter plays the hit; s saves it (2026-10-07), the picker kept open with the answer on its status line.
-        var rows = hits.Select(YouTubeText.PickRow).ToList();
+        // Enter plays the hit; s saves it (2026-10-07), the picker kept open with the answer on its status line. The pane's pick leaves
+        // it open for the next page, so it is closed here: as Enter plays (before the wait, whose spinner takes its place) and after
+        // ESC (2026-10-09, the user's report: since 2026-10-07's save button the picker stayed drawn over the input row after either,
+        // the keys reaching a line no one could see).
+        var rows = YouTubeText.PickRows(hits);
         int cursor = 0;
         var footers = hits.Select(YouTubeText.PickFooter).ToList();
-        while (await _menu.PickVideoAsync(YouTubeText.PickTitle(query), rows, cursor, cancellationToken, footers).ConfigureAwait(false) is { } picked)
+        try
         {
-            var hit = hits[picked.Row];
-            if (!picked.Save)
+            while (await _menu.PickVideoAsync(YouTubeText.PickTitle(query), rows, cursor, cancellationToken, footers).ConfigureAwait(false) is { } picked)
             {
-                Show(await PlayVideoAsync(player, hit.Id, null, cancellationToken).ConfigureAwait(false), sink);
-                return;
+                var hit = hits[picked.Row];
+                if (!picked.Save)
+                {
+                    _menuPane.Close();
+                    ShowWatched(await WatchPlayerAsync(token => hit.Kind switch
+                    {
+                        YouTubeKind.Playlist => PlayPlaylistAsync(player, hit.Id, null, null, null, token),
+                        YouTubeKind.Channel => PlayPlaylistAsync(player, YouTubeIds.Uploads(hit.Id) ?? hit.Id, null, null, null, token),
+                        _ => PlayVideoAsync(player, hit.Id, null, token),
+                    }, spinner, cancellationToken).ConfigureAwait(false), sink, cancellationToken);
+                    return;
+                }
+
+                cursor = picked.Row;
+                if (hit.Kind != YouTubeKind.Video)
+                {
+                    _menuPane.Notice(YouTubeText.SaveVideosOnly(hit.Kind));
+                    continue;
+                }
+
+                var library = YouTubeLibraryNow();
+                var added = library.Add(hit.Id, hit.Title, hit.Channel, hit.Duration?.TotalSeconds ?? 0);
+                Show(library.Find(hit.Id) is { } saved ? YouTubeText.Saved(saved, added) : "Error: " + YouTubeText.SaveFailed, _menuPane);
+            }
+        }
+        finally
+        {
+            _menuPane.Close();
+        }
+    }
+
+    /// <summary>
+    /// <c>/youtube playlist [&lt;id|link&gt;]</c> (2026-10-08): the playlist named (or the one playing) read with the key, its entries on the
+    /// picker — Enter plays the playlist from the highlighted one, <c>s</c> saves that video — or listed where there is no pane or no window.
+    /// </summary>
+    private async Task ShowPlaylistAsync(string? named, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
+    {
+        var effective = _effective();
+        if (YouTubeDataApi.Key(effective) is not { } key)
+        {
+            sink.Error(YouTubeText.NoKeyForPlaylist);
+            return;
+        }
+
+        if ((named ?? _videoPlayer?.Snapshot?.PlaylistId) is not { } list)
+        {
+            Show(YouTubeText.NoPlaylistNamed, sink);
+            return;
+        }
+
+        var read = () => _youTubeSearch.PlaylistAsync(list, YouTubeDataApi.MaxPlaylistEntries, key, cancellationToken);
+        var outcome = spinner ? await _transcript.WithSpinnerAsync(YouTubeText.ReadingPlaylist, read).ConfigureAwait(false) : await read().ConfigureAwait(false);
+        if (!outcome.Ok)
+        {
+            Show(YouTubeText.Failure(outcome.Failure, outcome.Detail), sink);
+            return;
+        }
+
+        var playlist = outcome.Playlist!;
+        var entries = outcome.Entries;
+        if (entries.Count == 0 || !_pane.Enabled || _videoPlayer is not { } player)
+        {
+            foreach (string row in YouTubeText.PlaylistEntries(playlist, entries).Split('\n'))
+            {
+                sink.Notice(row);
             }
 
-            var library = YouTubeLibraryNow();
-            var added = library.Add(hit.Id, hit.Title, hit.Channel, hit.Duration?.TotalSeconds ?? 0);
-            Show(library.Find(hit.Id) is { } saved ? YouTubeText.Saved(saved, added) : "Error: " + YouTubeText.SaveFailed, _menuPane);
-            cursor = picked.Row;
+            return;
+        }
+
+        var rows = YouTubeText.PlaylistPickRows(entries);
+        var footers = entries.Select(e => YouTubeText.PlaylistPickFooter(playlist, e)).ToList();
+        int cursor = player.Snapshot is { PlaylistId: { } playing, PlaylistEntry: { } at } && playing == list ? Math.Clamp(at, 0, entries.Count - 1) : 0;
+        // Closed as Enter plays and after ESC, the search picker's way (2026-10-09).
+        try
+        {
+            while (await _menu.PickVideoAsync(YouTubeText.PlaylistPickTitle(playlist), rows, cursor, cancellationToken, footers).ConfigureAwait(false) is { } picked)
+            {
+                var entry = entries[picked.Row];
+                if (!picked.Save)
+                {
+                    _menuPane.Close();
+                    ShowWatched(await WatchPlayerAsync(token => PlayPlaylistAsync(player, list, entry.Position, null, null, token), spinner, cancellationToken).ConfigureAwait(false), sink, cancellationToken);
+                    return;
+                }
+
+                cursor = picked.Row;
+                var library = YouTubeLibraryNow();
+                var added = library.Add(entry.VideoId, entry.Title, entry.Channel, 0);
+                Show(library.Find(entry.VideoId) is { } saved ? YouTubeText.Saved(saved, added) : "Error: " + YouTubeText.SaveFailed, _menuPane);
+            }
+        }
+        finally
+        {
+            _menuPane.Close();
         }
     }
 
@@ -269,6 +384,28 @@ internal sealed partial class ChatScreen
         return (string)(await new YouTubePlayTool(player, _effective, _time, YouTubeLibraryNow).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!;
     }
 
+    // A playlist through youtube_play (2026-10-08): from entry (0-based here, 1-based on the tool), or the video named in it.
+    private async Task<string> PlayPlaylistAsync(IVideoPlayer player, string list, int? entry, string? video, double? start, CancellationToken cancellationToken)
+    {
+        var arguments = new AIFunctionArguments { [YouTubePlayTool.PlaylistArgument] = list };
+        if (entry is { } at)
+        {
+            arguments[YouTubePlayTool.EntryArgument] = at + 1;
+        }
+
+        if (video is not null)
+        {
+            arguments[YouTubePlayTool.VideoArgument] = video;
+        }
+
+        if (start is { } seconds)
+        {
+            arguments[YouTubePlayTool.StartArgument] = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return (string)(await new YouTubePlayTool(player, _effective, _time, YouTubeLibraryNow).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!;
+    }
+
     private async Task<string> ControlVideoAsync(IVideoPlayer player, string action, double? value, CancellationToken cancellationToken)
     {
         var arguments = new AIFunctionArguments { [YouTubeControlTool.ActionArgument] = action };
@@ -278,6 +415,37 @@ internal sealed partial class ChatScreen
         }
 
         return (string)(await new YouTubeControlTool(player, _time).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!;
+    }
+
+    /// <summary>
+    /// A play, or a move through the window's video, waited for under a spinner that ESC or Ctrl+C cancels (2026-10-09, the user's
+    /// report: a channel picked from a search opened a window the page never started, and the screen sat on the picker, keys dead,
+    /// for the whole <see cref="YouTubeWait.Play"/>). Only the wait stops; the window carries on. Under a reply's own watch, or with
+    /// no spinner (a line run mid-turn), the plain wait. Null when a key stopped it.
+    /// </summary>
+    private async Task<string?> WatchPlayerAsync(Func<CancellationToken, Task<string>> wait, bool spinner, CancellationToken cancellationToken)
+    {
+        if (!spinner || _turnRunning)
+        {
+            return await wait(cancellationToken).ConfigureAwait(false);
+        }
+
+        string? answer = null;
+        await UnderWatchAsync(YouTubeText.WaitingForPlayer, async token => answer = await wait(token).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        return answer;
+    }
+
+    // WatchPlayerAsync's answer: the player's, or the wait stopped by a key (nothing when the app itself is stopping).
+    private static void ShowWatched(string? result, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (result is not null)
+        {
+            Show(result, sink);
+        }
+        else if (!cancellationToken.IsCancellationRequested)
+        {
+            sink.Notice(YouTubeText.StoppedWaiting);
+        }
     }
 
     private static void Show(string result, INoticeSink sink)
@@ -297,6 +465,7 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlySet<string> YouTubeToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
         YouTubeSearchTool.ToolName,
+        YouTubePlaylistTool.ToolName,
         YouTubePlayTool.ToolName,
         YouTubeControlTool.ToolName,
         YouTubeStatusTool.ToolName,

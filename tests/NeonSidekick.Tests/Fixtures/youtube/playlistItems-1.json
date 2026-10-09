@@ -1,0 +1,40 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "i0",
+  "nextPageToken": "EAAaBlBUOkNBSQ",
+  "pageInfo": { "totalResults": 3, "resultsPerPage": 2 },
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "i1",
+      "id": "UExhYmMuMQ",
+      "snippet": {
+        "publishedAt": "2019-03-01T10:00:00Z",
+        "channelId": "UCSMOQeBJ2RAnuFungnQOxLg",
+        "title": "Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film",
+        "channelTitle": "Blender",
+        "playlistId": "PLabcdefghijklmnopq",
+        "position": 0,
+        "resourceId": { "kind": "youtube#video", "videoId": "aqz-KE-bpKQ" },
+        "videoOwnerChannelTitle": "Blender",
+        "videoOwnerChannelId": "UCSMOQeBJ2RAnuFungnQOxLg"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "i2",
+      "id": "UExhYmMuMg",
+      "snippet": {
+        "publishedAt": "2019-03-01T10:00:00Z",
+        "channelId": "UCSMOQeBJ2RAnuFungnQOxLg",
+        "title": "Me at the zoo &amp; more",
+        "channelTitle": "Blender",
+        "playlistId": "PLabcdefghijklmnopq",
+        "position": 1,
+        "resourceId": { "kind": "youtube#video", "videoId": "jNQXAC9IVRw" },
+        "videoOwnerChannelTitle": "jawed",
+        "videoOwnerChannelId": "UC4QobU6STFB0P71PMvOGN5A"
+      }
+    }
+  ]
+}

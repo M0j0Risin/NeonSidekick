@@ -176,7 +176,11 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/window` | Shows the terminal window's size. |
 | `/youtube`, `/youtube status` | Says what the video window is playing. |
 | `/youtube <words>` | Searches YouTube (with a *YouTube API key*; 100 quota units a search) and opens a picker of the videos found; Enter plays one in the video window. Words that start with a verb below search too, unless what follows fits the verb; `/youtube search <words>` searches whatever they are. |
-| `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. The video window is Windows' WebView2 or, on a Mac (macOS 14 or later), WebKit; see [YouTube](TOOLS.md#youtube) for its keys. |
+| `/youtube play <id>\|<link> [<time>]` | Plays a video by its id or a YouTube link, from the time (`90`, `1:30`) or the link's own. A link alone plays too. Needs no key. The video window is Windows' WebView2 or, on a Mac (macOS 14 or later), WebKit; see [YouTube](TOOLS.md#youtube) for its keys. The screen waits under a spinner for the player to start it (up to 12 seconds); ESC stops the wait and leaves the window open. |
+| `/youtube search [--switches] <words>` | Searches with switches before the words: `--playlists` or `--channels` (Enter plays a playlist from its start, or a channel's uploads), `--order relevance\|date\|views\|rating\|title`, `--length short\|medium\|long` (under 4 minutes, 4–20, over 20), `--since today\|week\|month\|year\|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions`, `--safe none\|moderate\|strict`. A line that starts with a switch searches too: `/youtube --playlists lofi`. The order, region, language and safe search otherwise come from the YouTube tab of `/tools`. |
+| `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist through, in YouTube's own player: by its id (`PL…`), a link with `list=` (from its `index=`, or the video it names), or a channel's id or link (its uploads), from entry n. A playlist link alone plays too. Needs no key. An entry the player refuses is skipped. |
+| `/youtube next\|previous`, `/youtube entry <n>` | The playlist's next video or the one before (`prev` too), or its video n. |
+| `/youtube playlist [<id>\|<link>]` | A playlist's videos on the pane (with a *YouTube API key*: 1 quota unit, 1 more per 50 videos); Enter plays the playlist from the highlighted one, `s` saves that video. Alone, the playlist playing. |
 | `/youtube play\|resume`, `pause`, `seek <time>`, `volume <level>`, `mute\|unmute`, `close` | Drive the video window: carry on, pause, go to a time, set the volume (0–100), mute or unmute, close it. |
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos (`youtube.json`); its title is looked up without a key where possible. A saved video resumes a few seconds before where it was left; a time you give wins, and one watched to the end starts over. In a search's picker, `s` saves the highlighted one. |
 | `/youtube list` | The saved videos on the pane, each with where it was left (`at 12:34 of 45:00`, `watched`, `not played yet`); Enter plays one from there, `d` removes the highlighted one and `c` clears the whole list, each after a yes. Any still without a title are looked up first. |
@@ -551,6 +555,7 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
 | `/docker` | Enter opens · `r` refresh · type to filter |
 | `/youtube list` | Enter plays · `d` remove selected (asks) · `c` clear all (asks) · type to filter |
+| `/youtube <words>`, `/youtube playlist` | Enter plays (a playlist from the entry, a channel's uploads) · `s` save the highlighted video |
 | `/cmdlist` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |
 | *Shell police forbidden strings* | the top row adds · Enter removes (asks) · `r` restore defaults (asks) |
 | `/police` | `s` the forbidden strings |

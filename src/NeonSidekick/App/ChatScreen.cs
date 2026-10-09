@@ -756,6 +756,9 @@ internal sealed partial class ChatScreen
     /// (the v0.5.0 release run, 2026-10-07, where the watcher had not queued a line yet when the reply ended).</summary>
     internal int QueuedCount => _queue.Count;
 
+    /// <summary>Whether a menu pane visit is open (tests: the YouTube pickers' close, 2026-10-09, a pane left drawn over the input row).</summary>
+    internal bool MenuPaneOpen => _menuPane.IsOpen;
+
     private readonly QueueMenu _queueMenu;
     private readonly SkillsMenu _skillsMenu;
     private readonly ToolsMenu _toolsMenu;

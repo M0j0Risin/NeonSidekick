@@ -192,6 +192,23 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.Equal(7, library.Find(Zoo)!.Position);            // the window's last report, kept for its close
     }
 
+    /// <summary>
+    /// A saved video reached in a playlist (2026-10-08) keeps its place: the player starts each entry at its beginning, so a pause in
+    /// the list would otherwise write over where it was left.
+    /// </summary>
+    [Fact]
+    public void APlaylistsEntry_LeavesItsSavedPlaceAlone()
+    {
+        var library = Watching(Bunny);
+        library.Update(Bunny, saved => saved with { Position = 300 });
+
+        _player.Report(new VideoSnapshot(VideoState.Playing, Bunny, "Big Buck Bunny", "Blender", 4, 635, PlaylistId: "PLabcdefghijklmnopq", PlaylistEntry: 0, PlaylistCount: 3));
+        _player.Report(new VideoSnapshot(VideoState.Paused, Bunny, "Big Buck Bunny", "Blender", 9, 635, PlaylistId: "PLabcdefghijklmnopq", PlaylistEntry: 0, PlaylistCount: 3));
+        _player.CloseByUser();
+
+        Assert.Equal(300, library.Find(Bunny)!.Position);
+    }
+
     [Fact]
     public void TheEnd_OrAStopInTheLastTenSeconds_StartsItOver_AndMarksItWatched()
     {

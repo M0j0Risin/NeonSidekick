@@ -34,16 +34,28 @@ public enum VideoPageEvent
 /// </summary>
 public static class VideoMessages
 {
-    /// <summary><c>{"cmd":"load","id":…,"start":…,"autoplay":…}</c>.</summary>
+    /// <summary>
+    /// <c>{"cmd":"load","id":…,"start":…,"autoplay":…}</c>; a playlist (2026-10-08) adds <c>"list":…,"index":…</c>, its <c>id</c> the
+    /// video to start at when one is named (left out otherwise).
+    /// </summary>
     public static string Load(VideoRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         return Write(w =>
         {
             w.WriteString("cmd", "load");
-            w.WriteString("id", request.VideoId);
+            if (request.VideoId is { } id)
+            {
+                w.WriteString("id", id);
+            }
+
             w.WriteNumber("start", request.Start);
             w.WriteBoolean("autoplay", request.Autoplay);
+            if (request.PlaylistId is { } list)
+            {
+                w.WriteString("list", list);
+                w.WriteNumber("index", request.Entry);
+            }
         });
     }
 
@@ -63,6 +75,10 @@ public static class VideoMessages
                     w.WriteString("cmd", "volume");
                     w.WriteNumber("v", (int)command.Value);
                     break;
+                case VideoCommandKind.PlayAt:
+                    w.WriteString("cmd", "at");
+                    w.WriteNumber("i", (int)command.Value);
+                    break;
                 default:
                     w.WriteString("cmd", command.Kind switch
                     {
@@ -71,6 +87,8 @@ public static class VideoMessages
                         VideoCommandKind.Stop => "stop",
                         VideoCommandKind.Mute => "mute",
                         VideoCommandKind.Unmute => "unmute",
+                        VideoCommandKind.Next => "next",
+                        VideoCommandKind.Previous => "previous",
                         _ => throw new ArgumentOutOfRangeException(nameof(command), command.Kind, null),
                     });
                     break;
@@ -81,7 +99,8 @@ public static class VideoMessages
     /// <summary>
     /// A page message read against <paramref name="current"/>: a state report becomes the new snapshot (YouTube's error kept
     /// while it is the same video, dropped for another), an error is set on the current one, and anything else leaves it as
-    /// it is. Each change counts up <see cref="VideoSnapshot.Version"/>. Never throws on what the page sends.
+    /// it is. Each change counts up <see cref="VideoSnapshot.Version"/>. Never throws on what the page sends. A playlist's
+    /// report (2026-10-08) carries <c>list</c>, <c>index</c> and <c>count</c>, and an error the page moves past <c>skip</c>.
     /// </summary>
     public static (VideoPageEvent Event, VideoSnapshot Snapshot) Apply(VideoSnapshot current, string? message)
     {
@@ -114,6 +133,7 @@ public static class VideoMessages
                         VideoId = Text(root, "id") ?? current.VideoId,
                         Error = Number(root, "code") is { } code ? (int)code : -1,
                         Version = current.Version + 1,
+                        Skipping = root.TryGetProperty("skip", out var skip) && skip.ValueKind == JsonValueKind.True,
                     });
                 case "state":
                     string? id = Text(root, "id") ?? current.VideoId;
@@ -127,7 +147,11 @@ public static class VideoMessages
                         Volume: Number(root, "volume") is { } volume ? (int)Math.Clamp(Math.Round(volume), 0, 100) : current.Volume,
                         Muted: root.TryGetProperty("muted", out var muted) && muted.ValueKind == JsonValueKind.True,
                         Error: id == current.VideoId ? current.Error : null,
-                        Version: current.Version + 1));
+                        Version: current.Version + 1,
+                        PlaylistId: Text(root, "list"),
+                        PlaylistEntry: Number(root, "index") is { } index and >= 0 ? (int)index : null,
+                        PlaylistCount: Number(root, "count") is { } count and > 0 ? (int)count : null,
+                        Skipping: id == current.VideoId && current.Skipping));
                 default:
                     return (VideoPageEvent.Other, current);
             }

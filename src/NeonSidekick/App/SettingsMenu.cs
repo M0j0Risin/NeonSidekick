@@ -986,8 +986,20 @@ public enum SettingsField
     /// <summary>A toggle: whether a played video starts at once or waits cued (<see cref="Settings.AppSettingsData.YouTubeAutoplay"/>). The YouTube tab (2026-10-05); no reconnect.</summary>
     YouTubeAutoplay,
 
-    /// <summary>A picker over pause, duck and none: what a playing video does while the app speaks or listens (<see cref="Settings.AppSettingsData.YouTubeVoice"/>). The YouTube tab's last row (2026-10-05); no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A picker over pause, duck and none: what a playing video does while the app speaks or listens (<see cref="Settings.AppSettingsData.YouTubeVoice"/>). The YouTube tab (2026-10-05); no reconnect.</summary>
     YouTubeVoice,
+
+    /// <summary>A picker over relevance, date, views, rating and title: a search's order unless it names one (<see cref="Settings.AppSettingsData.YouTubeSearchOrder"/>). The YouTube tab (2026-10-08); no reconnect.</summary>
+    YouTubeSearchOrder,
+
+    /// <summary>A picker over none, moderate and strict: a search's safe search unless it names one (<see cref="Settings.AppSettingsData.YouTubeSafeSearch"/>). The YouTube tab (2026-10-08); no reconnect.</summary>
+    YouTubeSafeSearch,
+
+    /// <summary>Typed: a search's region, two letters, empty for none (<see cref="Settings.AppSettingsData.YouTubeRegion"/>). The YouTube tab (2026-10-08); no reconnect.</summary>
+    YouTubeRegion,
+
+    /// <summary>Typed: the language a search favours, empty for none (<see cref="Settings.AppSettingsData.YouTubeLanguage"/>). The YouTube tab's last row (2026-10-08); no reconnect. Last in the enum, as every newcomer.</summary>
+    YouTubeLanguage,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1418,7 +1430,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
-        [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
+        [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
     ];
@@ -1958,6 +1970,10 @@ internal sealed partial class SettingsMenu
         SettingsField.YouTubeSearchMaxResults => "YouTube search max results",
         SettingsField.YouTubeAutoplay => "YouTube autoplay",
         SettingsField.YouTubeVoice => "YouTube while speaking",
+        SettingsField.YouTubeSearchOrder => "YouTube search order",
+        SettingsField.YouTubeSafeSearch => "YouTube safe search",
+        SettingsField.YouTubeRegion => "YouTube region",
+        SettingsField.YouTubeLanguage => "YouTube language",
         SettingsField.HomeAssistantUrl => "Home Assistant URL",
         SettingsField.HomeAssistantToken => "Home Assistant API key",
         SettingsField.HomeAssistantTest => "Home Assistant test connection",
@@ -2310,6 +2326,10 @@ internal sealed partial class SettingsMenu
             SettingsField.YouTubeSearchMaxResults => Results(data.YouTubeSearchMaxResults),
             SettingsField.YouTubeAutoplay => OnOff(data.YouTubeAutoplay),
             SettingsField.YouTubeVoice => YouTube.YouTubeVoiceMode.Resolve(data.YouTubeVoice),
+            SettingsField.YouTubeSearchOrder => YouTube.YouTubeSearchFilters.Defaults(data).Order,
+            SettingsField.YouTubeSafeSearch => YouTube.YouTubeSearchFilters.Defaults(data).SafeSearch,
+            SettingsField.YouTubeRegion => YouTube.YouTubeSearchFilters.Defaults(data).Region is { Length: > 0 } region ? region : NoYouTubeRegionLabel,
+            SettingsField.YouTubeLanguage => YouTube.YouTubeSearchFilters.Defaults(data).Language is { Length: > 0 } language ? language : NoYouTubeLanguageLabel,
             SettingsField.HomeAssistantUrl => string.IsNullOrWhiteSpace(data.HomeAssistantUrl) ? NoHomeAssistantUrlLabel : data.HomeAssistantUrl,
             SettingsField.HomeAssistantToken => ApiKeyLabel(data.HomeAssistantToken),
             SettingsField.HomeAssistantTest => HomeAssistantTestLabel,
@@ -2779,6 +2799,18 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The warning when DPAPI could not encrypt the YouTube API key (2026-10-05): it is kept as typed. Pinned.</summary>
     public static string YouTubeApiKeyPlainWarning(string reason) => $"YouTube API key saved unencrypted: {reason}.";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.YouTubeRegion"/> (2026-10-08): no region asked for. Pinned.</summary>
+    public const string NoYouTubeRegionLabel = "(any region)";
+
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.YouTubeLanguage"/> (2026-10-08): no language favoured. Pinned.</summary>
+    public const string NoYouTubeLanguageLabel = "(any language)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.YouTubeRegion"/> (2026-10-08). Pinned.</summary>
+    public const string YouTubeRegionError = "must be two letters (US, GB, DE), or empty for any region";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.YouTubeLanguage"/> (2026-10-08). Pinned.</summary>
+    public const string YouTubeLanguageError = "must be a language code (en, es, zh-Hans), or empty for any language";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.YouTubeSearchMaxResults"/>. Pinned.</summary>
     public static readonly string YouTubeSearchMaxResultsRangeError =
@@ -3418,6 +3450,8 @@ internal sealed partial class SettingsMenu
         SettingsField.OpenAIApiKey => "",
         SettingsField.HomeAssistantToken => "",
         SettingsField.YouTubeApiKey => "",
+        SettingsField.YouTubeRegion => data.YouTubeRegion,
+        SettingsField.YouTubeLanguage => data.YouTubeLanguage,
         SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
         SettingsField.HomeAssistantAssistAgent => data.HomeAssistantAssistAgent,
         SettingsField.DockerEnginePipe => data.DockerEnginePipe,
@@ -4502,6 +4536,11 @@ internal sealed partial class SettingsMenu
             return await PickYouTubeVoiceAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field is SettingsField.YouTubeSearchOrder or SettingsField.YouTubeSafeSearch)
+        {
+            return await PickYouTubeFilterAsync(field, saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field == SettingsField.ShowPerformanceBar)
         {
             return await EditPerfBarAsync(cancellationToken).ConfigureAwait(false);
@@ -4851,7 +4890,8 @@ internal sealed partial class SettingsMenu
 
         bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCliExecutable or SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
-            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder;
+            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder
+            or SettingsField.YouTubeRegion or SettingsField.YouTubeLanguage;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -5518,6 +5558,18 @@ internal sealed partial class SettingsMenu
 
             case SettingsField.HomeAssistantAssistAgent:
                 Apply(field, d => d.HomeAssistantAssistAgent = text);
+                return true;
+
+            case SettingsField.YouTubeRegion:
+            case SettingsField.YouTubeLanguage:
+                bool isRegion = field == SettingsField.YouTubeRegion;
+                if ((isRegion ? YouTube.YouTubeSearchFilters.NormalizeRegion(text) : YouTube.YouTubeSearchFilters.NormalizeLanguage(text)) is not { } code)
+                {
+                    Sink.Error($"{FieldName(field)} {(isRegion ? YouTubeRegionError : YouTubeLanguageError)}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => { if (isRegion) d.YouTubeRegion = code; else d.YouTubeLanguage = code; });
                 return true;
 
             case SettingsField.DockerEnginePipe:

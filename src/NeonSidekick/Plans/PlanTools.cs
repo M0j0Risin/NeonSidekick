@@ -57,8 +57,8 @@ public static class PlanTools
         "postgres_relationships", "postgres_indexes", "postgres_query",
         // the advisor: Claude reads and answers, read-only whatever Claude CLI slash command permissions says (2026-09-27)
         "claude_advisor_cli",
-        // YouTube (2026-10-05): a search reads the Data API; the status reads the window's last report; the saved list (2026-10-07) reads the profile's file
-        "youtube_search", "youtube_status", "youtube_saved",
+        // YouTube (2026-10-05): a search and a playlist's listing (2026-10-08) read the Data API; the status reads the window's last report; the saved list (2026-10-07) reads the profile's file
+        "youtube_search", "youtube_playlist", "youtube_status", "youtube_saved",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>

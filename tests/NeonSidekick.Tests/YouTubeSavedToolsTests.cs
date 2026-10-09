@@ -167,8 +167,8 @@ public sealed class YouTubeSavedToolsTests : IDisposable
         var screen = ChatScreen.YouTubeTools(search, _player, () => _settings, _time, Library);
         var headless = ChatScreen.YouTubeTools(search, player: null, () => _settings, _time, Library);
 
-        Assert.Equal(["youtube_search", "youtube_play", "youtube_control", "youtube_status", "youtube_saved", "youtube_save"], screen.Select(t => t.Name));
-        Assert.Equal(["youtube_search", "youtube_saved", "youtube_save"], headless.Select(t => t.Name));
+        Assert.Equal(["youtube_search", "youtube_playlist", "youtube_play", "youtube_control", "youtube_status", "youtube_saved", "youtube_save"], screen.Select(t => t.Name));
+        Assert.Equal(["youtube_search", "youtube_playlist", "youtube_saved", "youtube_save"], headless.Select(t => t.Name));
         Assert.Equal(ChatScreen.YouTubeToolNames.Order(), screen.Select(t => t.Name).Order());
         Assert.True(ChatScreen.YouTubeOffered(_settings, headless));                // no key, no window: the saved videos still
         Assert.All(screen, t => Assert.True(PlanTools.ReadOnly.Contains(t.Name) ^ PlanTools.Mutating.Contains(t.Name), t.Name));
@@ -178,8 +178,11 @@ public sealed class YouTubeSavedToolsTests : IDisposable
 
     private sealed class NoSearch : IYouTubeSearch
     {
-        public Task<YouTubeSearchOutcome> SearchAsync(string query, int max, string apiKey, CancellationToken cancellationToken) =>
+        public Task<YouTubeSearchOutcome> SearchAsync(string query, int max, YouTubeSearchFilters filters, string apiKey, CancellationToken cancellationToken) =>
             Task.FromResult(new YouTubeSearchOutcome([]));
+
+        public Task<YouTubePlaylistOutcome> PlaylistAsync(string playlistId, int max, string apiKey, CancellationToken cancellationToken) =>
+            Task.FromResult(YouTubePlaylistOutcome.Failed(YouTubeFailure.NotFound));
 
         public Task<YouTubeVideoInfo?> LookupAsync(string videoId, string? apiKey, CancellationToken cancellationToken) => Task.FromResult<YouTubeVideoInfo?>(null);
     }

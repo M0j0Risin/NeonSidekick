@@ -36,6 +36,9 @@ public static class VideoText
     /// <summary>The not-a-video-id refusal of <see cref="VideoRequest"/>.</summary>
     public static string NotAnId(string? text) => $"\"{text}\" is not a YouTube video id (11 letters, digits, - or _).";
 
+    /// <summary>The not-a-playlist-id refusal of <see cref="VideoRequest.Playlist"/> (2026-10-08).</summary>
+    public static string NotAPlaylistId(string? text) => $"\"{text}\" is not a YouTube playlist id (13 to 64 letters, digits, - or _).";
+
     /// <summary>A WebView2 step that failed, as the snapshot's <see cref="VideoSnapshot.Failure"/>: what it was and its HRESULT.</summary>
     public static string Failed(string step, int hr) => hr == unchecked((int)0x8007139F)
         ? $"The video window's browser could not start: its profile folder is in use by another copy of the app started with other options (WebView2 {step}, 0x{hr.ToString("X8", CultureInfo.InvariantCulture)})."

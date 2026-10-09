@@ -73,6 +73,23 @@ public class VideoTests
         Assert.Equal("{\"cmd\":\"unmute\"}", VideoMessages.Command(VideoCommand.Unmute));
         Assert.Equal("{\"cmd\":\"seek\",\"t\":75.25}", VideoMessages.Command(VideoCommand.Seek(75.25)));
         Assert.Equal("{\"cmd\":\"volume\",\"v\":40}", VideoMessages.Command(VideoCommand.Volume(40)));
+        Assert.Equal("{\"cmd\":\"next\"}", VideoMessages.Command(VideoCommand.Next));                    // a playlist's (2026-10-08)
+        Assert.Equal("{\"cmd\":\"previous\"}", VideoMessages.Command(VideoCommand.Previous));
+        Assert.Equal("{\"cmd\":\"at\",\"i\":4}", VideoMessages.Command(VideoCommand.PlayAt(4)));
+        Assert.Equal(0, VideoCommand.PlayAt(-3).Value);
+    }
+
+    /// <summary>A playlist's load (2026-10-08): the list and its entry, the video to start at only when one is named.</summary>
+    [Fact]
+    public void Load_APlaylist_CarriesTheListAndTheEntry()
+    {
+        Assert.Equal("{\"cmd\":\"load\",\"start\":0,\"autoplay\":true,\"list\":\"PLabcdefghijklmnopq\",\"index\":2}", VideoMessages.Load(VideoRequest.Playlist("PLabcdefghijklmnopq", 2)));
+        Assert.Equal("{\"cmd\":\"load\",\"id\":\"aqz-KE-bpKQ\",\"start\":30,\"autoplay\":false,\"list\":\"PLabcdefghijklmnopq\",\"index\":0}", VideoMessages.Load(VideoRequest.Playlist("PLabcdefghijklmnopq", 0, Bunny, 30, autoplay: false)));
+        Assert.Throws<ArgumentException>(() => VideoRequest.Playlist("PL1"));
+        Assert.Throws<ArgumentException>(() => VideoRequest.Playlist("PLabcdefghijklmnopq", 0, "short"));
+        Assert.True(VideoRequest.IsPlaylistId("UUSMOQeBJ2RAnuFungnQOxLg"));
+        Assert.False(VideoRequest.IsPlaylistId(Bunny));
+        Assert.Equal(new VideoSnapshot(VideoState.Opening, null, PlaylistId: "PLabcdefghijklmnopq"), VideoSnapshot.Opening(VideoRequest.Playlist("PLabcdefghijklmnopq")));
     }
 
     /// <summary>Every command the app can send is one the page acts on: its <c>case</c> is in the page's switch.</summary>
@@ -90,6 +107,12 @@ public class VideoTests
 
         Assert.Contains("player.seekTo(m.t, true)", page);
         Assert.Contains("player.setVolume(m.v)", page);
+        Assert.Contains("player.playVideoAt(m.i)", page);
+        Assert.Contains("player.loadPlaylist(args)", page);
+        Assert.Contains("player.cuePlaylist(args)", page);
+        // A playlist's player is made with no videoId key: the API throws on one there but undefined (2026-10-09, the silent window).
+        Assert.Contains("if (!m.list) options.videoId = m.id;", page);
+        Assert.DoesNotContain("videoId: m.list", page);
     }
 
     // ── VideoMessages: the page's side ───────────────────────────────────────
@@ -119,6 +142,30 @@ public class VideoTests
         Assert.Null(other.Error);
         Assert.Equal(VideoState.Buffering, other.State);
         Assert.Equal(3, other.Version);
+    }
+
+    /// <summary>A playlist's report (2026-10-08): its list, entry and count; an error the page moves past marked skip, cleared by the next entry.</summary>
+    [Fact]
+    public void Apply_APlaylistsReport_CarriesItsPlace_AndASkippedError()
+    {
+        var opening = VideoSnapshot.Opening(VideoRequest.Playlist("PLabcdefghijklmnopq"));
+
+        var (_, playing) = VideoMessages.Apply(opening, "{\"ev\":\"state\",\"id\":\"aqz-KE-bpKQ\",\"state\":1,\"list\":\"PLabcdefghijklmnopq\",\"index\":2,\"count\":25}");
+        Assert.Equal(("PLabcdefghijklmnopq", 2, 25), (playing.PlaylistId, playing.PlaylistEntry, playing.PlaylistCount));
+
+        var (_, refused) = VideoMessages.Apply(playing, "{\"ev\":\"error\",\"code\":150,\"id\":\"aaaaaaaaaaa\",\"skip\":true}");
+        Assert.True(refused.Skipping);
+        Assert.Equal(("PLabcdefghijklmnopq", 150), (refused.PlaylistId, refused.Error));
+        var (_, still) = VideoMessages.Apply(refused, "{\"ev\":\"state\",\"id\":\"aaaaaaaaaaa\",\"state\":-1,\"list\":\"PLabcdefghijklmnopq\",\"index\":3,\"count\":25}");
+        Assert.True(still.Skipping);
+        var (_, next) = VideoMessages.Apply(still, "{\"ev\":\"state\",\"id\":\"jNQXAC9IVRw\",\"state\":1,\"list\":\"PLabcdefghijklmnopq\",\"index\":4,\"count\":25}");
+        Assert.False(next.Skipping);
+        Assert.Null(next.Error);
+
+        var (_, last) = VideoMessages.Apply(next, "{\"ev\":\"error\",\"code\":150,\"id\":\"jNQXAC9IVRw\"}");
+        Assert.False(last.Skipping);   // the last entry: nothing to move on to
+        var (_, single) = VideoMessages.Apply(opening, "{\"ev\":\"state\",\"id\":\"aqz-KE-bpKQ\",\"state\":1,\"index\":-1,\"count\":0}");
+        Assert.Equal((null, null, null), (single.PlaylistId, single.PlaylistEntry, single.PlaylistCount));
     }
 
     [Theory]

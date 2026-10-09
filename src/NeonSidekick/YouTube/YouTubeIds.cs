@@ -76,6 +76,86 @@ public static partial class YouTubeIds
     }
 
     /// <summary>
+    /// The public playlist <paramref name="text"/> names (2026-10-08, the user's ask): a bare playlist id (<see cref="VideoRequest.IsPlaylistId"/>),
+    /// a link with <c>list=</c> (<c>/playlist?list=</c>, <c>/watch?v=…&amp;list=…</c>, <c>youtu.be/…?list=…</c>), or a channel — its id
+    /// <c>UC…</c> or a <c>/channel/UC…</c> link — as its uploads list (<c>UU…</c>, <see cref="Uploads"/>). The entry is a link's
+    /// <c>index=</c> (1-based there, 0-based here); without one, a watch link's video is where to start (<paramref name="videoId"/>),
+    /// and the start its <c>t=</c>. False when it names no playlist, a plain video link among them.
+    /// </summary>
+    public static bool TryParsePlaylist(string? text, out string list, out int entry, out string? videoId, out double start)
+    {
+        list = "";
+        entry = 0;
+        videoId = null;
+        start = 0;
+        text = text?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        if (Uploads(text) is { } uploads)
+        {
+            list = uploads;
+            return true;
+        }
+
+        if (VideoRequest.IsPlaylistId(text))
+        {
+            list = text;
+            return true;
+        }
+
+        string link = text.Contains("://", StringComparison.Ordinal) ? text : "https://" + text;
+        if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        {
+            return false;
+        }
+
+        string host = uri.Host.ToLowerInvariant();
+        if (!Hosts.Contains(host) && host is not ("youtu.be" or "www.youtu.be"))
+        {
+            return false;
+        }
+
+        string[] segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (Hosts.Contains(host) && segments is ["channel", var channel, ..] && Uploads(channel) is { } channelUploads)
+        {
+            list = channelUploads;
+            return true;
+        }
+
+        var query = Query(uri.Query);
+        if (query.GetValueOrDefault("list") is not { } named || !VideoRequest.IsPlaylistId(named))
+        {
+            return false;
+        }
+
+        list = named;
+        if (int.TryParse(query.GetValueOrDefault("index"), NumberStyles.None, CultureInfo.InvariantCulture, out int index) && index >= 1)
+        {
+            entry = index - 1;
+        }
+        else if (TryParse(text, out string id, out double at))
+        {
+            videoId = id;
+            start = at;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// A channel's uploads playlist (2026-10-08): YouTube names it after the channel, <c>UC…</c> becoming <c>UU…</c> (24 characters);
+    /// null when <paramref name="channelId"/> is no channel id.
+    /// </summary>
+    public static string? Uploads(string? channelId) =>
+        channelId is { Length: 24 } && channelId.StartsWith("UC", StringComparison.Ordinal) && VideoRequest.IsPlaylistId(channelId) ? "UU" + channelId[2..] : null;
+
+    /// <summary>The playlist page of <paramref name="list"/> (2026-10-08), for <c>open_url</c>.</summary>
+    public static string PlaylistUrl(string list) => "https://www.youtube.com/playlist?list=" + list;
+
+    /// <summary>
     /// A time as seconds: <c>90</c>, <c>90.5</c>, <c>90s</c>, <c>1m30s</c>, <c>1h2m3s</c>, <c>1:30</c>, <c>1:02:03</c>; null for
     /// anything else (a negative, a minute or second field of 60 or more after a colon).
     /// </summary>

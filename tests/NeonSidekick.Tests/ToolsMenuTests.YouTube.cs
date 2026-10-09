@@ -13,19 +13,22 @@ public partial class ToolsMenuTests
     private void OpenYouTubeRow(int row) => Push([.. ToTab(ToolsText.YouTubeTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
-    public void TheYouTubeTab_SitsAfterComfyUI_BeforeGitLib_WithItsFiveRows()
+    public void TheYouTubeTab_SitsAfterComfyUI_BeforeGitLib_WithItsNineRows()
     {
         int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.YouTubeTabTitle);
 
         Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.ComfyTabTitle) + 1, tab);   // the user's place, later on 2026-10-05 (after Screen until then)
         Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.GitTabTitle) - 1, tab);
-        Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube autoplay", "YouTube while speaking"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
+        Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube autoplay", "YouTube while speaking", "YouTube search order", "YouTube safe search", "YouTube region", "YouTube language"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal([SettingsField.YouTubeTools, SettingsField.YouTubeAutoplay], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.IsLlmField);   // no reconnect: read at each turn and search
 
         var data = new AppSettingsData();
-        Assert.Equal(["off", "(none)", "8 results", "on", "pause"], SettingsMenu.ToolsTabFields[tab - 1].Select(f => SettingsMenu.FieldValue(f, data, _settings.ProfileDirectory)));
+        Assert.Equal(["off", "(none)", "8 results", "on", "pause", "relevance", "moderate", "(any region)", "(any language)"], SettingsMenu.ToolsTabFields[tab - 1].Select(f => SettingsMenu.FieldValue(f, data, _settings.ProfileDirectory)));
+        Assert.Equal(["views", "strict", "GB", "pt-BR"], new[] { SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage }
+            .Select(f => SettingsMenu.FieldValue(f, new AppSettingsData { YouTubeSearchOrder = "Views", YouTubeSafeSearch = "strict", YouTubeRegion = "gb", YouTubeLanguage = "PT-BR" }, _settings.ProfileDirectory)));
+        Assert.Equal("relevance", SettingsMenu.FieldValue(SettingsField.YouTubeSearchOrder, new AppSettingsData { YouTubeSearchOrder = "newest" }, _settings.ProfileDirectory));   // unreadable: YouTube's own
         Assert.Equal(SettingsMenu.Mask("AIza-plain"), SettingsMenu.FieldValue(SettingsField.YouTubeApiKey, new AppSettingsData { YouTubeApiKey = "AIza-plain" }, _settings.ProfileDirectory));
         Assert.Equal(SettingsMenu.ApiKeyEncryptedLabel, SettingsMenu.FieldValue(SettingsField.YouTubeApiKey, new AppSettingsData { YouTubeApiKey = Sql.WindowsCredentials.ProtectedPrefix + "AQAA" }, _settings.ProfileDirectory));
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.YouTubeApiKey, new AppSettingsData { YouTubeApiKey = "AIza-plain" }));   // never put back on the line
@@ -65,6 +68,54 @@ public partial class ToolsMenuTests
         Assert.Contains("  ✗ YouTube search max results " + SettingsMenu.YouTubeSearchMaxResultsRangeError + "; keeping 8.", Output);
         Assert.Equal(12, saved.YouTubeSearchMaxResults);
         pane.Dispose();
+    }
+
+    /// <summary>
+    /// The filters' saved defaults (2026-10-08, the user's ask): the order and safe search on pickers with the saved one under the cursor;
+    /// the region and language typed, refused when they are no code, kept as YouTube reads them.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheYouTubeTab_TheFilterDefaults_PickAndType()
+    {
+        var (menu, pane, _) = PaneMenu();
+        OpenYouTubeRow(5);                                    // YouTube search order: relevance under the cursor
+        Push(Keys.Down, Keys.Enter);                          // date
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // YouTube safe search: moderate under the cursor, then strict
+        Push(Keys.Down, Keys.Enter);                          // YouTube region
+        _console.Input.PushText("USA");
+        Push(Keys.Enter);                                     // refused
+        Push(Keys.Enter);
+        _console.Input.PushText("us");
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Enter);                          // YouTube language
+        _console.Input.PushText("english");
+        Push(Keys.Enter);                                     // refused
+        Push(Keys.Enter);
+        _console.Input.PushText("zh-Hans");
+        Push(Keys.Enter);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var saved = _settings.Current;
+        Assert.Equal(("date", "strict", "US", "zh-Hans"), (saved.YouTubeSearchOrder, saved.YouTubeSafeSearch, saved.YouTubeRegion, saved.YouTubeLanguage));
+        Assert.Contains("  ✗ YouTube region " + SettingsMenu.YouTubeRegionError + "; keeping " + SettingsMenu.NoYouTubeRegionLabel + ".", Output);
+        Assert.Contains("  ✗ YouTube language " + SettingsMenu.YouTubeLanguageError + "; keeping " + SettingsMenu.NoYouTubeLanguageLabel + ".", Output);
+        Assert.Contains("newest first", Output);                                    // the order picker's notes
+        Assert.Contains(SettingsMenu.YouTubeSafeSearchNote("strict"), Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public void TheFilterDefaults_AreCopied_AndReadAsTheSearchsOwn()
+    {
+        var copy = AppSettings.Copy(new AppSettingsData { YouTubeSearchOrder = "date", YouTubeSafeSearch = "none", YouTubeRegion = "DE", YouTubeLanguage = "de" });
+        Assert.Equal(("date", "none", "DE", "de"), (copy.YouTubeSearchOrder, copy.YouTubeSafeSearch, copy.YouTubeRegion, copy.YouTubeLanguage));
+
+        var filters = YouTube.YouTubeSearchFilters.Defaults(copy);
+        Assert.Equal(("date", "none", "DE", "de", YouTube.YouTubeKind.Video), (filters.Order, filters.SafeSearch, filters.Region, filters.Language, filters.Kind));
+        Assert.Equal(YouTube.YouTubeSearchFilters.None, YouTube.YouTubeSearchFilters.Defaults(new AppSettingsData()));
+        Assert.Equal(YouTube.YouTubeSearchFilters.None, YouTube.YouTubeSearchFilters.Defaults(new AppSettingsData { YouTubeRegion = "Texas", YouTubeLanguage = "!!", YouTubeSafeSearch = "max" }));
     }
 
     [Fact]

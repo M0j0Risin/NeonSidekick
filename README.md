@@ -82,7 +82,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"). `/ha` drives the house directly.
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your own prompt.
 * **Picture viewer & editing:** a built-in picture viewer and thumbnail browser, and image editing (resize, crop, rotate, recolour, convert, strip metadata) by the model or a right-click.
-* **YouTube:** search (with your API key), then play in the app's own video window, controlled by the model or `/youtube`; saved videos resume where you left off.
+* **YouTube:** search for videos, playlists or channels (with your API key), then play a video or a whole public playlist in the app's own video window, controlled by the model or `/youtube`; saved videos resume where you left off.
 * **Printing & PDFs:** `/print` to any installed printer (Windows or Mac), and `/pdf` from Markdown, text, pictures or a web page.
 * **Claude Code:** `/claude` messages your installed Claude Code; the model can ask it for read-only advice.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.

@@ -937,6 +937,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ImageEditMode,   // later still on 2026-10-04: the picture menu's and image_edit's
                 SettingsField.UserLineStyle,   // later still: how the sent line is drawn (the UI review)
                 SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice,   // 2026-10-05, /tools' YouTube tab
+                SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage,   // 2026-10-08, the search filters' saved defaults
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.

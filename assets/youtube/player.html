@@ -3,13 +3,18 @@
   The video window's page (Viewer/VideoPage, 2026-10-05). WebView2 serves it from https://player.neonsidekick.example/, a
   page with an origin, so the embed YouTube's IFrame Player API makes is sent a Referer (without one, error 153). The app talks
   to it in JSON over WebView2's web messages:
-    app to page: {cmd: "load", id, start, autoplay}, "play", "pause", "seek" {t}, "volume" {v}, "mute", "unmute", "stop",
+    app to page: {cmd: "load", id, start, autoplay} or, for a playlist, {cmd: "load", list, index, id?, start, autoplay},
+                 "play", "pause", "seek" {t}, "volume" {v}, "mute", "unmute", "stop", "next", "previous", "at" {i},
                  "echo" {value} (the smoke's round trip)
     page to app: {ev: "page"} once the script runs (no network needed), {ev: "ready"} once the player is,
-                 {ev: "state", ...} on every change, after every command and every second while playing,
-                 {ev: "error", code, id} (YouTube's onError: 2 a bad id, 5 HTML5, 100 not found, 101/150 not here),
+                 {ev: "state", ...} on every change, after every command and every second while playing; while a playlist
+                 plays, with its list, index (0-based) and count,
+                 {ev: "error", code, id, skip?} (YouTube's onError: 2 a bad id, 5 HTML5, 100 not found, 101/150 not here),
                  {ev: "echo", value}
-  The player is made at the first load, with that video, because a player made empty has nothing to be ready with.
+  The player is made at the first load, with that video or playlist, because a player made empty has nothing to be ready with.
+  A playlist (2026-10-08) is YouTube's own: the player moves through it, and next, previous and at move it by hand. An entry the
+  player refuses is reported with skip: true and passed over a second later, unless it is the last. A playlist loaded with a
+  video (a watch?v=…&list=… link with no index) starts at that video once the player has the list, if it is in it.
   From a load until the player's next change no tick is sent (2026-10-06): the player reports its state late, so a tick in
   between still reads the video before it, and on a replay of the same video that read as the new one at the old position.
   An error names the video last asked for when the player cannot say (a missing video has no data).
@@ -35,25 +40,67 @@ let ready = false;
 let pending = null;
 let current = null;
 let settled = true;
+let list = null;
+let seek = null;
 
 function videoData() {
   try { return player.getVideoData() || {}; } catch { return {}; }
 }
 
+function entries() {
+  try { return player.getPlaylist() || []; } catch { return []; }
+}
+
+function entry() {
+  try { const i = player.getPlaylistIndex(); return typeof i === 'number' && i >= 0 ? i : null; } catch { return null; }
+}
+
+// A playlist loaded with a video named: once the player has the list, start at that video (once).
+function findSought() {
+  if (!seek) return;
+  const ids = entries();
+  if (ids.length === 0) return;
+  const i = ids.indexOf(seek);
+  seek = null;
+  if (i >= 0 && i !== entry()) player.playVideoAt(i);
+}
+
 function report(why) {
   if (!ready) return;
   const d = videoData();
-  send({
+  const message = {
     ev: 'state', why, id: d.video_id || null, title: d.title || null, author: d.author || null,
     state: player.getPlayerState(), position: player.getCurrentTime(), duration: player.getDuration(),
     volume: player.getVolume(), muted: player.isMuted()
-  });
+  };
+  if (list) {
+    message.list = list;
+    message.index = entry();
+    message.count = entries().length || null;
+  }
+  send(message);
+}
+
+function failed(code) {
+  const id = videoData().video_id || current;
+  const i = entry();
+  const count = entries().length;
+  const skip = list !== null && i !== null && i < count - 1;
+  send(skip ? { ev: 'error', code, id, skip: true } : { ev: 'error', code, id });
+  if (skip) setTimeout(() => { if (list && entry() === i) player.nextVideo(); }, 1000);
 }
 
 function create(m) {
-  player = new YT.Player('player', {
-    videoId: m.id,
-    playerVars: { playsinline: 1, rel: 0, start: Math.floor(m.start || 0), origin: location.origin },
+  const vars = { playsinline: 1, rel: 0, start: Math.floor(m.start || 0), origin: location.origin };
+  if (m.list) {
+    vars.listType = 'playlist';
+    vars.list = m.list;
+    vars.index = m.index || 0;
+  }
+  // A playlist's player has no videoId key at all: the API throws "Invalid video id" on one that is there but undefined
+  // (2026-10-09, found playing a channel's uploads: the throw left the page silent, no player and no report).
+  const options = {
+    playerVars: vars,
     events: {
       onReady: () => {
         ready = true;
@@ -61,17 +108,26 @@ function create(m) {
         if (m.autoplay !== false) player.playVideo();
         report('ready');
       },
-      onStateChange: () => { settled = true; report('change'); },
-      onError: e => { settled = true; send({ ev: 'error', code: e.data, id: videoData().video_id || current }); }
+      onStateChange: () => { settled = true; findSought(); report('change'); },
+      onError: e => { settled = true; failed(e.data); }
     }
-  });
+  };
+  if (!m.list) options.videoId = m.id;
+  player = new YT.Player('player', options);
 }
 
 function load(m) {
-  current = m.id;
+  current = m.id || null;
+  list = m.list || null;
+  seek = m.list && m.id ? m.id : null;
   if (!api) { pending = m; return; }
   if (!player) { create(m); return; }
   settled = false;
+  if (m.list) {
+    const args = { list: m.list, listType: 'playlist', index: m.index || 0, startSeconds: m.start || 0 };
+    if (m.autoplay === false) player.cuePlaylist(args); else player.loadPlaylist(args);
+    return;
+  }
   const args = { videoId: m.id, startSeconds: m.start || 0 };
   if (m.autoplay === false) player.cueVideoById(args); else player.loadVideoById(args);
 }
@@ -96,6 +152,9 @@ chrome.webview.addEventListener('message', e => {
     case 'volume': player.setVolume(m.v); if (m.v > 0) player.unMute(); break;
     case 'mute': player.mute(); break;
     case 'unmute': player.unMute(); break;
+    case 'next': player.nextVideo(); break;
+    case 'previous': player.previousVideo(); break;
+    case 'at': player.playVideoAt(m.i); break;
     default: return;
   }
   report(m.cmd);

@@ -22,6 +22,11 @@ public partial class ChatScreenTests
     {
         _videoPlayer = window ? new FakeVideoPlayer() : null;
         _settings.Update(d => { d.TtsOutput = false; d.YouTubeApiKey = key ? "AIza-test" : ""; d.YouTubeSearchMaxResults = 3; });
+        _http.Map("https://www.googleapis.com/youtube/v3/search?part=snippet&type=playlist", HttpStatusCode.OK, YouTubeFixtureFile("search-playlists.json"));   // 2026-10-08
+        _http.Map("https://www.googleapis.com/youtube/v3/playlists?", HttpStatusCode.OK, YouTubeFixtureFile("playlist.json"));
+        _http.Map("https://www.googleapis.com/youtube/v3/channels?", HttpStatusCode.OK, YouTubeFixtureFile("channels.json"));
+        _http.Map("https://www.googleapis.com/youtube/v3/playlistItems?", (request, _) => Task.FromResult(Fakes.StubHttpMessageHandler.Json(HttpStatusCode.OK,
+            YouTubeFixtureFile(request.RequestUri!.Query.Contains("pageToken=", StringComparison.Ordinal) ? "playlistItems-2.json" : "playlistItems-1.json"))));
         _http.Map("https://www.googleapis.com/youtube/v3/search", HttpStatusCode.OK, YouTubeFixtureFile("search.json"));
         _http.Map("https://www.googleapis.com/youtube/v3/videos", HttpStatusCode.OK, YouTubeFixtureFile("videos.json"));
         _http.Map("https://www.youtube.com/oembed", HttpStatusCode.OK, YouTubeFixtureFile("oembed.json"));   // a saved video's title (2026-10-07): the zoo's, whatever is asked
@@ -43,8 +48,8 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(YouTubeText.PickTitle("big buck bunny"), output);
-        Assert.Contains("Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film  ·  Blender · 10:35 · 21M views", output);
-        Assert.Contains("Me at the zoo & the elephants' \"trunks\"  ·  jawed · 0:19", output);
+        Assert.Matches(@"Big Buck Bunny 60fps 4K - Official Blender Foundation S…  Blender +10:35", output);   // in columns, the title cut (2026-10-09)
+        Assert.Matches(@"Me at the zoo & the elephants' ""trunks"" +jawed +0:19", output);
         Assert.Equal(new VideoRequest("aqz-KE-bpKQ"), Assert.Single(_videoPlayer!.Plays));
         Assert.Contains("  · Playing \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\" (Blender) at 0:00 of 10:35, volume 100% · video aqz-KE-bpKQ", output);
         Assert.Contains("  · Paused \"Big Buck Bunny", output);
@@ -84,7 +89,7 @@ public partial class ChatScreenTests
 
         Assert.Contains("  ✗ Searching YouTube needs a YouTube Data API key: add one as YouTube API key on the YouTube tab of /tools.", output);   // the rest wraps
         Assert.Contains("  ✗ " + (OperatingSystem.IsMacOS() ? YouTubeText.NoWindowMac : YouTubeText.NoWindow), output);   // a Mac's own since 2026-10-07
-        Assert.Contains("  ✗ " + YouTubeText.CommandUsage, output);
+        Assert.Contains("  ✗ /youtube [<words> | play <id|link> [<time>] |", output);   // the usage, which wraps since 2026-10-08's verbs
         Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == "www.googleapis.com");
     }
 
@@ -229,6 +234,179 @@ public partial class ChatScreenTests
         Assert.Equal(97, Assert.Single(_videoPlayer!.Plays).Start);
         Assert.Contains("  · Resumed the saved video at 1:37, a moment before where it was left. Playing ", output);
         Assert.Equal(180, new YouTubeLibrary(_settings.ProfileDirectory).Find("aqz-KE-bpKQ")!.Position);
+    }
+
+    /// <summary>
+    /// A playlist search (2026-10-08): its rows on the picker, s on one says only a video saves, Enter plays the list from its start;
+    /// then next moves through it, and a channel search's Enter plays the channel's uploads.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_APlaylistSearch_EnterPlaysTheList_NextMoves_AndAChannelPlaysItsUploads()
+    {
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/youtube search --playlists --order date lofi");
+        _console.Input.PushKey(Keys.Char('s'));
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/youtube next");
+        PushLine("/youtube --channels blender");
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/youtube search --since someday lofi");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Matches(@"Open Movies & Shorts +Blender +3 videos", output);
+        Assert.Contains(YouTubeText.SaveVideosOnly(YouTube.YouTubeKind.Playlist), output);
+        Assert.Contains(_http.Requests, r => r.Uri.AbsoluteUri.Contains("type=playlist", StringComparison.Ordinal) && r.Uri.AbsoluteUri.Contains("&order=date", StringComparison.Ordinal));
+        Assert.Equal([VideoRequest.Playlist("PLabcdefghijklmnopq"), VideoRequest.Playlist("UUSMOQeBJ2RAnuFungnQOxLg")], _videoPlayer!.Plays);
+        Assert.Contains(" · entry 2 of 3 in playlist PLabcdefghijklmnopq", output);
+        Assert.Matches(@"Blender +1\.8M subscribers +689 videos", output);
+        Assert.Contains("  ✗ \"since\" must be today, week, month, year or a date like 2026-01-31, not \"someday\".", output);
+        Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
+    }
+
+    /// <summary>
+    /// A play the page never answers (2026-10-09, the user's report: a channel picked from a search opened a silent window and the
+    /// screen sat on the picker, keys dead, for the wait's whole cap): the wait runs under a spinner, ESC stops it, the transcript
+    /// says so, and the window is left open.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_ASilentPlay_EscStopsTheWait_AndLeavesTheWindowOpen()
+    {
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _videoPlayer!.Behave = false;   // the page never reports past the window's own opening
+        var input = Scripted();
+        PushLine("/youtube --channels blender");
+        input.Push(Keys.Enter);
+        _videoPlayer.Changed += s =>
+        {
+            if (s is { State: VideoState.Opening })
+            {
+                input.Push(Keys.Escape);   // under the wait's spinner (the test clock never reaches its cap)
+            }
+        };
+        input.OnWait = () =>
+        {
+            if (_videoPlayer.Plays.Count == 1)
+            {
+                input.OnWait = null;
+                PushLine(input, "/exit");   // at the idle line after
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Equal([VideoRequest.Playlist("UUSMOQeBJ2RAnuFungnQOxLg")], _videoPlayer.Plays);
+        Assert.Contains("  · " + YouTubeText.StoppedWaiting[..40], output);   // the rest wraps
+        Assert.Equal(0, _videoPlayer.Closes);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// A play the page answers late, from the window's thread (2026-10-09, the user's second report: the video played, but the picker
+    /// stayed drawn and no key reached the screen after): the screen is the user's again once the answer comes — the next command
+    /// runs.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_APlayAnsweredLate_GivesTheKeysBack()
+    {
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _videoPlayer!.Behave = false;
+        var input = Scripted();
+        PushLine("/youtube big buck bunny");
+        input.Push(Keys.Enter);
+        _videoPlayer.Changed += s =>
+        {
+            if (s is { State: VideoState.Opening, VideoId: { } id })
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(300);
+                    _videoPlayer.Report(new VideoSnapshot(VideoState.Playing, id, "Big Buck Bunny", "Blender", 0, 635));
+                });
+            }
+        };
+        input.OnWait = () =>
+        {
+            if (_videoPlayer.Snapshot is { State: VideoState.Playing })
+            {
+                input.OnWait = null;
+                PushLine(input, "/youtube pause");
+                PushLine(input, "/exit");
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Playing \"Big Buck Bunny\"", output);
+        Assert.Equal([VideoCommand.Pause], _videoPlayer.Commands);
+    }
+
+    /// <summary>
+    /// The pickers close (2026-10-09, the user's report: since 2026-10-07 the search picker stayed drawn over the input row after
+    /// Enter or ESC, every key going to a line no one could see): Enter closes it before the play's wait, ESC after; the playlist's
+    /// picker the same.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_ThePickers_CloseOnEnterBeforeThePlay_AndOnEsc()
+    {
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var input = Scripted();
+        var openAtPlay = new List<bool>();
+        _videoPlayer!.Changed += s =>
+        {
+            if (s is { State: VideoState.Opening })
+            {
+                openAtPlay.Add(_running!.MenuPaneOpen);
+            }
+        };
+        PushLine("/youtube big buck bunny");
+        input.Push(Keys.Enter);
+        PushLine("/youtube playlist https://www.youtube.com/playlist?list=PLabcdefghijklmnopq");
+        input.Push(Keys.Enter);
+        PushLine("/youtube big buck bunny");
+        input.Push(Keys.Escape);
+        bool? openAtIdle = null;
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            openAtIdle = _running!.MenuPaneOpen;
+            PushLine(input, "/exit");
+        };
+
+        await RunAsync();
+
+        Assert.Equal([false, false], openAtPlay);
+        Assert.False(openAtIdle);
+    }
+
+    /// <summary><c>/youtube playlist &lt;link&gt;</c> (2026-10-08): its entries on the picker, Enter plays the list from the one picked.</summary>
+    [Fact]
+    public async Task YouTube_APlaylistsEntries_OnThePicker_EnterPlaysFromThatOne()
+    {
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/youtube playlist https://www.youtube.com/playlist?list=PLabcdefghijklmnopq");
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/youtube https://www.youtube.com/playlist?list=PLzyxwvutsrqponmlk");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.PlaylistPickTitle(new YouTubePlaylist("PLabcdefghijklmnopq", "Open Movies & Shorts", "Blender", 3)), output);
+        Assert.Matches(@"2\. +Me at the zoo & more +jawed", output);
+        Assert.Matches(@"3\. +\(deleted video\)", output);
+        Assert.Equal([VideoRequest.Playlist("PLabcdefghijklmnopq", 1), VideoRequest.Playlist("PLzyxwvutsrqponmlk")], _videoPlayer!.Plays);
     }
 
     /// <summary>Without the pane (or a window), a search's hits are listed instead of picked.</summary>

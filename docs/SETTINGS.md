@@ -871,11 +871,15 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 
 | Setting | What it does | Default |
 |---|---|---|
-| YouTube tools | Offers the YouTube tools: `youtube_search` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's id or link needs no key. Headless offers the search alone. | off |
+| YouTube tools | Offers the YouTube tools: `youtube_search` and `youtube_playlist` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video or a public playlist in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's or playlist's id or link needs no key. Headless offers the search and the playlist listing. | off |
 | YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac); sent only to www.googleapis.com, in a header, never in a URL. `/keycopy` copies it; a plain `/profile reset` keeps it. | (none) |
-| YouTube search max results | How many videos a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
+| YouTube search max results | How many videos (or playlists, or channels) a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
 | YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
 | YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
+| YouTube search order | The order a search lists in unless it names one (a picker): `relevance` (YouTube's own ranking), `date` (newest first), `views`, `rating` or `title`. The model's `order` and `/youtube search --order` override it for one search. | `relevance` |
+| YouTube safe search | How much restricted content a search leaves out unless it names a level (a picker): `none`, `moderate` (YouTube's own default) or `strict`. The model's `safe_search` and `/youtube search --safe` override it. | `moderate` |
+| YouTube region | A two-letter country code (`US`, `GB`, `DE`) a search asks for: what can be watched and is popular there. Empty for any region. The model's `region` and `/youtube search --region` override it. | (any region) |
+| YouTube language | A language code (`en`, `es`, `zh-Hans`) a search favours: results in it rank higher, the rest are still listed. Empty for any language. The model's `language` and `/youtube search --lang` override it. | (any language) |
 
 ### GitLib
 

@@ -372,7 +372,7 @@ internal sealed class MacVideoWindow : AppKitWindow, IWebPageSink
     public MacVideoWindow(VideoRequest first, string storeId)
     {
         _pending = first;
-        _snapshot = VideoSnapshot.Opening(first.VideoId) with { Version = MacVideoWindows.NextVersion() };
+        _snapshot = VideoSnapshot.Opening(first) with { Version = MacVideoWindows.NextVersion() };
         _storeId = storeId;
     }
 
@@ -423,7 +423,7 @@ internal sealed class MacVideoWindow : AppKitWindow, IWebPageSink
         lock (_gate)
         {
             _pending = request;
-            _snapshot = VideoSnapshot.Opening(request.VideoId) with { Version = MacVideoWindows.NextVersion() };
+            _snapshot = VideoSnapshot.Opening(request) with { Version = MacVideoWindows.NextVersion() };
         }
 
         return Post(() =>

@@ -1,0 +1,23 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "j0",
+  "prevPageToken": "EAEaBlBUOkNBSQ",
+  "pageInfo": { "totalResults": 3, "resultsPerPage": 2 },
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "j1",
+      "id": "UExhYmMuMw",
+      "snippet": {
+        "publishedAt": "2019-03-01T10:00:00Z",
+        "channelId": "UCSMOQeBJ2RAnuFungnQOxLg",
+        "title": "Deleted video",
+        "description": "This video is unavailable.",
+        "channelTitle": "Blender",
+        "playlistId": "PLabcdefghijklmnopq",
+        "position": 2,
+        "resourceId": { "kind": "youtube#video", "videoId": "dQw4w9WgXcQ" }
+      }
+    }
+  ]
+}

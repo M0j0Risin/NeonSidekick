@@ -41,6 +41,13 @@ public class YouTubeCommandTests
     [InlineData("unsave 2", YouTubeVerb.Unsave, "2", null, null)]
     [InlineData("unsave aqz-KE-bpKQ", YouTubeVerb.Unsave, "aqz-KE-bpKQ", null, null)]
     [InlineData("unsave the date", YouTubeVerb.Search, "unsave the date", null, null)]
+    [InlineData("next", YouTubeVerb.Next, "", null, null)]                                        // playlists (2026-10-08)
+    [InlineData("next level", YouTubeVerb.Search, "next level", null, null)]
+    [InlineData("prev", YouTubeVerb.Previous, "", null, null)]
+    [InlineData("previous", YouTubeVerb.Previous, "", null, null)]
+    [InlineData("entry 4", YouTubeVerb.Entry, "4", null, 4.0)]
+    [InlineData("entry level jobs", YouTubeVerb.Search, "entry level jobs", null, null)]
+    [InlineData("playlist", YouTubeVerb.Playlist, "", null, null)]
     public void Parse_ReadsAVerb_OnlyWhenWhatFollowsFitsIt(string args, YouTubeVerb verb, string text, string? id, double? number)
     {
         var line = YouTubeCommand.Parse(args);
@@ -48,10 +55,56 @@ public class YouTubeCommandTests
         Assert.Equal(new YouTubeCommandLine(verb, text, id, number), line);
     }
 
+    /// <summary>A playlist plays by its link (alone too), its id, or a channel's; an entry after it is 1-based (2026-10-08).</summary>
+    [Fact]
+    public void Parse_APlaylist_PlaysIt_FromItsPlace()
+    {
+        const string List = "PLabcdefghijklmnopq";
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, "https://www.youtube.com/playlist?list=" + List, PlaylistId: List, Entry: 0), YouTubeCommand.Parse("https://www.youtube.com/playlist?list=" + List));
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, List + " 3", PlaylistId: List, Entry: 2), YouTubeCommand.Parse("play " + List + " 3"));
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, "youtube.com/watch?v=aqz-KE-bpKQ&list=" + List + "&index=5", PlaylistId: List, Entry: 4), YouTubeCommand.Parse("play youtube.com/watch?v=aqz-KE-bpKQ&list=" + List + "&index=5"));
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, "youtu.be/aqz-KE-bpKQ?list=" + List + "&t=9", "aqz-KE-bpKQ", 9, PlaylistId: List), YouTubeCommand.Parse("youtu.be/aqz-KE-bpKQ?list=" + List + "&t=9"));
+        Assert.Equal("UUSMOQeBJ2RAnuFungnQOxLg", YouTubeCommand.Parse("play UCSMOQeBJ2RAnuFungnQOxLg").PlaylistId);
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Playlist, List, PlaylistId: List), YouTubeCommand.Parse("playlist " + List));
+        Assert.Null(YouTubeCommand.Parse("play aqz-KE-bpKQ").PlaylistId);                           // a video id stays a video
+        Assert.Equal(YouTubeVerb.Search, YouTubeCommand.Parse("playlist of the year").Verb);
+    }
+
+    /// <summary>A search's switches (2026-10-08), after search or leading the line, before its words; their values checked later.</summary>
+    [Fact]
+    public void Parse_TheSearchSwitches()
+    {
+        var line = YouTubeCommand.Parse("search --playlists --order date --since week --region gb --lang en --safe strict lofi beats");
+        Assert.Equal((YouTubeVerb.Search, "lofi beats"), (line.Verb, line.Text));
+        Assert.Equal(new YouTubeSearchChoices(Kind: "playlist", Order: "date", Since: "week", Region: "gb", Language: "en", SafeSearch: "strict"), line.Choices);
+        Assert.Equal(new YouTubeSearchChoices(Kind: "channel", Length: "long", Live: true, Captions: true), YouTubeCommand.Parse("--channels --length long --live --captions blender").Choices);
+        Assert.Null(YouTubeCommand.Parse("search lofi --live").Choices);                            // a switch after the words is a word
+        Assert.Equal("lofi --live", YouTubeCommand.Parse("search lofi --live").Text);
+        Assert.Equal(YouTubeText.UnknownSwitch("--loud"), YouTubeCommand.Parse("search --loud x").Error);
+        Assert.Equal(YouTubeText.CommandUsage, YouTubeCommand.Parse("search --live").Error);       // no words
+        Assert.Equal(YouTubeText.CommandUsage, YouTubeCommand.Parse("search x --order").Error is null ? YouTubeText.CommandUsage : "");
+        Assert.Equal(YouTubeText.CommandUsage, YouTubeCommand.Parse("--order").Error);              // a value switch without its value
+        Assert.All(YouTubeCommand.Switches, s => Assert.Contains(s.Switch, YouTubeText.SearchSwitchesNote));
+    }
+
+    [Fact]
+    public void Complete_OffersTheSwitches_AndTheirWords()
+    {
+        Assert.Equal(YouTubeCommand.Switches.Count, YouTubeCommand.Complete("search -").Count);
+        Assert.Equal(["search --order"], YouTubeCommand.Complete("search --or").Select(c => c.Text));
+        Assert.Equal(["search --order date"], YouTubeCommand.Complete("search --order d").Select(c => c.Text));
+        Assert.Equal(["--live --lang", "--live --length", "--live --live"], YouTubeCommand.Complete("--live --l").Select(c => c.Text).Order());
+        Assert.Equal(YouTubeSearchFilters.SafeSearches.Count, YouTubeCommand.Complete("search --safe ").Count);
+        Assert.Empty(YouTubeCommand.Complete("search lofi"));
+        Assert.Empty(YouTubeCommand.Complete("search --region "));                                  // a code is free
+    }
+
     [Theory]
     [InlineData("search")]
     [InlineData("seek")]
     [InlineData("volume")]
+    [InlineData("entry")]
+    [InlineData("entry 0")]
     [InlineData("volume 140")]
     [InlineData("unsave")]
     public void Parse_AVerbWithoutItsArgument_IsTheUsage(string args)
@@ -62,7 +115,7 @@ public class YouTubeCommandTests
     [Fact]
     public void Complete_OffersTheVerbs_OnlyForTheFirstWord()
     {
-        Assert.Equal(["pause", "play"], YouTubeCommand.Complete("p").Select(c => c.Text).Order());
+        Assert.Equal(["pause", "play", "playlist", "previous"], YouTubeCommand.Complete("p").Select(c => c.Text).Order());
         Assert.Equal(YouTubeCommand.Words.Count, YouTubeCommand.Complete("").Count);
         Assert.Empty(YouTubeCommand.Complete("lofi b"));
         Assert.Equal(["save", "list"], YouTubeCommand.Complete("").Take(2).Select(c => c.Text));   // first (2026-10-08, the user's ask)

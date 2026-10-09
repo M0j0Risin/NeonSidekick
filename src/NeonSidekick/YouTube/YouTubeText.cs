@@ -42,6 +42,8 @@ public static class YouTubeText
         YouTubeFailure.KeyRestricted => "Error: the API key's restrictions refuse this app (" + detail + "). In the Google Cloud Console its application restrictions should be None, and its API restrictions YouTube Data API v3.",
         YouTubeFailure.Refused => detail.Length > 0 ? detail : "Error: the network mode keeps the internet, and YouTube with it, off limits.",
         YouTubeFailure.Timeout => "Error: YouTube did not answer within " + YouTubeDataApi.Timeout.TotalSeconds.ToString(CultureInfo.InvariantCulture) + " seconds; try again.",
+        YouTubeFailure.BadFilter => "Error: YouTube refused the search's filters (" + (detail.Length > 0 ? detail : "no reason given") + ").",
+        YouTubeFailure.NotFound => "Error: YouTube lists no such public playlist" + (detail.Length > 0 ? " (" + detail + ")" : "") + ": it may be private, removed, or a mix made for one viewer, which only plays. Playing it by its link may still work.",
         _ => "Error: the YouTube search failed (" + (detail.Length > 0 ? detail : "no reason given") + ").",
     };
 
@@ -63,27 +65,158 @@ public static class YouTubeText
         _ => Short(views.Value / 1_000_000_000d) + "B",
     };
 
-    /// <summary>A search's answer: a header (the transcript's note) and a numbered line per video, its id last for youtube_play.</summary>
-    public static string Results(string query, IReadOnlyList<YouTubeHit> hits)
+    /// <summary>
+    /// A search's answer: a header (the transcript's note) and a numbered line per hit, its id last for youtube_play: a video's
+    /// <c>id</c>, a playlist's <c>playlist</c> and a channel's <c>channel</c> (2026-10-08, the other kinds).
+    /// </summary>
+    public static string Results(string query, IReadOnlyList<YouTubeHit> hits, YouTubeKind kind = YouTubeKind.Video)
     {
+        ArgumentNullException.ThrowIfNull(hits);
         if (hits.Count == 0)
         {
-            return $"YouTube: no videos for \"{query}\".";
+            return $"YouTube: no {Noun(kind, 2)} for \"{query}\".";
         }
 
-        var lines = new List<string> { $"YouTube: {hits.Count.ToString(CultureInfo.InvariantCulture)} video{(hits.Count == 1 ? "" : "s")} for \"{query}\":" };
+        var lines = new List<string> { $"YouTube: {hits.Count.ToString(CultureInfo.InvariantCulture)} {Noun(kind, hits.Count)} for \"{query}\":" };
         for (int i = 0; i < hits.Count; i++)
         {
             var hit = hits[i];
-            var parts = new List<string> { hit.Channel, Length(hit), Views(hit.Views) is { Length: > 0 } views ? views + " views" : "", hit.Published?.Year.ToString(CultureInfo.InvariantCulture) ?? "", "id " + hit.Id };
-            lines.Add($"{(i + 1).ToString(CultureInfo.InvariantCulture)}. {hit.Title} — {string.Join(" · ", parts.Where(p => p.Length > 0))}");
+            string facts = string.Join(" · ", Facts(hit, withId: true));
+            lines.Add($"{(i + 1).ToString(CultureInfo.InvariantCulture)}. {hit.Title}{(hit.Kind == YouTubeKind.Channel ? " · " : " — ")}{facts}");
         }
 
         return string.Join('\n', lines);
     }
 
+    /// <summary><c>video</c>/<c>videos</c>, <c>playlist</c>/<c>playlists</c>, <c>channel</c>/<c>channels</c> (2026-10-08).</summary>
+    public static string Noun(YouTubeKind kind, int count) => kind switch
+    {
+        YouTubeKind.Playlist => count == 1 ? "playlist" : "playlists",
+        YouTubeKind.Channel => count == 1 ? "channel" : "channels",
+        _ => count == 1 ? "video" : "videos",
+    };
+
+    // A hit's facts after its title: a video's channel, length, views and year; a playlist's channel, count and year; a channel's
+    // subscribers and videos; then its id when asked for.
+    private static IEnumerable<string> Facts(YouTubeHit hit, bool withId, bool withYear = true)
+    {
+        string year = withYear ? hit.Published?.Year.ToString(CultureInfo.InvariantCulture) ?? "" : "";
+        string count = hit.Count is { } n ? Views(n) + (n == 1 ? " video" : " videos") : "";
+        var parts = hit.Kind switch
+        {
+            YouTubeKind.Playlist => [hit.Channel, count, year, withId ? "playlist " + hit.Id : ""],
+            YouTubeKind.Channel => [Views(hit.Subscribers) is { Length: > 0 } subs ? subs + " subscribers" : "", count, withId ? "channel " + hit.Id : ""],
+            _ => new[] { hit.Channel, Length(hit), Views(hit.Views) is { Length: > 0 } views ? views + " views" : "", year, withId ? "id " + hit.Id : "" },
+        };
+        return parts.Where(p => p.Length > 0);
+    }
+
+    /// <summary>A search filter's word not among <paramref name="words"/> (2026-10-08).</summary>
+    public static string NotOneOf(string argument, string? text, IEnumerable<string> words) => $"Error: \"{argument}\" must be one of {string.Join(", ", words)}, not \"{text}\".";
+
+    /// <summary>A <c>since</c> that is no word and no date (2026-10-08).</summary>
+    public static string NotASince(string? text) => $"Error: \"since\" must be today, week, month, year or a date like 2026-01-31, not \"{text}\".";
+
+    /// <summary>A region that is not two letters (2026-10-08).</summary>
+    public static string NotARegion(string? text) => $"Error: \"region\" must be a two-letter country code like US or GB, not \"{text}\".";
+
+    /// <summary>A language that is no language code (2026-10-08).</summary>
+    public static string NotALanguage(string? text) => $"Error: \"language\" must be a language code like en, es or zh-Hans, not \"{text}\".";
+
+    /// <summary>A video-only filter on a playlist or channel search (2026-10-08). Pinned.</summary>
+    public const string VideoOnlyFilter = "Error: length, live and captions filter videos only; leave them out to search for playlists or channels.";
+
+    /// <summary>A <c>/youtube search</c> switch it does not know (2026-10-08).</summary>
+    public static string UnknownSwitch(string? text) => $"Unknown switch \"{text}\"; {SearchSwitchesNote}.";
+
+    /// <summary>The search switches in a line, for the usage and the help (2026-10-08). Pinned.</summary>
+    public const string SearchSwitchesNote = "/youtube search takes --playlists, --channels, --order <relevance|date|views|rating|title>, --length <short|medium|long>, --since <today|week|month|year|date>, --region <cc>, --lang <code>, --live, --captions and --safe <none|moderate|strict> before its words";
+
     /// <summary>No window open.</summary>
     public const string NoVideo = "No video is open; youtube_play opens one.";
+
+    /// <summary>A playlist named no way youtube_play reads (2026-10-08).</summary>
+    public static string NotAPlaylist(string? text) => $"Error: \"{text}\" names no YouTube playlist: give its id (PL…), a link with list=, or a channel's id (UC…) or link for its uploads.";
+
+    /// <summary>next, previous or entry with no playlist in the window (2026-10-08). Pinned.</summary>
+    public const string NoPlaylist = "Error: the video window is not playing a playlist; youtube_play with a playlist starts one.";
+
+    /// <summary>An entry number out of the playlist (2026-10-08).</summary>
+    public static string NotAnEntry(string? text, int? count) =>
+        $"Error: \"entry\" must be a number from 1{(count is { } n ? " to " + n.ToString(CultureInfo.InvariantCulture) : "")}, not \"{text}\".";
+
+    /// <summary>youtube_playlist's <c>max</c> out of its range (2026-10-08).</summary>
+    public static readonly string BadPlaylistMax = "Error: \"max\" must be 1 to " + YouTubeDataApi.MaxPlaylistEntries.ToString(CultureInfo.InvariantCulture) + ".";
+
+    /// <summary>youtube_playlist with no playlist named and none playing (2026-10-08).</summary>
+    public const string NoPlaylistNamed = "Error: name a playlist (its id or a link); none is playing to list.";
+
+    /// <summary>
+    /// youtube_playlist's answer (2026-10-08): the playlist, then a numbered line per entry — its place in the list, the number
+    /// youtube_play's <c>entry</c> takes — a deleted or private one said so.
+    /// </summary>
+    public static string PlaylistEntries(YouTubePlaylist playlist, IReadOnlyList<YouTubePlaylistEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(playlist);
+        ArgumentNullException.ThrowIfNull(entries);
+        string by = playlist.Channel.Length > 0 ? " by " + playlist.Channel : "";
+        string shown = entries.Count < playlist.Count ? $", the first {entries.Count.ToString(CultureInfo.InvariantCulture)} listed" : "";
+        var lines = new List<string> { $"Playlist {Named(playlist)}{by}: {playlist.Count.ToString(CultureInfo.InvariantCulture)} {Noun(YouTubeKind.Video, playlist.Count)}{shown}; youtube_play with playlist {playlist.Id} and an entry number plays from it:" };
+        foreach (var entry in entries)
+        {
+            string number = (entry.Position + 1).ToString(CultureInfo.InvariantCulture);
+            lines.Add(entry.Available
+                ? $"{number}. {entry.Title} — {entry.Channel} · id {entry.VideoId}"
+                : $"{number}. ({entry.Title.ToLowerInvariant()}, which the player skips)");
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    // A playlist in a sentence: its title in quotes, or its id when YouTube named none (a channel's uploads).
+    private static string Named(YouTubePlaylist playlist) => playlist.Title.Length > 0 ? $"\"{playlist.Title}\"" : playlist.Id;
+
+    /// <summary>The picker's title over a playlist's entries (2026-10-08).</summary>
+    public static string PlaylistPickTitle(YouTubePlaylist playlist)
+    {
+        ArgumentNullException.ThrowIfNull(playlist);
+        return $"YouTube playlist: {Named(playlist)} ({playlist.Count.ToString(CultureInfo.InvariantCulture)} {Noun(YouTubeKind.Video, playlist.Count)})";
+    }
+
+    /// <summary>
+    /// A playlist's entries as the picker's rows (2026-10-08; in columns 2026-10-09, the search picker's way): the entry's number
+    /// right-aligned, its title and channel; a deleted or private one in brackets. Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> PlaylistPickRows(IReadOnlyList<YouTubePlaylistEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        return Table(entries.Select(entry => new Column[]
+        {
+            new((entry.Position + 1).ToString(CultureInfo.InvariantCulture) + ".", 0, Right: true),
+            new(entry.Available ? entry.Title : "(" + entry.Title.ToLowerInvariant() + ")", SavedTitleWidth),
+            new(entry.Available ? entry.Channel : "", SavedChannelWidth),
+        }).ToList());
+    }
+
+    /// <summary>The footer under the playlist's picker for <paramref name="entry"/> (2026-10-08): the whole title, then its place and id.</summary>
+    public static UI.MenuFooter PlaylistPickFooter(YouTubePlaylist playlist, YouTubePlaylistEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(playlist);
+        ArgumentNullException.ThrowIfNull(entry);
+        string place = $"entry {(entry.Position + 1).ToString(CultureInfo.InvariantCulture)} of {playlist.Count.ToString(CultureInfo.InvariantCulture)}";
+        return new UI.MenuFooter(entry.Title, string.Join(" · ", new[] { entry.Channel, place, "id " + entry.VideoId }.Where(p => p.Length > 0)));
+    }
+
+    /// <summary>The spinner's label while <c>/youtube playlist</c> reads a playlist (2026-10-08).</summary>
+    public const string ReadingPlaylist = "Reading the playlist from YouTube…";
+
+    /// <summary><c>/youtube playlist</c> with no key (2026-10-08): the user's own sentence.</summary>
+    public const string NoKeyForPlaylist = "Listing a playlist's videos needs a YouTube Data API key: add one as YouTube API key on the YouTube tab of /tools. Playing it needs none: /youtube play <playlist link>.";
+
+    /// <summary>The picker's save on a playlist or a channel (2026-10-08): only a video is saved.</summary>
+    public static string SaveVideosOnly(YouTubeKind kind) => kind == YouTubeKind.Channel
+        ? "Only a video can be saved; Enter plays this channel's uploads."
+        : "Only a video can be saved; Enter plays this playlist.";
 
     /// <summary>A video named no way youtube_play reads.</summary>
     public static string NotAVideo(string? text) => $"Error: \"{text}\" names no YouTube video: give its 11-character id or a youtube.com or youtu.be link.";
@@ -133,12 +266,14 @@ public static class YouTubeText
 
         if (snapshot.Error is { } code)
         {
-            return Refused(snapshot.VideoId, code);
+            return Refused(snapshot.VideoId, code) + (snapshot.Skipping ? " The playlist moves on to the next entry." : "");
         }
 
         if (snapshot.State == VideoState.Opening)
         {
-            return $"Opening video {snapshot.VideoId} in the video window; youtube_status says when it plays.";
+            return snapshot.VideoId is null && snapshot.PlaylistId is { } opening
+                ? $"Opening playlist {opening} in the video window; youtube_status says when it plays."
+                : $"Opening video {snapshot.VideoId} in the video window; youtube_status says when it plays.";
         }
 
         string state = snapshot.State switch
@@ -157,14 +292,32 @@ public static class YouTubeText
             : snapshot.Position > 0 ? $" at {YouTubeIds.FormatTime(snapshot.Position)}" : "";
         string sound = $", volume {snapshot.Volume.ToString(CultureInfo.InvariantCulture)}%{(snapshot.Muted ? ", muted" : "")}";
         string id = string.IsNullOrWhiteSpace(snapshot.Title) ? "" : $" · video {snapshot.VideoId}";
-        return state + " " + title + author + where + sound + id;
+        return state + " " + title + author + where + sound + id + InPlaylist(snapshot);
+    }
+
+    /// <summary>
+    /// Where a playlist's video stands in it (2026-10-08): <c> · entry 3 of 25 in playlist PL…</c>, <c> · in playlist PL…</c> before the
+    /// player says; empty for one video.
+    /// </summary>
+    public static string InPlaylist(VideoSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (snapshot.PlaylistId is not { } list)
+        {
+            return "";
+        }
+
+        string entry = snapshot.PlaylistEntry is { } at
+            ? "entry " + (at + 1).ToString(CultureInfo.InvariantCulture) + (snapshot.PlaylistCount is { } count ? " of " + count.ToString(CultureInfo.InvariantCulture) : "") + " "
+            : "";
+        return $" · {entry}in playlist {list}";
     }
 
     /// <summary><c>/youtube</c>'s line in the help's list: a few words, lowercase.</summary>
     public const string HelpSummary = "search and play YouTube videos";
 
     /// <summary>A <c>/youtube</c> verb without what it needs.</summary>
-    public const string CommandUsage = "/youtube [<words> | play <id|link> [<time>] | pause | resume | seek <time> | volume <0-100> | mute | unmute | close | status | save [<id|link>] | saved [--clear] | unsave <n|id|link> | search <words>]";
+    public const string CommandUsage = "/youtube [<words> | play <id|link> [<time>] | play <playlist|link> [<entry>] | next | previous | entry <n> | playlist [<id|link>] | pause | resume | seek <time> | volume <0-100> | mute | unmute | close | status | save [<id|link>] | list [--clear] | unsave <n|id|link> | search [--switches] <words>]";
 
     // ── The saved videos (2026-10-07, the user's ask) ─────────────────────────
 
@@ -213,6 +366,15 @@ public static class YouTubeText
 
     /// <summary>The spinner's label while <c>/youtube save &lt;id|link&gt;</c> looks the video up (2026-10-07).</summary>
     public const string LookingUp = "Looking the video up on YouTube…";
+
+    /// <summary>
+    /// The spinner's label while <c>/youtube</c> waits for the player to start a video or playlist, or move through one (2026-10-09:
+    /// the wait, up to <see cref="YouTubeWait.Play"/>, held the screen with nothing on it, found playing a channel the page never started).
+    /// </summary>
+    public const string WaitingForPlayer = "Waiting for the video window…";
+
+    /// <summary>ESC or Ctrl+C under <see cref="WaitingForPlayer"/>: only the wait stops, the window carries on (2026-10-09).</summary>
+    public const string StoppedWaiting = "(stopped waiting; the video window is still open: /youtube status says where it is)";
 
     /// <summary>The spinner's label while <c>/youtube list</c> looks up the titles still missing (2026-10-07).</summary>
     public const string LookingUpTitles = "Looking up the saved videos' titles…";
@@ -330,8 +492,7 @@ public static class YouTubeText
     public static UI.MenuFooter PickFooter(YouTubeHit hit)
     {
         ArgumentNullException.ThrowIfNull(hit);
-        var parts = new List<string> { hit.Channel, Length(hit), Views(hit.Views) is { Length: > 0 } views ? views + " views" : "", hit.Published?.Year.ToString(CultureInfo.InvariantCulture) ?? "", "id " + hit.Id };
-        return new UI.MenuFooter(hit.Title, string.Join(" · ", parts.Where(p => p.Length > 0)));
+        return new UI.MenuFooter(hit.Title, string.Join(" · ", Facts(hit, withId: true)));
     }
 
     /// <summary>The count over the pane's rows and the printed list.</summary>
@@ -404,11 +565,54 @@ public static class YouTubeText
     /// <summary>The picker's title over a search's hits.</summary>
     public static string PickTitle(string query) => $"YouTube: \"{query}\"";
 
-    /// <summary>A hit as the picker's row: the title, then the channel, the length and the views.</summary>
-    public static string PickRow(YouTubeHit hit)
+    /// <summary>
+    /// A search's hits as the picker's rows, in columns (2026-10-09, the user's ask: the saved list's uniform columns, 2026-10-08): a
+    /// video's title, channel, length and views; a playlist's title, channel and count; a channel's name, subscribers and videos. The
+    /// title and channel are cut at <see cref="SavedTitleWidth"/> and <see cref="SavedChannelWidth"/> (the footer has them whole), the
+    /// numbers right-aligned; the year and the id are the footer's. Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> PickRows(IReadOnlyList<YouTubeHit> hits)
     {
-        var parts = new[] { hit.Channel, Length(hit), Views(hit.Views) is { Length: > 0 } views ? views + " views" : "" }.Where(p => p.Length > 0);
-        return hit.Title + "  ·  " + string.Join(" · ", parts);
+        ArgumentNullException.ThrowIfNull(hits);
+        return Table(hits.Select(hit =>
+        {
+            string count = hit.Count is { } n ? Views(n) + (n == 1 ? " video" : " videos") : "";
+            return hit.Kind switch
+            {
+                YouTubeKind.Playlist => new Column[] { new(hit.Title, SavedTitleWidth), new(hit.Channel, SavedChannelWidth), new(count, 0, Right: true) },
+                YouTubeKind.Channel => [new(hit.Title, SavedTitleWidth), new(Views(hit.Subscribers) is { Length: > 0 } subs ? subs + " subscribers" : "", 0, Right: true), new(count, 0, Right: true)],
+                _ => [new(hit.Title, SavedTitleWidth), new(hit.Channel, SavedChannelWidth), new(Length(hit), 0, Right: true), new(Views(hit.Views) is { Length: > 0 } views ? views + " views" : "", 0, Right: true)],
+            };
+        }).ToList());
+    }
+
+    // One cell of a picker's table: its text, its width at most (0 for none) and whether it sits right (a number).
+    private readonly record struct Column(string Text, int Cap, bool Right = false);
+
+    // Rows of cells as lines in columns: each column as wide as its widest cell (held to its cap, cut with an ellipsis past it), two
+    // blanks between, an empty column left out, the line's end trimmed.
+    private static List<string> Table(IReadOnlyList<Column[]> rows)
+    {
+        int count = rows.Count == 0 ? 0 : rows.Max(r => r.Length);
+        var widths = new int[count];
+        foreach (var row in rows)
+        {
+            for (int i = 0; i < row.Length; i++)
+            {
+                int width = UI.TextCells.Width(row[i].Text);
+                widths[i] = Math.Max(widths[i], row[i].Cap > 0 ? Math.Min(width, row[i].Cap) : width);
+            }
+        }
+
+        return rows.Select(row => string.Join("  ", row.Select((cell, i) => (cell, i)).Where(c => widths[c.i] > 0)
+            .Select(c => c.cell.Right ? RightCell(c.cell.Text, widths[c.i]) : Cell(c.cell.Text, widths[c.i]))).TrimEnd()).ToList();
+    }
+
+    // Text in exactly width cells, padded on the left (a number's column).
+    private static string RightCell(string text, int width)
+    {
+        string fitted = UI.ScreenPane.Fit(text, width);
+        return new string(' ', Math.Max(0, width - UI.TextCells.Width(fitted))) + fitted;
     }
 
     /// <summary>Headless, and off Windows: every verb but a search wants the video window.</summary>

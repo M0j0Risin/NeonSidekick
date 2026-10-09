@@ -1,0 +1,38 @@
+{
+  "kind": "youtube#searchListResponse",
+  "etag": "s0",
+  "regionCode": "US",
+  "pageInfo": { "totalResults": 2, "resultsPerPage": 2 },
+  "items": [
+    {
+      "kind": "youtube#searchResult",
+      "etag": "s1",
+      "id": { "kind": "youtube#playlist", "playlistId": "PLabcdefghijklmnopq" },
+      "snippet": {
+        "publishedAt": "2019-03-01T10:00:00Z",
+        "channelId": "UCSMOQeBJ2RAnuFungnQOxLg",
+        "title": "Open Movies &amp; Shorts",
+        "channelTitle": "Blender",
+        "liveBroadcastContent": "none"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "s2",
+      "id": { "kind": "youtube#playlist", "playlistId": "PLzyxwvutsrqponmlk" },
+      "snippet": {
+        "publishedAt": "2021-06-01T10:00:00Z",
+        "channelId": "UCSJ4gkVC6NrvII8umztf0Ow",
+        "title": "lofi hip hop",
+        "channelTitle": "Lofi Girl",
+        "liveBroadcastContent": "none"
+      }
+    },
+    {
+      "kind": "youtube#searchResult",
+      "etag": "s3",
+      "id": { "kind": "youtube#video", "videoId": "aqz-KE-bpKQ" },
+      "snippet": { "title": "a stray video", "channelTitle": "Blender", "liveBroadcastContent": "none" }
+    }
+  ]
+}

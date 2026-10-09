@@ -40,6 +40,176 @@ public class YouTubeSearchTests
         Assert.Equal(start, at);
     }
 
+    // ── Playlists (2026-10-08) ───────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("PLabcdefghijklmnopq", "PLabcdefghijklmnopq", 0, null, 0)]
+    [InlineData("https://www.youtube.com/playlist?list=PLabcdefghijklmnopq", "PLabcdefghijklmnopq", 0, null, 0)]
+    [InlineData("youtube.com/playlist?list=PLabcdefghijklmnopq&si=x", "PLabcdefghijklmnopq", 0, null, 0)]
+    [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ&list=PLabcdefghijklmnopq&index=4", "PLabcdefghijklmnopq", 3, null, 0)]
+    [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ&list=PLabcdefghijklmnopq&t=30", "PLabcdefghijklmnopq", 0, "aqz-KE-bpKQ", 30)]
+    [InlineData("https://youtu.be/aqz-KE-bpKQ?list=PLabcdefghijklmnopq", "PLabcdefghijklmnopq", 0, "aqz-KE-bpKQ", 0)]
+    [InlineData("https://music.youtube.com/playlist?list=OLAK5uy_abcdefghijklmnop", "OLAK5uy_abcdefghijklmnop", 0, null, 0)]
+    [InlineData("UCSMOQeBJ2RAnuFungnQOxLg", "UUSMOQeBJ2RAnuFungnQOxLg", 0, null, 0)]
+    [InlineData("https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg/videos", "UUSMOQeBJ2RAnuFungnQOxLg", 0, null, 0)]
+    public void TryParsePlaylist_ReadsTheListAndWhereToStart(string text, string list, int entry, string? video, double start)
+    {
+        Assert.True(YouTubeIds.TryParsePlaylist(text, out string parsed, out int at, out string? id, out double from));
+        Assert.Equal((list, entry, video, start), (parsed, at, id, from));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("aqz-KE-bpKQ")]                                          // a video id
+    [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ")]          // a video link
+    [InlineData("https://www.youtube.com/watch?v=aqz-KE-bpKQ&list=WL")] // Watch Later: no public list
+    [InlineData("https://example.com/playlist?list=PLabcdefghijklmnopq")]
+    [InlineData("https://www.youtube.com/@Blender")]
+    [InlineData("lofi beats")]
+    [InlineData(null)]
+    public void TryParsePlaylist_RefusesWhatNamesNoPlaylist(string? text)
+    {
+        Assert.False(YouTubeIds.TryParsePlaylist(text, out _, out _, out _, out _));
+    }
+
+    [Fact]
+    public void SearchUrl_AddsEachFilter_OnlyWhenSet()
+    {
+        const string Plain = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=5&q=lofi";
+        Assert.Equal(Plain, YouTubeDataApi.SearchUrl("lofi", 5).AbsoluteUri);
+        Assert.Equal(Plain, YouTubeDataApi.SearchUrl("lofi", 5, YouTubeSearchFilters.None with { Order = "relevance", SafeSearch = "moderate", Length = "any" }).AbsoluteUri);
+
+        var all = new YouTubeSearchFilters
+        {
+            Order = "views", Length = "long", Since = new DateTimeOffset(2026, 1, 31, 0, 0, 0, TimeSpan.Zero), Region = "GB", Language = "en",
+            Live = true, Captions = true, SafeSearch = "strict",
+        };
+        Assert.Equal(Plain + "&order=viewCount&publishedAfter=2026-01-31T00%3A00%3A00Z&regionCode=GB&relevanceLanguage=en&videoDuration=long&eventType=live&videoCaption=closedCaption&safeSearch=strict",
+            YouTubeDataApi.SearchUrl("lofi", 5, all).AbsoluteUri);
+
+        // A playlist or channel search: no embeddable, none of the video-only filters.
+        Assert.Equal("https://www.googleapis.com/youtube/v3/search?part=snippet&type=playlist&maxResults=5&q=lofi&order=date&regionCode=GB",
+            YouTubeDataApi.SearchUrl("lofi", 5, all with { Kind = YouTubeKind.Playlist, Order = "date", Since = null, Language = "", SafeSearch = "moderate" }).AbsoluteUri);
+        Assert.StartsWith("https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=5&q=lofi", YouTubeDataApi.SearchUrl("lofi", 5, all with { Kind = YouTubeKind.Channel }).AbsoluteUri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheFilters_ReadTheUsersWords()
+    {
+        var now = new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero);
+        Assert.Equal(now.AddDays(-1), YouTubeSearchFilters.ParseSince("today", now));
+        Assert.Equal(now.AddDays(-365), YouTubeSearchFilters.ParseSince(" YEAR ", now));
+        Assert.Equal(new DateTimeOffset(2026, 1, 31, 0, 0, 0, TimeSpan.Zero), YouTubeSearchFilters.ParseSince("2026-01-31", now));
+        Assert.Null(YouTubeSearchFilters.ParseSince("2026-13-01", now));
+        Assert.Null(YouTubeSearchFilters.ParseSince("last week", now));
+        Assert.Equal(["US", "", null, null], new[] { "us", " ", "USA", "U1" }.Select(YouTubeSearchFilters.NormalizeRegion));
+        Assert.Equal(["en", "zh-Hans", "pt-BR", "fil", "", null, null], new[] { "EN", "zh-Hans", "pt-BR", "fil", "", "english", "en-" }.Select(YouTubeSearchFilters.NormalizeLanguage));
+        Assert.Equal(["relevance", "date", "viewCount", "rating", "title", null], new[] { "relevance", "Date", "views", "rating", "title", "viewCount" }.Select(YouTubeSearchFilters.ApiOrder));
+    }
+
+    [Fact]
+    public void ParseSearch_TakesTheKindAskedFor()
+    {
+        var channels = YouTubeDataApi.ParseSearch(Fixture("search.json"), YouTubeKind.Channel);
+        Assert.Equal([("UCSMOQeBJ2RAnuFungnQOxLg", "Blender", YouTubeKind.Channel)], channels.Select(h => (h.Id, h.Title, h.Kind)));
+
+        var playlists = YouTubeDataApi.ParseSearch(Fixture("search-playlists.json"), YouTubeKind.Playlist);
+        Assert.Equal(["PLabcdefghijklmnopq", "PLzyxwvutsrqponmlk"], playlists.Select(h => h.Id));   // the stray video passed over
+        Assert.Equal("Open Movies & Shorts", playlists[0].Title);
+    }
+
+    [Fact]
+    public async Task Search_ForPlaylists_AndChannels_AsksForTheirOwnDetails()
+    {
+        var stub = new StubHttpMessageHandler()
+            .Map("https://www.googleapis.com/youtube/v3/search", HttpStatusCode.OK, Fixture("search-playlists.json"))
+            .Map("https://www.googleapis.com/youtube/v3/playlists?", HttpStatusCode.OK, Fixture("playlist.json"));
+        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("lofi", 5, YouTubeSearchFilters.None with { Kind = YouTubeKind.Playlist }, Key, CancellationToken.None);
+
+        Assert.Equal([(3L, YouTubeKind.Playlist), (120L, YouTubeKind.Playlist)], outcome.Hits.Select(h => (h.Count!.Value, h.Kind)));
+        Assert.Equal("https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&id=PLabcdefghijklmnopq,PLzyxwvutsrqponmlk", stub.Requests[^1].Uri.AbsoluteUri);
+
+        stub = new StubHttpMessageHandler()
+            .Map("https://www.googleapis.com/youtube/v3/search", HttpStatusCode.OK, Fixture("search.json"))
+            .Map("https://www.googleapis.com/youtube/v3/channels?", HttpStatusCode.OK, Fixture("channels.json"));
+        outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("blender", 5, YouTubeSearchFilters.None with { Kind = YouTubeKind.Channel }, Key, CancellationToken.None);
+
+        var channel = Assert.Single(outcome.Hits);
+        Assert.Equal((1_840_000L, 689L), (channel.Subscribers!.Value, channel.Count!.Value));
+        Assert.Equal("https://www.googleapis.com/youtube/v3/channels?part=statistics&id=UCSMOQeBJ2RAnuFungnQOxLg", stub.Requests[^1].Uri.AbsoluteUri);
+    }
+
+    /// <summary>A playlist: one call for it, then pages of entries until the count asked for; a deleted entry kept, marked.</summary>
+    [Fact]
+    public async Task Playlist_ReadsItsTitle_ThenItsEntries_PageByPage()
+    {
+        var keys = new List<string?>();
+        var stub = new StubHttpMessageHandler()
+            .Map("https://www.googleapis.com/youtube/v3/playlists?", (request, _) => Answer(request, keys, "playlist.json"))
+            .Map("https://www.googleapis.com/youtube/v3/playlistItems?", (request, _) =>
+                Answer(request, keys, request.RequestUri!.Query.Contains("pageToken=EAAaBlBUOkNBSQ", StringComparison.Ordinal) ? "playlistItems-2.json" : "playlistItems-1.json"));
+
+        var outcome = await new YouTubeDataApi(new HttpClient(stub)).PlaylistAsync("PLabcdefghijklmnopq", 50, Key, CancellationToken.None);
+
+        Assert.True(outcome.Ok);
+        Assert.Equal(new YouTubePlaylist("PLabcdefghijklmnopq", "Open Movies & Shorts", "Blender", 3), outcome.Playlist);
+        Assert.Equal(
+            [new YouTubePlaylistEntry(0, "aqz-KE-bpKQ", "Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film", "Blender"), new YouTubePlaylistEntry(1, "jNQXAC9IVRw", "Me at the zoo & more", "jawed"), new YouTubePlaylistEntry(2, "dQw4w9WgXcQ", "Deleted video", "", Available: false)],
+            outcome.Entries);
+        Assert.Equal(
+            ["https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&id=PLabcdefghijklmnopq",
+             "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=PLabcdefghijklmnopq",
+             "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=48&playlistId=PLabcdefghijklmnopq&pageToken=EAAaBlBUOkNBSQ"],
+            stub.Requests.Select(r => r.Uri.AbsoluteUri));
+        Assert.Equal([Key, Key, Key], keys);
+
+        // Two asked for: the first page answers it, no second.
+        stub.Requests.Clear();
+        outcome = await new YouTubeDataApi(new HttpClient(stub)).PlaylistAsync("PLabcdefghijklmnopq", 2, Key, CancellationToken.None);
+        Assert.Equal(2, outcome.Entries.Count);
+        Assert.Equal(2, stub.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Playlist_NoneSuch_NoKey_AndAnUnlistedOne()
+    {
+        Assert.Equal(YouTubeFailure.NoKey, (await new YouTubeDataApi(new HttpClient(new StubHttpMessageHandler())).PlaylistAsync("PLabcdefghijklmnopq", 5, " ", CancellationToken.None)).Failure);
+
+        const string NotFound = "{\"error\":{\"code\":404,\"message\":\"The playlist identified with the request's playlistId parameter cannot be found.\",\"errors\":[{\"reason\":\"playlistNotFound\"}]}}";
+        var stub = new StubHttpMessageHandler()
+            .Map("https://www.googleapis.com/youtube/v3/playlists?", HttpStatusCode.OK, "{ \"items\": [] }")
+            .Map("https://www.googleapis.com/youtube/v3/playlistItems?", HttpStatusCode.NotFound, NotFound);
+        Assert.Equal(YouTubeFailure.NotFound, (await new YouTubeDataApi(new HttpClient(stub)).PlaylistAsync("PLnosuchlistatall", 5, Key, CancellationToken.None)).Failure);
+
+        // Not listed by playlists.list (a channel's uploads may not be), but its entries read: titled by its id.
+        stub = new StubHttpMessageHandler()
+            .Map("https://www.googleapis.com/youtube/v3/playlists?", HttpStatusCode.OK, "{ \"items\": [] }")
+            .Map("https://www.googleapis.com/youtube/v3/playlistItems?", HttpStatusCode.OK, Fixture("playlistItems-2.json"));
+        var unlisted = await new YouTubeDataApi(new HttpClient(stub)).PlaylistAsync("UUSMOQeBJ2RAnuFungnQOxLg", 5, Key, CancellationToken.None);
+        Assert.Equal(new YouTubePlaylist("UUSMOQeBJ2RAnuFungnQOxLg", "", "", 1), unlisted.Playlist);
+        Assert.StartsWith("Playlist UUSMOQeBJ2RAnuFungnQOxLg: 1 video;", YouTubeText.PlaylistEntries(unlisted.Playlist!, unlisted.Entries), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ParseError_ReadsABadFilter_AndAMissingPlaylist()
+    {
+        Assert.Equal(YouTubeFailure.BadFilter, YouTubeDataApi.ParseError(HttpStatusCode.BadRequest, "{\"error\":{\"code\":400,\"message\":\"Invalid region code.\",\"errors\":[{\"reason\":\"invalidRegionCode\"}]}}").Failure);
+        Assert.Equal(YouTubeFailure.NotFound, YouTubeDataApi.ParseError(HttpStatusCode.NotFound, "{\"error\":{\"code\":404,\"message\":\"x\",\"errors\":[{\"reason\":\"playlistNotFound\"}]}}").Failure);
+        Assert.StartsWith("Error: YouTube refused the search's filters (HTTP 400: Invalid region code.)", YouTubeText.Failure(YouTubeFailure.BadFilter, "HTTP 400: Invalid region code."), StringComparison.Ordinal);
+    }
+
+    /// <summary>The real API (about 2 quota units): Blender's uploads, read as a playlist.</summary>
+    [LiveYouTubeFact]
+    public async Task Live_AChannelsUploads_ReadAsAPlaylist()
+    {
+        using var http = new HttpClient();
+        var outcome = await new YouTubeDataApi(http).PlaylistAsync("UUSMOQeBJ2RAnuFungnQOxLg", 5, LiveYouTube.Key!, CancellationToken.None);
+
+        Assert.True(outcome.Ok, outcome.Failure + " " + outcome.Detail);
+        Assert.Equal(5, outcome.Entries.Count);
+        Assert.All(outcome.Entries, e => Assert.True(Viewer.VideoRequest.IsVideoId(e.VideoId)));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("lofi beats")]
@@ -168,7 +338,7 @@ public class YouTubeSearchTests
             .Map("https://www.googleapis.com/youtube/v3/videos", (request, _) => Answer(request, keys, "videos.json"));
         var api = new YouTubeDataApi(new HttpClient(stub));
 
-        var outcome = await api.SearchAsync(" big buck bunny ", 3, Key, CancellationToken.None);
+        var outcome = await api.SearchAsync(" big buck bunny ", 3, YouTubeSearchFilters.None, Key, CancellationToken.None);
 
         Assert.True(outcome.Ok);
         Assert.Equal(
@@ -222,7 +392,7 @@ public class YouTubeSearchTests
             .Map("https://www.googleapis.com/youtube/v3/search", HttpStatusCode.OK, Fixture("search.json"))
             .Map("https://www.googleapis.com/youtube/v3/videos", HttpStatusCode.Forbidden, Fixture("error-quota.json"));
 
-        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, Key, CancellationToken.None);
+        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, YouTubeSearchFilters.None, Key, CancellationToken.None);
 
         Assert.True(outcome.Ok);
         Assert.Equal(3, outcome.Hits.Count);
@@ -234,7 +404,7 @@ public class YouTubeSearchTests
     {
         var stub = new StubHttpMessageHandler();
 
-        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, "  ", CancellationToken.None);
+        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, YouTubeSearchFilters.None, "  ", CancellationToken.None);
 
         Assert.Equal(YouTubeFailure.NoKey, outcome.Failure);
         Assert.Empty(stub.Requests);
@@ -245,7 +415,7 @@ public class YouTubeSearchTests
     {
         var stub = new StubHttpMessageHandler().Map("https://www.googleapis.com/youtube/v3/search", HttpStatusCode.OK, "{\"items\":[]}");
 
-        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("zzzz", 5, Key, CancellationToken.None);
+        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("zzzz", 5, YouTubeSearchFilters.None, Key, CancellationToken.None);
 
         Assert.True(outcome.Ok);
         Assert.Empty(outcome.Hits);
@@ -257,7 +427,7 @@ public class YouTubeSearchTests
     {
         var stub = new StubHttpMessageHandler().Map("https://www.googleapis.com/youtube/v3/search", HttpStatusCode.Forbidden, Fixture("error-quota.json"));
 
-        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, Key, CancellationToken.None);
+        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, YouTubeSearchFilters.None, Key, CancellationToken.None);
 
         Assert.Equal(YouTubeFailure.Quota, outcome.Failure);
         Assert.Single(stub.Requests);
@@ -269,7 +439,7 @@ public class YouTubeSearchTests
     {
         var stub = new StubHttpMessageHandler().Map("https://www.googleapis.com/", (_, _) => throw new HttpRequestException("connect failed", new NetworkRefusedException("www.googleapis.com", NetworkRefusal.Internet)));
 
-        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, Key, CancellationToken.None);
+        var outcome = await new YouTubeDataApi(new HttpClient(stub)).SearchAsync("bunny", 5, YouTubeSearchFilters.None, Key, CancellationToken.None);
 
         Assert.Equal(YouTubeFailure.Refused, outcome.Failure);
         Assert.Equal(WebText.InternetRefused("www.googleapis.com"), outcome.Detail);
@@ -333,7 +503,7 @@ public class YouTubeSearchTests
     public async Task Live_ASearch_FindsBigBuckBunny_WithItsLength()
     {
         using var http = new HttpClient();
-        var outcome = await new YouTubeDataApi(http).SearchAsync("big buck bunny blender", 5, LiveYouTube.Key!, CancellationToken.None);
+        var outcome = await new YouTubeDataApi(http).SearchAsync("big buck bunny blender", 5, YouTubeSearchFilters.None, LiveYouTube.Key!, CancellationToken.None);
 
         Assert.True(outcome.Ok, outcome.Failure + " " + outcome.Detail);
         Assert.NotEmpty(outcome.Hits);

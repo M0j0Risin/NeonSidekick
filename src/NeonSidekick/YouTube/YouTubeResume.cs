@@ -11,6 +11,8 @@ namespace NeonSidekick.YouTube;
 /// <see cref="YouTubeLibrary.FinishedWithin"/> of its end, or ended, goes back to the start and is marked watched. The title,
 /// channel and length the player reports fill the entry in (a video saved by its link alone has none until it plays). Raised on
 /// the window's thread: a write is a small file, done there, so the last one is down before the app's exit closes the window.
+/// A playlist's entries are left alone (2026-10-08): the player starts each at its beginning, so a saved video reached in a list
+/// and paused early would lose the place it was saved at.
 /// </summary>
 public sealed class YouTubeResume
 {
@@ -75,7 +77,7 @@ public sealed class YouTubeResume
     /// </summary>
     private void Write(VideoSnapshot snapshot, bool stopped)
     {
-        if (snapshot.VideoId is not { } id || snapshot.Error is not null
+        if (snapshot.VideoId is not { } id || snapshot.Error is not null || snapshot.PlaylistId is not null
             || snapshot.State is VideoState.Opening or VideoState.Failed or VideoState.Cued or VideoState.Unstarted)
         {
             return;

@@ -1019,8 +1019,8 @@ public sealed class SidekickApp
                 }
 
                 // /youtube (2026-10-05): a search lists what it finds, ahead of the server check (the API needs no LLM); the saved
-                // videos (2026-10-07) are listed, saved by id or link and taken off; every other verb wants the video window, which
-                // headless has none of.
+                // videos (2026-10-07) are listed, saved by id or link and taken off; a named playlist's entries are listed (2026-10-08);
+                // every other verb wants the video window, which headless has none of.
                 if (SlashCommands.Parse(text) is (SlashCommand.YouTube, var youTubeArgs))
                 {
                     var youTubeLine = YouTube.YouTubeCommand.Parse(youTubeArgs);
@@ -1034,24 +1034,22 @@ public sealed class SidekickApp
                         continue;
                     }
 
-                    if (youTubeLine.Verb != YouTube.YouTubeVerb.Search)
+                    if (youTubeLine.Verb is not (YouTube.YouTubeVerb.Search or YouTube.YouTubeVerb.Playlist) || youTubeLine is { Verb: YouTube.YouTubeVerb.Playlist, PlaylistId: null })
                     {
-                        await HeadlessLineAsync("[error] " + (youTubeLine.Error ?? YouTube.YouTubeText.NeedsScreen)).ConfigureAwait(false);
+                        await HeadlessLineAsync("[error] " + (youTubeLine.Error ?? (youTubeLine.Verb == YouTube.YouTubeVerb.Playlist ? YouTube.YouTubeText.NoPlaylistNamed["Error: ".Length..] : YouTube.YouTubeText.NeedsScreen))).ConfigureAwait(false);
                         continue;
                     }
 
                     if (YouTube.YouTubeDataApi.Key(EffectiveSettings) is not { } youTubeKey)
                     {
-                        await HeadlessLineAsync("[error] " + YouTube.YouTubeText.NoKeyForUser).ConfigureAwait(false);
+                        await HeadlessLineAsync("[error] " + (youTubeLine.Verb == YouTube.YouTubeVerb.Playlist ? YouTube.YouTubeText.NoKeyForPlaylist : YouTube.YouTubeText.NoKeyForUser)).ConfigureAwait(false);
                         continue;
                     }
 
-                    int youTubeCount = Math.Clamp(EffectiveSettings.YouTubeSearchMaxResults, AppSettingsData.MinYouTubeSearchMaxResults, AppSettingsData.MaxYouTubeSearchMaxResults);
-                    var youTubeFound = await new YouTube.YouTubeDataApi(_web.Http).SearchAsync(youTubeLine.Text, youTubeCount, youTubeKey, cancellationToken).ConfigureAwait(false);
-                    string youTubeText = youTubeFound.Ok ? YouTube.YouTubeText.Results(youTubeLine.Text, youTubeFound.Hits.Take(youTubeCount).ToList()) : "[error] " + YouTube.YouTubeText.Failure(youTubeFound.Failure, youTubeFound.Detail)["Error: ".Length..];
+                    string youTubeText = await HeadlessYouTubeAsync(youTubeLine, youTubeKey, cancellationToken).ConfigureAwait(false);
                     foreach (string youTubeRow in youTubeText.Split('\n'))
                     {
-                        await HeadlessLineAsync(youTubeRow).ConfigureAwait(false);
+                        await HeadlessLineAsync(youTubeRow.StartsWith("Error: ", StringComparison.Ordinal) ? "[error] " + youTubeRow["Error: ".Length..] : youTubeRow).ConfigureAwait(false);
                     }
 
                     continue;
@@ -2002,6 +2000,30 @@ public sealed class SidekickApp
 
     /// <summary>The loaded profile's saved videos for a headless run (2026-10-07): made afresh each time, so a profile switch moves it.</summary>
     private YouTube.YouTubeLibrary HeadlessYouTubeLibrary() => new(_settings.ProfileDirectory, _time);
+
+    /// <summary>
+    /// Headless <c>/youtube search</c> (its switches checked over the saved choices, 2026-10-08) and <c>/youtube playlist &lt;id|link&gt;</c>
+    /// (2026-10-08): the answer's text, a refusal led by <c>Error: </c>.
+    /// </summary>
+    private async Task<string> HeadlessYouTubeAsync(YouTube.YouTubeCommandLine line, string key, CancellationToken cancellationToken)
+    {
+        var api = new YouTube.YouTubeDataApi(_web.Http);
+        if (line.Verb == YouTube.YouTubeVerb.Playlist)
+        {
+            var listed = await api.PlaylistAsync(line.PlaylistId!, YouTube.YouTubeDataApi.MaxPlaylistEntries, key, cancellationToken).ConfigureAwait(false);
+            return listed.Ok ? YouTube.YouTubeText.PlaylistEntries(listed.Playlist!, listed.Entries) : YouTube.YouTubeText.Failure(listed.Failure, listed.Detail);
+        }
+
+        var (filters, error) = (line.Choices ?? YouTube.YouTubeSearchChoices.None).Resolve(EffectiveSettings, _time.GetUtcNow());
+        if (filters is null)
+        {
+            return error!;
+        }
+
+        int count = YouTube.YouTubeDataApi.DefaultCount(EffectiveSettings);
+        var found = await api.SearchAsync(line.Text, count, filters, key, cancellationToken).ConfigureAwait(false);
+        return found.Ok ? YouTube.YouTubeText.Results(line.Text, found.Hits.Take(count).ToList(), filters.Kind) : YouTube.YouTubeText.Failure(found.Failure, found.Detail);
+    }
 
     /// <summary>
     /// Headless <c>/youtube save &lt;id|link&gt;</c>, <c>unsave &lt;n|id|link&gt;</c> and <c>list</c> (2026-10-07; <c>saved</c> until 2026-10-08): the answer's lines, a

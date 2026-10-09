@@ -199,6 +199,32 @@ public sealed class AppSettingsData
     public string YouTubeVoice { get; set; } = YouTube.YouTubeVoiceMode.Default;
 
     /// <summary>
+    /// The order a search lists in unless it names one (2026-10-08, the user's ask: the filters' saved defaults): one of
+    /// <see cref="YouTube.YouTubeSearchFilters.Orders"/> — <c>relevance</c> (the default, YouTube's own), <c>date</c>, <c>views</c>,
+    /// <c>rating</c>, <c>title</c>; anything else reads as relevance. The YouTube tab; no reconnect.
+    /// </summary>
+    public string YouTubeSearchOrder { get; set; } = "relevance";
+
+    /// <summary>
+    /// Safe search unless a search names it (2026-10-08): one of <see cref="YouTube.YouTubeSearchFilters.SafeSearches"/> — <c>none</c>,
+    /// <c>moderate</c> (the default, YouTube's own), <c>strict</c>; anything else reads as moderate. The YouTube tab; no reconnect.
+    /// </summary>
+    public string YouTubeSafeSearch { get; set; } = "moderate";
+
+    /// <summary>
+    /// The region a search asks for (2026-10-08): two letters (<c>US</c>, <c>GB</c>), YouTube's <c>regionCode</c>: what can be watched
+    /// and is popular there; empty (the default) for none. The YouTube tab; no reconnect.
+    /// </summary>
+    public string YouTubeRegion { get; set; } = "";
+
+    /// <summary>
+    /// The language a search favours (2026-10-08): a language code (<c>en</c>, <c>es</c>, <c>zh-Hans</c>), YouTube's
+    /// <c>relevanceLanguage</c>, which ranks results in it higher without leaving the rest out; empty (the default) for none. The
+    /// YouTube tab; no reconnect.
+    /// </summary>
+    public string YouTubeLanguage { get; set; } = "";
+
+    /// <summary>
     /// The thumbnail browser's top-left corner as it last closed (2026-10-04, <c>/view --thumbs</c>' window, <c>/thumbs</c>' until later that day): the <see cref="ViewerLeft"/>
     /// pair's twin, set by the window itself (<see cref="Viewer.ThumbsWindow.Placed"/>). No menu row; null opens it where Windows puts it.
     /// </summary>

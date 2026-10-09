@@ -238,7 +238,7 @@ internal sealed unsafe class VideoWindowThread
     public VideoWindowThread(VideoRequest first, string userDataFolder, string siteFolder)
     {
         _pending = first;
-        _snapshot = VideoSnapshot.Opening(first.VideoId) with { Version = VideoWindow.NextVersion() };
+        _snapshot = VideoSnapshot.Opening(first) with { Version = VideoWindow.NextVersion() };
         _userDataFolder = userDataFolder;
         _siteFolder = siteFolder;
     }
@@ -277,7 +277,7 @@ internal sealed unsafe class VideoWindowThread
         lock (_gate)
         {
             _pending = request;
-            _snapshot = VideoSnapshot.Opening(request.VideoId) with { Version = VideoWindow.NextVersion() };
+            _snapshot = VideoSnapshot.Opening(request) with { Version = VideoWindow.NextVersion() };
         }
 
         return Post(PlayMessage);
