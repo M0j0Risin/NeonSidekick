@@ -135,16 +135,38 @@ public partial class ToolsMenuTests : IDisposable
             : row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Print · Camera · Screen · Obsidian · SQL · MySQL · SQLite · Postgres · Oracle · ClaudeCLI · Docker · HA · ComfyUI · YouTube · GitLib · Options ";   // the user's order since 2026-10-03; before it Camera after Ask and Docker after UNC since 2026-10-02; HA second to last since later on 2026-10-01 (the user's ask); Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
+    private const string Strip = ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · Media · Obsidian · Database · ClaudeCLI · Docker · HA · GitLib · Options ";   // Media and Database since 2026-10-09 (the user's call: the five media and five database tabs as menus on one tab each); the user's order since 2026-10-03; before it Camera after Ask and Docker after UNC since 2026-10-02; HA second to last since later on 2026-10-01 (the user's ask); Print since later on 2026-09-28, Home Assistant since 2026-09-28, Images since 2026-09-24, SQL since 2026-09-23, Obsidian since 2026-09-22, Options last since later that day (second from later on 2026-09-19); the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
 
-    /// <summary>The rows of the settings tab titled <paramref name="title"/>: <see cref="SettingsMenu.ToolsTabFields"/> one down from <see cref="ToolsText.TabTitles"/>, so a pin follows the tab, not its place (2026-10-03).</summary>
-    internal static IReadOnlyList<SettingsField> TabFields(string title) => SettingsMenu.ToolsTabFields[TabIndex(title) - 1];
+    /// <summary>
+    /// The rows of the settings menu titled <paramref name="title"/>: <see cref="SettingsMenu.ToolsTabFields"/> at <see cref="ToolsText.MenuIndex"/>,
+    /// so a pin follows the menu, not its place (2026-10-03; a menu on Media or Database since 2026-10-09).
+    /// </summary>
+    internal static IReadOnlyList<SettingsField> TabFields(string title) => SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(title) is var i and >= 0 ? i : throw new ArgumentException("no menu " + title, nameof(title))];
 
-    /// <summary>Where <paramref name="title"/> sits on the strip.</summary>
-    internal static int TabIndex(string title) => ToolsText.TabTitles.ToList().IndexOf(title) is var i and >= 0 ? i : throw new ArgumentException("no tab " + title, nameof(title));
+    /// <summary>Where <paramref name="title"/> sits on the strip: a tab's own place, or the place of the group tab that holds the menu (2026-10-09).</summary>
+    internal static int TabIndex(string title) =>
+        ToolsText.TabTitles.ToList().IndexOf(title) is var i and >= 0 ? i
+        : ToolsText.MenuIndex(title) is var m and >= 0 ? ToolsText.TabOfMenu(m)
+        : throw new ArgumentException("no tab " + title, nameof(title));
 
-    /// <summary>The Right presses that walk the strip from Offered to <paramref name="title"/>.</summary>
-    private static ConsoleKeyInfo[] ToTab(string title) => Enumerable.Repeat(Keys.Right, TabIndex(title)).ToArray();
+    /// <summary>Whether menu <paramref name="title"/> sits on Media or Database (2026-10-09): reaching it is one level more, so leaving it one ESC more.</summary>
+    internal static bool InGroup(string title) => ToolsText.TabTitles.ToList().IndexOf(title) < 0 && ToolsText.IsGroupTab(TabIndex(title));
+
+    /// <summary>
+    /// The keys that walk from Offered to <paramref name="title"/>: Right presses along the strip, then on Media or Database (2026-10-09)
+    /// Down to the menu's row and Enter, the menu's own rows under the cursor as a tab's were.
+    /// </summary>
+    private static ConsoleKeyInfo[] ToTab(string title)
+    {
+        var right = Enumerable.Repeat(Keys.Right, TabIndex(title));
+        if (!InGroup(title))
+        {
+            return right.ToArray();
+        }
+
+        int row = ToolsText.TabMenus[TabIndex(title) - 1].ToList().IndexOf(ToolsText.MenuIndex(title));
+        return [.. right, .. Enumerable.Repeat(Keys.Down, row), Keys.Enter];
+    }
 
     /// <summary>A tool row as the pane prints it at width 120 (the markup rendered): the name padded to 22, the state to 5, then the description, cut to 119 cells and an ellipsis (FittedMarkup; every description is longer).</summary>
     private string Row(string name, bool on, string mark = "  ") => Fitted(mark + name.PadRight(22) + (on ? "on" : "off").PadRight(5) + Description(name, on));
@@ -175,7 +197,13 @@ public partial class ToolsMenuTests : IDisposable
         // the Options tab ahead of them (later on 2026-09-19): the pane's own $-mention switch.
         Assert.Equal(10, SettingsMenu.TabFields.Count);   // /settings' Claude and OpenAI tabs since 2026-10-03; Docker tab since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded model since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25
         Assert.Equal(21, SettingsMenu.ToolsTabFields.Count);   // YouTube 2026-10-05; Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23   // Obsidian since 2026-09-22   // Git since 2026-09-20, Shell since 2026-09-21; the user's order (Web, Files, Shell, Ask, Git (native)) since later on 2026-09-21, alphabetical before
-        Assert.Equal(["Offered", "Ask", "Web", "Shell", "Files", "UNC", "Print", "Camera", "Screen", "Obsidian", "SQL", "MySQL", "SQLite", "Postgres", "Oracle", "ClaudeCLI", "Docker", "HA", "ComfyUI", "YouTube", "GitLib", "Options"], ToolsText.TabTitles);   // the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04)
+        Assert.Equal(["Offered", "Ask", "Web", "Shell", "Files", "UNC", "Media", "Obsidian", "Database", "ClaudeCLI", "Docker", "HA", "GitLib", "Options"], ToolsText.TabTitles);   // Media and Database since 2026-10-09; the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04)
+        Assert.Equal(["Ask", "Web", "Shell", "Files", "UNC", "Print", "Camera", "Screen", "Obsidian", "SQL", "MySQL", "SQLite", "Postgres", "Oracle", "ClaudeCLI", "Docker", "HA", "ComfyUI", "YouTube", "GitLib", "Options"], ToolsText.MenuTitles);   // one per ToolsTabFields list, every one a tab until 2026-10-09
+        Assert.Equal(ToolsText.TabTitles.Count - 1, ToolsText.TabMenus.Count);
+        Assert.Equal(Enumerable.Range(0, SettingsMenu.ToolsTabFields.Count), ToolsText.TabMenus.SelectMany(m => m).Order());   // every menu on one tab
+        Assert.Equal(["Print", "Camera", "Screen", "ComfyUI", "YouTube"], ToolsText.TabMenus[TabIndex(ToolsText.MediaTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]));
+        Assert.Equal(["SQL", "MySQL", "SQLite", "Postgres", "Oracle"], ToolsText.TabMenus[TabIndex(ToolsText.DatabaseTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]));
+        Assert.Equal([TabIndex(ToolsText.MediaTabTitle), TabIndex(ToolsText.DatabaseTabTitle)], Enumerable.Range(0, ToolsText.TabTitles.Count).Where(ToolsText.IsGroupTab));
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], TabFields(ToolsText.OptionsTabTitle));
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], TabFields(ToolsText.HomeAssistantTabTitle));   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
@@ -530,7 +558,7 @@ public partial class ToolsMenuTests : IDisposable
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (right under the offered list since the default row went, 2026-10-09): the pick
         Push(Keys.Enter);                                               // prod, the one connection that takes a password
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -578,7 +606,7 @@ public partial class ToolsMenuTests : IDisposable
         Type("the container");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -627,7 +655,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                         // no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test: the failure on the status line, still saveable
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         string target = "NeonSidekick/oracle/ledger";
         try
@@ -661,7 +689,7 @@ public partial class ToolsMenuTests : IDisposable
         OpenOracleRow(4);
         Push(Keys.Enter);                                               // free
         Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -683,7 +711,7 @@ public partial class ToolsMenuTests : IDisposable
         OpenOracleRow(3);
         Push(Keys.Down, Keys.Enter);                         // ledger on (nothing is ticked until the user ticks it)
         Push(Keys.Escape);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -730,7 +758,7 @@ public partial class ToolsMenuTests : IDisposable
         Type("the sample shop");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -925,7 +953,7 @@ public partial class ToolsMenuTests : IDisposable
         Type("the sample");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -1221,7 +1249,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                                    // aw on
         Push(Keys.Char(' '));                                // and off again (Space flips too)
         Push(Keys.Enter);                                    // and on
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -1920,7 +1948,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Enumerable.Repeat(Keys.Down, 9).Append(Keys.Enter).ToArray());   // the tenth row (the mode and the statements above since 2026-10-05, the default row gone 2026-10-09), under the timeout: the typed slot with "32000"
         Push(Enumerable.Repeat(Keys.Backspace, 5).Append(Keys.Char('9')).Append(Keys.Enter).ToArray());   // refused: 9
         Push(new[] { Keys.Enter }.Concat(Enumerable.Repeat(Keys.Backspace, 5)).Concat("200,000".Select(Keys.Char)).Append(Keys.Enter).ToArray());   // 200,000, the separator allowed
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -2012,7 +2040,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Shell\n  ·   Shell command policy: ask\n", Output);
         Assert.Contains("  · Ask\n  ·   Ask user: on\n  ·   Ask max questions: 10 questions\n  ·   Ask max choices per question: 10 choices\n  · Web\n", Output);
         Assert.Contains("  ·   Shell tool bridge max calls: 50 tool calls\n  · Files\n  ·   File tools: on\n", Output);
-        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  ·   Pasted images folder: pasted_images\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add/edit share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Print\n  ·   Print tools: off\n  ·   Print action policy: ask\n  ·   Print default printer: (Windows default)\n  ·   Print font size (pt): 10 pt\n  ·   PDF engine: auto\n  · Camera\n  ·   Camera tool: off\n  ·   Camera shutter: user\n  ·   Camera preview: live\n  ·   Camera device: (first camera)\n  ·   Camera resolution: 1280x720\n  ·   Camera output folder: camera_images\n  ·   Camera keep in sessions: off\n  ·   Camera watch interval (s): 10\n  ·   Camera watch change (%): 8%\n  ·   Camera watch speaks up: off\n  ·   Camera watch min gap (s): 120\n  · Screen\n  ·   Screen capture tool: off\n  ·   Screen capture ask: ask\n  ·   Screen capture preview: on\n  ·   Screen capture output folder: screen_images\n  ·   Screen capture keep in sessions: off\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · SQL\n  ·   SQL tools: on\n  ·   SQL mode: read-only\n  ·   SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQL connections offered: none of 0\n  ·   SQL set password: Enter to set password for a connection\n  ·   SQL add/edit connection: Enter to start the connection wizard\n  ·   SQL %-mention enabled: on\n  ·   SQL max rows: 100 rows\n  ·   SQL query timeout (s): 30\n  ·   SQL query result max chars: 32,000 chars\n  ·   SQL connections (profile): (none) · Enter edits sql.json\n  ·   SQL connections (global): (none) · Enter edits sql.json\n  · MySQL\n  ·   MySQL tools: off\n  ·   MySQL mode: read-only\n  ·   MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   MySQL connections offered: none of 0\n  ·   MySQL set password: Enter to set password for a connection\n  ·   MySQL add/edit connection: Enter to start the connection wizard\n  ·   MySQL %-mention enabled: on\n  ·   MySQL max rows: 100 rows\n  ·   MySQL query timeout (s): 30\n  ·   MySQL connections (profile): (none) · Enter edits mysql.json\n  ·   MySQL connections (global): (none) · Enter edits mysql.json\n  · SQLite\n  ·   SQLite tools: off\n  ·   SQLite mode: read-only\n  ·   SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·   SQLite databases offered: none of 0\n  ·   SQLite sandbox files: off\n  ·   SQLite add/edit database: Enter to start database wizard\n  ·   SQLite %-mention enabled: on\n  ·   SQLite max rows: 100 rows\n  ·   SQLite query timeout (s): 30\n  ·   SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·   SQLite databases (global): (none) · Enter edits sqlite.json\n  · Postgres\n  ·   PostgreSQL tools: off\n  ·   PostgreSQL mode: read-only\n  ·   PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·   PostgreSQL connections offered: none of 0\n  ·   PostgreSQL set password: Enter to set password for a connection\n  ·   PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·   PostgreSQL %-mention enabled: on\n  ·   PostgreSQL max rows: 100 rows\n  ·   PostgreSQL query timeout (s): 30\n  ·   PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·   PostgreSQL connections (global): (none) · Enter edits postgres.json\n  · Oracle\n  ·   Oracle tools: off\n  ·   Oracle mode: read-only\n  ·   Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·   Oracle connections offered: none of 0\n  ·   Oracle set password: Enter to set password for a connection\n  ·   Oracle add/edit connection: Enter to start the connection wizard\n  ·   Oracle %-mention enabled: on\n  ·   Oracle max rows: 100 rows\n  ·   Oracle query timeout (s): 30\n  ·   Oracle connections (profile): (none) · Enter edits oracle.json\n  ·   Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · ComfyUI\n  ·   ComfyUI tools: on\n  ·   ComfyUI URL: (not set)\n  ·   ComfyUI workflows offered: none of 0\n  ·   ComfyUI add workflow: Enter to start workflow wizard\n  ·   ComfyUI ^-mention enabled: on\n  ·   ComfyUI timeout (s): 300\n  ·   ComfyUI max pictures per call: 5 pictures\n  ·   ComfyUI reinforce negatives: on\n  ·   ComfyUI show prompts: on\n  ·   ComfyUI picture strip: on\n  ·   ComfyUI output folder: comfy_images\n  · YouTube\n  ·   YouTube tools: off\n  ·   YouTube API key: (none)\n  ·   YouTube search max results: 8 results\n  ·   YouTube autoplay: on\n  ·   YouTube while speaking: pause\n  ·   YouTube search order: relevance\n  ·   YouTube safe search: moderate\n  ·   YouTube region: (any region)\n  ·   YouTube language: (any language)\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", Output);
+        Assert.Contains("  ·   File search max results: 200 results\n  ·   Image edit quality: 90\n  ·   Image edit metadata: none\n  ·   Image edit mode: beside-original\n  ·   Image edit output folder: (beside the source)\n  ·   Pasted images folder: pasted_images\n  · UNC\n  ·   UNC tools: off\n  ·   UNC writes: off\n  ·   UNC shares offered: none of 0\n  ·   UNC set password: Enter to set password for a runas share\n  ·   UNC add/edit share: Enter to start share wizard\n  ·   UNC *-mention enabled: on\n  ·   UNC shares (profile): (none) · Enter edits unc.json\n  ·   UNC shares (global): (none) · Enter edits unc.json\n  · Media\n  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: (Windows default)\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera_images\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch speaks up: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen capture tool: off\n  ·     Screen capture ask: ask\n  ·     Screen capture preview: on\n  ·     Screen capture output folder: screen_images\n  ·     Screen capture keep in sessions: off\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI workflows offered: none of 0\n  ·     ComfyUI add workflow: Enter to start workflow wizard\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max pictures per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy_images\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  · Obsidian\n  ·   Obsidian tools: on\n  ·   Obsidian vault: (not set)\n  ·   Obsidian allow delete (.trash): on\n  · Database\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: off\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   Postgres\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  · ClaudeCLI\n  ·   Claude CLI executable: (looked up)\n  ·   Claude CLI slash command permissions: read-only\n  ·   Claude CLI slash command model: (Claude Code's default)\n  ·   Claude CLI slash command effort: (Claude Code's default)\n  ·   Claude CLI advisor tool: off\n  ·   Claude CLI advisor tool context: brief\n  ·   Claude CLI advisor tool calls per turn: 2 calls\n  ·   Claude CLI advisor tool model: (as Claude CLI slash command model)\n  ·   Claude CLI advisor tool effort: (as Claude CLI slash command effort)\n  ·   Claude CLI advisor tool confirm: off\n  · Docker\n  ·   Docker tools: off\n  ·   Docker writes: off\n  ·   Docker engine pipe: \\\\.\\pipe\\docker_engine\n  · HA\n  ·   Home Assistant tools: on\n  ·   Home Assistant URL: (not set)\n  ·   Home Assistant API key: (none)\n  ·   Home Assistant test connection: Enter to ask the server for its version\n  ·   Home Assistant action policy: ask\n  ·   Home Assistant Assist agent: (Home Assistant's default)\n  ·   Home Assistant timeout (s): 10\n  · GitLib\n  ·   GitLib tools: on\n  ·   GitLib diff max lines: 500 lines\n  ·   GitLib log max commits: 20 commits\n  ·   GitLib email: (not set)\n  ·   GitLib name: (not set)\n  · Options\n  ·   $-mention enabled: on\n  ·   Tool collapse count: 2 lines\n  ·   Code collapse count: 20 lines\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2427,7 +2455,7 @@ public partial class ToolsMenuTests : IDisposable
         (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
         Push(Keys.Char('n'));
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -2453,7 +2481,7 @@ public partial class ToolsMenuTests : IDisposable
         (menu, _, _) = PaneMenu();
         OpenImagesRow(2);
         Push(Keys.Char('n'));
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -2470,7 +2498,7 @@ public partial class ToolsMenuTests : IDisposable
         var (menu, _, _) = PaneMenu();
         OpenImagesRow(2);
         Push(Keys.Down, Keys.Enter);                         // pony-txt2img on (the list is by name; none ticked at first)
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -2507,7 +2535,7 @@ public partial class ToolsMenuTests : IDisposable
         Type("anime portraits");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows)
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -2546,7 +2574,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                     // its own negative
         Push(Keys.Enter);                     // no description
         Push(Keys.Enter);                     // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -2573,7 +2601,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Enter);         // sdxl, this profile
         Push(Keys.Enter);                     // the suggested name: refused, asked again
         Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);   // back out page by page
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 

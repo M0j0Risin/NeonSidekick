@@ -87,7 +87,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ Searching YouTube needs a YouTube Data API key: add one as YouTube API key on the YouTube tab of /tools.", output);   // the rest wraps
+        Assert.Contains("  ✗ Searching YouTube needs a YouTube Data API key: add one as YouTube API key on /tools › Media › YouTube.", output);   // the rest wraps
         Assert.Contains("  ✗ " + (OperatingSystem.IsMacOS() ? YouTubeText.NoWindowMac : YouTubeText.NoWindow), output);   // a Mac's own since 2026-10-07
         Assert.Contains("  ✗ /youtube [<words> | play <id|link> [<time>] |", output);   // the usage, which wraps since 2026-10-08's verbs
         Assert.DoesNotContain(_http.Requests, r => r.Uri.Host == "www.googleapis.com");

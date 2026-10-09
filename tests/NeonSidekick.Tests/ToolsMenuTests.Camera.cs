@@ -14,9 +14,10 @@ public partial class ToolsMenuTests
     [Fact]
     public void TheCameraTab_SitsAfterPrint_WithItsElevenRows()
     {
-        int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.CameraTabTitle);
+        int tab = ToolsText.MenuIndex(ToolsText.CameraTabTitle) + 1;   // a menu on Media since 2026-10-09, its rows ToolsTabFields' as before
 
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.PrintTabTitle) + 1, tab);   // the user's order since 2026-10-03 (after Ask from 2026-10-02)
+        Assert.Equal(ToolsText.MenuIndex(ToolsText.PrintTabTitle) + 2, tab);   // the user's order since 2026-10-03 (after Ask from 2026-10-02); after Print on Media since 2026-10-09
+        Assert.Equal(ToolsText.MediaTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.CameraTabTitle)]);
         Assert.Equal(
             ["Camera tool", "Camera shutter", "Camera preview", "Camera device", "Camera resolution", "Camera output folder", "Camera keep in sessions", "Camera watch interval (s)", "Camera watch change (%)", "Camera watch speaks up", "Camera watch min gap (s)"],
             SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
@@ -40,7 +41,7 @@ public partial class ToolsMenuTests
         Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Camera shutter: user → model
         Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Camera preview: live → post
         Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Up, Keys.Enter);   // Camera resolution: 1280x720 → 640x480
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -62,7 +63,7 @@ public partial class ToolsMenuTests
         Push(Keys.Down, Keys.Down, Keys.Enter);    // (first camera) → MX Brio → Laptop Camera
         OpenAgain();
         Push(Keys.Up, Keys.Up, Keys.Enter);        // back to (first camera)
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -80,7 +81,7 @@ public partial class ToolsMenuTests
         var (menu, pane, settings) = PaneMenu();
         settings.Cameras = () => throw new CameraException(CameraFailure.NoMediaFoundation, null);
         OpenCameraRow(3);
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -100,7 +101,7 @@ public partial class ToolsMenuTests
         Type("comfy_images");                      // the ComfyUI folder is fine
         Push([Keys.Enter, .. Enumerable.Repeat(Keys.Backspace, 20)]);
         Push(Keys.Enter);                          // empty: the working directory
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -125,7 +126,7 @@ public partial class ToolsMenuTests
         Type("10");                                // refused: under 30
         Push([Keys.Enter, .. Enumerable.Repeat(Keys.Backspace, 4)]);
         Type("600");
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 

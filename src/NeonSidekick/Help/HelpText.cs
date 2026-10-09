@@ -14,7 +14,7 @@ public static class HelpText
     /// <summary>The group <c>neon_help</c> sits in on <c>/tools</c>' Offered tab and <c>/sys</c>: no switch of its own, the tool switched off by name. Pinned.</summary>
     public const string GroupTitle = "Help";
 
-    /// <summary>Between a pane, a tab and a row in a setting's place: <c>/tools › Camera › Camera tool</c>.</summary>
+    /// <summary>Between a pane, a tab, a menu and a row in a setting's place: <c>/tools › Media › Camera › Camera tool</c>.</summary>
     public const string PathSeparator = " › ";
 
     /// <summary>The cap on one answer, in characters: the command list (<see cref="CommandList"/>) and the longest tab fit, and a broad query is cut with <see cref="CutNote"/>.</summary>
@@ -25,7 +25,7 @@ public static class HelpText
 
     // The panes' one-liners: README's Available Panes, kept short.
     public const string SettingsPaneSummary = "the app's settings: the profile and screen, the embedded model, Docker servers, the Anthropic and OpenAI APIs and the Claude CLI server, the LLM connection, speech output (TTS), voice input (STT), sessions and /botchat";
-    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); the other tabs hold each tool group's settings";
+    public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); the other tabs hold each tool group's settings, Media and Database a menu per group (Enter opens one)";
     public const string SkillsPaneSummary = "agent skills (SKILL.md folders) and the model's self-reflection";
     public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the switch and timeout";
 
@@ -115,7 +115,8 @@ public static class HelpText
     public static string Setting(HelpRow row, string defaultValue, string description)
     {
         ArgumentNullException.ThrowIfNull(row);
-        return $"Setting {row.Label}\n  Where: {row.Path} (open {row.Pane}, go to the {row.Tab} tab, Enter on the row edits it)\n  Default: {defaultValue}\n  What it does: {description}";
+        string menu = row.Menu is null ? "" : $", Enter on {row.Menu}";
+        return $"Setting {row.Label}\n  Where: {row.Path} (open {row.Pane}, go to the {row.Tab} tab{menu}, Enter on the row edits it)\n  Default: {defaultValue}\n  What it does: {description}";
     }
 
     /// <summary>A pane: its summary, then each tab with its rows' names (a tab without settings rows says what it lists).</summary>
@@ -127,13 +128,42 @@ public static class HelpText
         foreach (string tab in pane.Tabs)
         {
             var rows = rowsOf(tab);
-            sb.Append("\n- ").Append(tab).Append(": ").Append(rows.Count > 0 ? string.Join(", ", rows.Select(r => r.Label)) : ListTab(pane.Command, tab));
+            var menus = rows.Select(r => r.Menu).OfType<string>().Distinct().ToList();
+            sb.Append("\n- ").Append(tab).Append(": ").Append(
+                menus.Count > 0 ? MenusTab(menus)
+                : rows.Count > 0 ? string.Join(", ", rows.Select(r => r.Label))
+                : ListTab(pane.Command, tab));
         }
 
         return sb.ToString();
     }
 
-    /// <summary>A tab's rows, each with its default and the first sentence of what it does.</summary>
+    /// <summary>What a group tab holds (2026-10-09): <c>the menus Print, Camera, … (Enter opens one, each a strip of its rows)</c>. Pinned.</summary>
+    public static string MenusTab(IReadOnlyList<string> menus)
+    {
+        ArgumentNullException.ThrowIfNull(menus);
+        return "the menus " + string.Join(", ", menus) + " (Enter opens one, each a strip of its rows)";
+    }
+
+    /// <summary>
+    /// A group tab (2026-10-09, <c>/tools</c>' Media and Database): its menus, then each menu's rows' names on a line of its own, and how to
+    /// ask for one menu's whole answer — the five menus' rows with every default and sentence would not fit <see cref="MaxChars"/>. Pinned.
+    /// </summary>
+    public static string GroupTab(HelpPane pane, string tab, IReadOnlyList<HelpRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(pane);
+        ArgumentNullException.ThrowIfNull(rows);
+        var menus = rows.GroupBy(r => r.Menu ?? "").ToList();
+        var sb = new StringBuilder("Tab ").Append(pane.Command).Append(PathSeparator).Append(tab).Append(": ").Append(MenusTab(menus.Select(m => m.Key).ToList()));
+        foreach (var menu in menus)
+        {
+            sb.Append("\n- ").Append(menu.Key).Append(": ").Append(string.Join(", ", menu.Select(r => r.Label)));
+        }
+
+        return sb.Append("\nAsk for one menu (").Append(pane.Command).Append(' ').Append(menus[0].Key.ToLowerInvariant()).Append(") for its rows' defaults and what each does.").ToString();
+    }
+
+    /// <summary>A tab's rows, each with its default and the first sentence of what it does (a menu's on a group tab too, <paramref name="tab"/> then <c>Database › SQL</c>).</summary>
     public static string Tab(HelpPane pane, string tab, IReadOnlyList<HelpRow> rows, Func<SettingsField, string> defaultOf, Func<SettingsField, string> describe)
     {
         ArgumentNullException.ThrowIfNull(pane);

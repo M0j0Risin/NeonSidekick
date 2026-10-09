@@ -30,6 +30,10 @@ namespace NeonSidekick.App;
 /// <see cref="ShowAllowedCommandsAsync"/> (the toolbar's lock glyph); its <c>Shell police</c> row since 2026-09-22:
 /// <see cref="ShowPoliceAsync"/> (the toolbar's officer). Their typed words were <c>/cmdlist</c> and <c>/police</c> until
 /// 2026-10-09, <c>/tools shell allowed</c> and <c>/tools shell police</c> since (<see cref="ShowShellSubAsync"/>, the user's call).
+/// The Media and Database tabs (later on 2026-10-09, the user's call: the strip had grown to 22 tabs) hold five menus each, every one a
+/// tab of its own until then (<see cref="ToolsText.TabMenus"/>): a row per menu with its switch's value (<see cref="SettingsMenu.MenusTab"/>),
+/// Space flipping that switch, Enter opening <see cref="ShowGroupAsync"/> — a strip of the five under the crumb <c>Tools › Database</c>,
+/// on the menu picked, its rows edited as a plain tab's are; ESC there comes back to the group tab with the cursor on the menu last shown.
 /// </summary>
 internal sealed class ToolsMenu
 {
@@ -82,21 +86,62 @@ internal sealed class ToolsMenu
         };
         for (int t = 1; t < tabs.Length; t++)
         {
-            tabs[t] = menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[t - 1], saved);
+            // A group tab (2026-10-09) is a row per menu; a plain tab is its one menu's rows.
+            var menus = ToolsText.TabMenus[t - 1];
+            tabs[t] = menus.Count > 1
+                ? menu.MenusTab(ToolsText.TabTitles[t], menus, saved)
+                : menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[menus[0]], saved);
         }
 
         return MenuPage.Tabbed(ToolsText.Label, tabs, tab, SettingsMenu.TabKeys) with
         {
             SpaceToggles = true,
-            TabCursors = [ToolsText.FirstToolRow(offered), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            TabCursors = [ToolsText.FirstToolRow(offered), .. Enumerable.Repeat(0, tabs.Length - 1)],
             // The Offered tab's band says the cursor's tool (2026-10-05): a heading, a gap, the off line and the no-match row name none.
+            // A group tab's says the cursor's menu's switch (2026-10-09).
             Footer = (t, row) => t == 0
                 ? row < offered.Count && offered[row].Tool is { } name ? toolFooter?.Invoke(name) : null
-                : row < SettingsMenu.ToolsTabFields[t - 1].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[t - 1][row], saved) : null,
+                : RowField(t, row) is { } field ? menu.FieldFooter(field, saved) : null,
         };
     }
 
-    /// <summary>The nine tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented.</summary>
+    /// <summary>
+    /// The field behind row <paramref name="row"/> of tab <paramref name="tab"/> (after Offered): a plain tab's row, or on a group tab
+    /// (2026-10-09) the menu's switch, its first row; null past the rows.
+    /// </summary>
+    private static SettingsField? RowField(int tab, int row)
+    {
+        var menus = ToolsText.TabMenus[tab - 1];
+        if (menus.Count > 1)
+        {
+            return row >= 0 && row < menus.Count ? SettingsMenu.ToolsTabFields[menus[row]][0] : null;
+        }
+
+        var fields = SettingsMenu.ToolsTabFields[menus[0]];
+        return row >= 0 && row < fields.Count ? fields[row] : null;
+    }
+
+    /// <summary>The crumb over group tab <paramref name="tab"/>'s menus (2026-10-09): <c>🛠️ Tools › Database</c>. Pinned.</summary>
+    public static string GroupCrumb(int tab) => ToolsText.Label + " › " + ToolsText.TabTitles[tab];
+
+    /// <summary>
+    /// A group tab's menus as a page of their own (2026-10-09, <see cref="ShowGroupAsync"/>): a strip of the five under
+    /// <see cref="GroupCrumb"/>, each menu's rows as its tab was (<see cref="SettingsMenu.FieldsTab"/>), <paramref name="shown"/> the
+    /// menu on show (an index into the tab's menus), the band under the list the cursor's row's.
+    /// </summary>
+    public static MenuPage GroupPage(int tab, AppSettingsData saved, SettingsMenu menu, int shown)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        ArgumentNullException.ThrowIfNull(menu);
+        var menus = ToolsText.TabMenus[tab - 1];
+        var tabs = menus.Select(m => menu.FieldsTab(ToolsText.MenuTitles[m], SettingsMenu.ToolsTabFields[m], saved)).ToList();
+        return MenuPage.Tabbed(GroupCrumb(tab), tabs, shown, SettingsMenu.TabKeys) with
+        {
+            Footer = (t, row) => row < SettingsMenu.ToolsTabFields[menus[t]].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[menus[t]][row], saved) : null,
+        };
+    }
+
+    /// <summary>The tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented; a group tab's menus (2026-10-09) each a heading under it, their rows indented again.</summary>
     public static IEnumerable<string> Lines(ToolsFacts facts, AppSettingsData saved, SettingsMenu menu)
     {
         ArgumentNullException.ThrowIfNull(facts);
@@ -111,9 +156,24 @@ internal sealed class ToolsMenu
         for (int t = 1; t < ToolsText.TabTitles.Count; t++)
         {
             yield return ToolsText.TabTitles[t];
-            foreach (var field in SettingsMenu.ToolsTabFields[t - 1])
+            var menus = ToolsText.TabMenus[t - 1];
+            if (menus.Count == 1)
             {
-                yield return "  " + menu.PlainRow(field, saved);
+                foreach (var field in SettingsMenu.ToolsTabFields[menus[0]])
+                {
+                    yield return "  " + menu.PlainRow(field, saved);
+                }
+
+                continue;
+            }
+
+            foreach (int m in menus)
+            {
+                yield return "  " + ToolsText.MenuTitles[m];
+                foreach (var field in SettingsMenu.ToolsTabFields[m])
+                {
+                    yield return "    " + menu.PlainRow(field, saved);
+                }
             }
         }
     }
@@ -178,42 +238,87 @@ internal sealed class ToolsMenu
                     continue;
                 }
 
-                var fields = SettingsMenu.ToolsTabFields[tab - 1];
-                if (cursor >= fields.Count)
+                if (RowField(tab, cursor) is not { } field)
                 {
                     continue;
                 }
 
-                var field = fields[cursor];
-                if (midTurn && SettingsMenu.RefusedMidTurn(field))
+                if (ToolsText.IsGroupTab(tab) && !pick.Toggle)
                 {
-                    Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
-                    continue;
-                }
-
-                if (pick.Toggle)
-                {
-                    // Space on a settings row (2026-10-04, as on /settings): a switch flips and saves, any other row does nothing.
-                    if (await _menu.FlipAsync(field, cancellationToken).ConfigureAwait(false) && SettingsMenu.IsLlmField(field))
-                    {
-                        changes |= SettingsChanges.Llm;
-                    }
-
+                    // Enter on a menu of Media or Database (2026-10-09): its strip, and back here on the menu last shown.
+                    (var opened, cursor) = await ShowGroupAsync(tab, cursor, midTurn, cancellationToken).ConfigureAwait(false);
+                    changes |= opened;
                     continue;
                 }
 
                 // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows (PickSettingAsync's shape).
                 var shown = pick.Tab == page.Tab ? page : MenuPage.Tabbed(ToolsText.Label, page.Tabs!, pick.Tab, SettingsMenu.TabKeys);
-                if (await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false) && SettingsMenu.IsLlmField(field))
-                {
-                    changes |= SettingsChanges.Llm;
-                }
+                changes |= await RowAsync(field, pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);
             }
         }
         finally
         {
             _menu.Root = SettingsMenu.Title;
             _pane.Close();
+        }
+    }
+
+    /// <summary>
+    /// A settings row picked (the Tools pane's tabs, a group's menus): refused under a reply as on <c>/settings</c>, Space a flip
+    /// (2026-10-04: a switch flips and saves, any other row does nothing), Enter its edit under <paramref name="shown"/>'s
+    /// <paramref name="cursor"/>; <see cref="SettingsChanges.Llm"/> when a reconnect row saved.
+    /// </summary>
+    private async Task<SettingsChanges> RowAsync(SettingsField field, bool toggle, AppSettingsData saved, MenuPage shown, int cursor, bool midTurn, CancellationToken cancellationToken)
+    {
+        if (midTurn && SettingsMenu.RefusedMidTurn(field))
+        {
+            Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+            return SettingsChanges.None;
+        }
+
+        bool done = toggle
+            ? await _menu.FlipAsync(field, cancellationToken).ConfigureAwait(false)
+            : await _menu.EditAsync(field, saved, shown, cursor, cancellationToken).ConfigureAwait(false);
+        return done && SettingsMenu.IsLlmField(field) ? SettingsChanges.Llm : SettingsChanges.None;
+    }
+
+    /// <summary>
+    /// Group tab <paramref name="tab"/>'s menus on a strip of their own (2026-10-09, the user's call), opened on <paramref name="menu"/>
+    /// (an index into the tab's menus): each menu's rows as its tab had them, edited the same way, the pickers titled under the crumb
+    /// (<c>Tools › Database › MySQL mode</c>). ESC returns the menu last shown, for the group tab's cursor.
+    /// </summary>
+    private async Task<(SettingsChanges Changes, int Menu)> ShowGroupAsync(int tab, int menu, bool midTurn, CancellationToken cancellationToken)
+    {
+        var changes = SettingsChanges.None;
+        var menus = ToolsText.TabMenus[tab - 1];
+        int cursor = 0;
+        _menu.Root = GroupCrumb(tab);
+        try
+        {
+            while (true)
+            {
+                var saved = _settings.Current;
+                var page = GroupPage(tab, saved, _menu, menu);
+                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                {
+                    return (changes, _pane.ShownTab);   // the menu on show at ESC, ←/→ included
+                }
+
+                menu = pick.Tab;
+                cursor = pick.Row;
+                var fields = SettingsMenu.ToolsTabFields[menus[menu]];
+                if (cursor >= fields.Count)
+                {
+                    continue;
+                }
+
+                var shown = pick.Tab == page.Tab ? page : GroupPage(tab, saved, _menu, pick.Tab);
+                changes |= await RowAsync(fields[cursor], pick.Toggle, saved, shown, cursor, midTurn, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _menu.Root = ToolsText.Label;
         }
     }
 

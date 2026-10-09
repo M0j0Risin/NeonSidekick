@@ -14,7 +14,8 @@ public partial class ToolsMenuTests
     [Fact]
     public void ThePostgresTab_IsAfterSqlite_WithMySqlsRows()
     {
-        Assert.Equal(TabIndex(ToolsText.SqliteTabTitle) + 1, TabIndex(ToolsText.PostgresTabTitle));
+        Assert.Equal(ToolsText.MenuIndex(ToolsText.SqliteTabTitle) + 1, ToolsText.MenuIndex(ToolsText.PostgresTabTitle));   // menus on Database since 2026-10-09
+        Assert.True(InGroup(ToolsText.PostgresTabTitle));
         Assert.Equal(
             [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
             TabFields(ToolsText.PostgresTabTitle));
@@ -53,7 +54,7 @@ public partial class ToolsMenuTests
         Type("the sample shop");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -85,7 +86,7 @@ public partial class ToolsMenuTests
         var (menu, _, _) = PaneMenu();
         OpenPostgresRow(1);
         Push(Keys.Down, Keys.Enter);              // read-write
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -121,7 +122,7 @@ public partial class ToolsMenuTests
         Push(Keys.Char('n'));
         Push(Keys.Char('a'));
         Push(Keys.Escape);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
         await menu.ShowAsync(CancellationToken.None);
         Assert.Equal(ServerStatementKinds.Names, _settings.Current.PostgresStatementsAllowed);
     }

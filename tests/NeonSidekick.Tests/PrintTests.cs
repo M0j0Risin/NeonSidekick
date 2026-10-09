@@ -625,8 +625,8 @@ public sealed class PrintTests : IDisposable
     [Fact]
     public void Settings_ThePrintTab()
     {
-        int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.PrintTabTitle);
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.UncTabTitle) + 1, tab);   // after UNC since 2026-10-03, the user's order (after Claude from later on 2026-10-01)
+        int tab = (ToolsText.MenuIndex(ToolsText.PrintTabTitle) + 1);
+        Assert.Equal((ToolsText.MenuIndex(ToolsText.UncTabTitle) + 1) + 1, tab);   // after UNC since 2026-10-03, the user's order (after Claude from later on 2026-10-01)
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], SettingsMenu.ToolsTabFields[tab - 1]);   // the PDF engine last since 2026-10-03
         Assert.True(SettingsMenu.IsToggle(SettingsField.PrintTools));
 

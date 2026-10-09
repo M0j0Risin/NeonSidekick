@@ -18,8 +18,8 @@ public static class OracleText
     public const string NoUser = "no \"user\" is given";
     public static string SysRefused(string user) => $"\"user\" is '{user}'; SYS (or any AS SYSDBA-style sign-in) is not held to a read-only transaction, so the Oracle tools refuse it — use a read-only account";
     public static string BadSchemaKey(string schema) => $"\"schema\" is '{schema}', which is not a valid Oracle name";
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on the Oracle tab of /tools (Oracle set password)";
-    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on the Oracle tab of /tools, or: {SqlText.CredentialCommand(target, "<user>")}";
+    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Database › Oracle (Oracle set password)";
+    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on /tools › Database › Oracle, or: {SqlText.CredentialCommand(target, "<user>")}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's oracle.json was checked for plain passwords: {detail}";
     public const string NoPasswordConnections = "No connection in oracle.json yet; add one first (Oracle add connection).";
 
@@ -37,8 +37,8 @@ public static class OracleText
     /// <summary>The closing line of <c>oracle_connections</c> while the profile hides some: how many, never which. Pinned.</summary>
     public static string HiddenConnections(int count) =>
         count == 1
-            ? "1 more connection in oracle.json is switched off for this profile (the Oracle tab of /tools)."
-            : $"{Invariant(count)} more connections in oracle.json are switched off for this profile (the Oracle tab of /tools).";
+            ? "1 more connection in oracle.json is switched off for this profile (/tools › Database › Oracle)."
+            : $"{Invariant(count)} more connections in oracle.json are switched off for this profile (/tools › Database › Oracle).";
 
     /// <summary>A connection's note on the <c>%</c>-mention list: <c>Oracle ·</c>, where it points, then its description. Pinned.</summary>
     public static string MentionNote(OracleNamedConnection connection)
@@ -136,7 +136,7 @@ public static class OracleText
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
-    public const string NoConnections = "Error: no Oracle connection is defined; the user adds one to oracle.json (the Oracle tab of /tools)";
+    public const string NoConnections = "Error: no Oracle connection is defined; the user adds one to oracle.json (/tools › Database › Oracle)";
     public static string UnknownConnection(string name, string names) => $"Error: no Oracle connection is named '{name}'; the connections are {names}";
 
     /// <summary>A call that names no connection while several are offered (2026-10-09: the default-connection settings gone). Pinned.</summary>

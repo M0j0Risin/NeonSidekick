@@ -40,7 +40,7 @@ public static class UncSecrets
 
         // WindowsCredentials words its failure for sql.json; the fix it names is on the UNC tab here.
         var decrypted = WindowsCredentials.Unprotect(password);
-        return decrypted.Error is { } error ? CredentialResult.Failed(error.Replace("the SQL tab", "the UNC tab", StringComparison.Ordinal)) : decrypted;
+        return decrypted.Error is { } error ? CredentialResult.Failed(error.Replace(Sql.SqlText.SqlMenuPath, "the UNC tab of /tools", StringComparison.Ordinal)) : decrypted;
     }
 
     /// <summary>

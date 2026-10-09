@@ -196,7 +196,7 @@ public sealed class SqlWriteGateTests
     public void Check_RefusesAKindNotTicked_AndARoutineIsCode()
     {
         Assert.Equal(
-            "Error: the SQL is deleting (DELETE, TRUNCATE TABLE, a MERGE that deletes), which the user has not allowed; sql_execute may run changing data, creating, reading — the user ticks more in SQL statements allowed on the SQL tab of /tools",
+            "Error: the SQL is deleting (DELETE, TRUNCATE TABLE, a MERGE that deletes), which the user has not allowed; sql_execute may run changing data, creating, reading — the user ticks more in SQL statements allowed on /tools › Database › SQL",
             SqlWriteGate.Check("DELETE FROM t", ServerStatementKinds.Resolve(null)));
         Assert.StartsWith("Error: the SQL is procedures and triggers", SqlWriteGate.Check("CREATE PROCEDURE p AS SELECT 1", ServerStatementKinds.Resolve(null)));
         Assert.Null(SqlWriteGate.Kinds("GRANT SELECT ON t TO bob"));

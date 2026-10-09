@@ -95,7 +95,7 @@ public sealed class SqliteWriteGateTests
         IReadOnlyList<SqliteStatementKind> data = [SqliteStatementKind.Data];
         Assert.Null(SqliteWriteGate.Check("WITH c AS (SELECT 1) INSERT INTO t SELECT * FROM c", data));
         Assert.Equal(
-            "Error: the SQL is dropping (DROP TABLE, INDEX, VIEW, TRIGGER), which the user has not allowed; sqlite_execute may run changing data — the user ticks more in SQLite statements allowed on the SQLite tab of /tools",
+            "Error: the SQL is dropping (DROP TABLE, INDEX, VIEW, TRIGGER), which the user has not allowed; sqlite_execute may run changing data — the user ticks more in SQLite statements allowed on /tools › Database › SQLite",
             SqliteWriteGate.Check("DROP TABLE t", data));
         Assert.Contains("is reading (SELECT, VALUES, EXPLAIN)", SqliteWriteGate.Check("SELECT 1", data));
         Assert.Contains("may run changing data, settings —", SqliteWriteGate.Check("CREATE TABLE t (a)", [SqliteStatementKind.Data, SqliteStatementKind.Pragma]));
@@ -407,7 +407,7 @@ public sealed class SqliteExecuteTests : IDisposable
         Assert.Equal(0, asked);   // refused before asking
         // DELETE is deleting, its own kind since later on 2026-10-05: not ticked here, so refused before asking.
         Assert.Equal(
-            "Error: the SQL is deleting (DELETE), which the user has not allowed; sqlite_execute may run changing data — the user ticks more in SQLite statements allowed on the SQLite tab of /tools",
+            "Error: the SQL is deleting (DELETE), which the user has not allowed; sqlite_execute may run changing data — the user ticks more in SQLite statements allowed on /tools › Database › SQLite",
             await tool.RunAsync("DELETE FROM customers WHERE id = 1", null, [], null, false, CancellationToken.None));
         Assert.Equal(0, asked);
         Assert.StartsWith("Changed 1 row", await tool.RunAsync("UPDATE customers SET name = 'Ada L.' WHERE id = 1", null, [], null, false, CancellationToken.None));

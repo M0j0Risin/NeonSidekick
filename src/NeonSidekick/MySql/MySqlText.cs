@@ -18,8 +18,8 @@ public static class MySqlText
     public const string NoUser = "no \"user\" is given";
     public static string BadPort(int port) => $"\"port\" is {Invariant(port)}; it must be 1 to 65535";
     public static string BadSslMode(string word) => $"\"sslMode\" is '{word}'; it must be preferred, required, verify-ca, verify-full or none";
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on the MySQL tab of /tools (MySQL set password)";
-    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on the MySQL tab of /tools, or: {SqlText.CredentialCommand(target, "<user>")}";
+    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Database › MySQL (MySQL set password)";
+    public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on /tools › Database › MySQL, or: {SqlText.CredentialCommand(target, "<user>")}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's mysql.json was checked for plain passwords: {detail}";
     public const string NoPasswordConnections = "No connection in mysql.json yet; add one first (MySQL add connection).";
 
@@ -37,8 +37,8 @@ public static class MySqlText
     /// <summary>The closing line of <c>mysql_connections</c> while the profile hides some: how many, never which. Pinned.</summary>
     public static string HiddenConnections(int count) =>
         count == 1
-            ? "1 more connection in mysql.json is switched off for this profile (the MySQL tab of /tools)."
-            : $"{Invariant(count)} more connections in mysql.json are switched off for this profile (the MySQL tab of /tools).";
+            ? "1 more connection in mysql.json is switched off for this profile (/tools › Database › MySQL)."
+            : $"{Invariant(count)} more connections in mysql.json are switched off for this profile (/tools › Database › MySQL).";
 
     /// <summary>A connection's note on the <c>%</c>-mention list: <c>MySQL ·</c>, where it points, then its description. Pinned.</summary>
     public static string MentionNote(MySqlNamedConnection connection)
@@ -141,7 +141,7 @@ public static class MySqlText
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
-    public const string NoConnections = "Error: no MySQL connection is defined; the user adds one to mysql.json (the MySQL tab of /tools)";
+    public const string NoConnections = "Error: no MySQL connection is defined; the user adds one to mysql.json (/tools › Database › MySQL)";
     public static string UnknownConnection(string name, string names) => $"Error: no MySQL connection is named '{name}'; the connections are {names}";
 
     /// <summary>A call that names no connection while several are offered (2026-10-09: the default-connection settings gone). Pinned.</summary>

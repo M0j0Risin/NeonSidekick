@@ -135,21 +135,38 @@ internal static class NeonHelp
 
             string tabWords = string.Join(' ', rest);
             string? tab = pane.Tabs.FirstOrDefault(t => TabMatches(t, tabWords));
-            return tab is null ? null : TabAnswer(pane, tab);
+            if (tab is not null)
+            {
+                return TabAnswer(pane, tab);
+            }
+
+            // A menu on a group tab (2026-10-09): /tools sql is the SQL menu of the Database tab, as it was the SQL tab.
+            var menu = HelpLocation.Menus(pane.Command).FirstOrDefault(m => TabMatches(m.Menu, tabWords));
+            return menu.Menu is null ? null : MenuAnswer(pane, menu.Tab, menu.Menu);
         }
 
-        if (words.Length >= 2 && words[^1] is "tab" or "tabs")
+        if (words.Length >= 2 && words[^1] is "tab" or "tabs" or "menu")
         {
             string tabWords = string.Join(' ', words[..^1]);
-            var found = HelpLocation.Panes.SelectMany(p => p.Tabs.Where(t => TabMatches(t, tabWords)).Select(t => TabAnswer(p, t))).ToList();
+            var found = HelpLocation.Panes.SelectMany(p => p.Tabs.Where(t => TabMatches(t, tabWords)).Select(t => TabAnswer(p, t))
+                .Concat(HelpLocation.Menus(p.Command).Where(m => TabMatches(m.Menu, tabWords)).Select(m => MenuAnswer(p, m.Tab, m.Menu)))).ToList();
             return found.Count > 0 ? string.Join("\n\n", found) : null;
         }
 
         return null;
     }
 
-    private static string TabAnswer(HelpPane pane, string tab) =>
-        HelpText.Tab(pane, tab, HelpLocation.OnTab(pane.Command, tab), HelpLocation.Default, HelpSettings.Describe);
+    private static string TabAnswer(HelpPane pane, string tab)
+    {
+        var rows = HelpLocation.OnTab(pane.Command, tab);
+        return rows.Any(r => r.Menu is not null)
+            ? HelpText.GroupTab(pane, tab, rows)   // Media or Database (2026-10-09): the menus, each answered on its own
+            : HelpText.Tab(pane, tab, rows, HelpLocation.Default, HelpSettings.Describe);
+    }
+
+    /// <summary>A menu on a group tab (2026-10-09) answered as a tab is, under its place: <c>Tab /tools › Database › SQL:</c>.</summary>
+    private static string MenuAnswer(HelpPane pane, string tab, string menu) =>
+        HelpText.Tab(pane, tab + HelpText.PathSeparator + menu, HelpLocation.InMenu(pane.Command, menu), HelpLocation.Default, HelpSettings.Describe);
 
     /// <summary>A tab title against the words asked: the title itself, its start (<c>git</c> is GitLib), or the README's longer name (<c>HA</c> is Home Assistant).</summary>
     private static bool TabMatches(string tab, string words) =>
@@ -189,7 +206,7 @@ internal static class NeonHelp
         }
 
         return HelpLocation.Rows
-            .Select((row, index) => (Row: row, Score: Score(words, row.Label + " " + row.Tab, HelpSettings.Describe(row.Field)), Index: index))
+            .Select((row, index) => (Row: row, Score: Score(words, row.Label + " " + row.Place, HelpSettings.Describe(row.Field)), Index: index))
             .Where(i => i.Score > 0)
             .OrderByDescending(i => i.Score)
             .ThenBy(i => i.Row.Label.Length)
@@ -219,7 +236,7 @@ internal static class NeonHelp
             foreach (var row in HelpLocation.Rows)
             {
                 string description = HelpSettings.Describe(row.Field);
-                items.Add((Score(words, row.Label + " " + row.Tab, description), row.Label.Length, Setting(row.Field)));
+                items.Add((Score(words, row.Label + " " + row.Place, description), row.Label.Length, Setting(row.Field)));
             }
         }
 

@@ -254,7 +254,7 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.Equal("plain", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = "plain" })).Value);
         Assert.Equal("kept", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.Protect("kept").Value })).Value);
         Assert.Equal(OracleText.NoPassword("prod"), OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u" })).Error);
-        Assert.Contains("the Oracle tab of /tools", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.ProtectedPrefix + "bm90LWRwYXBp" })).Error);
+        Assert.Contains("/tools › Database › Oracle", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.ProtectedPrefix + "bm90LWRwYXBp" })).Error);
 
         var credman = Named(new OracleConnectionConfig { DataSource = "x", User = "ledger_ro", PasswordStore = "credman", Credential = _target });
         Assert.Equal(OracleText.NoCredential(_target), OracleSecrets.Resolve(credman).Error);

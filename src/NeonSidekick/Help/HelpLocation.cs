@@ -7,11 +7,17 @@ namespace NeonSidekick.Help;
 /// <summary>A pane <c>neon_help</c> knows: the command that opens it, what it is for, and its tab strip in order.</summary>
 public sealed record HelpPane(string Command, string Summary, IReadOnlyList<string> Tabs);
 
-/// <summary>Where a settings row lives: the pane's command, the tab's title and the row's label (<see cref="SettingsMenu.FieldName"/>).</summary>
-public sealed record HelpRow(SettingsField Field, string Pane, string Tab, string Label)
+/// <summary>
+/// Where a settings row lives: the pane's command, the tab's title and the row's label (<see cref="SettingsMenu.FieldName"/>);
+/// on <c>/tools</c>' Media and Database tabs (2026-10-09) the menu on the tab that holds it too, null elsewhere.
+/// </summary>
+public sealed record HelpRow(SettingsField Field, string Pane, string Tab, string Label, string? Menu = null)
 {
-    /// <summary><c>/tools › Camera › Camera watch interval (s)</c>. Pinned.</summary>
-    public string Path => Pane + HelpText.PathSeparator + Tab + HelpText.PathSeparator + Label;
+    /// <summary><c>/tools › Media › Camera › Camera watch interval (s)</c> (<c>/tools › Camera › …</c> until 2026-10-09). Pinned.</summary>
+    public string Path => Pane + HelpText.PathSeparator + Place + HelpText.PathSeparator + Label;
+
+    /// <summary>The tab, and the menu on it when there is one: <c>Media › Camera</c>.</summary>
+    public string Place => Menu is null ? Tab : Tab + HelpText.PathSeparator + Menu;
 }
 
 /// <summary>
@@ -20,7 +26,8 @@ public sealed record HelpRow(SettingsField Field, string Pane, string Tab, strin
 /// under <see cref="ToolsText.TabTitles"/> one down, <see cref="SettingsMenu.SkillsTabFields"/> under
 /// <see cref="SkillsMenu.SettingsTabTitles"/>, <see cref="SettingsMenu.McpTabFields"/> as <c>/mcp</c>' Options — so a row
 /// moved to another tab is found there with nothing written here. The four lists are every <see cref="SettingsField"/> once
-/// (pinned by the settings tests), so every field has one row.
+/// (pinned by the settings tests), so every field has one row. <c>/tools</c>' lists are menus since 2026-10-09, placed on the strip by
+/// <see cref="ToolsText.TabMenus"/>: a menu on Media or Database names the tab and itself (<see cref="HelpRow.Menu"/>).
 /// </summary>
 internal static class HelpLocation
 {
@@ -47,9 +54,17 @@ internal static class HelpLocation
     /// <summary>The row <paramref name="field"/> is on.</summary>
     public static HelpRow Of(SettingsField field) => Rows.First(r => r.Field == field);
 
-    /// <summary>The rows of one tab, in the order the tab shows them.</summary>
+    /// <summary>The rows of one tab, in the order the tab shows them (a group tab's, every menu's in turn).</summary>
     public static IReadOnlyList<HelpRow> OnTab(string pane, string tab) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && string.Equals(r.Tab, tab, StringComparison.Ordinal)).ToList();
+
+    /// <summary>The menus on a pane's group tabs, each with its tab (2026-10-09): <c>/tools</c>' Media and Database, five each.</summary>
+    public static IReadOnlyList<(string Tab, string Menu)> Menus(string pane) =>
+        Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && r.Menu is not null).Select(r => (r.Tab, r.Menu!)).Distinct().ToList();
+
+    /// <summary>The rows of one menu on a group tab, in its order.</summary>
+    public static IReadOnlyList<HelpRow> InMenu(string pane, string menu) =>
+        Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && string.Equals(r.Menu, menu, StringComparison.Ordinal)).ToList();
 
     /// <summary>
     /// The row's value in a fresh profile, as the menu shows it (<see cref="SettingsMenu.FieldValue(SettingsField, AppSettingsData, string)"/>
@@ -68,7 +83,17 @@ internal static class HelpLocation
     {
         var rows = new List<HelpRow>(256);
         Add(rows, "/settings", SettingsMenu.TabTitles, SettingsMenu.TabFields);
-        Add(rows, "/tools", ToolsText.TabTitles.Skip(1).ToList(), SettingsMenu.ToolsTabFields);
+        for (int t = 1; t < ToolsText.TabTitles.Count; t++)
+        {
+            // A plain tab is its menu; a group tab's rows name their menu too (2026-10-09).
+            var menus = ToolsText.TabMenus[t - 1];
+            foreach (int m in menus)
+            {
+                string? menu = menus.Count > 1 ? ToolsText.MenuTitles[m] : null;
+                rows.AddRange(SettingsMenu.ToolsTabFields[m].Select(field => new HelpRow(field, "/tools", ToolsText.TabTitles[t], SettingsMenu.FieldName(field), menu)));
+            }
+        }
+
         Add(rows, "/skills", SkillsMenu.SettingsTabTitles, SettingsMenu.SkillsTabFields);
         Add(rows, "/mcp", [McpText.OptionsTabTitle], SettingsMenu.McpTabFields);
         return rows;

@@ -290,10 +290,10 @@ public class ClaudeTests
     public void ToolsMenu_TheClaudeTab_ItsTenRowsAndHowTheyRead()
     {
         var data = new AppSettingsData();
-        int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.ClaudeCliTabTitle);
+        int tab = (ToolsText.MenuIndex(ToolsText.ClaudeCliTabTitle) + 1);
 
         // On /tools since later on 2026-09-27 (the user's call), after Ask, before Obsidian since later still that day (the user's order; after ComfyUI, before Options, before); gone from /settings.
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.OracleTabTitle) + 1, tab);   // after Oracle since 2026-10-03, the user's order (after Camera from 2026-10-02)
+        Assert.Equal((ToolsText.MenuIndex(ToolsText.OracleTabTitle) + 1) + 1, tab);   // after Oracle since 2026-10-03, the user's order (after Camera from 2026-10-02)
         Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);   // gone since 2026-09-29; /settings' own Claude tab (2026-10-03) holds the server rows
         Assert.Equal("ClaudeCLI", ToolsText.ClaudeCliTabTitle);   // "Claude (CLI)" until 2026-09-29, "Claude" until 2026-10-04 (the user's call: /settings' tab became Anthropic)
         Assert.Equal(

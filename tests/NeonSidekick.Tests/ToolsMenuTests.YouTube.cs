@@ -15,10 +15,10 @@ public partial class ToolsMenuTests
     [Fact]
     public void TheYouTubeTab_SitsAfterComfyUI_BeforeGitLib_WithItsNineRows()
     {
-        int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.YouTubeTabTitle);
+        int tab = ToolsText.MenuIndex(ToolsText.YouTubeTabTitle) + 1;   // a menu on Media since 2026-10-09, its rows ToolsTabFields' as before
 
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.ComfyTabTitle) + 1, tab);   // the user's place, later on 2026-10-05 (after Screen until then)
-        Assert.Equal(ToolsText.TabTitles.ToList().IndexOf(ToolsText.GitTabTitle) - 1, tab);
+        Assert.Equal(ToolsText.MenuIndex(ToolsText.ComfyTabTitle) + 2, tab);   // the user's place, later on 2026-10-05 (after Screen until then); last on Media since 2026-10-09
+        Assert.Equal(ToolsText.MediaTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.YouTubeTabTitle)]);
         Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube autoplay", "YouTube while speaking", "YouTube search order", "YouTube safe search", "YouTube region", "YouTube language"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal([SettingsField.YouTubeTools, SettingsField.YouTubeAutoplay], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);
@@ -51,7 +51,7 @@ public partial class ToolsMenuTests
         Push(Keys.Enter, Keys.Ctrl(ConsoleKey.A), Keys.Backspace);
         _console.Input.PushText("12");
         Push(Keys.Enter);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -93,7 +93,7 @@ public partial class ToolsMenuTests
         Push(Keys.Enter);
         _console.Input.PushText("zh-Hans");
         Push(Keys.Enter);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 

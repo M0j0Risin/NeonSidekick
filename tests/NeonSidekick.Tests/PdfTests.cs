@@ -569,7 +569,7 @@ public sealed class PdfTests : IDisposable
     [Fact]
     public void Setting_LastOnThePrintTab()
     {
-        int tab = ToolsText.TabTitles.ToList().IndexOf(ToolsText.PrintTabTitle);
+        int tab = (ToolsText.MenuIndex(ToolsText.PrintTabTitle) + 1);
         Assert.Equal(SettingsField.PdfEngine, SettingsMenu.ToolsTabFields[tab - 1][^1]);
         Assert.Equal("auto", SettingsMenu.FieldValue(SettingsField.PdfEngine, new AppSettingsData(), _dir));
         Assert.Equal("printer", SettingsMenu.FieldValue(SettingsField.PdfEngine, new AppSettingsData { PdfEngine = "Printer" }, _dir));

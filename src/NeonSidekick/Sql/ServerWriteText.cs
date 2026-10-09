@@ -25,8 +25,12 @@ public sealed record ServerWriteFamily(
     /// <summary>The checklist setting's label: <c>PostgreSQL statements allowed</c>.</summary>
     public string KindsSetting => Title + " statements allowed";
 
-    /// <summary>Where the user changes either: <c>the PostgreSQL tab of /tools</c>.</summary>
-    public string Tab => "the " + Title + " tab of /tools";
+    /// <summary>
+    /// Where the user changes either: <c>/tools › Database › Postgres</c> since 2026-10-09, when the five database tabs became menus
+    /// on one Database tab (the user's call; <c>the PostgreSQL tab of /tools</c> until then). The menu is the strip's title, so
+    /// PostgreSQL's is <c>Postgres</c>.
+    /// </summary>
+    public string Tab => "/tools › Database › " + (Title == "PostgreSQL" ? App.ToolsText.PostgresTabTitle : Title);
 }
 
 /// <summary>

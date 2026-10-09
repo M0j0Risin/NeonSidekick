@@ -26,6 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
+* **`/tools` Media and Database:** each lists five menus, one row each with its switch (Space flips it); Enter opens the five as a strip of their own (*Tools › Database*) on the menu picked, and ESC comes back to the tab on the menu last shown.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -668,7 +669,21 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Ask max questions | Questions per call (1–10). | 10 |
 | Ask max choices per question | Options per question (2–15). | 10 |
 
-### Camera
+### Media
+
+The picture, print and video tools, five menus on one tab: each row is a menu with its switch (Space flips it). Enter opens the five as a strip of their own, *Tools › Media*, on the menu picked; ←/→ moves between them and ESC comes back to the tab. Each was a tab of its own until 2026-10-09.
+
+#### Print
+
+| Setting | What it does | Default |
+|---|---|---|
+| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. The top of its on/off page has a **printer** button (`p`) that opens *Print default printer*; ESC there comes back. | off |
+| Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
+| Print default printer | Where a print goes when none is named. On a Mac the picker shows each printer's queue name with the name System Settings shows, and the empty row reads *(system default)*. | (Windows default) |
+| Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
+| PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). On a Mac only the browser makes PDFs (Edge, Chrome, Brave or Chromium); `printer` needs Windows. | `auto` |
+
+#### Camera
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -684,7 +699,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Camera watch speaks up | Off, a changed picture rides your next message. On, the model is shown it unasked, at most once per gap below, when nothing else is going on. | off |
 | Camera watch min gap (s) | The least time between unprompted watch turns (30–3600). | 120 |
 
-### Screen
+#### Screen
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -693,6 +708,36 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
 | Screen capture output folder | Where screenshots are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. | `screen_images` |
 | Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
+
+#### ComfyUI
+
+| Setting | What it does | Default |
+|---|---|---|
+| ComfyUI tools | Offers `generate_image` and `set_splash_image` once *ComfyUI URL* is set and a workflow is installed. | off |
+| ComfyUI URL | The ComfyUI server, often on your LAN (`http://gpu-box:8188`). The web tools' network mode never blocks it. | (not set) |
+| ComfyUI workflows offered | A checklist of the workflows the model is offered; nothing until ticked (here or in the wizard). `a` / `n` tick all or none. With one ticked, every plain request and plain `/imagine` uses it. `/imagine <name>` can still use a hidden one. A ticked workflow no longer installed is dropped when the checklist opens (not one whose file failed to load). The checklist lines up family, shape and size in columns. | none |
+| ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** a ComfyUI export. See [Adding a workflow](TOOLS.md#adding-a-workflow). | — |
+| ComfyUI ^-mention enabled | `^` and part of a name lists the offered workflows; a pick writes `^name`, which `generate_image` uses. | on |
+| ComfyUI timeout (s) | How long to wait for one generation, queue included (10–3600). | 300 |
+| ComfyUI max pictures per call | Most pictures one `generate_image` call or `/imagine --count` makes (1–16). All go to the model in the next request. | 5 |
+| ComfyUI reinforce negatives | When the model writes the prompt, adds a few opposite tags to the negative where the image model tends to drift (a solo figure → `multiple girls`). Skipped for verbatim prompts, a negative given for the call, `/imagine`, families without a negative and a workflow whose `.md` says `reinforce: false`. | on |
+| ComfyUI show prompts | Shows the `prompt:`, `negative:` and `params:` lines under each picture. | on |
+| ComfyUI picture strip | Keeps the session's pictures as thumbnails above the input line, newest left by when each file was made, the viewer's order (a late Botchat image async picture lands in its place). With the line empty, ←/→ highlight one (moving an open viewer to it) and Enter opens it; a double-click opens any, and a drag onto the input row attaches it. **🎞️** opens the viewer on the output folder; **×** hides the strip until the next picture; meanwhile **🎞️** on the rule over the input row (right of ⤡) brings it back. `/clear`, `/new` and a session switch empty it. | on |
+| ComfyUI output folder | Where pictures are saved, under the profile's `images` folder (`comfy_images\pony-txt2img-1234.png`), out of the working directory; empty = the `images` folder. | `comfy_images` |
+
+#### YouTube
+
+| Setting | What it does | Default |
+|---|---|---|
+| YouTube tools | Offers the YouTube tools: `youtube_search` and `youtube_playlist` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video or a public playlist in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's or playlist's id or link needs no key. Headless offers the search and the playlist listing. The top of its on/off page has **max** (`m`), **voice** (`v`), **order** (`o`) and **safe** (`s`) buttons that open *YouTube search max results*, *YouTube while speaking*, *YouTube search order* and *YouTube safe search*; ESC there comes back. | off |
+| YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac); sent only to www.googleapis.com, in a header, never in a URL. `/profile push keys` copies it; a plain `/profile reset` keeps it. | (none) |
+| YouTube search max results | How many videos (or playlists, or channels) a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
+| YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
+| YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
+| YouTube search order | The order a search lists in unless it names one (a picker): `relevance` (YouTube's own ranking), `date` (newest first), `views`, `rating` or `title`. The model's `order` and `/youtube search --order` override it for one search. | `relevance` |
+| YouTube safe search | How much restricted content a search leaves out unless it names a level (a picker): `none`, `moderate` (YouTube's own default) or `strict`. The model's `safe_search` and `/youtube search --safe` override it. | `moderate` |
+| YouTube region | A two-letter country code (`US`, `GB`, `DE`) a search asks for: what can be watched and is popular there. Empty for any region. The model's `region` and `/youtube search --region` override it. | (any region) |
+| YouTube language | A language code (`en`, `es`, `zh-Hans`) a search favours: results in it rank higher, the rest are still listed. Empty for any language. The model's `language` and `/youtube search --lang` override it. | (any language) |
 
 ### ClaudeCLI
 
@@ -725,16 +770,6 @@ The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (th
 
 The services that run unasked under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`: `light.*`, `remote.send_command`…).
 
-### Print
-
-| Setting | What it does | Default |
-|---|---|---|
-| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. The top of its on/off page has a **printer** button (`p`) that opens *Print default printer*; ESC there comes back. | off |
-| Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
-| Print default printer | Where a print goes when none is named. On a Mac the picker shows each printer's queue name with the name System Settings shows, and the empty row reads *(system default)*. | (Windows default) |
-| Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
-| PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). On a Mac only the browser makes PDFs (Edge, Chrome, Brave or Chromium); `printer` needs Windows. | `auto` |
-
 ### Obsidian
 
 | Setting | What it does | Default |
@@ -743,23 +778,11 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | Obsidian vault | The vault's folder (holding `.obsidian`), separate from the working directory. The row opens the folder picker. | (not set) |
 | Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
 
-### ComfyUI
+### Database
 
-| Setting | What it does | Default |
-|---|---|---|
-| ComfyUI tools | Offers `generate_image` and `set_splash_image` once *ComfyUI URL* is set and a workflow is installed. | off |
-| ComfyUI URL | The ComfyUI server, often on your LAN (`http://gpu-box:8188`). The web tools' network mode never blocks it. | (not set) |
-| ComfyUI workflows offered | A checklist of the workflows the model is offered; nothing until ticked (here or in the wizard). `a` / `n` tick all or none. With one ticked, every plain request and plain `/imagine` uses it. `/imagine <name>` can still use a hidden one. A ticked workflow no longer installed is dropped when the checklist opens (not one whose file failed to load). The checklist lines up family, shape and size in columns. | none |
-| ComfyUI add workflow | A wizard that **builds** a standard workflow from your server's checkpoints, or **imports** a ComfyUI export. See [Adding a workflow](TOOLS.md#adding-a-workflow). | — |
-| ComfyUI ^-mention enabled | `^` and part of a name lists the offered workflows; a pick writes `^name`, which `generate_image` uses. | on |
-| ComfyUI timeout (s) | How long to wait for one generation, queue included (10–3600). | 300 |
-| ComfyUI max pictures per call | Most pictures one `generate_image` call or `/imagine --count` makes (1–16). All go to the model in the next request. | 5 |
-| ComfyUI reinforce negatives | When the model writes the prompt, adds a few opposite tags to the negative where the image model tends to drift (a solo figure → `multiple girls`). Skipped for verbatim prompts, a negative given for the call, `/imagine`, families without a negative and a workflow whose `.md` says `reinforce: false`. | on |
-| ComfyUI show prompts | Shows the `prompt:`, `negative:` and `params:` lines under each picture. | on |
-| ComfyUI picture strip | Keeps the session's pictures as thumbnails above the input line, newest left by when each file was made, the viewer's order (a late Botchat image async picture lands in its place). With the line empty, ←/→ highlight one (moving an open viewer to it) and Enter opens it; a double-click opens any, and a drag onto the input row attaches it. **🎞️** opens the viewer on the output folder; **×** hides the strip until the next picture; meanwhile **🎞️** on the rule over the input row (right of ⤡) brings it back. `/clear`, `/new` and a session switch empty it. | on |
-| ComfyUI output folder | Where pictures are saved, under the profile's `images` folder (`comfy_images\pony-txt2img-1234.png`), out of the working directory; empty = the `images` folder. | `comfy_images` |
+The five database families, five menus on one tab, as on Media: a row per menu with its switch, Enter opening the five as a strip of their own (*Tools › Database*). Each was a tab of its own until 2026-10-09.
 
-### SQL
+#### SQL
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -776,25 +799,9 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (created with commented examples). | (none) |
 | SQL connections (global) | The same for the home folder's `sql.json`, which every profile reads. The profile's wins a name clash. | (none) |
 
-The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`, `mysql.json`, `postgres.json` and `unc.json`.
+The Oracle, MySQL and Postgres menus and the UNC tab work like this one, over `oracle.json`, `mysql.json`, `postgres.json` and `unc.json`.
 
-### Oracle
-
-| Setting | What it does | Default |
-|---|---|---|
-| Oracle tools | Offers the Oracle tools (connections, tables, columns, describe, relationships, indexes, query), each connection held to its one schema. | off |
-| Oracle mode | `read-only`: the tools only read. `read-write`: `oracle_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [Oracle › Changes](TOOLS.md#changes-1). | read-only |
-| Oracle statements allowed | Under `read-write`: the kinds of statement `oracle_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [Oracle › Changes](TOOLS.md#changes-1). | changing data, creating, reading |
-| Oracle connections offered | As *SQL connections offered*. | none |
-| Oracle set password | As *SQL set password*. | — |
-| Oracle add/edit connection | The wizard (new or edit); its *Schema* is the one the connection is held to (the user's own when empty). Its test shows who it signs in as, the version, a warning when the account could change data, and the other schemas it could read. See [Oracle](TOOLS.md#oracle). | — |
-| Oracle %-mention enabled | Lists the Oracle connections in the `%` list too, marked `Oracle ·`. | on |
-| Oracle max rows | As *SQL max rows*, for `oracle_query`. | 100 |
-| Oracle query timeout (s) | How long one statement may run on the server (1–600). | 30 |
-| Oracle connections (profile) | As *SQL connections (profile)*. | (none) |
-| Oracle connections (global) | As *SQL connections (global)*. | (none) |
-
-### MySQL
+#### MySQL
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -810,7 +817,7 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | MySQL connections (profile) | As *SQL connections (profile)*. | (none) |
 | MySQL connections (global) | As *SQL connections (global)*. | (none) |
 
-### SQLite
+#### SQLite
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -826,7 +833,7 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | (none) |
 | SQLite databases (global) | Opens the global `sqlite.json` in your editor. | (none) |
 
-### Postgres
+#### Postgres
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -841,6 +848,22 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | PostgreSQL query timeout (s) | How long one statement may run (1–600): the server's own `statement_timeout`. | 30 |
 | PostgreSQL connections (profile) | As *SQL connections (profile)*. | (none) |
 | PostgreSQL connections (global) | As *SQL connections (global)*. | (none) |
+
+#### Oracle
+
+| Setting | What it does | Default |
+|---|---|---|
+| Oracle tools | Offers the Oracle tools (connections, tables, columns, describe, relationships, indexes, query), each connection held to its one schema. | off |
+| Oracle mode | `read-only`: the tools only read. `read-write`: `oracle_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [Oracle › Changes](TOOLS.md#changes-1). | read-only |
+| Oracle statements allowed | Under `read-write`: the kinds of statement `oracle_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [Oracle › Changes](TOOLS.md#changes-1). | changing data, creating, reading |
+| Oracle connections offered | As *SQL connections offered*. | none |
+| Oracle set password | As *SQL set password*. | — |
+| Oracle add/edit connection | The wizard (new or edit); its *Schema* is the one the connection is held to (the user's own when empty). Its test shows who it signs in as, the version, a warning when the account could change data, and the other schemas it could read. See [Oracle](TOOLS.md#oracle). | — |
+| Oracle %-mention enabled | Lists the Oracle connections in the `%` list too, marked `Oracle ·`. | on |
+| Oracle max rows | As *SQL max rows*, for `oracle_query`. | 100 |
+| Oracle query timeout (s) | How long one statement may run on the server (1–600). | 30 |
+| Oracle connections (profile) | As *SQL connections (profile)*. | (none) |
+| Oracle connections (global) | As *SQL connections (global)*. | (none) |
 
 ### UNC
 
@@ -862,20 +885,6 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See [Docker](TOOLS.md#docker). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
-
-### YouTube
-
-| Setting | What it does | Default |
-|---|---|---|
-| YouTube tools | Offers the YouTube tools: `youtube_search` and `youtube_playlist` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video or a public playlist in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's or playlist's id or link needs no key. Headless offers the search and the playlist listing. The top of its on/off page has **max** (`m`), **voice** (`v`), **order** (`o`) and **safe** (`s`) buttons that open *YouTube search max results*, *YouTube while speaking*, *YouTube search order* and *YouTube safe search*; ESC there comes back. | off |
-| YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac); sent only to www.googleapis.com, in a header, never in a URL. `/profile push keys` copies it; a plain `/profile reset` keeps it. | (none) |
-| YouTube search max results | How many videos (or playlists, or channels) a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
-| YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |
-| YouTube while speaking | What a playing video does while the app speaks a reply (first word to last) or listens to you (push-to-talk, or after the wake phrase): `pause` and play on after, `duck` to 15% and back up, or `none`. Only what the app did is undone: a video you paused stays paused. | `pause` |
-| YouTube search order | The order a search lists in unless it names one (a picker): `relevance` (YouTube's own ranking), `date` (newest first), `views`, `rating` or `title`. The model's `order` and `/youtube search --order` override it for one search. | `relevance` |
-| YouTube safe search | How much restricted content a search leaves out unless it names a level (a picker): `none`, `moderate` (YouTube's own default) or `strict`. The model's `safe_search` and `/youtube search --safe` override it. | `moderate` |
-| YouTube region | A two-letter country code (`US`, `GB`, `DE`) a search asks for: what can be watched and is popular there. Empty for any region. The model's `region` and `/youtube search --region` override it. | (any region) |
-| YouTube language | A language code (`en`, `es`, `zh-Hans`) a search favours: results in it rank higher, the rest are still listed. Empty for any language. The model's `language` and `/youtube search --lang` override it. | (any language) |
 
 ### GitLib
 

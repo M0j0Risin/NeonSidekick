@@ -65,7 +65,10 @@ public class NeonHelpTests
     [Fact]
     public void Location_IsWorkedOutFromTheMenus()
     {
-        Assert.Equal("/tools › Camera › Camera watch interval (s)", HelpLocation.Of(SettingsField.CameraWatchSeconds).Path);
+        Assert.Equal("/tools › Media › Camera › Camera watch interval (s)", HelpLocation.Of(SettingsField.CameraWatchSeconds).Path);   // a menu on Media since 2026-10-09
+        Assert.Equal("/tools › Database › Postgres › PostgreSQL mode", HelpLocation.Of(SettingsField.PostgresMode).Path);
+        Assert.Equal("/tools › Shell › Shell police", HelpLocation.Of(SettingsField.ShellPolice).Path);   // a plain tab names no menu
+        Assert.Null(HelpLocation.Of(SettingsField.ShellPolice).Menu);
         Assert.Equal("/settings › General › Profile", HelpLocation.Of(SettingsField.Profile).Path);
         Assert.Equal("/skills › Reflection", HelpLocation.Of(SettingsField.ReflectionAutoLearn).Pane + HelpText.PathSeparator + HelpLocation.Of(SettingsField.ReflectionAutoLearn).Tab);
         Assert.Equal("/mcp › Options › MCP servers", HelpLocation.Of(SettingsField.McpServers).Path);
@@ -133,7 +136,7 @@ public class NeonHelpTests
     public void ASettingByName_IsWhereItIs_ItsDefault_AndWhatItDoes(string query)
     {
         Assert.Equal(
-            "Setting Camera watch interval (s)\n  Where: /tools › Camera › Camera watch interval (s) (open /tools, go to the Camera tab, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
+            "Setting Camera watch interval (s)\n  Where: /tools › Media › Camera › Camera watch interval (s) (open /tools, go to the Media tab, Enter on Camera, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
             Invoke(query));
     }
 
@@ -149,12 +152,14 @@ public class NeonHelpTests
     [InlineData("/tools camera")]
     [InlineData("tools camera")]
     [InlineData("camera tab")]
+    [InlineData("camera menu")]
     public void ATab_ListsItsRows_WithDefaultsAndAFirstSentence(string query)
     {
         string text = Invoke(query);
 
-        Assert.StartsWith("Tab /tools › Camera:\n", text, StringComparison.Ordinal);
-        foreach (var row in HelpLocation.OnTab("/tools", ToolsText.CameraTabTitle))
+        Assert.StartsWith("Tab /tools › Media › Camera:\n", text, StringComparison.Ordinal);   // a menu on Media since 2026-10-09, answered as its tab was
+        Assert.Equal(11, HelpLocation.InMenu("/tools", ToolsText.CameraTabTitle).Count);
+        foreach (var row in HelpLocation.InMenu("/tools", ToolsText.CameraTabTitle))
         {
             Assert.Contains("\n- " + row.Label + " (default " + HelpLocation.Default(row.Field) + "): ", text);
         }
@@ -172,6 +177,13 @@ public class NeonHelpTests
                 Assert.StartsWith("Tab " + pane.Command + HelpText.PathSeparator + tab + ":", text, StringComparison.Ordinal);
                 Assert.DoesNotContain(HelpText.CutNote, text);
             }
+
+            foreach (var (tab, menu) in HelpLocation.Menus(pane.Command))
+            {
+                string text = Invoke(pane.Command + " " + menu);
+                Assert.StartsWith("Tab " + pane.Command + HelpText.PathSeparator + tab + HelpText.PathSeparator + menu + ":", text, StringComparison.Ordinal);
+                Assert.DoesNotContain(HelpText.CutNote, text);
+            }
         }
     }
 
@@ -180,6 +192,20 @@ public class NeonHelpTests
     {
         Assert.StartsWith("Tab /tools › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › HA:", Invoke("/tools home assistant"), StringComparison.Ordinal);
+    }
+
+    /// <summary>A group tab (2026-10-09) lists its menus and their rows' names, and says how to ask for one. Pinned.</summary>
+    [Fact]
+    public void AGroupTab_ListsItsMenus_AndTheirRowsNames()
+    {
+        string text = Invoke("/tools database");
+
+        Assert.StartsWith("Tab /tools › Database: " + HelpText.MenusTab(["SQL", "MySQL", "SQLite", "Postgres", "Oracle"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
+        Assert.Contains("\n- Oracle: Oracle tools, ", text);
+        Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
+        Assert.Equal("the menus Print, Camera (Enter opens one, each a strip of its rows)", HelpText.MenusTab(["Print", "Camera"]));
+        Assert.Equal([(ToolsText.MediaTabTitle, "Print"), (ToolsText.MediaTabTitle, "Camera"), (ToolsText.MediaTabTitle, "Screen")], HelpLocation.Menus("/tools").Take(3));
+        Assert.Empty(HelpLocation.Menus("/settings"));
     }
 
     [Fact]

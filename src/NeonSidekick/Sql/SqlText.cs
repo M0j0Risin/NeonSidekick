@@ -35,10 +35,17 @@ public static class SqlText
     // ─── passwords (later on 2026-09-23) ───────────────────────────────────────
 
     public const string NotProtected = "the value is not one the app encrypted (dpapi:…)";
+
+    /// <summary>
+    /// Where the SQL rows are, as the wording says it: <c>/tools › Database › SQL</c> since 2026-10-09 (the user's call: the five database tabs
+    /// became menus on one Database tab; <c>the SQL tab of /tools</c> until then). The other families put their own in its place
+    /// (<see cref="ConnectionFamily{TConfig, TNamed}.Tab"/>, <c>UncSecrets</c>). Pinned.
+    /// </summary>
+    public const string SqlMenuPath = "/tools › Database › SQL";
     /// <summary>A stored password that will not decrypt: saved by another Windows user or machine, or on a Mac by another user or Mac, whose Keychain key this one lacks (2026-10-06, the macOS build). Pinned.</summary>
     public static string CannotDecrypt(string detail) => OperatingSystem.IsMacOS()
-        ? $"the password cannot be decrypted — it was saved by another user or on another Mac ({detail}); set it again on the SQL tab of /tools"
-        : $"the password cannot be decrypted — it was saved by another Windows user or on another machine ({detail}); set it again on the SQL tab of /tools";
+        ? $"the password cannot be decrypted — it was saved by another user or on another Mac ({detail}); set it again on {SqlMenuPath}"
+        : $"the password cannot be decrypted — it was saved by another Windows user or on another machine ({detail}); set it again on {SqlMenuPath}";
     /// <summary>Where a <c>passwordStore: credman</c> password lives: Windows Credential Manager, or the macOS Keychain (2026-10-06, the macOS build). Pinned.</summary>
     public static string CredentialStore => OperatingSystem.IsMacOS() ? "the macOS Keychain" : "Windows Credential Manager";
 
@@ -53,8 +60,8 @@ public static class SqlText
     public static IReadOnlyList<string> StoreRows(string file) =>
         [OperatingSystem.IsMacOS() ? $"file     encrypted (Keychain key) in {file}" : $"file     encrypted (DPAPI) in {file}", "credman  " + CredentialStore];
 
-    public static string NoCredential(string target) => $"no password in {CredentialStore} for {target}; set it on the SQL tab of /tools, or: {CredentialCommand(target, "<account>")}";
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on the SQL tab of /tools (SQL set password)";
+    public static string NoCredential(string target) => $"no password in {CredentialStore} for {target}; set it on /tools › Database › SQL, or: {CredentialCommand(target, "<account>")}";
+    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Database › SQL (SQL set password)";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's sql.json was checked for plain passwords: {detail}";
     public static string EncryptedLogLine(string name, string path) => $"encrypted the password of '{name}' in {path}";
     public static string EncryptFailedLogLine(string name, string path, string detail) => $"could not encrypt the password of '{name}' in {path}, so it stays plain text there: {detail}";
@@ -95,8 +102,8 @@ public static class SqlText
     /// <summary>The closing line of <c>sql_connections</c> while the profile hides some (later on 2026-09-23): how many, never which. Pinned.</summary>
     public static string HiddenConnections(int count) =>
         count == 1
-            ? "1 more connection in sql.json is switched off for this profile (the SQL tab of /tools)."
-            : $"{Invariant(count)} more connections in sql.json are switched off for this profile (the SQL tab of /tools).";
+            ? "1 more connection in sql.json is switched off for this profile (/tools › Database › SQL)."
+            : $"{Invariant(count)} more connections in sql.json are switched off for this profile (/tools › Database › SQL).";
 
     /// <summary>A connection's note on the <c>%</c>-mention list (later on 2026-09-23): where it points, then its description. Pinned.</summary>
     public static string MentionNote(SqlNamedConnection connection)
@@ -200,7 +207,7 @@ public static class SqlText
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
-    public const string NoConnections = "Error: no SQL connection is defined; the user adds one to sql.json (the SQL tab of /tools)";
+    public const string NoConnections = "Error: no SQL connection is defined; the user adds one to sql.json (/tools › Database › SQL)";
     public static string UnknownConnection(string name, string names) => $"Error: no SQL connection is named '{name}'; the connections are {names}";
 
     /// <summary>A call that names no connection while several are offered (2026-10-09: the default-connection settings gone). Pinned.</summary>

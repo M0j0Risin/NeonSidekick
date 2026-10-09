@@ -16,10 +16,10 @@ public static class YouTubeText
     public const string KeySteps = "in the Google Cloud Console (console.cloud.google.com), create a project, enable YouTube Data API v3 under APIs & Services › Library, then create an API key under Credentials and restrict it to that API";
 
     /// <summary>No key set: the search was not asked.</summary>
-    public const string NoKey = "Error: YouTube search needs a YouTube Data API key, and none is set. The user can add one as YouTube API key on the YouTube tab of /tools (or NEONSIDEKICK_YOUTUBE_API_KEY): " + KeySteps + ". Playing a video by its id or link needs no key.";
+    public const string NoKey = "Error: YouTube search needs a YouTube Data API key, and none is set. The user can add one as YouTube API key on /tools › Media › YouTube (or NEONSIDEKICK_YOUTUBE_API_KEY): " + KeySteps + ". Playing a video by its id or link needs no key.";
 
     /// <summary><c>/youtube &lt;words&gt;</c> with no key: the user's own sentence (the tool's says "the user can").</summary>
-    public const string NoKeyForUser = "Searching YouTube needs a YouTube Data API key: add one as YouTube API key on the YouTube tab of /tools. To make one, " + KeySteps + ". Playing a video by its id or link needs none.";
+    public const string NoKeyForUser = "Searching YouTube needs a YouTube Data API key: add one as YouTube API key on /tools › Media › YouTube. To make one, " + KeySteps + ". Playing a video by its id or link needs none.";
 
     /// <summary>youtube_search with nothing to look for.</summary>
     public const string EmptyQuery = "Error: \"query\" is empty; say what to look for.";
@@ -37,7 +37,7 @@ public static class YouTubeText
     {
         YouTubeFailure.NoKey => NoKey,
         YouTubeFailure.Quota => "Error: the YouTube API key's daily quota is used up (" + QuotaNote + "); it resets at midnight Pacific time.",
-        YouTubeFailure.KeyInvalid => "Error: YouTube refused the API key as not valid or expired (" + detail + "). The user can set a new one as YouTube API key on the YouTube tab of /tools.",
+        YouTubeFailure.KeyInvalid => "Error: YouTube refused the API key as not valid or expired (" + detail + "). The user can set a new one as YouTube API key on /tools › Media › YouTube.",
         YouTubeFailure.NotEnabled => "Error: YouTube Data API v3 is not enabled on the API key's Google Cloud project (" + detail + "). The user can enable it under APIs & Services › Library in the Google Cloud Console.",
         YouTubeFailure.KeyRestricted => "Error: the API key's restrictions refuse this app (" + detail + "). In the Google Cloud Console its application restrictions should be None, and its API restrictions YouTube Data API v3.",
         YouTubeFailure.Refused => detail.Length > 0 ? detail : "Error: the network mode keeps the internet, and YouTube with it, off limits.",
@@ -215,7 +215,7 @@ public static class YouTubeText
     public const string ReadingPlaylist = "Reading the playlist from YouTube…";
 
     /// <summary><c>/youtube playlist</c> with no key (2026-10-08): the user's own sentence.</summary>
-    public const string NoKeyForPlaylist = "Listing a playlist's videos needs a YouTube Data API key: add one as YouTube API key on the YouTube tab of /tools. Playing it needs none: /youtube play <playlist link>.";
+    public const string NoKeyForPlaylist = "Listing a playlist's videos needs a YouTube Data API key: add one as YouTube API key on /tools › Media › YouTube. Playing it needs none: /youtube play <playlist link>.";
 
     /// <summary>The picker's save on a playlist or a channel (2026-10-08): only a video is saved.</summary>
     public static string SaveVideosOnly(YouTubeKind kind) => kind == YouTubeKind.Channel

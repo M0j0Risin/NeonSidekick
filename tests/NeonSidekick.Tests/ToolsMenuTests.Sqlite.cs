@@ -30,7 +30,8 @@ public partial class ToolsMenuTests
     [Fact]
     public void TheTab_IsAfterMySql_WithItsRows_AndItsWordsArePinned()
     {
-        Assert.Equal(TabIndex(ToolsText.MySqlTabTitle) + 1, TabIndex(ToolsText.SqliteTabTitle));
+        Assert.Equal(ToolsText.MenuIndex(ToolsText.MySqlTabTitle) + 1, ToolsText.MenuIndex(ToolsText.SqliteTabTitle));   // menus on Database since 2026-10-09
+        Assert.True(InGroup(ToolsText.SqliteTabTitle));
         Assert.Equal(
             [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
             TabFields(ToolsText.SqliteTabTitle));
@@ -56,7 +57,7 @@ public partial class ToolsMenuTests
         Push(Keys.Enter);                         // no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test
         Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -77,7 +78,7 @@ public partial class ToolsMenuTests
         var (menu, _, _) = PaneMenu();
         OpenSqliteRow(1);
         Push(Keys.Down, Keys.Enter);              // read-write
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -94,7 +95,7 @@ public partial class ToolsMenuTests
         OpenSqliteRow(2);
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // dropping, after deleting (later on 2026-10-05)
         Push(Keys.Escape);                                   // out of the checklist
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -111,7 +112,7 @@ public partial class ToolsMenuTests
         OpenSqliteRow(2);
         Push(Keys.Char('d'));
         Push(Keys.Escape);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -129,7 +130,7 @@ public partial class ToolsMenuTests
         Push(Keys.Char('n'));
         Push(Keys.Char('a'));
         Push(Keys.Escape);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -158,7 +159,7 @@ public partial class ToolsMenuTests
         Push(Keys.Escape);
         Push(Keys.Down, Keys.Down, Keys.Enter);   // the wizard
         Push(Keys.Escape);                        // out of its first page: nothing
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 

@@ -545,6 +545,12 @@ public sealed class MenuPane : INoticeSink
     // ── The visit ───────────────────────────────────────────────────────────
 
     /// <summary>
+    /// The tab the last level showed as its <see cref="PickAsync"/> returned, an ESC's included (2026-10-09: <c>/tools</c>' group menus
+    /// come back to their tab on the menu last shown, though ←/→ moved along the strip with no pick); 0 before any.
+    /// </summary>
+    public int ShownTab => _page?.Tab ?? 0;
+
+    /// <summary>
     /// Shows <paramref name="page"/> with the cursor on row <paramref name="cursor"/> and reads
     /// keys until Enter (the tab shown and the row's index within it) or ESC, the token or no
     /// keyboard (null). The pane stays open either way: the caller shows the next page or calls

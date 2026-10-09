@@ -101,7 +101,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// <summary>What a fresh file holds.</summary>
     public required string EmptyText { get; init; }
 
-    /// <summary>The tab of <c>/tools</c> whose rows fix a password (<c>the MySQL tab</c>), put in for <see cref="WindowsCredentials"/>' <c>the SQL tab</c>.</summary>
+    /// <summary>Where on <c>/tools</c> the rows that fix a password are (<c>/tools › Database › MySQL</c>; <c>the MySQL tab</c> until 2026-10-09), put in for <see cref="SqlText.SqlMenuPath"/> in <see cref="WindowsCredentials"/>' wording.</summary>
     public required string Tab { get; init; }
 
     /// <summary>Why a <c>null</c> entry cannot connect (<c>MySqlText.NoHost</c>).</summary>
@@ -332,7 +332,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
 
         // WindowsCredentials words its failure for sql.json; the fix it names is on this family's tab.
         var decrypted = WindowsCredentials.Unprotect(password);
-        return decrypted.Error is { } error ? CredentialResult.Failed(error.Replace("the SQL tab", Tab, StringComparison.Ordinal)) : decrypted;
+        return decrypted.Error is { } error ? CredentialResult.Failed(error.Replace(SqlText.SqlMenuPath, Tab, StringComparison.Ordinal)) : decrypted;
     }
 
     /// <summary>

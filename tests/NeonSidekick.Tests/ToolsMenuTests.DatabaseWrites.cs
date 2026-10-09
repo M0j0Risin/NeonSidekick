@@ -26,7 +26,7 @@ public partial class ToolsMenuTests
         Push(Keys.Down, Keys.Enter);                     // the statements, third
         Push(Keys.Char('d'));                            // the default
         Push(Keys.Escape);
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 

@@ -177,7 +177,7 @@ public partial class ToolsMenuTests
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace);
         Type("renamed");
         Push(Keys.Enter);                                             // Save, hidden
-        Push(Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 

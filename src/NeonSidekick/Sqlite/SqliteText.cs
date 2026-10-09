@@ -34,8 +34,8 @@ public static class SqliteText
     /// <summary>The closing line of <c>sqlite_databases</c> while the profile hides some: how many, never which. Pinned.</summary>
     public static string HiddenDatabases(int count) =>
         count == 1
-            ? "1 more database in sqlite.json is switched off for this profile (the SQLite tab of /tools)."
-            : $"{Invariant(count)} more databases in sqlite.json are switched off for this profile (the SQLite tab of /tools).";
+            ? "1 more database in sqlite.json is switched off for this profile (/tools › Database › SQLite)."
+            : $"{Invariant(count)} more databases in sqlite.json are switched off for this profile (/tools › Database › SQLite).";
 
     public const string SandboxLine = "Any SQLite file in the working directory can be named by its path too (e.g. \"data/app.db\").";
 
@@ -96,11 +96,11 @@ public static class SqliteText
     {
         ArgumentNullException.ThrowIfNull(allowed);
         string may = allowed.Count == 0 ? "nothing" : string.Join(", ", allowed.Select(SqliteStatementKinds.Title));
-        return $"Error: the SQL is {SqliteStatementKinds.Title(kind)} ({SqliteStatementKinds.Statements(kind)}), which the user has not allowed; sqlite_execute may run {may} — the user ticks more in SQLite statements allowed on the SQLite tab of /tools";
+        return $"Error: the SQL is {SqliteStatementKinds.Title(kind)} ({SqliteStatementKinds.Statements(kind)}), which the user has not allowed; sqlite_execute may run {may} — the user ticks more in SQLite statements allowed on /tools › Database › SQLite";
     }
 
-    public const string CreateNotAllowed = "Error: \"create\" makes a new database, and the user has not allowed creating (SQLite statements allowed on the SQLite tab of /tools)";
-    public const string NoKindsAllowed = "Error: the user has allowed no kind of statement for sqlite_execute (SQLite statements allowed on the SQLite tab of /tools)";
+    public const string CreateNotAllowed = "Error: \"create\" makes a new database, and the user has not allowed creating (SQLite statements allowed on /tools › Database › SQLite)";
+    public const string NoKindsAllowed = "Error: the user has allowed no kind of statement for sqlite_execute (SQLite statements allowed on /tools › Database › SQLite)";
 
     public const string OwnTransaction = "each call is a transaction of its own, committed when its statement succeeds";
     public const string AnotherFile = "it reaches a file other than this database";
@@ -109,7 +109,7 @@ public static class SqliteText
 
     // ─── sqlite_execute (2026-10-05) ────────────────────────────────────────────
 
-    public const string ReadOnlyMode = "Error: SQLite mode is read-only, so nothing may change a SQLite database; the user switches it to read-write on the SQLite tab of /tools";
+    public const string ReadOnlyMode = "Error: SQLite mode is read-only, so nothing may change a SQLite database; the user switches it to read-write on /tools › Database › SQLite";
     public const string NoPane = "Error: sqlite_execute needs the user to allow each change on a pane, and there is none here";
     public const string Declined = "The user declined the change; nothing was run. Do not run it again unless the user asks for it.";
     public const string CreateNeedsSandbox = "Error: a new database file can only be made in the working directory, and SQLite sandbox files is off";
@@ -171,7 +171,7 @@ public static class SqliteText
 
     // ─── outcomes ───────────────────────────────────────────────────────────────
 
-    public const string NoDatabases = "Error: no SQLite database is defined; the user adds one to sqlite.json (the SQLite tab of /tools)";
+    public const string NoDatabases = "Error: no SQLite database is defined; the user adds one to sqlite.json (/tools › Database › SQLite)";
     public static string UnknownDatabase(string name, string names, bool sandbox) =>
         $"Error: no SQLite database is named '{name}'" + (sandbox ? " and no file by that path is in the working directory" : "") + (names.Length > 0 ? $"; the databases are {names}" : "");
 

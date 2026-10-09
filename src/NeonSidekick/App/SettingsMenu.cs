@@ -1382,7 +1382,9 @@ internal sealed partial class SettingsMenu
     ];
 
     /// <summary>
-    /// The rows of <c>/tools</c>' four settings tabs (2026-09-19, the Ask, Files and Web rows moved off <c>/settings</c> the user's call), indexed by
+    /// The rows of <c>/tools</c>' settings menus (2026-09-19, the Ask, Files and Web rows moved off <c>/settings</c> the user's call), titled by
+    /// <see cref="ToolsText.MenuTitles"/> and put on the strip by <see cref="ToolsText.TabMenus"/> since 2026-10-09 (the user's call: the five
+    /// database lists on one Database tab, the five media lists on one Media tab); each a tab of its own until then, indexed by
     /// <see cref="ToolsText.TabTitles"/> one down (Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options — the user's order since 2026-10-03; before it the Home Assistant list second to last, before Options, since later on 2026-10-01, the user's ask; after Claude's before)
     /// (Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Git (native), Options — the user's order since 2026-09-27; Web, Files, Shell, Ask, Git (native), Obsidian, SQL, ComfyUI, Claude, Options before; alphabetical before 2026-09-21): Options (later on 2026-09-19) is the <c>$</c>-mention switch, and under it the tool-run fold (<c>Tool collapse count</c>, 2026-09-22, the user's place);
     /// Ask (2026-09-15) is the question tool's switch and its two caps;

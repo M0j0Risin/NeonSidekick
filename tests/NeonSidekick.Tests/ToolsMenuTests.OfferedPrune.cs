@@ -94,7 +94,7 @@ public partial class ToolsMenuTests
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
         Push(Keys.Enter);                                    // aw on
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -111,7 +111,7 @@ public partial class ToolsMenuTests
         _settings.Update(d => d.SqlConnectionsOffered = ["mine", "aw"]);
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -128,7 +128,7 @@ public partial class ToolsMenuTests
         _settings.Update(d => d.ComfyWorkflowsOffered = ["gone", "broken", "pony-txt2img"]);
         var (menu, _, _) = PaneMenu();
         OpenImagesRow(2);
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 

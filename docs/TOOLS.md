@@ -63,7 +63,7 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_help` | `query?, kind?` | NeonSidekick's own manual: every form of a command; a setting's effect, default and place (pane › tab › row); a pane's or tab's rows; the keys. `query` is a command (`/camera`), a setting, a pane or tab (`/tools camera`), a key (`Ctrl+H`) or plain words; none gives an overview. `kind` (`command`, `setting`, `pane`, `keys`) narrows it; `kind: command` alone lists every command. |
+| `neon_help` | `query?, kind?` | NeonSidekick's own manual: every form of a command; a setting's effect, default and place (pane › tab › row, with the menu on `/tools`' Media and Database tabs); a pane's or tab's rows; the keys. `query` is a command (`/camera`), a setting, a pane or tab (`/tools camera`), a key (`Ctrl+H`) or plain words; none gives an overview. `kind` (`command`, `setting`, `pane`, `keys`) narrows it; `kind: command` alone lists every command. |
 
 It is offered on every turn, headless and in plan mode too, and the rules tell the model to use it instead of guessing. It reads only the built-in reference, never your current settings. To withhold it, switch it off on the Offered tab.
 
@@ -145,7 +145,7 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 
 ### Managing connections
 
-* **SQL add/edit connection** (the SQL tab of `/tools`) walks through a new connection one page per choice, access (`read`/`readwrite`) included. With connections saved, its first page lists them: **+ New connection**, or one to edit, opened prefilled on its summary (Enter on a row changes it; the stored password is kept unless you type another). The summary can **test** the draft (`SELECT @@VERSION`, nothing written): it also names the other databases the login could open, or says it opens none. It saves with the file's comments kept. ESC steps back.
+* **SQL add/edit connection** (`/tools` › Database › SQL) walks through a new connection one page per choice, access (`read`/`readwrite`) included. With connections saved, its first page lists them: **+ New connection**, or one to edit, opened prefilled on its summary (Enter on a row changes it; the stored password is kept unless you type another). The summary can **test** the draft (`SELECT @@VERSION`, nothing written): it also names the other databases the login could open, or says it opens none. It saves with the file's comments kept. ESC steps back.
 * **SQL set password** updates a password.
 * Or edit `sql.json` directly: `%USERPROFILE%\.neonsidekick\sql.json` (global; `~/.neonsidekick/sql.json` on a Mac) or `…/profiles/<profile>/sql.json` (comments and trailing commas allowed).
 
@@ -251,7 +251,7 @@ The SQL tools' twin for Oracle, through ODP.NET Core (fully managed; no Oracle C
 
 ### Managing connections
 
-**Oracle add/edit connection** (the Oracle tab of `/tools`) walks through a new connection, or edits a saved one as SQL's does. Its test (nothing written) shows who it signed in as, the container and the version, names the other schemas the account could read (and any `SELECT ANY` privilege) or says it reads none, and warns when the account could change data: the tools only write through `oracle_execute` on a `readwrite` connection, and a read-only account is the real guard. It asks for the access too (`read` or `readwrite`). **Oracle set password** updates a password; or edit `oracle.json` directly.
+**Oracle add/edit connection** (`/tools` › Database › Oracle) walks through a new connection, or edits a saved one as SQL's does. Its test (nothing written) shows who it signed in as, the container and the version, names the other schemas the account could read (and any `SELECT ANY` privilege) or says it reads none, and warns when the account could change data: the tools only write through `oracle_execute` on a `readwrite` connection, and a read-only account is the real guard. It asks for the access too (`read` or `readwrite`). **Oracle set password** updates a password; or edit `oracle.json` directly.
 
 ```json
 {
@@ -366,7 +366,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 }
 ```
 
-**MySQL add/edit connection** (the MySQL tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when `SHOW GRANTS` allows changes, and the other databases the account could reach (or that it sees none). It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
+**MySQL add/edit connection** (`/tools` › Database › MySQL) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when `SHOW GRANTS` allows changes, and the other databases the account could reach (or that it sees none). It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
 
 ### Safety
 
@@ -434,7 +434,7 @@ SQLite database files, through the same Microsoft.Data.Sqlite the sessions use: 
 }
 ```
 
-**SQLite add/edit database** (the SQLite tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: it opens the file read-only and counts its tables.
+**SQLite add/edit database** (`/tools` › Database › SQLite) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: it opens the file read-only and counts its tables.
 
 ### Safety
 
@@ -505,7 +505,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 }
 ```
 
-**PostgreSQL add/edit connection** (the Postgres tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when the role is a superuser or holds write grants, and what else the role could reach (other databases, foreign servers, and other schemas under a schema lock), or that it reaches nothing more. It asks for the schema and the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
+**PostgreSQL add/edit connection** (`/tools` › Database › Postgres) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when the role is a superuser or holds write grants, and what else the role could reach (other databases, foreign servers, and other schemas under a schema lock), or that it reaches nothing more. It asks for the schema and the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
 
 ### Safety
 
@@ -714,7 +714,7 @@ The image tools run **your own ComfyUI workflows** on your server (*ComfyUI URL*
 
 ### Adding a workflow
 
-**With the wizard** (*ComfyUI add workflow* on the ComfyUI tab of `/tools`):
+**With the wizard** (*ComfyUI add workflow* on `/tools` › Media › ComfyUI):
 
 * **Build** makes a standard text → image or image → image workflow from your server's lists: checkpoint, family, folder (this profile's or every profile's), name, CLIP skip, sampler, scheduler, size, steps, CFG, denoise, negative and description.
 * **Import** takes a ComfyUI API export (*Workflow → Export (API)*). It finds the prompt, negative, seed, steps, CFG, size and input-image nodes, puts the placeholders in, and keeps the export's values as defaults. It reads both a plain `KSampler` graph and FLUX.2's custom-sampler graph. A value fed by a primitive node gets its placeholder there; one set by another node (a switch, a resolution picker) is left alone, and the wizard says so.

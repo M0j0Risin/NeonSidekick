@@ -106,7 +106,7 @@ public sealed class SqlConfigFile
         "  // },\n" +
         "  //\n" +
         "  // A SQL login with the password in " + SqlText.CredentialStore + " as NeonSidekick/sql/<name> — set it with SQL set password\n" +
-        "  // on the SQL tab of /tools, or: " + SqlText.CredentialCommand("NeonSidekick/sql/reports-reader", "reader") + "\n" +
+        "  // on /tools › Database › SQL, or: " + SqlText.CredentialCommand("NeonSidekick/sql/reports-reader", "reader") + "\n" +
         "  // \"reports-reader\": {\n" +
         "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +
         "  //   \"auth\": \"sql\", \"user\": \"reader\", \"passwordStore\": \"credman\"\n" +
@@ -144,7 +144,7 @@ public sealed class SqlConfigFile
         "  // },\n" +
         "  //\n" +
         "  // Windows sign-in as another account (auth runas: runas /netonly's way, remote servers only), the password in\n" +
-        "  // Windows Credential Manager as NeonSidekick/sql/<name> — set it with SQL set password on the SQL tab of /tools,\n" +
+        "  // Windows Credential Manager as NeonSidekick/sql/<name> — set it with SQL set password on /tools › Database › SQL,\n" +
         "  // or: cmdkey /generic:NeonSidekick/sql/reports-admin /user:CONTOSO\\svc-reader /pass\n" +
         "  // \"reports-admin\": {\n" +
         "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +
