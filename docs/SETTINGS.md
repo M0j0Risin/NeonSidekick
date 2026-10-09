@@ -123,10 +123,11 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 |---|---|---|
 | ⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 | always | `/settings`, `/profile` (the profile picker), `/theme` (the theme picker), `/tools`, `/mcp`, `/skills`, `/sys`, `/sessions`, `/usage` |
 | 💾 | always; on the slab while *Memory mode* is `disabled` | `/memory`: the memories, with **read-write** (`w`), **read-only** (`o`) and **disabled** (`x`) on its title row |
+| 🙋 | always; on the slab while *Ask user* is off | `/tools ask`: the *Ask user* on/off page |
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
-| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
+| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Claude CLI advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -174,7 +175,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See [Welcome splash](#welcome-splash) below. | `fullsize` |
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it, shown at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). `a` / `n` / `d` pick all, none or the default ten; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Web, path (10 of 35) |
+| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). `a` / `n` / `d` pick all, none or the default ten; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Web, path (10 of 36) |
 | Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates), **PROC** (background processes running); VRAM is **GMEM** on a Mac. `a` / `n` / `d` pick all, none or the default four; none hides the bar. The title row picks the look: **text** (`t`), **gauge** (`g`), **spark** (`s`, the last ten seconds) or **led** (`l`). See [Performance bar](#performance-bar) below. | CPU, RAM, GPU, VRAM, `led` |
 | Menus max height | How much of the window a menu or info pane may take: `half-screen`, `three-quarters` or `full-screen` (all but one row). Longer lists scroll; every tab keeps the tallest tab's height. | `full-screen` |
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…); it must wait for the file to close. Empty uses the app the system opens `.txt` files with (TextEdit on a Mac unless you chose another). | (default .txt editor) |
@@ -592,7 +593,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 | Setting | What it does | Default |
 |---|---|---|
-| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image, image_edit…), which reach only the working directory (a junction or symlink in it that leads outside is refused; deleting or moving the link itself is allowed, its target untouched). | off |
+| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image, image_edit…), which reach only the working directory (a junction or symlink in it that leads outside is refused; deleting or moving the link itself is allowed, its target untouched). The top of its on/off page has **browser** (`b`) and **edit mode** (`e`) buttons that open *File browser/tree mode* and *Image edit mode*; ESC there comes back. | off |
 | File /tree max length | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `folder-remain` opens it in the list; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
@@ -663,7 +664,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Ask user | Offers `ask_user`: multiple-choice questions on the pane. | on |
+| Ask user | Offers `ask_user`: multiple-choice questions on the pane. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
 | Ask max questions | Questions per call (1–10). | 10 |
 | Ask max choices per question | Options per question (2–15). | 10 |
 
@@ -687,7 +688,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. On a Mac the terminal app needs the Screen Recording permission (see [Screen capture](COMMANDS.md#screen-capture)). | off |
+| Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. On a Mac the terminal app needs the Screen Recording permission (see [Screen capture](COMMANDS.md#screen-capture)). The top of its on/off page has **ask** (`a`) and **preview** (`p`) buttons that open *Screen capture ask* and *Screen capture preview*; ESC there comes back. | off |
 | Screen capture ask | `ask`: a pane names what would be captured and why; Deny, Allow once, or Allow for this session. `allow`: taken without asking. | `ask` |
 | Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
 | Screen capture output folder | Where screenshots are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. | `screen_images` |
@@ -703,7 +704,7 @@ The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (th
 | Claude CLI slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), `edit` (its usual tools with file edits, no commands) or `full` (everything, `bypassPermissions`). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
 | Claude CLI slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
 | Claude CLI slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
-| Claude CLI advisor tool | Offers `claude_advisor_cli`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. | off |
+| Claude CLI advisor tool | Offers `claude_advisor_cli`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. The top of its on/off page has **model** (`m`) and **effort** (`e`) buttons that open *Claude CLI advisor tool model* and *Claude CLI advisor tool effort*; ESC there comes back. | off |
 | Claude CLI advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
 | Claude CLI advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
 | Claude CLI advisor tool model | The advisor's `--model`; the first row follows *Claude CLI slash command model*. | (as Claude CLI slash command model) |
@@ -728,7 +729,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 
 | Setting | What it does | Default |
 |---|---|---|
-| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. | off |
+| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. The top of its on/off page has a **printer** button (`p`) that opens *Print default printer*; ESC there comes back. | off |
 | Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
 | Print default printer | Where a print goes when none is named. On a Mac the picker shows each printer's queue name with the name System Settings shows, and the empty row reads *(system default)*. | (Windows default) |
 | Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
@@ -738,7 +739,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 
 | Setting | What it does | Default |
 |---|---|---|
-| Obsidian tools | Offers the vault tools (search, list, read, links, daily, write, properties, move) once a vault is set. | off |
+| Obsidian tools | Offers the vault tools (search, list, read, links, daily, write, properties, move) once a vault is set. The top of its on/off page has a **vault** button (`v`) that opens *Obsidian vault*'s folder picker; ESC there comes back. | off |
 | Obsidian vault | The vault's folder (holding `.obsidian`), separate from the working directory. The row opens the folder picker. | (not set) |
 | Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
 
@@ -866,7 +867,7 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 
 | Setting | What it does | Default |
 |---|---|---|
-| YouTube tools | Offers the YouTube tools: `youtube_search` and `youtube_playlist` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video or a public playlist in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's or playlist's id or link needs no key. Headless offers the search and the playlist listing. | off |
+| YouTube tools | Offers the YouTube tools: `youtube_search` and `youtube_playlist` (with a key below), and `youtube_play`, `youtube_control` and `youtube_status`, which play a video or a public playlist in the app's own video window (Windows, with the WebView2 Runtime Windows 11 has; or macOS 14 or later, through WebKit). Playing by a video's or playlist's id or link needs no key. Headless offers the search and the playlist listing. The top of its on/off page has **max** (`m`), **voice** (`v`), **order** (`o`) and **safe** (`s`) buttons that open *YouTube search max results*, *YouTube while speaking*, *YouTube search order* and *YouTube safe search*; ESC there comes back. | off |
 | YouTube API key | A YouTube Data API v3 key, for searching: in the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable *YouTube Data API v3* (APIs & Services › Library), create an API key under Credentials and restrict it to that API, with no application restriction. A search costs 100 of the project's 10,000 free units a day (about 100 searches). Typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac); sent only to www.googleapis.com, in a header, never in a URL. `/profile push keys` copies it; a plain `/profile reset` keeps it. | (none) |
 | YouTube search max results | How many videos (or playlists, or channels) a search lists (1–20), for the model and in `/youtube`'s picker. The quota cost is the same whatever the count. | 8 |
 | YouTube autoplay | Whether a played video starts at once, sound included, or waits cued for a play. | on |

@@ -21,7 +21,8 @@ namespace NeonSidekick.App;
 /// after the log, <c>/process</c>'s list of the model's background processes (a pane, not a window). 📺 YouTube in the Camera live
 /// viewer's place on 2026-10-08 (the user's ask: the live viewer's item gone, <c>/camera live</c> and Ctrl+Alt+V still open its window),
 /// <c>/youtube list</c>'s saved videos (a pane); a saved <c>liveview</c> is an unknown word, dropped as any is. Later that day (the
-/// user's ask) 📺 moved behind 🪟, the two viewers together again.
+/// user's ask) 📺 moved behind 🪟, the two viewers together again. 🙋 Ask on 2026-10-09 (the user's ask): the <c>Ask user</c> switch
+/// between the disk and the lock, <c>/tools ask</c>.
 /// </summary>
 public static class ToolbarItems
 {
@@ -36,6 +37,7 @@ public static class ToolbarItems
     public const string Usage = "usage";
     public const string Perf = "perf";         // later on 2026-09-29, the user's ask: 📈, the performance bar shown or hidden
     public const string Memory = "memory";
+    public const string Ask = "ask";           // 2026-10-09, the user's ask: 🙋, the Ask user switch (/tools ask), between the disk and the lock
     public const string CmdList = "cmdlist";
     public const string Police = "police";
 
@@ -72,11 +74,11 @@ public static class ToolbarItems
     /// the disk, the lock and the officer, the tool switches, the log, the two viewers, the chart (the last glyph, later on
     /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04); Process
     /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
-    /// (the user's ask). Pinned.
+    /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, CmdList, Police,
+        Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Ask, CmdList, Police,
         Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, Perf, Path,
     ];
@@ -108,6 +110,7 @@ public static class ToolbarItems
         Usage => ChatScreen.UsageToolGlyph,
         Perf => ChatScreen.PerfToolGlyph,
         Memory => ChatScreen.MemoryToolGlyph,
+        Ask => ChatScreen.AskToolGlyph,
         CmdList => ChatScreen.CmdAskToolGlyph,
         Police => ChatScreen.PoliceToolGlyph,
         Shell => ChatScreen.ShellToolGlyph,
@@ -149,6 +152,7 @@ public static class ToolbarItems
         Usage => "Usage",
         Perf => "Performance",
         Memory => "Memory",
+        Ask => "Ask",
         CmdList => "Shell allowed commands",
         Police => "Shell police",
         Shell => "Shell",

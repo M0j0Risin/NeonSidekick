@@ -33,11 +33,11 @@ public static class ToolsText
     /// <c>/tools &lt;group&gt;</c>'s words (2026-10-03, the user's ask: the toolbar's tool switches): each opens its group's
     /// switch straight — <c>shell</c> the <c>Shell command policy</c> picker (its allowed-commands and police buttons since
     /// 2026-10-09, and <see cref="ShellSubWords"/> after it), the others their on/off page. In the toolbar's order; each is also
-    /// its toolbar item's id. Pinned.
+    /// its toolbar item's id. <c>ask</c> first since 2026-10-09 (the user's ask: 🙋, <c>Ask user</c>, before the lock). Pinned.
     /// </summary>
     public static readonly string[] SwitchWords =
     [
-        ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Docker, ToolbarItems.Obsidian,
+        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Docker, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print,
     ];
@@ -45,6 +45,7 @@ public static class ToolsText
     /// <summary>The setting a <see cref="SwitchWords"/> word opens (any case, trimmed); null for any other word. Pinned.</summary>
     public static SettingsField? SwitchField(string word) => word.Trim().ToLowerInvariant() switch
     {
+        ToolbarItems.Ask => SettingsField.AskUser,
         ToolbarItems.Shell => SettingsField.ShellCommandPolicy,
         ToolbarItems.Files => SettingsField.FileTools,
         ToolbarItems.Web => SettingsField.WebTools,

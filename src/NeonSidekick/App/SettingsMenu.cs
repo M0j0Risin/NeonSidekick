@@ -6701,6 +6701,27 @@ internal sealed partial class SettingsMenu
                 break;
             }
         }
+        else if (SettingButtonsFor(field) is { } settingButtons && _pane.Enabled)
+        {
+            // The File, Print, Screen capture, Obsidian, YouTube and Claude CLI advisor pages carry their settings' buttons (2026-10-09,
+            // the user's ask, the offered button's shape): the setting's own editor, then the page again with the values read afresh.
+            var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], SettingButtonKeys(settingButtons));
+            int cursor = was ? 0 : 1;
+            while (true)
+            {
+                var buttons = SettingButtons(settingButtons, _settings.Current, _settings.ProfileDirectory);
+                var pressed = await PickChecklistAsync(page, cursor, cancellationToken, buttons).ConfigureAwait(false);
+                if (pressed is { Button: >= 0 } button)
+                {
+                    cursor = button.Row;
+                    modeChanged |= await EditFromButtonAsync(settingButtons[button.Button].Target, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                picked = pressed?.Row;
+                break;
+            }
+        }
         else
         {
             var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], PickKeys);
@@ -6709,8 +6730,8 @@ internal sealed partial class SettingsMenu
 
         if (picked is not { } index || (index == 0) == was)
         {
-            // A browser mode switched on the Web page is a change of its own, and so is watch mode on the Camera tool page and a
-            // checklist changed from an offered button: no "unchanged" over its notice.
+            // A browser mode switched on the Web page is a change of its own, and so is watch mode on the Camera tool page, a
+            // checklist changed from an offered button and a setting saved from a setting button: no "unchanged" over its notice.
             return modeChanged || Unchanged();
         }
 

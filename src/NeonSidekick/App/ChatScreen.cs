@@ -1450,6 +1450,12 @@ internal sealed partial class ChatScreen
     public const string UsageToolGlyph = "📊";
     public const string PerfToolGlyph = Perf.PerfText.Glyph;
     public const string MemoryToolGlyph = "💾";
+
+    /// <summary>
+    /// The Ask item (2026-10-09, the user's ask): a raised hand between the disk and the lock, a tool switch like the others —
+    /// <c>Ask user</c>, the <c>ask_user</c> tool's switch, its double-click <c>/tools ask</c>, on the off slab while it is off. Pinned.
+    /// </summary>
+    public const string AskToolGlyph = "🙋";
     public const string CmdAskToolGlyph = "🔒";
     public const string CmdYoloToolGlyph = "🔓";
     public const string PoliceToolGlyph = "👮";
@@ -1940,6 +1946,7 @@ internal sealed partial class ChatScreen
         UsageToolGlyph => SlashCommands.UsageWord,
         PerfToolGlyph => SlashCommands.PerfWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
+        AskToolGlyph => ToolsText.SwitchLine(ToolbarItems.Ask),
         CmdAskToolGlyph or CmdYoloToolGlyph => ToolsText.ShellSubLine(ToolsText.ShellAllowedWord),
         PoliceToolGlyph or NinjaToolGlyph => ToolsText.ShellSubLine(ToolsText.ShellPoliceWord),
         ShellToolGlyph => ToolsText.SwitchLine(ToolbarItems.Shell),
