@@ -3706,6 +3706,16 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
+    /// <see cref="ConfirmAsync"/> over a page of the caller's own rows (2026-10-09, the shortcut offer's three answers): the row
+    /// picked from the top, or null for ESC; on the pane, or as a prompt without it (where the page's hotkeys do nothing).
+    /// </summary>
+    public Task<int?> ChooseAsync(MenuPage page, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        return PickOnceAsync(page, 0, cancellationToken);
+    }
+
+    /// <summary>
     /// One pick from the settings list: on the pane the tabbed page (<see cref="SettingsTabs"/>)
     /// opened on <paramref name="tab"/>, elsewhere the flat list (<see cref="SettingsPage"/>) as a
     /// prompt. The field picked, the page it was picked from (its <see cref="MenuPage.Tab"/> is the

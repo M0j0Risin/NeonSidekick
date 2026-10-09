@@ -45,6 +45,25 @@ public static class ShortcutText
     public const string LoadedProfileNote = "the loaded profile";
     public const string LogNote = "and log to logs beside the exe";
 
+    /// <summary>The first start's question (2026-10-09, the user's ask), over <see cref="OfferRows"/>; plain text, the pane's title.</summary>
+    public static string OfferQuestion(string profile) =>
+        NoticeGlyphs.Shortcut + "Put a NeonSidekick shortcut for profile " + profile + " on the desktop?";
+
+    /// <summary>The offer's rows (2026-10-09, the user's pick: one pane, three rows), <c>No</c> first, the row the cursor opens on. Pinned.</summary>
+    public static readonly IReadOnlyList<string> OfferRows = ["No", "Yes", "Yes, with a log (" + DesktopShortcut.LogSwitch + ")"];
+
+    /// <summary>The offer's hint row. Pinned.</summary>
+    public const string OfferKeys = "y / n / l = pick · Enter = choose · ESC = no";
+
+    /// <summary>The offer's hotkeys: <c>n</c> to <c>No</c>, <c>y</c> to <c>Yes</c>, <c>l</c> to the log row (Enter still picks). Pinned.</summary>
+    public static readonly IReadOnlyDictionary<char, int> OfferHotkeys = new Dictionary<char, int> { ['n'] = 0, ['y'] = 1, ['l'] = 2 };
+
+    /// <summary>The line after the offer is declined (No or ESC alike, the user's pick): it is not asked again, the command remains.</summary>
+    public const string OfferDeclined = "(no desktop shortcut; /shortcut makes one any time, /shortcut --log one that logs)";
+
+    /// <summary>The diagnostic line where the offer was skipped because the loaded profile's shortcut is already on the desktop.</summary>
+    public static string OfferAlreadyThere(string linkPath) => $"Not offering a desktop shortcut: {linkPath} is already there.";
+
     /// <summary>The shortcut's tooltip (its Comment). Pinned.</summary>
     public static string Description(string profile) => "NeonSidekick on profile " + profile;
 

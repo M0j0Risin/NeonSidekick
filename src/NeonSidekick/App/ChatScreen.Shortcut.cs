@@ -71,6 +71,54 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// The first start's offer of the desktop shortcut (2026-10-09, the user's ask): while <c>settings.json</c>'s
+    /// <see cref="RootSettingsData.ShortcutOffered"/> is false, one pane asks No / Yes / Yes, with a log (the user's pick: one
+    /// pane, three rows), and a yes is <c>/shortcut</c> or <c>/shortcut --log</c> through <see cref="HandleShortcut"/>, its
+    /// notice and errors as typed. Any answer marks the offer made, ESC and a pane closed off it too (the user's pick: asked once).
+    /// Run after the startup's LLM connect, so a first run's server picker or Connect page comes first. Not asked — and not
+    /// marked, so a later start asks — without a writer or the exe's path, without menus (a redirected console: a typed
+    /// fallback would take the user's first line), or on a temporary profile (a shortcut to scratch is the wrong first offer). A shortcut already on
+    /// the desktop for the loaded profile marks it unasked.
+    /// </summary>
+    private async Task OfferShortcutAsync(CancellationToken cancellationToken)
+    {
+        if (_settings.ShortcutOffered
+            || _shortcutWriter is not { Executable: { } exe } writer
+            || !_menu.CanShowMenus()
+            || Profiles.IsTemporary(_settings.ProfileName))
+        {
+            return;
+        }
+
+        string linkPath = DesktopShortcut.For(exe, writer.DesktopFolder, _settings.ProfileName, log: false, writer.Kind).LinkPath;
+        if (File.Exists(linkPath))
+        {
+            DiagnosticLog.Info(ShortcutText.Category, ShortcutText.OfferAlreadyThere(linkPath));
+            _settings.MarkShortcutOffered();
+            return;
+        }
+
+        var page = new MenuPage(Spectre.Console.Markup.Escape(ShortcutText.OfferQuestion(_settings.ProfileName)), ShortcutText.OfferRows.Select(Spectre.Console.Markup.Escape).ToList(), ShortcutText.OfferKeys)
+        {
+            Hotkeys = ShortcutText.OfferHotkeys,
+        };
+        int? picked = await _menu.ChooseAsync(page, cancellationToken).ConfigureAwait(false);
+        _settings.MarkShortcutOffered();
+        switch (picked)
+        {
+            case 1:
+                HandleShortcut("");
+                break;
+            case 2:
+                HandleShortcut(DesktopShortcut.LogSwitch);
+                break;
+            default:
+                _transcript.Notice(ShortcutText.OfferDeclined);
+                break;
+        }
+    }
+
+    /// <summary>
     /// <c>/shortcut</c>'s argument list: every profile (the loaded one marked) and <c>--log</c>; after a profile, <c>--log</c>;
     /// after <c>--log</c>, the profiles. Nothing once both are typed.
     /// </summary>

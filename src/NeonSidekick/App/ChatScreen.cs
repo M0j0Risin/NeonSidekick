@@ -8676,6 +8676,8 @@ internal sealed partial class ChatScreen
             ClearWatchFolder();
 
             await ConnectLlmAsync(cancellationToken, quiet: true, startup: true).ConfigureAwait(false);
+            // The first start's desktop shortcut offer (2026-10-09): after the server picker or Connect page, before the splash.
+            await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);

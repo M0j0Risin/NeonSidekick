@@ -2,10 +2,14 @@ using NeonSidekick.App;
 using NeonSidekick.Settings;
 using NeonSidekick.Shortcuts;
 using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
-/// <summary><c>/shortcut</c> on the screen (2026-10-07): the four forms, a replaced one, the refusals, the error off Windows.</summary>
+/// <summary>
+/// <c>/shortcut</c> on the screen (2026-10-07): the four forms, a replaced one, the refusals, the error off Windows; and the first
+/// start's offer of it (2026-10-09).
+/// </summary>
 public partial class ChatScreenTests
 {
     /// <summary>The writer the chat screen gets; null (the default) is a platform without one.</summary>
@@ -13,7 +17,18 @@ public partial class ChatScreenTests
 
     private string ShortcutExe => Path.Combine(_dir, "app", "NeonSidekick.exe");
 
-    private FakeShortcutWriter UseShortcutWriter() => _shortcutWriter = new FakeShortcutWriter(Path.Combine(_dir, "Desktop"), ShortcutExe);
+    /// <summary>A writer for the screen, the first start's offer already made (unless <paramref name="offered"/> is false) so a script's keys reach the line.</summary>
+    private FakeShortcutWriter UseShortcutWriter(bool offered = true, ShortcutKind kind = ShortcutKind.Lnk)
+    {
+        if (offered)
+        {
+            _settings.MarkShortcutOffered();
+        }
+
+        return _shortcutWriter = new FakeShortcutWriter(Path.Combine(_dir, "Desktop"), ShortcutExe, kind);
+    }
+
+    private static string OfferWords => ShortcutText.OfferQuestion(Profiles.DefaultName)[NoticeGlyphs.Shortcut.Length..];
 
     [Fact]
     public async Task Shortcut_TheFourForms_TheLoadedProfileOrTheNamedOne_WithOrWithoutTheLog()
@@ -48,7 +63,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Shortcut_AMacsWriter_MakesACommandFile_ItsLogQuotedForZsh()
     {
-        var writer = _shortcutWriter = new FakeShortcutWriter(Path.Combine(_dir, "Desktop"), ShortcutExe, ShortcutKind.Command);
+        var writer = UseShortcutWriter(kind: ShortcutKind.Command);
         PushLine("/shortcut --log");
         PushLine("/exit");
 
@@ -119,5 +134,108 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("  ✗ " + ShortcutText.NotHere, output);
+    }
+
+    /// <summary>The first start's offer (2026-10-09): Yes is <c>/shortcut</c>, and the offer is marked made.</summary>
+    [Fact]
+    public async Task Offer_AFreshHome_Yes_WritesTheShortcut_AndMarksItOffered()
+    {
+        var writer = UseShortcutWriter(offered: false);
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(OfferWords, output);
+        var spec = Assert.Single(writer.Written);
+        Assert.Equal("--profile default", spec.Arguments);
+        Assert.Contains(ShortcutText.Made(spec.LinkPath, spec.Arguments, replaced: false), output.Replace("\n", "", StringComparison.Ordinal));
+        Assert.True(_settings.ShortcutOffered);
+        using var relaunched = new AppSettings(_dir);
+        Assert.True(relaunched.ShortcutOffered);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>The log row: <c>/shortcut --log</c>. (The fixture's menus are the prompt, whose rows are reached by the arrows.)</summary>
+    [Fact]
+    public async Task Offer_TheLogRow_WritesTheShortcutWithTheLog()
+    {
+        var writer = UseShortcutWriter(offered: false);
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var spec = Assert.Single(writer.Written);
+        string log = Path.Combine(Path.GetDirectoryName(ShortcutExe)!, "logs", "neon-default-{ts}.log");
+        Assert.Equal("--profile default --log " + DesktopShortcut.Quote(log), spec.Arguments);
+        Assert.True(_settings.ShortcutOffered);
+    }
+
+    /// <summary>ESC is No (the user's pick): nothing written, the line that says how to make one later, and never asked again.</summary>
+    [Fact]
+    public async Task Offer_Escape_WritesNothing_SaysSo_AndMarksItOffered()
+    {
+        var writer = UseShortcutWriter(offered: false);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(OfferWords, output);
+        Assert.Empty(writer.Written);
+        Assert.Contains(ShortcutText.OfferDeclined, output.Replace("\n", "", StringComparison.Ordinal));
+        Assert.True(_settings.ShortcutOffered);
+    }
+
+    /// <summary>Made already: no pane, and the script's first line reaches the input row.</summary>
+    [Fact]
+    public async Task Offer_AlreadyMade_IsNotAsked()
+    {
+        var writer = UseShortcutWriter();
+        PushLine("/shortcut");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(OfferWords, output);
+        Assert.Single(writer.Written);
+    }
+
+    /// <summary>The loaded profile's shortcut already on the desktop: not asked, and marked made.</summary>
+    [Fact]
+    public async Task Offer_TheShortcutAlreadyThere_IsNotAsked_ButMarked()
+    {
+        var writer = UseShortcutWriter(offered: false);
+        Directory.CreateDirectory(writer.DesktopFolder);
+        File.WriteAllText(Path.Combine(writer.DesktopFolder, DesktopShortcut.LinkName(Profiles.DefaultName)), "");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(OfferWords, output);
+        Assert.Empty(writer.Written);
+        Assert.True(_settings.ShortcutOffered);
+    }
+
+    /// <summary>Nothing to make a shortcut to (no writer, or no exe path): not asked, and left unmarked for a later start.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Offer_NoWriterOrNoExe_IsNotAsked_NorMarked(bool writerWithoutExe)
+    {
+        if (writerWithoutExe)
+        {
+            UseShortcutWriter(offered: false).Executable = null;
+        }
+
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(OfferWords, output);
+        Assert.False(_settings.ShortcutOffered);
     }
 }

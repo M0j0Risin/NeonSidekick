@@ -41,6 +41,7 @@ public sealed class AppSettings : IDisposable
     private readonly object _gate = new();
     private AppSettingsData _data;
     private string _profileName;
+    private bool _shortcutOffered;
 
     private CancellationTokenSource? _pendingSave;
     private bool _disposed;
@@ -67,6 +68,7 @@ public sealed class AppSettings : IDisposable
             _profileName = Profiles.Resolve(storageDirectory, profileOverride)
                 ?? throw new ArgumentException(UnknownProfileMessage(profileOverride, Profiles.List(storageDirectory)), nameof(profileOverride));
             _data = Load(FilePath);
+            _shortcutOffered = File.Exists(PointerPath) && LoadPointer(PointerPath).ShortcutOffered;
             if (!File.Exists(PointerPath))
             {
                 TrySavePointer(Profiles.DefaultName);
@@ -78,6 +80,7 @@ public sealed class AppSettings : IDisposable
         }
 
         var pointer = LoadPointer(PointerPath);
+        _shortcutOffered = pointer.ShortcutOffered;
         bool rewritePointer = !File.Exists(PointerPath);
 
         string? resolved = Profiles.Resolve(storageDirectory, pointer.Profile);
@@ -147,6 +150,30 @@ public sealed class AppSettings : IDisposable
 
     /// <summary>The loaded profile's directory: where its <c>profile.json</c>, <c>memory.json</c>, <c>persona.md</c>, <c>operata.md</c> and <c>vocalia.md</c> live.</summary>
     public string ProfileDirectory => Profiles.Directory(StorageDirectory, ProfileName);
+
+    /// <summary>
+    /// Whether the desktop shortcut has been offered (2026-10-09, <see cref="RootSettingsData.ShortcutOffered"/>): the first start's
+    /// question is asked while this is false.
+    /// </summary>
+    public bool ShortcutOffered
+    {
+        get { lock (_gate) { return _shortcutOffered; } }
+    }
+
+    /// <summary>
+    /// Records that the desktop shortcut was offered (2026-10-09): the pointer is written at once, naming the profile it already
+    /// names (a missing one reads as the default) — a <c>--profile</c> launch still never moves it. Never throws; a failed write
+    /// is logged and asks again next start.
+    /// </summary>
+    public void MarkShortcutOffered()
+    {
+        lock (_gate)
+        {
+            _shortcutOffered = true;
+        }
+
+        TrySavePointer(LoadPointer(PointerPath).Profile);
+    }
 
     /// <summary>The full path of the loaded profile's settings file.</summary>
     public string FilePath => Profiles.ProfileFile(StorageDirectory, ProfileName);
@@ -510,14 +537,14 @@ public sealed class AppSettings : IDisposable
         }
     }
 
-    /// <summary>The pointer: written synchronously (once per launch, once per switch), never throws.</summary>
+    /// <summary>The pointer: written synchronously (once per launch, once per switch), never throws. <see cref="ShortcutOffered"/> rides along.</summary>
     private void TrySavePointer(string profile)
     {
         var tempPath = $"{PointerPath}.{Guid.NewGuid():N}.tmp";
         try
         {
             Directory.CreateDirectory(StorageDirectory);
-            var json = JsonSerializer.Serialize(new RootSettingsData { Profile = profile }, SettingsJsonContext.Default.RootSettingsData);
+            var json = JsonSerializer.Serialize(new RootSettingsData { Profile = profile, ShortcutOffered = ShortcutOffered }, SettingsJsonContext.Default.RootSettingsData);
             File.WriteAllText(tempPath, json);
             File.Move(tempPath, PointerPath, overwrite: true);
         }

@@ -974,6 +974,65 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("work-2", relaunched.Current.LlmModel);
     }
 
+    /// <summary>
+    /// The shortcut offer's flag (2026-10-09): false in a new home and in a pointer from before the key, true once marked, kept
+    /// by the next launch and by a profile switch's rewrite of the pointer.
+    /// </summary>
+    [Fact]
+    public async Task ShortcutOffered_FalseUntilMarked_ThenKept_AcrossALaunchAndASwitch()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName), "{ \"SchemaVersion\": 2, \"Profile\": \"default\" }");
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        using (var settings = new AppSettings(_dir))
+        {
+            Assert.False(settings.ShortcutOffered);
+            settings.MarkShortcutOffered();
+            Assert.True(settings.ShortcutOffered);
+            Assert.Contains("\"ShortcutOffered\": true", File.ReadAllText(settings.PointerPath));
+            Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+
+            await settings.SwitchProfileAsync("work");
+            Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(settings.PointerPath));
+            Assert.Contains("\"ShortcutOffered\": true", File.ReadAllText(settings.PointerPath));
+        }
+
+        using var relaunched = new AppSettings(_dir);
+        Assert.True(relaunched.ShortcutOffered);
+        Assert.Equal("work", relaunched.ProfileName);
+    }
+
+    /// <summary>A brand-new home has not been offered the shortcut, and its new pointer says so.</summary>
+    [Fact]
+    public void ShortcutOffered_ANewHome_IsFalse()
+    {
+        using var settings = new AppSettings(_dir);
+
+        Assert.False(settings.ShortcutOffered);
+        Assert.Contains("\"ShortcutOffered\": false", File.ReadAllText(settings.PointerPath));
+    }
+
+    /// <summary>Marked under a <c>--profile</c> launch (2026-10-09): the flag is read and written, the pointer's profile left as it was.</summary>
+    [Fact]
+    public void ShortcutOffered_UnderAProfileOverride_MarkingLeavesThePointersProfile()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        using (var first = new AppSettings(_dir))
+        {
+            Assert.Equal(Profiles.DefaultName, first.ProfileName);
+        }
+
+        using (var settings = new AppSettings(_dir, profileOverride: "work"))
+        {
+            Assert.False(settings.ShortcutOffered);
+            settings.MarkShortcutOffered();
+            Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+        }
+
+        using var overridden = new AppSettings(_dir, profileOverride: "work");
+        Assert.True(overridden.ShortcutOffered);
+    }
+
     /// <summary>A temporary profile (<c>_test</c>, 2026-09-24) loads like any other, but the next launch opens default and points the pointer back; the profile is kept.</summary>
     [Fact]
     public async Task Launch_OnATemporaryProfile_LoadsDefault_AndRewritesThePointer()
