@@ -1,11 +1,11 @@
-# Neon Sidekick
+# <img src="assets/icon.svg" alt="NeonSidekick icon" width="2%">Neon Sidekick
 [![Release](https://img.shields.io/github/v/release/M0j0Risin/NeonSidekick)](https://github.com/M0j0Risin/NeonSidekick/releases/latest)
 ![License](https://img.shields.io/github/license/M0j0Risin/NeonSidekick)
 ![.NET 10](https://img.shields.io/badge/.NET-10.0-512bd4?logo=dotnet)
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)
 
-Neon Sidekick is an agentic terminal client built first and foremost for local LLMs. Point it at LM Studio, Ollama, llama.cpp or vLLM, or let it download a model and run it itself. When you want a frontier model too, it connects to the OpenAI and Anthropic APIs with your own key, or to your Claude Code install.
+Neon Sidekick is an agentic terminal client built first and foremost for local LLMs. Point it at LM Studio, Ollama, vLLM, SGLang or llama.cpp, or let it download a model and run it itself. When you want a frontier model too, it connects to the OpenAI and Anthropic APIs with your own key, or to your Claude Code install.
 
 It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together the features I liked most in each, plus many they don't have. It runs on Windows and Apple Silicon Macs, is built on .NET 10, and is meant as a stable base for building and testing new agentic tools.
 
