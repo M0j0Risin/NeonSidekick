@@ -119,6 +119,8 @@ On a Mac:
 The `.sha256` file next to each download lets you check the package arrived intact.
 
 ### First launch
+The app first offers, once, to put a shortcut on the desktop (with or without a log; `/shortcut` makes one later).
+
 If no model server answers when the app starts, it opens **Connect a model**:
 
 | Choice | When to pick it |
@@ -130,7 +132,7 @@ If no model server answers when the app starts, it opens **Connect a model**:
 | Use the Anthropic API / Use the OpenAI API | You have an API key (billed per message). |
 | Use Claude Code | You have Claude Code installed and a Claude subscription. |
 
-Pick one and the app walks you through it. ESC skips; `/server` brings the page back. Next it offers, once, to put a shortcut on the desktop (with or without a log; `/shortcut` makes one later). Then type a message and press Enter.
+Pick one and the app walks you through it. ESC skips; `/server` brings the page back. Then type a message and press Enter.
 
 Good to know:
 * Your settings, memories and conversations are saved in `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac).

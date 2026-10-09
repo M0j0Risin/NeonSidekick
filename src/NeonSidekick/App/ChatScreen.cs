@@ -8675,9 +8675,10 @@ internal sealed partial class ChatScreen
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
             ClearWatchFolder();
 
-            await ConnectLlmAsync(cancellationToken, quiet: true, startup: true).ConfigureAwait(false);
-            // The first start's desktop shortcut offer (2026-10-09): after the server picker or Connect page, before the splash.
+            // The first start's desktop shortcut offer (2026-10-09): first of all, before the LLM's connect (the user's call the
+            // same day), so it never waits behind a scan, a server picker or the Connect page.
             await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
+            await ConnectLlmAsync(cancellationToken, quiet: true, startup: true).ConfigureAwait(false);
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);

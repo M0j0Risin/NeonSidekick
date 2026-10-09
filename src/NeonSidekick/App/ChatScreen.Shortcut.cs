@@ -75,7 +75,8 @@ internal sealed partial class ChatScreen
     /// <see cref="RootSettingsData.ShortcutOffered"/> is false, one pane asks No / Yes / Yes, with a log (the user's pick: one
     /// pane, three rows), and a yes is <c>/shortcut</c> or <c>/shortcut --log</c> through <see cref="HandleShortcut"/>, its
     /// notice and errors as typed. Any answer marks the offer made, ESC and a pane closed off it too (the user's pick: asked once).
-    /// Run after the startup's LLM connect, so a first run's server picker or Connect page comes first. Not asked — and not
+    /// Run as the screen opens, before the LLM's connect (the user's call the same day: first, not behind the server picker or
+    /// the Connect page). Not asked — and not
     /// marked, so a later start asks — without a writer or the exe's path, without menus (a redirected console: a typed
     /// fallback would take the user's first line), or on a temporary profile (a shortcut to scratch is the wrong first offer). A shortcut already on
     /// the desktop for the loaded profile marks it unasked.
