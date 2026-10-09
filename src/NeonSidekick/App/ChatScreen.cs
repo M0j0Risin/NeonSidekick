@@ -73,18 +73,47 @@ public enum ProfileActionKind
     /// <summary><c>reload</c> (2026-09-21): the loaded profile's <c>profile.json</c> read back from disk, the sessions whose settings changed reconnected.</summary>
     Reload,
 
-    /// <summary><c>push &lt;name&gt;</c> (2026-09-28): the loaded profile's settings copied over the named one's, its working directory kept.</summary>
+    /// <summary><c>push [section] &lt;name&gt;</c> (2026-09-28; the sections 2026-10-09): the loaded profile's settings, or one <see cref="ProfileSection"/> of them, copied into the named one.</summary>
     Push,
 
-    /// <summary><c>pull &lt;name&gt;</c> (2026-09-28): the named profile's settings copied over the loaded one's, its working directory kept, the conversation cleared.</summary>
+    /// <summary><c>pull [section] &lt;name&gt;</c> (2026-09-28; the sections 2026-10-09): the named profile's settings copied over the loaded one's (its working directory kept, the conversation cleared), or one <see cref="ProfileSection"/> of them applied live.</summary>
     Pull,
 
     /// <summary>Anything the grammar does not cover; <c>ChatScreen.ProfileUsageError</c>.</summary>
     Invalid,
 }
 
-/// <summary>The parsed <c>/profile</c> argument; <paramref name="NewName"/> is set by <see cref="ProfileActionKind.Rename"/> alone, <paramref name="All"/> by <c>reset --all</c> alone (2026-09-27).</summary>
-public readonly record struct ProfileAction(ProfileActionKind Kind, string Name, string NewName = "", bool All = false);
+/// <summary>
+/// What a <c>/profile push</c> or <c>pull</c> copies (2026-10-09, the user's ask: <c>/keycopy</c>, <c>/srvcopy</c> and <c>/cmdcopy</c>
+/// folded in as section words, each gaining a pull, and the police's forbidden strings joining them). <see cref="All"/> is the bare
+/// form, the whole <c>profile.json</c>. Top-level like <see cref="ProfileActionKind"/>, so the test project can pin the grammar.
+/// </summary>
+public enum ProfileSection
+{
+    /// <summary>No section word: every setting but the target's working directory (<c>Profiles.CopySettings</c>).</summary>
+    All,
+
+    /// <summary><c>keys</c>: the five API keys, mirrored (a key unset in the source clears the target's). <c>/keycopy</c> until 2026-10-09.</summary>
+    Keys,
+
+    /// <summary><c>servers</c>: <c>ChatScreen.ProfileServerFields</c>, mirrored. <c>/srvcopy</c> until 2026-10-09.</summary>
+    Servers,
+
+    /// <summary><c>commands [overwrite]</c>: <c>Shell allowed commands</c>, added or replaced. <c>/cmdcopy</c> until 2026-10-09.</summary>
+    Commands,
+
+    /// <summary><c>history [overwrite]</c>: the command history in <c>sessions.db</c>, appended or replaced. <c>/cmdcopy --history</c> until 2026-10-09.</summary>
+    History,
+
+    /// <summary><c>policestrings [overwrite]</c> (2026-10-09, the user's ask): <c>Shell police forbidden strings</c>, added or replaced.</summary>
+    PoliceStrings,
+}
+
+/// <summary>
+/// The parsed <c>/profile</c> argument; <paramref name="NewName"/> is set by <see cref="ProfileActionKind.Rename"/> alone, <paramref name="All"/> by
+/// <c>reset --all</c> alone (2026-09-27), <paramref name="Section"/> and <paramref name="Overwrite"/> by <c>push</c> and <c>pull</c> alone (2026-10-09).
+/// </summary>
+public readonly record struct ProfileAction(ProfileActionKind Kind, string Name, string NewName = "", bool All = false, ProfileSection Section = ProfileSection.All, bool Overwrite = false);
 
 /// <summary>What a <c>/gituser</c> argument asks for (2026-09-21; <c>/git</c>'s until 2026-09-26). Top-level like <see cref="ProfileActionKind"/>, so the test project can pin the grammar.</summary>
 public enum GitActionKind
@@ -356,7 +385,7 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/find</c> without the screen to scroll (2026-10-07). Pinned.</summary>
     public const string FindNeedsPaneNotice = "/find needs the interactive screen.";
-    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push <name>, pull <name>, edit or reload.";
+    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|commands|history|policestrings] <name> [overwrite], edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
@@ -471,7 +500,7 @@ internal sealed partial class ChatScreen
     // The /memory grammar's words, their notes on the argument list and the usage error (2026-09-22,
     // the user's ask: the wipe was the standalone /forget, and the copy the standalone /memcopy, until
     // that day). The /queue trio's shape; the copy's words are CopyWord and OverwriteWord, shared with
-    // the prompt files and /cmdcopy. Pinned.
+    // the prompt files and /profile push|pull's list sections. Pinned.
     /// <summary>The completion note of <c>/settings changed</c> (2026-10-04). Pinned.</summary>
     public const string SettingsChangedNote = "the settings that are not their defaults";
 
@@ -489,7 +518,7 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/copy</c> word for every exchange.</summary>
     public const string CopyAllWord = "all";
 
-    /// <summary>The <c>/copy</c> switch for the model's thinking too (2026-09-26, the user's ask), after <c>/cmdcopy</c>'s <see cref="HistorySwitch"/>.</summary>
+    /// <summary>The <c>/copy</c> switch for the model's thinking too (2026-09-26, the user's ask), after <c>/cmdcopy</c>'s <c>--history</c> (folded into <c>/profile push history</c> on 2026-10-09).</summary>
     public const string CopyThinkingSwitch = "--thinking";
     public const string CopyUsageError = "/copy copies the last reply; /copy <n> the last n; /copy all every one; add --thinking for the model's thinking too.";
     public const string NothingToCopyNotice = "(nothing to copy yet)";
@@ -3909,12 +3938,51 @@ internal sealed partial class ChatScreen
         new("add", "add a profile: /profile add <name>"),
         new("delete", "delete a profile: /profile delete <name>"),
         new("edit", "open this profile's profile.json in your editor: /profile edit"),
-        new(PullWord, "copy another profile's settings into this one: /profile pull <name>"),
-        new(PushWord, "copy this profile's settings into another: /profile push <name>"),
+        new(PullWord, "copy another profile's settings, or one section, into this one: /profile pull [section] <name>"),
+        new(PushWord, "copy this profile's settings, or one section, into another: /profile push [section] <name>"),
         new("reload", "read this profile's profile.json back from disk: /profile reload"),
         new("rename", "rename a profile: /profile rename <name> <new-name>"),
         new("reset", "reset a profile to the defaults, keeping URLs, paths and keys: /profile reset [name] [--all]"),
     ];
+
+    /// <summary>The note on <c>overwrite</c> after a list section's name (2026-10-09; <c>/cmdcopy</c>'s overwrite note until then). Pinned.</summary>
+    public const string ProfileSectionOverwriteNote = "replace the target's list instead of adding to it";
+
+    /// <summary>
+    /// <c>/profile push </c> and <c>pull </c>'s argument list (2026-10-09): the section words (<see cref="ProfileSectionWords"/>) and
+    /// every profile but the loaded one, default included (the user's call, 2026-09-28); after a section word, the profiles; after a
+    /// list section's profile, <see cref="OverwriteWord"/>. Each item carries the whole argument, the verb first.
+    /// </summary>
+    private static List<CompletionItem> PushPullItems(string verb, IReadOnlyList<string> profiles, string loaded, string argText)
+    {
+        var names = profiles.Where(name => !Profiles.NameEquals(name, loaded)).ToList();
+        string head = verb + " ";
+        foreach (var (word, section, _) in ProfileSectionWords)
+        {
+            string sectionHead = head + word + " ";
+            if (!argText.StartsWith(sectionHead, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (SectionTakesOverwrite(section))
+            {
+                foreach (string name in names)
+                {
+                    if (argText.StartsWith(sectionHead + name + " ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return [new(sectionHead + name + " " + OverwriteWord, ProfileSectionOverwriteNote)];
+                    }
+                }
+            }
+
+            return names.Select(name => new CompletionItem(sectionHead + name, ProfileNote(name, loaded))).ToList();
+        }
+
+        return ProfileSectionWords.Select(item => new CompletionItem(head + item.Word, item.Note))
+            .Concat(names.Select(name => new CompletionItem(head + name, ProfileNote(name, loaded))))
+            .ToList();
+    }
 
     /// <summary>The notes on a profile name on the <c>/profile</c> list. Pinned.</summary>
     public const string SwitchToProfileNote = "switch to it";
@@ -3949,18 +4017,6 @@ internal sealed partial class ChatScreen
     public const string MemoryCopyNote = "copy every memory into another profile";
     public const string MemoryCopyTargetNote = "copy this profile's memory into it";
     public const string MemoryCopyOverwriteNote = "replace its memory instead of adding to it";
-
-    /// <summary>The <c>/cmdcopy</c> notes (2026-09-21), the shape of the <c>/memory copy</c> pair.</summary>
-    public const string CmdCopyTargetNote = "copy this profile's allowed commands into it";
-    public const string CmdCopyOverwriteNote = "replace its allowed commands instead of adding to it";
-    public const string CmdCopyHistoryNote = "copy this profile's command history into it instead";
-    public const string CmdCopyHistoryOverwriteNote = "replace its command history instead of adding to it";
-
-    /// <summary>The <c>/keycopy</c> target's note (2026-09-28).</summary>
-    public const string KeyCopyTargetNote = "copy this profile's API keys into it";
-
-    /// <summary>The <c>/srvcopy</c> target's note (2026-10-07).</summary>
-    public const string SrvCopyTargetNote = "copy this profile's server settings into it";
 
     /// <summary>The <c>/timer</c> list's entries. Pinned.</summary>
     public const string TimerStopNote = "stop a timer: /timer stop <name> | all";
@@ -4090,18 +4146,21 @@ internal sealed partial class ChatScreen
                         continue;
                     }
 
+                    if (verb.Text is PushWord or PullWord && argText.StartsWith(verb.Text + " ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return MentionCompleter.Matches(PushPullItems(verb.Text, sources.Profiles(), sources.LoadedProfile, argText), argText);
+                    }
+
                     if (argText.StartsWith(verb.Text + " ", StringComparison.OrdinalIgnoreCase))
                     {
                         // The second level: the verb with each name; rename's new name is free text.
                         // reset leaves default out unless it is the loaded one (2026-09-22, Profiles.ResetRefusal);
                         // delete leaves it out always (later that day, the user's call: it can never be deleted),
                         // and so does rename (later still, the user's call: Profiles.RenameRefusal refuses it from any profile).
-                        // push and pull (2026-09-28) offer every profile but the loaded one, default included (the user's call).
                         var names = sources.Profiles().Where(name => verb.Text switch
                         {
                             ResetWord => Profiles.ResetRefusal(name, sources.LoadedProfile) is null,
                             "delete" or "rename" => !Profiles.IsDefault(name),
-                            PushWord or PullWord => !Profiles.NameEquals(name, sources.LoadedProfile),
                             _ => true,
                         }).ToList();
                         var choices = names.Select(name => new CompletionItem(verb.Text + " " + name, ProfileNote(name, sources.LoadedProfile))).ToList();
@@ -4157,42 +4216,6 @@ internal sealed partial class ChatScreen
                 }
 
                 return MentionCompleter.Matches([new("stop", TimerStopNote)], argText);
-            }
-
-            case SlashCommand.CmdCopy:
-            {
-                // Every profile but the loaded one (the source); after a name and a space, the one word that replaces.
-                // /memcopy had the grammar from 2026-09-17 until it became /memory copy on 2026-09-22, and this branch was the pair's.
-                var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile)).ToList();
-                foreach (var name in targets)
-                {
-                    if (argText.StartsWith(name + " " + HistorySwitch + " ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return MentionCompleter.Matches([new(name + " " + HistorySwitch + " " + OverwriteWord, CmdCopyHistoryOverwriteNote)], argText);
-                    }
-
-                    if (argText.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // --history (2026-09-25): the command history instead of the allowed commands.
-                        return MentionCompleter.Matches([new(name + " " + OverwriteWord, CmdCopyOverwriteNote), new(name + " " + HistorySwitch, CmdCopyHistoryNote)], argText);
-                    }
-                }
-
-                return MentionCompleter.Matches(targets.Select(name => new CompletionItem(name, CmdCopyTargetNote)).ToList(), argText);
-            }
-
-            case SlashCommand.KeyCopy:
-            case SlashCommand.SrvCopy:
-            {
-                // /keycopy (2026-09-28) and /srvcopy (2026-10-07): every profile but the loaded one; nothing after a name.
-                if (argText.Contains(' ', StringComparison.Ordinal))
-                {
-                    return [];
-                }
-
-                string note = kind == SlashCommand.SrvCopy ? SrvCopyTargetNote : KeyCopyTargetNote;
-                var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile));
-                return MentionCompleter.Matches(targets.Select(name => new CompletionItem(name, note)).ToList(), argText);
             }
 
             case SlashCommand.Shortcut:
@@ -6235,7 +6258,7 @@ internal sealed partial class ChatScreen
 
     // ── /memory copy (2026-09-17 as /memcopy, the word folded in 2026-09-22) ─
 
-    /// <summary>The last word of <c>/memory copy</c> and <c>/cmdcopy</c> that replaces the target's list instead of adding to it.</summary>
+    /// <summary>The last word of <c>/memory copy</c> and <c>/profile push|pull</c>'s list sections (<c>/cmdcopy</c>'s until 2026-10-09) that replaces the target's list instead of adding to it.</summary>
     public const string OverwriteWord = "overwrite";
 
     public const string MemoryCopySelfError = "/memory copy copies into another profile; that one is loaded.";
@@ -6667,30 +6690,57 @@ internal sealed partial class ChatScreen
 
     private static string Memories(int count) => count == 1 ? "1 memory" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} memories";
 
-    // ── /cmdcopy (2026-09-21) ───────────────────────────────────────────────
+    // ── /profile push|pull's sections (2026-10-09) ──────────────────────────
+    // /cmdcopy (2026-09-21), its --history (2026-09-25), /keycopy (2026-09-28) and /srvcopy (2026-10-07) were commands of their own
+    // until 2026-10-09, when the user folded them into /profile push and pull as section words, each gaining a pull into the loaded
+    // profile, and added the police's forbidden strings beside them. A push is the old commands' read-edit-write of the other
+    // profile's profile.json (Profiles.ReadProfileFile: a corrupt one is an error, never overwritten; the loaded profile is never
+    // the target, so no pending save is at stake). A pull reads the other's file and applies the section through the settings
+    // store, as a menu edit does: the sessions whose settings changed reconnect and the conversation stays (the user's call; the
+    // bare /profile pull is the one that clears it). The stored values throughout, never the effective ones: a key or URL that only
+    // a variable or a flag sets is this run's and stays out of the files. Every line below is pinned.
 
-    public const string CmdCopyUsageError = "/cmdcopy takes a profile name, --history to copy the command history instead of the allowed commands, and overwrite to replace the target's: /cmdcopy <profile> [--history] [overwrite]";
+    /// <summary>A push that could not read or write the other profile's <c>profile.json</c>.</summary>
+    public static string ProfileSectionFailedError(string detail) => $"Could not write the profile's settings: {detail}";
 
-    /// <summary>The <c>/cmdcopy</c> switch that copies the command history instead of the allowed commands (2026-09-25). Pinned.</summary>
-    public const string HistorySwitch = "--history";
+    /// <summary>A pull whose source <c>profile.json</c> could not be read; nothing changed.</summary>
+    public static string ProfileSectionReadError(string profile, string detail) => $"Could not read \"{profile}\"'s settings: {detail}";
 
-    public const string CmdCopySelfError = "/cmdcopy copies into another profile; that one is loaded.";
+    /// <summary>The profile a section's source is in a line: the other one quoted on a pull, "this profile" on a push.</summary>
+    private static string SourceName(string profile, bool pull) => pull ? $"\"{profile}\"" : "this profile";
 
-    public const string CmdCopyNothingNotice = "(nothing to copy: this profile has no allowed commands)";
+    private static string AllowedCommands(int count) => count == 1 ? "1 allowed command" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} allowed commands";
 
-    /// <summary>The question before a copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
-    public static string CmdCopyPrompt(int count, string profile, bool overwrite) =>
-        overwrite ? $"Replace \"{profile}\"'s allowed commands with these {AllowedCommands(count)}?" : $"Copy {AllowedCommands(count)} into \"{profile}\"?";
+    private static string ForbiddenStringCount(int count) => count == 1 ? "1 forbidden string" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} forbidden strings";
 
     /// <summary>
-    /// <c>(3 allowed commands copied into "work")</c>; <c>(2 allowed commands copied into "work", 1 already there)</c>;
-    /// an overwrite reads <c>replaced "work"'s allowed commands with 3 allowed commands</c>. No "dropped" bucket:
-    /// the list has no cap, unlike the memory's. Pinned.
+    /// The question before a list section's copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
+    /// <c>Copy 3 allowed commands into "work"?</c>, <c>Replace "work"'s allowed commands with these 3 allowed commands?</c>, and on a
+    /// pull <c>Copy 3 allowed commands from "work" into this profile?</c>, <c>Replace this profile's allowed commands with "work"'s 3 allowed commands?</c>.
     /// </summary>
-    public static string CmdCopiedNotice(int added, int duplicates, string profile, bool overwrite)
+    private static string ListSectionPrompt(string counted, string list, string profile, bool overwrite, bool pull) => (pull, overwrite) switch
+    {
+        (false, false) => $"Copy {counted} into \"{profile}\"?",
+        (false, true) => $"Replace \"{profile}\"'s {list} with these {counted}?",
+        (true, false) => $"Copy {counted} from \"{profile}\" into this profile?",
+        (true, true) => $"Replace this profile's {list} with \"{profile}\"'s {counted}?",
+    };
+
+    /// <summary>
+    /// A list section's copy done: <c>(3 allowed commands copied into "work")</c>, <c>(2 allowed commands copied from "work", 1 already
+    /// there)</c>; a replace reads <c>(replaced "work"'s allowed commands with 3 allowed commands)</c> or, pulled, <c>(replaced this profile's
+    /// allowed commands with "work"'s 3 allowed commands)</c>. No "dropped" bucket: neither list has a cap, unlike the memory's.
+    /// </summary>
+    private static string ListSectionNotice(string counted, int duplicates, string list, string profile, bool overwrite, bool pull)
     {
         var sb = new StringBuilder("(");
-        sb.Append(overwrite ? $"replaced \"{profile}\"'s allowed commands with {AllowedCommands(added)}" : $"{AllowedCommands(added)} copied into \"{profile}\"");
+        sb.Append((pull, overwrite) switch
+        {
+            (false, false) => $"{counted} copied into \"{profile}\"",
+            (false, true) => $"replaced \"{profile}\"'s {list} with {counted}",
+            (true, false) => $"{counted} copied from \"{profile}\"",
+            (true, true) => $"replaced this profile's {list} with \"{profile}\"'s {counted}",
+        });
         if (duplicates > 0)
         {
             sb.Append(", ").Append(duplicates.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(" already there");
@@ -6699,104 +6749,59 @@ internal sealed partial class ChatScreen
         return sb.Append(')').ToString();
     }
 
-    public static string CmdCopyFailedError(string detail) => $"Could not write the profile's settings: {detail}";
+    /// <summary><c>commands</c> with nothing to copy: <c>(nothing to copy: this profile has no allowed commands)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfileCommandsNothingNotice(string profile, bool pull = false) => $"(nothing to copy: {SourceName(profile, pull)} has no allowed commands)";
 
-    /// <summary>
-    /// <c>/cmdcopy &lt;profile&gt; [overwrite]</c> (2026-09-21, the user's ask): this profile's
-    /// <c>Shell allowed commands</c> — the prefixes allowed for good on the approval pane — into
-    /// another's, the grammar, the confirmation and the append-or-replace of <c>/memory copy</c>. The
-    /// target's <c>profile.json</c> is read whole (<see cref="Profiles.ReadProfileFile"/>: a corrupt
-    /// one is an error, never overwritten), the one field changed, the file written back
-    /// (<see cref="Profiles.WriteProfileFile"/>); the loaded profile is never the target, so no
-    /// pending save is at stake. Appending skips what the target holds (<see cref="CommandAllowList.Contains"/>);
-    /// both lists come out normalised (<see cref="CommandAllowList.Merge"/>: lower case, sorted, no doubles).
-    /// <c>--history</c> after the name (2026-09-25) copies the command history instead (<see cref="CopyCommandHistoryAsync"/>).
-    /// </summary>
-    private async Task HandleCmdCopyAsync(string args, CancellationToken cancellationToken)
+    /// <summary>The question before a <c>commands</c> copy (<see cref="ListSectionPrompt"/>).</summary>
+    public static string ProfileCommandsPrompt(int count, string profile, bool overwrite, bool pull = false) =>
+        ListSectionPrompt(AllowedCommands(count), "allowed commands", profile, overwrite, pull);
+
+    /// <summary>A <c>commands</c> copy done (<see cref="ListSectionNotice"/>).</summary>
+    public static string ProfileCommandsCopiedNotice(int added, int duplicates, string profile, bool overwrite, bool pull = false) =>
+        ListSectionNotice(AllowedCommands(added), duplicates, "allowed commands", profile, overwrite, pull);
+
+    /// <summary><c>policestrings</c> with nothing to copy: <c>(nothing to copy: this profile has no forbidden strings)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfilePoliceStringsNothingNotice(string profile, bool pull = false) => $"(nothing to copy: {SourceName(profile, pull)} has no forbidden strings)";
+
+    /// <summary>The question before a <c>policestrings</c> copy (<see cref="ListSectionPrompt"/>).</summary>
+    public static string ProfilePoliceStringsPrompt(int count, string profile, bool overwrite, bool pull = false) =>
+        ListSectionPrompt(ForbiddenStringCount(count), "forbidden strings", profile, overwrite, pull);
+
+    /// <summary>A <c>policestrings</c> copy done (<see cref="ListSectionNotice"/>).</summary>
+    public static string ProfilePoliceStringsCopiedNotice(int added, int duplicates, string profile, bool overwrite, bool pull = false) =>
+        ListSectionNotice(ForbiddenStringCount(added), duplicates, "forbidden strings", profile, overwrite, pull);
+
+    // The command history (/cmdcopy --history, 2026-09-25).
+
+    /// <summary><c>history</c> with nothing to copy: <c>(nothing to copy: this profile has no command history)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfileHistoryNothingNotice(string profile, bool pull = false) => $"(nothing to copy: {SourceName(profile, pull)} has no command history)";
+
+    /// <summary><c>history</c> into a profile whose <c>Keep command history</c> is off: its next load would drop the lines.</summary>
+    public static string ProfileHistoryOffError(string profile, bool pull = false) => pull
+        ? "This profile has Keep command history off, so its next load would drop the lines; switch it on first."
+        : $"\"{profile}\" has Keep command history off, so its next load would drop the lines; switch it on there first.";
+
+    /// <summary>The question before a <c>history</c> copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open).</summary>
+    public static string ProfileHistoryPrompt(int count, string profile, bool overwrite, bool pull = false) => (pull, overwrite) switch
     {
-        string[] all = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        // --history anywhere after the name (2026-09-25): the rest is the allowed commands' grammar as ever.
-        string[] words = all.Where(word => !string.Equals(word, HistorySwitch, StringComparison.OrdinalIgnoreCase)).ToArray();
-        bool history = words.Length < all.Length;
-        bool overwrite = words.Length == 2 && string.Equals(words[1], OverwriteWord, StringComparison.OrdinalIgnoreCase);
-        // The switch once, and never in the name's place.
-        bool misplaced = history && (all.Length - words.Length > 1 || string.Equals(all[0], HistorySwitch, StringComparison.OrdinalIgnoreCase));
-        if (misplaced || words.Length == 0 || words.Length > 2 || (words.Length == 2 && !overwrite))
-        {
-            _flow.Error(CmdCopyUsageError);
-            return;
-        }
+        (false, false) => $"Copy {CommandLines(count)} of command history into \"{profile}\"?",
+        (false, true) => $"Replace \"{profile}\"'s command history with these {CommandLines(count)}?",
+        (true, false) => $"Copy {CommandLines(count)} of command history from \"{profile}\" into this profile?",
+        (true, true) => $"Replace this profile's command history with \"{profile}\"'s {CommandLines(count)}?",
+    };
 
-        string home = _settings.StorageDirectory;
-        if (Profiles.Resolve(home, words[0]) is not { } target)
-        {
-            _flow.Error(ProfileMissingError(words[0]));
-            return;
-        }
+    /// <summary><c>(12 command lines copied into "work")</c>; a replace reads <c>(replaced "work"'s command history with 12 command lines)</c>; a pull says from.</summary>
+    public static string ProfileHistoryCopiedNotice(int added, string profile, bool overwrite, bool pull = false) => (pull, overwrite) switch
+    {
+        (false, false) => $"({CommandLines(added)} copied into \"{profile}\")",
+        (false, true) => $"(replaced \"{profile}\"'s command history with {CommandLines(added)})",
+        (true, false) => $"({CommandLines(added)} copied from \"{profile}\")",
+        (true, true) => $"(replaced this profile's command history with {CommandLines(added)} from \"{profile}\")",
+    };
 
-        if (Profiles.NameEquals(target, _settings.ProfileName))
-        {
-            _flow.Error(CmdCopySelfError);
-            return;
-        }
-
-        if (history)
-        {
-            await CopyCommandHistoryAsync(home, target, overwrite, cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        var source = CommandAllowList.Merge(_settings.Current.ShellCommandAllowed, []);
-        if (source.Count == 0)
-        {
-            _flow.Notice(CmdCopyNothingNotice);
-            return;
-        }
-
-        if (!await ConfirmAsync(CmdCopyPrompt(source.Count, target, overwrite), cancellationToken).ConfigureAwait(false))
-        {
-            _flow.Notice(KeptNotice);
-            return;
-        }
-
-        try
-        {
-            string path = Profiles.ProfileFile(home, target);
-            var data = Profiles.ReadProfileFile(path);
-            int duplicates = overwrite ? 0 : source.Count(prefix => CommandAllowList.Contains(data.ShellCommandAllowed, prefix));
-            data.ShellCommandAllowed = overwrite ? source : CommandAllowList.Merge(data.ShellCommandAllowed, source);
-            Profiles.WriteProfileFile(path, data);
-            _flow.Notice(CmdCopiedNotice(source.Count - duplicates, duplicates, target, overwrite));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        {
-            _flow.Error(CmdCopyFailedError(ex.Message));
-        }
-        finally
-        {
-            RunOrPost(DrainDiagnostics);
-        }
-    }
-
-    private static string AllowedCommands(int count) => count == 1 ? "1 allowed command" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} allowed commands";
-
-    // ── /cmdcopy --history and /cmdclear (2026-09-25) ───────────────────────
-
-    public const string CmdCopyHistoryNothingNotice = "(nothing to copy: this profile has no command history)";
-
-    /// <summary><c>/cmdcopy --history</c> into a profile whose <c>Keep command history</c> is off: its next load would drop the lines. Pinned.</summary>
-    public static string CmdCopyHistoryOffError(string profile) =>
-        $"\"{profile}\" has Keep command history off, so its next load would drop the lines; switch it on there first.";
-
-    /// <summary>The question before a history copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
-    public static string CmdCopyHistoryPrompt(int count, string profile, bool overwrite) =>
-        overwrite ? $"Replace \"{profile}\"'s command history with these {CommandLines(count)}?" : $"Copy {CommandLines(count)} of command history into \"{profile}\"?";
-
-    /// <summary><c>(12 command lines copied into "work")</c>; an overwrite reads <c>(replaced "work"'s command history with 12 command lines)</c>. Pinned.</summary>
-    public static string CmdHistoryCopiedNotice(int added, string profile, bool overwrite) =>
-        overwrite ? $"(replaced \"{profile}\"'s command history with {CommandLines(added)})" : $"({CommandLines(added)} copied into \"{profile}\")";
-
-    public static string CmdCopyHistoryFailedError(string profile) => $"Could not open \"{profile}\"'s {SessionStore.FileName}; nothing was copied.";
+    /// <summary>The target's <c>sessions.db</c> would not open: the other profile's on a push, this one's on a pull.</summary>
+    public static string ProfileHistoryFailedError(string profile, bool pull = false) =>
+        $"Could not open {(pull ? "this profile" : $"\"{profile}\"")}'s {SessionStore.FileName}; nothing was copied.";
 
     public const string CmdClearNothingNotice = "(nothing to clear: the command history is empty)";
 
@@ -6808,62 +6813,7 @@ internal sealed partial class ChatScreen
 
     private static string CommandLines(int count) => count == 1 ? "1 command line" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} command lines";
 
-    /// <summary>
-    /// <c>/cmdcopy &lt;profile&gt; --history [overwrite]</c> (2026-09-25, the user's ask): this profile's stored command
-    /// history into the other profile's <c>sessions.db</c> — appended, a line equal to the one before it skipped, or in
-    /// place of it — after a confirmation. The stored lines, not the line's list: what the setting keeps is what is copied.
-    /// Refused when the target has <c>Keep command history</c> off (its next load would drop them). The target's store is
-    /// opened for the copy alone; the loaded profile is never the target.
-    /// </summary>
-    private async Task CopyCommandHistoryAsync(string home, string target, bool overwrite, CancellationToken cancellationToken)
-    {
-        var lines = _sessions.CommandHistory();
-        if (lines.Count == 0)
-        {
-            _flow.Notice(CmdCopyHistoryNothingNotice);
-            return;
-        }
-
-        try
-        {
-            if (!Profiles.ReadProfileFile(Profiles.ProfileFile(home, target)).KeepCommandHistory)
-            {
-                _flow.Error(CmdCopyHistoryOffError(target));
-                return;
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        {
-            _flow.Error(CmdCopyFailedError(ex.Message));
-            return;
-        }
-
-        if (!await ConfirmAsync(CmdCopyHistoryPrompt(lines.Count, target, overwrite), cancellationToken).ConfigureAwait(false))
-        {
-            _flow.Notice(KeptNotice);
-            return;
-        }
-
-        using (var store = new SessionStore(Profiles.Directory(home, target), _time))
-        {
-            if (store.Available)
-            {
-                _flow.Notice(CmdHistoryCopiedNotice(store.AddCommandHistory(lines, overwrite), target, overwrite));
-            }
-            else
-            {
-                _flow.Error(CmdCopyHistoryFailedError(target));
-            }
-        }
-
-        RunOrPost(DrainDiagnostics);
-    }
-
-    // ── /keycopy (2026-09-28) ───────────────────────────────────────────────
-
-    public const string KeyCopyUsageError = "/keycopy takes a profile name: /keycopy <profile>";
-
-    public const string KeyCopySelfError = "/keycopy copies into another profile; that one is loaded.";
+    // The keys (/keycopy, 2026-09-28).
 
     /// <summary>The keys' names, as the settings pane's rows read; the Home Assistant API key joined them on 2026-09-28 (the user's ask; "API key", not "token", the user's call for one word across the three), the OpenAI API key on 2026-10-03.</summary>
     private const string LlmKeyName = "LLM API key";
@@ -6876,7 +6826,7 @@ internal sealed partial class ChatScreen
     private static string KeySeries(IReadOnlyList<string> items) =>
         items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
-    /// <summary>The keys' names split by whether this profile has them set, in the settings pane's order.</summary>
+    /// <summary>The keys' names split by whether the source has them set, in the settings pane's order.</summary>
     private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet)
     {
         var set = new List<string>();
@@ -6889,124 +6839,78 @@ internal sealed partial class ChatScreen
         return (set, unset);
     }
 
+    /// <summary>Which of <paramref name="data"/>'s five keys are set, the LLM's placeholder key counting as unset.</summary>
+    private static (bool Llm, bool Anthropic, bool OpenAI, bool HomeAssistant, bool YouTube) KeysSet(AppSettingsData data) => (
+        !string.IsNullOrWhiteSpace(data.LlmApiKey) && data.LlmApiKey.Trim() != LlmEndpoint.DefaultApiKey,
+        !string.IsNullOrWhiteSpace(data.AnthropicApiKey),
+        !string.IsNullOrWhiteSpace(data.OpenAIApiKey),
+        !string.IsNullOrWhiteSpace(data.HomeAssistantToken),
+        !string.IsNullOrWhiteSpace(data.YouTubeApiKey));
+
     /// <summary>
-    /// The question before a key copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open):
-    /// <c>Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key into "work"?</c>, and when a key is not set
-    /// here what the mirror does to the target's — <c> "work"'s Anthropic API key is cleared: none here.</c> — so the clearing
-    /// is never a surprise. Pinned.
+    /// The five keys copied as stored, mirrored: a key unset in <paramref name="from"/> clears <paramref name="to"/>'s. A <c>dpapi:</c>
+    /// value reads the same in any profile of this Windows user on this machine, as <see cref="Profiles.KeepOnReset"/> already relies on.
+    /// The values are never shown or logged.
     /// </summary>
-    public static string KeyCopyPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet)
+    public static void CopyKeys(AppSettingsData from, AppSettingsData to)
     {
-        string question = $"Copy the {KeySeries([LlmKeyName, "the " + AnthropicKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName, "the " + YouTubeKeyName])} into \"{profile}\"?";
-        var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet);
-        return unset.Count == 0
-            ? question
-            : $"{question} \"{profile}\"'s {KeySeries(unset)} {(unset.Count == 1 ? "is" : "are")} cleared: none here.";
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        to.LlmApiKey = from.LlmApiKey;
+        to.AnthropicApiKey = from.AnthropicApiKey;
+        to.OpenAIApiKey = from.OpenAIApiKey;
+        to.HomeAssistantToken = from.HomeAssistantToken;
+        to.YouTubeApiKey = from.YouTubeApiKey;
     }
 
     /// <summary>
-    /// <c>(copied the LLM API key, the Anthropic API key and the Home Assistant API key into "work")</c>; one not set here reads
-    /// <c>(copied the LLM API key and the Home Assistant API key into "work"; its Anthropic API key cleared)</c>, none
-    /// <c>(cleared "work"'s LLM API key, Anthropic API key and Home Assistant API key)</c>. Pinned.
+    /// The question before a <c>keys</c> copy: <c>Copy the LLM API key, the Anthropic API key, … into "work"?</c> (a pull: <c>… from "work"
+    /// into this profile?</c>), and when a key is not set in the source what the mirror does — <c> "work"'s Anthropic API key is cleared:
+    /// none here.</c>, pulled <c> This profile's Anthropic API key is cleared: none in "work".</c> — so the clearing is never a surprise.
     /// </summary>
-    public static string KeyCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet)
+    public static string ProfileKeysPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet, bool pull = false)
+    {
+        string series = KeySeries([LlmKeyName, "the " + AnthropicKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName, "the " + YouTubeKeyName]);
+        string question = pull ? $"Copy the {series} from \"{profile}\" into this profile?" : $"Copy the {series} into \"{profile}\"?";
+        var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet);
+        if (unset.Count == 0)
+        {
+            return question;
+        }
+
+        string verb = unset.Count == 1 ? "is" : "are";
+        return pull
+            ? $"{question} This profile's {KeySeries(unset)} {verb} cleared: none in \"{profile}\"."
+            : $"{question} \"{profile}\"'s {KeySeries(unset)} {verb} cleared: none here.";
+    }
+
+    /// <summary>
+    /// <c>(copied the LLM API key, the Anthropic API key and the Home Assistant API key into "work")</c>; one not set in the source reads
+    /// <c>(copied the LLM API key into "work"; its Anthropic API key cleared)</c>, none <c>(cleared "work"'s LLM API key, …)</c>. A pull
+    /// says <c>from "work"</c> and <c>this profile's</c>.
+    /// </summary>
+    public static string ProfileKeysCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet, bool pull = false)
     {
         var (set, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet);
+        string owner = pull ? "this profile's" : $"\"{profile}\"'s";
         if (set.Count == 0)
         {
-            return $"(cleared \"{profile}\"'s {KeySeries(unset)})";
+            return $"(cleared {owner} {KeySeries(unset)})";
         }
 
-        string copied = $"copied {KeySeries(set.Select(name => "the " + name).ToList())} into \"{profile}\"";
-        return unset.Count == 0 ? $"({copied})" : $"({copied}; its {KeySeries(unset)} cleared)";
+        string copied = $"copied {KeySeries(set.Select(name => "the " + name).ToList())} {(pull ? "from" : "into")} \"{profile}\"";
+        return unset.Count == 0 ? $"({copied})" : $"({copied}; {(pull ? owner : "its")} {KeySeries(unset)} cleared)";
     }
 
-    /// <summary>
-    /// <c>/keycopy &lt;profile&gt;</c> (2026-09-28, the user's ask): this profile's <c>LLM API key</c>, <c>Anthropic API
-    /// key</c>, <c>OpenAI API key</c> (2026-10-03), <c>Home Assistant API key</c> (joined the same day, the user's ask) and <c>YouTube API key</c>
-    /// (2026-10-05, the user's ask) into another's, after a confirmation —
-    /// <c>/cmdcopy</c>'s read-edit-write of the target's <c>profile.json</c> (<see cref="Profiles.ReadProfileFile"/>: a corrupt
-    /// one is an error, never overwritten) without its switches. All are mirrored (the user's call): a key not set here clears
-    /// the target's, so it ends with exactly this profile's keys, and the question says so. The stored values
-    /// (<c>_settings.Current</c>, not the effective ones: a key that comes only from <c>NEONSIDEKICK_LLM_API_KEY</c>/
-    /// <c>NEONSIDEKICK_ANTHROPIC_API_KEY</c>/<c>NEONSIDEKICK_OPENAI_API_KEY</c>/<c>NEONSIDEKICK_HA_TOKEN</c>/<c>NEONSIDEKICK_YOUTUBE_API_KEY</c> is a per-run override and stays out of the file),
-    /// copied as stored: a <c>dpapi:</c> key or token reads the same in any profile of this Windows user on this machine, as
-    /// <see cref="Profiles.KeepOnReset"/> already relies on. The values are never shown or logged.
-    /// </summary>
-    private async Task HandleKeyCopyAsync(string args, CancellationToken cancellationToken)
-    {
-        string[] words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length != 1)
-        {
-            _flow.Error(KeyCopyUsageError);
-            return;
-        }
-
-        string home = _settings.StorageDirectory;
-        if (Profiles.Resolve(home, words[0]) is not { } target)
-        {
-            _flow.Error(ProfileMissingError(words[0]));
-            return;
-        }
-
-        if (Profiles.NameEquals(target, _settings.ProfileName))
-        {
-            _flow.Error(KeyCopySelfError);
-            return;
-        }
-
-        var current = _settings.Current;
-        string llmKey = current.LlmApiKey;
-        string claudeKey = current.AnthropicApiKey;
-        string openAIKey = current.OpenAIApiKey;
-        string haToken = current.HomeAssistantToken;
-        string youTubeKey = current.YouTubeApiKey;
-        bool llmSet = !string.IsNullOrWhiteSpace(llmKey) && llmKey.Trim() != LlmEndpoint.DefaultApiKey;
-        bool claudeSet = !string.IsNullOrWhiteSpace(claudeKey);
-        bool openAISet = !string.IsNullOrWhiteSpace(openAIKey);
-        bool haSet = !string.IsNullOrWhiteSpace(haToken);
-        bool youTubeSet = !string.IsNullOrWhiteSpace(youTubeKey);
-        if (!await ConfirmAsync(KeyCopyPrompt(target, llmSet, claudeSet, openAISet, haSet, youTubeSet), cancellationToken).ConfigureAwait(false))
-        {
-            _flow.Notice(KeptNotice);
-            return;
-        }
-
-        try
-        {
-            string path = Profiles.ProfileFile(home, target);
-            var data = Profiles.ReadProfileFile(path);
-            data.LlmApiKey = llmKey;
-            data.AnthropicApiKey = claudeKey;
-            data.OpenAIApiKey = openAIKey;
-            data.HomeAssistantToken = haToken;
-            data.YouTubeApiKey = youTubeKey;
-            Profiles.WriteProfileFile(path, data);
-            _flow.Notice(KeyCopiedNotice(target, llmSet, claudeSet, openAISet, haSet, youTubeSet));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        {
-            _flow.Error(CmdCopyFailedError(ex.Message));
-        }
-        finally
-        {
-            RunOrPost(DrainDiagnostics);
-        }
-    }
-
-    // ── /srvcopy (2026-10-07) ───────────────────────────────────────────────
-
-    public const string SrvCopyUsageError = "/srvcopy takes a profile name: /srvcopy <profile>";
-
-    public const string SrvCopySelfError = "/srvcopy copies into another profile; that one is loaded.";
+    // The server settings (/srvcopy, 2026-10-07).
 
     /// <summary>
-    /// What <c>/srvcopy</c> carries (2026-10-07, the user's list, and the three groups they added: the Claude CLI server, the embedded
+    /// What <c>servers</c> carries (2026-10-07, the user's list, and the three groups they added: the Claude CLI server, the embedded
     /// tuning, the Docker server timings), in the settings pane's order: each field and the copy of its stored value. <c>Embedded
     /// models</c> stores nothing per profile (the models are shared under the home, the one in use is in <c>LLM URL</c> and
-    /// <c>LLM model</c>), and the keys are <c>/keycopy</c>'s. A server setting added later is one line here.
+    /// <c>LLM model</c>), and the keys are <c>keys</c>'. A server setting added later is one line here.
     /// </summary>
-    public static readonly IReadOnlyList<(SettingsField Field, Action<AppSettingsData, AppSettingsData> Copy)> SrvCopyFields =
+    public static readonly IReadOnlyList<(SettingsField Field, Action<AppSettingsData, AppSettingsData> Copy)> ProfileServerFields =
     [
         (SettingsField.LlmScanMode, (from, to) => to.LlmScanMode = from.LlmScanMode),
         (SettingsField.LlmUrl, (from, to) => to.LlmUrl = from.LlmUrl),
@@ -7030,75 +6934,236 @@ internal sealed partial class ChatScreen
         (SettingsField.ClaudeCliServer, (from, to) => to.ClaudeCliServer = from.ClaudeCliServer),
     ];
 
-    /// <summary>The question before a server copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
-    public static string SrvCopyPrompt(string profile) =>
-        $"Copy this profile's server settings into \"{profile}\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced.";
+    /// <summary>The question before a <c>servers</c> copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open).</summary>
+    public static string ProfileServersPrompt(string profile, bool pull = false) => pull
+        ? $"Copy \"{profile}\"'s server settings into this profile? This profile's LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced."
+        : $"Copy this profile's server settings into \"{profile}\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced.";
 
     /// <summary>
-    /// The copy done: <c>(copied the server settings into "work": LLM URL http://…, LLM model qwen3)</c> — what the target now connects to,
-    /// in the settings pane's words (<c>(scan the local network)</c>, <c>(first listed)</c> when they are empty). Pinned.
+    /// A <c>servers</c> copy done: <c>(copied the server settings into "work": LLM URL http://…, LLM model qwen3)</c> — what the target now
+    /// connects to, in the settings pane's words (<c>(scan the local network)</c>, <c>(first listed)</c> when they are empty); a pull says from.
     /// </summary>
-    public static string SrvCopiedNotice(string profile, string url, string model) =>
-        $"(copied the server settings into \"{profile}\": LLM URL {url}, LLM model {model})";
+    public static string ProfileServersCopiedNotice(string profile, string url, string model, bool pull = false) =>
+        $"(copied the server settings {(pull ? "from" : "into")} \"{profile}\": LLM URL {url}, LLM model {model})";
 
     /// <summary>
-    /// <c>/srvcopy &lt;profile&gt;</c> (2026-10-07, the user's ask, <c>/keycopy</c>'s twin): this profile's server settings
-    /// (<see cref="SrvCopyFields"/>) into another's, after a confirmation, by the same read-edit-write of the target's
-    /// <c>profile.json</c> (<see cref="Profiles.ReadProfileFile"/>: a corrupt one is an error, never overwritten). Mirrored: the target
-    /// ends with exactly these values, a default here resetting its own, and the question says so. The stored values
-    /// (<c>_settings.Current</c>), not the effective ones: a URL that only <c>--url</c> or <c>NEONSIDEKICK_LLM_URL</c> sets is this run's,
-    /// and stays out of the file.
+    /// One section's copy, worked out before the question (2026-10-09): <see cref="Nothing"/> when the source has nothing to copy (no
+    /// question asked), else the question, the edit of the target's settings, and the line once it is made (given the target's data
+    /// afterwards and its folder, for the server notice's values).
     /// </summary>
-    private async Task HandleSrvCopyAsync(string args, CancellationToken cancellationToken)
+    private sealed record SectionCopy(string? Nothing, string Prompt, Action<AppSettingsData> Apply, Func<AppSettingsData, string, string> Notice);
+
+    /// <summary>
+    /// <paramref name="section"/>'s copy from <paramref name="from"/> over <paramref name="to"/> (pure: the edit is only planned). Keys and
+    /// servers are mirrored. The lists come out as their editors save them — <see cref="CommandAllowList.Merge"/> (lower case, sorted, no
+    /// doubles) and <see cref="ForbiddenStrings.Sorted"/> (normalised, no doubles ignoring case) — added to the target's unless
+    /// <paramref name="overwrite"/>, what it already holds counted as already there.
+    /// </summary>
+    private static SectionCopy PlanSectionCopy(ProfileSection section, AppSettingsData from, AppSettingsData to, string profile, bool overwrite, bool pull)
     {
-        string[] words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length != 1)
+        switch (section)
         {
-            _flow.Error(SrvCopyUsageError);
-            return;
-        }
+            case ProfileSection.Keys:
+            {
+                var (llm, anthropic, openAI, homeAssistant, youTube) = KeysSet(from);
+                return new(
+                    null,
+                    ProfileKeysPrompt(profile, llm, anthropic, openAI, homeAssistant, youTube, pull),
+                    target => CopyKeys(from, target),
+                    (_, _) => ProfileKeysCopiedNotice(profile, llm, anthropic, openAI, homeAssistant, youTube, pull));
+            }
 
+            case ProfileSection.Servers:
+                return new(
+                    null,
+                    ProfileServersPrompt(profile, pull),
+                    target =>
+                    {
+                        foreach (var (_, copy) in ProfileServerFields)
+                        {
+                            copy(from, target);
+                        }
+                    },
+                    (data, directory) => ProfileServersCopiedNotice(
+                        profile, SettingsMenu.FieldValue(SettingsField.LlmUrl, data, directory), SettingsMenu.FieldValue(SettingsField.LlmModel, data, directory), pull));
+
+            case ProfileSection.Commands:
+            {
+                var source = CommandAllowList.Merge(from.ShellCommandAllowed, []);
+                if (source.Count == 0)
+                {
+                    return new(ProfileCommandsNothingNotice(profile, pull), "", _ => { }, (_, _) => "");
+                }
+
+                int duplicates = overwrite ? 0 : source.Count(prefix => CommandAllowList.Contains(to.ShellCommandAllowed, prefix));
+                return new(
+                    null,
+                    ProfileCommandsPrompt(source.Count, profile, overwrite, pull),
+                    target => target.ShellCommandAllowed = overwrite ? [.. source] : CommandAllowList.Merge(target.ShellCommandAllowed, source),
+                    (_, _) => ProfileCommandsCopiedNotice(source.Count - duplicates, duplicates, profile, overwrite, pull));
+            }
+
+            case ProfileSection.PoliceStrings:
+            {
+                var source = ForbiddenStrings.Sorted(from.ShellPoliceForbiddenStrings);
+                if (source.Count == 0)
+                {
+                    return new(ProfilePoliceStringsNothingNotice(profile, pull), "", _ => { }, (_, _) => "");
+                }
+
+                int duplicates = overwrite ? 0 : source.Count(entry => ForbiddenStrings.Contains(to.ShellPoliceForbiddenStrings, entry));
+                return new(
+                    null,
+                    ProfilePoliceStringsPrompt(source.Count, profile, overwrite, pull),
+                    target => target.ShellPoliceForbiddenStrings = overwrite ? [.. source] : ForbiddenStrings.Sorted([.. target.ShellPoliceForbiddenStrings, .. source]),
+                    (_, _) => ProfilePoliceStringsCopiedNotice(source.Count - duplicates, duplicates, profile, overwrite, pull));
+            }
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(section), section, "Not a profile.json section.");
+        }
+    }
+
+    /// <summary>
+    /// <c>/profile push|pull &lt;section&gt; &lt;name&gt; [overwrite]</c> (2026-10-09, the user's ask): the checks every section shares —
+    /// the name listed (<see cref="Profiles.Resolve"/>), never the loaded one — then the section's own copy. The parser has already
+    /// held <c>overwrite</c> to the list sections.
+    /// </summary>
+    private async Task CopyProfileSectionAsync(ProfileAction action, CancellationToken cancellationToken)
+    {
+        bool pull = action.Kind == ProfileActionKind.Pull;
         string home = _settings.StorageDirectory;
-        if (Profiles.Resolve(home, words[0]) is not { } target)
+        if (Profiles.Resolve(home, action.Name) is not { } other)
         {
-            _flow.Error(ProfileMissingError(words[0]));
+            _flow.Error(ProfileMissingError(action.Name));
             return;
         }
 
-        if (Profiles.NameEquals(target, _settings.ProfileName))
+        string loaded = _settings.ProfileName;
+        if (Profiles.NameEquals(other, loaded))
         {
-            _flow.Error(SrvCopySelfError);
+            _flow.Error(pull ? ProfilePullSelfError(loaded) : ProfilePushSelfError(loaded));
             return;
         }
 
-        if (!await ConfirmAsync(SrvCopyPrompt(target), cancellationToken).ConfigureAwait(false))
+        if (action.Section == ProfileSection.History)
+        {
+            await CopyCommandHistoryAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await CopyProfileFieldsAsync(home, other, action.Section, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// A <c>profile.json</c> section (keys, servers, commands, policestrings) pushed into <paramref name="other"/> or pulled from it. The
+    /// other's file is read first (a corrupt one is an error and nothing is asked), the copy planned (<see cref="PlanSectionCopy"/>), the
+    /// question asked, then a push writes the other's file back and a pull goes through <see cref="AppSettings.Update"/> and reconnects
+    /// what changed (<see cref="ApplySettingsChangesAsync"/> over <see cref="ReloadChanges"/>, as <c>/profile reload</c> does).
+    /// </summary>
+    private async Task CopyProfileFieldsAsync(string home, string other, ProfileSection section, bool overwrite, bool pull, CancellationToken cancellationToken)
+    {
+        string path = Profiles.ProfileFile(home, other);
+        AppSettingsData theirs;
+        try
+        {
+            theirs = Profiles.ReadProfileFile(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            _flow.Error(pull ? ProfileSectionReadError(other, ex.Message) : ProfileSectionFailedError(ex.Message));
+            return;
+        }
+
+        var current = _settings.Current;
+        var copy = pull ? PlanSectionCopy(section, theirs, current, other, overwrite, pull: true) : PlanSectionCopy(section, current, theirs, other, overwrite, pull: false);
+        if (copy.Nothing is { } nothing)
+        {
+            _flow.Notice(nothing);
+            return;
+        }
+
+        if (!await ConfirmAsync(copy.Prompt, cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
         }
 
-        var current = _settings.Current;
+        if (pull)
+        {
+            var before = _settings.Current;
+            _settings.Update(copy.Apply);
+            var after = _settings.Current;
+            _flow.Notice(copy.Notice(after, _settings.ProfileDirectory));
+            await ApplySettingsChangesAsync(ReloadChanges(SettingsDiff.Changes(before, after)), cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         try
         {
-            string path = Profiles.ProfileFile(home, target);
-            var data = Profiles.ReadProfileFile(path);
-            foreach (var (_, copy) in SrvCopyFields)
-            {
-                copy(current, data);
-            }
+            copy.Apply(theirs);
+            Profiles.WriteProfileFile(path, theirs);
+            _flow.Notice(copy.Notice(theirs, Path.GetDirectoryName(path)!));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _flow.Error(ProfileSectionFailedError(ex.Message));
+        }
+    }
 
-            Profiles.WriteProfileFile(path, data);
-            string targetDirectory = Path.GetDirectoryName(path)!;
-            _flow.Notice(SrvCopiedNotice(target, SettingsMenu.FieldValue(SettingsField.LlmUrl, data, targetDirectory), SettingsMenu.FieldValue(SettingsField.LlmModel, data, targetDirectory)));
+    /// <summary>
+    /// <c>history [overwrite]</c> (<c>/cmdcopy --history</c> 2026-09-25, a section since 2026-10-09): the source's stored command history
+    /// into the target's <c>sessions.db</c> — appended, a line equal to the one before it skipped, or in place of it — after a
+    /// confirmation. The stored lines, not the line's list: what the setting keeps is what is copied. Refused when the target has
+    /// <c>Keep command history</c> off (its next load would drop them). The other profile's store is opened for the copy alone; a pull
+    /// puts the loaded one's lines back on the input line, as a load does.
+    /// </summary>
+    private async Task CopyCommandHistoryAsync(string home, string other, bool overwrite, bool pull, CancellationToken cancellationToken)
+    {
+        using var theirs = new SessionStore(Profiles.Directory(home, other), _time);
+        var lines = pull ? theirs.CommandHistory() : _sessions.CommandHistory();
+        if (lines.Count == 0)
+        {
+            _flow.Notice(ProfileHistoryNothingNotice(other, pull));
+            return;
+        }
+
+        try
+        {
+            bool keeps = pull ? _effective().KeepCommandHistory : Profiles.ReadProfileFile(Profiles.ProfileFile(home, other)).KeepCommandHistory;
+            if (!keeps)
+            {
+                _flow.Error(ProfileHistoryOffError(other, pull));
+                return;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
-            _flow.Error(CmdCopyFailedError(ex.Message));
+            _flow.Error(ProfileSectionFailedError(ex.Message));
+            return;
         }
-        finally
+
+        if (!await ConfirmAsync(ProfileHistoryPrompt(lines.Count, other, overwrite, pull), cancellationToken).ConfigureAwait(false))
         {
-            RunOrPost(DrainDiagnostics);
+            _flow.Notice(KeptNotice);
+            return;
         }
+
+        var target = pull ? _sessions : theirs;
+        if (!target.Available)
+        {
+            _flow.Error(ProfileHistoryFailedError(other, pull));
+            return;
+        }
+
+        int added = target.AddCommandHistory(lines, overwrite);
+        if (pull)
+        {
+            _input.ReplaceHistory(_sessions.CommandHistory());
+        }
+
+        _flow.Notice(ProfileHistoryCopiedNotice(added, other, overwrite, pull));
     }
 
     /// <summary>
@@ -8342,7 +8407,9 @@ internal sealed partial class ChatScreen
     /// profile (an empty name); <c>rename &lt;name&gt; &lt;new-name&gt;</c> ⇒ rename (the only three-token
     /// form; <c>rename</c> with fewer is invalid, never a switch — it is a reserved word); one other
     /// token ⇒ switch; <c>push &lt;name&gt;</c> / <c>pull &lt;name&gt;</c> (2026-09-28) ⇒ that, the name
-    /// required; anything else ⇒ invalid. The names are not validated here (the handler says
+    /// required, and a section word before it (2026-10-09, <see cref="ProfileSectionWords"/>) ⇒ that section,
+    /// <see cref="OverwriteWord"/> after the name for the list sections alone (<see cref="SectionTakesOverwrite"/>);
+    /// anything else ⇒ invalid. The names are not validated here (the handler says
     /// why one is refused). <see cref="ResetAllFlag"/> (any case, before or after the name) belongs to
     /// <c>reset</c> alone (2026-09-27): it sets <see cref="ProfileAction.All"/>; after any other verb,
     /// or twice, the line is invalid.
@@ -8350,6 +8417,12 @@ internal sealed partial class ChatScreen
     public static ProfileAction ParseProfileArgs(string args)
     {
         var tokens = (args ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length >= 2 && !tokens.Any(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase))
+            && (tokens[0].Equals(PushWord, StringComparison.OrdinalIgnoreCase) || tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase)))
+        {
+            return ParsePushPull(tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase) ? ProfileActionKind.Pull : ProfileActionKind.Push, tokens[1..]);
+        }
+
         int flags = tokens.Count(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase));
         if (flags > 0)
         {
@@ -8379,16 +8452,59 @@ internal sealed partial class ChatScreen
                 return new(ProfileActionKind.Delete, tokens[1]);
             case 2 when tokens[0].Equals("reset", StringComparison.OrdinalIgnoreCase):
                 return new(ProfileActionKind.Reset, tokens[1]);
-            case 2 when tokens[0].Equals(PushWord, StringComparison.OrdinalIgnoreCase):
-                return new(ProfileActionKind.Push, tokens[1]);
-            case 2 when tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase):
-                return new(ProfileActionKind.Pull, tokens[1]);
             case 3 when tokens[0].Equals("rename", StringComparison.OrdinalIgnoreCase):
                 return new(ProfileActionKind.Rename, tokens[1], tokens[2]);
             default:
                 return new(ProfileActionKind.Invalid, "");
         }
     }
+
+    /// <summary>
+    /// What follows <c>push</c> or <c>pull</c> (2026-10-09): a name alone ⇒ <see cref="ProfileSection.All"/>; a section word
+    /// and a name ⇒ that section; a list section's word, a name and <see cref="OverwriteWord"/> ⇒ that, replacing. A section
+    /// word with no name, or overwrite after keys, servers or a bare name, is invalid. The section words are reserved profile
+    /// names (<see cref="Profiles.ReservedNames"/>), so <c>push keys</c> never means a profile called keys.
+    /// </summary>
+    private static ProfileAction ParsePushPull(ProfileActionKind kind, string[] rest)
+    {
+        if (ProfileSectionOf(rest[0]) is not { } section)
+        {
+            return rest.Length == 1 ? new(kind, rest[0]) : new(ProfileActionKind.Invalid, "");
+        }
+
+        bool overwrite = rest.Length == 3 && rest[2].Equals(OverwriteWord, StringComparison.OrdinalIgnoreCase);
+        return rest.Length == 2 || (overwrite && SectionTakesOverwrite(section))
+            ? new(kind, rest[1], Section: section, Overwrite: overwrite)
+            : new(ProfileActionKind.Invalid, "");
+    }
+
+    /// <summary>The <c>/profile push|pull</c> section words (2026-10-09), in the order the argument list offers them, each with its note. Pinned.</summary>
+    public static readonly IReadOnlyList<(string Word, ProfileSection Section, string Note)> ProfileSectionWords =
+    [
+        ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
+        ("servers", ProfileSection.Servers, "the server settings: LLM URL, model, scan mode, Embedded, Docker, Anthropic API, OpenAI API, Claude CLI server"),
+        ("commands", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
+        ("history", ProfileSection.History, "the command history, added (or replaced with overwrite)"),
+        ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),
+    ];
+
+    /// <summary>The section a word names, any case; null for none.</summary>
+    public static ProfileSection? ProfileSectionOf(string word)
+    {
+        foreach (var (text, section, _) in ProfileSectionWords)
+        {
+            if (text.Equals(word, StringComparison.OrdinalIgnoreCase))
+            {
+                return section;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether a section takes <see cref="OverwriteWord"/>: the lists, which are added to by default. Keys and servers are mirrored, so replacing is all they do.</summary>
+    public static bool SectionTakesOverwrite(ProfileSection section) =>
+        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.PoliceStrings;
 
     public static string ProfileMissingError(string name) => $"No profile named \"{name}\"; /profile lists them.";
 
@@ -11054,18 +11170,6 @@ internal sealed partial class ChatScreen
                 await HandleProfileAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.CmdCopy:
-                await HandleCmdCopyAsync(args, cancellationToken).ConfigureAwait(false);
-                return false;
-
-            case SlashCommand.KeyCopy:
-                await HandleKeyCopyAsync(args, cancellationToken).ConfigureAwait(false);
-                return false;
-
-            case SlashCommand.SrvCopy:
-                await HandleSrvCopyAsync(args, cancellationToken).ConfigureAwait(false);
-                return false;
-
             case SlashCommand.Timer:
                 HandleTimer(args);
                 return false;
@@ -11562,8 +11666,13 @@ internal sealed partial class ChatScreen
                     RenameProfile(action.Name, action.NewName);
                     return;
 
-                case ProfileActionKind.Push or ProfileActionKind.Pull:
+                case ProfileActionKind.Push or ProfileActionKind.Pull when action.Section == ProfileSection.All:
                     await CopyProfileSettingsAsync(action.Name, pull: action.Kind == ProfileActionKind.Pull, cancellationToken).ConfigureAwait(false);
+                    return;
+
+                case ProfileActionKind.Push or ProfileActionKind.Pull:
+                    // A section (2026-10-09): /keycopy, /srvcopy and /cmdcopy folded in, each with a pull, and the police's strings.
+                    await CopyProfileSectionAsync(action, cancellationToken).ConfigureAwait(false);
                     return;
 
                 case ProfileActionKind.Edit:

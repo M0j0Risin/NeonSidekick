@@ -151,8 +151,9 @@ internal sealed partial class ChatScreen
     /// reply ends instead of being dropped (so <c>/learn</c> reflects on the reply it waited for); <c>/window</c> and the bare
     /// <c>/cwd</c> are quick notices; <c>/tree</c> and <c>/vault</c> are panes (the info pane, never the transcript the turn
     /// owns); <c>/cmdcopy</c> and the three prompt files' words are panes — they write another profile or a file the running
-    /// turn's prompt was built from already, and ask their yes/no on the pane. <c>/keycopy</c> (2026-09-28) is one the same
-    /// way: another profile's file, its yes/no on the pane. <c>/perfbar</c> (later on 2026-09-29) is quick: display only.</para>
+    /// turn's prompt was built from already, and ask their yes/no on the pane. <c>/keycopy</c> (2026-09-28) was one the same
+    /// way, and <c>/srvcopy</c>, until all three became <c>/profile push|pull</c>'s sections on 2026-10-09: deferred with
+    /// <c>/profile</c> since (a pull changes the loaded profile, which must wait for the reply). <c>/perfbar</c> (later on 2026-09-29) is quick: display only.</para>
     /// <para><c>/ha</c> (2026-09-30, the user's ask: it waited for the reply) is a <see cref="MidTurnClass.Pane"/> though it opens
     /// none: a quick act runs on the turn task, and a Home Assistant call — up to <c>Home Assistant timeout</c>, 10 s by
     /// default — would hold the streaming reply that long. On the watcher the reply streams on, its lines go through the flow
@@ -166,7 +167,7 @@ internal sealed partial class ChatScreen
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.CmdList or SlashCommand.Police or SlashCommand.Tools
-            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.CmdCopy or SlashCommand.KeyCopy or SlashCommand.SrvCopy or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
+            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Persona or SlashCommand.Operata or SlashCommand.Vocalia
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -501,20 +502,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Vault:
                 await ShowWalkAsync(VaultLines(args, out string? vaultError), vaultError, TreeText.PaneLabel("/vault", args), _flow, cancellationToken).ConfigureAwait(false);
                 break;
-            case SlashCommand.CmdCopy:
-                // /cmdcopy and the prompt files (later on 2026-09-27): another profile's file, or one the running turn's prompt
-                // was read from already; the yes/no is a pane and every line goes through the flow sink.
-                await HandleCmdCopyAsync(args, cancellationToken).ConfigureAwait(false);
-                break;
-            case SlashCommand.KeyCopy:
-                // /keycopy (2026-09-28): /cmdcopy's reason — another profile's file, the yes/no on the pane.
-                await HandleKeyCopyAsync(args, cancellationToken).ConfigureAwait(false);
-                break;
-            case SlashCommand.SrvCopy:
-                // /srvcopy (2026-10-07): /keycopy's reason.
-                await HandleSrvCopyAsync(args, cancellationToken).ConfigureAwait(false);
-                break;
             case SlashCommand.Persona:
+                // The prompt files (later on 2026-09-27): one the running turn's prompt was read from already; the yes/no is a
+                // pane and every line goes through the flow sink. /cmdcopy, /keycopy and /srvcopy were panes here for another
+                // profile's file until 2026-10-09, when they became /profile push|pull's sections and wait for the reply as /profile does.
                 await HandlePromptFileAsync(_persona, "/persona", args, PersonaCreatedNotice, PersonaOpenedNotice, PersonaOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Operata:

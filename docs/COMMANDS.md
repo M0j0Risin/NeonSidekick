@@ -36,10 +36,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
 | `/clear` | Starts a new conversation and clears the screen. |
-| `/cmdcopy <profile> [overwrite] [--history]` | Copies *Shell allowed commands* into another profile (added, or replacing with `overwrite`). `--history` copies the command history instead (refused when that profile has *Keep command history* off). |
 | `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey, the held ones first, in a pane. A held chord never reaches the app. Only hotkeys registered with Windows show; a keyboard hook (AutoHotkey, PowerToys Keyboard Manager) or a Windows Terminal key binding can still take a key. Needs Windows. |
-| `/keycopy <profile>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* into another profile after a confirmation, mirrored: a key unset here clears theirs. Keys set only by environment variable aren't copied. |
-| `/srvcopy <profile>` | Copies the server settings into another profile after a confirmation, replacing theirs: scan mode, LLM URL and model, and the embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings. Saved values only, not a `--url` or variable; the keys are `/keycopy`'s. |
 | `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/cmdlist` | Opens *Shell allowed commands*: Enter removes a prefix after a yes; the ask and yolo buttons (`a`, `y`) switch *Shell command policy*; typing filters the list. |
 | `/police` | Opens the on/off page for *Shell police*; its strings button (`s`) opens *Shell police forbidden strings*. |
@@ -118,7 +115,12 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile add\|delete <name>` | Creates or deletes a profile. |
 | `/profile rename <name> <new-name>` | Renames a profile. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths and keys unless `--all`. |
-| `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another. |
+| `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another.Every setting but the working directory; a pull clears the conversation. |
+| `/profile push\|pull keys <name>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* to or from another profile after a confirmation, mirrored: a key unset in the source clears the target's. Keys set only by environment variable aren't copied. |
+| `/profile push\|pull servers <name>` | Copies the server settings to or from another profile after a confirmation, replacing the target's: scan mode, LLM URL and model, and the embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings. Saved values only, not a `--url` or variable. |
+| `/profile push\|pull commands <name> [overwrite]` | Copies *Shell allowed commands* to or from another profile (added, or replacing with `overwrite`). |
+| `/profile push\|pull history <name> [overwrite]` | Copies the command history to or from another profile (added, or replacing with `overwrite`); refused when the target has *Keep command history* off. |
+| `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* to or from another profile (added, or replacing with `overwrite`). |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
 | `/queue [clear]` | Lists and prunes the queued messages (Enter removes one after a yes; `⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. `/queue clear` drops them without the pane. |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |

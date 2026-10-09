@@ -56,10 +56,6 @@ public static class HelpCommands
         [
             new("/cmdclear", "Clear this profile's command history, both stored and in memory, after you confirm."),
         ]),
-        new("/cmdcopy",
-        [
-            new("/cmdcopy <profile> [overwrite] [--history]", "Copy this profile's *Shell allowed commands* into another profile. They are added to its list, or replace it with `overwrite`. `--history` copies the command history instead; this is refused while that profile has *Keep command history* off."),
-        ]),
         new("/cmdlist",
         [
             new("/cmdlist", "Open the *Shell allowed commands* list. Enter removes a prefix after a yes; the ask and yolo buttons at the top (`a`, `y`) switch *Shell command policy*, yolo after a yes; ESC closes it."),
@@ -159,10 +155,6 @@ public static class HelpCommands
         [
             new("/keycheck", "List the app's key chords (the Keys tab of `/help`) and whether another program holds each as a global hotkey, the held ones first. A held chord never reaches the app: free it in the program that holds it, such as a graphics card's overlay. Only hotkeys registered with Windows show; a keyboard hook or a Windows Terminal key binding can still take a key."),
         ]),
-        new("/keycopy",
-        [
-            new("/keycopy <profile>", "Copy this profile's *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* into another profile, replacing its own, after you confirm. The keys are mirrored: a key that is not set here clears that profile's. Only saved keys are copied, and encrypted ones are copied as they are. A key set only by `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_HA_TOKEN` or `NEONSIDEKICK_YOUTUBE_API_KEY` is not copied."),
-        ]),
         new("/learn",
         [
             new("/learn [<note>]", "Write or improve a skill in the background from the last turn, a note steering what to keep. Needs *Agent skills* and *LLM offer tools* on."),
@@ -249,7 +241,12 @@ public static class HelpCommands
             new("/profile add|delete <name>", "Create or delete a profile."),
             new("/profile rename <name> <new-name>", "Rename a profile."),
             new("/profile reset [<name>] [--all]", "Reset a profile to the defaults (the loaded one when no name is given), keeping its URLs, paths and keys; `--all` resets those too."),
-            new("/profile push|pull <name>", "Copy this profile's settings to another (`push`) or another's into this one (`pull`)."),
+            new("/profile push|pull <name>", "Copy this profile's settings to another (`push`) or another's into this one (`pull`): every setting but the working directory. A pull clears the conversation; a section pulled (below) applies at once, like a settings change, and the conversation stays."),
+            new("/profile push|pull keys <name>", "Copy the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* to another profile or from it, after you confirm. The keys are mirrored: a key not set in the source clears the target's. Only saved keys are copied, and encrypted ones as they are; a key set only by a `NEONSIDEKICK_*` variable is not copied."),
+            new("/profile push|pull servers <name>", "Copy the server settings to another profile or from it, replacing the target's, after you confirm: *LLM server scan mode*, *LLM URL* and *LLM model*; *Embedded servers enabled*, *Embedded backend* and the embedded context size, GPU layers, VRAM budget, VRAM only, vision and drafter; *Docker servers enabled*, *Docker server containers* and the Docker server timings and stop on exit; *Anthropic API*, *OpenAI API* and *Claude CLI server*. The saved values are copied, not a `--url` or variable that only overrides this run. Installed embedded models are shared by every profile already."),
+            new("/profile push|pull commands <name> [overwrite]", "Copy *Shell allowed commands* to another profile or from it: added to the target's list, or replacing it with `overwrite`."),
+            new("/profile push|pull history <name> [overwrite]", "Copy the command history to another profile or from it: added to the target's, or replacing it with `overwrite`. Refused while the target has *Keep command history* off."),
+            new("/profile push|pull policestrings <name> [overwrite]", "Copy *Shell police forbidden strings* to another profile or from it: added to the target's list, or replacing it with `overwrite`."),
             new("/profile edit|reload", "`edit` opens `profile.json` in your editor; `reload` reads it back and reconnects only what changed."),
         ]),
         new("/queue",
@@ -322,10 +319,6 @@ public static class HelpCommands
         new("/splash",
         [
             new("/splash", "Start a new conversation and show the splash screen."),
-        ]),
-        new("/srvcopy",
-        [
-            new("/srvcopy <profile>", "Copy this profile's server settings into another profile, replacing its own, after a yes/no: *LLM server scan mode*, *LLM URL* and *LLM model*; *Embedded servers enabled*, *Embedded backend* and the embedded context size, GPU layers, VRAM budget, VRAM only, vision and drafter; *Docker servers enabled*, *Docker server containers* and the Docker server timings and stop on exit; *Anthropic API*, *OpenAI API* and *Claude CLI server*. The saved values are copied, not a `--url` or variable that only overrides this run. Installed embedded models are shared by every profile already; the API keys are `/keycopy`'s."),
         ]),
         new("/stt",
         [

@@ -168,7 +168,7 @@ public sealed class AppSettingsData
     /// The YouTube Data API v3 key (2026-10-05, the user's call: the official API, no keyless scraping): made in the Google Cloud
     /// Console (a project, the API enabled, an API key restricted to it). Kept encrypted with DPAPI as <see cref="OpenAIApiKey"/>
     /// is, sent only to www.googleapis.com, in the <c>X-Goog-Api-Key</c> header (never in a URL); empty means no search — playing
-    /// by id or link needs none. Copied by <c>/keycopy</c> and kept by a plain <c>/profile reset</c> (the user's ask, the other keys'
+    /// by id or link needs none. Copied by <c>/keycopy</c> (<c>/profile push|pull keys</c> since 2026-10-09) and kept by a plain <c>/profile reset</c> (the user's ask, the other keys'
     /// way). Never logged (<see cref="SettingsDiff.Secrets"/>). Variable <see cref="EnvironmentOverrides.YouTubeApiKeyVariable"/> (plain).
     /// </summary>
     public string YouTubeApiKey { get; set; } = "";

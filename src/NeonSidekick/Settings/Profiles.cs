@@ -39,8 +39,13 @@ public static class Profiles
     /// </summary>
     public static readonly string[] BasicSidekickFiles = { "memory.json" };
 
-    /// <summary>The <c>/profile</c> subcommand words (<c>edit</c> and <c>reload</c> since 2026-09-21, <c>push</c> and <c>pull</c> since 2026-09-28); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and <c>/profile reset</c> is always the loaded one.</summary>
-    public static readonly string[] ReservedNames = { "add", "delete", "edit", "pull", "push", "reload", "rename", "reset" };
+    /// <summary>
+    /// The <c>/profile</c> subcommand words (<c>edit</c> and <c>reload</c> since 2026-09-21, <c>push</c> and <c>pull</c> since 2026-09-28,
+    /// and push and pull's section words since 2026-10-09 — <c>ChatScreen.ProfileSectionWords</c> — so <c>/profile push keys work</c> never
+    /// reads as a profile called keys); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and
+    /// <c>/profile reset</c> is always the loaded one.
+    /// </summary>
+    public static readonly string[] ReservedNames = { "add", "commands", "delete", "edit", "history", "keys", "policestrings", "pull", "push", "reload", "rename", "reset", "servers" };
 
     /// <summary>
     /// The sidekick's own name, never a profile's (2026-09-21, the user's call): it is the default
@@ -271,7 +276,7 @@ public static class Profiles
 
     /// <summary>
     /// Reads a <c>profile.json</c> that is not the loaded one, to edit and <see cref="WriteProfileFile"/>
-    /// back (<c>/cmdcopy</c>, 2026-09-21). A missing file is the compiled defaults: the profile is
+    /// back (<c>/cmdcopy</c>, 2026-09-21; <c>/profile push|pull</c>'s sections since 2026-10-09, a pull reading its source). A missing file is the compiled defaults: the profile is
     /// logical, as <c>default</c>'s can be, or was never saved, and that is what loading it would give.
     /// A corrupt file, or one that parses to null, <b>throws</b> <see cref="JsonException"/> — the
     /// opposite of <c>AppSettings.Load</c>'s fall-back, because a copy that quietly fell back would

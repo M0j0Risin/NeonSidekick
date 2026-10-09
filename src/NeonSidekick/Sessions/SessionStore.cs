@@ -958,7 +958,7 @@ public sealed class SessionStore : IDisposable
     }
 
     /// <summary>
-    /// Lines appended in order (<c>/cmdcopy --history</c>, 2026-09-25) — or in place of every stored one when
+    /// Lines appended in order (<c>/cmdcopy --history</c>, 2026-09-25; <c>/profile push|pull history</c> since 2026-10-09) — or in place of every stored one when
     /// <paramref name="overwrite"/> — a line equal to the one before it skipped, as the input line's own history
     /// skips it, then the oldest past <see cref="CommandHistoryCap"/> dropped; one transaction. How many went in.
     /// </summary>

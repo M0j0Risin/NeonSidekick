@@ -99,7 +99,7 @@ What to use instead:
 | `/reasoning [level]` | `NEONSIDEKICK_LLM_REASONING` |
 | `/sampling [field value]` | `NEONSIDEKICK_LLM_SAMPLING`; the profile's saved sampling for the model applies too. |
 | `/cwd [path]` | `--cwd <path>` |
-| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` need the TUI, or the files under `<home>/profiles`. |
+| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` (and push and pull's sections) need the TUI, or the files under `<home>/profiles`. |
 | `/settings`, `//`, `/tools`, `/skills` (the pane, its revert and `/skills purge`; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. A key typed into `profile.json` in plain text (the LLM, Anthropic, OpenAI, Home Assistant or YouTube key) is encrypted the next time the profile loads (DPAPI on Windows, the Keychain on a Mac). Environment variables override some values for one run. |
 | `/remember <text>` | Ask in a message ("Remember that …"); the model has the `save_memory` tool. |
 | `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. `/memory read-write` / `read-only` / `disabled` need the TUI, or `MemoryMode` in `profile.json`. |
@@ -109,9 +109,9 @@ What to use instead:
 | `/learn` | Not available; the TUI's reflection runs it. |
 | `/timer` | Not available; there are no timers headless (nothing could deliver the alert). |
 | `/tts`, `/stt`, `/wake`, `/interrupt`, `/speak`, `/echo` | Not available; headless never speaks or listens. |
-| `/cmdlist`, `/cmdcopy`, `/cmdclear`, `/police` | Not available. Manage the allow list in the TUI; `NEONSIDEKICK_COMMAND_POLICY` sets the policy for a run. |
-| `/srvcopy` | Not available; copy the server settings in the TUI. `--url`, `--model` and `NEONSIDEKICK_LLM_URL` set the server for a run. |
-| `/keycopy` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_HA_TOKEN` and `NEONSIDEKICK_YOUTUBE_API_KEY` set them for a run. |
+| `/cmdlist`, `/cmdclear`, `/police` | Not available. Manage the allow list in the TUI; `NEONSIDEKICK_COMMAND_POLICY` sets the policy for a run. |
+| `/profile push\|pull servers` | Not available; copy the server settings in the TUI. `--url`, `--model` and `NEONSIDEKICK_LLM_URL` set the server for a run. |
+| `/profile push\|pull keys` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_HA_TOKEN` and `NEONSIDEKICK_YOUTUBE_API_KEY` set them for a run. |
 | `/usage` | Not available; `--log` records the run. |
 | `/process` | Not available; ask the model, whose `process` tool lists, reads and stops the background processes. |
 | `/sys` | Not available; open `/sys` in the TUI on the same profile to see the prompt. |
@@ -598,7 +598,7 @@ Select-String -Path yolo.log -Pattern "--yolo|COMMAND_POLICY|approval: yolo"
 
 Stay on `ask` and allow-list just the prefixes the job needs (`dotnet build`, `dotnet test`,
 `git status`…). To build the list, run the job once in the TUI on the same profile and answer
-*Allow … always* on the approval pane. Or copy another profile's list over with `/cmdcopy`, and
+*Allow … always* on the approval pane. Or copy another profile's list over with `/profile pull commands <name>`, and
 trim it with `/cmdlist`. The headless run then executes those commands and refuses anything else,
 and exit code 3 tells you if the job needed something the list doesn't cover.
 

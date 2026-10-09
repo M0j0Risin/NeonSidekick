@@ -69,6 +69,8 @@ public class ProfilesTests : IDisposable
         Assert.False(Profiles.IsValidName("edit"));
         Assert.False(Profiles.IsValidName("Reload"));
         Assert.False(Profiles.IsValidName("push"));   // 2026-09-28
+        Assert.All(new[] { "keys", "SERVERS", "commands", "history", "policestrings" }, word => Assert.False(Profiles.IsValidName(word)));   // push and pull's sections, 2026-10-09
+        Assert.True(Profiles.IsValidName("keys2"));
         Assert.False(Profiles.IsValidName("PULL"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before deleting it.", Profiles.CurrentUndeletable("work"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before renaming it.", Profiles.CurrentUnrenamable("work"));
@@ -117,7 +119,7 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void ReadProfileFile_MissingIsTheDefaults_AndAWrittenFileRoundTrips()
     {
-        // 2026-09-21: the reader /cmdcopy edits another profile's settings with.
+        // 2026-09-21: the reader /cmdcopy (/profile push|pull's sections since 2026-10-09) edits another profile's settings with.
         string path = Profiles.ProfileFile(_dir, "work");
         var missing = Profiles.ReadProfileFile(path);
         Assert.Equal(new AppSettingsData().LlmModel, missing.LlmModel);

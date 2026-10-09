@@ -6911,9 +6911,32 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("push", ProfileActionKind.Invalid, "")]
     [InlineData("pull", ProfileActionKind.Invalid, "")]
     [InlineData("push a b", ProfileActionKind.Invalid, "")]
+    [InlineData("keys", ProfileActionKind.Invalid, "")]   // a section word is reserved (2026-10-09): never a switch
+    [InlineData("history", ProfileActionKind.Invalid, "")]
     public void ParseProfileArgs_IsPinned(string args, ProfileActionKind kind, string name, string newName = "")
     {
         Assert.Equal(new ProfileAction(kind, name, newName), ChatScreen.ParseProfileArgs(args));
+    }
+
+    [Theory]
+    [InlineData("push keys work", ProfileActionKind.Push, "work", ProfileSection.Keys, false)]   // the sections, 2026-10-09
+    [InlineData("PULL Servers work", ProfileActionKind.Pull, "work", ProfileSection.Servers, false)]
+    [InlineData("push commands work", ProfileActionKind.Push, "work", ProfileSection.Commands, false)]
+    [InlineData("pull commands work OVERWRITE", ProfileActionKind.Pull, "work", ProfileSection.Commands, true)]
+    [InlineData("push history default overwrite", ProfileActionKind.Push, "default", ProfileSection.History, true)]
+    [InlineData("pull\tpolicestrings  work", ProfileActionKind.Pull, "work", ProfileSection.PoliceStrings, false)]
+    [InlineData("push policestrings work overwrite", ProfileActionKind.Push, "work", ProfileSection.PoliceStrings, true)]
+    [InlineData("push keys", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("pull history", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push keys work overwrite", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // mirrored: no overwrite
+    [InlineData("pull servers work overwrite", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push work overwrite", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push commands work now", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push commands work overwrite please", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push keys work --all", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    public void ParseProfileArgs_Sections_ArePinned(string args, ProfileActionKind kind, string name, ProfileSection section, bool overwrite)
+    {
+        Assert.Equal(new ProfileAction(kind, name, Section: section, Overwrite: overwrite), ChatScreen.ParseProfileArgs(args));
     }
 
     [Theory]
@@ -8328,17 +8351,17 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("overwrite", ChatScreen.OverwriteWord);
     }
 
-    // ── /cmdcopy (2026-09-21) ───────────────────────────────────────────────
+    // ── /profile push|pull commands and policestrings (2026-10-09; /cmdcopy from 2026-09-21) ──
 
     private static AppSettingsData ReadProfile(string path) =>
         JsonSerializer.Deserialize(File.ReadAllText(path), SettingsJsonContext.Default.AppSettingsData)!;
 
     [Fact]
-    public async Task CmdCopy_Yes_AppendsIntoTheOtherProfile_SkippingWhatItHolds()
+    public async Task ProfilePushCommands_Yes_AppendsIntoTheOtherProfile_SkippingWhatItHolds()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", ShellCommandAllowed = ["echo", "dir"] });
         _settings.Update(d => d.ShellCommandAllowed = ["ECHO ", "git status"]);
-        PushLine("/cmdcopy work");
+        PushLine("/profile push commands work");
         PickYes();
         PushLine("/exit");
 
@@ -8355,11 +8378,11 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CmdCopy_Overwrite_Yes_ReplacesTheOtherProfilesList()
+    public async Task ProfilePushCommands_Overwrite_Yes_ReplacesTheOtherProfilesList()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { ShellCommandAllowed = ["echo", "dir"] });
         _settings.Update(d => d.ShellCommandAllowed = ["git status"]);
-        PushLine("/cmdcopy WORK Overwrite");
+        PushLine("/profile PUSH Commands WORK Overwrite");
         PickYes();
         PushLine("/exit");
 
@@ -8371,12 +8394,12 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CmdCopy_IntoTheDefault_FromAnotherProfile_CreatesItsFile()
+    public async Task ProfilePushCommands_IntoTheDefault_FromAnotherProfile_CreatesItsFile()
     {
         // default is an ordinary target (its profile.json written by the fixture's saves, or created when it is only logical); only the one field changes.
         Profiles.Create(_dir, "work", new AppSettingsData { ShellCommandAllowed = ["echo"] });
         PushLine("/profile work");
-        PushLine("/cmdcopy default");
+        PushLine("/profile push commands default");
         PickYes();
         PushLine("/exit");
 
@@ -8389,13 +8412,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CmdCopy_No_Keeps()
+    public async Task ProfilePushCommands_No_Keeps()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { ShellCommandAllowed = ["dir"] });
         _settings.Update(d => d.ShellCommandAllowed = ["echo"]);
-        PushLine("/cmdcopy work");
+        PushLine("/profile push commands work");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
-        PushLine("/cmdcopy work overwrite");
+        PushLine("/profile pull commands work overwrite");
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
@@ -8403,61 +8426,187 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, output.Split("  · " + ChatScreen.KeptNotice).Length - 1);
         Assert.Equal(new[] { "dir" }, ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);
+        Assert.Equal(new[] { "echo" }, _settings.Current.ShellCommandAllowed);
     }
 
     [Fact]
-    public async Task CmdCopy_Refusals_AreOneLineEach_AndAskNothing()
+    public async Task ProfileSections_Refusals_AreOneLineEach_AndAskNothing()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData { ShellCommandAllowed = ["dir"] });
-        PushLine("/cmdcopy");
-        PushLine("/cmdcopy work now");
-        PushLine("/cmdcopy work overwrite please");
-        PushLine("/cmdcopy ghost");
-        PushLine("/cmdcopy default");
-        PushLine("/cmdcopy work");   // nothing allowed here yet
+        Profiles.Create(_dir, "work", new AppSettingsData { ShellCommandAllowed = ["dir"], ShellPoliceForbiddenStrings = [] });
+        _settings.Update(d => { d.ShellCommandAllowed = []; d.ShellPoliceForbiddenStrings = []; });
+        PushLine("/profile push commands");                     // a section needs a name
+        PushLine("/profile push commands work now");
+        PushLine("/profile push commands work overwrite please");
+        PushLine("/profile push keys work overwrite");           // keys and servers are mirrored: no overwrite
+        PushLine("/profile pull servers work overwrite");
+        PushLine("/profile push commands ghost");
+        PushLine("/profile pull keys default");
+        PushLine("/profile push servers DEFAULT");
+        PushLine("/profile push commands work");                 // nothing allowed here yet
+        PushLine("/profile pull policestrings work");            // nor forbidden there
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(3, output.Split("  ✗ " + ChatScreen.CmdCopyUsageError).Length - 1);
+        Assert.Equal(5, output.Split("  ✗ " + ChatScreen.ProfileUsageError).Length - 1);
         Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
-        Assert.Contains("  ✗ " + ChatScreen.CmdCopySelfError, output);
-        Assert.Contains("  · " + ChatScreen.CmdCopyNothingNotice, output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfilePullSelfError("default"), output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfilePushSelfError("default"), output);
+        Assert.Contains("  · " + ChatScreen.ProfileCommandsNothingNotice("work"), output);
+        Assert.Contains("  · " + ChatScreen.ProfilePoliceStringsNothingNotice("work", pull: true), output);
         Assert.DoesNotContain("Copy ", output);
         Assert.Equal(new[] { "dir" }, ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);
     }
 
     [Fact]
-    public async Task CmdCopy_CorruptTarget_IsAnError_AndTheFileIsLeftAlone()
+    public async Task ProfilePushCommands_CorruptTarget_IsAnError_AsksNothing_AndTheFileIsLeftAlone()
     {
-        // A profile.json that does not parse is never overwritten with the defaults plus the prefixes (Profiles.ReadProfileFile throws).
+        // A profile.json that does not parse is never overwritten with the defaults plus the prefixes (Profiles.ReadProfileFile throws);
+        // since 2026-10-09 it is read before the question, so nothing is asked.
         Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
         _settings.Update(d => d.ShellCommandAllowed = ["echo"]);
-        PushLine("/cmdcopy work");
+        PushLine("/profile push commands work");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.ProfileSectionFailedError(""), output);
+        Assert.DoesNotContain("Copy ", output);
+        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+    }
+
+    [Fact]
+    public async Task ProfilePullCommands_AddsToThisProfile_OrReplacesIt_AndKeepsTheConversation()
+    {
+        // A section pulled applies live, as a menu edit does (the user's call): the conversation stays, unlike a bare /profile pull.
+        Profiles.Create(_dir, "work", new AppSettingsData { ShellCommandAllowed = ["echo", "dir"] });
+        _settings.Update(d => d.ShellCommandAllowed = ["ECHO", "git status"]);
+        _chat.EnqueueText("Hello.").EnqueueText("Hi.");
+        PushLine("hi");
+        PushLine("/profile pull commands work");
+        PickYes();
+        PushLine("hi again");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle("Copy 2 allowed commands from \"work\" into this profile?", SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (1 allowed command copied from \"work\", 1 already there)", output);
+        Assert.Equal(new[] { "dir", "echo", "git status" }, _settings.Current.ShellCommandAllowed);
+        Assert.Equal(new[] { "echo", "dir" }, ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);   // the source untouched
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi");   // the conversation kept
+    }
+
+    [Fact]
+    public async Task ProfilePullCommands_Overwrite_ReplacesThisProfilesList()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { ShellCommandAllowed = ["echo", "dir"] });
+        _settings.Update(d => d.ShellCommandAllowed = ["git status"]);
+        PushLine("/profile pull commands work overwrite");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.CmdCopyFailedError(""), output);
-        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+        Assert.Contains(SettingsMenu.PromptTitle("Replace this profile's allowed commands with \"work\"'s 2 allowed commands?", SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (replaced this profile's allowed commands with \"work\"'s 2 allowed commands)", output);
+        Assert.Equal(new[] { "dir", "echo" }, _settings.Current.ShellCommandAllowed);
     }
 
     [Fact]
-    public void CmdCopyText_IsPinned()
+    public async Task ProfilePull_ACorruptSourceSection_IsAnError_AsksNothing_AndNothingChanges()
     {
-        Assert.Equal("/cmdcopy takes a profile name, --history to copy the command history instead of the allowed commands, and overwrite to replace the target's: /cmdcopy <profile> [--history] [overwrite]", ChatScreen.CmdCopyUsageError);   // --history 2026-09-25
-        Assert.Equal("/cmdcopy copies into another profile; that one is loaded.", ChatScreen.CmdCopySelfError);
-        Assert.Equal("(nothing to copy: this profile has no allowed commands)", ChatScreen.CmdCopyNothingNotice);
-        Assert.Equal("Copy 3 allowed commands into \"work\"?", ChatScreen.CmdCopyPrompt(3, "work", overwrite: false));
-        Assert.Equal("Copy 1 allowed command into \"work\"?", ChatScreen.CmdCopyPrompt(1, "work", overwrite: false));
-        Assert.Equal("Replace \"work\"'s allowed commands with these 3 allowed commands?", ChatScreen.CmdCopyPrompt(3, "work", overwrite: true));
-        Assert.Equal("(3 allowed commands copied into \"work\")", ChatScreen.CmdCopiedNotice(3, 0, "work", overwrite: false));
-        Assert.Equal("(2 allowed commands copied into \"work\", 1 already there)", ChatScreen.CmdCopiedNotice(2, 1, "work", overwrite: false));
-        Assert.Equal("(0 allowed commands copied into \"work\", 3 already there)", ChatScreen.CmdCopiedNotice(0, 3, "work", overwrite: false));
-        Assert.Equal("(replaced \"work\"'s allowed commands with 3 allowed commands)", ChatScreen.CmdCopiedNotice(3, 0, "work", overwrite: true));
-        Assert.Equal("Could not write the profile's settings: x", ChatScreen.CmdCopyFailedError("x"));
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
+        File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
+        _settings.Update(d => d.ShellCommandAllowed = ["echo"]);
+        PushLine("/profile pull commands work");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.ProfileSectionReadError("work", ""), output);
+        Assert.DoesNotContain("Copy ", output);
+        Assert.Equal(new[] { "echo" }, _settings.Current.ShellCommandAllowed);
+    }
+
+    [Fact]
+    public void ProfileCommandsText_IsPinned()
+    {
+        Assert.Equal("(nothing to copy: this profile has no allowed commands)", ChatScreen.ProfileCommandsNothingNotice("work"));
+        Assert.Equal("(nothing to copy: \"work\" has no allowed commands)", ChatScreen.ProfileCommandsNothingNotice("work", pull: true));
+        Assert.Equal("Copy 3 allowed commands into \"work\"?", ChatScreen.ProfileCommandsPrompt(3, "work", overwrite: false));
+        Assert.Equal("Copy 1 allowed command into \"work\"?", ChatScreen.ProfileCommandsPrompt(1, "work", overwrite: false));
+        Assert.Equal("Replace \"work\"'s allowed commands with these 3 allowed commands?", ChatScreen.ProfileCommandsPrompt(3, "work", overwrite: true));
+        Assert.Equal("Copy 3 allowed commands from \"work\" into this profile?", ChatScreen.ProfileCommandsPrompt(3, "work", overwrite: false, pull: true));
+        Assert.Equal("Replace this profile's allowed commands with \"work\"'s 3 allowed commands?", ChatScreen.ProfileCommandsPrompt(3, "work", overwrite: true, pull: true));
+        Assert.Equal("(3 allowed commands copied into \"work\")", ChatScreen.ProfileCommandsCopiedNotice(3, 0, "work", overwrite: false));
+        Assert.Equal("(2 allowed commands copied into \"work\", 1 already there)", ChatScreen.ProfileCommandsCopiedNotice(2, 1, "work", overwrite: false));
+        Assert.Equal("(0 allowed commands copied into \"work\", 3 already there)", ChatScreen.ProfileCommandsCopiedNotice(0, 3, "work", overwrite: false));
+        Assert.Equal("(replaced \"work\"'s allowed commands with 3 allowed commands)", ChatScreen.ProfileCommandsCopiedNotice(3, 0, "work", overwrite: true));
+        Assert.Equal("(2 allowed commands copied from \"work\", 1 already there)", ChatScreen.ProfileCommandsCopiedNotice(2, 1, "work", overwrite: false, pull: true));
+        Assert.Equal("(replaced this profile's allowed commands with \"work\"'s 3 allowed commands)", ChatScreen.ProfileCommandsCopiedNotice(3, 0, "work", overwrite: true, pull: true));
+        Assert.Equal("Could not write the profile's settings: x", ChatScreen.ProfileSectionFailedError("x"));
+        Assert.Equal("Could not read \"work\"'s settings: x", ChatScreen.ProfileSectionReadError("work", "x"));
+        Assert.Equal("replace the target's list instead of adding to it", ChatScreen.ProfileSectionOverwriteNote);
+    }
+
+    [Fact]
+    public async Task ProfilePushPoliceStrings_AddsIntoTheOtherProfile_OrReplacesIt()
+    {
+        // 2026-10-09, the user's ask: the forbidden strings as the editor saves them (spacing collapsed, the case kept, no doubles ignoring case).
+        Profiles.Create(_dir, "work", new AppSettingsData { ShellPoliceForbiddenStrings = ["rm -rf", "format c:"] });
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = ["RM   -RF", "shutdown"]);
+        PushLine("/profile push policestrings work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle("Copy 2 forbidden strings into \"work\"?", SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (1 forbidden string copied into \"work\", 1 already there)", output);
+        Assert.Equal(new[] { "format c:", "rm -rf", "shutdown" }, ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellPoliceForbiddenStrings);
+        Assert.Equal(new[] { "RM   -RF", "shutdown" }, _settings.Current.ShellPoliceForbiddenStrings);   // the source untouched
+
+        PushLine("/profile push policestrings work overwrite");
+        PickYes();
+        PushLine("/exit");
+
+        output = await RunAsync();
+
+        Assert.Contains("  · (replaced \"work\"'s forbidden strings with 2 forbidden strings)", output);
+        Assert.Equal(new[] { "RM -RF", "shutdown" }, ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellPoliceForbiddenStrings);
+    }
+
+    [Fact]
+    public async Task ProfilePullPoliceStrings_AddsToThisProfile()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { ShellPoliceForbiddenStrings = ["curl | sh", "Shutdown"] });
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = ["shutdown"]);
+        PushLine("/profile pull policestrings work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle("Copy 2 forbidden strings from \"work\" into this profile?", SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (1 forbidden string copied from \"work\", 1 already there)", output);
+        Assert.Equal(new[] { "curl | sh", "shutdown" }, _settings.Current.ShellPoliceForbiddenStrings);
+    }
+
+    [Fact]
+    public void ProfilePoliceStringsText_IsPinned()
+    {
+        Assert.Equal("(nothing to copy: this profile has no forbidden strings)", ChatScreen.ProfilePoliceStringsNothingNotice("work"));
+        Assert.Equal("(nothing to copy: \"work\" has no forbidden strings)", ChatScreen.ProfilePoliceStringsNothingNotice("work", pull: true));
+        Assert.Equal("Copy 1 forbidden string into \"work\"?", ChatScreen.ProfilePoliceStringsPrompt(1, "work", overwrite: false));
+        Assert.Equal("Replace \"work\"'s forbidden strings with these 3 forbidden strings?", ChatScreen.ProfilePoliceStringsPrompt(3, "work", overwrite: true));
+        Assert.Equal("Copy 3 forbidden strings from \"work\" into this profile?", ChatScreen.ProfilePoliceStringsPrompt(3, "work", overwrite: false, pull: true));
+        Assert.Equal("Replace this profile's forbidden strings with \"work\"'s 3 forbidden strings?", ChatScreen.ProfilePoliceStringsPrompt(3, "work", overwrite: true, pull: true));
+        Assert.Equal("(2 forbidden strings copied into \"work\", 1 already there)", ChatScreen.ProfilePoliceStringsCopiedNotice(2, 1, "work", overwrite: false));
+        Assert.Equal("(replaced this profile's forbidden strings with \"work\"'s 3 forbidden strings)", ChatScreen.ProfilePoliceStringsCopiedNotice(3, 0, "work", overwrite: true, pull: true));
     }
 
     // ── /profile push and pull (2026-09-28) ─────────────────────────────────
@@ -8599,38 +8748,38 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
     }
 
-    // ── /srvcopy (2026-10-07) ───────────────────────────────────────────────
+    // ── /profile push|pull servers (2026-10-09; /srvcopy from 2026-10-07) ───
 
     /// <summary>The server settings that are safe to change on the loaded profile go across; the target's other settings and keys stay.</summary>
     [Fact]
-    public async Task SrvCopy_Yes_WritesTheServerSettings_AndLeavesTheRestOfTheTargetAlone()
+    public async Task ProfilePushServers_Yes_WritesTheServerSettings_AndLeavesTheRestOfTheTargetAlone()
     {
         _console.Profile.Width = 320;   // the question and its keys on one row
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", Theme = "synthwave", EmbeddedBackend = "cuda", DockerServers = false });
         _settings.Update(d => { d.EmbeddedBackend = "vulkan"; d.DockerServers = true; d.DockerServerContainers = ["vllm_qwen"]; d.AnthropicApi = true; d.OpenAIApi = true; d.EmbeddedContextSize = 16384; });
-        PushLine("/srvcopy work");
+        PushLine("/profile push servers work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.SrvCopyPrompt("work"), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileServersPrompt("work"), SettingsMenu.ConfirmKeys), output);
         Assert.Contains("  · (copied the server settings into \"work\": LLM URL ", output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(("vulkan", true, true, true, 16384), (work.EmbeddedBackend, work.DockerServers, work.AnthropicApi, work.OpenAIApi, work.EmbeddedContextSize));
         Assert.Equal(["vllm_qwen"], work.DockerServerContainers!);
         Assert.Equal((_settings.Current.LlmUrl, _settings.Current.LlmModel), (work.LlmUrl, work.LlmModel));
-        Assert.Equal(("work-llm", "synthwave"), (work.LlmApiKey, work.Theme));   // the keys are /keycopy's; the rest round-trips
+        Assert.Equal(("work-llm", "synthwave"), (work.LlmApiKey, work.Theme));   // the keys are the keys section's; the rest round-trips
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
         Assert.Empty(_chat.Requests);
     }
 
     /// <summary>Mirrored: a setting at its default here puts the target's back to it.</summary>
     [Fact]
-    public async Task SrvCopy_Mirrors_ADefaultHereResetsTheTargets()
+    public async Task ProfilePushServers_Mirrors_ADefaultHereResetsTheTargets()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { DockerServers = true, DockerServerContainers = ["sglang"], AnthropicApi = true, ClaudeCliServer = true, EmbeddedVision = false });
-        PushLine("/srvcopy work");
+        PushLine("/profile push servers work");
         PickYes();
         PushLine("/exit");
 
@@ -8643,30 +8792,58 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task SrvCopy_No_Keeps_TheRefusals_AreOneLineEach_AndACorruptTargetIsLeftAlone()
+    public async Task ProfilePushServers_No_Keeps_AndACorruptTargetIsLeftAlone()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { DockerServers = true });
         Profiles.Create(_dir, "broken", new AppSettingsData());
         File.WriteAllText(Profiles.ProfileFile(_dir, "broken"), "{ not json");
-        PushLine("/srvcopy work");
+        PushLine("/profile push servers work");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
-        PushLine("/srvcopy");
-        PushLine("/srvcopy work now");
-        PushLine("/srvcopy ghost");
-        PushLine("/srvcopy default");
-        PushLine("/srvcopy broken");
-        PickYes();
+        PushLine("/profile push servers broken");   // read before the question: nothing asked
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.KeptNotice, output);
-        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.SrvCopyUsageError).Length - 1);
-        Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
-        Assert.Contains("  ✗ " + ChatScreen.SrvCopySelfError, output);
-        Assert.Contains("  ✗ " + ChatScreen.CmdCopyFailedError(""), output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfileSectionFailedError(""), output);
         Assert.True(ReadProfile(Profiles.ProfileFile(_dir, "work")).DockerServers);
         Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "broken")));
+    }
+
+    /// <summary>
+    /// A servers pull (2026-10-09) applies live: the server settings come over, the rest of this profile stays, the LLM reconnects
+    /// for the changed model (<see cref="ChatScreen.ReloadChanges"/>), and the conversation is kept.
+    /// </summary>
+    [Fact]
+    public async Task ProfilePullServers_AppliesLive_AndKeepsTheConversation()
+    {
+        _console.Profile.Width = 320;
+        WorkProfile();
+        string workFile = Profiles.ProfileFile(_dir, "work");
+        var seeded = Profiles.ReadProfileFile(workFile);
+        seeded.EmbeddedBackend = "vulkan";
+        seeded.DockerServerContainers = ["vllm_qwen"];
+        Profiles.WriteProfileFile(workFile, seeded);
+        _settings.Update(d => { d.LlmModel = "default-model"; d.ToolCollapseCount = 7; d.LlmApiKey = "my-llm"; });
+        _chat.EnqueueText("Hello.").EnqueueText("Hi.");
+        PushLine("hi");
+        PushLine("/profile pull servers work");
+        PickYes();
+        PushLine("hi again");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileServersPrompt("work", pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · (copied the server settings from \"work\": LLM URL ", output);
+        Assert.Equal(("work-model", "vulkan"), (_settings.Current.LlmModel, _settings.Current.EmbeddedBackend));
+        Assert.Equal(["vllm_qwen"], _settings.Current.DockerServerContainers!);
+        Assert.Equal((7, "my-llm"), (_settings.Current.ToolCollapseCount, _settings.Current.LlmApiKey));   // the rest of this profile, its keys too, stays
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi");   // the conversation kept
+        Assert.DoesNotContain("You are Rex.", _chat.Requests[1][0].Text);                       // and this profile's prompt
+        Assert.True(ChatScreen.ReloadChanges(["LlmModel: default-model → work-model"]).HasFlag(SettingsChanges.Llm));
     }
 
     /// <summary>
@@ -8674,7 +8851,7 @@ public partial class ChatScreenTests : IDisposable
     /// copied whole. A source with each one off its default makes the target read the same on every row, none of them the default.
     /// </summary>
     [Fact]
-    public void SrvCopyFields_AreTheServerSettings_AndEachIsCopied()
+    public void ProfileServerFields_AreTheServerSettings_AndEachIsCopied()
     {
         Assert.Equal(
             [
@@ -8685,7 +8862,7 @@ public partial class ChatScreenTests : IDisposable
                 SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit,
                 SettingsField.AnthropicApi, SettingsField.OpenAIApi, SettingsField.ClaudeCliServer,
             ],
-            ChatScreen.SrvCopyFields.Select(f => f.Field));
+            ChatScreen.ProfileServerFields.Select(f => f.Field));
 
         var from = new AppSettingsData
         {
@@ -8697,38 +8874,40 @@ public partial class ChatScreenTests : IDisposable
             AnthropicApi = true, OpenAIApi = true, ClaudeCliServer = true,
         };
         var to = new AppSettingsData();
-        foreach (var (_, copy) in ChatScreen.SrvCopyFields)
+        foreach (var (_, copy) in ChatScreen.ProfileServerFields)
         {
             copy(from, to);
         }
 
         string dir = _settings.ProfileDirectory;
-        foreach (var (field, _) in ChatScreen.SrvCopyFields)
+        foreach (var (field, _) in ChatScreen.ProfileServerFields)
         {
             Assert.Equal(SettingsMenu.FieldValue(field, from, dir), SettingsMenu.FieldValue(field, to, dir));
             Assert.NotEqual(SettingsMenu.FieldValue(field, new AppSettingsData(), dir), SettingsMenu.FieldValue(field, to, dir));
         }
 
         Assert.NotSame(from.DockerServerContainers, to.DockerServerContainers);   // a list of its own
-        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced.", ChatScreen.SrvCopyPrompt("work"));
-        Assert.Equal("(copied the server settings into \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.SrvCopiedNotice("work", "http://x/v1", "qwen3"));
+        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced.", ChatScreen.ProfileServersPrompt("work"));
+        Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
+        Assert.Equal("(copied the server settings into \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3"));
+        Assert.Equal("(copied the server settings from \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3", pull: true));
     }
 
-    // ── /keycopy (2026-09-28) ───────────────────────────────────────────────
+    // ── /profile push|pull keys (2026-10-09; /keycopy from 2026-09-28) ──────
 
     [Fact]
-    public async Task KeyCopy_Yes_WritesEveryKeyIntoTheOtherProfile()
+    public async Task ProfilePushKeys_Yes_WritesEveryKeyIntoTheOtherProfile()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", AnthropicApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha", YouTubeApiKey = "work-yt" });
         _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = "dpapi:AQAAAN"; d.OpenAIApiKey = "dpapi:AQAAOA"; d.HomeAssistantToken = "dpapi:AQAAHA"; d.YouTubeApiKey = "dpapi:AQAAYT"; });
-        PushLine("/keycopy work");
+        PushLine("/profile push keys work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("dpapi:AQAAAN", work.AnthropicApiKey);   // as stored: never decrypted on the way
@@ -8742,20 +8921,20 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task KeyCopy_Mirrors_AKeyNotSetHereClearsTheTargets()
+    public async Task ProfilePushKeys_Mirrors_AKeyNotSetHereClearsTheTargets()
     {
         _console.Profile.Width = 320;   // the question and its keys on one row: 245 cells since "Anthropic API key" (2026-10-04), 301 with the YouTube API key (2026-10-05)
         // The user's call: the target ends with exactly this profile's keys; the question says which ones go.
         Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", AnthropicApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha", YouTubeApiKey = "work-yt" });
         _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = ""; d.HomeAssistantToken = ""; });
-        PushLine("/keycopy work");
+        PushLine("/profile push keys work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("", work.AnthropicApiKey);
@@ -8765,17 +8944,17 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task KeyCopy_IntoTheDefault_FromAnotherProfile_CreatesItsFile()
+    public async Task ProfilePushKeys_IntoTheDefault_FromAnotherProfile_CreatesItsFile()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", AnthropicApiKey = "work-claude" });
         PushLine("/profile work");
-        PushLine("/keycopy default");
+        PushLine("/profile push keys default");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("default", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("default", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false), output);
         var data = ReadProfile(Profiles.ProfileFile(_dir, Profiles.DefaultName));
         // "work"'s plain keys were encrypted as it loaded (2026-09-28) and copied as stored.
         Assert.Equal("work-llm", SettingsSecrets.Reveal(data.LlmApiKey));
@@ -8784,13 +8963,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task KeyCopy_No_Keeps()
+    public async Task ProfilePushAndPullKeys_No_Keeps()
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm" });
         _settings.Update(d => d.LlmApiKey = "my-llm");
-        PushLine("/keycopy work");
+        PushLine("/profile push keys work");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
-        PushLine("/keycopy work");
+        PushLine("/profile pull keys work");
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
@@ -8798,83 +8977,89 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, output.Split("  · " + ChatScreen.KeptNotice).Length - 1);
         Assert.Equal("work-llm", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmApiKey);
+        Assert.Equal("my-llm", _settings.Current.LlmApiKey);
     }
 
     [Fact]
-    public async Task KeyCopy_Refusals_AreOneLineEach_AndAskNothing()
-    {
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm" });
-        _settings.Update(d => d.LlmApiKey = "my-llm");
-        PushLine("/keycopy");
-        PushLine("/keycopy work overwrite");   // no switches: that is /cmdcopy's
-        PushLine("/keycopy ghost");
-        PushLine("/keycopy default");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.KeyCopyUsageError).Length - 1);
-        Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
-        Assert.Contains("  ✗ " + ChatScreen.KeyCopySelfError, output);
-        Assert.DoesNotContain("Copy ", output);
-        Assert.Equal("work-llm", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmApiKey);
-    }
-
-    [Fact]
-    public async Task KeyCopy_CorruptTarget_IsAnError_AndTheFileIsLeftAlone()
+    public async Task ProfilePushKeys_CorruptTarget_IsAnError_AsksNothing_AndTheFileIsLeftAlone()
     {
         Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         File.WriteAllText(Profiles.ProfileFile(_dir, "work"), "{ not json");
         _settings.Update(d => d.LlmApiKey = "my-llm");
-        PushLine("/keycopy work");
+        PushLine("/profile push keys work");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.ProfileSectionFailedError(""), output);
+        Assert.DoesNotContain("Copy ", output);
+        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+    }
+
+    /// <summary>A keys pull (2026-10-09): the other profile's keys over this one's, mirrored the same way, the values never shown.</summary>
+    [Fact]
+    public async Task ProfilePullKeys_Mirrors_IntoThisProfile()
+    {
+        _console.Profile.Width = 320;
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", YouTubeApiKey = "work-yt" });
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = "sk-ant-x"; d.YouTubeApiKey = "my-yt"; });
+        PushLine("/profile pull keys work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.CmdCopyFailedError(""), output);
-        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true, pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true, pull: true), output);
+        Assert.Equal(("work-llm", "", "work-yt"), (_settings.Current.LlmApiKey, _settings.Current.AnthropicApiKey, _settings.Current.YouTubeApiKey));
+        Assert.DoesNotContain("work-llm", output);
+        Assert.Equal("work-llm", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmApiKey);   // the source untouched
     }
 
     [Fact]
-    public void KeyCopyText_IsPinned()
+    public void ProfileKeysText_IsPinned()
     {
         // The question's wording is the contract (the clearing clause is what makes the mirror safe to say yes to).
         const string Question = "Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key into \"work\"?";
-        Assert.Equal(Question, ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s Anthropic API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: false, openAISet: true, haSet: true, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s OpenAI API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: false, haSet: true, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s Home Assistant API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s YouTube API key is cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: false));
-        Assert.Equal(Question + " \"work\"'s LLM API key and Home Assistant API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key are cleared: none here.", ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false));
-        Assert.Equal("(copied the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key into \"work\")", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true));
-        Assert.Equal("(copied the LLM API key and the Anthropic API key into \"work\"; its OpenAI API key, Home Assistant API key and YouTube API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false));
-        Assert.Equal("(copied the Home Assistant API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key and YouTube API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: true, youTubeSet: false));
-        Assert.Equal("(copied the YouTube API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key and Home Assistant API key cleared)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true));
-        Assert.Equal("(cleared \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key)", ChatScreen.KeyCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false));
+        Assert.Equal(Question, ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true));
+        Assert.Equal(Question + " \"work\"'s Anthropic API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: true, haSet: true, youTubeSet: true));
+        Assert.Equal(Question + " \"work\"'s OpenAI API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: false, haSet: true, youTubeSet: true));
+        Assert.Equal(Question + " \"work\"'s Home Assistant API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true));
+        Assert.Equal(Question + " \"work\"'s YouTube API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: false));
+        Assert.Equal(Question + " \"work\"'s LLM API key and Home Assistant API key are cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true));
+        Assert.Equal(Question + " \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key are cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false));
+        const string Pulled = "Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key from \"work\" into this profile?";
+        Assert.Equal(Pulled, ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, pull: true));
+        Assert.Equal(Pulled + " This profile's Anthropic API key and OpenAI API key are cleared: none in \"work\".", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: true, youTubeSet: true, pull: true));
+        Assert.Equal("(copied the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key into \"work\")", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true));
+        Assert.Equal("(copied the LLM API key and the Anthropic API key into \"work\"; its OpenAI API key, Home Assistant API key and YouTube API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false));
+        Assert.Equal("(copied the Home Assistant API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key and YouTube API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: true, youTubeSet: false));
+        Assert.Equal("(copied the YouTube API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key and Home Assistant API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true));
+        Assert.Equal("(cleared \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false));
+        Assert.Equal("(copied the LLM API key from \"work\"; this profile's Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, pull: true));
+        Assert.Equal("(cleared this profile's LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, pull: true));
     }
 
     [Fact]
-    public async Task KeyCopy_TheDefaultLlmKey_CountsAsNotSet()
+    public async Task ProfilePushKeys_TheDefaultLlmKey_CountsAsNotSet()
     {
         // LlmEndpoint.DefaultApiKey ("empty") is the placeholder a local server ignores: mirrored as it is, and said to clear.
         _console.Profile.Width = 320;   // the question on one row: past the fixture's width since the YouTube API key joined (2026-10-05)
         Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", AnthropicApiKey = "work-claude" });
         _settings.Update(d => { d.LlmApiKey = LlmEndpoint.DefaultApiKey; d.AnthropicApiKey = "sk-ant-x"; });
-        PushLine("/keycopy work");
+        PushLine("/profile push keys work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.KeyCopyPrompt("work", llmSet: false, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false), SettingsMenu.ConfirmKeys), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(LlmEndpoint.DefaultApiKey, work.LlmApiKey);
         Assert.Equal("sk-ant-x", work.AnthropicApiKey);
     }
 
-    // ── Keep command history, /cmdclear and /cmdcopy --history (2026-09-25) ──
+    // ── Keep command history, /cmdclear and /profile push|pull history (2026-09-25) ──
 
     private string[] StoredHistory(string profileDirectory)
     {
@@ -8986,56 +9171,97 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CmdCopyHistory_AppendsIntoTheOtherProfilesStore_OrReplacesIt()
+    public async Task ProfilePushHistory_AppendsIntoTheOtherProfilesStore_OrReplacesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
         Profiles.Create(_dir, "work", PreFlipDefaults.Data());
         SeedHistory(Profiles.Directory(_dir, "work"), "theirs");
         SeedHistory(_settings.ProfileDirectory, "mine", "also mine");
-        PushLine("/cmdcopy work --history");
+        PushLine("/profile push history work");
         PickYes();
-        PushLine("/cmdcopy work --history overwrite");
+        PushLine("/profile push history work overwrite");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.CmdCopyHistoryPrompt(3, "work", overwrite: false), SettingsMenu.ConfirmKeys), output);   // mine, also mine, the command itself
-        Assert.Contains("  · " + ChatScreen.CmdHistoryCopiedNotice(3, "work", overwrite: false), output);
-        Assert.Contains("  · " + ChatScreen.CmdHistoryCopiedNotice(4, "work", overwrite: true), output);
-        Assert.Equal(new[] { "mine", "also mine", "/cmdcopy work --history", "/cmdcopy work --history overwrite" }, StoredHistory(Profiles.Directory(_dir, "work")));
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHistoryPrompt(3, "work", overwrite: false), SettingsMenu.ConfirmKeys), output);   // mine, also mine, the command itself
+        Assert.Contains("  · " + ChatScreen.ProfileHistoryCopiedNotice(3, "work", overwrite: false), output);
+        Assert.Contains("  · " + ChatScreen.ProfileHistoryCopiedNotice(4, "work", overwrite: true), output);
+        Assert.Equal(new[] { "mine", "also mine", "/profile push history work", "/profile push history work overwrite" }, StoredHistory(Profiles.Directory(_dir, "work")));
         Assert.Empty(ReadProfile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);   // the allowed commands untouched
     }
 
     [Fact]
-    public async Task CmdCopyHistory_Refusals_AskNothing()
+    public async Task ProfilePushHistory_IntoAProfileThatKeepsNone_IsRefused_AndAsksNothing()
     {
         _settings.Update(d => d.TtsOutput = false);
         Profiles.Create(_dir, "work", new AppSettingsData { KeepCommandHistory = false });
-        PushLine("/cmdcopy --history work");
-        PushLine("/cmdcopy work --history --history");
-        PushLine("/cmdcopy work --history");
+        PushLine("/profile push history work");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.CmdCopyUsageError).Length - 1);
-        Assert.Contains("  ✗ " + ChatScreen.CmdCopyHistoryOffError("work"), output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfileHistoryOffError("work"), output);
         Assert.DoesNotContain("Copy ", output);
         Assert.Empty(StoredHistory(Profiles.Directory(_dir, "work")));
+    }
+
+    /// <summary>A history pull (2026-10-09): the other profile's lines appended to this one's store, and Up recalls them at once.</summary>
+    [Fact]
+    public async Task ProfilePullHistory_AddsToThisProfile_AndUpRecallsIt()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
+        SeedHistory(Profiles.Directory(_dir, "work"), "theirs one", "theirs two");
+        SeedHistory(_settings.ProfileDirectory, "mine");
+        _chat.EnqueueText("Hello.");
+        StepsWhenIdle(Line("/profile pull history work"), Key(Keys.Down), Key(Keys.Enter), Key(Keys.Up), Key(Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHistoryPrompt(2, "work", overwrite: false, pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileHistoryCopiedNotice(2, "work", overwrite: false, pull: true), output);
+        Assert.Equal("theirs two", _chat.Requests[0].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal(new[] { "mine", "/profile pull history work", "theirs one", "theirs two" }, StoredHistory(_settings.ProfileDirectory).Take(4));
+        Assert.Equal(new[] { "theirs one", "theirs two" }, StoredHistory(Profiles.Directory(_dir, "work")));   // the source untouched
+    }
+
+    [Fact]
+    public async Task ProfilePullHistory_IntoThisProfileKeepingNone_IsRefused_AndANoneThereIsNothing()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.KeepCommandHistory = false; });
+        Profiles.Create(_dir, "work", PreFlipDefaults.Data());
+        Profiles.Create(_dir, "empty", PreFlipDefaults.Data());
+        SeedHistory(Profiles.Directory(_dir, "work"), "theirs");
+        PushLine("/profile pull history work");
+        PushLine("/profile pull history empty");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.ProfileHistoryOffError("work", pull: true), output);
+        Assert.Contains("  · " + ChatScreen.ProfileHistoryNothingNotice("empty", pull: true), output);
+        Assert.DoesNotContain("Copy ", output);
     }
 
     [Fact]
     public void CommandHistoryText_IsPinned()
     {
-        Assert.Equal("--history", ChatScreen.HistorySwitch);
-        Assert.Equal("(nothing to copy: this profile has no command history)", ChatScreen.CmdCopyHistoryNothingNotice);
-        Assert.Equal("\"work\" has Keep command history off, so its next load would drop the lines; switch it on there first.", ChatScreen.CmdCopyHistoryOffError("work"));
-        Assert.Equal("Copy 3 command lines of command history into \"work\"?", ChatScreen.CmdCopyHistoryPrompt(3, "work", overwrite: false));
-        Assert.Equal("Replace \"work\"'s command history with these 1 command line?", ChatScreen.CmdCopyHistoryPrompt(1, "work", overwrite: true));
-        Assert.Equal("(3 command lines copied into \"work\")", ChatScreen.CmdHistoryCopiedNotice(3, "work", overwrite: false));
-        Assert.Equal("(replaced \"work\"'s command history with 1 command line)", ChatScreen.CmdHistoryCopiedNotice(1, "work", overwrite: true));
-        Assert.Equal("Could not open \"work\"'s sessions.db; nothing was copied.", ChatScreen.CmdCopyHistoryFailedError("work"));
+        Assert.Equal("(nothing to copy: this profile has no command history)", ChatScreen.ProfileHistoryNothingNotice("work"));
+        Assert.Equal("(nothing to copy: \"work\" has no command history)", ChatScreen.ProfileHistoryNothingNotice("work", pull: true));
+        Assert.Equal("\"work\" has Keep command history off, so its next load would drop the lines; switch it on there first.", ChatScreen.ProfileHistoryOffError("work"));
+        Assert.Equal("This profile has Keep command history off, so its next load would drop the lines; switch it on first.", ChatScreen.ProfileHistoryOffError("work", pull: true));
+        Assert.Equal("Copy 3 command lines of command history into \"work\"?", ChatScreen.ProfileHistoryPrompt(3, "work", overwrite: false));
+        Assert.Equal("Replace \"work\"'s command history with these 1 command line?", ChatScreen.ProfileHistoryPrompt(1, "work", overwrite: true));
+        Assert.Equal("Copy 3 command lines of command history from \"work\" into this profile?", ChatScreen.ProfileHistoryPrompt(3, "work", overwrite: false, pull: true));
+        Assert.Equal("Replace this profile's command history with \"work\"'s 3 command lines?", ChatScreen.ProfileHistoryPrompt(3, "work", overwrite: true, pull: true));
+        Assert.Equal("(3 command lines copied into \"work\")", ChatScreen.ProfileHistoryCopiedNotice(3, "work", overwrite: false));
+        Assert.Equal("(replaced \"work\"'s command history with 1 command line)", ChatScreen.ProfileHistoryCopiedNotice(1, "work", overwrite: true));
+        Assert.Equal("(3 command lines copied from \"work\")", ChatScreen.ProfileHistoryCopiedNotice(3, "work", overwrite: false, pull: true));
+        Assert.Equal("(replaced this profile's command history with 3 command lines from \"work\")", ChatScreen.ProfileHistoryCopiedNotice(3, "work", overwrite: true, pull: true));
+        Assert.Equal("Could not open \"work\"'s sessions.db; nothing was copied.", ChatScreen.ProfileHistoryFailedError("work"));
+        Assert.Equal("Could not open this profile's sessions.db; nothing was copied.", ChatScreen.ProfileHistoryFailedError("work", pull: true));
         Assert.Equal("(nothing to clear: the command history is empty)", ChatScreen.CmdClearNothingNotice);
         Assert.Equal("Clear 2 command lines of command history?", ChatScreen.CmdClearPrompt(2));
         Assert.Equal("(cleared 1 command line)", ChatScreen.CmdClearedNotice(1));
@@ -12625,8 +12851,6 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Splash, false, MidTurnClass.Cancel)]   // 2026-09-19
     [InlineData(SlashCommand.Exit, false, MidTurnClass.Cancel)]
     [InlineData(SlashCommand.Profile, true, MidTurnClass.Deferred)]
-    [InlineData(SlashCommand.CmdCopy, true, MidTurnClass.Pane)]   // a pane since later on 2026-09-27 (refused from 2026-09-21): another profile's file, its yes/no on the pane
-    [InlineData(SlashCommand.KeyCopy, true, MidTurnClass.Pane)]   // 2026-09-28, /cmdcopy's reason
     [InlineData(SlashCommand.Server, false, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Model, false, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Compact, false, MidTurnClass.Deferred)]
@@ -13398,58 +13622,27 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests);
     }
 
-    /// <summary><c>/cmdcopy</c> under a reply (later on 2026-09-27): the yes/no on the pane, the target profile written after the answer.</summary>
+    /// <summary>
+    /// A <c>/profile push|pull</c> section under a reply (2026-10-09): deferred with <c>/profile</c>, where <c>/cmdcopy</c> and
+    /// <c>/keycopy</c> opened their pane over the reply until then. It runs when the reply ends.
+    /// </summary>
     [Fact]
-    public async Task MidTurn_CmdCopy_AsksOnThePane_YesWritesTheOtherProfile()
+    public async Task MidTurn_AProfileSection_RunsWhenTheReplyEnds()
     {
         WorkProfile();
-        _settings.Update(d => d.ShellCommandAllowed = ["git status"]);
+        _settings.Update(d => d.ShellCommandAllowed = []);
         MidTurnFixture(i =>
         {
             if (i == 1)
             {
-                PushLine("/cmdcopy work");
-            }
-            else if (i == 2)
-            {
-                Scripted().Push(Keys.Down, Keys.Enter);
+                PushLine("/profile push commands work");
             }
         });
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ChatScreen.CmdCopyPrompt(1, "work", overwrite: false)) + "\n \n▸ No\n  Yes\n", output);
-        Assert.Contains("  · " + ChatScreen.CmdCopiedNotice(1, 0, "work", overwrite: false), output);
-        Assert.Equal(["git status"], Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).ShellCommandAllowed);
-        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
-        Assert.Single(_chat.Requests);
-    }
-
-    /// <summary><c>/keycopy</c> under a reply (2026-09-28): <c>/cmdcopy</c>'s pane, the target profile written after the answer.</summary>
-    [Fact]
-    public async Task MidTurn_KeyCopy_AsksOnThePane_YesWritesTheOtherProfile()
-    {
-        WorkProfile();
-        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = "sk-ant-x"; });
-        MidTurnFixture(i =>
-        {
-            if (i == 1)
-            {
-                PushLine("/keycopy work");
-            }
-            else if (i == 2)
-            {
-                Scripted().Push(Keys.Down, Keys.Enter);
-            }
-        });
-
-        string output = await RunAsync();
-
-        Assert.Contains("\n" + Titled(ChatScreen.KeyCopyPrompt("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false)) + "\n \n▸ No\n  Yes\n", output);
-        Assert.Contains("  · " + ChatScreen.KeyCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false), output);
-        var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
-        Assert.Equal("my-llm", work.LlmApiKey);
-        Assert.Equal("sk-ant-x", work.AnthropicApiKey);
+        Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/profile"), output);
+        Assert.True(output.IndexOf(ChatScreen.MidTurnDeferredNotice("/profile"), StringComparison.Ordinal) < output.IndexOf(ChatScreen.ProfileCommandsNothingNotice("work"), StringComparison.Ordinal));
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
     }
@@ -22494,11 +22687,19 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "reload ", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "rename work ", sources));  // so is the new name
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
+        // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull chef", "pull default"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push commands", "push history", "push policestrings", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull commands", "pull history", "pull policestrings", "pull chef", "pull default"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
         Assert.Equal(["push default"], Texts(ChatScreen.ArgumentItems("/profile", "PUSH d", Sources(loaded: "work"))));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "push work ", sources));
+        Assert.Equal([new CompletionItem("push keys", ChatScreen.ProfileSectionWords[0].Note)], ChatScreen.ArgumentItems("/profile", "push k", sources));
+        Assert.Equal(["push keys chef", "push keys work"], Texts(ChatScreen.ArgumentItems("/profile", "push keys ", sources)));
+        Assert.Equal(["pull commands chef", "pull commands default"], Texts(ChatScreen.ArgumentItems("/profile", "pull commands ", Sources(loaded: "work"))));
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "push keys work ", sources));   // mirrored: nothing after the name
+        Assert.Equal([new CompletionItem("push commands work overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push commands work ", sources));
+        Assert.Equal(["pull policestrings work overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "PULL POLICESTRINGS WORK ov", sources)));
+        Assert.Equal(["push history chef overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "push history chef ", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "work", sources));
 
         // /memory copy: every profile but the loaded one (the source), then copy <name> overwrite (2026-09-17 as /memcopy, the word folded in 2026-09-22).
@@ -22510,19 +22711,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy work overwrite", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy default ", sources));   // not a target: the source
         Assert.Equal(["copy chef", "copy default", "copy work"], Texts(ChatScreen.ArgumentItems("/memory", "copy ", Sources(loaded: "other"))));
-
-        // /cmdcopy: the same shape, its own notes (2026-09-21).
-        Assert.Equal([new CompletionItem("chef", ChatScreen.CmdCopyTargetNote), new CompletionItem("work", ChatScreen.CmdCopyTargetNote)], ChatScreen.ArgumentItems("/cmdcopy", "", sources));
-        Assert.Equal([new CompletionItem("work overwrite", ChatScreen.CmdCopyOverwriteNote), new CompletionItem("work --history", ChatScreen.CmdCopyHistoryNote)], ChatScreen.ArgumentItems("/cmdcopy", "work ", sources));   // --history 2026-09-25
-        Assert.Equal([new CompletionItem("work --history overwrite", ChatScreen.CmdCopyHistoryOverwriteNote)], ChatScreen.ArgumentItems("/cmdcopy", "work --history ", sources));
-        Assert.Equal("copy this profile's command history into it instead", ChatScreen.CmdCopyHistoryNote);
-        Assert.Equal("replace its command history instead of adding to it", ChatScreen.CmdCopyHistoryOverwriteNote);
-        Assert.Empty(ChatScreen.ArgumentItems("/cmdcopy", "default ", sources));
-
-        // /keycopy (2026-09-28): the targets alone, nothing after a name.
-        Assert.Equal([new CompletionItem("chef", ChatScreen.KeyCopyTargetNote), new CompletionItem("work", ChatScreen.KeyCopyTargetNote)], ChatScreen.ArgumentItems("/keycopy", "", sources));
-        Assert.Equal(["work"], Texts(ChatScreen.ArgumentItems("/keycopy", "w", sources)));
-        Assert.Empty(ChatScreen.ArgumentItems("/keycopy", "work ", sources));
 
         // /timer: stop, then stop all | <name> with the names whole.
         Assert.Equal([new CompletionItem("stop", ChatScreen.TimerStopNote)], ChatScreen.ArgumentItems("/timer", "", sources));
@@ -22677,8 +22865,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("copy every memory into another profile", ChatScreen.MemoryCopyNote);   // 2026-09-22
         Assert.Equal("copy this profile's memory into it", ChatScreen.MemoryCopyTargetNote);
         Assert.Equal("replace its memory instead of adding to it", ChatScreen.MemoryCopyOverwriteNote);
-        Assert.Equal("copy this profile's allowed commands into it", ChatScreen.CmdCopyTargetNote);   // 2026-09-21
-        Assert.Equal("replace its allowed commands instead of adding to it", ChatScreen.CmdCopyOverwriteNote);
         Assert.Equal("remove persona.md and go back to the default", ChatScreen.PromptFileResetNote("persona.md"));
         Assert.Equal("copy persona.md into another profile", ChatScreen.PromptFileCopyNote("persona.md"));   // 2026-09-21
         Assert.Equal("copy operata.md into it", ChatScreen.PromptFileCopyTargetNote("operata.md"));
