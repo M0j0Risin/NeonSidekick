@@ -7,10 +7,11 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>oracle_execute(sql, connection?, schema?, params?)</c> (2026-10-05, the user's ask: <c>postgres_execute</c>'s twin): one statement
+/// <c>oracle_execute(sql, connection?, params?)</c> (2026-10-05, the user's ask: <c>postgres_execute</c>'s twin): one statement
 /// that may change an Oracle schema — SQL, or a PL/SQL unit — offered only while <c>Oracle mode</c> is <c>read-write</c>, a pane can ask,
 /// <c>Oracle statements allowed</c> ticks a kind and an offered connection says <c>"access": "readwrite"</c>. <see cref="OracleWriteGate"/>,
-/// the connection, a read unasked, else the user's allow per connection and schema, then <see cref="OracleAccess.ExecuteAsync"/>
+/// the connection, the lock to its schema (<see cref="OracleTool.OutsideAsync"/>, 2026-10-09: another is refused, never asked about), a
+/// read unasked, else the user's allow per connection, then <see cref="OracleAccess.ExecuteAsync"/>
 /// committed as it runs and written to the log (<see cref="ServerExecute"/>). Plan mode drops it.
 /// </summary>
 public sealed class OracleExecuteTool : OracleTool
@@ -24,7 +25,6 @@ public sealed class OracleExecuteTool : OracleTool
           "properties": {
             "sql": { "type": "string", "description": "One Oracle statement of a kind this tool's description lists, or one PL/SQL block or unit ending END; (no trailing / needed). No COMMIT, ALTER SESSION, GRANT, EXECUTE IMMEDIATE, @dblink, RETURNING INTO or second statement." },
             {{ConnectionProperty}},
-            "schema": { "type": "string", "description": "The schema unqualified names resolve in (CURRENT_SCHEMA); leave it out for the connection's own." },
             "params": { "type": "object", "description": "Values for :name placeholders in the SQL, e.g. {\"id\": 101} for :id; strings, numbers, true, false or null." },
             "max_rows": { "type": "integer", "description": "How many rows a read shows at most, 1 to 100000. Leave it out for the user's default." }
           },
@@ -51,7 +51,7 @@ public sealed class OracleExecuteTool : OracleTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public Task<string> RunAsync(string sql, string? connection, string? schema, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    public Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -62,11 +62,6 @@ public sealed class OracleExecuteTool : OracleTool
             return Task.FromResult(SqlText.BadMaxRows(OracleQueryTool.MinRows, OracleQueryTool.MaxRows));
         }
 
-        if (!TryReadSchema(schema, out var owner, out var badSchema))
-        {
-            return Task.FromResult(badSchema!);
-        }
-
         int timeout = TimeoutSeconds(effective);
         var hooks = new ServerExecuteHooks(
             OracleWriteGate.Check,
@@ -74,23 +69,24 @@ public sealed class OracleExecuteTool : OracleTool
             OracleReadOnlyGate.Check,
             OracleWriteGate.Body,
             () => Oracle.Resolve(connection, effective.OracleDefaultConnection, out var refused) is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, Place(target.Config, owner)), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.Place(target.Config)), null)
                 : (null, OracleText.Error(refused!)),
             async (body, token) =>
             {
-                var run = await Oracle.RunAsync(connection, effective.OracleDefaultConnection, owner, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await Oracle.RunAsync(connection, effective.OracleDefaultConnection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 if (IsTooNew(run))
                 {
                     // ORA-01466 (found live, 2026-10-05): a read-only transaction cannot read a table whose DDL is younger than Oracle's
                     // SCN-to-time grain (about three seconds) — what a read straight after this tool's CREATE meets. Read again once, after it.
                     await Task.Delay(TooNewWait, token).ConfigureAwait(false);
-                    run = await Oracle.RunAsync(connection, effective.OracleDefaultConnection, owner, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                    run = await Oracle.RunAsync(connection, effective.OracleDefaultConnection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 }
 
                 return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(effective)) : OracleText.Error(run);
             },
-            (body, token) => Oracle.ExecuteAsync(connection, effective.OracleDefaultConnection, owner, body, parameters, timeout, token),
-            OracleText.Error);
+            (body, token) => Oracle.ExecuteAsync(connection, effective.OracleDefaultConnection, body, parameters, timeout, token),
+            OracleText.Error,
+            (body, token) => OutsideAsync(body, connection, token));
         return ServerExecute.RunAsync(OracleStatementKinds.Family, effective.OracleMode, effective.OracleStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
     }
 
@@ -104,14 +100,7 @@ public sealed class OracleExecuteTool : OracleTool
         return run.Outcome == SqlOutcome.Failed && run.Detail.Contains("ORA-01466", StringComparison.Ordinal);
     }
 
-    /// <summary>The schema a call works in: the one it names, else the connection's own, else the user's — as the dictionary spells it.</summary>
-    public static string Place(OracleConnectionConfig config, string? schema)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-        return OracleIdentifier.Normalize(schema) ?? OracleIdentifier.Normalize(config.Schema) ?? OracleIdentifier.Normalize(config.User) ?? config.User?.Trim().ToUpperInvariant() ?? "";
-    }
-
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, OracleQueryTool.MaxRowsArgument, out var max, out var raw))
@@ -135,6 +124,6 @@ public sealed class OracleExecuteTool : OracleTool
             parameters = read;
         }
 
-        return await RunAsync(ToolArguments.ReadString(arguments, OracleQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        return await RunAsync(ToolArguments.ReadString(arguments, OracleQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
     }
 }

@@ -233,42 +233,9 @@ public static class ServerWriteGate
     }
 
     /// <summary>
-    /// Whether a statement names something by a qualifier other than <paramref name="place"/> (the review, 2026-10-05): the head of an
-    /// <c>x.y</c> chain, which may be another database or schema. A lexer cannot tell a table's qualifier (<c>t.col</c>) from a
-    /// database's (<c>payroll.salaries</c>), so any head but the place counts: such a statement is asked about every time, since
-    /// "Allow for this session" is for the place a call names, not what its text reaches. A head after <c>:</c> is a bind's (Oracle's
-    /// <c>:NEW.x</c>); <paramref name="members"/> are the words after a dot that name no object (Oracle's <c>NEXTVAL</c>).
-    /// </summary>
-    public static bool NamesElsewhere(IReadOnlyList<GateToken> tokens, string place, IReadOnlySet<string>? members = null)
-    {
-        ArgumentNullException.ThrowIfNull(tokens);
-        ArgumentNullException.ThrowIfNull(place);
-        for (int i = 0; i + 1 < tokens.Count; i++)
-        {
-            var t = tokens[i];
-            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".")
-                || (i > 0 && (tokens[i - 1].IsSymbol(".") || tokens[i - 1].IsSymbol(":"))))
-            {
-                continue;
-            }
-
-            if (members is not null && i + 2 < tokens.Count && tokens[i + 2].Kind == GateTokenKind.Word && members.Contains(tokens[i + 2].Text))
-            {
-                continue;
-            }
-
-            if (!string.Equals(t.Text, place, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// The first qualifier in a statement that is one of <paramref name="names"/> (2026-10-09, the lock to a connection's place): the
-    /// head of an <c>x.y</c> chain, as <see cref="NamesElsewhere"/> reads them, compared case-blind. A lexer cannot tell a table's alias
+    /// head of an <c>x.y</c> chain (<see cref="Qualifiers"/>), compared case-blind. It took the place of <c>NamesElsewhere</c> (the
+    /// review of 2026-10-05), which counted every head but the place and so asked about a table's <c>t.col</c> too. A lexer cannot tell a table's alias
     /// (<c>t.col</c>) from a database's or schema's name (<c>payroll.salaries</c>), so the caller hands the names that exist on the
     /// server (and the server's own): a head among them reaches that place — or is an alias spelled like it, which the refusal says
     /// to rename. Null when none is.
@@ -279,7 +246,11 @@ public static class ServerWriteGate
         return Qualifiers(tokens, members).FirstOrDefault(names.Contains);
     }
 
-    /// <summary>Every qualifier in a statement, in order: the heads of its <c>x.y</c> chains, as <see cref="NamesAny"/> reads them.</summary>
+    /// <summary>
+    /// Every qualifier in a statement, in order: the heads of its <c>x.y</c> chains. A head after another dot is no qualifier, nor one
+    /// after <c>:</c> (a bind's, Oracle's <c>:NEW.x</c>); <paramref name="members"/> are the words after a dot that name no object
+    /// (Oracle's <c>NEXTVAL</c>).
+    /// </summary>
     public static IReadOnlyList<string> Qualifiers(IReadOnlyList<GateToken> tokens, IReadOnlySet<string>? members = null)
     {
         ArgumentNullException.ThrowIfNull(tokens);

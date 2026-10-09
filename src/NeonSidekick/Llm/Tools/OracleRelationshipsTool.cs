@@ -17,8 +17,7 @@ public sealed class OracleRelationshipsTool : OracleTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            "schema": { "type": "string", "description": "Only the keys into or out of this schema's tables; leave it out for every schema." },
-            "table": { "type": "string", "description": "Only the keys into or out of this table (SCHEMA.NAME); leave it out for more." }
+            "table": { "type": "string", "description": "Only the keys into or out of this table; leave it out for every one in the schema." }
           }
         }
         """);
@@ -31,40 +30,33 @@ public sealed class OracleRelationshipsTool : OracleTool
 
     public override string Description =>
         "Lists the foreign-key relationships of an Oracle database as join paths, from_table.from_column -> to_table.to_column, " +
-        "every one, those touching one schema, or those touching one table. Use them to write JOINs without guessing column names.";
+        "every one in the connection's schema, or those touching one table. Use them to write JOINs without guessing column names.";
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string? connection, string? schema, string? table, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string? connection, string? table, CancellationToken cancellationToken)
     {
-        if (!TryReadSchema(schema, out var owner, out var error))
-        {
-            return error!;
-        }
-
-        string? tableOwner = null;
         string? tableName = null;
-        string? label = owner is null ? null : "schema " + owner;
+        string? label = null;
         if (table is not null)
         {
-            var match = await FindTableAsync(connection, owner, table, cancellationToken).ConfigureAwait(false);
+            var match = await FindTableAsync(connection, table, cancellationToken).ConfigureAwait(false);
             if (match.Error is { } refused)
             {
                 return refused;
             }
 
-            (tableOwner, tableName) = (match.Owner, match.Name);
+            tableName = match.Name;
             label = match.Owner + "." + match.Name;
         }
 
-        var run = await CatalogAsync(connection, null, [OracleCatalogQueries.Relationships],
-            [new SqlParameterValue("owner", tableOwner), new SqlParameterValue("name", tableName), new SqlParameterValue("schema", table is null ? owner : null)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, [OracleCatalogQueries.Relationships], [new SqlParameterValue("name", tableName)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? OracleText.Relationships(label, run, Files.WorkingDirectory.MaxReadChars) : OracleText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
     }
 }

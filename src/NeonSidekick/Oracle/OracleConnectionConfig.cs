@@ -37,7 +37,10 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
     /// <summary>The data source: EZConnect <c>host:port/service</c> (<c>//host/service</c>, the port 1521 when left out), or a <c>(DESCRIPTION=…)</c>.</summary>
     public string? DataSource { get; set; }
 
-    /// <summary>The schema a call works in when it names none (<c>ALTER SESSION SET CURRENT_SCHEMA</c>); the user's own when blank.</summary>
+    /// <summary>
+    /// The schema the connection is held to (<c>ALTER SESSION SET CURRENT_SCHEMA</c>); the user's own when blank. Since 2026-10-09 (the
+    /// user's pick) no call names another and <see cref="OracleBoundary"/> refuses a statement that reaches one.
+    /// </summary>
     public string? Schema { get; set; }
 
     /// <summary>The database user.</summary>

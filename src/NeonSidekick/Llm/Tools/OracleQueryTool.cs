@@ -7,7 +7,8 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>oracle_query(sql, connection?, schema?, params?, max_rows?)</c>: one read-only SELECT (a WITH clause may lead it),
+/// <c>oracle_query(sql, connection?, params?, max_rows?)</c>: one read-only SELECT (a WITH clause may lead it), held to the connection's
+/// schema (<see cref="OracleTool.OutsideAsync"/>, 2026-10-09),
 /// passed by <see cref="OracleReadOnlyGate"/> first, then run in a read-only session and transaction that is rolled back,
 /// with the setting's timeout; the rows as a Markdown table under a header that says when the cap cut it. <c>params</c> is
 /// one object, each name bound as <c>:name</c> — the values never spliced into the text.
@@ -29,7 +30,6 @@ public sealed class OracleQueryTool : OracleTool
           "properties": {
             "sql": { "type": "string", "description": "One Oracle SELECT (FETCH FIRST n ROWS ONLY, not TOP or LIMIT; no trailing ;); a WITH clause may lead it. No INSERT, UPDATE, DELETE, MERGE, PL/SQL, DDL, FOR UPDATE, NEXTVAL, @dblink or second statement." },
             {{ConnectionProperty}},
-            "schema": { "type": "string", "description": "The schema unqualified names resolve in (CURRENT_SCHEMA); leave it out for the connection's own." },
             "params": { "type": "object", "description": "Values for :name placeholders in the SQL, e.g. {\"id\": 101} for :id; strings, numbers, true, false or null." },
             "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
           },
@@ -57,7 +57,7 @@ public sealed class OracleQueryTool : OracleTool
         return Math.Clamp(effective.OracleQueryMaxRows, MinRows, MaxRows);
     }
 
-    public async Task<string> RunAsync(string sql, string? connection, string? schema, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    public async Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -72,16 +72,17 @@ public sealed class OracleQueryTool : OracleTool
             return refused;
         }
 
-        if (!TryReadSchema(schema, out var owner, out var error))
+        string body = OracleReadOnlyGate.Body(sql);
+        if (await OutsideAsync(body, connection, cancellationToken).ConfigureAwait(false) is { } outside)
         {
-            return error!;
+            return outside;
         }
 
-        var run = await Oracle.RunAsync(connection, Effective.OracleDefaultConnection, owner, [OracleReadOnlyGate.Body(sql)], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Oracle.RunAsync(connection, Effective.OracleDefaultConnection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(Effective)) : OracleText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, MaxRowsArgument, out var max, out var raw))
@@ -106,6 +107,6 @@ public sealed class OracleQueryTool : OracleTool
         }
 
         string sql = ToolArguments.ReadString(arguments, SqlArgument);
-        return await RunAsync(sql, Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        return await RunAsync(sql, Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
     }
 }

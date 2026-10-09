@@ -236,7 +236,7 @@ public sealed class Assistant
     /// </summary>
     public const string OracleRule =
         "The Oracle tools read Oracle databases (Oracle SQL: FETCH FIRST n ROWS ONLY, not TOP or LIMIT; no trailing semicolon; unquoted names are upper case) on the user's named connections and never change data: " +
-        NeonSidekick.Llm.Tools.OracleConnectionsTool.ToolName + " lists the connections and " + NeonSidekick.Llm.Tools.OracleSchemasTool.ToolName + " a database's schemas; " +
+        NeonSidekick.Llm.Tools.OracleConnectionsTool.ToolName + " lists the connections, each one held to its own schema (another schema needs its own connection, which the user adds); " +
         NeonSidekick.Llm.Tools.OracleTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.OracleColumnsTool.ToolName + " a column, " +
         NeonSidekick.Llm.Tools.OracleDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.OracleRelationshipsTool.ToolName + " the joins and " +
         NeonSidekick.Llm.Tools.OracleIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +

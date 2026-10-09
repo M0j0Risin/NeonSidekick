@@ -21,8 +21,7 @@ public sealed class OracleColumnsTool : OracleTool
           "type": "object",
           "properties": {
             "pattern": { "type": "string", "description": "The column name, or part of it (EMAIL, CUSTOMER_ID), or a LIKE pattern with %; case-insensitive." },
-            {{ConnectionProperty}},
-            "schema": { "type": "string", "description": "Only this schema's tables and views; leave it out for every schema the account can see." }
+            {{ConnectionProperty}}
           },
           "required": ["pattern"]
         }
@@ -40,25 +39,20 @@ public sealed class OracleColumnsTool : OracleTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string pattern, string? connection, string? schema, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string pattern, string? connection, CancellationToken cancellationToken)
     {
         if (OracleTablesTool.LikePattern(pattern) is not { } like)
         {
             return OracleText.NoPattern;
         }
 
-        if (!TryReadSchema(schema, out var owner, out var error))
-        {
-            return error!;
-        }
-
-        var run = await CatalogAsync(connection, null, [OracleCatalogQueries.Columns], [new SqlParameterValue("pattern", like), new SqlParameterValue("schema", owner)], cancellationToken).ConfigureAwait(false);
-        return run.Outcome == SqlOutcome.Ok ? OracleText.Columns(pattern.Trim(), run with { Database = "" }, Files.WorkingDirectory.MaxReadChars) : OracleText.Error(run);
+        var run = await CatalogAsync(connection, [OracleCatalogQueries.Columns], [new SqlParameterValue("pattern", like)], cancellationToken).ConfigureAwait(false);
+        return run.Outcome == SqlOutcome.Ok ? OracleText.Columns(pattern.Trim(), run, Files.WorkingDirectory.MaxReadChars) : OracleText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(ToolArguments.ReadString(arguments, PatternArgument), Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(ToolArguments.ReadString(arguments, PatternArgument), Optional(arguments, ConnectionArgument), cancellationToken).ConfigureAwait(false);
     }
 }

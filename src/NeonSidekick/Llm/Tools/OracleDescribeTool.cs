@@ -20,9 +20,8 @@ public sealed class OracleDescribeTool : OracleTool
         {
           "type": "object",
           "properties": {
-            "table": { "type": "string", "description": "The table or view as SCHEMA.NAME (HR.EMPLOYEES); a bare name works when the schema in force or only one schema has it. Unquoted names are upper-cased, as Oracle does." },
-            {{ConnectionProperty}},
-            "schema": { "type": "string", "description": "The schema a bare table name is looked up in first; leave it out for the connection's own." }
+            "table": { "type": "string", "description": "The table or view's name (EMPLOYEES), or SCHEMA.NAME with the connection's schema. Unquoted names are upper-cased, as Oracle does." },
+            {{ConnectionProperty}}
           },
           "required": ["table"]
         }
@@ -40,31 +39,26 @@ public sealed class OracleDescribeTool : OracleTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string table, string? connection, string? schema, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string table, string? connection, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(table))
         {
             return OracleText.NoTable;
         }
 
-        if (!TryReadSchema(schema, out var owner, out var error))
-        {
-            return error!;
-        }
-
-        var match = await FindTableAsync(connection, owner, table.Trim(), cancellationToken).ConfigureAwait(false);
+        var match = await FindTableAsync(connection, table.Trim(), cancellationToken).ConfigureAwait(false);
         if (match.Error is { } refused)
         {
             return refused;
         }
 
-        var run = await CatalogAsync(connection, owner, OracleCatalogQueries.Describe, [new SqlParameterValue("owner", match.Owner), new SqlParameterValue("name", match.Name)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, OracleCatalogQueries.Describe, [new SqlParameterValue("owner", match.Owner), new SqlParameterValue("name", match.Name)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? OracleText.Describe(match.Owner, match.Name, match.Kind, run, Files.WorkingDirectory.MaxReadChars) : OracleText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, ConnectionArgument), cancellationToken).ConfigureAwait(false);
     }
 }

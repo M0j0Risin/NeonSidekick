@@ -7,27 +7,29 @@ namespace NeonSidekick.Oracle;
 /// the dictionary spells it (<see cref="OracleIdentifier.Normalize"/>, the tool's job). The <c>ALL_*</c> views, so each
 /// answers with what the account may see; every one written <c>SYS.</c>, since a call's <c>CURRENT_SCHEMA</c> is searched
 /// before the public synonyms and a table there named <c>ALL_OBJECTS</c> would answer instead. Oracle's own schemas
-/// (<c>ORACLE_MAINTAINED</c>) are left out of the listings; 12c and later. A description is the <c>COMMENT ON</c> text.
+/// (<c>ORACLE_MAINTAINED</c>) are left out of the listings; 12c and later. Every listing keeps to the call's schema
+/// (<c>CURRENT_SCHEMA</c>, the connection's lock, 2026-10-09), never another. A description is the <c>COMMENT ON</c> text.
 /// ODP.NET runs one statement per command, so a many-part answer is a list of statements.
 /// </summary>
 public static class OracleCatalogQueries
 {
-    /// <summary>The schemas (users) the account can see, Oracle's own left out, with their table and view counts; <c>your own</c> marks the account's.</summary>
-    public const string Schemas =
+    /// <summary>
+    /// What else the account could read (2026-10-09, the wizard's test and <c>--oracle-check</c>; <c>oracle_schemas</c>' listing until the
+    /// lock): the other schemas, Oracle's own left out, holding a table or view it may see; then the system privileges that read any.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Reach =
+    [
         """
-        SELECT u.username AS "schema",
-               (SELECT COUNT(*) FROM sys.all_tables t WHERE t.owner = u.username) AS "tables",
-               (SELECT COUNT(*) FROM sys.all_views v WHERE v.owner = u.username) AS "views",
-               TO_CHAR(u.created, 'YYYY-MM-DD') AS "created",
-               CASE WHEN u.username = SYS_CONTEXT('USERENV', 'SESSION_USER') THEN 'your own' END AS "note"
-        FROM sys.all_users u
-        WHERE u.oracle_maintained = 'N'
-        ORDER BY u.username
-        """;
+        SELECT DISTINCT o.owner FROM sys.all_objects o JOIN sys.all_users u ON u.username = o.owner AND u.oracle_maintained = 'N'
+        WHERE o.object_type IN ('TABLE', 'VIEW') AND o.owner <> SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+        ORDER BY 1
+        """,
+        "SELECT p.privilege FROM sys.session_privs p WHERE p.privilege LIKE 'SELECT ANY %' OR p.privilege LIKE 'READ ANY %' ORDER BY 1",
+    ];
 
     /// <summary>
-    /// The tables and views, <c>:schema</c> (null = all) and <c>:pattern</c> (a LIKE pattern over the name or
-    /// <c>SCHEMA.NAME</c>, case-insensitive, null = all) narrowing it; a table's rows are the optimizer's count (as of its
+    /// The tables and views of the call's schema, <c>:pattern</c> (a LIKE pattern over the name or <c>SCHEMA.NAME</c>,
+    /// case-insensitive, null = all) narrowing it; a table's rows are the optimizer's count (as of its
     /// last statistics, free); the last column its comment.
     /// </summary>
     public const string Tables =
@@ -38,21 +40,21 @@ public static class OracleCatalogQueries
         LEFT JOIN sys.all_tables t ON o.object_type = 'TABLE' AND t.owner = o.owner AND t.table_name = o.object_name
         LEFT JOIN sys.all_tab_comments c ON c.owner = o.owner AND c.table_name = o.object_name
         WHERE o.object_type IN ('TABLE', 'VIEW') AND o.secondary = 'N' AND o.object_name NOT LIKE 'BIN$%'
-          AND (:schema IS NULL OR o.owner = :schema)
+          AND o.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
           AND (:pattern IS NULL OR UPPER(o.object_name) LIKE UPPER(:pattern) OR UPPER(o.owner || '.' || o.object_name) LIKE UPPER(:pattern))
         ORDER BY o.owner, o.object_name
         """;
 
     /// <summary>
-    /// The tables and views <c>:owner</c>.<c>:name</c> may mean: that one, or — with no owner — every schema's of that name,
-    /// <c>exact</c> marking the one in the call's schema (<c>CURRENT_SCHEMA</c>), so <c>EMPLOYEES</c> finds <c>HR.EMPLOYEES</c>.
+    /// The table or view <c>:name</c> in the call's schema (<c>CURRENT_SCHEMA</c>, the connection's lock): <c>exact</c> kept for the
+    /// shape of the answer, every row being the schema's own.
     /// </summary>
     public const string Resolve =
         """
         SELECT o.owner AS "schema", o.object_name AS "name", LOWER(o.object_type) AS "type",
                CASE WHEN o.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') THEN 1 ELSE 0 END AS "exact"
         FROM sys.all_objects o
-        WHERE o.object_type IN ('TABLE', 'VIEW') AND o.object_name = :name AND (:owner IS NULL OR o.owner = :owner)
+        WHERE o.object_type IN ('TABLE', 'VIEW') AND o.object_name = :name AND o.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
         ORDER BY 4 DESC, o.owner
         """;
 
@@ -84,7 +86,7 @@ public static class OracleCatalogQueries
         JOIN sys.all_constraints r ON r.owner = k.r_owner AND r.constraint_name = k.r_constraint_name
         JOIN sys.all_cons_columns fc ON fc.owner = k.owner AND fc.constraint_name = k.constraint_name
         JOIN sys.all_cons_columns rc ON rc.owner = r.owner AND rc.constraint_name = r.constraint_name AND rc.position = fc.position
-        WHERE k.constraint_type = 'R' AND ((k.owner = :owner AND k.table_name = :name) OR (r.owner = :owner AND r.table_name = :name))
+        WHERE k.constraint_type = 'R' AND k.owner = :owner AND (k.table_name = :name OR (r.owner = :owner AND r.table_name = :name))
         ORDER BY 1 DESC, k.constraint_name, fc.position
         """,
         """
@@ -118,8 +120,7 @@ public static class OracleCatalogQueries
     ];
 
     /// <summary>
-    /// The foreign-key join paths, one row per column pair: every one outside Oracle's schemas, or those touching
-    /// <c>:owner</c>.<c>:name</c>, or those touching schema <c>:schema</c>.
+    /// The foreign-key join paths of the call's schema, one row per column pair: every one, or those touching its table <c>:name</c>.
     /// </summary>
     public const string Relationships =
         """
@@ -129,16 +130,14 @@ public static class OracleCatalogQueries
         JOIN sys.all_constraints r ON r.owner = k.r_owner AND r.constraint_name = k.r_constraint_name
         JOIN sys.all_cons_columns fc ON fc.owner = k.owner AND fc.constraint_name = k.constraint_name
         JOIN sys.all_cons_columns rc ON rc.owner = r.owner AND rc.constraint_name = r.constraint_name AND rc.position = fc.position
-        JOIN sys.all_users u ON u.username = k.owner AND u.oracle_maintained = 'N'
-        WHERE k.constraint_type = 'R'
-          AND (:name IS NULL OR (k.owner = :owner AND k.table_name = :name) OR (r.owner = :owner AND r.table_name = :name))
-          AND (:schema IS NULL OR k.owner = :schema OR r.owner = :schema)
+        WHERE k.constraint_type = 'R' AND k.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+          AND (:name IS NULL OR k.table_name = :name OR (r.owner = k.owner AND r.table_name = :name))
         ORDER BY 2, 1, fc.position
         """;
 
     /// <summary>
-    /// The columns whose name is <c>LIKE :pattern</c> (case-insensitive) across every table and view, <c>:schema</c> narrowing
-    /// it: where a column lives, its type parts, nullability, comment.
+    /// The columns whose name is <c>LIKE :pattern</c> (case-insensitive) across the call's schema's tables and views: where a column
+    /// lives, its type parts, nullability, comment.
     /// </summary>
     public const string Columns =
         """
@@ -148,12 +147,12 @@ public static class OracleCatalogQueries
         JOIN sys.all_objects o ON o.owner = c.owner AND o.object_name = c.table_name AND o.object_type IN ('TABLE', 'VIEW')
         JOIN sys.all_users u ON u.username = c.owner AND u.oracle_maintained = 'N'
         LEFT JOIN sys.all_col_comments m ON m.owner = c.owner AND m.table_name = c.table_name AND m.column_name = c.column_name
-        WHERE UPPER(c.column_name) LIKE UPPER(:pattern) AND (:schema IS NULL OR c.owner = :schema) AND c.table_name NOT LIKE 'BIN$%'
+        WHERE UPPER(c.column_name) LIKE UPPER(:pattern) AND c.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AND c.table_name NOT LIKE 'BIN$%'
         ORDER BY 1, c.column_id
         """;
 
     /// <summary>
-    /// The indexes of every table outside Oracle's schemas, or of <c>:owner</c>.<c>:name</c>, or of schema <c>:schema</c>: kind,
+    /// The indexes of the call's schema's tables, or of its table <c>:name</c>: kind,
     /// uniqueness, the key constraint an index backs (P or U), key columns, status and visibility, the optimizer's counts and
     /// when it last analyzed them — views any reader may see. The last column (the index's owner) is what
     /// <see cref="IndexUsage"/> joins on.
@@ -168,9 +167,8 @@ public static class OracleCatalogQueries
                i.status, i.visibility, i.num_rows, i.distinct_keys, TO_CHAR(i.last_analyzed, 'YYYY-MM-DD') AS "last_analyzed", i.owner
         FROM sys.all_indexes i
         JOIN sys.all_users u ON u.username = i.table_owner AND u.oracle_maintained = 'N'
-        WHERE i.index_type <> 'LOB'
-          AND (:name IS NULL OR (i.table_owner = :owner AND i.table_name = :name))
-          AND (:schema IS NULL OR i.table_owner = :schema)
+        WHERE i.index_type <> 'LOB' AND i.table_owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+          AND (:name IS NULL OR i.table_name = :name)
         ORDER BY 1, 2
         """;
 
@@ -183,7 +181,7 @@ public static class OracleCatalogQueries
         """
         SELECT u.owner, u.name, u.total_access_count, u.total_exec_count, u.total_rows_returned, TO_CHAR(u.last_used, 'YYYY-MM-DD HH24:MI') AS "last_used"
         FROM sys.dba_index_usage u
-        WHERE (:owner IS NULL OR u.owner = :owner)
+        WHERE u.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
         """;
 
     /// <summary>The wizard's and the check's first question: who the connection signed in as, in which container, and the server's version (a public view).</summary>

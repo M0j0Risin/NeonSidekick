@@ -20,11 +20,11 @@ internal sealed partial class SettingsMenu
 {
     /// <summary>The wizard's rows, one per <see cref="OracleWizardStep"/> before the summary, in its order. Pinned.</summary>
     public static readonly IReadOnlyList<string> OracleWizardLabels =
-        ["File", "Name", "Data source", "Default schema", "User", "Password store", "Password", "Connect timeout (s)", "Access", "Description"];
+        ["File", "Name", "Data source", "Schema", "User", "Password store", "Password", "Connect timeout (s)", "Access", "Description"];
 
     public const string OracleWizardFileQuestion = "Which oracle.json: this profile's or the global one?";
     public const string OracleWizardDataSourceQuestion = "The database: host:port/service (EZConnect, e.g. localhost:1521/FREEPDB1) or a whole (DESCRIPTION=…).";
-    public const string OracleWizardSchemaQuestion = "The schema a call works in when it names none; empty for the user's own.";
+    public const string OracleWizardSchemaQuestion = "The schema the connection is held to (the tools never leave it); empty for the user's own.";
     public const string OracleWizardUserQuestion = "The database user (a read-only account is the real guard; SYS is refused).";
     public const string OracleWizardDataSourceRequired = "A data source is required.";
 
@@ -546,12 +546,27 @@ internal sealed partial class SettingsMenu
         {
             Sink.Warning(OracleText.CanWrite(powers, c.IsReadWrite));
         }
+
+        // What else it could read (2026-10-09, OracleCatalogQueries.Reach: the third and fourth results).
+        if (run.Grids.Count > 3)
+        {
+            var (owners, any) = (run.Grids[2].Rows.Select(r => r[0]).ToList(), run.Grids[3].Rows.Select(r => r[0]).ToList());
+            string reach = OracleText.Reach(OracleAccess.Place(copy), owners, any);
+            if (owners.Count > 0 || any.Count > 0)
+            {
+                Sink.Warning(reach);
+            }
+            else
+            {
+                Sink.Notice(reach);
+            }
+        }
     }
 
-    /// <summary>The app's test: <see cref="OracleAccess.RunAsync"/> over the one connection, <see cref="OracleCatalogQueries.WhoAmI"/> then <see cref="OracleCatalogQueries.WritePowers"/>, the Oracle tab's timeout.</summary>
+    /// <summary>The app's test: <see cref="OracleAccess.RunAsync"/> over the one connection, <see cref="OracleCatalogQueries.WhoAmI"/>, <see cref="OracleCatalogQueries.WritePowers"/> and <see cref="OracleCatalogQueries.Reach"/>, the Oracle tab's timeout.</summary>
     private Task<Sql.SqlRun> TestOracleConnectionAsync(OracleNamedConnection connection, CancellationToken cancellationToken) =>
         new OracleAccess(() => new OracleCatalog([connection], []))
-            .RunAsync(connection.Name, null, null, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers], [], 50, _settings.Current.OracleQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, null, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers, .. OracleCatalogQueries.Reach], [], 100, _settings.Current.OracleQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="OracleConfigFile.AddConnection"/>), then its password to its store, then — when

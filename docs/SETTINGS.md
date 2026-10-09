@@ -781,13 +781,13 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 
 | Setting | What it does | Default |
 |---|---|---|
-| Oracle tools | Offers the Oracle tools (connections, schemas, tables, columns, describe, relationships, indexes, query). | off |
+| Oracle tools | Offers the Oracle tools (connections, tables, columns, describe, relationships, indexes, query), each connection held to its one schema. | off |
 | Oracle mode | `read-only`: the tools only read. `read-write`: `oracle_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [Oracle › Changes](TOOLS.md#changes-1). | read-only |
 | Oracle statements allowed | Under `read-write`: the kinds of statement `oracle_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [Oracle › Changes](TOOLS.md#changes-1). | changing data, creating, reading |
 | Oracle connections offered | As *SQL connections offered*. | none |
-| Oracle default connection | As *SQL default connection*; `schema` works in another schema. | (the first connection) |
+| Oracle default connection | As *SQL default connection*. | (the first connection) |
 | Oracle set password | As *SQL set password*. | — |
-| Oracle add/edit connection | The wizard (new or edit); its test shows who it signs in as, the version, and a warning when the account could change data. See [Oracle](TOOLS.md#oracle). | — |
+| Oracle add/edit connection | The wizard (new or edit); its *Schema* is the one the connection is held to (the user's own when empty). Its test shows who it signs in as, the version, a warning when the account could change data, and the other schemas it could read. See [Oracle](TOOLS.md#oracle). | — |
 | Oracle %-mention enabled | Lists the Oracle connections in the `%` list too, marked `Oracle ·`. | on |
 | Oracle max rows | As *SQL max rows*, for `oracle_query`. | 100 |
 | Oracle query timeout (s) | How long one statement may run on the server (1–600). | 30 |

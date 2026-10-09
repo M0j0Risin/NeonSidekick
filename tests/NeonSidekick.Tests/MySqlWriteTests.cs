@@ -152,7 +152,6 @@ public sealed class MySqlWriteGateTests
     {
         string[] visible = ["scratch", "payroll", "information_schema"];
         Assert.Equal(other is null ? null : MySqlText.OtherDatabase(other, "scratch"), MySqlBoundary.Check(sql, "scratch", visible));
-        Assert.Null(MySqlStatementKinds.Family.NamesElsewhere);
     }
 
     [Theory]

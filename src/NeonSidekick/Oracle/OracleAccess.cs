@@ -59,6 +59,16 @@ public sealed class OracleAccess
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     }
 
+    /// <summary>
+    /// The schema a connection works in, as the dictionary spells it: the entry's own, else the user's (2026-10-09: the one it is locked
+    /// to, <see cref="OracleBoundary"/>; no call names another).
+    /// </summary>
+    public static string Place(OracleConnectionConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        return OracleIdentifier.Normalize(config.Schema) ?? OracleIdentifier.Normalize(config.User) ?? config.User?.Trim().ToUpperInvariant() ?? "";
+    }
+
     /// <summary>The connections as the files hold them now.</summary>
     public OracleCatalog Catalog() => _catalog();
 
@@ -87,13 +97,13 @@ public sealed class OracleAccess
 
     /// <summary>
     /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or the
-    /// first when blank), in <paramref name="schema"/> when given (else the connection's own, else the user's): each one's rows
+    /// first when blank), in its schema (<see cref="Place"/>, 2026-10-09: the lock — the connection's own, else the user's): each one's rows
     /// read to <paramref name="maxRows"/> (<see cref="SqlGrid.ReadAsync"/>, one past to learn whether more are left), each
     /// statement bound only the parameters it names, all inside one read-only transaction that is rolled back. A timeout, a
     /// failed connect and a server error are outcomes; a cancelled token throws. The run's <see cref="SqlRun.Database"/> is the
     /// schema it worked in.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, string? schema, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -108,7 +118,7 @@ public sealed class OracleAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        string workIn = OracleIdentifier.Normalize(schema) ?? OracleIdentifier.Normalize(target.Config.Schema) ?? OracleIdentifier.Normalize(target.Config.User) ?? target.Config.User!.Trim().ToUpperInvariant();
+        string workIn = Place(target.Config);
         await using var connection = new OracleConnection(target.Config.Builder(secret.Value).ConnectionString);
         try
         {
@@ -183,13 +193,13 @@ public sealed class OracleAccess
     /// <c>oracle_execute</c>'s run (2026-10-05, <c>Oracle mode</c> <c>read-write</c>): one statement the write gate passed (a PL/SQL
     /// unit with its final <c>;</c>), on a connection whose entry says <c>"access": "readwrite"</c> (any other is
     /// <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the caller checked; SYS stays refused by the entry's own problem), in
-    /// <paramref name="schema"/> when given (else the connection's own, else the user's). A session of its own — no pooling, so never
+    /// its schema (<see cref="Place"/>). A session of its own — no pooling, so never
     /// one a read left <c>READ_ONLY</c> — with <c>CURRENT_SCHEMA</c> set and no transaction of the app's: ODP.NET commits the one
     /// statement as it runs (DDL commits anyway). Bound only the parameters it names. <see cref="SqlRun.Changes"/> is the rows the
     /// server counts (none for DDL or a block). A timeout (ORA-01013), a failed connect and a server error are outcomes; a cancelled
     /// token throws (the server undoes the statement).
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? schema, string sql, IReadOnlyList<SqlParameterValue> parameters, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -209,7 +219,7 @@ public sealed class OracleAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        string workIn = OracleIdentifier.Normalize(schema) ?? OracleIdentifier.Normalize(target.Config.Schema) ?? OracleIdentifier.Normalize(target.Config.User) ?? target.Config.User!.Trim().ToUpperInvariant();
+        string workIn = Place(target.Config);
         await using var connection = new OracleConnection(target.Config.Builder(secret.Value, pooling: false).ConnectionString);
         try
         {

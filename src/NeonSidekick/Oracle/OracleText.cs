@@ -29,7 +29,7 @@ public static class OracleText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string schema = string.IsNullOrWhiteSpace(config.Schema) ? "" : $", schema {config.Schema.Trim()}";
+        string schema = $", schema {OracleAccess.Place(config)} alone";
         string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.DataSource?.Trim()}, user {config.User?.Trim()}{schema}{ServerWriteText.AccessNote(OracleStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
@@ -45,7 +45,7 @@ public static class OracleText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string where = "Oracle · " + config.DataSource?.Trim() + (string.IsNullOrWhiteSpace(config.Schema) ? "" : " / " + config.Schema.Trim());
+        string where = "Oracle · " + config.DataSource?.Trim() + " / " + OracleAccess.Place(config);
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 
@@ -95,7 +95,39 @@ public static class OracleText
     public const string NoTable = "Error: give the table or view in \"table\" (SCHEMA.NAME, e.g. HR.EMPLOYEES)";
     public const string NoPattern = "Error: give the column name (or part of it) to look for in \"pattern\"";
     public static string BadTable(string table) => $"Error: '{table}' is not a table name (NAME or SCHEMA.NAME; \"quoted\" keeps the case)";
-    public static string BadSchema(string schema) => $"Error: '{schema}' is not a schema name (oracle_schemas lists them)";
+    // ─── the connection's schema (2026-10-09, OracleBoundary) ───────────────────
+
+    /// <summary>A call that still sends <c>schema</c>. Pinned.</summary>
+    public const string NoSchemaArgument =
+        "Error: \"schema\" is not an argument: an Oracle connection works in its own schema alone (oracle_connections names each one's); another schema needs a connection of its own, which the user adds";
+
+    /// <summary>A qualifier naming another schema (or an alias spelled like one). Pinned.</summary>
+    public static string OtherSchema(string named, string schema) =>
+        $"Error: the SQL names '{named}', another schema (an alias spelled like it reads the same: rename it), but this connection is held to schema '{schema}'; another schema needs a connection of its own, which the user adds (oracle_connections lists them)";
+
+    /// <summary>A dictionary view of the whole database the schema does not qualify. Pinned.</summary>
+    public static string Dictionary(string named, string schema) =>
+        $"Error: the SQL reads {named}, which describes the whole database rather than schema '{schema}'; the Oracle tools keep to the connection's schema (oracle_tables, oracle_columns and oracle_describe read its catalog; a table of its own named so is written {schema}.NAME)";
+
+    /// <summary>A table named in another schema (<c>HR.EMPLOYEES</c> as a catalog tool's <c>table</c>). Pinned.</summary>
+    public static string TableElsewhere(string named, string schema) =>
+        $"Error: '{named}' is another schema, but this connection is held to schema '{schema}'; give the table as NAME or {schema}.NAME";
+
+    /// <summary>What else the account could read (the wizard's test and <c>--oracle-check</c>, 2026-10-09). Pinned.</summary>
+    public static string Reach(string schema, IReadOnlyList<string> owners, IReadOnlyList<string> anyPrivileges)
+    {
+        ArgumentNullException.ThrowIfNull(owners);
+        ArgumentNullException.ThrowIfNull(anyPrivileges);
+        if (owners.Count == 0 && anyPrivileges.Count == 0)
+        {
+            return $"The account reads nothing beyond schema {schema}: the database holds it there too.";
+        }
+
+        string names = string.Join(", ", owners.Take(10)) + (owners.Count > 10 ? $" and {Invariant(owners.Count - 10)} more" : "");
+        string what = owners.Count == 0 ? "" : "read tables of " + names;
+        string any = anyPrivileges.Count == 0 ? "" : (what.Length > 0 ? ", and holds " : "hold ") + string.Join(", ", anyPrivileges);
+        return $"The account could also {what}{any}. The tools keep to schema {schema}; an account that reads only it is the lock the database keeps too.";
+    }
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5, \"name\": \"x\"}} for :id and :name (got {Clip(raw, 200)})";
     public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; use letters, digits and _ (bound as :name)";
     public static string TableNotFound(string table, string connection, string schema) => $"Error: no table or view '{table}' visible in {connection}/{schema}; oracle_tables lists them";

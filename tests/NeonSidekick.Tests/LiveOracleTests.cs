@@ -131,15 +131,18 @@ public sealed class LiveOracleTests
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
-        _access.RunAsync("free", null, null, [sql], [], 10, timeoutSeconds, cancellationToken);
+        _access.RunAsync("free", null, [sql], [], 10, timeoutSeconds, cancellationToken);
 
     [LiveOracleFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
     {
-        Assert.Contains("| " + LiveOracle.Owner + " |", await Invoke<OracleSchemasTool>());
-        Assert.Contains("your own", await Invoke<OracleSchemasTool>());
+        // The lock (2026-10-09): the dictionary's whole-database views and a schema argument are refused; the own schema written out reads.
+        Assert.Equal(OracleText.Dictionary("ALL_USERS", LiveOracle.Owner), await Invoke<OracleQueryTool>(("sql", "SELECT username FROM all_users")));
+        Assert.Equal(OracleText.NoSchemaArgument, await Invoke<OracleTablesTool>(("schema", LiveOracle.Owner)));
+        Assert.Equal(OracleText.OtherSchema("SYS", LiveOracle.Owner), await Invoke<OracleQueryTool>(("sql", "SELECT COUNT(*) FROM sys.obj$")));
+        Assert.StartsWith("1 row", await Invoke<OracleQueryTool>(("sql", $"SELECT COUNT(*) FROM {LiveOracle.Owner}.ns_orders o WHERE o.id > 0")));
 
-        string tables = await Invoke<OracleTablesTool>(("pattern", "ns_"), ("schema", LiveOracle.Owner.ToLowerInvariant()));
+        string tables = await Invoke<OracleTablesTool>(("pattern", "ns_"));
         Assert.Contains("| " + LiveOracle.Owner + " | NS_CUSTOMERS | table |", tables);
         Assert.Contains("People who buy things", tables);
 
@@ -160,7 +163,7 @@ public sealed class LiveOracleTests
 
         Assert.Equal(OracleText.TableNotFound("ns_nothing", "free", LiveOracle.Owner), await Invoke<OracleDescribeTool>(("table", "ns_nothing")));
         Assert.Contains(LiveOracle.Owner + ".NS_ORDERS.CUSTOMER_ID -> " + LiveOracle.Owner + ".NS_CUSTOMERS.ID", await Invoke<OracleRelationshipsTool>(("table", "ns_customers")));
-        Assert.Contains("| " + LiveOracle.Owner + ".NS_CUSTOMERS | table | EMAIL | VARCHAR2(200) | yes | Where to write |", await Invoke<OracleColumnsTool>(("pattern", "email"), ("schema", LiveOracle.Owner)));
+        Assert.Contains("| " + LiveOracle.Owner + ".NS_CUSTOMERS | table | EMAIL | VARCHAR2(200) | yes | Where to write |", await Invoke<OracleColumnsTool>(("pattern", "email")));
         string indexes = await Invoke<OracleIndexesTool>(("table", "ns_orders"));
         Assert.StartsWith("2 indexes on " + LiveOracle.Owner + ".NS_ORDERS in free", indexes);
         Assert.Contains("NS_ORDERS_CUSTOMER_IX", indexes);
@@ -236,7 +239,7 @@ public sealed class LiveOracleTests
     [LiveOracleFact]
     public async Task TheWizardsTest_SaysWhoItIs_AndWarnsOfAnAccountThatCanWrite()
     {
-        var run = await _access.RunAsync("free", null, null, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers], [], 50, 30, CancellationToken.None);
+        var run = await _access.RunAsync("free", null, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers], [], 50, 30, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, run.Outcome);
         Assert.Equal(LiveOracle.Owner, run.Grids[0].Rows[0][0]);
         Assert.StartsWith(LiveOracle.Release.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".", run.Grids[0].Rows[0][2]);

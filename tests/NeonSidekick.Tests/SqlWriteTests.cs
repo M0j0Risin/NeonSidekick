@@ -135,7 +135,6 @@ public sealed class SqlWriteGateTests
     public void TheBoundary_RefusesAnotherDatabase(string sql, string? other)
     {
         Assert.Equal(other is null ? null : SqlText.OtherDatabase(other, "scratch"), SqlBoundary.Check(sql, "scratch"));
-        Assert.Null(SqlStatementKinds.Family.NamesElsewhere);
     }
 
     /// <summary>What describes the whole server rather than the database (2026-10-09, the user's pick): refused; the database's own catalog reads.</summary>

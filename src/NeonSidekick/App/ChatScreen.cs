@@ -5149,14 +5149,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The eight Oracle tools (2026-09-30), <see cref="SqlTools"/>' twin, offered on every turn while <see cref="OracleOffered"/>
-    /// says so (headless too): the connections first, then the catalog from the schemas down to a table and its indexes, the
-    /// query last. Each reads the settings in force at the call and <c>oracle.json</c> afresh.
+    /// The Oracle tools (2026-09-30), <see cref="SqlTools"/>' twin, offered on every turn while <see cref="OracleOffered"/>
+    /// says so (headless too): the connections first, then the catalog from the schema down to a table and its indexes, the
+    /// query last (<c>oracle_schemas</c> gone 2026-10-09 with the lock to each connection's schema). Each reads the settings in force at the call and <c>oracle.json</c> afresh.
     /// </summary>
     public static IReadOnlyList<AIFunction> OracleTools(OracleAccess oracle, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
     {
         new OracleConnectionsTool(oracle, effective),
-        new OracleSchemasTool(oracle, effective),
         new OracleTablesTool(oracle, effective),
         new OracleColumnsTool(oracle, effective),
         new OracleDescribeTool(oracle, effective),
@@ -5170,7 +5169,6 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlySet<string> OracleToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
         OracleConnectionsTool.ToolName,
-        OracleSchemasTool.ToolName,
         OracleTablesTool.ToolName,
         OracleColumnsTool.ToolName,
         OracleDescribeTool.ToolName,

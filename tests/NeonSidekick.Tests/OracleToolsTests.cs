@@ -56,15 +56,15 @@ public sealed class OracleToolsTests
         static string[] Properties(AIFunction tool) => tool.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray();
         static string[] Required(AIFunction tool) => tool.JsonSchema.TryGetProperty("required", out var r) ? r.EnumerateArray().Select(e => e.GetString()!).ToArray() : [];
         Assert.Empty(Properties(Tool<OracleConnectionsTool>()));
-        Assert.Equal(["connection"], Properties(Tool<OracleSchemasTool>()));
-        Assert.Equal(["connection", "schema", "pattern"], Properties(Tool<OracleTablesTool>()));
-        Assert.Equal(["table", "connection", "schema"], Properties(Tool<OracleDescribeTool>()));
+        Assert.Equal(["connection", "pattern"], Properties(Tool<OracleTablesTool>()));
+        Assert.Equal(["table", "connection"], Properties(Tool<OracleDescribeTool>()));
         Assert.Equal(["table"], Required(Tool<OracleDescribeTool>()));
-        Assert.Equal(["connection", "schema", "table"], Properties(Tool<OracleRelationshipsTool>()));
-        Assert.Equal(["pattern", "connection", "schema"], Properties(Tool<OracleColumnsTool>()));
+        Assert.Equal(["connection", "table"], Properties(Tool<OracleRelationshipsTool>()));
+        Assert.Equal(["pattern", "connection"], Properties(Tool<OracleColumnsTool>()));
         Assert.Equal(["pattern"], Required(Tool<OracleColumnsTool>()));
-        Assert.Equal(["connection", "table", "schema"], Properties(Tool<OracleIndexesTool>()));
-        Assert.Equal(["sql", "connection", "schema", "params", "max_rows"], Properties(Tool<OracleQueryTool>()));
+        Assert.Equal(["connection", "table"], Properties(Tool<OracleIndexesTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<OracleQueryTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<OracleExecuteTool>()));
         Assert.Equal(["sql"], Required(Tool<OracleQueryTool>()));
         Assert.Contains("FETCH FIRST", Tool<OracleQueryTool>().JsonSchema.GetProperty("properties").GetProperty("sql").GetProperty("description").GetString());
     }
@@ -73,7 +73,6 @@ public sealed class OracleToolsTests
     public async Task WithNoConnection_EveryServerTool_SaysHowToAddOne()
     {
         Assert.Equal(OracleText.NoConnections, await Invoke<OracleConnectionsTool>());
-        Assert.Equal(OracleText.NoConnections, await Invoke<OracleSchemasTool>());
         Assert.Equal(OracleText.NoConnections, await Invoke<OracleTablesTool>());
         Assert.Equal(OracleText.NoConnections, await Invoke<OracleDescribeTool>(("table", "hr.employees")));
         Assert.Equal(OracleText.NoConnections, await Invoke<OracleRelationshipsTool>());
@@ -94,11 +93,11 @@ public sealed class OracleToolsTests
         Assert.DoesNotContain("https://", failed);   // the help link dropped
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleTablesTool>(("connection", "OTHER")));   // by name, any case
         _settings.OracleDefaultConnection = "other";
-        Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleSchemasTool>());   // the default when none is named
+        Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleTablesTool>());   // the default when none is named
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleDescribeTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleRelationshipsTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleColumnsTool>(("pattern", "email")));
-        Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleIndexesTool>(("schema", "hr")));
+        Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleIndexesTool>());
 
         _catalog = new OracleCatalog([new OracleNamedConnection("bare", new OracleConnectionConfig { DataSource = "127.0.0.1:1/x", User = "u" }, "test")], []);
         Assert.Equal(OracleText.ConnectFailed("bare", OracleText.NoPassword("bare")), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual")));
@@ -119,11 +118,59 @@ public sealed class OracleToolsTests
         Assert.Equal(ClockText.BadInteger("max_rows", "lots"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("max_rows", "lots")));
         Assert.Equal(OracleText.BadParams("[1,2]"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("params", Json("[1,2]"))));
         Assert.Equal("Error: '1x' is not a valid parameter name; use letters, digits and _ (bound as :name)", await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("params", Json("""{"1x": 1}"""))));
-        Assert.Equal(OracleText.BadSchema("not a name"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("schema", "not a name")));
-        Assert.Equal(OracleText.BadSchema("x;y"), await Invoke<OracleTablesTool>(("schema", "x;y")));
+        Assert.Equal(OracleText.NoSchemaArgument, await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("schema", "not a name")));
+        Assert.Equal(OracleText.NoSchemaArgument, await Invoke<OracleTablesTool>(("schema", "HR")));
         Assert.Equal(OracleText.NoTable, await Invoke<OracleDescribeTool>(("table", "  ")));
         Assert.Equal(OracleText.BadTable("a.b.c"), await Invoke<OracleDescribeTool>(("table", "a.b.c")));
         Assert.Equal(OracleText.NoPattern, await Invoke<OracleColumnsTool>());
+    }
+
+    /// <summary>
+    /// The lock to the connection's schema (2026-10-09): every tool refuses a <c>schema</c>; the dictionary's views of the whole database
+    /// and a table named in another schema are refused before any connect; a qualifier but the schema's own sends for the users' names.
+    /// </summary>
+    [Fact]
+    public async Task EveryTool_KeepsToTheConnectionsSchema()
+    {
+        _catalog = new OracleCatalog([Unreachable("down")], []);
+        foreach (var tool in _tools)
+        {
+            Assert.Equal(OracleText.NoSchemaArgument, (string)(await tool.InvokeAsync(Args(("sql", "SELECT 1 FROM dual"), ("table", "t"), ("pattern", "x"), ("schema", "HR"))))!);
+        }
+
+        Assert.Equal(OracleText.Dictionary("ALL_TABLES", "READER"), await Invoke<OracleQueryTool>(("sql", "SELECT table_name FROM all_tables")));
+        Assert.Equal(OracleText.Dictionary("V$SESSION", "READER"), await Invoke<OracleQueryTool>(("sql", "SELECT * FROM v$session")));
+        Assert.Equal(OracleText.TableElsewhere("HR", "READER"), await Invoke<OracleDescribeTool>(("table", "hr.employees")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM reader.t")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM reader.all_orders")));   // its own, written out
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM hr.employees")));   // the names read first
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM hr.employees", "HR")]
+    [InlineData("SELECT * FROM \"HR\".employees e WHERE e.id = 1", "HR")]
+    [InlineData("SELECT e.id FROM employees e", null)]
+    [InlineData("SELECT * FROM t hr WHERE hr.a = 1", "HR")]
+    [InlineData("INSERT INTO t VALUES (s.NEXTVAL)", null)]
+    [InlineData("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN :NEW.a := 1; END;", null)]
+    [InlineData("SELECT DBMS_LOB.GETLENGTH(c) FROM t", null)]
+    [InlineData("SELECT * FROM sys.obj$", "SYS")]
+    public void TheBoundary_RefusesAnotherSchema(string sql, string? other)
+    {
+        string[] visible = ["NEON", "HR", "SYS", "SYSTEM"];
+        Assert.Equal(other is null ? null : OracleText.OtherSchema(other, "NEON"), OracleBoundary.Check(sql, "NEON", visible));
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM all_users", "ALL_USERS")]
+    [InlineData("SELECT * FROM SYS.DBA_TABLES", "DBA_TABLES")]
+    [InlineData("SELECT * FROM gv$sql", "GV$SQL")]
+    [InlineData("SELECT * FROM \"CDB_DATA_FILES\"", "CDB_DATA_FILES")]
+    public void TheBoundary_RefusesTheDictionarysWholeDatabaseViews(string sql, string named)
+    {
+        Assert.Equal(OracleText.Dictionary(named, "NEON"), OracleBoundary.Check(sql, "NEON", []));
+        Assert.Null(OracleBoundary.Check("SELECT * FROM user_tables", "NEON", []));
+        Assert.Null(OracleBoundary.Check("SELECT * FROM neon.all_orders", "NEON", ["NEON"]));
     }
 
     [Fact]
@@ -139,7 +186,7 @@ public sealed class OracleToolsTests
         var items = ChatScreen.OracleChoices(catalog);
 
         Assert.Equal(["free", "ledger"], items.Select(i => i.Text));
-        Assert.Equal(["Oracle · localhost:1521/FREEPDB1 / HR — the container", "Oracle · db:1521/LEDGER"], items.Select(i => i.Note));
+        Assert.Equal(["Oracle · localhost:1521/FREEPDB1 / HR — the container", "Oracle · db:1521/LEDGER / RO"], items.Select(i => i.Note));   // the account's own schema when none is named (2026-10-09)
         Assert.Empty(ChatScreen.OracleChoices(OracleCatalog.Empty));
         Assert.True(new AppSettingsData().OraclePercentMention);
         Assert.False(new AppSettingsData().OracleTools);   // off by default, as SQL tools is

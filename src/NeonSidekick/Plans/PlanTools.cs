@@ -31,7 +31,7 @@ public static class PlanTools
         // SQL: read-only by three layers already
         "sql_connections", "sql_tables", "sql_columns", "sql_describe", "sql_indexes", "sql_relationships", "sql_query",
         // Oracle: read-only by four layers already (2026-09-30)
-        "oracle_connections", "oracle_schemas", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_indexes", "oracle_relationships", "oracle_query",
+        "oracle_connections", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_indexes", "oracle_relationships", "oracle_query",
         // MySQL and MariaDB: read-only by the same layers (2026-09-30)
         "mysql_connections", "mysql_tables", "mysql_columns", "mysql_describe", "mysql_indexes", "mysql_relationships", "mysql_query",
         // UNC shares: the reads (2026-09-30); unc_fetch writes the working directory, so it is not here

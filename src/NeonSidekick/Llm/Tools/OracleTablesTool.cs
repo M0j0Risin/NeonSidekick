@@ -21,7 +21,6 @@ public sealed class OracleTablesTool : OracleTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            "schema": { "type": "string", "description": "Only this schema (HR, SALES, …); leave it out for every schema the account can see." },
             "pattern": { "type": "string", "description": "Only names containing this text (case-insensitive), or matching it as a LIKE pattern when it holds % over NAME or SCHEMA.NAME; leave it out for all." }
           }
         }
@@ -35,7 +34,7 @@ public sealed class OracleTablesTool : OracleTool
 
     public override string Description =>
         "Lists the tables and views of an Oracle database as SCHEMA.NAME, with each one's kind, the optimizer's row count and its comment. " +
-        "Narrow it with schema and pattern; then oracle_describe a table before querying it.";
+        "Narrow it with pattern; then oracle_describe a table before querying it.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -56,26 +55,21 @@ public sealed class OracleTablesTool : OracleTool
         return text.Contains('%', StringComparison.Ordinal) ? text : "%" + text + "%";
     }
 
-    public async Task<string> DescribeAsync(string? connection, string? schema, string? pattern, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string? connection, string? pattern, CancellationToken cancellationToken)
     {
-        if (!TryReadSchema(schema, out var owner, out var error))
-        {
-            return error!;
-        }
-
-        var run = await CatalogAsync(connection, null, [OracleCatalogQueries.Tables], [new SqlParameterValue("schema", owner), new SqlParameterValue("pattern", LikePattern(pattern))], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, [OracleCatalogQueries.Tables], [new SqlParameterValue("pattern", LikePattern(pattern))], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return OracleText.Error(run);
         }
 
-        var listed = run.Grids.Count > 0 ? run with { Grids = [SqlText.WithoutEmptyColumn(run.Grids[0], "description")], Database = "" } : run;
+        var listed = run.Grids.Count > 0 ? run with { Grids = [SqlText.WithoutEmptyColumn(run.Grids[0], "description")] } : run;
         return OracleText.Listing("table or view", "tables and views", listed, Files.WorkingDirectory.MaxReadChars);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), Optional(arguments, PatternArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, PatternArgument), cancellationToken).ConfigureAwait(false);
     }
 }

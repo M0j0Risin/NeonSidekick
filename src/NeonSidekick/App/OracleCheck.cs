@@ -42,14 +42,14 @@ internal static class OracleCheck
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var access = new OracleAccess(() => catalog);
         var checks = new List<SmokeCheck>();
-        if (catalog.Find(name, null) is null || string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name, null) is not { } target)
         {
             checks.Add(new SmokeCheck("oracle:connection", false, catalog.Connections.Count == 0 ? OracleText.NoConnections : OracleText.UnknownConnection(name, string.Join(", ", catalog.Connections.Select(c => c.Name)))));
             return Report(console, checks);
         }
 
         Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout, CancellationToken token) =>
-            access.RunAsync(name, null, null, statements, [], 10, timeout, token);
+            access.RunAsync(name, null, statements, [], 10, timeout, token);
 
         var who = await Run([OracleCatalogQueries.WhoAmI], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)
@@ -73,6 +73,14 @@ internal static class OracleCheck
         string[] bypasses = ["SELECT 1 FROM dual FOR UPDATE", "WITH FUNCTION f RETURN NUMBER IS BEGIN RETURN 1; END; SELECT f FROM dual", "SELECT s.NEXTVAL FROM dual", "SELECT 1 FROM t@remote", "SELECT 1 FROM dual; DELETE FROM t"];
         var passed = bypasses.Where(b => OracleReadOnlyGate.Check(b) is null).ToList();
         checks.Add(new SmokeCheck("oracle:gate", passed.Count == 0, passed.Count == 0 ? $"refused all {bypasses.Length.ToString(CultureInfo.InvariantCulture)} bypasses" : "let through: " + string.Join(" | ", passed)));
+
+        string place = OracleAccess.Place(target.Config);
+        var names = await access.RunAsync(name, null, [OracleBoundary.Names], [], OracleBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        checks.Add(BoundaryCheck(place, names));
+        var reach = await access.RunAsync(name, null, OracleCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        checks.Add(new SmokeCheck("oracle:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
+            ? OracleText.Reach(place, Column(reach, 0), Column(reach, 1))
+            : OracleText.Error(reach)));
 
         var locked = await Run(["SELECT dummy FROM sys.dual FOR UPDATE"], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         bool refused = locked.Outcome == SqlOutcome.Failed && (locked.Detail.Contains("ORA-28193", StringComparison.Ordinal) || locked.Detail.Contains("ORA-01456", StringComparison.Ordinal));
@@ -100,6 +108,36 @@ internal static class OracleCheck
         var timedOut = await Run([SlowQuery], 1, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("oracle:timeout", timedOut.Outcome == SqlOutcome.Timeout, timedOut.Outcome == SqlOutcome.Timeout ? "ORA-01013 after 1 s" : timedOut.Outcome + " " + timedOut.Detail));
         return Report(console, checks);
+    }
+
+    /// <summary>The first column of one of a run's result sets.</summary>
+    private static List<string> Column(SqlRun run, int set) => set < run.Grids.Count ? run.Grids[set].Rows.Select(r => r[0]).ToList() : [];
+
+    /// <summary>
+    /// The lock's line, over the users the database lists: the dictionary's views of the whole database, SYS and another user (when
+    /// there is one) refused; the schema's own written out, an alias and a sequence's NEXTVAL passed.
+    /// </summary>
+    private static SmokeCheck BoundaryCheck(string place, SqlRun names)
+    {
+        if (names.Outcome != SqlOutcome.Ok)
+        {
+            return new SmokeCheck("oracle:boundary", false, OracleText.Error(names));
+        }
+
+        var visible = Column(names, 0);
+        var outside = new List<string> { "SELECT * FROM all_tables", "SELECT * FROM v$session", "SELECT * FROM dba_users", "SELECT * FROM sys.obj$" };
+        if (visible.FirstOrDefault(v => !v.Equals(place, StringComparison.Ordinal) && v != "SYS") is { } other)
+        {
+            outside.Add($"SELECT 1 FROM \"{other}\".t");
+        }
+
+        string[] inside = [$"SELECT * FROM \"{place}\".t", "SELECT e.id FROM t e", "SELECT s.NEXTVAL FROM dual", "SELECT * FROM user_tables"];
+        var passed = outside.Where(s => OracleBoundary.Check(s, place, visible) is null).ToList();
+        var refused = inside.Where(s => OracleBoundary.Check(s, place, visible) is not null).ToList();
+        bool ok = passed.Count == 0 && refused.Count == 0;
+        return new SmokeCheck("oracle:boundary", ok, ok
+            ? $"held to schema {place}: refused all {outside.Count.ToString(CultureInfo.InvariantCulture)} reaches outside it"
+            : (passed.Count > 0 ? "let through: " + string.Join(" | ", passed) : "") + (refused.Count > 0 ? " refused: " + string.Join(" | ", refused) : ""));
     }
 
     /// <summary>The type matrix's line: every cell read — none left unreadable, the 38-digit number whole, the CLOB clipped, not lost.</summary>

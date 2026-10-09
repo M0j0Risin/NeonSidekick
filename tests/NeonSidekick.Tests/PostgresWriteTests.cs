@@ -86,10 +86,6 @@ public sealed class ServerWriteTests
         Assert.Equal("The model wants to change shop/sales (PostgreSQL, database sales):\nDELETE FROM t", ServerWriteText.AllowCaption(Family, "shop", "sales", " DELETE FROM t "));
         Assert.Equal("Change a PostgreSQL database?", ServerWriteText.AllowTitle(Family));
         Assert.Equal(
-            "The model wants to change shop/sales (PostgreSQL, database sales):\nDELETE FROM t\nIt qualifies a name with something other than the database, so it may reach another one; a session's allow never covers it.",
-            ServerWriteText.AllowCaption(Family, "shop", "sales", "DELETE FROM t", elsewhere: true));
-        Assert.Null(Family.NamesElsewhere);
-        Assert.Equal(
             "Error: mysql_execute cannot tell where the routine's body ends; write the body as BEGIN … END and quote any name spelled like a block word (BEGIN, END, a label)",
             ServerWriteText.UnclearBody(NeonSidekick.MySql.MySqlStatementKinds.Family));
         Assert.Equal("shop/sales: 2 rows changed by INSERT …", ServerWriteText.AuditLogLine("shop/sales", 2, "INSERT …"));

@@ -27,12 +27,6 @@ public sealed record ServerWriteFamily(
 
     /// <summary>Where the user changes either: <c>the PostgreSQL tab of /tools</c>.</summary>
     public string Tab => "the " + Title + " tab of /tools";
-
-    /// <summary>
-    /// Whether a statement (the first argument) may reach past the place a call names (the second): the family's
-    /// <c>NamesElsewhere</c> (the review, 2026-10-05). Null where a connection cannot leave its place (PostgreSQL's database).
-    /// </summary>
-    public Func<string, string, bool>? NamesElsewhere { get; init; }
 }
 
 /// <summary>
@@ -114,21 +108,16 @@ public static class ServerWriteText
     /// <summary>The allow pane's title. Pinned.</summary>
     public static string AllowTitle(ServerWriteFamily family) => $"Change a {family.Engine} database?";
 
-    /// <summary>The allow pane's caption: where the change would land, and the statement. Pinned.</summary>
-    public static string AllowCaption(ServerWriteFamily family, string connection, string place, string sql, bool elsewhere = false)
+    /// <summary>
+    /// The allow pane's caption: where the change would land, and the statement. Pinned. (A statement that reached past the place was
+    /// asked about every time from the review of 2026-10-05; since 2026-10-09 each family's boundary refuses it before the pane.)
+    /// </summary>
+    public static string AllowCaption(ServerWriteFamily family, string connection, string place, string sql)
     {
         ArgumentNullException.ThrowIfNull(family);
         ArgumentNullException.ThrowIfNull(sql);
         string where = place.Length == 0 ? connection : connection + "/" + place;
-        return $"The model wants to change {where} ({family.Engine}, {family.Place} {(place.Length == 0 ? "the connection's own" : place)}):\n" + Clip(sql.Trim(), 1200)
-            + (elsewhere ? "\n" + NamesElsewhere(family) : "");
-    }
-
-    /// <summary>The allow caption's last line for a statement that qualifies a name with something but the place (the review, 2026-10-05). Pinned.</summary>
-    public static string NamesElsewhere(ServerWriteFamily family)
-    {
-        ArgumentNullException.ThrowIfNull(family);
-        return $"It qualifies a name with something other than the {family.Place}, so it may reach another one; a session's allow never covers it.";
+        return $"The model wants to change {where} ({family.Engine}, {family.Place} {(place.Length == 0 ? "the connection's own" : place)}):\n" + Clip(sql.Trim(), 1200);
     }
 
     /// <summary>The audit line of a change (every one run): where, the rows changed (when the server counts them), the statement. Pinned.</summary>

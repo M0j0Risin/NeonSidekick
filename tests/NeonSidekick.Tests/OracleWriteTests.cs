@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
@@ -94,16 +95,19 @@ public sealed class OracleWriteGateTests
         Assert.Equal([ServerStatementKind.Procedures], OracleWriteGate.Kinds("CREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;"));
     }
 
-    /// <summary>What may reach past the schema a call names (the review, 2026-10-05): any qualifier but the place; a sequence's values and a bind's fields do not count.</summary>
+    /// <summary>
+    /// What reaches past the connection's schema (the review, 2026-10-05, asked about every time; refused since 2026-10-09,
+    /// <see cref="OracleBoundary"/>): the qualifiers the users' names are read for — a sequence's values and a bind's fields are none.
+    /// </summary>
     [Theory]
-    [InlineData("DELETE FROM hr.employees", "NEON", true)]
-    [InlineData("DELETE FROM neon.employees", "NEON", false)]
-    [InlineData("INSERT INTO t VALUES (s.NEXTVAL)", "NEON", false)]
-    [InlineData("INSERT INTO t VALUES (hr.s.NEXTVAL)", "NEON", true)]
-    [InlineData("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN :NEW.a := 1; END;", "NEON", false)]
-    [InlineData("UPDATE t SET t.a = 1", "NEON", true)]
-    public void NamesElsewhere_AnyQualifierButThePlace(string sql, string place, bool elsewhere) =>
-        Assert.Equal(elsewhere, OracleStatementKinds.Family.NamesElsewhere!(sql, place));
+    [InlineData("DELETE FROM hr.employees", "HR")]
+    [InlineData("DELETE FROM neon.employees", "")]
+    [InlineData("INSERT INTO t VALUES (s.NEXTVAL)", "")]
+    [InlineData("INSERT INTO t VALUES (hr.s.NEXTVAL)", "HR")]
+    [InlineData("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN :NEW.a := 1; END;", "")]
+    [InlineData("UPDATE t SET t.a = 1", "T")]
+    public void TheBoundary_AsksTheDatabaseOnlyAboutAnotherQualifier(string sql, string heads) =>
+        Assert.Equal(heads, string.Join(",", OracleBoundary.Qualifiers(sql, "NEON").Heads));
 
     [Fact]
     public void TheBody_KeepsAPlSqlUnitsSemicolon_AndDropsPlainSqls()
@@ -126,7 +130,7 @@ public sealed class OracleExecuteTests
         new(() => new OracleCatalog([new OracleNamedConnection("hr", Config("readwrite"), "x.json"), new OracleNamedConnection("ro", Config(null), "x.json")], []).Offered(_settings.OracleConnectionsOffered));
 
     [Fact]
-    public async Task TheTool_ChecksInOrder_ThenAsks_PerConnectionAndSchema()
+    public async Task TheTool_ChecksInOrder_ThenAsks_PerConnection()
     {
         var asked = new List<(string Connection, string Place, string Sql)>();
         var tool = new OracleExecuteTool(Access(), () => _settings, (_, connection, place, sql, _) =>
@@ -135,19 +139,21 @@ public sealed class OracleExecuteTests
             return Task.FromResult<bool?>(false);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = :id;", null, null, [new("id", 1L)], null, CancellationToken.None));
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("BEGIN NULL; END;\n/", "hr", "app", [], null, CancellationToken.None));
-        Assert.Equal([("hr", "HR", "DELETE FROM t WHERE id = :id"), ("hr", "APP", "BEGIN NULL; END;")], asked);
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = :id;", null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("BEGIN NULL; END;\n/", "hr", [], null, CancellationToken.None));
+        Assert.Equal([("hr", "HR", "DELETE FROM t WHERE id = :id"), ("hr", "HR", "BEGIN NULL; END;")], asked);
 
         asked.Clear();
-        Assert.Equal(ServerWriteText.ReadOnlyConnection(OracleStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", null, [], null, CancellationToken.None));
-        Assert.Equal(OracleText.BadSchema("1bad"), await tool.RunAsync("DELETE FROM t", null, "1bad", [], null, CancellationToken.None));
-        Assert.StartsWith("Error: the SQL uses UTL_HTTP", await tool.RunAsync("SELECT UTL_HTTP.REQUEST('x') FROM dual", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyConnection(OracleStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
+        Assert.Equal(OracleText.NoSchemaArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "DELETE FROM t", ["schema"] = "APP" }))!);   // 2026-10-09
+        Assert.Equal(OracleText.Dictionary("DBA_USERS", "HR"), await tool.RunAsync("SELECT * FROM dba_users", null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("DELETE FROM app.t", "hr", [], null, CancellationToken.None));   // the names read first, never the pane
+        Assert.StartsWith("Error: the SQL uses UTL_HTTP", await tool.RunAsync("SELECT UTL_HTTP.REQUEST('x') FROM dual", null, [], null, CancellationToken.None));
         _settings.OracleMode = "read-only";
-        Assert.Equal(ServerWriteText.ReadOnlyMode(OracleStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyMode(OracleStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         Assert.Empty(asked);
         _settings.OracleMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(OracleStatementKinds.Family), await new OracleExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(OracleStatementKinds.Family), await new OracleExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -173,8 +179,8 @@ public sealed class OracleExecuteTests
     {
         _settings.OracleConnectionsOffered = ["hr", "ro"];
         string listing = new OracleConnectionsTool(Access(), () => _settings).Describe();
-        Assert.Contains("- hr (default): 127.0.0.1:1/X, user hr, schema HR, read-write", listing);
-        Assert.Contains("- ro: 127.0.0.1:1/X, user hr, schema HR", listing);
+        Assert.Contains("- hr (default): 127.0.0.1:1/X, user hr, schema HR alone, read-write", listing);
+        Assert.Contains("- ro: 127.0.0.1:1/X, user hr, schema HR alone", listing);
         Assert.EndsWith("a read-only account is the real guard.", OracleText.CanWrite(["INSERT ANY TABLE"]));
         Assert.Contains("as readwrite, oracle_execute may use those powers", OracleText.CanWrite(["INSERT ANY TABLE"], readWrite: true));
         Assert.True(OracleExecuteTool.IsTooNew(new SqlRun(SqlOutcome.Failed, "ORA-01466: unable to read data - table definition has changed", "x", "", [], TimeSpan.Zero)));
@@ -210,26 +216,26 @@ public sealed class LiveOracleWriteTests
         string table = "NS_WRITE_" + id, proc = "NS_BUMP_" + id;
         try
         {
-            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id NUMBER PRIMARY KEY, a VARCHAR2(10));", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Changed 1 row in live/", await tool.RunAsync($"INSERT INTO {table} VALUES (1, :a)", null, null, [new("a", "x")], null, CancellationToken.None));
-            Assert.StartsWith("Changed 1 row", await tool.RunAsync($"INSERT INTO {table} VALUES (2, 'b')", null, null, [], null, CancellationToken.None));
+            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id NUMBER PRIMARY KEY, a VARCHAR2(10));", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Changed 1 row in live/", await tool.RunAsync($"INSERT INTO {table} VALUES (1, :a)", null, [new("a", "x")], null, CancellationToken.None));
+            Assert.StartsWith("Changed 1 row", await tool.RunAsync($"INSERT INTO {table} VALUES (2, 'b')", null, [], null, CancellationToken.None));
             Assert.StartsWith("Ran it", await tool.RunAsync(
                 $"CREATE OR REPLACE PROCEDURE {proc} (n IN NUMBER) AS BEGIN FOR i IN 1 .. n LOOP UPDATE {table} SET a = a || '+' WHERE id = 1; END LOOP; END;\n/",
-                null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Ran it", await tool.RunAsync($"BEGIN {proc}(2); END;", null, null, [], null, CancellationToken.None));
-            Assert.Contains("| x++ |", await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, null, [], null, CancellationToken.None));   // read again past ORA-01466
+                null, [], null, CancellationToken.None));
+            Assert.StartsWith("Ran it", await tool.RunAsync($"BEGIN {proc}(2); END;", null, [], null, CancellationToken.None));
+            Assert.Contains("| x++ |", await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, [], null, CancellationToken.None));   // read again past ORA-01466
             Assert.Equal(5, asked.Count);   // the read asked nothing
-            Assert.StartsWith("Error: the server refused it", await tool.RunAsync($"INSERT INTO {table} VALUES (1, 'dup')", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, null, [], null, CancellationToken.None));
+            Assert.StartsWith("Error: the server refused the SQL (live", await tool.RunAsync($"INSERT INTO {table} VALUES (1, 'dup')", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, [], null, CancellationToken.None));
         }
         finally
         {
-            await tool.RunAsync($"DROP PROCEDURE {proc}", null, null, [], null, CancellationToken.None);
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE {table} PURGE", null, null, [], null, CancellationToken.None));
+            await tool.RunAsync($"DROP PROCEDURE {proc}", null, [], null, CancellationToken.None);
+            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE {table} PURGE", null, [], null, CancellationToken.None));
         }
 
         var (readOnly, roAsked) = Tool(null);
-        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE NS_NEVER (a NUMBER)", null, null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE NS_NEVER (a NUMBER)", null, [], null, CancellationToken.None));
         Assert.Empty(roAsked);
     }
 }

@@ -26,6 +26,6 @@ public sealed class OracleConnectionsTool : OracleTool
 
     public string Describe() => OracleText.Connections(Oracle.Catalog(), Effective.OracleDefaultConnection, Sql.DatabaseWriteModes.IsReadWrite(Effective.OracleMode));
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+    protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         new(Describe());
 }
