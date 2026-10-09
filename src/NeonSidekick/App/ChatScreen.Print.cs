@@ -94,10 +94,33 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        PrintCommandResult result;
+        PrintCommandResult? result;
         try
         {
-            result = await _transcript.WithSpinnerAsync(PrintText.Working, () => PrintCommand.RunAsync(_print, args, () => _log.LastReply, cancellationToken)).ConfigureAwait(false);
+            if (_turnRunning)
+            {
+                // Under a reply's own watch already: the plain spinner, so that watch's state is never taken from it.
+                result = await _transcript.WithSpinnerAsync(PrintText.Working, () => PrintCommand.RunAsync(_print, args, () => _log.LastReply, cancellationToken)).ConfigureAwait(false);
+            }
+            else
+            {
+                // ESC or Ctrl+C cancels a print (2026-10-08, found proving a Mac's: /print had only the app's token): /imagine's
+                // watch, so the spooler withdraws a job half sent — CUPS purges it, Windows aborts the document between pages.
+                // A print that went through before the key took effect keeps its result: the watch reports any ESC as a cancel,
+                // and "(print cancelled)" over a job the printer has would be false (found proving a Mac's, 2026-10-08).
+                PrintCommandResult? done = null;
+                await UnderWatchAsync(PrintText.Working, async token => done = await PrintCommand.RunAsync(_print, args, () => _log.LastReply, token).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                result = done;
+                if (result is null)
+                {
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _transcript.Notice(PrintText.Cancelled);
+                    }
+
+                    return;
+                }
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

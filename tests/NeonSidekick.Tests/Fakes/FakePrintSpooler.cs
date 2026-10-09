@@ -44,9 +44,27 @@ public sealed class FakePrintSpooler : IPrintSpooler
         return new Surface(PageMetrics.Letter(landscape));
     }
 
+    /// <summary>A slow printer (2026-10-08): <see cref="Print"/> waits for its token (30 s at most) and throws, as a job withdrawn mid-send does.</summary>
+    public bool WaitForCancel { get; set; }
+
+    /// <summary>With <see cref="WaitForCancel"/>: the job goes through anyway once cancelled, as one the printer had before the key.</summary>
+    public bool FinishAnyway { get; set; }
+
+    /// <summary>Told when a job starts, before it waits: the test pushes its ESC there, so nothing else can take the key first.</summary>
+    public Action? Started { get; set; }
+
     public string? Print(PrintJob job, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        Started?.Invoke();
+        if (WaitForCancel && !cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(30)))
+        {
+            throw new TimeoutException("the print was never cancelled");
+        }
+
+        if (!FinishAnyway)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
         Jobs.Add(job);
         if (FailWith is null && job.OutputFile is not null && OutputBytes is not null)
         {

@@ -14,7 +14,8 @@ namespace NeonSidekick.Printing;
 /// <c>cupsCreateJob</c>, <c>cupsStartDocument</c>, <c>cupsWriteRequestData</c> in 64 KB chunks, <c>cupsFinishDocument</c>, all on
 /// a connection of the job's own. A cancel before the job exists sends nothing; during the writing it closes that connection
 /// (the half-sent document is never finished) and purges the job with <c>cupsCancelJob2</c> on the thread's default one, then
-/// throws as Windows' <c>AbortDoc</c> path does; after <c>cupsFinishDocument</c> the job is CUPS'. A job with an output file
+/// throws as Windows' <c>AbortDoc</c> path does; one that lands while <c>cupsFinishDocument</c> waits cancels the job CUPS
+/// already has, the same way. A job with an output file
 /// writes the PDF there and submits nothing (the smoke's way, and print-to-file's meaning here). A PDF goes to CUPS as it is
 /// (<see cref="ShellPrint(string, string, int, IReadOnlyList{int}?, CancellationToken)"/>: printer, copies and pages as IPP
 /// options); nothing else the app does not draw has a printer path on a Mac. Excluded from coverage: the decisions are
@@ -230,6 +231,15 @@ public sealed unsafe class MacPrintSpooler : IPrintSpooler
 
             int status = cupsFinishDocument(http, printer);
             finished = true;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // Cancelled while CUPS took the last of it (2026-10-08, found proving it: the loopback socket swallows a whole PDF,
+                // so the wait is here, not between chunks): the job is CUPS' now, so it is cancelled there — purged if it waits,
+                // stopped if it prints.
+                Withdraw(ref http, printer, jobId, null);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
             return status < IppFirstError ? null : Withdraw(ref http, printer, jobId, PrintText.Failed(printer, LastError()));
         }
         catch (Exception) when (jobId != 0 && !finished && http != 0)

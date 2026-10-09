@@ -15184,6 +15184,52 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// ESC cancels a <c>/print</c> (2026-10-08, found proving a Mac's: it had only the app's token): the spooler's token ends, the
+    /// job is withdrawn, the transcript says so and nothing is reported printed.
+    /// </summary>
+    [Fact]
+    public async Task Print_Esc_CancelsThePrint()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "hello");
+        var input = Scripted();
+        _printSpooler.WaitForCancel = true;
+        _printSpooler.Started = () => input.Push(Keys.Escape);
+        PushLine("/print notes.txt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + NeonSidekick.Printing.PrintText.Cancelled, output);
+        Assert.DoesNotContain("Printed notes.txt", output);
+        Assert.Empty(_printSpooler.Jobs);
+    }
+
+    /// <summary>An ESC too late (2026-10-08): the printer had the job, so the result is "Printed", never "(print cancelled)".</summary>
+    [Fact]
+    public async Task Print_EscTooLate_ShowsThePrintThatWentThrough()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "hello");
+        var input = Scripted();
+        _printSpooler.WaitForCancel = true;
+        _printSpooler.FinishAnyway = true;
+        _printSpooler.Started = () => input.Push(Keys.Escape);
+        PushLine("/print notes.txt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("Printed notes.txt: 1 page to Office Laser", output);
+        Assert.DoesNotContain(NeonSidekick.Printing.PrintText.Cancelled, output);
+        Assert.Single(_printSpooler.Jobs);
+    }
+
     /// <summary>With no viewer (not Windows) a picture is drawn in the transcript as <c>--chat</c> draws it, and a folder is an error.</summary>
     [Fact]
     public async Task View_WithoutAViewer_DrawsThePicture_AndAFolderIsAnError()

@@ -245,6 +245,9 @@ public static class PrintText
 
     public const string Working = "Printing";
 
+    /// <summary>A <c>/print</c> cancelled by ESC or Ctrl+C (2026-10-08): a job half sent was withdrawn, so nothing prints. Pinned.</summary>
+    public const string Cancelled = "(print cancelled)";
+
     public const string ReplyWord = "reply";
 
     public const string PrintersWord = "printers";
