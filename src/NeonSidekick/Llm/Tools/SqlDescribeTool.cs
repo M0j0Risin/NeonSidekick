@@ -6,7 +6,7 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>sql_describe(table, connection?, database?)</c>: one table or view's columns (types as declared, nullability,
+/// <c>sql_describe(table, connection?)</c>: one table or view's columns (types as declared, nullability,
 /// identity, default, primary key), its foreign keys out and in, and its indexes. A bare name finds the one schema
 /// that has it; an unknown name is an explicit not-found (the <c>mcp-mssql-read</c> note: a column-less answer
 /// sent a model looping).
@@ -21,8 +21,7 @@ public sealed class SqlDescribeTool : SqlTool
           "type": "object",
           "properties": {
             "table": { "type": "string", "description": "The table or view as schema.name (Sales.SalesOrderHeader); a bare name works when only one schema has it." },
-            {{ConnectionProperty}},
-            {{DatabaseProperty}}
+            {{ConnectionProperty}}
           },
           "required": ["table"]
         }
@@ -40,26 +39,26 @@ public sealed class SqlDescribeTool : SqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string table, string? connection, string? database, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string table, string? connection, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(table))
         {
             return SqlText.NoTable;
         }
 
-        var match = await FindTableAsync(connection, database, table.Trim(), cancellationToken).ConfigureAwait(false);
+        var match = await FindTableAsync(connection, table.Trim(), cancellationToken).ConfigureAwait(false);
         if (match.Error is { } error)
         {
             return error;
         }
 
-        var run = await CatalogAsync(connection, database, SqlCatalogQueries.Describe, [new SqlParameterValue("id", match.Id)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, SqlCatalogQueries.Describe, [new SqlParameterValue("id", match.Id)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? SqlText.Describe(match.Schema, match.Name, match.Kind, run, Files.WorkingDirectory.MaxReadChars) : SqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, ConnectionArgument), cancellationToken).ConfigureAwait(false);
     }
 }

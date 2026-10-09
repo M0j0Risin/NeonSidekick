@@ -6,7 +6,7 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>sql_tables(connection?, database?, schema?, pattern?)</c>: the user tables and views as <c>schema.name</c> —
+/// <c>sql_tables(connection?, schema?, pattern?)</c>: the user tables and views as <c>schema.name</c> —
 /// the schema the <c>mcp-mssql-read</c> server's <c>list_tables</c> dropped — with their kind and approximate
 /// row counts, narrowed by a schema and a name pattern.
 /// </summary>
@@ -22,7 +22,6 @@ public sealed class SqlTablesTool : SqlTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            {{DatabaseProperty}},
             "schema": { "type": "string", "description": "Only this schema (Sales, dbo, …); leave it out for all." },
             "pattern": { "type": "string", "description": "Only names containing this text, or matching it as a LIKE pattern (% and _) over name or schema.name; leave it out for all." }
           }
@@ -53,9 +52,9 @@ public sealed class SqlTablesTool : SqlTool
         return text.Contains('%', StringComparison.Ordinal) || text.Contains('_', StringComparison.Ordinal) ? text : "%" + text + "%";
     }
 
-    public async Task<string> DescribeAsync(string? connection, string? database, string? schema, string? pattern, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string? connection, string? schema, string? pattern, CancellationToken cancellationToken)
     {
-        var run = await CatalogAsync(connection, database, SqlCatalogQueries.Tables, [new SqlParameterValue("schema", schema), new SqlParameterValue("pattern", LikePattern(pattern))], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, SqlCatalogQueries.Tables, [new SqlParameterValue("schema", schema), new SqlParameterValue("pattern", LikePattern(pattern))], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return SqlText.Error(run);
@@ -66,9 +65,9 @@ public sealed class SqlTablesTool : SqlTool
         return SqlText.Listing("table or view", "tables and views", listed, Files.WorkingDirectory.MaxReadChars);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), Optional(arguments, SchemaArgument), Optional(arguments, PatternArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), Optional(arguments, PatternArgument), cancellationToken).ConfigureAwait(false);
     }
 }

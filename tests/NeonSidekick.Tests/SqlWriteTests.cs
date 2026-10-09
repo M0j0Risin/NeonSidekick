@@ -114,21 +114,61 @@ public sealed class SqlWriteGateTests
         Assert.StartsWith("Error: the SQL is changing structure", SqlWriteGate.Check("CREATE OR ALTER VIEW v AS SELECT * FROM t", ServerStatementKinds.Resolve(null)));
     }
 
-    /// <summary>What may reach past the database a call names (the review, 2026-10-05): ScriptDom tells a database's part from a schema's.</summary>
+    /// <summary>
+    /// What reaches past the connection's database (the review, 2026-10-05, asked about every time; refused outright since 2026-10-09,
+    /// <see cref="SqlBoundary"/>): ScriptDom tells a database's part from a schema's and an alias's. The write family asks nothing more.
+    /// </summary>
     [Theory]
-    [InlineData("DELETE FROM payroll.dbo.salaries WHERE id = 1", "scratch", true)]
-    [InlineData("DELETE FROM dbo.salaries WHERE id = 1", "scratch", false)]
-    [InlineData("DELETE FROM Scratch.dbo.t", "scratch", false)]
-    [InlineData("DELETE FROM scratch.dbo.t", "", true)]
-    [InlineData("INSERT INTO t SELECT x FROM other.dbo.u", "scratch", true)]
-    [InlineData("UPDATE t SET a = other.dbo.f(1)", "scratch", true)]
-    [InlineData("UPDATE t SET a = dbo.f(1), b = t.c", "scratch", false)]
-    [InlineData("EXEC payroll.dbo.p", "scratch", true)]
-    [InlineData("not sql at all (", "scratch", true)]
-    public void NamesElsewhere_ADatabaseButThePlace(string sql, string place, bool elsewhere)
+    [InlineData("DELETE FROM payroll.dbo.salaries WHERE id = 1", "payroll")]
+    [InlineData("DELETE FROM dbo.salaries WHERE id = 1", null)]
+    [InlineData("DELETE FROM Scratch.dbo.t", null)]
+    [InlineData("DELETE FROM [scratch]..t", null)]
+    [InlineData("INSERT INTO t SELECT x FROM other.dbo.u", "other")]
+    [InlineData("UPDATE t SET a = other.dbo.f(1)", "other")]
+    [InlineData("UPDATE t SET a = dbo.f(1), b = t.c", null)]
+    [InlineData("EXEC payroll.dbo.p", "payroll")]
+    [InlineData("SELECT a.Shape.STAsText() FROM dbo.places AS a", null)]
+    [InlineData("SELECT * FROM t WHERE x = other.dbo.t.c", "other")]
+    [InlineData("SELECT OBJECT_ID('other.dbo.t')", "other")]
+    [InlineData("SELECT OBJECT_ID('dbo.t'), OBJECT_ID('scratch.dbo.t')", null)]
+    [InlineData("not sql at all (", null)]
+    public void TheBoundary_RefusesAnotherDatabase(string sql, string? other)
     {
-        Assert.Equal(elsewhere, SqlWriteGate.NamesElsewhere(sql, place));
-        Assert.Equal(elsewhere, SqlStatementKinds.Family.NamesElsewhere!(sql, place));
+        Assert.Equal(other is null ? null : SqlText.OtherDatabase(other, "scratch"), SqlBoundary.Check(sql, "scratch"));
+        Assert.Null(SqlStatementKinds.Family.NamesElsewhere);
+    }
+
+    /// <summary>What describes the whole server rather than the database (2026-10-09, the user's pick): refused; the database's own catalog reads.</summary>
+    [Theory]
+    [InlineData("SELECT name FROM sys.databases", "sys.databases")]
+    [InlineData("SELECT * FROM sys.server_principals", "sys.server_principals")]
+    [InlineData("SELECT * FROM sys.dm_exec_sessions", "sys.dm_exec_sessions")]
+    [InlineData("SELECT t.text FROM sys.dm_exec_requests AS r CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) AS t", "sys.dm_exec_requests")]
+    [InlineData("SELECT * FROM sys.dm_db_index_usage_stats", "sys.dm_db_index_usage_stats")]
+    [InlineData("SELECT * FROM sysprocesses", "sysprocesses")]
+    [InlineData("SELECT * FROM sys.fn_get_audit_file('c:\\a\\*', DEFAULT, DEFAULT)", "fn_get_audit_file")]
+    [InlineData("SELECT DB_NAME(5)", "DB_NAME()")]
+    [InlineData("SELECT HAS_DBACCESS('payroll')", "HAS_DBACCESS()")]
+    [InlineData("SELECT name FROM sys.objects", null)]
+    [InlineData("SELECT * FROM sys.database_principals", null)]
+    [InlineData("SELECT * FROM INFORMATION_SCHEMA.TABLES", null)]
+    [InlineData("SELECT DB_NAME(), DB_ID()", null)]
+    [InlineData("SELECT * FROM dbo.databases", null)]
+    public void TheBoundary_RefusesTheServersCatalog(string sql, string? what)
+    {
+        Assert.Equal(what is null ? null : SqlText.ServerCatalog(what), SqlBoundary.Check(sql, "scratch"));
+    }
+
+    [Theory]
+    [InlineData("payroll.dbo.salaries", "payroll")]
+    [InlineData("[pay.roll].dbo.t", "pay.roll")]
+    [InlineData("\"x\"..t", "x")]
+    [InlineData("srv.db.dbo.t", "db")]
+    [InlineData("dbo.t", null)]
+    [InlineData("t", null)]
+    public void NamedDatabase_IsTheThirdPartFromTheEnd(string name, string? database)
+    {
+        Assert.Equal(database, SqlBoundary.NamedDatabase(name));
     }
 
     [Fact]
@@ -154,7 +194,7 @@ public sealed class SqlExecuteTests
         new(() => new SqlCatalog([new SqlNamedConnection("shop", Config("readwrite"), "x.json"), new SqlNamedConnection("ro", Config(null), "x.json")], []).Offered(_settings.SqlConnectionsOffered));
 
     [Fact]
-    public async Task TheTool_ChecksInOrder_ThenAsks_PerConnectionAndDatabase()
+    public async Task TheTool_ChecksInOrder_ThenAsks_PerConnection()
     {
         var asked = new List<(string Connection, string Place, string Sql)>();
         var tool = new SqlExecuteTool(Access(), () => _settings, (_, connection, place, sql, _) =>
@@ -163,18 +203,24 @@ public sealed class SqlExecuteTests
             return Task.FromResult<bool?>(false);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync(" DELETE FROM t WHERE id = @id; ", null, null, [new("id", 1L)], null, CancellationToken.None));
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t", "shop", "Archive", [], null, CancellationToken.None));
-        Assert.Equal([("shop", "Sales", "DELETE FROM t WHERE id = @id;"), ("shop", "Archive", "DELETE FROM t")], asked);
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync(" DELETE FROM t WHERE id = @id; ", null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM sales.dbo.t", "shop", [], null, CancellationToken.None));
+        Assert.Equal([("shop", "Sales", "DELETE FROM t WHERE id = @id;"), ("shop", "Sales", "DELETE FROM sales.dbo.t")], asked);
+
+        // Another database is refused before the pane (2026-10-09), a read through the tool too.
+        asked.Clear();
+        Assert.Equal(SqlText.OtherDatabase("Archive", "Sales"), await tool.RunAsync("DELETE FROM Archive.dbo.t", "shop", [], null, CancellationToken.None));
+        Assert.Equal(SqlText.ServerCatalog("sys.databases"), await tool.RunAsync("SELECT name FROM sys.databases", "shop", [], null, CancellationToken.None));
+        Assert.Empty(asked);
 
         asked.Clear();
-        Assert.Equal(ServerWriteText.ReadOnlyConnection(SqlStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", null, [], null, CancellationToken.None));
-        Assert.StartsWith("Error: the SQL uses xp_cmdshell", await tool.RunAsync("EXEC xp_cmdshell 'dir'", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyConnection(SqlStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
+        Assert.StartsWith("Error: the SQL uses xp_cmdshell", await tool.RunAsync("EXEC xp_cmdshell 'dir'", null, [], null, CancellationToken.None));
         _settings.SqlMode = "read-only";
-        Assert.Equal(ServerWriteText.ReadOnlyMode(SqlStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyMode(SqlStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         Assert.Empty(asked);
         _settings.SqlMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(SqlStatementKinds.Family), await new SqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(SqlStatementKinds.Family), await new SqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -233,25 +279,25 @@ public sealed class LiveSqlWriteTests
         string table = "dbo.ns_write_" + id, proc = "dbo.ns_bump_" + id;
         try
         {
-            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id int PRIMARY KEY, a nvarchar(10))", null, null, [], null, CancellationToken.None));
-            string inserted = await tool.RunAsync($"INSERT INTO {table} OUTPUT inserted.id VALUES (1, @a), (2, N'b')", null, null, [new("a", "x")], null, CancellationToken.None);
+            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id int PRIMARY KEY, a nvarchar(10))", null, [], null, CancellationToken.None));
+            string inserted = await tool.RunAsync($"INSERT INTO {table} OUTPUT inserted.id VALUES (1, @a), (2, N'b')", null, [new("a", "x")], null, CancellationToken.None);
             Assert.StartsWith("Changed 2 rows in live/", inserted);
             Assert.Contains("it returned 2 rows", inserted);
-            Assert.StartsWith("Ran it", await tool.RunAsync($"CREATE PROCEDURE {proc} @n int AS BEGIN SET NOCOUNT ON; UPDATE {table} SET a = a + N'+' WHERE id <= @n; END", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Ran it", await tool.RunAsync($"EXEC {proc} @n = 1", null, null, [], null, CancellationToken.None));
-            Assert.Contains("| x+ |", await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, null, [], null, CancellationToken.None));
+            Assert.StartsWith("Ran it", await tool.RunAsync($"CREATE PROCEDURE {proc} @n int AS BEGIN SET NOCOUNT ON; UPDATE {table} SET a = a + N'+' WHERE id <= @n; END", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Ran it", await tool.RunAsync($"EXEC {proc} @n = 1", null, [], null, CancellationToken.None));
+            Assert.Contains("| x+ |", await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, [], null, CancellationToken.None));
             Assert.Equal(4, asked.Count);   // the read asked nothing
-            Assert.StartsWith("Error: the server refused it", await tool.RunAsync($"INSERT INTO {table} VALUES (1, N'dup')", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, null, [], null, CancellationToken.None));
+            Assert.StartsWith("Error: the server refused the SQL (live): ", await tool.RunAsync($"INSERT INTO {table} VALUES (1, N'dup')", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, [], null, CancellationToken.None));
         }
         finally
         {
-            await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, null, [], null, CancellationToken.None);
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, null, [], null, CancellationToken.None));
+            await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, [], null, CancellationToken.None);
+            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None));
         }
 
         var (readOnly, roAsked) = Tool(null);
-        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE dbo.ns_never (a int)", null, null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE dbo.ns_never (a int)", null, [], null, CancellationToken.None));
         Assert.Empty(roAsked);
     }
 }

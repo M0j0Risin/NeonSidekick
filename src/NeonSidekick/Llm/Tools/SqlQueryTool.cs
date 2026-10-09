@@ -6,8 +6,8 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>sql_query(sql, connection?, database?, params?, max_rows?)</c>: one read-only SELECT (a CTE may lead it),
-/// passed by <see cref="SqlReadOnlyGate"/> first, then run in a transaction that is rolled back with the
+/// <c>sql_query(sql, connection?, params?, max_rows?)</c>: one read-only SELECT (a CTE may lead it),
+/// passed by <see cref="SqlReadOnlyGate"/> first and held to the connection's database (<see cref="SqlBoundary"/>, 2026-10-09), then run in a transaction that is rolled back with the
 /// setting's timeout; the rows as a Markdown table under a header that says when the cap cut it.
 /// <c>params</c> is one object, each name bound as <c>@name</c> — the values never spliced into the text.
 /// </summary>
@@ -28,7 +28,6 @@ public sealed class SqlQueryTool : SqlTool
           "properties": {
             "sql": { "type": "string", "description": "One T-SQL SELECT (TOP, not LIMIT); a WITH … CTE may lead it. No INSERT, UPDATE, DELETE, EXEC, DDL or second statement." },
             {{ConnectionProperty}},
-            {{DatabaseProperty}},
             "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 43659} for @id; strings, numbers, true, false or null." },
             "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
           },
@@ -118,7 +117,7 @@ public sealed class SqlQueryTool : SqlTool
         return name.Length > 0 && (char.IsAsciiLetter(name[0]) || name[0] == '_') && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') ? name : null;
     }
 
-    public async Task<string> RunAsync(string sql, string? connection, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    public async Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -128,16 +127,16 @@ public sealed class SqlQueryTool : SqlTool
             return SqlText.BadMaxRows(MinRows, MaxRows);
         }
 
-        if (SqlReadOnlyGate.Check(sql) is { } refused)
+        if ((SqlReadOnlyGate.Check(sql) ?? Boundary(sql, connection)) is { } refused)
         {
             return refused;
         }
 
-        var run = await Sql.RunAsync(connection, Effective.SqlDefaultConnection, database, sql, parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Sql.RunAsync(connection, Effective.SqlDefaultConnection, sql, parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, ResultChars(Effective)) : SqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, MaxRowsArgument, out var max, out var raw))
@@ -162,6 +161,6 @@ public sealed class SqlQueryTool : SqlTool
         }
 
         string sql = ToolArguments.ReadString(arguments, SqlArgument);
-        return await RunAsync(sql, Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        return await RunAsync(sql, Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
     }
 }

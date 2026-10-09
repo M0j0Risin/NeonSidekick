@@ -99,9 +99,10 @@ public sealed class LiveSqlTests
         Assert.DoesNotContain(LiveSql.Password, connections);
         Assert.StartsWith(WindowsCredentials.ProtectedPrefix, LiveSql.Config!.Password);
 
-        string databases = await Invoke<SqlDatabasesTool>();
-        Assert.Matches(@"^\d+ databases in aw/AdventureWorks2022\n", databases);
-        Assert.Contains("| AdventureWorks2022 | ONLINE |", databases);
+        // The lock (2026-10-09): the connection's own database written out reads; another, or the server's catalog, never reaches the server.
+        Assert.StartsWith("1 row × 1 column from aw/AdventureWorks2022 (", await Invoke<SqlQueryTool>(("sql", "SELECT COUNT(*) AS n FROM AdventureWorks2022.Sales.Currency")));
+        Assert.Equal(SqlText.OtherDatabase("master", "AdventureWorks2022"), await Invoke<SqlQueryTool>(("sql", "SELECT name FROM master.sys.objects")));
+        Assert.Equal(SqlText.ServerCatalog("sys.databases"), await Invoke<SqlQueryTool>(("sql", "SELECT name FROM sys.databases")));
 
         string tables = await Invoke<SqlTablesTool>(("pattern", "SalesOrder"));
         Assert.Contains("| Sales | SalesOrderHeader | table | 31465 |", tables);
@@ -191,7 +192,7 @@ public sealed class LiveSqlTests
     public async Task ServerErrors_Timeouts_AndCancels_AreOutcomes_NotCrashes()
     {
         Assert.Equal("Error: the server refused the SQL (aw): Msg 208, line 1: Invalid object name 'dbo.NoSuchTable'.", await Invoke<SqlQueryTool>(("sql", "SELECT * FROM dbo.NoSuchTable")));
-        Assert.StartsWith("1 row × 1 column from aw/master (", await Invoke<SqlQueryTool>(("sql", "SELECT DB_NAME() AS db"), ("database", "master")));
+        Assert.Equal(SqlText.NoDatabaseArgument, await Invoke<SqlQueryTool>(("sql", "SELECT DB_NAME() AS db"), ("database", "master")));
 
         _settings.SqlQueryTimeoutSeconds = 1;
         Assert.Equal(SqlText.Timeout("aw", "1"), await Invoke<SqlQueryTool>(("sql", Heavy)));
@@ -209,9 +210,9 @@ public sealed class LiveSqlTests
     {
         // The second layer under the gate: the access itself, handed a write (no tool would pass it), leaves nothing behind.
         const string read = "SELECT Name FROM Sales.Currency WHERE CurrencyCode = 'AFA'";
-        var before = await _access.RunAsync(null, null, null, read, [], 10, 30, CancellationToken.None);
-        var during = await _access.RunAsync(null, null, null, "UPDATE Sales.Currency SET Name = Name + N' (changed)' WHERE CurrencyCode = 'AFA'; " + read, [], 10, 30, CancellationToken.None);
-        var after = await _access.RunAsync(null, null, null, read, [], 10, 30, CancellationToken.None);
+        var before = await _access.RunAsync(null, null, read, [], 10, 30, CancellationToken.None);
+        var during = await _access.RunAsync(null, null, "UPDATE Sales.Currency SET Name = Name + N' (changed)' WHERE CurrencyCode = 'AFA'; " + read, [], 10, 30, CancellationToken.None);
+        var after = await _access.RunAsync(null, null, read, [], 10, 30, CancellationToken.None);
 
         Assert.Equal(SqlOutcome.Ok, during.Outcome);
         Assert.Equal(before.Grids[0].Rows[0][0] + " (changed)", during.Grids[0].Rows[0][0]);   // the write happened inside the transaction
@@ -226,7 +227,8 @@ public sealed class LiveSqlTests
         console.Profile.Width = 400;
         int exit = await SqlCheck.RunAsync(console, new SqlCatalog([new SqlNamedConnection("aw", LiveSql.Config!, "test")], []), "aw", 30, CancellationToken.None);
         Assert.True(exit == 0, console.Output);
-        Assert.Contains("SQL CHECK PASS  6 checks", console.Output);   // sql:types passes only with geography read as the unreadable marker
+        Assert.Contains("SQL CHECK PASS  8 checks", console.Output);   // sql:types passes only with geography read as the unreadable marker
+        Assert.Contains("sql:boundary", console.Output);
     }
 
     [Fact]

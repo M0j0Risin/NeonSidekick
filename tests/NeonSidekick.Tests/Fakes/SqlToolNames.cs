@@ -8,7 +8,6 @@ public static class SqlToolNames
     public static readonly string[] All =
     {
         SqlConnectionsTool.ToolName,
-        SqlDatabasesTool.ToolName,
         SqlTablesTool.ToolName,
         SqlColumnsTool.ToolName,
         SqlDescribeTool.ToolName,
@@ -17,6 +16,6 @@ public static class SqlToolNames
         SqlQueryTool.ToolName,
     };
 
-    /// <summary>The eight reads and <c>sql_execute</c> (2026-10-05): what <c>ChatScreen.SqlTools</c> makes; plan mode and the read rule know only the eight.</summary>
+    /// <summary>The reads and <c>sql_execute</c> (2026-10-05): what <c>ChatScreen.SqlTools</c> makes; plan mode and the read rule know only the reads (seven since <c>sql_databases</c> went, 2026-10-09).</summary>
     public static readonly string[] WithExecute = [.. All, SqlExecuteTool.ToolName];
 }

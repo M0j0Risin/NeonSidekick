@@ -6,7 +6,7 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>sql_indexes(connection?, database?, table?, schema?, missing?)</c> (later on 2026-09-23, the user's ask: "I don't
+/// <c>sql_indexes(connection?, table?, schema?, missing?)</c> (later on 2026-09-23, the user's ask: "I don't
 /// see any tools to retrieve indexes"): the indexes of a table, a schema or the database — kind, key and included
 /// columns, filter, size — from the catalog views any reader may see; then how each has been used since the server
 /// started (<c>sys.dm_db_index_usage_stats</c>) and, with <c>missing</c>, the optimizer's missing-index suggestions.
@@ -24,7 +24,6 @@ public sealed class SqlIndexesTool : SqlTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            {{DatabaseProperty}},
             "table": { "type": "string", "description": "Only this table or view's indexes (schema.name); leave it out for more." },
             "schema": { "type": "string", "description": "Only this schema's indexes; leave table and schema out for the whole database." },
             "missing": { "type": "boolean", "description": "Also list the server's missing-index suggestions (true); leave it out for the indexes alone." }
@@ -45,13 +44,13 @@ public sealed class SqlIndexesTool : SqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string? connection, string? database, string? table, string? schema, bool missing, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string? connection, string? table, string? schema, bool missing, CancellationToken cancellationToken)
     {
         object? id = null;
         string scope = schema is null ? "" : $"in schema {schema}";
         if (table is not null)
         {
-            var match = await FindTableAsync(connection, database, table, cancellationToken).ConfigureAwait(false);
+            var match = await FindTableAsync(connection, table, cancellationToken).ConfigureAwait(false);
             if (match.Error is { } error)
             {
                 return error;
@@ -61,33 +60,33 @@ public sealed class SqlIndexesTool : SqlTool
             scope = $"on {match.Schema}.{match.Name}";
         }
 
-        var run = await CatalogAsync(connection, database, SqlCatalogQueries.Indexes, [new SqlParameterValue("id", id), new SqlParameterValue("schema", table is null ? schema : null)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, SqlCatalogQueries.Indexes, [new SqlParameterValue("id", id), new SqlParameterValue("schema", table is null ? schema : null)], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return SqlText.Error(run);
         }
 
-        var (usage, usageError) = await ReadDmvAsync(connection, database, SqlCatalogQueries.IndexUsage, id, cancellationToken).ConfigureAwait(false);
+        var (usage, usageError) = await ReadDmvAsync(connection, SqlCatalogQueries.IndexUsage, id, cancellationToken).ConfigureAwait(false);
         SqlGrid? suggestions = null;
         string? missingError = null;
         if (missing)
         {
-            (suggestions, missingError) = await ReadDmvAsync(connection, database, SqlCatalogQueries.MissingIndexes, id, cancellationToken).ConfigureAwait(false);
+            (suggestions, missingError) = await ReadDmvAsync(connection, SqlCatalogQueries.MissingIndexes, id, cancellationToken).ConfigureAwait(false);
         }
 
         return SqlText.Indexes(scope, run, usage, usageError, suggestions, missingError, Files.WorkingDirectory.MaxReadChars);
     }
 
     /// <summary>One DMV batch: its grid, or the server's refusal as the detail of a note (a timeout or a lost connection too — the indexes stand).</summary>
-    private async Task<(SqlGrid? Grid, string? Error)> ReadDmvAsync(string? connection, string? database, string sql, object? id, CancellationToken cancellationToken)
+    private async Task<(SqlGrid? Grid, string? Error)> ReadDmvAsync(string? connection, string sql, object? id, CancellationToken cancellationToken)
     {
-        var run = await CatalogAsync(connection, database, sql, [new SqlParameterValue("id", id)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, sql, [new SqlParameterValue("id", id)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok
             ? (run.Grids.Count > 0 ? run.Grids[0] : new SqlGrid([], [], false), null)
             : (null, run.Outcome == SqlOutcome.Failed ? run.Detail : SqlText.Error(run));
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadBoolean(arguments, MissingArgument, out var missing, out var raw))
@@ -95,6 +94,6 @@ public sealed class SqlIndexesTool : SqlTool
             return SqlText.BadMissing(raw);
         }
 
-        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), Optional(arguments, TableArgument), Optional(arguments, SqlTablesTool.SchemaArgument), missing ?? false, cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, TableArgument), Optional(arguments, SqlTablesTool.SchemaArgument), missing ?? false, cancellationToken).ConfigureAwait(false);
     }
 }

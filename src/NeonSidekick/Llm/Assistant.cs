@@ -221,7 +221,7 @@ public sealed class Assistant
     /// </summary>
     public const string SqlRule =
         "The SQL tools read SQL Server (T-SQL: TOP, not LIMIT) on the user's named connections and never change data: " +
-        NeonSidekick.Llm.Tools.SqlConnectionsTool.ToolName + " lists the connections and " + NeonSidekick.Llm.Tools.SqlDatabasesTool.ToolName + " a server's databases; " +
+        NeonSidekick.Llm.Tools.SqlConnectionsTool.ToolName + " lists the connections, each one held to its own database (another database needs its own connection, which the user adds); " +
         NeonSidekick.Llm.Tools.SqlTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.SqlColumnsTool.ToolName + " a column, " +
         NeonSidekick.Llm.Tools.SqlDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.SqlRelationshipsTool.ToolName + " the joins and " +
         NeonSidekick.Llm.Tools.SqlIndexesTool.ToolName + " the indexes with their use — look before you query, never guess a column; " +

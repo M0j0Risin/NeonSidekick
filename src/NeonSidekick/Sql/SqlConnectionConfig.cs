@@ -51,7 +51,10 @@ public sealed class SqlConnectionConfig
     /// <summary>The server: <c>host</c>, <c>host,port</c>, <c>host\instance</c> (SqlClient's <c>Data Source</c>).</summary>
     public string? Server { get; set; }
 
-    /// <summary>The database a call opens when it names none; the login's default database when blank.</summary>
+    /// <summary>
+    /// The one database the connection reaches (required since 2026-10-09, the user's call: a connection is locked to it — no tool takes
+    /// another, <see cref="SqlBoundary"/> refuses a statement that names another, and another database is another connection).
+    /// </summary>
     public string? Database { get; set; }
 
     /// <summary><c>sql</c> (the default), <c>windows</c> or <c>runas</c>.</summary>
@@ -109,7 +112,7 @@ public sealed class SqlConnectionConfig
     public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
     /// <summary>
-    /// The reason this entry cannot connect, or null: no server, an <see cref="Auth"/> or <see cref="Encrypt"/>
+    /// The reason this entry cannot connect, or null: no server, no database, an <see cref="Auth"/> or <see cref="Encrypt"/>
     /// word outside the lists, a SQL login without a user, a connect timeout out of range. Pure.
     /// </summary>
     [JsonIgnore]
@@ -120,6 +123,11 @@ public sealed class SqlConnectionConfig
             if (string.IsNullOrWhiteSpace(Server))
             {
                 return SqlText.NoServer;
+            }
+
+            if (string.IsNullOrWhiteSpace(Database))
+            {
+                return SqlText.NoDatabase;
             }
 
             string auth = Auth?.Trim() ?? "";
@@ -170,8 +178,8 @@ public sealed class SqlConnectionConfig
     }
 
     /// <summary>
-    /// The SqlClient connection string for this entry, <paramref name="database"/> (when not blank) in place of
-    /// <see cref="Database"/>, <paramref name="password"/> the resolved one (<see cref="SqlSecrets.Resolve"/>) for a SQL
+    /// The SqlClient connection string for this entry, in its <see cref="Database"/> alone (the per-call override went 2026-10-09, with
+    /// the lock), <paramref name="password"/> the resolved one (<see cref="SqlSecrets.Resolve"/>) for a SQL
     /// login. Always read-only intent (a replica takes it; a primary ignores it), the app's name in
     /// <c>sys.dm_exec_sessions</c>, pooling on — except for <c>runas</c>: integrated security under the other account's
     /// token, with pooling <b>off</b> and its own application name, since SqlClient keys an integrated pool by the
@@ -180,13 +188,14 @@ public sealed class SqlConnectionConfig
     /// <paramref name="readOnlyIntent"/> false (2026-10-05, <c>sql_execute</c> on a <c>readwrite</c> connection) asks for the primary:
     /// read-write intent, a pool of its own.
     /// </summary>
-    public SqlConnectionStringBuilder Builder(string? database = null, string? password = null, bool readOnlyIntent = true)
+    public SqlConnectionStringBuilder Builder(string? password = null, bool readOnlyIntent = true)
     {
         var builder = new SqlConnectionStringBuilder
         {
             DataSource = Server!.Trim(),
             ApplicationIntent = readOnlyIntent ? ApplicationIntent.ReadOnly : ApplicationIntent.ReadWrite,
             ApplicationName = "NeonSidekick",
+            InitialCatalog = Database?.Trim() ?? "",
             ConnectTimeout = ConnectTimeoutSeconds ?? DefaultConnectTimeoutSeconds,
             TrustServerCertificate = TrustServerCertificate,
             Encrypt = (Encrypt?.Trim().ToLowerInvariant() ?? "") switch
@@ -196,12 +205,6 @@ public sealed class SqlConnectionConfig
                 _ => SqlConnectionEncryptOption.Mandatory,
             },
         };
-
-        string catalog = !string.IsNullOrWhiteSpace(database) ? database.Trim() : Database?.Trim() ?? "";
-        if (catalog.Length > 0)
-        {
-            builder.InitialCatalog = catalog;
-        }
 
         if (IsWindows)
         {

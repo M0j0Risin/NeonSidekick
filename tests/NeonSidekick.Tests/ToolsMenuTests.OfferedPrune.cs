@@ -38,7 +38,7 @@ public partial class ToolsMenuTests
     [Fact]
     public async Task TheSqlOffered_DropsAGoneName_AsItOpens()
     {
-        WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "aw": { "server": "x", "auth": "windows" } } }""");
+        WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""");
         await AssertDroppedAsItOpensAsync(SettingsField.SqlConnectionsOffered, (d, v) => d.SqlConnectionsOffered = v, d => d.SqlConnectionsOffered,
             () => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]), "aw");
     }
@@ -89,7 +89,7 @@ public partial class ToolsMenuTests
     [Fact]
     public async Task TheSqlOffered_KeepsABrokenEntrysName()
     {
-        WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "broken": { "auth": "windows" } } }""");
+        WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "broken": { "auth": "windows" } } }""");
         _settings.Update(d => d.SqlConnectionsOffered = ["gone", "broken"]);
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
@@ -107,7 +107,7 @@ public partial class ToolsMenuTests
     public async Task TheSqlOffered_DropsNothing_WhileAFileCannotBeRead()
     {
         WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory), "{ not json");
-        WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "aw": { "server": "x", "auth": "windows" } } }""");
+        WriteProfileFile(NeonSidekick.Sql.SqlConfigFile.GlobalPath(_settings.StorageDirectory), """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""");
         _settings.Update(d => d.SqlConnectionsOffered = ["mine", "aw"]);
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);

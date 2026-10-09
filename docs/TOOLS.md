@@ -131,11 +131,12 @@ The vault tools work on the vault's files directly: no plugin, no network, and O
 
 ## SQL
 
-Read-only queries against SQL Server over named connections, with no ODBC driver (`Microsoft.Data.SqlClient`). Connections live in `sql.json`: the home folder's is read by every profile, and the profile's wins a name clash.
+Read-only queries against SQL Server over named connections, with no ODBC driver (`Microsoft.Data.SqlClient`). Connections live in `sql.json`: the home folder's is read by every profile, and the profile's wins a name clash. Each connection reaches one database, its own: to work in another database on the same server, add a connection for it.
 
 ### Connection settings
 
 * **`server`**: `host`, `host,port` or `host\instance`.
+* **`database`** (required): the one database the connection reaches. See [The connection's database](#the-connections-database).
 * **`auth`**: `sql` (a SQL login: `user` and `password`), `windows` (your account; on a Mac, your Kerberos ticket from `kinit`), or `runas` (another Windows account, `DOMAIN\name` or `name@domain`, plus `password`; like `runas /netonly`, it signs in to the server only as that account). `runas` needs Windows; a Mac's wizard and `sql.json` template leave it out.
 * **`encrypt`**: `strict`, `mandatory` (default) or `optional`. **`trustServerCertificate`**: `true` accepts a self-signed certificate.
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
@@ -144,7 +145,7 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 
 ### Managing connections
 
-* **SQL add/edit connection** (the SQL tab of `/tools`) walks through a new connection one page per choice, access (`read`/`readwrite`) included. With connections saved, its first page lists them: **+ New connection**, or one to edit, opened prefilled on its summary (Enter on a row changes it; the stored password is kept unless you type another). The summary can **test** the draft (`SELECT @@VERSION`, nothing written) and saves it with the file's comments kept. ESC steps back.
+* **SQL add/edit connection** (the SQL tab of `/tools`) walks through a new connection one page per choice, access (`read`/`readwrite`) included. With connections saved, its first page lists them: **+ New connection**, or one to edit, opened prefilled on its summary (Enter on a row changes it; the stored password is kept unless you type another). The summary can **test** the draft (`SELECT @@VERSION`, nothing written): it also names the other databases the login could open, or says it opens none. It saves with the file's comments kept. ESC steps back.
 * **SQL set password** updates a password.
 * Or edit `sql.json` directly: `%USERPROFILE%\.neonsidekick\sql.json` (global; `~/.neonsidekick/sql.json` on a Mac) or `…/profiles/<profile>/sql.json` (comments and trailing commas allowed).
 
@@ -188,23 +189,33 @@ Read-only queries against SQL Server over named connections, with no ODBC driver
 * It runs in a read-only-intent transaction that is always rolled back. Still give the login read-only permissions.
 * Values go in as `@name` parameters. Results come back as a Markdown table, floats at full precision; CLR types (`geography`, `hierarchyid`) need `.ToString()`.
 
+### The connection's database
+
+A connection reaches its own `database` and nothing else on the server:
+
+* No tool takes a database. A call that still sends `database` is refused, and there's no tool that lists the server's databases.
+* The connection opens its database by name. If the server opens any other (a login's default database, when the configured one is refused), nothing runs.
+* A statement the model writes (in `sql_query`, or `sql_execute` whether it reads or changes) is refused before it reaches the server when it names another database: a three-part name (`payroll.dbo.salaries`, `master.sys.objects`), a function called as `db.schema.f()`, a four-part column, or `OBJECT_ID('payroll.dbo.t')`. Its own database written out (`Sales.dbo.Orders`) is fine. So is a catalog tool's `table` in it, while another database's (`sql_describe` of `payroll.dbo.t`) is refused.
+* What describes the whole server rather than the database is refused too: `sys.databases`, `sys.master_files`, the logins, servers and credentials views, every `sys.server_*`, `sys.availability_*` and `sys.dm_*` view and function (other sessions' queries among them), the old compatibility views (`sysdatabases`, `sysprocesses`…), the `fn_` functions that read the server's audit, trace and log files, and `DB_NAME`, `DB_ID`, `HAS_DBACCESS` and `DATABASEPROPERTYEX` given a database. The database's own catalog (`sys.objects`, `sys.database_principals`, `INFORMATION_SCHEMA`) reads as before, and so do `DB_NAME()` and `DB_ID()` without an argument.
+
+What a statement's text can't show stays the login's to guard: a view, synonym, procedure or function in the database that reads another database, or a name built inside a string. The wizard's test and `--sql-check` name the other databases the login could open (the server's own four left out). For a lock the server keeps too, give the connection a login that opens only its database.
+
 | Tool | Arguments | What it does |
 |---|---|---|
 | `sql_connections` | — | The named connections (server, database, sign-in, description), the default marked. Touches no server. |
-| `sql_databases` | `connection?` | The databases the login may open, with state, compatibility level and collation. |
-| `sql_tables` | `connection?, database?, schema?, pattern?` | Tables and views as `schema.name`, with kind, approximate rows and `MS_Description`. `pattern` is text in the name or a `LIKE` pattern (`%`, `_`, `*`). |
-| `sql_columns` | `pattern, connection?, database?, schema?` | Every column whose name matches (`EmailAddress`, `%CustomerID`): table, type, nullability, description. |
-| `sql_describe` | `table, connection?, database?` | One table or view in full: description, columns (type, nullability, identity, computed, default, key), foreign keys both ways, indexes, CHECK constraints and triggers. A bare name finds the one schema with it. |
-| `sql_relationships` | `connection?, database?, table?` | Foreign-key join paths as `from_table.from_column -> to_table.to_column`, all or touching a table. |
-| `sql_indexes` | `connection?, database?, table?, schema?, missing?` | The indexes of a table, schema or database: kind, key and included columns, filter, size, and seeks, scans, lookups and updates since restart (unread ones marked). `missing: true` adds the optimizer's suggestions. Usage needs `VIEW SERVER STATE`. |
-| `sql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–100000 (*SQL max rows* by default). Cut at *SQL query result max chars*. |
-| `sql_execute` | `sql, connection?, database?, params?, max_rows?` | Only under *SQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *SQL statements allowed* ticks. Answers with the rows changed and any rows the statement returned (an `OUTPUT` clause's, a procedure's). |
+| `sql_tables` | `connection?, schema?, pattern?` | Tables and views as `schema.name`, with kind, approximate rows and `MS_Description`. `pattern` is text in the name or a `LIKE` pattern (`%`, `_`, `*`). |
+| `sql_columns` | `pattern, connection?, schema?` | Every column whose name matches (`EmailAddress`, `%CustomerID`): table, type, nullability, description. |
+| `sql_describe` | `table, connection?` | One table or view in full: description, columns (type, nullability, identity, computed, default, key), foreign keys both ways, indexes, CHECK constraints and triggers. A bare name finds the one schema with it. |
+| `sql_relationships` | `connection?, table?` | Foreign-key join paths as `from_table.from_column -> to_table.to_column`, all or touching a table. |
+| `sql_indexes` | `connection?, table?, schema?, missing?` | The indexes of a table, schema or database: kind, key and included columns, filter, size, and seeks, scans, lookups and updates since restart (unread ones marked). `missing: true` adds the optimizer's suggestions. Usage needs `VIEW SERVER STATE`. |
+| `sql_query` | `sql, connection?, params?, max_rows?` | One read-only `SELECT`. `params` is an object (`{"id": 43659}` for `@id`); `max_rows` is 1–100000 (*SQL max rows* by default). Cut at *SQL query result max chars*. |
+| `sql_execute` | `sql, connection?, params?, max_rows?` | Only under *SQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *SQL statements allowed* ticks. Answers with the rows changed and any rows the statement returned (an `OUTPUT` clause's, a procedure's). |
 
-`--sql-check <connection>` proves the tools against a real server on the published exe (the sign-in, every type, the gate, the rollback, a cancel and a timeout).
+`--sql-check <connection>` proves the tools against a real server on the published exe (the sign-in, every type, the gate, the lock to the connection's database and the other databases the login could open, the rollback, a cancel and a timeout).
 
 ### Changes
 
-With *SQL mode* set to `read-write`, the model gets `sql_execute` beside the eight reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
+With *SQL mode* set to `read-write`, the model gets `sql_execute` beside the seven reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
 
 1. **The kinds.** *SQL statements allowed* decides which kinds of statement may run; a statement needs every kind it does, and the refusal names the kinds that are ticked.
 
@@ -220,7 +231,7 @@ With *SQL mode* set to `read-write`, the model gets `sql_execute` beside the eig
    | reading | `SELECT`: never asks, and runs as `sql_query` does (read-only intent, rolled back) once its gate passes it too | ✓ |
 
 2. **The gate.** One batch, one statement, parsed by ScriptDom as the reading gate is (a procedure's body is one statement; `GO` makes two). An allow-list of statement types: one it doesn't know is refused. Every data change inside counts (an `INSERT … SELECT FROM (MERGE … OUTPUT …)` deletes too). Always refused: `BEGIN TRAN`/`COMMIT`/`ROLLBACK`/`SAVE` and `BEGIN … END` blocks (each call is its own transaction), `SET` and `USE`, `GRANT`/`DENY`/`REVOKE`, `EXECUTE AS`, logins, users, roles, keys and certificates, databases, `DBCC`, `BACKUP`/`RESTORE`, `KILL`, `SHUTDOWN`, `RECONFIGURE`, `CHECKPOINT`, `BULK INSERT`, `WAITFOR`, dynamic SQL (`EXEC` of a string, `sp_executesql`, a procedure named by a variable), every other `xp_`/`sp_` procedure, `EXEC … AT` a linked server, and the reading gate's doors out (`OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE`, `OPENXML`, four-part names; `NEXT VALUE FOR` is allowed here).
-3. **Your allow.** Every change asks on a pane that names the connection and database and shows the statement (`v` shows the whole of it, its lines numbered): **Deny**, **Allow once**, or **Allow for this session** (that connection and database only, until `/new`, `/clear` or a profile switch). A statement that names another database (`payroll.dbo.salaries`) is asked about every time, whatever was allowed.
+3. **Your allow.** Every change asks on a pane that names the connection and database and shows the statement (`v` shows the whole of it, its lines numbered): **Deny**, **Allow once**, or **Allow for this session** (that connection only, until `/new`, `/clear` or a profile switch). A statement that names another database (`payroll.dbo.salaries`) never gets this far: it's refused (see [The connection's database](#the-connections-database)).
 4. **The run.** The connection asks for read-write intent (its own pool), and signs in as for a read (`runas` too). There's no transaction of the app's: SQL Server commits the one statement on its own, atomically (a procedure's own transactions are its own). A failed, timed-out or cancelled statement changes nothing.
 5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
 6. **The account.** It's still the real guard. Give a `readwrite` connection a login with only the permissions you want the model to use.

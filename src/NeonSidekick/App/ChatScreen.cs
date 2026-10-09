@@ -5096,15 +5096,14 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The eight SQL tools (2026-09-23; <c>sql_columns</c> and <c>sql_indexes</c> later that day), offered on every turn while
-    /// <see cref="SqlOffered"/> says so (headless too): the connections first, then the catalog from the server down to a
-    /// table and its indexes, the query last. Each reads the settings
+    /// The SQL tools (2026-09-23; <c>sql_columns</c> and <c>sql_indexes</c> later that day; <c>sql_databases</c> gone 2026-10-09 with
+    /// the lock to each connection's database), offered on every turn while <see cref="SqlOffered"/> says so (headless too): the
+    /// connections first, then the catalog from the database down to a table and its indexes, the query last. Each reads the settings
     /// in force at the call and <c>sql.json</c> afresh.
     /// </summary>
     public static IReadOnlyList<AIFunction> SqlTools(SqlAccess sql, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
     {
         new SqlConnectionsTool(sql, effective),
-        new SqlDatabasesTool(sql, effective),
         new SqlTablesTool(sql, effective),
         new SqlColumnsTool(sql, effective),
         new SqlDescribeTool(sql, effective),
@@ -5118,7 +5117,6 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlySet<string> SqlToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
         SqlConnectionsTool.ToolName,
-        SqlDatabasesTool.ToolName,
         SqlTablesTool.ToolName,
         SqlColumnsTool.ToolName,
         SqlDescribeTool.ToolName,

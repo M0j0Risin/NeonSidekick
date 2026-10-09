@@ -26,6 +26,6 @@ public sealed class SqlConnectionsTool : SqlTool
 
     public string Describe() => SqlText.Connections(Sql.Catalog(), Effective.SqlDefaultConnection, DatabaseWriteModes.IsReadWrite(Effective.SqlMode));
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+    protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         new(Describe());
 }

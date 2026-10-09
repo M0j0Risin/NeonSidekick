@@ -6,7 +6,7 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>sql_columns(pattern, connection?, database?, schema?)</c> (later on 2026-09-23, the user's pick): every table and
+/// <c>sql_columns(pattern, connection?, schema?)</c> (later on 2026-09-23, the user's pick): every table and
 /// view column whose name matches — where an email address or a customer id lives, before the model guesses a
 /// table — with its type, nullability and description.
 /// </summary>
@@ -22,7 +22,6 @@ public sealed class SqlColumnsTool : SqlTool
           "properties": {
             "pattern": { "type": "string", "description": "The column name, or part of it (EmailAddress, CustomerID), or a LIKE pattern with % and _." },
             {{ConnectionProperty}},
-            {{DatabaseProperty}},
             "schema": { "type": "string", "description": "Only this schema's tables and views; leave it out for all." }
           },
           "required": ["pattern"]
@@ -41,20 +40,20 @@ public sealed class SqlColumnsTool : SqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string pattern, string? connection, string? database, string? schema, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string pattern, string? connection, string? schema, CancellationToken cancellationToken)
     {
         if (SqlTablesTool.LikePattern(pattern) is not { } like)
         {
             return SqlText.NoPattern;
         }
 
-        var run = await CatalogAsync(connection, database, SqlCatalogQueries.Columns, [new SqlParameterValue("pattern", like), new SqlParameterValue("schema", schema)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, SqlCatalogQueries.Columns, [new SqlParameterValue("pattern", like), new SqlParameterValue("schema", schema)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? SqlText.Columns(pattern.Trim(), run, Files.WorkingDirectory.MaxReadChars) : SqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(ToolArguments.ReadString(arguments, PatternArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), Optional(arguments, SqlTablesTool.SchemaArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(ToolArguments.ReadString(arguments, PatternArgument), Optional(arguments, ConnectionArgument), Optional(arguments, SqlTablesTool.SchemaArgument), cancellationToken).ConfigureAwait(false);
     }
 }

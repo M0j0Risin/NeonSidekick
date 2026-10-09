@@ -160,12 +160,13 @@ public sealed class SqlAccess
 
     /// <summary>
     /// Runs <paramref name="sql"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or
-    /// the first when blank), in <paramref name="database"/> when given: every result set read to
+    /// the first when blank), in the connection's own database (2026-10-09: the one it reaches; a server that opens any other — a
+    /// login's default — is refused before the batch): every result set read to
     /// <paramref name="maxRows"/> (<see cref="SqlGrid.ReadAsync"/>), the command cancelled at the first set that has
     /// more — so the server stops, and the reader never drains a million rows on dispose — and the transaction
     /// rolled back. A timeout, a failed connect and a server error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, string? database, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -180,7 +181,7 @@ public sealed class SqlAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        var builder = target.Config.Builder(database, secret.Value);
+        var builder = target.Config.Builder(secret.Value);
         string catalogName = builder.InitialCatalog;
         await using var connection = new SqlConnection(builder.ConnectionString);
         try
@@ -213,6 +214,11 @@ public sealed class SqlAccess
         }
 
         string databaseName = connection.Database;
+        if (!string.Equals(databaseName, catalogName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, SqlText.WrongDatabase(catalogName, databaseName), target.Name);
+        }
+
         var watch = Stopwatch.StartNew();
         var grids = new List<SqlGrid>();
         try
@@ -274,14 +280,14 @@ public sealed class SqlAccess
     /// <summary>
     /// <c>sql_execute</c>'s run (2026-10-05, <c>SQL mode</c> <c>read-write</c>): one statement the write gate passed, on a connection
     /// whose entry says <c>"access": "readwrite"</c> (any other is <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the caller
-    /// checked), in <paramref name="database"/> when given, with read-write intent (<see cref="SqlConnectionConfig.Builder"/>) and the
+    /// checked), in the connection's own database, with read-write intent (<see cref="SqlConnectionConfig.Builder"/>) and the
     /// <c>runas</c> sign-in as for a read. No transaction of the app's: SQL Server commits the one statement on its own, atomically (a
     /// procedure's own transactions are its own). Every result set (an <c>OUTPUT</c> clause's rows, a procedure's) is read to
     /// <paramref name="maxRows"/> and the rest drained, never cancelled — a cancel would undo the statement. <see cref="SqlRun.Changes"/>
     /// is the rows the server counts. A timeout, a failed connect and a server error are outcomes; a cancelled token throws (the
     /// server undoes the statement).
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? database, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -301,7 +307,7 @@ public sealed class SqlAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        var builder = target.Config.Builder(database, secret.Value, readOnlyIntent: false);
+        var builder = target.Config.Builder(secret.Value, readOnlyIntent: false);
         string catalogName = builder.InitialCatalog;
         await using var connection = new SqlConnection(builder.ConnectionString);
         try
@@ -334,6 +340,11 @@ public sealed class SqlAccess
         }
 
         string databaseName = connection.Database;
+        if (!string.Equals(databaseName, catalogName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, SqlText.WrongDatabase(catalogName, databaseName), target.Name);
+        }
+
         var watch = Stopwatch.StartNew();
         var grids = new List<SqlGrid>();
         int? changes;

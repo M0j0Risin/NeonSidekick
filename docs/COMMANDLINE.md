@@ -17,7 +17,7 @@ Options that set something apply to this launch only. Both `--option value` and 
 | `--smoke` | Checks the native parts load, then exits. |
 | `--audio-check` | Plays a test tone through the speech output, then exits. |
 | `--voice-check` | Records up to 5 seconds from the microphone and transcribes it, then exits (on a Mac the terminal app needs the Microphone permission). |
-| `--sql-check <connection>` | Proves the SQL tools against a connection of `sql.json`, then exits. |
+| `--sql-check <connection>` | Proves the SQL tools against a connection of `sql.json` (its lock to its database too), then exits. |
 | `--oracle-check <connection>` | The same for a connection of `oracle.json`. |
 | `--mysql-check <connection>` | The same for a connection of `mysql.json`. |
 | `--sqlite-check <database>` | The same for a database of `sqlite.json`, or a SQLite file in the working directory by its path. |

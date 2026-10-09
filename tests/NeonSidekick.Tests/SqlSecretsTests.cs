@@ -99,7 +99,7 @@ public sealed class SqlSecretsTests : IDisposable
         Assert.Equal("typed", WindowsCredentials.ReadGeneric(_target).Value);
 
         string path = Path.Combine(_dir, SqlConfigFile.FileName);
-        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "user": "u" } } }""");
+        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "user": "u" } } }""");
         Assert.Equal((true, SqlText.PasswordSavedToFile("prod", path)), SqlSecrets.Save(Named(new SqlConnectionConfig { Server = "x", User = "u" }, path), "typed"));
         var loaded = SqlConfigFile.Load(path);
         Assert.StartsWith(WindowsCredentials.ProtectedPrefix, loaded.Connections[0].Config.Password);
@@ -128,7 +128,7 @@ public sealed class SqlSecretsTests : IDisposable
         Assert.Equal("typed", SqlSecrets.Resolve(credman).Value);
 
         string path = Path.Combine(_dir, SqlConfigFile.FileName);
-        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "user": "u" } } }""");
+        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "user": "u" } } }""");
         Assert.Equal((true, SqlText.PasswordSavedToFile("prod", path)), SqlSecrets.Save(Named(new SqlConnectionConfig { Server = "x", User = "u" }, path), "typed"));
         var loaded = SqlConfigFile.Load(path);
         Assert.StartsWith(WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);

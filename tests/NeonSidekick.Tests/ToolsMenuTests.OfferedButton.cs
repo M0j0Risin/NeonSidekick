@@ -57,7 +57,7 @@ public partial class ToolsMenuTests
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
+        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "prod": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, pane, _) = PaneMenu();
         Push(Keys.Char('o'), Keys.Enter, Keys.Escape, Keys.Escape);   // the button, aw ticked, back to the page, out
 

@@ -5,7 +5,7 @@ using NeonSidekick.Sql;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>sql_relationships(connection?, database?, table?)</c>: the foreign-key join paths <c>from.col -&gt; to.col</c>, every one or those touching a table — so a JOIN is written from the keys, not guessed.</summary>
+/// <summary><c>sql_relationships(connection?, table?)</c>: the foreign-key join paths <c>from.col -&gt; to.col</c>, every one or those touching a table — so a JOIN is written from the keys, not guessed.</summary>
 public sealed class SqlRelationshipsTool : SqlTool
 {
     public const string ToolName = "sql_relationships";
@@ -16,7 +16,6 @@ public sealed class SqlRelationshipsTool : SqlTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            {{DatabaseProperty}},
             "table": { "type": "string", "description": "Only the keys into or out of this table (schema.name); leave it out for every one in the database." }
           }
         }
@@ -34,13 +33,13 @@ public sealed class SqlRelationshipsTool : SqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string? connection, string? database, string? table, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string? connection, string? table, CancellationToken cancellationToken)
     {
         object? id = null;
         string? label = null;
         if (table is not null)
         {
-            var match = await FindTableAsync(connection, database, table, cancellationToken).ConfigureAwait(false);
+            var match = await FindTableAsync(connection, table, cancellationToken).ConfigureAwait(false);
             if (match.Error is { } error)
             {
                 return error;
@@ -50,13 +49,13 @@ public sealed class SqlRelationshipsTool : SqlTool
             label = match.Schema + "." + match.Name;
         }
 
-        var run = await CatalogAsync(connection, database, SqlCatalogQueries.Relationships, [new SqlParameterValue("id", id)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, SqlCatalogQueries.Relationships, [new SqlParameterValue("id", id)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? SqlText.Relationships(label, run, Files.WorkingDirectory.MaxReadChars) : SqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
     }
 }

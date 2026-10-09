@@ -6,10 +6,11 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>sql_execute(sql, connection?, database?, params?, max_rows?)</c> (2026-10-05, the user's ask: <c>postgres_execute</c>'s twin): one
+/// <c>sql_execute(sql, connection?, params?, max_rows?)</c> (2026-10-05, the user's ask: <c>postgres_execute</c>'s twin): one
 /// T-SQL statement that may change a SQL Server database, offered only while <c>SQL mode</c> is <c>read-write</c>, a pane can ask,
 /// <c>SQL statements allowed</c> ticks a kind and an offered connection says <c>"access": "readwrite"</c>. <see cref="SqlWriteGate"/>
-/// (ScriptDom), the connection, a read unasked, else the user's allow per connection and database, then
+/// (ScriptDom) and <see cref="SqlBoundary"/> (the connection's database alone, 2026-10-09: a name in another one is refused, never asked
+/// about), the connection, a read unasked, else the user's allow per connection, then
 /// <see cref="SqlAccess.ExecuteAsync"/> committed as it runs and written to the log (<see cref="ServerExecute"/>). Plan mode drops it.
 /// </summary>
 public sealed class SqlExecuteTool : SqlTool
@@ -23,7 +24,6 @@ public sealed class SqlExecuteTool : SqlTool
           "properties": {
             "sql": { "type": "string", "description": "One T-SQL statement of a kind this tool's description lists (OUTPUT allowed). No BEGIN TRAN/COMMIT, SET, USE, GRANT, dynamic SQL or second statement; no GO." },
             {{ConnectionProperty}},
-            {{DatabaseProperty}},
             "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 43659} for @id; strings, numbers, true, false or null." },
             "max_rows": { "type": "integer", "description": "How many returned rows (OUTPUT, a procedure's results) to show at most, 1 to 100000. Leave it out for the user's default." }
           },
@@ -50,7 +50,7 @@ public sealed class SqlExecuteTool : SqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public Task<string> RunAsync(string sql, string? connection, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    public Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -63,31 +63,24 @@ public sealed class SqlExecuteTool : SqlTool
 
         int timeout = TimeoutSeconds(effective);
         var hooks = new ServerExecuteHooks(
-            SqlWriteGate.Check,
+            (text, kinds) => SqlWriteGate.Check(text, kinds) ?? Boundary(text, connection),
             SqlWriteGate.Kinds,
             SqlReadOnlyGate.Check,
             text => text.Trim(),
             () => Sql.Resolve(connection, effective.SqlDefaultConnection, out var refused) is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, Place(target.Config, database)), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? ""), null)
                 : (null, SqlText.Error(refused!)),
             async (body, token) =>
             {
-                var run = await Sql.RunAsync(connection, effective.SqlDefaultConnection, database, body, parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await Sql.RunAsync(connection, effective.SqlDefaultConnection, body, parameters, rows, timeout, token).ConfigureAwait(false);
                 return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, ResultChars(effective)) : SqlText.Error(run);
             },
-            (body, token) => Sql.ExecuteAsync(connection, effective.SqlDefaultConnection, database, body, parameters, rows, timeout, token),
+            (body, token) => Sql.ExecuteAsync(connection, effective.SqlDefaultConnection, body, parameters, rows, timeout, token),
             SqlText.Error);
         return ServerExecute.RunAsync(SqlStatementKinds.Family, effective.SqlMode, effective.SqlStatementsAllowed, sql, rows, ResultChars(effective), hooks, _allow, cancellationToken);
     }
 
-    /// <summary>The database a call works in: the one it names, else the connection's own, else none (the login's default).</summary>
-    public static string Place(SqlConnectionConfig config, string? database)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-        return !string.IsNullOrWhiteSpace(database) ? database.Trim() : config.Database?.Trim() ?? "";
-    }
-
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, SqlQueryTool.MaxRowsArgument, out var max, out var raw))
@@ -111,6 +104,6 @@ public sealed class SqlExecuteTool : SqlTool
             parameters = read;
         }
 
-        return await RunAsync(ToolArguments.ReadString(arguments, SqlQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        return await RunAsync(ToolArguments.ReadString(arguments, SqlQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
     }
 }

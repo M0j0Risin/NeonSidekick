@@ -12,12 +12,16 @@ namespace NeonSidekick.Sql;
 /// </summary>
 public static class SqlCatalogQueries
 {
-    /// <summary>The databases the login may open, online or not.</summary>
-    public const string Databases =
+    /// <summary>
+    /// The other databases the login may open, the server's own four (master, tempdb, model, msdb) left out: what the connection's lock
+    /// keeps the tools out of but the login could reach, for the wizard's test and <c>--sql-check</c> (2026-10-09; <c>sql_databases</c>'
+    /// listing until the lock). Empty when the server holds the login to its database too.
+    /// </summary>
+    public const string OtherDatabases =
         """
-        SELECT d.name AS [database], d.state_desc AS [state], d.compatibility_level AS [compatibility], d.collation_name AS [collation]
+        SELECT d.name AS [database]
         FROM sys.databases AS d
-        WHERE HAS_DBACCESS(d.name) = 1
+        WHERE d.database_id > 4 AND d.name <> DB_NAME() AND HAS_DBACCESS(d.name) = 1
         ORDER BY d.name
         """;
 

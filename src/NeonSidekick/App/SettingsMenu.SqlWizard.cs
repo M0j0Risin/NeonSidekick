@@ -33,7 +33,7 @@ internal sealed partial class SettingsMenu
     public const string SqlWizardFileQuestion = "Which sql.json: this profile's or the global one?";
     public const string SqlWizardNameQuestion = "Its name: what the model passes as \"connection\" and %name picks on the input line.";
     public const string SqlWizardServerQuestion = "The server: host, host,port or host\\instance.";
-    public const string SqlWizardDatabaseQuestion = "The database a call opens when it names none; empty for the login's default database.";
+    public const string SqlWizardDatabaseQuestion = "The database: the one this connection reaches (the tools never leave it; another database is another connection).";
     public const string SqlWizardAuthQuestion = "How it signs in.";
     public const string SqlWizardSqlUserQuestion = "The SQL login's name.";
     public const string SqlWizardRunAsUserQuestion = "The Windows account to sign in as: DOMAIN\\name or name@domain.";
@@ -78,6 +78,7 @@ internal sealed partial class SettingsMenu
     public const string SqlWizardNameRequired = "A name is required.";
     public const string SqlWizardNameSpaces = "A name has no spaces: the model and %name use it as one word.";
     public const string SqlWizardServerRequired = "A server is required.";
+    public const string SqlWizardDatabaseRequired = "A database is required: the connection reaches that one alone.";
     public const string SqlWizardUserRequired = "A user is required.";
     public const string SqlWizardPasswordRequired = "A password is required.";
     public const string SqlWizardCancelledNotice = "No connection added.";
@@ -153,7 +154,7 @@ internal sealed partial class SettingsMenu
         step == SqlWizardStep.File ? draft.Original is null
             : step is not (SqlWizardStep.User or SqlWizardStep.Store or SqlWizardStep.Password) || draft.Config.NeedsPassword;
 
-    /// <summary>The first step the draft still lacks (a name, a server, and the account and password when it needs them), or null.</summary>
+    /// <summary>The first step the draft still lacks (a name, a server, a database, and the account and password when it needs them), or null.</summary>
     private static SqlWizardStep? SqlWizardMissing(SqlDraft draft)
     {
         if (draft.Name.Length == 0)
@@ -164,6 +165,11 @@ internal sealed partial class SettingsMenu
         if (string.IsNullOrWhiteSpace(draft.Config.Server))
         {
             return SqlWizardStep.Server;
+        }
+
+        if (string.IsNullOrWhiteSpace(draft.Config.Database))
+        {
+            return SqlWizardStep.Database;
         }
 
         if (draft.Config.NeedsPassword && string.IsNullOrWhiteSpace(draft.Config.User))
@@ -189,7 +195,7 @@ internal sealed partial class SettingsMenu
             SqlWizardStep.File => SqlWizardFileRow(draft.Global, SqlWizardPath(draft.Global)),
             SqlWizardStep.Name => OrUnset(draft.Name),
             SqlWizardStep.Server => OrUnset(c.Server),
-            SqlWizardStep.Database => string.IsNullOrWhiteSpace(c.Database) ? "(the login's default)" : c.Database.Trim(),
+            SqlWizardStep.Database => OrUnset(c.Database),
             SqlWizardStep.Auth => c.Auth ?? SqlConnectionConfig.SqlAuth,
             SqlWizardStep.User => OrUnset(c.User),
             SqlWizardStep.Store => c.InCredentialManager ? SqlConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : SqlConnectionConfig.FileStore,
@@ -403,9 +409,14 @@ internal sealed partial class SettingsMenu
                 }, cancellationToken).ConfigureAwait(false);
 
             case SqlWizardStep.Database:
-                return await SqlWizardTypeAsync(step, draft, SqlWizardDatabaseQuestion, c.Database ?? "", allowEmpty: true, mask: false, text =>
+                return await SqlWizardTypeAsync(step, draft, SqlWizardDatabaseQuestion, c.Database ?? "", allowEmpty: false, mask: false, text =>
                 {
-                    c.Database = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        return SqlWizardDatabaseRequired;
+                    }
+
+                    c.Database = text.Trim();
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -642,7 +653,9 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The draft tried as it stands, nothing written: a one-entry catalog of it, its password handed over as a plain
     /// <c>file</c> value (which <see cref="SqlSecrets.Resolve"/> passes through) so a <c>credman</c> draft is tested before its
-    /// entry exists. The server's answer on the status line; a failure still lets it be saved.
+    /// entry exists. The server's answer on the status line; a failure still lets it be saved. Then what else the login could open
+    /// (2026-10-09, <see cref="SqlCatalogQueries.OtherDatabases"/>, the second result set): a warning naming them, or the notice
+    /// saying the server holds it to the database too.
     /// </summary>
     private async Task SqlWizardTestAsync(SqlDraft draft, CancellationToken cancellationToken)
     {
@@ -667,21 +680,30 @@ internal sealed partial class SettingsMenu
         }
 
         var run = await _testSqlConnection(new SqlNamedConnection(draft.Name, copy, SqlWizardPath(draft.Global)), cancellationToken).ConfigureAwait(false);
-        if (run.Outcome == SqlOutcome.Ok)
+        if (run.Outcome != SqlOutcome.Ok)
         {
-            string version = run.Grids.Count > 0 && run.Grids[0].Rows.Count > 0 ? run.Grids[0].Rows[0][0] : "";
-            Sink.Notice(SqlWizardTestOkNotice(draft.Name, version.Split('\n')[0].Trim()));
+            Sink.Error(SqlText.Error(run));
+            return;
+        }
+
+        string version = run.Grids.Count > 0 && run.Grids[0].Rows.Count > 0 ? run.Grids[0].Rows[0][0] : "";
+        string ok = SqlWizardTestOkNotice(draft.Name, version.Split('\n')[0].Trim());
+        var others = run.Grids.Count > 1 ? run.Grids[1].Rows.Select(r => r[0]).ToList() : null;
+        if (others is { Count: > 0 })
+        {
+            Sink.Notice(ok);
+            Sink.Warning(SqlText.Reach(c.Database!.Trim(), others));
         }
         else
         {
-            Sink.Error(SqlText.Error(run));
+            Sink.Notice(others is null ? ok : ok + " " + SqlText.Reach(c.Database!.Trim(), others));
         }
     }
 
-    /// <summary>The app's test: <see cref="SqlAccess.RunAsync"/> over the one connection, <see cref="SqlTestQuery"/>, one row, the SQL tab's query timeout.</summary>
+    /// <summary>The app's test: <see cref="SqlAccess.RunAsync"/> over the one connection, <see cref="SqlTestQuery"/> then <see cref="SqlCatalogQueries.OtherDatabases"/>, the SQL tab's query timeout.</summary>
     private Task<SqlRun> TestSqlConnectionAsync(SqlNamedConnection connection, CancellationToken cancellationToken) =>
         new SqlAccess(() => new SqlCatalog([connection], []))
-            .RunAsync(connection.Name, null, null, SqlTestQuery, [], 1, _settings.Current.SqlQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, null, SqlTestQuery + ";\n" + SqlCatalogQueries.OtherDatabases, [], 100, _settings.Current.SqlQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="SqlConfigFile.AddConnection"/>, or for an edit <see cref="SqlConfigFile.ReplaceConnection"/>),

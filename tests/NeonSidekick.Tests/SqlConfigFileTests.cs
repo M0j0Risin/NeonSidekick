@@ -66,12 +66,12 @@ public sealed class SqlConfigFileTests : IDisposable
               // comments and a trailing comma are fine
               "connections": {
                 "adventureworks": { "server": "127.0.0.1,1433", "database": "AdventureWorks2022", "user": "sa", "password": "p", "trustServerCertificate": true, "encrypt": "optional", "description": "the sample" },
-                "corp": { "server": "corp\\inst", "auth": "windows" },
-                "nouser": { "server": "x" },
+                "corp": { "server": "corp\\inst", "database": "db", "auth": "windows" },
+                "nouser": { "server": "x", "database": "db" },
                 "noserver": { "user": "u" },
-                "badauth": { "server": "x", "auth": "entra", "user": "u" },
-                "badencrypt": { "server": "x", "user": "u", "encrypt": "sometimes" },
-                "slow": { "server": "x", "user": "u", "connectTimeoutSeconds": 0 },
+                "badauth": { "server": "x", "database": "db", "auth": "entra", "user": "u" },
+                "badencrypt": { "server": "x", "database": "db", "user": "u", "encrypt": "sometimes" },
+                "slow": { "server": "x", "database": "db", "user": "u", "connectTimeoutSeconds": 0 },
                 "empty": null,
               }
             }
@@ -107,8 +107,8 @@ public sealed class SqlConfigFileTests : IDisposable
     [Fact]
     public void TheProfilesFile_WinsByName_OverTheHomes_AndFindPicksByNameThenDefaultThenFirst()
     {
-        Profile("""{ "connections": { "Shared": { "server": "profile-server", "user": "u" }, "mine": { "server": "m", "user": "u" } } }""");
-        Global("""{ "connections": { "shared": { "server": "home-server", "user": "u" }, "theirs": { "server": "t", "user": "u" } } }""");
+        Profile("""{ "connections": { "Shared": { "server": "profile-server", "database": "db", "user": "u" }, "mine": { "server": "m", "database": "db", "user": "u" } } }""");
+        Global("""{ "connections": { "shared": { "server": "home-server", "database": "db", "user": "u" }, "theirs": { "server": "t", "database": "db", "user": "u" } } }""");
 
         var catalog = SqlConfigFile.LoadCatalog(_profile, _home);
 
@@ -122,7 +122,7 @@ public sealed class SqlConfigFileTests : IDisposable
     }
 
     [Fact]
-    public void TheBuilder_IsReadOnlyIntent_TheDatabaseOverridable_AndTheLoginAsConfigured()
+    public void TheBuilder_IsReadOnlyIntent_InItsOwnDatabase_AndTheLoginAsConfigured()
     {
         var sql = new SqlConnectionConfig { Server = " 127.0.0.1,1433 ", Database = "AdventureWorks2022", User = "sa", Password = "secret", Encrypt = "Optional", TrustServerCertificate = true };
         var builder = sql.Builder();
@@ -135,26 +135,26 @@ public sealed class SqlConfigFileTests : IDisposable
         Assert.Equal(SqlConnectionConfig.DefaultConnectTimeoutSeconds, builder.ConnectTimeout);
         Assert.False(builder.IntegratedSecurity);
         Assert.Equal("sa", builder.UserID);
-        Assert.Equal("master", sql.Builder("master").InitialCatalog);
 
-        var windows = new SqlConnectionConfig { Server = "corp", Auth = "Windows", User = "ignored" }.Builder();
+        var windows = new SqlConnectionConfig { Server = "corp", Database = "Reports", Auth = "Windows", User = "ignored" }.Builder();
         Assert.True(windows.IntegratedSecurity);
         Assert.Equal("", windows.UserID);
         Assert.Equal(SqlConnectionEncryptOption.Mandatory, windows.Encrypt);   // the default
-        Assert.Equal("", windows.InitialCatalog);   // the login's default database
+        Assert.Equal("Reports", windows.InitialCatalog);   // its own, never the login's default (2026-10-09)
         Assert.Equal(SqlConnectionEncryptOption.Strict, new SqlConnectionConfig { Server = "x", User = "u", Encrypt = "strict" }.Builder().Encrypt);
     }
 
     [Fact]
     public void RunAs_AndThePasswordStores_AreChecked()
     {
-        Assert.Null(new SqlConnectionConfig { Server = "x", Auth = "runas", User = @"CONTOSO\svc" }.Problem);
-        Assert.Null(new SqlConnectionConfig { Server = "x", Auth = "RunAs", User = "svc@contoso.com", PasswordStore = "credman" }.Problem);
-        Assert.Equal(SqlText.RunAsNeedsDomain("svc"), new SqlConnectionConfig { Server = "x", Auth = "runas", User = "svc" }.Problem);
-        Assert.Equal(SqlText.RunAsNeedsDomain(""), new SqlConnectionConfig { Server = "x", Auth = "runas" }.Problem);
-        Assert.Equal(SqlText.BadPasswordStore("vault"), new SqlConnectionConfig { Server = "x", User = "u", PasswordStore = "vault" }.Problem);
-        Assert.Equal(SqlText.CredmanWithWindows, new SqlConnectionConfig { Server = "x", Auth = "windows", PasswordStore = "credman" }.Problem);
-        Assert.Equal(SqlText.BadAuth("entra"), new SqlConnectionConfig { Server = "x", Auth = "entra", User = "u" }.Problem);
+        Assert.Null(new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas", User = @"CONTOSO\svc" }.Problem);
+        Assert.Null(new SqlConnectionConfig { Server = "x", Database = "db", Auth = "RunAs", User = "svc@contoso.com", PasswordStore = "credman" }.Problem);
+        Assert.Equal(SqlText.RunAsNeedsDomain("svc"), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas", User = "svc" }.Problem);
+        Assert.Equal(SqlText.RunAsNeedsDomain(""), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "runas" }.Problem);
+        Assert.Equal(SqlText.BadPasswordStore("vault"), new SqlConnectionConfig { Server = "x", Database = "db", User = "u", PasswordStore = "vault" }.Problem);
+        Assert.Equal(SqlText.CredmanWithWindows, new SqlConnectionConfig { Server = "x", Database = "db", Auth = "windows", PasswordStore = "credman" }.Problem);
+        Assert.Equal(SqlText.BadAuth("entra"), new SqlConnectionConfig { Server = "x", Database = "db", Auth = "entra", User = "u" }.Problem);
+        Assert.Equal(SqlText.NoDatabase, new SqlConnectionConfig { Server = "x", Database = " ", Auth = "windows" }.Problem);   // required since 2026-10-09
 
         var runas = new SqlConnectionConfig { Server = "sqlhost01,1453", Database = "db", Auth = "runas", User = @"CONTOSO\svc", Password = "never used" }.Builder(password: "p");
         Assert.True(runas.IntegratedSecurity);
@@ -172,9 +172,9 @@ public sealed class SqlConfigFileTests : IDisposable
             {
               // the dev box — keep this comment
               "connections": {
-                "a": { "server": "x", "user": "sa", "password": "hunter2" },   // trailing note
-                "b": { "server": "y", "auth": "windows" },
-                "c": { "server": "z", "user": "u", "passwordStore": "credman", "password": "left alone" },
+                "a": { "server": "x", "database": "db", "user": "sa", "password": "hunter2" },   // trailing note
+                "b": { "server": "y", "database": "db", "auth": "windows" },
+                "c": { "server": "z", "database": "db", "user": "u", "passwordStore": "credman", "password": "left alone" },
               }
             }
             """;
@@ -215,8 +215,8 @@ public sealed class SqlConfigFileTests : IDisposable
             {
               // the dev box — keep this comment
               "connections": {
-                "a": { "server": "x", "user": "sa", "password": "hunter2" },   // trailing note
-                "c": { "server": "z", "user": "u", "passwordStore": "credman", "password": "left alone" },
+                "a": { "server": "x", "database": "db", "user": "sa", "password": "hunter2" },   // trailing note
+                "c": { "server": "z", "database": "db", "user": "u", "passwordStore": "credman", "password": "left alone" },
               }
             }
             """;
@@ -241,7 +241,7 @@ public sealed class SqlConfigFileTests : IDisposable
     [WindowsFact]
     public void EncryptAll_ReadsTheHomesFile_AndEveryProfiles_NotOnlyTheLoadedOnes()
     {
-        const string plain = """{ "connections": { "a": { "server": "x", "user": "u", "password": "hunter2" } } }""";
+        const string plain = """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""";
         string work = Path.Combine(_home, "profiles", "work");
         Directory.CreateDirectory(work);
         Directory.CreateDirectory(Path.Combine(_home, "profiles", "empty"));   // a profile without a sql.json
@@ -271,7 +271,7 @@ public sealed class SqlConfigFileTests : IDisposable
             return;
         }
 
-        const string plain = """{ "connections": { "a": { "server": "x", "user": "u", "password": "hunter2" } } }""";
+        const string plain = """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""";
         string work = Path.Combine(_home, "profiles", "work");
         Directory.CreateDirectory(work);
         Global(plain);
@@ -292,14 +292,14 @@ public sealed class SqlConfigFileTests : IDisposable
     [Fact]
     public void WritePassword_ReplacesTheValue_OrInsertsTheKey()
     {
-        Profile("""{ "connections": { "a": { "server": "x", "user": "u", "password": null }, "b": { "server": "y", "user": "v" }, "c": { "server": "z" } } }""");
+        Profile("""{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": null }, "b": { "server": "y", "database": "db", "user": "v" }, "c": { "server": "z", "database": "db" } } }""");
         string path = SqlConfigFile.ProfilePath(_profile);
 
         Assert.Null(SqlConfigFile.WritePassword(path, "a", "dpapi:AAA+/="));
         Assert.Null(SqlConfigFile.WritePassword(path, "b", "dpapi:BBB"));
         Assert.Null(SqlConfigFile.WritePassword(path, "c", "dpapi:CCC"));
         Assert.Equal(
-            """{ "connections": { "a": { "server": "x", "user": "u", "password": "dpapi:AAA+/=" }, "b": { "server": "y", "user": "v", "password": "dpapi:BBB" }, "c": { "password": "dpapi:CCC", "server": "z" } } }""",
+            """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "dpapi:AAA+/=" }, "b": { "server": "y", "database": "db", "user": "v", "password": "dpapi:BBB" }, "c": { "password": "dpapi:CCC", "server": "z", "database": "db" } } }""",
             File.ReadAllText(path));
         Assert.Equal(SqlText.ConnectionNotInFile("nope"), SqlConfigFile.WritePassword(path, "nope", "dpapi:x"));
     }
@@ -316,7 +316,7 @@ public sealed class SqlConfigFileTests : IDisposable
         var first = new SqlConnectionConfig { Server = "127.0.0.1,1433", Database = "AdventureWorks2022", Auth = "sql", User = "reader", Password = "never-written", PasswordStore = "file", Encrypt = "mandatory", TrustServerCertificate = true, Description = "the sample" };
 
         Assert.Null(SqlConfigFile.AddConnection(path, " aw ", first));
-        Assert.Null(SqlConfigFile.AddConnection(path, "admin", new SqlConnectionConfig { Server = "sqlhost01", Auth = "runas", User = @"CONTOSO\svc-reader", PasswordStore = "credman", ConnectTimeoutSeconds = 30 }));
+        Assert.Null(SqlConfigFile.AddConnection(path, "admin", new SqlConnectionConfig { Server = "sqlhost01", Database = "Reports", Auth = "runas", User = @"CONTOSO\svc-reader", PasswordStore = "credman", ConnectTimeoutSeconds = 30 }));
 
         string text = File.ReadAllText(path);
         Assert.StartsWith(SqlConfigFile.EmptyText[..SqlConfigFile.EmptyText.IndexOf("  \"connections\"", StringComparison.Ordinal)], text);
@@ -341,7 +341,7 @@ public sealed class SqlConfigFileTests : IDisposable
     public void AddConnection_FitsTheFilesShape_OrRefusesOne_ItCannotWriteInto()
     {
         string path = SqlConfigFile.ProfilePath(_profile);
-        var windows = new SqlConnectionConfig { Server = "y", Auth = "windows" };
+        var windows = new SqlConnectionConfig { Server = "y", Database = "db", Auth = "windows" };
 
         Profile("{ \"other\": 1 }");
         Assert.Null(SqlConfigFile.AddConnection(path, "me", windows));
@@ -379,15 +379,15 @@ public sealed class SqlConfigFileTests : IDisposable
     public void ReplaceConnection_SwapsTheEntryInPlace_KeepsTheComments_AndRefusesWhatItCannot()
     {
         string path = SqlConfigFile.ProfilePath(_profile);
-        var windows = new SqlConnectionConfig { Server = "y", Auth = "windows" };
+        var windows = new SqlConnectionConfig { Server = "y", Database = "db", Auth = "windows" };
         Assert.Equal(SqlText.ConnectionNotInFile("aw"), SqlConfigFile.ReplaceConnection(path, "aw", "aw", windows));   // no file
 
-        Profile("{\n  // mine\n  \"connections\": {\n    \"aw\": { \"server\": \"old\", \"auth\": \"windows\" }, // the sample\n    \"other\": { \"server\": \"o\", \"auth\": \"windows\" }\n  }\n}\n");
-        Assert.Null(SqlConfigFile.ReplaceConnection(path, " AW ", "adventure", new SqlConnectionConfig { Server = "new", Auth = "windows", Password = "never-written", Description = "d" }));
+        Profile("{\n  // mine\n  \"connections\": {\n    \"aw\": { \"server\": \"old\", \"auth\": \"windows\" }, // the sample\n    \"other\": { \"server\": \"o\", \"database\": \"db\", \"auth\": \"windows\" }\n  }\n}\n");
+        Assert.Null(SqlConfigFile.ReplaceConnection(path, " AW ", "adventure", new SqlConnectionConfig { Server = "new", Database = "db", Auth = "windows", Password = "never-written", Description = "d" }));
 
         string text = File.ReadAllText(path);
         Assert.StartsWith("{\n  // mine\n  \"connections\": {\n    \"adventure\": {\n      \"server\": \"new\",\n", text);
-        Assert.Contains("\n    }, // the sample\n    \"other\": { \"server\": \"o\", \"auth\": \"windows\" }\n  }\n}\n", text);
+        Assert.Contains("\n    }, // the sample\n    \"other\": { \"server\": \"o\", \"database\": \"db\", \"auth\": \"windows\" }\n  }\n}\n", text);
         Assert.DoesNotContain("never-written", text);
         var loaded = SqlConfigFile.Load(path);
         Assert.Empty(loaded.Problems);
@@ -440,16 +440,16 @@ public sealed class SqlConfigFileTests : IDisposable
     [Fact]
     public void TheListing_NamesEveryConnection_TheDefaultMarked_AndNeverThePassword()
     {
-        Profile("""{ "connections": { "aw": { "server": "127.0.0.1,1433", "database": "AdventureWorks2022", "user": "sa", "password": "hunter2", "description": "the sample sales database" }, "corp": { "server": "corp\\inst", "auth": "windows" }, "bad": { "server": "x" } } }""");
+        Profile("""{ "connections": { "aw": { "server": "127.0.0.1,1433", "database": "AdventureWorks2022", "user": "sa", "password": "hunter2", "description": "the sample sales database" }, "corp": { "server": "corp\\inst", "database": "Reports", "auth": "windows" }, "bad": { "server": "x", "auth": "windows" } } }""");
         var catalog = SqlConfigFile.LoadCatalog(_profile, _home);
 
         string text = SqlText.Connections(catalog, "corp");
 
         Assert.Equal(
-            "2 SQL connections (every SQL tool takes one by name in \"connection\"; the default is used when it is left out):\n" +
+            "2 SQL connections (every SQL tool takes one by name in \"connection\"; the default is used when it is left out; each reaches its own database alone):\n" +
             "- aw: 127.0.0.1,1433 / AdventureWorks2022, sql login sa — the sample sales database\n" +
-            "- corp (default): corp\\inst / (the login's default database), windows sign-in\n" +
-            $"Skipped {SqlConfigFile.ProfilePath(_profile)} (bad): {SqlText.NoUser}",
+            "- corp (default): corp\\inst / Reports, windows sign-in\n" +
+            $"Skipped {SqlConfigFile.ProfilePath(_profile)} (bad): {SqlText.NoDatabase}",
             text);
         Assert.DoesNotContain("hunter2", text);
         Assert.Equal(SqlText.NoConnections, SqlText.Connections(SqlCatalog.Empty, null));

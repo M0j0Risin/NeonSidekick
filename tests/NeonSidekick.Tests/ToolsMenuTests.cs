@@ -495,7 +495,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "auth": "windows" } } }""");
+        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (the third since the offered list): the pick
         Push(Keys.Enter);                                               // prod, the one connection that takes a password
@@ -525,7 +525,7 @@ public partial class ToolsMenuTests : IDisposable
 
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "auth": "windows" } } }""");
+        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (the third since the offered list): the pick
         Push(Keys.Enter);                                               // prod, the one connection that takes a password
@@ -957,6 +957,35 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(["aw"], _settings.Current.SqlConnectionsOffered);   // offered by the wizard (nothing is until ticked, 2026-10-01)
     }
 
+    /// <summary>
+    /// The test's reach report (2026-10-09, the lock to the connection's database): the other databases the login could open, as
+    /// <c>SqlCatalogQueries.OtherDatabases</c>' second result set brings them, warned of by name; none, and the notice says the server
+    /// holds the login to its database too.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheSqlWizardsTest_SaysWhatElseTheLoginCouldOpen()
+    {
+        var others = new List<string[]> { new[] { "HR" }, new[] { "Payroll" } };
+        var (menu, _, _) = PaneMenu(testSql: (c, _) => Task.FromResult(new NeonSidekick.Sql.SqlRun(NeonSidekick.Sql.SqlOutcome.Ok, "", c.Name, "", [new NeonSidekick.Sql.SqlGrid(["v"], [["v1"]], false), new NeonSidekick.Sql.SqlGrid(["database"], others.ToList(), false)], TimeSpan.Zero)));
+        OpenSqlWizard();
+        Push(Keys.Enter);                         // the profile's file
+        Type("aw");
+        Type("sqlhost01");
+        Type("Sales");
+        Push(Keys.Down, Keys.Enter);              // windows
+        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test: two others
+        Push(Keys.Down, Keys.Enter);              // Cancel
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("The login could also open HR, Payroll.", Output);
+        Assert.Equal("The login could also open HR, Payroll. The tools keep to Sales; a login that opens only it is the lock the server keeps too.", NeonSidekick.Sql.SqlText.Reach("Sales", ["HR", "Payroll"]));
+        Assert.Equal("The login opens no other database: the server holds it to Sales too.", NeonSidekick.Sql.SqlText.Reach("Sales", []));
+        Assert.EndsWith(" and 2 more. The tools keep to Sales; a login that opens only it is the lock the server keeps too.", NeonSidekick.Sql.SqlText.Reach("Sales", Enumerable.Range(1, 12).Select(i => "db" + i).ToList()));
+    }
+
     /// <summary>The Unix twin of <see cref="OnThePane_TheSqlWizard_WalksASqlLogin_TestsTheDraft_AndSavesIt"/> (2026-10-06, the macOS build): a <c>keychain:</c> value, where Windows writes <c>dpapi:</c>.</summary>
     [UnixFact]
     public async Task OnThePane_TheSqlWizard_WalksASqlLogin_TestsTheDraft_AndSavesIt_Unix()
@@ -1032,7 +1061,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Down, Keys.Enter);              // the home's file
         Type("me");
         Type("sqlhost01");
-        Push(Keys.Enter);                         // the login's default database
+        Type("Reports");                          // the database: required since 2026-10-09, Enter on a blank one does nothing
         Push(Keys.Down, Keys.Enter);              // windows: no user, store or password page follows
         Push(Keys.Enter);                         // mandatory
         Push(Keys.Enter);                         // no
@@ -1051,7 +1080,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Null(me.Config.User);
         Assert.Null(me.Config.PasswordStore);
         Assert.Null(me.Config.Password);
-        Assert.Null(me.Config.Database);
+        Assert.Equal("Reports", me.Config.Database);
         Assert.Equal(30, me.Config.ConnectTimeoutSeconds);
         Assert.Equal("readwrite", me.Config.Access);
         Assert.Contains(SettingsMenu.DatabaseWizardModeOffNotice(NeonSidekick.Sql.SqlStatementKinds.Family), Output);
@@ -1090,7 +1119,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        const string Before = """{ "connections": { "aw": { "server": "x", "auth": "windows" } } }""";
+        const string Before = """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""";
         File.WriteAllText(path, Before);
         var (menu, _, _) = PaneMenu(testSql: (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "Login failed for user.", c.Name)));
         OpenSqlWizard();
@@ -1100,7 +1129,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Backspace, Keys.Backspace);
         Type("rep");
         Type("sqlhost01");
-        Push(Keys.Enter);
+        Type("Reports");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // runas
         Type("svc");                              // no domain
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace);
@@ -1161,7 +1190,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);
         Type("me");
         Type("sqlhost01");
-        Push(Keys.Enter);
+        Type("Reports");
         Push(Keys.Down, Keys.Enter);              // windows
         Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
         // The summary: the two save rows, Test, Cancel, then the rows File, Name, Server, Database, Sign-in (the ninth).
@@ -1189,7 +1218,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
+        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "prod": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row: the checklist
         Push(Keys.Enter);                                    // aw on
@@ -1204,7 +1233,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("SQL connections offered     1 of 2", Output);
         Assert.Contains("[x] aw    SQL Server · x", Output);
 
-        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" }, "new": { "server": "z", "auth": "windows" } } }""");
+        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "prod": { "server": "y", "database": "db", "auth": "windows" }, "new": { "server": "z", "database": "db", "auth": "windows" } } }""");
         var loaded = NeonSidekick.Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
         Assert.Equal("1 of 3", SettingsMenu.SqlOfferedValue(_settings.Current.SqlConnectionsOffered, loaded));   // the new one hidden until ticked
         Assert.Equal("none of 3", SettingsMenu.SqlOfferedValue(null, loaded));   // null offers none (2026-10-01)
@@ -2343,7 +2372,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "auth": "windows" }, "prod": { "server": "y", "auth": "windows" } } }""");
+        File.WriteAllText(path, """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" }, "prod": { "server": "y", "database": "db", "auth": "windows" } } }""");
         var (menu, _, _) = PaneMenu();
         Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the offered row
         Push(Keys.Char('a'));

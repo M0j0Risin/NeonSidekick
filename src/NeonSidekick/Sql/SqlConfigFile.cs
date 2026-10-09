@@ -88,7 +88,8 @@ public sealed class SqlConfigFile
     private static string MacEmptyText =>
         "{\n" +
         "  // One entry per connection. Its name is what the model passes as \"connection\", and what %name picks on the input\n" +
-        "  // line. Every key but \"server\" is optional. Remove the leading // from an example to use it, and put it inside\n" +
+        "  // line. \"server\" and \"database\" are required, every other key optional: a connection reaches its database alone,\n" +
+        "  // and another database is another entry. Remove the leading // from an example to use it, and put it inside\n" +
         "  // \"connections\" below.\n" +
         "  //\n" +
         "  // A SQL login (auth sql), the password kept in this file: typed in plain text, it is encrypted (\"" + WindowsCredentials.KeychainPrefix + "…\")\n" +
@@ -116,7 +117,7 @@ public sealed class SqlConfigFile
         "  // \"credential\" names another Keychain entry; runas (signing in as another Windows account) needs Windows.\n" +
         "  // encrypt: strict, mandatory (the default) or optional; trustServerCertificate only for a self-signed certificate;\n" +
         "  // connectTimeoutSeconds: 1 to 120 (15 by default). access: read (the default) or readwrite — sql_execute may change a\n" +
-        "  // readwrite connection's databases while SQL mode is read-write, each change allowed by you. A read-only login is the\n" +
+        "  // readwrite connection's database while SQL mode is read-write, each change allowed by you. A read-only login is the\n" +
         "  // real guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";
@@ -125,7 +126,8 @@ public sealed class SqlConfigFile
     public const string WindowsEmptyText =
         "{\n" +
         "  // One entry per connection. Its name is what the model passes as \"connection\", and what %name picks on the input\n" +
-        "  // line. Every key but \"server\" is optional, and a JSON backslash is doubled: \"CONTOSO\\\\svc-reader\". Remove the\n" +
+        "  // line. \"server\" and \"database\" are required, every other key optional: a connection reaches its database alone,\n" +
+        "  // and another database is another entry. A JSON backslash is doubled: \"CONTOSO\\\\svc-reader\". Remove the\n" +
         "  // leading // from an example to use it, and put it inside \"connections\" below.\n" +
         "  //\n" +
         "  // A SQL login (auth sql), the password kept in this file: typed in plain text, it is encrypted (\"dpapi:…\") when\n" +
@@ -160,7 +162,7 @@ public sealed class SqlConfigFile
         "  // \"passwordStore\": \"credman\" works for a SQL login too; \"credential\" names another Credential Manager entry.\n" +
         "  // encrypt: strict, mandatory (the default) or optional; trustServerCertificate only for a self-signed certificate;\n" +
         "  // connectTimeoutSeconds: 1 to 120 (15 by default). access: read (the default) or readwrite — sql_execute may change a\n" +
-        "  // readwrite connection's databases while SQL mode is read-write, each change allowed by you. A read-only login is the\n" +
+        "  // readwrite connection's database while SQL mode is read-write, each change allowed by you. A read-only login is the\n" +
         "  // real guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";

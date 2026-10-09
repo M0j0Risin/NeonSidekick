@@ -52,8 +52,8 @@ public partial class ToolsMenuTests
             {
               // the user's note
               "connections": {
-                "aw": { "server": "old", "auth": "sql", "user": "reader", "password": "s3cret", "credential": "Team/aw", "description": "the sample" }, // kept
-                "first": { "server": "a", "auth": "windows" }
+                "aw": { "server": "old", "database": "db", "auth": "sql", "user": "reader", "password": "s3cret", "credential": "Team/aw", "description": "the sample" }, // kept
+                "first": { "server": "a", "database": "db", "auth": "windows" }
               }
             }
             """);
@@ -95,7 +95,7 @@ public partial class ToolsMenuTests
     {
         string path = SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        const string Before = """{ "connections": { "aw": { "server": "x", "auth": "windows" } } }""";
+        const string Before = """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows" } } }""";
         File.WriteAllText(path, Before);
         var (menu, _, _) = PaneMenu();
         OpenSqlWizard();

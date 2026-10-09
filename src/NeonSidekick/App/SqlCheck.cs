@@ -14,7 +14,8 @@ namespace NeonSidekick.App;
 /// <c>decimal(38)</c> past <see cref="decimal"/>, <c>datetimeoffset</c>, <c>xml</c>, <c>sql_variant</c>, an <c>nvarchar(max)</c>) and a
 /// <c>geography</c> read as the unreadable marker, not a failed call; the gate refusing the bypasses under the trimmed ScriptDom;
 /// the batch inside a transaction and the transaction rolled back (a global temporary table made inside it is gone after — the
-/// one thing the check creates, and it never outlives the batch); a cancel and a timeout stopping a query on the server. SQL
+/// one thing the check creates, and it never outlives the batch); a cancel and a timeout stopping a query on the server; the lock to
+/// the connection's database (2026-10-09, <see cref="SqlBoundary"/> under the trimmed ScriptDom) and what else the login could open. SQL
 /// Server has no read-only session as Oracle's 23ai and MySQL's transaction have, so the rollback is the layer to prove. Exit 0
 /// only when every line passes. Not part of the build gate: it needs a server.
 /// </summary>
@@ -62,7 +63,7 @@ internal static class SqlCheck
         }
 
         Task<SqlRun> Run(string sql, int timeout, CancellationToken token) =>
-            access.RunAsync(name, null, null, sql, [], 10, timeout, token);
+            access.RunAsync(name, null, sql, [], 10, timeout, token);
 
         var who = await Run(WhoAmI, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)
@@ -87,6 +88,12 @@ internal static class SqlCheck
         var passed = bypasses[..^1].Where(b => SqlReadOnlyGate.Check(b) is null).ToList();
         bool stringRead = SqlReadOnlyGate.Check(bypasses[^1]) is null;
         checks.Add(new SmokeCheck("sql:gate", passed.Count == 0 && stringRead, passed.Count > 0 ? "let through: " + string.Join(" | ", passed) : stringRead ? $"refused all {(bypasses.Length - 1).ToString(CultureInfo.InvariantCulture)} bypasses" : "refused a SELECT of a string that reads like a DELETE"));
+
+        checks.Add(BoundaryCheck(target.Config.Database?.Trim() ?? ""));
+        var reach = await Run(SqlCatalogQueries.OtherDatabases, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        checks.Add(new SmokeCheck("sql:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
+            ? SqlText.Reach(target.Config.Database?.Trim() ?? "", reach.Grids.FirstOrDefault()?.Rows.Select(r => r[0]).ToList() ?? [])
+            : SqlText.Error(reach)));
 
         var inside = await Run($"CREATE TABLE {ScratchTable} (x int); INSERT INTO {ScratchTable} VALUES (1); SELECT @@TRANCOUNT AS trancount, COUNT(*) AS n FROM {ScratchTable}", timeoutSeconds, cancellationToken).ConfigureAwait(false);
         var after = await Run($"SELECT CASE WHEN OBJECT_ID('tempdb..{ScratchTable}') IS NULL THEN 'gone' ELSE 'kept' END AS state", timeoutSeconds, cancellationToken).ConfigureAwait(false);
@@ -114,6 +121,26 @@ internal static class SqlCheck
         var timedOut = await Run(SlowQuery, 1, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("sql:timeout", timedOut.Outcome == SqlOutcome.Timeout, timedOut.Outcome == SqlOutcome.Timeout ? "stopped after 1 s" : timedOut.Outcome + " " + timedOut.Detail));
         return Report(console, checks);
+    }
+
+    /// <summary>
+    /// The lock's line: <see cref="SqlBoundary"/> refuses another database's names and the server's views, and passes the connection's
+    /// own database written out and a table alias that looks like a qualifier.
+    /// </summary>
+    public static SmokeCheck BoundaryCheck(string database)
+    {
+        string[] outside =
+        [
+            "SELECT * FROM neonsidekick_other.dbo.t", "SELECT * FROM master.sys.objects", "SELECT name FROM sys.databases",
+            "SELECT * FROM sys.dm_exec_sessions", "SELECT DB_NAME(1)", "SELECT neonsidekick_other.dbo.f()",
+        ];
+        string[] inside = [$"SELECT * FROM [{database}].dbo.t", "SELECT o.name FROM sys.objects AS o", "SELECT DB_NAME()"];
+        var passed = outside.Where(s => SqlBoundary.Check(s, database) is null).ToList();
+        var refused = inside.Where(s => SqlBoundary.Check(s, database) is not null).ToList();
+        bool ok = passed.Count == 0 && refused.Count == 0;
+        return new SmokeCheck("sql:boundary", ok, ok
+            ? $"held to {database}: refused all {outside.Length.ToString(CultureInfo.InvariantCulture)} reaches outside it"
+            : (passed.Count > 0 ? "let through: " + string.Join(" | ", passed) : "") + (refused.Count > 0 ? " refused: " + string.Join(" | ", refused) : ""));
     }
 
     /// <summary>The type matrix's line: every cell read but the CLR one, which must be the unreadable marker; the 38-digit decimal whole.</summary>

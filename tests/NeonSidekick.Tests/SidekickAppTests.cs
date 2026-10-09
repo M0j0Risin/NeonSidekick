@@ -157,7 +157,7 @@ public partial class SidekickAppTests : IDisposable
         string other = Path.Combine(_dir, "profiles", "other");
         Directory.CreateDirectory(other);
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(other);
-        File.WriteAllText(path, """{ "connections": { "a": { "server": "x", "user": "u", "password": "hunter2" } } }""");
+        File.WriteAllText(path, """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""");
 
         Assert.Equal(0, await App(smoke: () => [new SmokeCheck("a", true, "ok")]).RunAsync(SidekickOptions.None with { Smoke = true }, CancellationToken.None));
         Assert.Contains("hunter2", File.ReadAllText(path));
@@ -176,7 +176,7 @@ public partial class SidekickAppTests : IDisposable
         string other = Path.Combine(_dir, "profiles", "other");
         Directory.CreateDirectory(other);
         string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(other);
-        File.WriteAllText(path, """{ "connections": { "a": { "server": "x", "user": "u", "password": "hunter2" } } }""");
+        File.WriteAllText(path, """{ "connections": { "a": { "server": "x", "database": "db", "user": "u", "password": "hunter2" } } }""");
 
         Assert.Equal(0, await App(smoke: () => [new SmokeCheck("a", true, "ok")]).RunAsync(SidekickOptions.None with { Smoke = true }, CancellationToken.None));
         Assert.Contains("hunter2", File.ReadAllText(path));

@@ -22,6 +22,9 @@ public static class SqlText
     // ─── sql.json ───────────────────────────────────────────────────────────────
 
     public const string NoServer = "no \"server\" is given";
+
+    /// <summary>An entry with no <c>database</c> (2026-10-09: a connection reaches that one database alone, so it must name it). Pinned.</summary>
+    public const string NoDatabase = "no \"database\" is given; a connection reaches one database, so it must name it";
     public const string NoUser = "a sql login needs a \"user\" (or \"auth\": \"windows\")";
     public const string BlankName = "a connection has a blank name";
     public static string BadAuth(string word) => $"\"auth\" is '{word}'; it must be sql, windows or runas";
@@ -83,7 +86,7 @@ public static class SqlText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string database = string.IsNullOrWhiteSpace(config.Database) ? "(the login's default database)" : config.Database.Trim();
+        string database = config.Database?.Trim() ?? "";
         string login = config.IsWindows ? "windows sign-in" : config.IsRunAs ? $"windows sign-in as {config.User?.Trim()} (runas)" : $"sql login {config.User?.Trim()}";
         string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Server?.Trim()} / {database}, {login}{ServerWriteText.AccessNote(SqlStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
@@ -100,7 +103,7 @@ public static class SqlText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string where = "SQL Server · " + config.Server?.Trim() + (string.IsNullOrWhiteSpace(config.Database) ? "" : " / " + config.Database.Trim());
+        string where = "SQL Server · " + config.Server?.Trim() + " / " + config.Database?.Trim();
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 
@@ -116,7 +119,7 @@ public static class SqlText
         else
         {
             var chosen = catalog.Find(null, defaultName);
-            sb.Append(Count(catalog.Connections.Count, "SQL connection")).Append(" (every SQL tool takes one by name in \"connection\"; the default is used when it is left out):");
+            sb.Append(Count(catalog.Connections.Count, "SQL connection")).Append(" (every SQL tool takes one by name in \"connection\"; the default is used when it is left out; each reaches its own database alone):");
             foreach (var connection in catalog.Connections)
             {
                 sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
@@ -144,6 +147,40 @@ public static class SqlText
     public static string NotOneStatement(int count) => $"Error: the SQL is {Invariant(count)} statements; send exactly one SELECT per call (a CTE may lead it)";
     public static string NotASelect(string word) => $"Error: the SQL is a {word} statement; the SQL tools only read — send one SELECT (a CTE may lead it)";
     public static string Forbidden(string what) => $"Error: the SELECT uses {what}, which the SQL tools refuse (it reaches outside this server or changes state a rollback cannot undo)";
+
+    // ─── the connection's database (2026-10-09, SqlBoundary) ────────────────────
+
+    /// <summary>A name in a database other than the connection's. Pinned.</summary>
+    public static string OtherDatabase(string named, string database) =>
+        $"Error: the SQL names database '{named}', but this connection reaches '{database}' alone; another database needs a connection of its own, which the user adds (sql_connections lists them)";
+
+    /// <summary>A view or function of the whole server rather than the database. Pinned.</summary>
+    public static string ServerCatalog(string what) =>
+        $"Error: the SQL reads {what}, which describes the whole server rather than this connection's database; the SQL tools keep to the connection's database (sql_tables, sql_columns and sql_describe read its catalog)";
+
+    /// <summary>A call that still sends <c>database</c>. Pinned.</summary>
+    public const string NoDatabaseArgument =
+        "Error: \"database\" is not an argument: a SQL connection reaches its own database alone (sql_connections names each one's); another database needs a connection of its own, which the user adds";
+
+    /// <summary>
+    /// What else the login could open (the wizard's test and <c>--sql-check</c>, 2026-10-09): nothing, so the server holds it to the
+    /// database too; or the names (the first ten), which the tools stay out of but the login does not. Pinned.
+    /// </summary>
+    public static string Reach(string database, IReadOnlyList<string> others)
+    {
+        ArgumentNullException.ThrowIfNull(others);
+        if (others.Count == 0)
+        {
+            return $"The login opens no other database: the server holds it to {database} too.";
+        }
+
+        string names = string.Join(", ", others.Take(10)) + (others.Count > 10 ? $" and {Invariant(others.Count - 10)} more" : "");
+        return $"The login could also open {names}. The tools keep to {database}; a login that opens only it is the lock the server keeps too.";
+    }
+
+    /// <summary>The backstop after the sign-in: the server opened another database than the entry's (a login's default where the entry's was refused). Pinned.</summary>
+    public static string WrongDatabase(string configured, string opened) =>
+        $"the server opened '{opened}' rather than the connection's database '{configured}', so nothing was run";
 
     // ─── arguments ──────────────────────────────────────────────────────────────
 

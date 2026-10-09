@@ -39,7 +39,7 @@ public sealed class SqlToolsTests
 
     /// <summary>A connection to a named pipe nobody serves: the connect fails fast, the way a stopped server does.</summary>
     private static SqlNamedConnection Unreachable(string name) =>
-        new(name, new SqlConnectionConfig { Server = @"np:\\.\pipe\neonsidekick-test-" + Guid.NewGuid().ToString("N") + @"\sql\query", Auth = "windows", ConnectTimeoutSeconds = 1, Encrypt = "optional" }, "test");
+        new(name, new SqlConnectionConfig { Server = @"np:\\.\pipe\neonsidekick-test-" + Guid.NewGuid().ToString("N") + @"\sql\query", Database = "Sales", Auth = "windows", ConnectTimeoutSeconds = 1, Encrypt = "optional" }, "test");
 
     [Fact]
     public void Names_Schemas_AndDescriptions_ArePinned()
@@ -55,17 +55,17 @@ public sealed class SqlToolsTests
         static string[] Properties(AIFunction tool) => tool.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray();
         static string[] Required(AIFunction tool) => tool.JsonSchema.TryGetProperty("required", out var r) ? r.EnumerateArray().Select(e => e.GetString()!).ToArray() : [];
         Assert.Empty(Properties(Tool<SqlConnectionsTool>()));
-        Assert.Equal(["connection"], Properties(Tool<SqlDatabasesTool>()));
-        Assert.Equal(["connection", "database", "schema", "pattern"], Properties(Tool<SqlTablesTool>()));
-        Assert.Equal(["table", "connection", "database"], Properties(Tool<SqlDescribeTool>()));
+        Assert.Equal(["connection", "schema", "pattern"], Properties(Tool<SqlTablesTool>()));
+        Assert.Equal(["table", "connection"], Properties(Tool<SqlDescribeTool>()));
         Assert.Equal(["table"], Required(Tool<SqlDescribeTool>()));
-        Assert.Equal(["connection", "database", "table"], Properties(Tool<SqlRelationshipsTool>()));
-        Assert.Equal(["pattern", "connection", "database", "schema"], Properties(Tool<SqlColumnsTool>()));
+        Assert.Equal(["connection", "table"], Properties(Tool<SqlRelationshipsTool>()));
+        Assert.Equal(["pattern", "connection", "schema"], Properties(Tool<SqlColumnsTool>()));
         Assert.Equal(["pattern"], Required(Tool<SqlColumnsTool>()));
-        Assert.Equal(["connection", "database", "table", "schema", "missing"], Properties(Tool<SqlIndexesTool>()));
+        Assert.Equal(["connection", "table", "schema", "missing"], Properties(Tool<SqlIndexesTool>()));
         Assert.Empty(Required(Tool<SqlIndexesTool>()));
         Assert.Equal("boolean", Tool<SqlIndexesTool>().JsonSchema.GetProperty("properties").GetProperty("missing").GetProperty("type").GetString());
-        Assert.Equal(["sql", "connection", "database", "params", "max_rows"], Properties(Tool<SqlQueryTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<SqlQueryTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<SqlExecuteTool>()));
         Assert.Equal(["sql"], Required(Tool<SqlQueryTool>()));
         Assert.Equal("object", Tool<SqlQueryTool>().JsonSchema.GetProperty("properties").GetProperty("params").GetProperty("type").GetString());
     }
@@ -74,7 +74,6 @@ public sealed class SqlToolsTests
     public async Task WithNoConnection_EveryServerTool_SaysHowToAddOne()
     {
         Assert.Equal(SqlText.NoConnections, await Invoke<SqlConnectionsTool>());
-        Assert.Equal(SqlText.NoConnections, await Invoke<SqlDatabasesTool>());
         Assert.Equal(SqlText.NoConnections, await Invoke<SqlTablesTool>());
         Assert.Equal(SqlText.NoConnections, await Invoke<SqlDescribeTool>(("table", "Sales.Customer")));
         Assert.Equal(SqlText.NoConnections, await Invoke<SqlRelationshipsTool>());
@@ -95,7 +94,7 @@ public sealed class SqlToolsTests
         Assert.Contains("Named Pipes Provider", failed);
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlTablesTool>(("connection", "OTHER")));   // by name, any case
         _settings.SqlDefaultConnection = "other";
-        Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlDatabasesTool>());   // the default when none is named
+        Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlTablesTool>());   // the default when none is named
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlDescribeTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlRelationshipsTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlColumnsTool>(("pattern", "Email")));
@@ -110,14 +109,14 @@ public sealed class SqlToolsTests
     [UnixFact]
     public async Task AnUnknownConnection_IsAConnectError_AndANamedPipeOffWindowsToo()
     {
-        _catalog = new SqlCatalog([Unreachable("down"), new SqlNamedConnection("closed", new SqlConnectionConfig { Server = "tcp:127.0.0.1,1", Auth = "windows", ConnectTimeoutSeconds = 1, Encrypt = "optional" }, "test")], []);
+        _catalog = new SqlCatalog([Unreachable("down"), new SqlNamedConnection("closed", new SqlConnectionConfig { Server = "tcp:127.0.0.1,1", Database = "Sales", Auth = "windows", ConnectTimeoutSeconds = 1, Encrypt = "optional" }, "test")], []);
 
         Assert.Equal(SqlText.UnknownConnection("nope", "down, closed"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "nope")));
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1")));
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlTablesTool>(("connection", "DOWN")));
         Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "closed")));
         _settings.SqlDefaultConnection = "closed";
-        Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlDatabasesTool>());
+        Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlTablesTool>());
     }
 
     [WindowsFact]
@@ -125,7 +124,7 @@ public sealed class SqlToolsTests
     {
         string target = "NeonSidekick.Tests/" + Guid.NewGuid().ToString("N");
         string pipe = @"np:\\.\pipe\neonsidekick-test-" + Guid.NewGuid().ToString("N") + @"\sql\query";
-        var runas = new SqlConnectionConfig { Server = pipe, Auth = "runas", User = @"NEONSIDEKICK-TEST\nobody", PasswordStore = "credman", Credential = target, ConnectTimeoutSeconds = 1, Encrypt = "optional" };
+        var runas = new SqlConnectionConfig { Server = pipe, Database = "Reports", Auth = "runas", User = @"NEONSIDEKICK-TEST\nobody", PasswordStore = "credman", Credential = target, ConnectTimeoutSeconds = 1, Encrypt = "optional" };
         _catalog = new SqlCatalog([new SqlNamedConnection("prod", runas, "test")], []);
         try
         {
@@ -136,14 +135,14 @@ public sealed class SqlToolsTests
             string failed = await Invoke<SqlQueryTool>(("sql", "SELECT SUSER_SNAME()"));
             Assert.StartsWith("Error: could not connect to prod: ", failed);
             Assert.Contains("Named Pipes Provider", failed);
-            Assert.Contains("- prod (default): " + pipe + " / (the login's default database), windows sign-in as NEONSIDEKICK-TEST\\nobody (runas)", await Invoke<SqlConnectionsTool>());
+            Assert.Contains("- prod (default): " + pipe + " / Reports, windows sign-in as NEONSIDEKICK-TEST\\nobody (runas)", await Invoke<SqlConnectionsTool>());
         }
         finally
         {
             WindowsCredentials.DeleteGeneric(target);
         }
 
-        _catalog = new SqlCatalog([new SqlNamedConnection("bare", new SqlConnectionConfig { Server = pipe, User = "sa" }, "test")], []);
+        _catalog = new SqlCatalog([new SqlNamedConnection("bare", new SqlConnectionConfig { Server = pipe, Database = "Reports", User = "sa" }, "test")], []);
         Assert.Equal(SqlText.ConnectFailed("bare", SqlText.NoPassword("bare")), await Invoke<SqlQueryTool>(("sql", "SELECT 1")));
     }
 
@@ -172,6 +171,31 @@ public sealed class SqlToolsTests
         Assert.Equal(SqlText.BadMissing("maybe"), await Invoke<SqlIndexesTool>(("missing", "maybe")));
     }
 
+    /// <summary>
+    /// The lock to the connection's database (2026-10-09, the user's call): a call that still sends <c>database</c> is refused by
+    /// every tool, and a name in another database — in the SQL, or as the table a catalog tool is asked about — before any connect.
+    /// </summary>
+    [Fact]
+    public async Task EveryTool_KeepsToTheConnectionsDatabase_BeforeAnyConnect()
+    {
+        _catalog = new SqlCatalog([Unreachable("down")], []);
+
+        foreach (var tool in _tools)
+        {
+            Assert.Equal(SqlText.NoDatabaseArgument, (string)(await tool.InvokeAsync(Args(("sql", "SELECT 1"), ("table", "t"), ("pattern", "x"), ("database", "Payroll"))))!);
+        }
+
+        Assert.Equal(SqlText.OtherDatabase("Payroll", "Sales"), await Invoke<SqlQueryTool>(("sql", "SELECT * FROM Payroll.dbo.Salaries")));
+        Assert.Equal(SqlText.OtherDatabase("master", "Sales"), await Invoke<SqlQueryTool>(("sql", "SELECT name FROM master.sys.objects")));
+        Assert.Equal(SqlText.ServerCatalog("sys.databases"), await Invoke<SqlQueryTool>(("sql", "SELECT name FROM sys.databases")));
+        Assert.Equal(SqlText.OtherDatabase("Payroll", "Sales"), await Invoke<SqlDescribeTool>(("table", "Payroll.dbo.Salaries")));
+        Assert.Equal(SqlText.OtherDatabase("Payroll", "Sales"), await Invoke<SqlIndexesTool>(("table", "[Payroll]..Salaries")));
+
+        // Its own database, written out or not, goes on to connect (and a blank "database" is no argument at all).
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlQueryTool>(("sql", "SELECT * FROM sales.dbo.Orders")), StringComparison.Ordinal);
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlDescribeTool>(("table", "Sales.dbo.Orders"), ("database", " ")), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Parameters_AreTypedByTheirValues()
     {
@@ -198,14 +222,14 @@ public sealed class SqlToolsTests
         var catalog = new SqlCatalog(
             [
                 new SqlNamedConnection("aw", new SqlConnectionConfig { Server = "127.0.0.1,1433", Database = "AdventureWorks2022", User = "sa", Description = "the sample" }, "test"),
-                new SqlNamedConnection("corp", new SqlConnectionConfig { Server = "corp\\inst", Auth = "windows" }, "test"),
+                new SqlNamedConnection("corp", new SqlConnectionConfig { Server = "corp\\inst", Database = "Reports", Auth = "windows" }, "test"),
             ],
             []);
 
         var items = ChatScreen.SqlChoices(catalog);
 
         Assert.Equal(["aw", "corp"], items.Select(i => i.Text));
-        Assert.Equal(["SQL Server · 127.0.0.1,1433 / AdventureWorks2022 — the sample", "SQL Server · corp\\inst"], items.Select(i => i.Note));
+        Assert.Equal(["SQL Server · 127.0.0.1,1433 / AdventureWorks2022 — the sample", "SQL Server · corp\\inst / Reports"], items.Select(i => i.Note));
         Assert.Empty(ChatScreen.SqlChoices(SqlCatalog.Empty));
         Assert.True(new AppSettingsData().SqlPercentMention);
     }
