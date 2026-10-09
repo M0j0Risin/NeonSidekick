@@ -643,20 +643,21 @@ The Home Assistant tools control your own Home Assistant over its REST API with 
 
 ## Printing
 
-`/print` and the print tools send work to any printer Windows has installed. **Windows only:** on a Mac the print group is never offered (`/tools` shows *off: it needs Windows*) and `/print` says printing needs Windows.
+`/print` and the print tools send work to any printer Windows has installed, or on a Mac to any printer set up in System Settings › Printers & Scanners (through CUPS).
 
 * **Drawn by the app:** text and code print as a monospace listing (tabs as four columns, long lines wrapped, form feeds start pages); Markdown prints formatted (headings, emphasis, lists, quotes, code blocks, rules, links with their address, tables cut to fit); a picture (PNG, JPEG, GIF, WebP, BMP) is fitted to one page, never enlarged. Every page carries the file's name, the time and *page N of M*; paper, tray and quality are the printer's.
 * **Anything else** (a PDF, a Word or Excel file) goes to the program Windows has for printing it, on the default printer only; a printer, copies, pages or landscape given with it is refused. A type nothing can print is refused.
+* **On a Mac** the pages are drawn into a PDF in Helvetica Neue and Menlo (Segoe UI's and Consolas' stand-ins) on the printer's own paper and margins, and sent to CUPS; landscape is turned onto the paper by the app. The layout follows the same rules as on Windows, but the fonts' widths differ, so a long file may break lines and pages a little differently. A **PDF** goes to the printer as it is, and takes a printer, copies and pages (not landscape: each page keeps the PDF's own orientation). A Word, Excel or other file is refused: print it from the program that made it. Printers are listed by their CUPS queue name with the name System Settings shows (`Brother_HL_L2340D_series — Brother HL-L2340D series`), and `printer=` matches either. Cancelling a print (ESC) before CUPS has the whole job withdraws it.
 * **The policy:** under `ask`, `print_file` shows the file, printer and sheets and waits for your yes. A no tells the model not to retry.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_printers` | — | The installed printers, marking the Windows default and *Print default printer*. Available in plan mode. |
-| `print_file` | `path, printer?, copies?, pages?, landscape?` | Prints a file from the working directory: a printer by name (else *Print default printer*, else the Windows default), 1–10 copies, pages like `1-3`, `4-` or `1,3,5`, and landscape. Not in plan mode. |
+| `list_printers` | — | The installed printers, marking the system's default (Windows' or the Mac's) and *Print default printer*. Available in plan mode. |
+| `print_file` | `path, printer?, copies?, pages?, landscape?` | Prints a file from the working directory: a printer by name (else *Print default printer*, else the system's default), 1–10 copies, pages like `1-3`, `4-` or `1,3,5`, and landscape. Not in plan mode. |
 
 ### Making PDFs
 
-`/pdf` and the `convert_to_pdf` file tool make a PDF in the working directory. Nothing new is installed: the browser you already have makes it, or Windows' own PDF printer. On a Mac only the browser makes it (Edge, Chrome, Brave or Chromium in `/Applications`); the `printer` engine needs Windows.
+`/pdf` and the `convert_to_pdf` file tool make a PDF in the working directory. Nothing new is installed: the browser you already have makes it, or Windows' own PDF printer. On a Mac only the browser makes it (Edge, Chrome, Brave or Chromium in `/Applications`); the `printer` engine needs Windows (it is Microsoft Print to PDF), even though a Mac prints.
 
 * **Markdown** keeps its headings, emphasis, lists and task lists, quotes, tables, links (clickable), footnotes and code blocks, coloured as in the transcript. Its pictures come from the working directory, relative to the file; a picture outside it or on the web shows as `[image: alt]`. Raw HTML in it is shown as text.
 * **Text and code** become one listing, coloured by the file's extension. **A picture** is fitted to one page, never enlarged.

@@ -59,7 +59,7 @@ Besides `--smoke`, the published exe has checks for real hardware and servers: `
 
 ## Building on a Mac
 
-The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: printing, Docker (the tools, `/docker` and Docker servers), UNC shares and `/keycheck`. Everything else works; see [The Mac build](#the-mac-build) for what differs.
+The Mac build is for Apple Silicon (`osx-arm64`). Each release since v0.5.0 has its package (`NeonSidekick-v<version>-osx-arm64.tar.gz`, built on GitHub's Mac runner), so building it yourself is only needed for a change of your own. It leaves out the features that have no macOS backend yet: Docker (the tools, `/docker` and Docker servers), UNC shares and `/keycheck`. Everything else works; see [The Mac build](#the-mac-build) for what differs.
 
 NativeAOT can't build a Mac binary from Windows, so build on the Mac itself. You need:
 
@@ -119,8 +119,9 @@ A downloaded build isn't notarized, so macOS quarantines it. Clear that once aft
 | Performance bar | Works | VRAM reads as GMEM: the GPU's share of the Mac's memory. |
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
 | `/shortcut` | Works | A `.command` file on the Desktop with the app's icon, opening in iTerm2 or Terminal as `/terminal` does. |
-| Printing, Docker, UNC shares, `/keycheck` | Left out | `/tools` shows the groups as *off: it needs Windows*; the UNC and Docker tabs still show their rows. |
-| `convert_to_pdf` and `/pdf` | Works, browser only | Edge, Chrome, Brave or Chromium from `/Applications`; the `printer` engine needs Windows. |
+| Printing | Works (CUPS) | Drawn into a PDF in Helvetica Neue and Menlo on the printer's paper; a PDF goes as it is; an Office file is refused. See [Printing](TOOLS.md#printing). |
+| Docker, UNC shares, `/keycheck` | Left out | `/tools` shows the groups as *off: it needs Windows*; the UNC and Docker tabs still show their rows. |
+| `convert_to_pdf` and `/pdf` | Works, browser only | Edge, Chrome, Brave or Chromium from `/Applications`; the `printer` engine (Microsoft Print to PDF) needs Windows. |
 
 ### What differs from Windows
 
@@ -128,7 +129,8 @@ A downloaded build isn't notarized, so macOS quarantines it. Clear that once aft
 * **Shell and scripts.** `run_command` runs in zsh unless you pick `bash` or `powershell` (pwsh) under *Shell default*. Scripts run with `python3`, `node` or `pwsh`.
 * **Paths.** `/cwd` completes a path that starts with `/`; network volumes list nothing, so typing never waits on a server. `/cwd ~` is the default folder, not the home folder. Dot-files show in listings and searches; only `chflags hidden` items and `.git` are skipped.
 * **The embedded LLM.** Pick a model in `/settings` › Embedded › Embedded models; the app downloads llama.cpp's macOS build and the model and runs it on the GPU. A 16 GB Mac suits the E2B and E4B models best. The server stops when the app ends, however it ends; one a crash left running is stopped at the next start.
-* **The app's windows** show no Dock icon and no menu bar, yet take the keyboard when they open. Tab gives it back to the terminal app that started NeonSidekick, and closing the last window does too. The viewer's keys are Windows' plus ⌫ for Del, ⌘W to close and ⌃⌘F for full screen (macOS keeps F11 for Show Desktop); see [Picture viewer](COMMANDS.md#picture-viewer). A right-click (or Control-click) opens the picture menu as the Mac's own menu, with *Show in Finder* and no *Print*. `/log`'s and `/process`'s windows are the system's text view, with ⌘A and ⌘C.
+* **The app's windows** show no Dock icon and no menu bar, yet take the keyboard when they open. Tab gives it back to the terminal app that started NeonSidekick, and closing the last window does too. The viewer's keys are Windows' plus ⌫ for Del, ⌘W to close and ⌃⌘F for full screen (macOS keeps F11 for Show Desktop); see [Picture viewer](COMMANDS.md#picture-viewer). A right-click (or Control-click) opens the picture menu as the Mac's own menu, with *Show in Finder*. `/log`'s and `/process`'s windows are the system's text view, with ⌘A and ⌘C.
+* **Printing** goes through CUPS in-process (libcups, no `lp`). The pages are drawn as on Windows, by the same layout, but in Helvetica Neue and Menlo, whose widths differ from Segoe UI's and Consolas', so a printout can wrap and paginate a little differently. The paper is the printer's default (Letter or A4 by the Mac's region if it won't say), landscape is turned onto it by the app, and copies are pages repeated. A PDF is sent as it is with its printer, copies and pages; Word, Excel and other files are refused, since only the program that made them can print them.
 * **Thumbnails and the splash** are half blocks: iTerm2 draws them in full colour, Terminal.app (macOS 15) in 256 colours, so they look banded there.
 * **Permissions belong to the terminal app** (Terminal or iTerm2), not to NeonSidekick: macOS asks the first time the microphone, the camera or the screen is used, and the answer covers everything run in that terminal. A refusal is changed in System Settings › Privacy & Security (Microphone, Camera, or Screen & System Audio Recording). To be asked again, quit the app and reset that terminal's answer: `tccutil reset Microphone com.apple.Terminal` (or `Camera`, `ScreenCapture`; `com.googlecode.iterm2` for iTerm2).
 * **A microphone that sends only silence** gets one warning in the transcript: a refused permission, or a MacBook's own microphone with the lid closed. Pick another input in System Settings › Sound, or open the lid. A MacBook's own camera is off with the lid closed too.
@@ -197,6 +199,7 @@ On both:
 
 * `pwsh ./build.ps1 -TestOnly` runs the suite with the Windows-only tests skipped. A test whose subject is Windows-only is marked `[WindowsFact]`/`[WindowsTheory]`; a test of a portable feature spelled with Windows paths or `cmd` lines gets a Unix twin (`…_Unix`, `[UnixFact]`).
 * The tests need the Xcode tools' `/usr/bin/python3`.
+* No print test or smoke reaches paper: the Mac facts and the smoke's `print:cups` draw PDFs and read them back, and the live facts (`NEONSIDEKICK_TEST_PRINTER=<queue>`, a printer set up on the Mac) send jobs held with `job-hold-until=indefinite` and cancel them.
 * The tests use a Keychain item of their own (`NeonSidekick.Tests` / `master-key`), never the app's; it can be deleted in Keychain Access at any time.
 * To see what Terminal.app or iTerm2 actually drew, `screencapture -l <window id>` captures the terminal's window (the script's terminal needs the Screen Recording permission). To check which app has the keyboard, ask `NSWorkspace.shared.frontmostApplication`: System Events' `frontmost` never names an accessory app like this one.
 

@@ -720,9 +720,9 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 
 | Setting | What it does | Default |
 |---|---|---|
-| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. Printing needs Windows: on a Mac the group is never offered and `/print` says so. | off |
+| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. | off |
 | Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
-| Print default printer | Where a print goes when none is named. On a Mac the row reads *(none: printing needs Windows)*. | (Windows default) |
+| Print default printer | Where a print goes when none is named. On a Mac the picker shows each printer's queue name with the name System Settings shows, and the empty row reads *(system default)*. | (Windows default) |
 | Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
 | PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). On a Mac only the browser makes PDFs (Edge, Chrome, Brave or Chromium); `printer` needs Windows. | `auto` |
 

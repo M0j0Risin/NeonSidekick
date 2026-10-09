@@ -116,6 +116,7 @@ Only for running the tests from source; each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_UNC_SHARE`: a readable `\\server\share` path (`\\localhost\C$\Windows`); with `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD`, a second account for the runas path. Read only.
 * `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe. Read only.
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`, a folder to keep the test photo in.
+* `NEONSIDEKICK_TEST_PRINTER`: a printer's CUPS queue name on a Mac (`Brother_HL_L2340D_series`). The jobs are held and cancelled, so nothing prints.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.
 * `NEONSIDEKICK_TEST_YOUTUBE_API_KEY`: a YouTube Data API key for the live search test (about 101 quota units a run).
 * `NEONSIDEKICK_TEST_WHISPER_MODEL`, `NEONSIDEKICK_TEST_SILERO_MODEL`, `NEONSIDEKICK_TEST_VOSK_MODEL`, `NEONSIDEKICK_TEST_KOKORO_MODEL`: a model not in the home's `models` folder.
