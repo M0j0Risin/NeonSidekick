@@ -53,10 +53,14 @@ public sealed record AboutFacts(
 /// <summary>One third-party part the app ships with or talks to: what it is, which version, under which licence, and what it does here.</summary>
 public sealed record Component(string Name, string Version, string License, string Role);
 
+/// <summary>One Hugging Face repository the embedded LLM's catalog downloads from (2026-10-09): the model's name, its builds' quants, the repository's page.</summary>
+public sealed record ModelRepository(string Name, IReadOnlyList<string> Quants, string Url);
+
 /// <summary>
 /// The words for <c>/about</c>: an info pane with an About tab (the app, the runtime, the folders,
 /// the servers it talks to), a Components tab (every third-party package and model with its
-/// version and licence — a pinned list a test checks against the project file) and a Licence tab
+/// version and licence — a pinned list a test checks against the project file), a Models tab (2026-10-09, the user's ask:
+/// each Hugging Face repository the embedded LLM's catalog downloads from, its builds and its page) and a Licence tab
 /// (the repository's <c>LICENSE</c> — GPL-3.0 since 2026-09-20, MIT before — embedded in the exe), the same as
 /// plain lines for a console without the pane. Pure statics, every string pinned. <c>Text</c> cells, never <c>Markup</c>: a path may hold brackets.
 /// </summary>
@@ -71,7 +75,22 @@ public static class AboutText
     /// <summary>The tab titles.</summary>
     public const string AboutTabTitle = "General";
     public const string ComponentsTabTitle = "Components";
+    public const string ModelsTabTitle = "Models";
     public const string LicenseTabTitle = "Licence";
+
+    /// <summary>The Models tab's first line (2026-10-09). Pinned.</summary>
+    public const string ModelsCaption = "The embedded LLM's catalog (/settings › Embedded), each from its Hugging Face repository, pinned to a commit:";
+
+    /// <summary>
+    /// The Models tab's entries (2026-10-09, the user's ask): one per repository of <see cref="EmbeddedLlm.EmbeddedModelCatalog.ForThisMachine"/>
+    /// in the catalog's order — the first build's name, every build's quant, and <c>https://huggingface.co/&lt;repo&gt;</c>, plain text that
+    /// Windows Terminal finds itself, as <see cref="RepositoryUrl"/> is. Every build of one repository fetches from it (projector and drafter too).
+    /// </summary>
+    public static IReadOnlyList<ModelRepository> ModelRepositories { get; } =
+        EmbeddedLlm.EmbeddedModelCatalog.ForThisMachine
+            .GroupBy(m => m.Repository, StringComparer.Ordinal)
+            .Select(g => new ModelRepository(g.First().Display, g.Select(m => m.Quant).Distinct(StringComparer.Ordinal).ToList(), EmbeddedLlm.EmbeddedModelCatalog.HuggingFaceBase + g.Key))
+            .ToList();
 
     /// <summary>The second line of the About tab.</summary>
     public const string Copyright = "© 2026 Christopher Nelson";
@@ -300,12 +319,26 @@ public static class AboutText
         return grid;
     }
 
+    /// <summary>The Models tab (2026-10-09): the caption, then each repository's name and builds on a line, its page indented under it.</summary>
+    public static IRenderable ModelsTab()
+    {
+        var lines = new List<IRenderable> { new Text(ModelsCaption, Theme.DimText) };
+        foreach (var repo in ModelRepositories)
+        {
+            lines.Add(new Text(" "));
+            lines.Add(new Paragraph().Append(repo.Name, Theme.AccentSecondary).Append("  " + string.Join(Sep, repo.Quants), Theme.DimText));
+            lines.Add(new Text("  " + repo.Url, Theme.Body));
+        }
+
+        return new Rows(lines);
+    }
+
     /// <summary>The Licence tab: the text, verbatim.</summary>
     public static IRenderable LicenseTab() => new Text(LicenseText.TrimEnd('\n'), Theme.Body);
 
     // ── Plain lines ─────────────────────────────────────────────────────────
 
-    /// <summary>The three tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented.</summary>
+    /// <summary>The four tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented (Models since 2026-10-09).</summary>
     public static IEnumerable<string> Lines(AboutFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
@@ -322,6 +355,14 @@ public static class AboutText
         foreach (var part in Components)
         {
             yield return "  " + part.Name + " " + part.Version + Sep + part.License + Sep + part.Role;
+        }
+
+        yield return ModelsTabTitle;
+        yield return "  " + ModelsCaption;
+        foreach (var repo in ModelRepositories)
+        {
+            yield return "  " + repo.Name + "  " + string.Join(Sep, repo.Quants);
+            yield return "    " + repo.Url;
         }
 
         yield return LicenseTabTitle;

@@ -25,7 +25,7 @@ public static class HelpCommands
     [
         new("/about",
         [
-            new("/about", "Show the app's version, runtime, folders, components and licence."),
+            new("/about", "Show the app's version, runtime, folders, components, the embedded models' Hugging Face pages and the licence."),
         ]),
         new("/botchat",
         [

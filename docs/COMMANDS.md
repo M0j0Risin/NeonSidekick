@@ -33,7 +33,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 | Command | What it does |
 |---|---|
-| `/about` | Shows the version, the GitHub repository, runtime, folders, components and licence. |
+| `/about` | Shows the version, the GitHub repository, runtime, folders, components, the embedded models (each Hugging Face repository with its link, the Models tab) and licence. |
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
 | `/clear` | Starts a new conversation and clears the screen. |

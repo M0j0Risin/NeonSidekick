@@ -186,7 +186,7 @@ public class AboutTextTests
     }
 
     [Fact]
-    public void Lines_AreTheThreeTabs_Headed()
+    public void Lines_AreTheFourTabs_Headed()
     {
         string[] lines = AboutText.Lines(Facts).ToArray();
         Assert.Equal("General", lines[0]);
@@ -199,8 +199,14 @@ public class AboutTextTests
         Assert.Equal("  Speech       " + AboutText.SpeechLine, lines[12]);
         Assert.Equal("Components", lines[13]);
         Assert.Equal("  Spectre.Console 0.57.2 · MIT · the terminal UI: the transcript, the panes, the thumbnails", lines[14]);
+        int models = Array.IndexOf(lines, "Models");   // 2026-10-09, between Components and Licence
+        Assert.Equal(14 + AboutText.Components.Count, models);
+        Assert.Equal("  " + AboutText.ModelsCaption, lines[models + 1]);
+        var first = AboutText.ModelRepositories[0];
+        Assert.Equal("  " + first.Name + "  " + string.Join(" · ", first.Quants), lines[models + 2]);
+        Assert.Equal("    " + first.Url, lines[models + 3]);
         int license = Array.IndexOf(lines, "Licence");
-        Assert.Equal(14 + AboutText.Components.Count, license);
+        Assert.Equal(models + 2 + 2 * AboutText.ModelRepositories.Count, license);
         Assert.Equal("                      GNU GENERAL PUBLIC LICENSE", lines[license + 1]);   // the FSF's own centring, verbatim
         Assert.Equal("  <https://www.gnu.org/licenses/why-not-lgpl.html>.", lines[^1]);
     }
@@ -246,6 +252,43 @@ public class AboutTextTests
         Assert.All(AboutText.Components, c => Assert.Contains(lines, l => l.StartsWith(c.Name, StringComparison.Ordinal) && l.Contains(c.Role.Split(' ')[0], StringComparison.Ordinal)));
         Assert.All(lines, l => Assert.True(l.Length <= 100, l));
         Assert.All(AboutText.Components, c => Assert.True(c.Name.Length <= 40, c.Name));
+    }
+
+    /// <summary>The Models tab (2026-10-09, the user's ask): one entry per repository the catalog fetches from, in its order, each linked.</summary>
+    [Fact]
+    public void ModelRepositories_AreTheCatalogsRepositories_InItsOrder_EachLinked()
+    {
+        var catalog = NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.ForThisMachine;
+        Assert.Equal(catalog.Select(m => m.Repository).Distinct().Select(r => "https://huggingface.co/" + r), AboutText.ModelRepositories.Select(r => r.Url));
+        Assert.Equal(catalog.Count, AboutText.ModelRepositories.Sum(r => r.Quants.Count));   // every build once, by its quant
+        Assert.All(AboutText.ModelRepositories, r => Assert.Equal(catalog.First(m => r.Url.EndsWith("/" + m.Repository, StringComparison.Ordinal)).Display, r.Name));
+        Assert.Equal("Models", AboutText.ModelsTabTitle);
+        Assert.Equal("The embedded LLM's catalog (/settings › Embedded), each from its Hugging Face repository, pinned to a commit:", AboutText.ModelsCaption);
+    }
+
+    [Fact]
+    public void ModelsTab_IsTheCaption_ThenEachRepository_ItsLinkOnTheLineUnder()
+    {
+        var console = new TestConsole { Profile = { Width = 240 } };
+        console.Write(AboutText.ModelsTab());
+
+        string output = string.Join("\n", console.Output.Split('\n').Select(l => l.TrimEnd()));
+        Assert.StartsWith(AboutText.ModelsCaption + "\n\n", output);
+        foreach (var repo in AboutText.ModelRepositories)
+        {
+            Assert.Contains("\n" + repo.Name + "  " + string.Join(" · ", repo.Quants) + "\n  " + repo.Url + "\n", output + "\n");
+        }
+    }
+
+    [Fact]
+    public void ModelsTab_FitsANormalWindow_EveryLinkOnOneLine()
+    {
+        // 100 columns: a link is never broken across rows (Windows Terminal would find only part of it).
+        var console = new TestConsole { Profile = { Width = 100 } };
+        console.Write(AboutText.ModelsTab());
+
+        string[] lines = console.Output.Split('\n').Select(l => l.TrimEnd()).ToArray();
+        Assert.All(AboutText.ModelRepositories, r => Assert.Contains("  " + r.Url, lines));
     }
 
     [Fact]

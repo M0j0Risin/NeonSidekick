@@ -10464,12 +10464,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task WithGeometry_AboutOpensTheInfoPane_ThreeTabs_AndEscClosesIt()
+    public async Task WithGeometry_AboutOpensTheInfoPane_FourTabs_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 80;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/about");
+        _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Escape);
@@ -10478,16 +10479,18 @@ public partial class ChatScreenTests : IDisposable
         string raw = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(AboutText.Label + " │ General · Components · Licence ") + "\n \n";
+        string strip = rule + "\n" + Titled(AboutText.Label + " │ General · Components · Models · Licence ") + "\n \n";   // Models since 2026-10-09
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         string output = string.Join("\n", raw.Split('\n').Select(l => l.TrimEnd()));
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
         Assert.Contains(strip.TrimEnd() + "\n\nNeonSidekick " + SidekickApp.Version + "\n" + AboutText.CopyrightLine + "\n" + AboutText.RepositoryLine + "\n\nRuntime      " + RuntimeInformation.FrameworkDescription + " · JIT · ", output);
         Assert.Contains("\nHome         " + _settings.StorageDirectory + "\nProfile      " + _settings.ProfileDirectory + "\nModels       " + _settings.ModelsDirectory + "\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
         Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
-        // → the Components tab, → the Licence tab.
+        // → the Components tab, → the Models tab, → the Licence tab.
         Assert.Contains(strip.TrimEnd() + "\n\nComponent", output);
         Assert.Contains("\nSpectre.Console", output);
+        Assert.Contains(strip.TrimEnd() + "\n\n" + AboutText.ModelsCaption + "\n\n" + AboutText.ModelRepositories[0].Name + "  ", output);
+        Assert.Contains("\n  " + AboutText.ModelRepositories[0].Url + "\n", output);
         Assert.Contains(strip.TrimEnd() + "\n\n                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n", output);
         // Nothing in the transcript; ESC brings the input row back.
         Assert.DoesNotContain("  · NeonSidekick", output);
@@ -10495,7 +10498,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task WithoutGeometry_AboutPrintsTheThreeTabs()
+    public async Task WithoutGeometry_AboutPrintsTheFourTabs()
     {
         _settings.Update(d => d.TtsOutput = false);
         PushLine("/about");
@@ -10508,6 +10511,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ·   Profile      " + _settings.ProfileDirectory, output);
         Assert.Contains("  · Components\n", output);
         Assert.Contains("  ·   Vosk 0.3.38 · Apache-2.0 · ", output);
+        Assert.Contains("  · Models\n  ·   " + AboutText.ModelsCaption + "\n", output);
+        Assert.Contains("\n  ·     " + AboutText.ModelRepositories[^1].Url + "\n  · Licence\n", output);
         Assert.Contains("  · Licence\n  ·                       GNU GENERAL PUBLIC LICENSE\n", output);
         Assert.DoesNotContain(InfoPane.HintText, output);
     }

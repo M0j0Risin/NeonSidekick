@@ -2381,11 +2381,12 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The tabs <c>/about</c> opens: the app and its folders (read when shown: a profile switch moves one), the third-party parts, the licence.</summary>
+    /// <summary>The tabs <c>/about</c> opens: the app and its folders (read when shown: a profile switch moves one), the third-party parts, the embedded models' repositories (2026-10-09), the licence.</summary>
     private IReadOnlyList<InfoTab> AboutTabs() =>
     [
         new(AboutText.AboutTabTitle, () => AboutText.AboutTab(AboutFacts())),
         new(AboutText.ComponentsTabTitle, AboutText.ComponentsTab),
+        new(AboutText.ModelsTabTitle, AboutText.ModelsTab),
         new(AboutText.LicenseTabTitle, AboutText.LicenseTab),
     ];
 

@@ -199,7 +199,7 @@ public enum SlashCommand
     /// </summary>
     Process,
 
-    /// <summary><c>/about</c>: the app's version, runtime, folders, servers, third-party components and licence, in the info pane.</summary>
+    /// <summary><c>/about</c>: the app's version, runtime, folders, servers, third-party components, the embedded models' Hugging Face repositories (the Models tab, 2026-10-09) and licence, in the info pane.</summary>
     About,
 
     /// <summary><c>/skills</c>: the Skills pane listing the skills the model can load, the project notes file and the skill folders (<c>/skills</c> again since 2026-09-19, the plural beside <c>/tools</c>, the user's call — <c>/skill</c> is an unknown command now; a bare <c>/skill</c> from later on 2026-09-18, <c>/skill list</c> earlier that day, <c>/skills</c> from 2026-09-16 until then). No argument: <c>/skill &lt;name&gt; [message]</c> loaded a skill into the next reply from 2026-09-16 until later on 2026-09-18, when the <c>#</c>-mention made it redundant (the user's call); an argument was <see cref="Overloaded"/> until 2026-09-21, when <c>/skills edit &lt;name&gt;</c> came (the user's ask: the skill's <c>SKILL.md</c> in your editor). Since 2026-09-26 it takes <c>add &lt;source&gt;</c> (the user's ask: search skills.sh and install from GitHub, <see cref="Skills.SkillInstallFlow"/>); any other argument is its usage error. <c>////</c> was its alias for part of that day (gone later on 2026-09-21, the user's ask, with <c>///</c> for <c>/tools</c>).</summary>
