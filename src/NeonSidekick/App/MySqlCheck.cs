@@ -40,14 +40,14 @@ internal static class MySqlCheck
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var access = new MySqlAccess(() => catalog);
         var checks = new List<SmokeCheck>();
-        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name, null) is not { } target)
+        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name) is not { } target)
         {
             checks.Add(new SmokeCheck("mysql:connection", false, catalog.Connections.Count == 0 ? MySqlText.NoConnections : MySqlText.UnknownConnection(name, string.Join(", ", catalog.Connections.Select(c => c.Name)))));
             return Report(console, checks);
         }
 
         Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout, CancellationToken token) =>
-            access.RunAsync(name, null, statements, [], 10, timeout, token);
+            access.RunAsync(name, statements, [], 10, timeout, token);
 
         var who = await Run([MySqlCatalogQueries.WhoAmI], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)
@@ -77,7 +77,7 @@ internal static class MySqlCheck
         bool sameString = escaped.Outcome == SqlOutcome.Ok && escaped.Grids[0].Rows.FirstOrDefault()?[0] == "a'; DROP TABLE t; --";
         checks.Add(new SmokeCheck("mysql:escapes", sameString, sameString ? "the server read the backslash escape as the gate did (sql_mode stripped)" : escaped.Outcome + " " + escaped.Detail));
 
-        var names = await access.RunAsync(name, null, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var names = await access.RunAsync(name, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(BoundaryCheck(target.Config.Database?.Trim() ?? "", names));
         var reach = await Run([MySqlCatalogQueries.OtherDatabases], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("mysql:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok

@@ -26,7 +26,7 @@ public sealed class UncSearchTool : UncTool
         {
           "type": "object",
           "properties": {
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when path is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\server\\share path or a folder under one." },
             "text": { "type": "string", "description": "The word or phrase to look for inside files. Case does not matter. Leave it out to list files instead of searching inside them." },
             "path": { "type": "string", "description": "A subfolder to search or list, or one file to search in, relative to the share (or a full path under it). Leave it out for the share's root." },
             "files": { "type": "string", "description": "Only files matching this pattern: a name pattern such as *.md or *.docx, or a path pattern such as specs/**/*.md (** spans folders); braces give alternatives, *.{png,jpg}. Without text, lists the matching files at every level." },

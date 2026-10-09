@@ -31,7 +31,7 @@ internal static class SqliteCheck
         ArgumentNullException.ThrowIfNull(name);
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var checks = new List<SmokeCheck>();
-        Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout) => access.RunAsync(name, null, statements, [], 10, timeout, cancellationToken);
+        Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout) => access.RunAsync(name, statements, [], 10, timeout, cancellationToken);
 
         var count = await Run([SqliteCatalogQueries.Count], timeoutSeconds).ConfigureAwait(false);
         if (count.Outcome != SqlOutcome.Ok)

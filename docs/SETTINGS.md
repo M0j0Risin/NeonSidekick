@@ -766,7 +766,6 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [SQL › Changes](TOOLS.md#changes). | read-only |
 | SQL statements allowed | Under `read-write`: the kinds of statement `sql_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [SQL › Changes](TOOLS.md#changes). | changing data, creating, reading |
 | SQL connections offered | A checklist of the connections in both `sql.json` files; nothing is offered until ticked (here or in the wizard). `a` / `n` tick all or none. A hidden connection is invisible to every tool, the rules and the `%`-mention. A ticked name no longer in the files is dropped when the checklist opens, and the status line names it; not while a file can't be read, nor a name an entry with a problem still holds. | none |
-| SQL default connection | The connection a call uses when it names none: an offered one, or the first. | (the first connection) |
 | SQL set password | Pick a `sql` or `runas` connection (`runas` is Windows only) and type its password, masked; it goes to that connection's store. | — |
 | SQL add/edit connection | A wizard for a new connection, or to edit a saved one, which can **test** it (`SELECT @@VERSION`, and the other databases the login could open) before saving. The database is required. See [Managing connections](TOOLS.md#managing-connections). | — |
 | SQL %-mention enabled | `%` and part of a name lists the connections; a pick writes `%name`. | on |
@@ -786,7 +785,6 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | Oracle mode | `read-only`: the tools only read. `read-write`: `oracle_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [Oracle › Changes](TOOLS.md#changes-1). | read-only |
 | Oracle statements allowed | Under `read-write`: the kinds of statement `oracle_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [Oracle › Changes](TOOLS.md#changes-1). | changing data, creating, reading |
 | Oracle connections offered | As *SQL connections offered*. | none |
-| Oracle default connection | As *SQL default connection*. | (the first connection) |
 | Oracle set password | As *SQL set password*. | — |
 | Oracle add/edit connection | The wizard (new or edit); its *Schema* is the one the connection is held to (the user's own when empty). Its test shows who it signs in as, the version, a warning when the account could change data, and the other schemas it could read. See [Oracle](TOOLS.md#oracle). | — |
 | Oracle %-mention enabled | Lists the Oracle connections in the `%` list too, marked `Oracle ·`. | on |
@@ -803,7 +801,6 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | MySQL mode | `read-only`: the tools only read. `read-write`: `mysql_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [MySQL › Changes](TOOLS.md#changes-2). | read-only |
 | MySQL statements allowed | Under `read-write`: the kinds of statement `mysql_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [MySQL › Changes](TOOLS.md#changes-2). | changing data, creating, reading |
 | MySQL connections offered | As *SQL connections offered*. | none |
-| MySQL default connection | As *SQL default connection*. | (the first connection) |
 | MySQL set password | As *SQL set password*. | — |
 | MySQL add/edit connection | The wizard (new or edit); the database is required. Its test shows who it signs in as, the version, a warning when `SHOW GRANTS` allows changes, and the other databases the account could reach. See [MySQL](TOOLS.md#mysql-and-mariadb). | — |
 | MySQL %-mention enabled | Lists the MySQL connections in the `%` list too, marked `MySQL ·`. | on |
@@ -820,7 +817,6 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` is offered too, one change per call of the kinds below, or a new database file in the working directory, each allowed on a pane (Deny, Allow once, Allow for this session). See [SQLite › Changes](TOOLS.md#changes-3). | read-only |
 | SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run, as a checklist: changing data, deleting, creating, changing structure, dropping, upkeep, settings, reading (see [SQLite › Changes](TOOLS.md#changes-3)). `a` / `n` / `d` pick all, none or the default. With none ticked, `sqlite_execute` isn't offered. | changing data, creating, reading |
 | SQLite databases offered | Which databases of `sqlite.json` the model sees. None until you tick them. Otherwise as *SQL connections offered*. | none |
-| SQLite default database | The database a call uses when it names none. | (the first database) |
 | SQLite sandbox files | The model may also open any SQLite file inside the working directory by its path (`data/app.db`), and `sqlite_execute`'s `create` may make one there. | off |
 | SQLite add/edit database | The wizard (new or edit): the file to save in, the name, the database file, a description; its test opens the file read-only and counts the tables. | — |
 | SQLite %-mention enabled | Lists the SQLite databases in the `%` list too, marked `SQLite ·`. | on |
@@ -837,7 +833,6 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | PostgreSQL mode | `read-only`: the tools only read. `read-write`: `postgres_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [PostgreSQL › Changes](TOOLS.md#changes-4). | read-only |
 | PostgreSQL statements allowed | Under `read-write`: the kinds of statement `postgres_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [PostgreSQL › Changes](TOOLS.md#changes-4). | changing data, creating, reading |
 | PostgreSQL connections offered | As *SQL connections offered*. | none |
-| PostgreSQL default connection | As *SQL default connection*. | (the first connection) |
 | PostgreSQL set password | As *SQL set password*. | — |
 | PostgreSQL add/edit connection | The wizard (new or edit); the database is required, a schema to hold the connection to optional. Its test shows who it signs in as, the version, a warning when the role could change data (a superuser is warned of, not refused), and what else the role could reach. See [PostgreSQL](TOOLS.md#postgresql). | — |
 | PostgreSQL %-mention enabled | Lists the PostgreSQL connections in the `%` list too, marked `PostgreSQL ·`. | on |
@@ -853,7 +848,6 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 | UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See [UNC shares](TOOLS.md#unc-shares-and-outside-folders). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
 | UNC writes | The master key for changes. On, a share with `access: readwrite` also gets `unc_write`, `unc_patch`, `unc_create_directory`, `unc_move`, `unc_copy`, `unc_delete` (off by default in Offered) and `unc_put`. Changes are permanent. | off |
 | UNC shares offered | As *SQL connections offered*. | none |
-| UNC default share | The share a call uses when it names none and gives no full path. | (the first share) |
 | UNC set password | As *SQL set password*, for runas shares. | — |
 | UNC add/edit share | The wizard (new or edit); its test lists the share's root under its account. | — |
 | UNC *-mention enabled | `*` and part of a name lists the offered shares; a pick writes `*name`. | on |

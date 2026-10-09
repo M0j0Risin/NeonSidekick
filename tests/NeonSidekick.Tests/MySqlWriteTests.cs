@@ -213,7 +213,8 @@ public sealed class MySqlExecuteTests
             return Task.FromResult<bool?>(false);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(MySqlText.ConnectionNeeded("shop, ro"), await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, [new("id", 1L)], null, CancellationToken.None));   // two, none named (2026-10-09)
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", "shop", [new("id", 1L)], null, CancellationToken.None));
         Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM `sales`.t", "shop", [], null, CancellationToken.None));   // its own, quoted as spelled: no names to read
         Assert.Equal([("shop", "sales", "DELETE FROM t WHERE id = @id"), ("shop", "sales", "DELETE FROM `sales`.t")], asked);
 
@@ -231,7 +232,7 @@ public sealed class MySqlExecuteTests
         Assert.Equal(ServerWriteText.ReadOnlyMode(MySqlStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         Assert.Empty(asked);
         _settings.MySqlMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(MySqlStatementKinds.Family), await new MySqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(MySqlStatementKinds.Family), await new MySqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", "shop", [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -258,7 +259,7 @@ public sealed class MySqlExecuteTests
     {
         _settings.MySqlConnectionsOffered = ["shop", "ro"];
         string listing = new MySqlConnectionsTool(Access(), () => _settings).Describe();
-        Assert.Contains("- shop (default): 127.0.0.1:1 / sales, user u, read-write", listing);
+        Assert.Contains("- shop: 127.0.0.1:1 / sales, user u, read-write", listing);
         Assert.Contains("- ro: 127.0.0.1:1 / sales, user u", listing);
         Assert.EndsWith("a SELECT-only account is the real guard.", MySqlText.CanWrite(["ALL"]));
         Assert.Contains("as readwrite, mysql_execute may use those powers", MySqlText.CanWrite(["ALL"], readWrite: true));

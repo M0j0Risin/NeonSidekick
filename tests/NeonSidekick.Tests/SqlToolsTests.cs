@@ -89,12 +89,14 @@ public sealed class SqlToolsTests
         _catalog = new SqlCatalog([Unreachable("down"), Unreachable("other")], []);
 
         Assert.Equal(SqlText.UnknownConnection("nope", "down, other"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "nope")));
-        string failed = await Invoke<SqlQueryTool>(("sql", "SELECT 1"));
+        Assert.Equal(SqlText.ConnectionNeeded("down, other"), await Invoke<SqlQueryTool>(("sql", "SELECT 1")));   // two, none named (2026-10-09: no default)
+        Assert.Equal(SqlText.ConnectionNeeded("down, other"), await Invoke<SqlTablesTool>());
+        string failed = await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "down"));
         Assert.StartsWith("Error: could not connect to down: ", failed);
         Assert.Contains("Named Pipes Provider", failed);
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlTablesTool>(("connection", "OTHER")));   // by name, any case
-        _settings.SqlDefaultConnection = "other";
-        Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlTablesTool>());   // the default when none is named
+        _catalog = new SqlCatalog([Unreachable("other")], []);
+        Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlTablesTool>());   // the only one when none is named
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlDescribeTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlRelationshipsTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<SqlColumnsTool>(("pattern", "Email")));
@@ -112,11 +114,11 @@ public sealed class SqlToolsTests
         _catalog = new SqlCatalog([Unreachable("down"), new SqlNamedConnection("closed", new SqlConnectionConfig { Server = "tcp:127.0.0.1,1", Database = "Sales", Auth = "windows", ConnectTimeoutSeconds = 1, Encrypt = "optional" }, "test")], []);
 
         Assert.Equal(SqlText.UnknownConnection("nope", "down, closed"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "nope")));
-        Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1")));
+        Assert.Equal(SqlText.ConnectionNeeded("down, closed"), await Invoke<SqlQueryTool>(("sql", "SELECT 1")));   // two, none named
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<SqlTablesTool>(("connection", "DOWN")));
         Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "closed")));
-        _settings.SqlDefaultConnection = "closed";
-        Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlTablesTool>());
+        _catalog = _catalog.Offered(["closed"]);
+        Assert.StartsWith("Error: could not connect to closed: ", await Invoke<SqlTablesTool>());   // the only one offered
     }
 
     [WindowsFact]
@@ -135,7 +137,7 @@ public sealed class SqlToolsTests
             string failed = await Invoke<SqlQueryTool>(("sql", "SELECT SUSER_SNAME()"));
             Assert.StartsWith("Error: could not connect to prod: ", failed);
             Assert.Contains("Named Pipes Provider", failed);
-            Assert.Contains("- prod (default): " + pipe + " / Reports, windows sign-in as NEONSIDEKICK-TEST\\nobody (runas)", await Invoke<SqlConnectionsTool>());
+            Assert.Contains("- prod: " + pipe + " / Reports, windows sign-in as NEONSIDEKICK-TEST\\nobody (runas)", await Invoke<SqlConnectionsTool>());
         }
         finally
         {
@@ -255,8 +257,7 @@ public sealed class SqlToolsTests
         Assert.Equal("1 more connection in sql.json is switched off for this profile (the SQL tab of /tools).", SqlText.HiddenConnections(1));
 
         Assert.Equal(SqlText.UnknownConnection("secret", "prod"), await Invoke<SqlQueryTool>(("sql", "SELECT 1"), ("connection", "secret")));
-        _settings.SqlDefaultConnection = "secret";   // a hidden default falls to the first offered
-        Assert.StartsWith("Error: could not connect to prod: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1")));
+        Assert.StartsWith("Error: could not connect to prod: ", await Invoke<SqlQueryTool>(("sql", "SELECT 1")));   // the only one offered: the hidden ones do not count
         Assert.Equal(["prod"], ChatScreen.SqlChoices(narrowed).Select(i => i.Text));
 
         var access = new SqlAccess(() => all.Offered([]));

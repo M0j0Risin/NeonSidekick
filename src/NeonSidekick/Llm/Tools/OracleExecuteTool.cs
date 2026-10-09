@@ -68,23 +68,23 @@ public sealed class OracleExecuteTool : OracleTool
             OracleWriteGate.Kinds,
             OracleReadOnlyGate.Check,
             OracleWriteGate.Body,
-            () => Oracle.Resolve(connection, effective.OracleDefaultConnection, out var refused) is { } target
+            () => Oracle.Resolve(connection, out var refused) is { } target
                 ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.Place(target.Config)), null)
                 : (null, OracleText.Error(refused!)),
             async (body, token) =>
             {
-                var run = await Oracle.RunAsync(connection, effective.OracleDefaultConnection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await Oracle.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 if (IsTooNew(run))
                 {
                     // ORA-01466 (found live, 2026-10-05): a read-only transaction cannot read a table whose DDL is younger than Oracle's
                     // SCN-to-time grain (about three seconds) — what a read straight after this tool's CREATE meets. Read again once, after it.
                     await Task.Delay(TooNewWait, token).ConfigureAwait(false);
-                    run = await Oracle.RunAsync(connection, effective.OracleDefaultConnection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                    run = await Oracle.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 }
 
                 return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(effective)) : OracleText.Error(run);
             },
-            (body, token) => Oracle.ExecuteAsync(connection, effective.OracleDefaultConnection, body, parameters, timeout, token),
+            (body, token) => Oracle.ExecuteAsync(connection, body, parameters, timeout, token),
             OracleText.Error,
             (body, token) => OutsideAsync(body, connection, token));
         return ServerExecute.RunAsync(OracleStatementKinds.Family, effective.OracleMode, effective.OracleStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);

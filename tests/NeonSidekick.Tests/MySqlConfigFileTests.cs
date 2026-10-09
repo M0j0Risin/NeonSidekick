@@ -113,8 +113,10 @@ public sealed class MySqlConfigFileTests : IDisposable
         var catalog = MySqlConfigFile.LoadCatalog(_profile, _home);
 
         Assert.Equal(["shop", "billing"], catalog.Connections.Select(c => c.Name));
-        Assert.Equal("profile", catalog.Find("Shop", null)!.Config.Host);
-        Assert.Equal("billing", catalog.Find(null, "BILLING")!.Name);
+        Assert.Equal("profile", catalog.Find("Shop")!.Config.Host);
+        Assert.Equal("billing", catalog.Find("BILLING")!.Name);
+        Assert.Null(catalog.Find(null));   // two, and none named (2026-10-09: no default)
+        Assert.Equal("billing", catalog.Offered(["billing"]).Find(null)!.Name);   // the only one offered
         Assert.Equal(1, catalog.Offered(["billing"]).Hidden);
     }
 

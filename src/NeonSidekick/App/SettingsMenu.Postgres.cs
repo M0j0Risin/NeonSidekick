@@ -48,25 +48,6 @@ internal sealed partial class SettingsMenu
     /// <summary>The status line after an edit row opened an <c>postgres.json</c>. Pinned.</summary>
     public static string PostgresEditingNotice(string path) => $"Opened {path} in the editor; the PostgreSQL tools read it at their next call.";
 
-    /// <summary>The <c>PostgreSQL default connection</c> pick: <see cref="FirstSqlConnectionLabel"/>, then every offered connection, the cursor on the one saved.</summary>
-    private async Task<bool> PickPostgresConnectionAsync(AppSettingsData saved, CancellationToken cancellationToken)
-    {
-        var names = PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(saved.PostgresConnectionsOffered).Connections.Select(c => c.Name).ToList();
-        var rows = new List<string> { Markup.Escape(FirstSqlConnectionLabel) };
-        rows.AddRange(names.Select(Markup.Escape));
-        int current = names.FindIndex(n => string.Equals(n, saved.PostgresDefaultConnection, StringComparison.OrdinalIgnoreCase));
-        var page = new MenuPage(Crumb(FieldName(SettingsField.PostgresDefaultConnection)), rows, PickKeys);
-        int? picked = await PickAsync(page, current + 1, cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
-        {
-            return Unchanged();
-        }
-
-        string name = index == 0 ? "" : names[index - 1];
-        Apply(SettingsField.PostgresDefaultConnection, d => d.PostgresDefaultConnection = name);
-        return true;
-    }
-
     /// <summary>
     /// <c>PostgreSQL connections offered</c>, <see cref="EditSqlOfferedAsync"/>'s twin: every connection the two files hold, ticked
     /// or not, Enter or Space flipping one until ESC; nothing is ticked until the user ticks it (2026-10-01; a

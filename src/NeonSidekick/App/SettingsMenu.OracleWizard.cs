@@ -566,7 +566,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The app's test: <see cref="OracleAccess.RunAsync"/> over the one connection, <see cref="OracleCatalogQueries.WhoAmI"/>, <see cref="OracleCatalogQueries.WritePowers"/> and <see cref="OracleCatalogQueries.Reach"/>, the Oracle tab's timeout.</summary>
     private Task<Sql.SqlRun> TestOracleConnectionAsync(OracleNamedConnection connection, CancellationToken cancellationToken) =>
         new OracleAccess(() => new OracleCatalog([connection], []))
-            .RunAsync(connection.Name, null, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers, .. OracleCatalogQueries.Reach], [], 100, _settings.Current.OracleQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers, .. OracleCatalogQueries.Reach], [], 100, _settings.Current.OracleQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="OracleConfigFile.AddConnection"/>), then its password to its store, then — when

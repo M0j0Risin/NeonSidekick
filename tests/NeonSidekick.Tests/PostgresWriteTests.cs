@@ -240,13 +240,14 @@ public sealed class PostgresExecuteTests
             return Task.FromResult(answer);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(PostgresText.ConnectionNeeded("shop, ro"), await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, [new("id", 1L)], null, CancellationToken.None));   // two, none named (2026-10-09)
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", "shop", [new("id", 1L)], null, CancellationToken.None));
         Assert.Equal([("PostgreSQL", "shop", "sales", "DELETE FROM t WHERE id = @id")], asked);
         Assert.Equal(PostgresText.NoDatabaseArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "DELETE FROM t", ["database"] = "archive" }))!);   // 2026-10-09
         Assert.Equal(PostgresText.ServerCatalog("pg_settings"), await tool.RunAsync("UPDATE pg_settings SET setting = '1'", "shop", [], null, CancellationToken.None));
         Assert.Single(asked);
         answer = null;
-        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await tool.RunAsync("DELETE FROM t", null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await tool.RunAsync("DELETE FROM t", "shop", [], null, CancellationToken.None));
 
         asked.Clear();
         Assert.Equal(ServerWriteText.ReadOnlyConnection(PostgresStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
@@ -267,7 +268,7 @@ public sealed class PostgresExecuteTests
         Assert.Empty(asked);   // every refusal comes before the ask
 
         _settings.PostgresMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await new PostgresExecuteTool(Access(), () => _settings, allow: null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await new PostgresExecuteTool(Access(), () => _settings, allow: null).RunAsync("INSERT INTO t VALUES (1)", "shop", [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -321,7 +322,7 @@ public sealed class PostgresExecuteTests
     public void TheListing_SaysWhichConnectionsMayChange()
     {
         string listing = new PostgresConnectionsTool(Access(), () => _settings).Describe();
-        Assert.Contains("- shop (default): 127.0.0.1:9 / sales, user u, read-write", listing);
+        Assert.Contains("- shop: 127.0.0.1:9 / sales, user u, read-write", listing);
         Assert.Contains("- ro: 127.0.0.1:9 / sales, user u\n", listing + "\n");
         _settings.PostgresMode = "read-only";
         Assert.Contains("user u, readwrite (but PostgreSQL mode is read-only)", new PostgresConnectionsTool(Access(), () => _settings).Describe());

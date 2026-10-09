@@ -78,7 +78,7 @@ public sealed class OracleQueryTool : OracleTool
             return outside;
         }
 
-        var run = await Oracle.RunAsync(connection, Effective.OracleDefaultConnection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(Effective)) : OracleText.Error(run);
     }
 

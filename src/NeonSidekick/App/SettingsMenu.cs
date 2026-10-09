@@ -340,8 +340,6 @@ public enum SettingsField
     /// <summary>A checklist: the kinds of statement <c>sql_execute</c> may run under read-write (<see cref="Settings.AppSettingsData.SqlStatementsAllowed"/>). The SQL tab's third row (2026-10-05).</summary>
     SqlStatementsAllowed,
 
-    /// <summary>A pick: the connection a SQL tool uses when the call names none (<see cref="Settings.AppSettingsData.SqlDefaultConnection"/>), from the names in <c>sql.json</c> or the first. The SQL tab's second row (2026-09-23); no reconnect (read at each call).</summary>
-    SqlDefaultConnection,
 
     /// <summary>Typed: how many rows a <c>sql_query</c> without <c>max_rows</c> returns, 1 to 100,000 (1000 until 2026-10-01) (<see cref="Settings.AppSettingsData.SqlQueryMaxRows"/>). The SQL tab's third row (2026-09-23); no reconnect.</summary>
     SqlQueryMaxRows,
@@ -632,8 +630,6 @@ public enum SettingsField
     /// <summary>A checklist: which connections of <c>oracle.json</c> this profile offers (<see cref="Settings.AppSettingsData.OracleConnectionsOffered"/>). The Oracle tab's second row (2026-09-30); no reconnect.</summary>
     OracleConnectionsOffered,
 
-    /// <summary>A pick: the connection an Oracle tool uses when the call names none (<see cref="Settings.AppSettingsData.OracleDefaultConnection"/>). The Oracle tab's third row (2026-09-30); no reconnect.</summary>
-    OracleDefaultConnection,
 
     /// <summary>An action row, no setting behind it (2026-09-30): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="Oracle.OracleSecrets.Save"/>). The Oracle tab's fourth row.</summary>
     OracleSetPassword,
@@ -668,8 +664,6 @@ public enum SettingsField
     /// <summary>A checklist: which connections of <c>mysql.json</c> this profile offers (<see cref="Settings.AppSettingsData.MySqlConnectionsOffered"/>). The MySQL tab (2026-09-30).</summary>
     MySqlConnectionsOffered,
 
-    /// <summary>A pick: the connection a MySQL tool uses when the call names none (<see cref="Settings.AppSettingsData.MySqlDefaultConnection"/>). The MySQL tab (2026-09-30).</summary>
-    MySqlDefaultConnection,
 
     /// <summary>An action row (2026-09-30): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="MySql.MySqlSecrets.Save"/>). The MySQL tab.</summary>
     MySqlSetPassword,
@@ -701,8 +695,6 @@ public enum SettingsField
     /// <summary>A checklist: which shares of <c>unc.json</c> this profile offers (<see cref="Settings.AppSettingsData.UncSharesOffered"/>). The UNC tab (2026-09-30).</summary>
     UncSharesOffered,
 
-    /// <summary>A pick: the share a UNC tool uses when the call names none (<see cref="Settings.AppSettingsData.UncDefaultShare"/>). The UNC tab (2026-09-30).</summary>
-    UncDefaultShare,
 
     /// <summary>An action row (2026-09-30): Enter picks a runas share and asks for its password in a masked slot, saved to its store (<see cref="Unc.UncSecrets.Save"/>). The UNC tab.</summary>
     UncSetPassword,
@@ -890,8 +882,6 @@ public enum SettingsField
     /// <summary>A checklist: which databases of <c>sqlite.json</c> this profile offers (<see cref="Settings.AppSettingsData.SqliteDatabasesOffered"/>). The SQLite tab (2026-10-04).</summary>
     SqliteDatabasesOffered,
 
-    /// <summary>A pick: the database a SQLite tool uses when the call names none (<see cref="Settings.AppSettingsData.SqliteDefaultDatabase"/>). The SQLite tab (2026-10-04).</summary>
-    SqliteDefaultDatabase,
 
     /// <summary>A toggle: whether a file in the working directory may be named by its path (<see cref="Settings.AppSettingsData.SqliteSandboxFiles"/>). The SQLite tab (2026-10-04).</summary>
     SqliteSandboxFiles,
@@ -926,8 +916,6 @@ public enum SettingsField
     /// <summary>A checklist: which connections of <c>postgres.json</c> this profile offers (<see cref="Settings.AppSettingsData.PostgresConnectionsOffered"/>). The PostgreSQL tab (2026-10-04).</summary>
     PostgresConnectionsOffered,
 
-    /// <summary>A pick: the connection a PostgreSQL tool uses when the call names none (<see cref="Settings.AppSettingsData.PostgresDefaultConnection"/>). The PostgreSQL tab (2026-10-04).</summary>
-    PostgresDefaultConnection,
 
     /// <summary>An action row (2026-10-04): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="Postgres.PostgresSecrets.Save"/>). The PostgreSQL tab.</summary>
     PostgresSetPassword,
@@ -1419,16 +1407,16 @@ internal sealed partial class SettingsMenu
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
-        [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
+        [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
         [SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
-        [SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlDefaultConnection, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
-        [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlDefaultConnection, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
-        [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
-        [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
-        [SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleDefaultConnection, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
+        [SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
+        [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
+        [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
+        [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
+        [SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort, SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
@@ -2016,7 +2004,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyOutputFolder => "ComfyUI output folder",
         SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
         SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
-        SettingsField.SqlDefaultConnection => "SQL default connection",
         SettingsField.SqlConnectionsOffered => "SQL connections offered",
         SettingsField.SqlSetPassword => "SQL set password",
         SettingsField.SqlAddConnection => "SQL add/edit connection",   // "add" alone until 2026-10-05, when the wizards took to editing
@@ -2030,7 +2017,6 @@ internal sealed partial class SettingsMenu
         SettingsField.OracleMode => "Oracle mode",
         SettingsField.OracleStatementsAllowed => "Oracle statements allowed",
         SettingsField.OracleConnectionsOffered => "Oracle connections offered",
-        SettingsField.OracleDefaultConnection => "Oracle default connection",
         SettingsField.OracleSetPassword => "Oracle set password",
         SettingsField.OracleAddConnection => "Oracle add/edit connection",
         SettingsField.OraclePercentMention => "Oracle %-mention enabled",
@@ -2042,7 +2028,6 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlMode => "MySQL mode",
         SettingsField.MySqlStatementsAllowed => "MySQL statements allowed",
         SettingsField.MySqlConnectionsOffered => "MySQL connections offered",
-        SettingsField.MySqlDefaultConnection => "MySQL default connection",
         SettingsField.MySqlSetPassword => "MySQL set password",
         SettingsField.MySqlAddConnection => "MySQL add/edit connection",
         SettingsField.MySqlPercentMention => "MySQL %-mention enabled",
@@ -2054,7 +2039,6 @@ internal sealed partial class SettingsMenu
         SettingsField.SqliteMode => "SQLite mode",
         SettingsField.SqliteStatementsAllowed => "SQLite statements allowed",
         SettingsField.SqliteDatabasesOffered => "SQLite databases offered",
-        SettingsField.SqliteDefaultDatabase => "SQLite default database",
         SettingsField.SqliteSandboxFiles => "SQLite sandbox files",
         SettingsField.SqliteAddDatabase => "SQLite add/edit database",
         SettingsField.SqlitePercentMention => "SQLite %-mention enabled",
@@ -2066,7 +2050,6 @@ internal sealed partial class SettingsMenu
         SettingsField.PostgresMode => "PostgreSQL mode",
         SettingsField.PostgresStatementsAllowed => "PostgreSQL statements allowed",
         SettingsField.PostgresConnectionsOffered => "PostgreSQL connections offered",
-        SettingsField.PostgresDefaultConnection => "PostgreSQL default connection",
         SettingsField.PostgresSetPassword => "PostgreSQL set password",
         SettingsField.PostgresAddConnection => "PostgreSQL add/edit connection",
         SettingsField.PostgresPercentMention => "PostgreSQL %-mention enabled",
@@ -2077,7 +2060,6 @@ internal sealed partial class SettingsMenu
         SettingsField.UncTools => "UNC tools",
         SettingsField.UncWrites => "UNC writes",
         SettingsField.UncSharesOffered => "UNC shares offered",
-        SettingsField.UncDefaultShare => "UNC default share",
         SettingsField.UncSetPassword => "UNC set password",
         SettingsField.UncAddShare => "UNC add/edit share",
         SettingsField.UncStarMention => "UNC *-mention enabled",
@@ -2372,7 +2354,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
             SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
             SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
-            SettingsField.SqlDefaultConnection => string.IsNullOrWhiteSpace(data.SqlDefaultConnection) ? FirstSqlConnectionLabel : data.SqlDefaultConnection,
             SettingsField.SqlSetPassword => SqlSetPasswordLabel,
             SettingsField.SqlAddConnection => SqlAddConnectionLabel,
             SettingsField.SqlConnectionsOffered => SqlOfferedValue(data.SqlConnectionsOffered, Sql.SqlConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
@@ -2385,7 +2366,6 @@ internal sealed partial class SettingsMenu
             SettingsField.OracleTools => OnOff(data.OracleTools),
             SettingsField.OracleMode => data.OracleMode,
             SettingsField.OracleStatementsAllowed => WriteStatementsValue(data.OracleStatementsAllowed, data.OracleMode),
-            SettingsField.OracleDefaultConnection => string.IsNullOrWhiteSpace(data.OracleDefaultConnection) ? FirstSqlConnectionLabel : data.OracleDefaultConnection,
             SettingsField.OracleSetPassword => SqlSetPasswordLabel,
             SettingsField.OracleAddConnection => SqlAddConnectionLabel,
             SettingsField.OracleConnectionsOffered => OracleOfferedValue(data.OracleConnectionsOffered, Oracle.OracleConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
@@ -2397,7 +2377,6 @@ internal sealed partial class SettingsMenu
             SettingsField.MySqlTools => OnOff(data.MySqlTools),
             SettingsField.MySqlMode => data.MySqlMode,
             SettingsField.MySqlStatementsAllowed => WriteStatementsValue(data.MySqlStatementsAllowed, data.MySqlMode),
-            SettingsField.MySqlDefaultConnection => string.IsNullOrWhiteSpace(data.MySqlDefaultConnection) ? FirstSqlConnectionLabel : data.MySqlDefaultConnection,
             SettingsField.MySqlSetPassword => SqlSetPasswordLabel,
             SettingsField.MySqlAddConnection => SqlAddConnectionLabel,
             SettingsField.MySqlConnectionsOffered => MySqlOfferedValue(data.MySqlConnectionsOffered, MySql.MySqlConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
@@ -2409,7 +2388,6 @@ internal sealed partial class SettingsMenu
             SettingsField.SqliteTools => OnOff(data.SqliteTools),
             SettingsField.SqliteMode => data.SqliteMode,
             SettingsField.SqliteStatementsAllowed => SqliteStatementsValue(data.SqliteStatementsAllowed, data.SqliteMode),
-            SettingsField.SqliteDefaultDatabase => string.IsNullOrWhiteSpace(data.SqliteDefaultDatabase) ? FirstSqliteDatabaseLabel : data.SqliteDefaultDatabase,
             SettingsField.SqliteDatabasesOffered => SqliteOfferedValue(data.SqliteDatabasesOffered, Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
             SettingsField.SqliteSandboxFiles => OnOff(data.SqliteSandboxFiles),
             SettingsField.SqliteAddDatabase => SqliteAddDatabaseLabel,
@@ -2421,7 +2399,6 @@ internal sealed partial class SettingsMenu
             SettingsField.PostgresTools => OnOff(data.PostgresTools),
             SettingsField.PostgresMode => data.PostgresMode,
             SettingsField.PostgresStatementsAllowed => WriteStatementsValue(data.PostgresStatementsAllowed, data.PostgresMode),
-            SettingsField.PostgresDefaultConnection => string.IsNullOrWhiteSpace(data.PostgresDefaultConnection) ? FirstSqlConnectionLabel : data.PostgresDefaultConnection,
             SettingsField.PostgresSetPassword => SqlSetPasswordLabel,
             SettingsField.PostgresAddConnection => SqlAddConnectionLabel,
             SettingsField.PostgresConnectionsOffered => PostgresOfferedValue(data.PostgresConnectionsOffered, Postgres.PostgresConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
@@ -2433,7 +2410,6 @@ internal sealed partial class SettingsMenu
             SettingsField.UncTools => OnOff(data.UncTools),
             SettingsField.UncWrites => OnOff(data.UncWrites),
             SettingsField.UncSharesOffered => UncOfferedValue(data.UncSharesOffered, Unc.UncConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
-            SettingsField.UncDefaultShare => string.IsNullOrWhiteSpace(data.UncDefaultShare) ? FirstUncShareLabel : data.UncDefaultShare,
             SettingsField.UncSetPassword => UncSetPasswordLabel,
             SettingsField.UncAddShare => UncAddShareLabel,
             SettingsField.UncStarMention => OnOff(data.UncStarMention),
@@ -2541,8 +2517,6 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ObsidianVault"/> (2026-09-22): no vault, so no vault tool is offered. Pinned.</summary>
     public const string NoObsidianVaultLabel = "(not set)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.SqlDefaultConnection"/> (2026-09-23): a call naming no connection gets the first in <c>sql.json</c>. Pinned.</summary>
-    public const string FirstSqlConnectionLabel = "(the first connection)";
 
     /// <summary>A <c>Botchat limited …</c> row's value while it names none (2026-09-27 as the two workflow pickers' none, which went on 2026-10-04; renamed from <c>NoBotChatWorkflowLabel</c> in that day's second code review). Pinned.</summary>
     public const string NoLimitedNamesLabel = "(none)";
@@ -4729,10 +4703,6 @@ internal sealed partial class SettingsMenu
             return picked is not null ? TrySaveObsidianVault(picked) : Unchanged();
         }
 
-        if (field == SettingsField.SqlDefaultConnection)
-        {
-            return await PickSqlConnectionAsync(saved, cancellationToken).ConfigureAwait(false);
-        }
 
         if (field == SettingsField.SqlConnectionsOffered)
         {
@@ -4759,10 +4729,6 @@ internal sealed partial class SettingsMenu
             return await AddComfyWorkflowAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.PostgresDefaultConnection)
-        {
-            return await PickPostgresConnectionAsync(saved, cancellationToken).ConfigureAwait(false);
-        }
 
         if (field == SettingsField.PostgresConnectionsOffered)
         {
@@ -4788,10 +4754,6 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        if (field == SettingsField.SqliteDefaultDatabase)
-        {
-            return await PickSqliteDatabaseAsync(saved, cancellationToken).ConfigureAwait(false);
-        }
 
         if (await EditWriteFieldAsync(field, saved, cancellationToken).ConfigureAwait(false) is { } written)
         {
@@ -4827,10 +4789,6 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        if (field == SettingsField.OracleDefaultConnection)
-        {
-            return await PickOracleConnectionAsync(saved, cancellationToken).ConfigureAwait(false);
-        }
 
         if (field == SettingsField.OracleConnectionsOffered)
         {
@@ -4856,10 +4814,6 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        if (field == SettingsField.MySqlDefaultConnection)
-        {
-            return await PickMySqlConnectionAsync(saved, cancellationToken).ConfigureAwait(false);
-        }
 
         if (field == SettingsField.MySqlConnectionsOffered)
         {
@@ -4885,10 +4839,6 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        if (field == SettingsField.UncDefaultShare)
-        {
-            return await PickUncShareAsync(saved, cancellationToken).ConfigureAwait(false);
-        }
 
         if (field == SettingsField.UncSharesOffered)
         {
@@ -7478,29 +7428,6 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The default-shell picker under the settings list (2026-09-21): one <see cref="ShellLabel"/> row per <see cref="Shell.ShellKinds.Names"/> entry, a shell not installed noted, the saved one under the cursor. A shell not found can still be picked: the row is the wish, the tool says what is missing.</summary>
-    /// <summary>
-    /// The <c>SQL default connection</c> pick (2026-09-23): <see cref="FirstSqlConnectionLabel"/>, then every connection
-    /// <c>sql.json</c> holds now (the profile's, then the home's), the cursor on the one saved.
-    /// </summary>
-    private async Task<bool> PickSqlConnectionAsync(AppSettingsData saved, CancellationToken cancellationToken)
-    {
-        var names = Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(saved.SqlConnectionsOffered).Connections.Select(c => c.Name).ToList();
-        var rows = new List<string> { Markup.Escape(FirstSqlConnectionLabel) };
-        rows.AddRange(names.Select(Markup.Escape));
-        int current = names.FindIndex(n => string.Equals(n, saved.SqlDefaultConnection, StringComparison.OrdinalIgnoreCase));
-        var page = new MenuPage(Crumb(FieldName(SettingsField.SqlDefaultConnection)), rows, PickKeys);
-        int? picked = await PickAsync(page, current + 1, cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
-        {
-            return Unchanged();
-        }
-
-        string name = index == 0 ? "" : names[index - 1];
-        Apply(SettingsField.SqlDefaultConnection, d => d.SqlDefaultConnection = name);
-        return true;
-    }
-
     /// <summary>
     /// <c>SQL connections offered</c> (later on 2026-09-23): every connection the two files hold, ticked or not, Enter or
     /// Space flipping one and the list shown again until ESC (the <see cref="EditCodeLanguagesAsync"/> shape). The list is
@@ -7638,6 +7565,7 @@ internal sealed partial class SettingsMenu
         }
     }
 
+    /// <summary>The default-shell picker under the settings list (2026-09-21): one <see cref="ShellLabel"/> row per <see cref="Shell.ShellKinds.Names"/> entry, a shell not installed noted, the saved one under the cursor. A shell not found can still be picked: the row is the wish, the tool says what is missing.</summary>
     private async Task<bool> PickShellAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var installed = _installedShells();

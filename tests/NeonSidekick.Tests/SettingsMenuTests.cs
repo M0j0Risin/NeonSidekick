@@ -852,7 +852,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.LlmCompactShowSummary, SettingsField.GitLibEmail, SettingsField.GitLibName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPolice,
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
-                SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlDefaultConnection, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
+                SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
                 SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyOutputFolder, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ImageEditor, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyCaretMention, SettingsField.ComfyPictureStrip,
                 SettingsField.ReflectionYieldsToTurns,
                 SettingsField.BotChatImageMode, SettingsField.BotChatImageAsync,   // BotChatImages and BotChatTxt2ImgWorkflow until later on 2026-10-04
@@ -884,7 +884,6 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ClaudeCliServer,   // 2026-09-30, the Claude CLI server
                 SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed,   // 2026-09-30, the Oracle tab's ten
                 SettingsField.OracleConnectionsOffered,
-                SettingsField.OracleDefaultConnection,
                 SettingsField.OracleSetPassword,
                 SettingsField.OracleAddConnection,
                 SettingsField.OraclePercentMention,
@@ -894,7 +893,6 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.OracleConnectionsGlobal,
                 SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed,   // later on 2026-09-30, the MySQL tab's ten
                 SettingsField.MySqlConnectionsOffered,
-                SettingsField.MySqlDefaultConnection,
                 SettingsField.MySqlSetPassword,
                 SettingsField.MySqlAddConnection,
                 SettingsField.MySqlPercentMention,
@@ -905,7 +903,6 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.UncTools,
                 SettingsField.UncWrites,
                 SettingsField.UncSharesOffered,
-                SettingsField.UncDefaultShare,
                 SettingsField.UncSetPassword,
                 SettingsField.UncAddShare,
                 SettingsField.UncStarMention,
@@ -930,7 +927,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.PdfEngine,   // later still on 2026-10-03, /tools' Print tab's last row: what makes a PDF
                 SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
-                SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
+                SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
                 SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows
                 SettingsField.DiffCollapseCount,   // later still on 2026-10-04, /tools' Options tab under Diff max lines: the diff's fold
                 SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder,   // later still on 2026-10-04, /tools' Files tab: image_edit's defaults

@@ -131,7 +131,7 @@ public sealed class LiveOracleTests
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
-        _access.RunAsync("free", null, [sql], [], 10, timeoutSeconds, cancellationToken);
+        _access.RunAsync("free", [sql], [], 10, timeoutSeconds, cancellationToken);
 
     [LiveOracleFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
@@ -239,7 +239,7 @@ public sealed class LiveOracleTests
     [LiveOracleFact]
     public async Task TheWizardsTest_SaysWhoItIs_AndWarnsOfAnAccountThatCanWrite()
     {
-        var run = await _access.RunAsync("free", null, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers], [], 50, 30, CancellationToken.None);
+        var run = await _access.RunAsync("free", [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers], [], 50, 30, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, run.Outcome);
         Assert.Equal(LiveOracle.Owner, run.Grids[0].Rows[0][0]);
         Assert.StartsWith(LiveOracle.Release.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".", run.Grids[0].Rows[0][2]);

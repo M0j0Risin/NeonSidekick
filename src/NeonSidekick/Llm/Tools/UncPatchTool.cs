@@ -19,7 +19,7 @@ public sealed class UncPatchTool : UncTool
         {
           "type": "object",
           "properties": {
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when path is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\server\\share path or a folder under one." },
             "path": { "type": "string", "description": "The text file to change, relative to the share (or a full path under it)." },
             "old_text": { "type": "string", "description": "The exact text to replace, copied from unc_read; enough of it to match one place." },
             "new_text": { "type": "string", "description": "What goes in its place." },

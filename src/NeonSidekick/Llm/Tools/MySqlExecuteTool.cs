@@ -11,7 +11,7 @@ namespace NeonSidekick.Llm.Tools;
 /// one statement that may change a MySQL or MariaDB database, offered only while <c>MySQL mode</c> is <c>read-write</c>, a pane can ask,
 /// <c>MySQL statements allowed</c> ticks a kind and an offered connection says <c>"access": "readwrite"</c>. <see cref="MySqlWriteGate"/>,
 /// the connection, the lock to its database (<see cref="MySqlTool.OutsideAsync"/>, 2026-10-09: another is refused, never asked about), a read
-/// unasked, else the user's allow per connection, then <see cref="MySqlAccess.ExecuteAsync(string?, string?, string, IReadOnlyList{SqlParameterValue}, int, int, CancellationToken)"/>
+/// unasked, else the user's allow per connection, then <see cref="MySqlAccess.ExecuteAsync(string?, string, IReadOnlyList{SqlParameterValue}, int, int, CancellationToken)"/>
 /// committed as it runs and written to the log (<see cref="ServerExecute"/>). Plan mode drops it.
 /// </summary>
 public sealed class MySqlExecuteTool : MySqlTool
@@ -61,15 +61,15 @@ public sealed class MySqlExecuteTool : MySqlTool
             MySqlWriteGate.Kinds,
             MySqlReadOnlyGate.Check,
             MySqlReadOnlyGate.Body,
-            () => Server.Resolve(connection, effective.MySqlDefaultConnection, out var refused) is { } target
+            () => Server.Resolve(connection, out var refused) is { } target
                 ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? ""), null)
                 : (null, MySqlText.Error(refused!)),
             async (body, token) =>
             {
-                var run = await Server.RunAsync(connection, effective.MySqlDefaultConnection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await Server.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 return run.Outcome == SqlOutcome.Ok ? MySqlText.Query(run, rows, SqlTool.ResultChars(effective)) : MySqlText.Error(run);
             },
-            (body, token) => Server.ExecuteAsync(connection, effective.MySqlDefaultConnection, body, parameters, rows, timeout, token),
+            (body, token) => Server.ExecuteAsync(connection, body, parameters, rows, timeout, token),
             MySqlText.Error,
             (body, token) => OutsideAsync(body, connection, token));
         return ServerExecute.RunAsync(MySqlStatementKinds.Family, effective.MySqlMode, effective.MySqlStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);

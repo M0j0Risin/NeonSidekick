@@ -7,8 +7,8 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// What the UNC tools share (2026-09-30, the user's ask): the <see cref="UncAccess"/> door, the settings in force at each call,
-/// and the optional <c>share</c> — a name from <c>unc.json</c>; left out, the share a full <c>path</c> lies in, else the setting
-/// <c>UNC default share</c>, else the first. A read runs as the share's account and is abandoned on ESC; a change is refused unless
+/// and the optional <c>share</c> — a name from <c>unc.json</c>; left out, the share a full <c>path</c> lies in, else the only
+/// share offered (several refused since 2026-10-09, the setting <c>UNC default share</c> gone). A read runs as the share's account and is abandoned on ESC; a change is refused unless
 /// both keys allow it (<c>UNC writes</c> and the share's <c>readwrite</c>), runs to its end, and leaves an audit line. A file
 /// operation's result is <see cref="FileText"/>'s, its root named for the share (<see cref="UncText.Scoped"/>).
 /// </summary>
@@ -18,7 +18,7 @@ public abstract class UncTool : AIFunction
     public const string PathArgument = FileTool.PathArgument;
 
     /// <summary>The <c>share</c> property every schema but <c>unc_shares</c>' carries.</summary>
-    public const string ShareProperty = "\"share\": { \"type\": \"string\", \"description\": \"The share's name (unc_shares lists them); leave it out for the default share, or when path is a full \\\\\\\\server\\\\share path or a folder under one.\" }";
+    public const string ShareProperty = "\"share\": { \"type\": \"string\", \"description\": \"The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\\\\\server\\\\share path or a folder under one.\" }";
 
     private readonly UncAccess _unc;
     private readonly Func<AppSettingsData> _effective;
@@ -51,7 +51,7 @@ public abstract class UncTool : AIFunction
     /// </summary>
     protected async Task<string> ReadAsync(string? share, string path, Func<WorkingDirectory, string, UncNamedShare, string> describe, CancellationToken cancellationToken)
     {
-        var target = Unc.Resolve(share, path, Effective.UncDefaultShare, out string relative, out string? error);
+        var target = Unc.Resolve(share, path, out string relative, out string? error);
         if (target is null)
         {
             return error!;
@@ -80,7 +80,7 @@ public abstract class UncTool : AIFunction
     /// </summary>
     protected async Task<string> WriteAsync(string? share, string path, string action, Func<WorkingDirectory, string, UncNamedShare, (string Text, bool Done)> change, CancellationToken cancellationToken)
     {
-        var target = Unc.Resolve(share, path, Effective.UncDefaultShare, out string relative, out string? error);
+        var target = Unc.Resolve(share, path, out string relative, out string? error);
         if (target is null)
         {
             return error!;

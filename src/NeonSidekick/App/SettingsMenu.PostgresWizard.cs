@@ -599,7 +599,7 @@ internal sealed partial class SettingsMenu
 
     private Task<Sql.SqlRun> TestPostgresConnectionAsync(PostgresNamedConnection connection, CancellationToken cancellationToken) =>
         new PostgresAccess(() => new PostgresCatalog([connection], []))
-            .RunAsync(connection.Name, null, [.. PostgresCatalogQueries.WhoAmI, .. PostgresCatalogQueries.Reach], [], 100, _settings.Current.PostgresQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, [.. PostgresCatalogQueries.WhoAmI, .. PostgresCatalogQueries.Reach], [], 100, _settings.Current.PostgresQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> — its name there. Null when nothing was written.</summary>
     private bool? PostgresWizardSave(PostgresDraft draft, bool offer)

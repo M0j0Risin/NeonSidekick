@@ -47,34 +47,38 @@ public sealed class UncAccessTests : IDisposable
     private static bool Impersonating() => OperatingSystem.IsWindows() && WindowsIdentity.GetCurrent(ifImpersonating: true) is not null;
 
     [WindowsFact]
-    public void Resolve_ByName_ByFullPath_ByDefault_AndEachRefusal()
+    public void Resolve_ByName_ByFullPath_ByTheOnlyShare_AndEachRefusal()
     {
         var access = Access();
         string full = Path.Combine(_root, "a.txt");
 
-        Assert.Equal("fin", access.Resolve("FIN", "a.txt", null, out string relative, out string? error)!.Name);
+        Assert.Equal("fin", access.Resolve("FIN", "a.txt", out string relative, out string? error)!.Name);
         Assert.Equal("a.txt", relative);
         Assert.Null(error);
-        Assert.Equal("eng", access.Resolve(null, full, "fin", out relative, out _)!.Name);   // located: the first root it lies under
+        Assert.Equal("eng", access.Resolve(null, full, out relative, out _)!.Name);   // located: the first root it lies under
         Assert.Equal(full, relative);
-        Assert.Equal("fin", access.Resolve("fin", full.Replace('\\', '/'), null, out relative, out _)!.Name);
+        Assert.Equal("fin", access.Resolve("fin", full.Replace('\\', '/'), out relative, out _)!.Name);
         Assert.Equal(full, relative);   // \-spelled for the sandbox
-        Assert.Equal("fin", access.Resolve(null, "a.txt", "fin", out _, out _)!.Name);
-        Assert.Equal("eng", access.Resolve(null, "", "gone", out _, out _)!.Name);
+        Assert.Null(access.Resolve(null, "a.txt", out _, out error));   // two shares, none named (2026-10-09: no default share)
+        Assert.Equal(UncText.ShareNeeded("eng, fin"), error);
 
-        Assert.Null(access.Resolve("hr", "a.txt", null, out _, out error));
+        Assert.Null(access.Resolve("hr", "a.txt", out _, out error));
         Assert.Equal(UncText.UnknownShare("hr", "eng, fin"), error);
-        Assert.Null(access.Resolve("eng", @"C:\Windows\win.ini", null, out _, out error));
+        Assert.Null(access.Resolve("eng", @"C:\Windows\win.ini", out _, out error));
         Assert.Equal(UncText.NotInShare(@"C:\Windows\win.ini", _catalog.Shares[0]), error);
-        Assert.Null(access.Resolve(null, @"\\elsewhere\x\y.txt", null, out _, out error));
+        Assert.Null(access.Resolve(null, @"\\elsewhere\x\y.txt", out _, out error));
         Assert.Equal(UncText.NotUnderAnyShare(@"\\elsewhere\x\y.txt", "eng, fin"), error);
-        Assert.Null(access.Resolve(null, "a.txt:secret", null, out _, out error));
+        Assert.Null(access.Resolve(null, "a.txt:secret", out _, out error));
         Assert.Equal(UncText.StreamPath("a.txt:secret"), error);
-        Assert.Null(access.Resolve(null, full + ":secret", null, out _, out error));
+        Assert.Null(access.Resolve(null, full + ":secret", out _, out error));
         Assert.Equal(UncText.StreamPath(full + ":secret"), error);
 
+        _catalog = new UncCatalog([RunAs("fin", _root)], []);
+        Assert.Equal("fin", access.Resolve(null, "a.txt", out _, out error)!.Name);   // the only share
+        Assert.Null(error);
+
         _catalog = UncCatalog.Empty;
-        Assert.Null(access.Resolve(null, "a.txt", null, out _, out error));
+        Assert.Null(access.Resolve(null, "a.txt", out _, out error));
         Assert.Equal(UncText.NoShares, error);
     }
 

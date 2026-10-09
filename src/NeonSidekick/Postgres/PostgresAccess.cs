@@ -55,7 +55,7 @@ public sealed class PostgresAccess
     /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="Sql.BoundaryNames"/>).</summary>
     public Sql.BoundaryNames Names { get; } = new();
 
-    public PostgresNamedConnection? Resolve(string? name, string? defaultName, out SqlRun? refused)
+    public PostgresNamedConnection? Resolve(string? name, out SqlRun? refused)
     {
         var catalog = Catalog();
         refused = null;
@@ -65,7 +65,7 @@ public sealed class PostgresAccess
             return null;
         }
 
-        var found = catalog.Find(name, defaultName);
+        var found = catalog.Find(name);
         if (found is null)
         {
             refused = SqlRun.Refused(SqlOutcome.UnknownConnection, string.Join(", ", catalog.Connections.Select(c => c.Name)), name?.Trim() ?? "");
@@ -91,16 +91,16 @@ public sealed class PostgresAccess
             .Build();
 
     /// <summary>
-    /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or the first when
+    /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (or the only one offered when
     /// blank), in the connection's own database: each one's rows read to <paramref name="maxRows"/>,
     /// each bound only the <c>@names</c> it uses, all inside one read-only transaction that is rolled back. A timeout, a failed connect
     /// and a server error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }
@@ -190,11 +190,11 @@ public sealed class PostgresAccess
     /// statement); <see cref="SqlRun.Changes"/> is the rows the server counts (null for DDL). A timeout, a failed connect and a server
     /// error are outcomes; a cancelled token throws (the server undoes the statement).
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }

@@ -132,7 +132,7 @@ public sealed class SqlQueryTool : SqlTool
             return refused;
         }
 
-        var run = await Sql.RunAsync(connection, Effective.SqlDefaultConnection, sql, parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Sql.RunAsync(connection, sql, parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, ResultChars(Effective)) : SqlText.Error(run);
     }
 

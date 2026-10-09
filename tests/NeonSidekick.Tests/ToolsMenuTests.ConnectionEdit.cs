@@ -138,35 +138,35 @@ public partial class ToolsMenuTests
                 File.WriteAllText(path, "{ \"connections\": { // mine\n\"old\": { \"dataSource\": \"localhost:1521/FREEPDB1\", \"user\": \"neon\", \"password\": \"pw\" } } }");
                 names = () => NeonSidekick.Oracle.OracleConfigFile.Load(path).Connections.Select(c => c.Name).ToList();
                 password = () => NeonSidekick.Oracle.OracleSecrets.Resolve(NeonSidekick.Oracle.OracleConfigFile.Load(path).Connections[0]).Value;
-                open = () => OpenOracleRow(6);
+                open = () => OpenOracleRow(5);
                 break;
             case "mysql":
                 path = NeonSidekick.MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
                 File.WriteAllText(path, "{ \"connections\": { // mine\n\"old\": { \"host\": \"localhost\", \"database\": \"shop\", \"user\": \"neon\", \"password\": \"pw\" } } }");
                 names = () => NeonSidekick.MySql.MySqlConfigFile.Load(path).Connections.Select(c => c.Name).ToList();
                 password = () => NeonSidekick.MySql.MySqlSecrets.Resolve(NeonSidekick.MySql.MySqlConfigFile.Load(path).Connections[0]).Value;
-                open = () => OpenMySqlRow(6);
+                open = () => OpenMySqlRow(5);
                 break;
             case "postgres":
                 path = NeonSidekick.Postgres.PostgresConfigFile.ProfilePath(_settings.ProfileDirectory);
                 File.WriteAllText(path, "{ \"connections\": { // mine\n\"old\": { \"host\": \"localhost\", \"database\": \"shop\", \"user\": \"neon\", \"password\": \"pw\" } } }");
                 names = () => NeonSidekick.Postgres.PostgresConfigFile.Load(path).Connections.Select(c => c.Name).ToList();
                 password = () => NeonSidekick.Postgres.PostgresSecrets.Resolve(NeonSidekick.Postgres.PostgresConfigFile.Load(path).Connections[0]).Value;
-                open = () => OpenPostgresRow(6);
+                open = () => OpenPostgresRow(5);
                 break;
             case "sqlite":
                 path = NeonSidekick.Sqlite.SqliteConfigFile.ProfilePath(_settings.ProfileDirectory);
                 File.WriteAllText(path, "{ \"databases\": { // mine\n\"old\": { \"path\": \"notes.db\", \"description\": \"the notes\" } } }");
                 names = () => NeonSidekick.Sqlite.SqliteConfigFile.Load(path).Databases.Select(d => d.Name).ToList();
                 password = () => NeonSidekick.Sqlite.SqliteConfigFile.Load(path).Databases[0].Config.Description;   // no password: the unasked-for row carried
-                open = () => OpenSqliteRow(6);
+                open = () => OpenSqliteRow(5);
                 break;
             default:
                 path = NeonSidekick.Unc.UncConfigFile.ProfilePath(_settings.ProfileDirectory);
                 File.WriteAllText(path, "{ \"shares\": { // mine\n\"old\": { \"path\": \"//fs02/fin\", \"auth\": \"runas\", \"user\": \"CORP\\\\svc\", \"password\": \"pw\" } } }");
                 names = () => NeonSidekick.Unc.UncConfigFile.Load(path).Shares.Select(s => s.Name).ToList();
                 password = () => NeonSidekick.Unc.UncSecrets.Resolve(NeonSidekick.Unc.UncConfigFile.Load(path).Shares[0]).Value;
-                open = () => OpenUncRow(5);
+                open = () => OpenUncRow(4);
                 break;
         }
 

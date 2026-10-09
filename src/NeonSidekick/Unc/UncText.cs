@@ -52,6 +52,9 @@ public static class UncText
         $"Error: share '{name}' signs in as another account, which a program the shell starts cannot use; unc_fetch the file into the working directory, then open the copy there";
 
     public static string UnknownShare(string name, string names) => $"Error: no UNC share is named '{name}'; the shares are {names}";
+
+    /// <summary>A call with several shares that names none and gives no full path (2026-10-09: <c>UNC default share</c> gone). Pinned.</summary>
+    public static string ShareNeeded(string names) => $"Error: name the UNC share in \"share\" (or give a full path under one); the shares are {names}";
     public static string NotInShare(string path, UncNamedShare share) => $"Error: '{path}' is not under share '{share.Name}' ({share.Config.Root}); give a path relative to it, or leave \"share\" out";
     public static string NotUnderAnyShare(string path, string names) => $"Error: '{path}' is under no UNC share the tools can reach; the shares are {names} (unc_shares lists where each points)";
     public static string StreamPath(string path) => $"Error: '{path}' names a stream (a ':' in the path); give a plain file or folder";
@@ -127,13 +130,13 @@ public static class UncText
     public const string BudgetNote = "(stopped early: a share's search reads at most 256 MB and looks at 100,000 entries; narrow it with path, files or depth)";
 
     /// <summary>One share as <c>unc_shares</c> lists it: the name, where, how it is reached, read or read-write, the description — never the password.</summary>
-    public static string ShareLine(UncNamedShare share, bool isDefault, bool writesOn, string? reach = null)
+    public static string ShareLine(UncNamedShare share, bool writesOn, string? reach = null)
     {
         ArgumentNullException.ThrowIfNull(share);
         var config = share.Config;
         string how = config.IsRunAs ? $"as {config.User?.Trim()} (runas)" : "as you";
         string access = config.IsReadWrite ? (writesOn ? "read-write" : "read-only (readwrite, but UNC writes is off)") : "read-only";
-        string line = $"- {share.Name}{(isDefault ? " (default)" : "")}: {config.Root}, {how}, {access}";
+        string line = $"- {share.Name}: {config.Root}, {how}, {access}";
         if (!string.IsNullOrWhiteSpace(config.Description))
         {
             line += " — " + config.Description.Trim();
@@ -157,7 +160,7 @@ public static class UncText
     public static string Reached(int entries) => $"reachable ({SqlText.Count(entries, "entry", "entries")} at its root)";
 
     /// <summary><c>unc_shares</c>' whole answer: a count, one line each (with its reach under <c>check</c>), the problems that kept any out.</summary>
-    public static string Shares(UncCatalog catalog, string? defaultName, bool writesOn, IReadOnlyDictionary<string, string>? reach = null)
+    public static string Shares(UncCatalog catalog, bool writesOn, IReadOnlyDictionary<string, string>? reach = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -167,12 +170,11 @@ public static class UncText
         }
         else
         {
-            var chosen = catalog.Find(null, defaultName);
-            sb.Append(SqlText.Count(catalog.Shares.Count, "UNC share")).Append(" (every UNC tool takes one by name in \"share\", or a full path under it; the default is used when both are left out):");
+            sb.Append(SqlText.Count(catalog.Shares.Count, "UNC share")).Append(" (every UNC tool takes one by name in \"share\", or a full path under it; both may be left out only when there is one share):");
             foreach (var share in catalog.Shares)
             {
                 string? reached = reach is not null && reach.TryGetValue(share.Name, out string? r) ? r : null;
-                sb.Append('\n').Append(ShareLine(share, ReferenceEquals(share, chosen), writesOn, reached));
+                sb.Append('\n').Append(ShareLine(share, writesOn, reached));
             }
 
             if (!writesOn)

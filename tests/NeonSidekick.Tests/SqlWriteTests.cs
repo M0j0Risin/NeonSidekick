@@ -224,7 +224,8 @@ public sealed class SqlExecuteTests
             return Task.FromResult<bool?>(false);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync(" DELETE FROM t WHERE id = @id; ", null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(SqlText.ConnectionNeeded("shop, ro"), await tool.RunAsync(" DELETE FROM t WHERE id = @id; ", null, [new("id", 1L)], null, CancellationToken.None));   // two, none named (2026-10-09)
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync(" DELETE FROM t WHERE id = @id; ", "shop", [new("id", 1L)], null, CancellationToken.None));
         Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM sales.dbo.t", "shop", [], null, CancellationToken.None));
         Assert.Equal([("shop", "Sales", "DELETE FROM t WHERE id = @id;"), ("shop", "Sales", "DELETE FROM sales.dbo.t")], asked);
 
@@ -241,7 +242,7 @@ public sealed class SqlExecuteTests
         Assert.Equal(ServerWriteText.ReadOnlyMode(SqlStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         Assert.Empty(asked);
         _settings.SqlMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(SqlStatementKinds.Family), await new SqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(SqlStatementKinds.Family), await new SqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", "shop", [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -267,7 +268,7 @@ public sealed class SqlExecuteTests
     {
         _settings.SqlConnectionsOffered = ["shop", "ro"];
         string listing = new SqlConnectionsTool(Access(), () => _settings).Describe();
-        Assert.Contains("- shop (default): 127.0.0.1,1 / Sales, windows sign-in, read-write", listing);
+        Assert.Contains("- shop: 127.0.0.1,1 / Sales, windows sign-in, read-write", listing);
         Assert.Contains("- ro: 127.0.0.1,1 / Sales, windows sign-in", listing);
         Assert.Equal(Microsoft.Data.SqlClient.ApplicationIntent.ReadOnly, Config(null).Builder().ApplicationIntent);
         Assert.Equal(Microsoft.Data.SqlClient.ApplicationIntent.ReadWrite, Config(null).Builder(readOnlyIntent: false).ApplicationIntent);

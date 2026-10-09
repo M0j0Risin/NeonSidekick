@@ -703,7 +703,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The app's test: <see cref="SqlAccess.RunAsync"/> over the one connection, <see cref="SqlTestQuery"/> then <see cref="SqlCatalogQueries.OtherDatabases"/>, the SQL tab's query timeout.</summary>
     private Task<SqlRun> TestSqlConnectionAsync(SqlNamedConnection connection, CancellationToken cancellationToken) =>
         new SqlAccess(() => new SqlCatalog([connection], []))
-            .RunAsync(connection.Name, null, SqlTestQuery + ";\n" + SqlCatalogQueries.OtherDatabases, [], 100, _settings.Current.SqlQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, SqlTestQuery + ";\n" + SqlCatalogQueries.OtherDatabases, [], 100, _settings.Current.SqlQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="SqlConfigFile.AddConnection"/>, or for an edit <see cref="SqlConfigFile.ReplaceConnection"/>),

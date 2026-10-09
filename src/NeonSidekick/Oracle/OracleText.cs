@@ -25,12 +25,12 @@ public static class OracleText
 
     /// <summary>One connection as <c>oracle_connections</c> lists it: the name, where, the user, the schema, the description — never the password.</summary>
     /// <remarks>A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>Oracle mode</c> read-write) lets it change.</remarks>
-    public static string ConnectionLine(OracleNamedConnection connection, bool isDefault, bool writes = false)
+    public static string ConnectionLine(OracleNamedConnection connection, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string schema = $", schema {OracleAccess.Place(config)} alone";
-        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.DataSource?.Trim()}, user {config.User?.Trim()}{schema}{ServerWriteText.AccessNote(OracleStatementKinds.Family, config.IsReadWrite, writes)}";
+        string line = $"- {connection.Name}: {config.DataSource?.Trim()}, user {config.User?.Trim()}{schema}{ServerWriteText.AccessNote(OracleStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -50,7 +50,7 @@ public static class OracleText
     }
 
     /// <summary><c>oracle_connections</c>' whole answer: a count, then one line each, then the problems that kept any out.</summary>
-    public static string Connections(OracleCatalog catalog, string? defaultName, bool writes = false)
+    public static string Connections(OracleCatalog catalog, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -60,11 +60,10 @@ public static class OracleText
         }
         else
         {
-            var chosen = catalog.Find(null, defaultName);
-            sb.Append(SqlText.Count(catalog.Connections.Count, "Oracle connection")).Append(" (every Oracle tool takes one by name in \"connection\"; the default is used when it is left out):");
+            sb.Append(SqlText.Count(catalog.Connections.Count, "Oracle connection")).Append(" (every Oracle tool takes one by name in \"connection\"; it may be left out only when there is one):");
             foreach (var connection in catalog.Connections)
             {
-                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
+                sb.Append('\n').Append(ConnectionLine(connection, writes));
             }
         }
 
@@ -139,6 +138,9 @@ public static class OracleText
 
     public const string NoConnections = "Error: no Oracle connection is defined; the user adds one to oracle.json (the Oracle tab of /tools)";
     public static string UnknownConnection(string name, string names) => $"Error: no Oracle connection is named '{name}'; the connections are {names}";
+
+    /// <summary>A call that names no connection while several are offered (2026-10-09: the default-connection settings gone). Pinned.</summary>
+    public static string ConnectionNeeded(string names) => $"Error: name the Oracle connection in \"connection\"; the connections are {names}";
     public static string ConnectFailed(string connection, string detail) => $"Error: could not connect to {connection}: {detail}";
     public static string Timeout(string connection, string seconds) => $"Error: the query on {connection} ran past {seconds} s and was stopped; narrow it (WHERE, FETCH FIRST n ROWS ONLY, fewer joins)";
     public static string Failed(string connection, string detail) => $"Error: the server refused the SQL ({connection}): {detail}";
@@ -152,7 +154,7 @@ public static class OracleText
         return run.Outcome switch
         {
             SqlOutcome.NoConnections => NoConnections,
-            SqlOutcome.UnknownConnection => UnknownConnection(run.Connection, run.Detail),
+            SqlOutcome.UnknownConnection => run.Connection.Length == 0 ? ConnectionNeeded(run.Detail) : UnknownConnection(run.Connection, run.Detail),
             SqlOutcome.ConnectFailed => ConnectFailed(run.Connection, run.Detail),
             SqlOutcome.Timeout => Timeout(run.Connection, run.Detail),
             SqlOutcome.ReadOnlyConnection => ServerWriteText.ReadOnlyConnection(OracleStatementKinds.Family, run.Connection),

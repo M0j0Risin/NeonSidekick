@@ -72,12 +72,12 @@ public sealed class UncAccess
 
     /// <summary>
     /// The share and the path within it a call means: <paramref name="share"/> by name (case-insensitive); or, with none named and
-    /// <paramref name="path"/> a full path, the share it lies in (<see cref="UncCatalog.Locate"/>); else <paramref name="defaultShare"/>,
-    /// else the first. A full path under a named share must lie in it. A stream name (<c>:</c> past a drive) is refused. The path
+    /// <paramref name="path"/> a full path, the share it lies in (<see cref="UncCatalog.Locate"/>); else the only share
+    /// when just one is offered (2026-10-09: <c>UNC default share</c> gone; several and none named is refused). A full path under a named share must lie in it. A stream name (<c>:</c> past a drive) is refused. The path
     /// comes back as the call gave it (relative, or full under the share — <see cref="WorkingDirectory.Resolve(string, bool, out string)"/>
     /// takes either). Null with the sentence on a refusal.
     /// </summary>
-    public UncNamedShare? Resolve(string? share, string? path, string? defaultShare, out string relative, out string? error)
+    public UncNamedShare? Resolve(string? share, string? path, out string relative, out string? error)
     {
         relative = (path ?? "").Trim();
         error = null;
@@ -103,7 +103,7 @@ public sealed class UncAccess
 
         if (!string.IsNullOrWhiteSpace(share))
         {
-            var named = catalog.Find(share, null);
+            var named = catalog.Find(share);
             if (named is null)
             {
                 error = UncText.UnknownShare(share.Trim(), Names(catalog));
@@ -130,7 +130,13 @@ public sealed class UncAccess
             return located;
         }
 
-        return catalog.Find(null, defaultShare);
+        var only = catalog.Find(null);
+        if (only is null)
+        {
+            error = UncText.ShareNeeded(Names(catalog));
+        }
+
+        return only;
     }
 
     /// <summary>

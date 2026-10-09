@@ -49,20 +49,20 @@ public sealed class SqliteAccess
 
     /// <summary>
     /// The database a call means: <paramref name="database"/> as a <c>sqlite.json</c> name (case-insensitive, it wins), else as a
-    /// path in the working directory (sandbox on); blank, <paramref name="defaultName"/>, else the first named. Null with the refusal.
+    /// path in the working directory (sandbox on); blank, the only named database (several refused). Null with the refusal.
     /// </summary>
-    public SqliteTarget? Resolve(string? database, string? defaultName, out SqlRun? refused) => Resolve(database, defaultName, create: false, out refused, out _);
+    public SqliteTarget? Resolve(string? database, out SqlRun? refused) => Resolve(database, create: false, out refused, out _);
 
     /// <summary>The file extensions a new database's file may have (2026-10-05, <c>sqlite_execute</c>'s <c>create</c>).</summary>
     public static readonly IReadOnlySet<string> CreateExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".db", ".sqlite", ".sqlite3", ".db3" };
 
     /// <summary>
-    /// <see cref="Resolve(string?, string?, out SqlRun?)"/>, and with <paramref name="create"/> (2026-10-05, the user's ask) a path in
+    /// <see cref="Resolve(string?, out SqlRun?)"/>, and with <paramref name="create"/> (2026-10-05, the user's ask) a path in
     /// the working directory that names no file yet is a new database's: the sandbox on, the name ending one of
     /// <see cref="CreateExtensions"/>, its folder already there; <paramref name="creating"/> says it is to be made. A
     /// <c>sqlite.json</c> name still wins and is never made, and a file already there is simply opened.
     /// </summary>
-    public SqliteTarget? Resolve(string? database, string? defaultName, bool create, out SqlRun? refused, out bool creating)
+    public SqliteTarget? Resolve(string? database, bool create, out SqlRun? refused, out bool creating)
     {
         refused = null;
         creating = false;
@@ -76,14 +76,21 @@ public sealed class SqliteAccess
 
         if (string.IsNullOrWhiteSpace(database))
         {
-            var chosen = catalog.Named(defaultName) ?? (catalog.Databases.Count > 0 ? catalog.Databases[0] : null);
-            if (chosen is null)
+            // Blank: the only named database (2026-10-09, the user's call: SQLite default database gone; several and none named is refused).
+            if (catalog.Databases.Count == 0)
             {
                 refused = SqlRun.Refused(SqlOutcome.NoConnections, "");
                 return null;
             }
 
-            return new SqliteTarget(chosen.Name, chosen.FullPath);
+            if (catalog.Databases.Count > 1)
+            {
+                refused = SqlRun.Refused(SqlOutcome.UnknownConnection, SqliteText.DatabaseNeeded(string.Join(", ", catalog.Databases.Select(d => d.Name)), sandbox is not null));
+                return null;
+            }
+
+            var only = catalog.Databases[0];
+            return new SqliteTarget(only.Name, only.FullPath);
         }
 
         string wanted = database.Trim().Trim('"');
@@ -140,11 +147,11 @@ public sealed class SqliteAccess
     /// does not give as NULL), all inside
     /// one transaction that is rolled back. A timeout, a failed open and an SQLite error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? database, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(database, defaultName, out var refused) is not { } target)
+        if (Resolve(database, out var refused) is not { } target)
         {
             return refused!;
         }

@@ -16,7 +16,7 @@ public partial class ToolsMenuTests
     {
         Assert.Equal(TabIndex(ToolsText.SqliteTabTitle) + 1, TabIndex(ToolsText.PostgresTabTitle));
         Assert.Equal(
-            [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresDefaultConnection, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
+            [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
             TabFields(ToolsText.PostgresTabTitle));
     }
 
@@ -37,7 +37,7 @@ public partial class ToolsMenuTests
                 [new SqlGrid(["user", "database", "version"], [["postgres", "shop", "PostgreSQL 17.2"]], false), new SqlGrid(["p"], [["superuser"]], false),
                  new SqlGrid(["datname"], [["postgres"]], false), new SqlGrid(["srvname"], [], false), new SqlGrid(["nspname"], [["public"]], false)], TimeSpan.Zero));
         };
-        OpenPostgresRow(6);
+        OpenPostgresRow(5);
         Push(Keys.Enter);                         // the profile's file
         Type("shop");
         Type("localhost");

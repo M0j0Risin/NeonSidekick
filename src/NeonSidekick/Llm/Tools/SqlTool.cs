@@ -6,8 +6,8 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// What the SQL tools share (2026-09-23): the <see cref="SqlAccess"/> door, the settings in force at each
-/// call, the optional <c>connection</c> (a name from <c>sql.json</c>; the setting <c>SQL default connection</c>,
-/// else the first, when left out) — each connection reaching its own database alone since 2026-10-09 (the user's call;
+/// call, the optional <c>connection</c> (a name from <c>sql.json</c>; left out, the only one offered;
+/// several and none named is refused since 2026-10-09, the setting <c>SQL default connection</c> gone) — each connection reaching its own database alone since 2026-10-09 (the user's call;
 /// <c>database</c>, the per-call way into another, and <c>sql_databases</c> went, and a call that still sends one is refused,
 /// <see cref="SqlText.NoDatabaseArgument"/>) — the batch timeout, and the table lookup <c>sql_describe</c>, <c>sql_relationships</c> and <c>sql_indexes</c> need. A refused
 /// run is <see cref="SqlText.Error"/>'s sentence, every one starting <c>Error:</c>.
@@ -20,7 +20,7 @@ public abstract class SqlTool : AIFunction
     public const string TableArgument = "table";
 
     /// <summary>The <c>connection</c> property the server-reaching schemas carry.</summary>
-    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The SQL connection's name (sql_connections lists them); leave it out for the default one.\" }";
+    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The SQL connection's name (sql_connections lists them); it may be left out only when there is one.\" }";
 
     private readonly SqlAccess _sql;
     private readonly Func<AppSettingsData> _effective;
@@ -72,7 +72,7 @@ public abstract class SqlTool : AIFunction
 
     /// <summary>Runs one of the app's catalog batches on the call's connection (in its database), capped at <see cref="SqlAccess.MaxCatalogRows"/>.</summary>
     protected Task<SqlRun> CatalogAsync(string? connection, string sql, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _sql.RunAsync(connection, Effective.SqlDefaultConnection, sql, parameters, SqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+        _sql.RunAsync(connection, sql, parameters, SqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
 
     /// <summary>
     /// The model's own SQL held to the connection's database (<see cref="SqlBoundary"/>): null when it keeps to it, or when the
@@ -82,7 +82,7 @@ public abstract class SqlTool : AIFunction
     /// </summary>
     protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
     {
-        if (Sql.Resolve(connection, Effective.SqlDefaultConnection, out _) is not { } target)
+        if (Sql.Resolve(connection, out _) is not { } target)
         {
             return null;
         }
@@ -95,7 +95,7 @@ public abstract class SqlTool : AIFunction
         }
 
         var (rows, failed) = await Sql.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.Server, database),
-            token => Sql.RunAsync(connection, Effective.SqlDefaultConnection, SqlCatalogQueries.DatabaseNames, [], 100_000, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+            token => Sql.RunAsync(connection, SqlCatalogQueries.DatabaseNames, [], 100_000, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
         return failed is not null ? SqlText.Error(failed) : SqlBoundary.Check(sql, database, rows!.Select(r => r[0]));
     }
 
@@ -113,7 +113,7 @@ public abstract class SqlTool : AIFunction
     /// </summary>
     protected async Task<TableMatch> FindTableAsync(string? connection, string table, CancellationToken cancellationToken)
     {
-        if (SqlBoundary.NamedDatabase(table) is { } named && Sql.Resolve(connection, Effective.SqlDefaultConnection, out _) is { } target
+        if (SqlBoundary.NamedDatabase(table) is { } named && Sql.Resolve(connection, out _) is { } target
             && SqlBoundary.IsOther(named, target.Config.Database ?? ""))
         {
             return TableMatch.Refused(SqlText.OtherDatabase(named, target.Config.Database!.Trim()));

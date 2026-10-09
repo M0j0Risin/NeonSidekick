@@ -1736,14 +1736,6 @@ public sealed class AppSettingsData
     public List<string>? SqlStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
 
     /// <summary>
-    /// The connection a SQL tool uses when the call names none (2026-09-23): a name in <c>sql.json</c>; empty, or a
-    /// name no longer there (or no longer offered, <see cref="SqlConnectionsOffered"/>), = the first offered connection.
-    /// A default, never a limit: a call that names another offered connection gets that one. The SQL tab of
-    /// <c>/tools</c>. No variable.
-    /// </summary>
-    public string SqlDefaultConnection { get; set; } = "";
-
-    /// <summary>
     /// Which connections of <c>sql.json</c> this profile offers the model (later on 2026-09-23, the user's ask: a way
     /// to limit what it can reach, not only choose its default). Exactly those names (case-insensitive), so a connection
     /// added to <c>sql.json</c> afterwards stays hidden until ticked (the user's call); a name no longer in the files is
@@ -1829,13 +1821,6 @@ public sealed class AppSettingsData
     public List<string>? OracleStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
 
     /// <summary>
-    /// The connection an Oracle tool uses when the call names none (2026-09-30), <see cref="SqlDefaultConnection"/>'s twin: a
-    /// name in <c>oracle.json</c>; empty, or a name no longer there (or no longer offered), = the first offered connection.
-    /// The Oracle tab of <c>/tools</c>. No variable.
-    /// </summary>
-    public string OracleDefaultConnection { get; set; } = "";
-
-    /// <summary>
     /// Which connections of <c>oracle.json</c> this profile offers the model (2026-09-30), <see cref="SqlConnectionsOffered"/>'s
     /// twin: exactly those names, so one added afterwards stays hidden until ticked; null or an empty list offers none
     /// (2026-10-01; null was "every connection" until then). The Oracle tab of <c>/tools</c>. No variable.
@@ -1885,9 +1870,6 @@ public sealed class AppSettingsData
     /// </summary>
     public List<string>? MySqlStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
 
-    /// <summary>The connection a MySQL tool uses when the call names none (2026-09-30), <see cref="OracleDefaultConnection"/>'s twin; empty = the first offered. No variable.</summary>
-    public string MySqlDefaultConnection { get; set; } = "";
-
     /// <summary>Which connections of <c>mysql.json</c> this profile offers the model (2026-09-30), <see cref="OracleConnectionsOffered"/>'s twin: exactly those names; null or empty offers none (2026-10-01; null was all until then). No variable.</summary>
     public List<string>? MySqlConnectionsOffered { get; set; }
 
@@ -1923,9 +1905,6 @@ public sealed class AppSettingsData
     /// <c>sqlite_execute</c> is then not offered). <c>create: true</c> needs <c>create</c>. Unused while read-only. No variable.
     /// </summary>
     public List<string>? SqliteStatementsAllowed { get; set; } = Sqlite.SqliteStatementKinds.Default();
-
-    /// <summary>The <c>sqlite.json</c> database a SQLite tool uses when the call names none; empty = the first offered.</summary>
-    public string SqliteDefaultDatabase { get; set; } = "";
 
     /// <summary>The names of <c>sqlite.json</c> this profile offers (the checklist on the SQLite tab); null or empty offers none, as for <see cref="MySqlConnectionsOffered"/>.</summary>
     public List<string>? SqliteDatabasesOffered { get; set; }
@@ -1968,9 +1947,6 @@ public sealed class AppSettingsData
     /// </summary>
     public List<string>? PostgresStatementsAllowed { get; set; } = Sql.ServerStatementKinds.Default();
 
-    /// <summary>The <c>postgres.json</c> connection a PostgreSQL tool uses when the call names none; empty = the first offered.</summary>
-    public string PostgresDefaultConnection { get; set; } = "";
-
     /// <summary>The connections of <c>postgres.json</c> this profile offers; null or empty offers none, as for <see cref="MySqlConnectionsOffered"/>.</summary>
     public List<string>? PostgresConnectionsOffered { get; set; }
 
@@ -2003,9 +1979,6 @@ public sealed class AppSettingsData
     /// are checked again at every call. Read at each turn. No variable.
     /// </summary>
     public bool UncWrites { get; set; }
-
-    /// <summary>The share a UNC tool uses when the call names none and gives no full path (2026-09-30), <see cref="SqlDefaultConnection"/>'s twin; empty = the first offered. No variable.</summary>
-    public string UncDefaultShare { get; set; } = "";
 
     /// <summary>Which shares of <c>unc.json</c> this profile offers the model (2026-09-30), <see cref="SqlConnectionsOffered"/>'s twin: exactly those names; null or empty offers none (2026-10-01; null was all until then). No variable.</summary>
     public List<string>? UncSharesOffered { get; set; }

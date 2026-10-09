@@ -28,23 +28,17 @@ public sealed record UncCatalog(IReadOnlyList<UncNamedShare> Shares, IReadOnlyLi
     }
 
     /// <summary>
-    /// The share a call means: <paramref name="name"/> when given (case-insensitive), else <paramref name="defaultName"/> when that
-    /// names one, else the first. Null when nothing matches.
+    /// The share a call means: <paramref name="name"/> when given (case-insensitive), else the only one when just one is offered
+    /// (2026-10-09, the user's call: <c>UNC default share</c> is gone). Null when nothing matches, or when several are and none is named.
     /// </summary>
-    public UncNamedShare? Find(string? name, string? defaultName)
+    public UncNamedShare? Find(string? name)
     {
         if (!string.IsNullOrWhiteSpace(name))
         {
             return Shares.FirstOrDefault(s => string.Equals(s.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
-        if (!string.IsNullOrWhiteSpace(defaultName)
-            && Shares.FirstOrDefault(s => string.Equals(s.Name, defaultName.Trim(), StringComparison.OrdinalIgnoreCase)) is { } named)
-        {
-            return named;
-        }
-
-        return Shares.Count > 0 ? Shares[0] : null;
+        return Shares.Count == 1 ? Shares[0] : null;
     }
 
     /// <summary>

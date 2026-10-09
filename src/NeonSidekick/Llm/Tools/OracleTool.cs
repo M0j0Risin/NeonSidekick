@@ -7,8 +7,8 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// What the Oracle tools share (2026-09-30), <see cref="SqlTool"/>'s shape: the <see cref="OracleAccess"/> door, the
-/// settings in force at each call, the optional <c>connection</c> (a name from <c>oracle.json</c>; the setting
-/// <c>Oracle default connection</c>, else the first, when left out) — each connection held to its one schema since 2026-10-09
+/// settings in force at each call, the optional <c>connection</c> (a name from <c>oracle.json</c>; left out,
+/// the only one offered, several refused since 2026-10-09) — each connection held to its one schema since 2026-10-09
 /// (the user's pick: the entry's <c>schema</c>, else the account's own, <see cref="OracleAccess.Place"/>; the per-call
 /// <c>schema</c> and <c>oracle_schemas</c> went, a call that still sends one is refused, and <see cref="OutsideAsync"/> holds the
 /// model's SQL to it) — the statement timeout, and the table lookup <c>oracle_describe</c>, <c>oracle_relationships</c> and <c>oracle_indexes</c> need. A refused run is
@@ -22,7 +22,7 @@ public abstract class OracleTool : AIFunction
     public const string TableArgument = "table";
 
     /// <summary>The <c>connection</c> property the server-reaching schemas carry.</summary>
-    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The Oracle connection's name (oracle_connections lists them); leave it out for the default one.\" }";
+    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The Oracle connection's name (oracle_connections lists them); it may be left out only when there is one.\" }";
 
     private readonly OracleAccess _oracle;
     private readonly Func<AppSettingsData> _effective;
@@ -66,7 +66,7 @@ public abstract class OracleTool : AIFunction
     /// </summary>
     protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
     {
-        if (_oracle.Resolve(connection, Effective.OracleDefaultConnection, out _) is not { } target)
+        if (_oracle.Resolve(connection, out _) is not { } target)
         {
             return null;
         }
@@ -80,13 +80,13 @@ public abstract class OracleTool : AIFunction
 
         // The names kept a minute per connection (the review, 2026-10-09: an alias's e.id sent every join for them).
         var (rows, failed) = await _oracle.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, place),
-            token => _oracle.RunAsync(connection, Effective.OracleDefaultConnection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+            token => _oracle.RunAsync(connection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
         return failed is not null ? OracleText.Error(failed) : OracleBoundary.Check(sql, place, rows!);
     }
 
     /// <summary>Runs the app's own statements on the call's connection (in its schema), capped at <see cref="OracleAccess.MaxCatalogRows"/>.</summary>
     protected Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _oracle.RunAsync(connection, Effective.OracleDefaultConnection, statements, parameters, OracleAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+        _oracle.RunAsync(connection, statements, parameters, OracleAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
 
     /// <summary>What <see cref="FindTableAsync"/> found: the object's owner, name and kind — or the <c>Error:</c> sentence.</summary>
     protected sealed record TableMatch(string Owner, string Name, string Kind, string? Error)
@@ -105,7 +105,7 @@ public abstract class OracleTool : AIFunction
             return TableMatch.Refused(OracleText.BadTable(table));
         }
 
-        if (parts.Owner is { } owner && _oracle.Resolve(connection, Effective.OracleDefaultConnection, out _) is { } target
+        if (parts.Owner is { } owner && _oracle.Resolve(connection, out _) is { } target
             && !owner.Equals(OracleAccess.Place(target.Config), StringComparison.Ordinal))
         {
             return TableMatch.Refused(OracleText.TableElsewhere(owner, OracleAccess.Place(target.Config)));

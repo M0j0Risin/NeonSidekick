@@ -13,8 +13,6 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class SettingsMenu
 {
-    /// <summary>How the menu shows an empty <c>SQLite default database</c>. Pinned.</summary>
-    public const string FirstSqliteDatabaseLabel = "(the first database)";
 
     /// <summary>The value of the <c>SQLite add database</c> row. Pinned.</summary>
     public const string SqliteAddDatabaseLabel = "Enter to start database wizard";
@@ -44,25 +42,6 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The status line after an edit row opened a <c>sqlite.json</c>. Pinned.</summary>
     public static string SqliteEditingNotice(string path) => $"Opened {path} in the editor; the SQLite tools read it at their next call.";
-
-    /// <summary>The <c>SQLite default database</c> pick: <see cref="FirstSqliteDatabaseLabel"/>, then every offered database, the cursor on the one saved.</summary>
-    private async Task<bool> PickSqliteDatabaseAsync(Settings.AppSettingsData saved, CancellationToken cancellationToken)
-    {
-        var names = SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(saved.SqliteDatabasesOffered).Databases.Select(d => d.Name).ToList();
-        var rows = new List<string> { Markup.Escape(FirstSqliteDatabaseLabel) };
-        rows.AddRange(names.Select(Markup.Escape));
-        int current = names.FindIndex(n => string.Equals(n, saved.SqliteDefaultDatabase, StringComparison.OrdinalIgnoreCase));
-        var page = new MenuPage(Crumb(FieldName(SettingsField.SqliteDefaultDatabase)), rows, PickKeys);
-        int? picked = await PickAsync(page, current + 1, cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
-        {
-            return Unchanged();
-        }
-
-        string name = index == 0 ? "" : names[index - 1];
-        Apply(SettingsField.SqliteDefaultDatabase, d => d.SqliteDefaultDatabase = name);
-        return true;
-    }
 
     /// <summary>One row of the <c>SQLite mode</c> pick: the name padded past <c>read-write</c>, then its hint, dim. Pinned.</summary>
     public static string SqliteModeLabel(string name) => Markup.Escape(name.PadRight(12)) + Theme.DimMarkup(Markup.Escape(SqliteModes.Describe(name)));

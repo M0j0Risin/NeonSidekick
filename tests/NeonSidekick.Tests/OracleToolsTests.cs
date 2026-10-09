@@ -87,13 +87,14 @@ public sealed class OracleToolsTests
         _catalog = new OracleCatalog([Unreachable("down"), Unreachable("other")], []);
 
         Assert.Equal(OracleText.UnknownConnection("nope", "down, other"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("connection", "nope")));
-        string failed = await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"));
+        Assert.Equal(OracleText.ConnectionNeeded("down, other"), await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual")));   // two, none named (2026-10-09: no default)
+        string failed = await Invoke<OracleQueryTool>(("sql", "SELECT 1 FROM dual"), ("connection", "down"));
         Assert.StartsWith("Error: could not connect to down: ORA-", failed);
         Assert.DoesNotContain("\n", failed);
         Assert.DoesNotContain("https://", failed);   // the help link dropped
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleTablesTool>(("connection", "OTHER")));   // by name, any case
-        _settings.OracleDefaultConnection = "other";
-        Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleTablesTool>());   // the default when none is named
+        _catalog = new OracleCatalog([Unreachable("other")], []);
+        Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleTablesTool>());   // the only one when none is named
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleDescribeTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleRelationshipsTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<OracleColumnsTool>(("pattern", "email")));
@@ -207,7 +208,7 @@ public sealed class OracleToolsTests
 
         string listing = await Invoke<OracleConnectionsTool>();
         Assert.StartsWith("1 Oracle connection (", listing);
-        Assert.Contains("- prod (default): 127.0.0.1:1/neonsidekick_test, user reader", listing);
+        Assert.Contains("- prod: 127.0.0.1:1/neonsidekick_test, user reader", listing);
         Assert.DoesNotContain("x", listing.Split('\n')[1].Replace("neonsidekick_test", "", StringComparison.Ordinal));   // never the password
         Assert.EndsWith("\n" + OracleText.HiddenConnections(2), listing);
         Assert.DoesNotContain("secret", listing);

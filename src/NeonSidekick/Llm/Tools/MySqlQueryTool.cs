@@ -77,7 +77,7 @@ public sealed class MySqlQueryTool : MySqlTool
             return outside;
         }
 
-        var run = await Server.RunAsync(connection, Effective.MySqlDefaultConnection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Server.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? MySqlText.Query(run, rows, SqlTool.ResultChars(Effective)) : MySqlText.Error(run);
     }
 

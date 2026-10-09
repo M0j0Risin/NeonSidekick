@@ -115,7 +115,7 @@ public sealed class OpenTool : FileTool
             return UncText.NoSharesOffered;
         }
 
-        var target = _unc!.Resolve(share, path, _effective!().UncDefaultShare, out string relative, out string? error);
+        var target = _unc!.Resolve(share, path, out string relative, out string? error);
         if (target is null)
         {
             return error!;

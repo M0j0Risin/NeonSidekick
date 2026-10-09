@@ -16,7 +16,7 @@ public sealed class UncInfoTool : UncTool
         {
           "type": "object",
           "properties": {
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when path is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\server\\share path or a folder under one." },
             "path": { "type": "string", "description": "The file or folder, relative to the share (or a full path under it). Leave it out for the share's root." }
           }
         }

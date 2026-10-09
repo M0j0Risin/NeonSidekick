@@ -171,7 +171,8 @@ public sealed class PostgresToolsTests : IDisposable
         Assert.Equal(("local", "require"), (shop.Config.Host, shop.Config.SslMode));
         Assert.Equal(PostgresText.NoHost, Assert.Single(catalog.Problems).Reason);
         Assert.Equal(1, catalog.Offered([]).Hidden);
-        Assert.Same(shop, catalog.Find(null, "SHOP"));
+        Assert.Same(shop, catalog.Find("SHOP"));
+        Assert.Same(shop, catalog.Find(null));   // the only one
     }
 
     [Fact]
@@ -270,10 +271,10 @@ public sealed class PostgresToolsTests : IDisposable
         Assert.Equal(PostgresText.ServerCatalog("pg_stat_activity"), await query.RunAsync("SELECT query FROM pg_stat_activity", null, [], null, CancellationToken.None));
         Assert.Equal(PostgresText.ServerCatalog("pg_database"), await query.RunAsync("SELECT datname FROM pg_catalog.pg_database", null, [], null, CancellationToken.None));
         Assert.StartsWith("Error: could not connect to shop", await query.RunAsync("SELECT * FROM public.t", null, [], null, CancellationToken.None));   // no lock: no names needed
-        Assert.Contains("- shop (default): 127.0.0.1:1 / shop, user reader", tools.OfType<PostgresConnectionsTool>().Single().Describe());
+        Assert.Contains("- shop: 127.0.0.1:1 / shop, user reader", tools.OfType<PostgresConnectionsTool>().Single().Describe());
 
         config.Schema = "sales";
-        Assert.Contains("- shop (default): 127.0.0.1:1 / shop (schema sales alone), user reader", tools.OfType<PostgresConnectionsTool>().Single().Describe());
+        Assert.Contains("- shop: 127.0.0.1:1 / shop (schema sales alone), user reader", tools.OfType<PostgresConnectionsTool>().Single().Describe());
         Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "public", null, CancellationToken.None));
         Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("public.orders", null, null, CancellationToken.None));
         Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), (string)(await tools.OfType<PostgresIndexesTool>().Single().InvokeAsync(new AIFunctionArguments { ["schema"] = "public" }))!);
@@ -463,7 +464,7 @@ public sealed class LivePostgresTests
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
-        _access.RunAsync("live", null, [sql], [], 10, timeoutSeconds, cancellationToken);
+        _access.RunAsync("live", [sql], [], 10, timeoutSeconds, cancellationToken);
 
     [LivePostgresFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
@@ -547,7 +548,7 @@ public sealed class LivePostgresTests
         using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Raw(PostgresCheck.SlowQuery, 30, cancel.Token));
 
-        var who = await _access.RunAsync("live", null, PostgresCatalogQueries.WhoAmI, [], 10, 30, CancellationToken.None);
+        var who = await _access.RunAsync("live", PostgresCatalogQueries.WhoAmI, [], 10, 30, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, who.Outcome);
         Assert.StartsWith("PostgreSQL ", who.Grids[0].Rows[0][2]);
     }

@@ -139,21 +139,22 @@ public sealed class OracleExecuteTests
             return Task.FromResult<bool?>(false);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = :id;", null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(OracleText.ConnectionNeeded("hr, ro"), await tool.RunAsync("DELETE FROM t WHERE id = :id;", null, [new("id", 1L)], null, CancellationToken.None));   // two, none named (2026-10-09)
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = :id;", "hr", [new("id", 1L)], null, CancellationToken.None));
         Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("BEGIN NULL; END;\n/", "hr", [], null, CancellationToken.None));
         Assert.Equal([("hr", "HR", "DELETE FROM t WHERE id = :id"), ("hr", "HR", "BEGIN NULL; END;")], asked);
 
         asked.Clear();
         Assert.Equal(ServerWriteText.ReadOnlyConnection(OracleStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
         Assert.Equal(OracleText.NoSchemaArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "DELETE FROM t", ["schema"] = "APP" }))!);   // 2026-10-09
-        Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("SELECT * FROM dba_users", null, [], null, CancellationToken.None));   // the names read first
+        Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("SELECT * FROM dba_users", "hr", [], null, CancellationToken.None));   // the names read first
         Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("DELETE FROM app.t", "hr", [], null, CancellationToken.None));   // the names read first, never the pane
         Assert.StartsWith("Error: the SQL uses UTL_HTTP", await tool.RunAsync("SELECT UTL_HTTP.REQUEST('x') FROM dual", null, [], null, CancellationToken.None));
         _settings.OracleMode = "read-only";
         Assert.Equal(ServerWriteText.ReadOnlyMode(OracleStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         Assert.Empty(asked);
         _settings.OracleMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(OracleStatementKinds.Family), await new OracleExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(OracleStatementKinds.Family), await new OracleExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", "hr", [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -179,7 +180,7 @@ public sealed class OracleExecuteTests
     {
         _settings.OracleConnectionsOffered = ["hr", "ro"];
         string listing = new OracleConnectionsTool(Access(), () => _settings).Describe();
-        Assert.Contains("- hr (default): 127.0.0.1:1/X, user hr, schema HR alone, read-write", listing);
+        Assert.Contains("- hr: 127.0.0.1:1/X, user hr, schema HR alone, read-write", listing);
         Assert.Contains("- ro: 127.0.0.1:1/X, user hr, schema HR alone", listing);
         Assert.EndsWith("a read-only account is the real guard.", OracleText.CanWrite(["INSERT ANY TABLE"]));
         Assert.Contains("as readwrite, oracle_execute may use those powers", OracleText.CanWrite(["INSERT ANY TABLE"], readWrite: true));

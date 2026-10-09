@@ -132,13 +132,13 @@ public sealed class UncToolsTests : IDisposable
         _catalog = new UncCatalog([Share("eng", _eng, description: "specs"), Share("data", _data, "readwrite"), Share("gone", Path.Combine(_dir, "nowhere"))], []);
 
         string listed = await Invoke<UncSharesTool>();
-        Assert.Equal(UncText.Shares(_catalog, "", writesOn: false), listed);
-        Assert.Contains($"- eng (default): {_eng}, as you, read-only — specs", listed);
+        Assert.Equal(UncText.Shares(_catalog, writesOn: false), listed);
+        Assert.Contains($"- eng: {_eng}, as you, read-only — specs", listed);
         Assert.Contains($"- data: {_data}, as you, read-only (readwrite, but UNC writes is off)", listed);
         Assert.EndsWith("\nUNC writes is off: every share is read-only.", listed);
 
         string checkedOut = await Invoke<UncSharesTool>(("check", true));
-        Assert.Contains($"- eng (default): {_eng}, as you, read-only — specs\n  " + UncText.Reached(1), checkedOut);   // specs\
+        Assert.Contains($"- eng: {_eng}, as you, read-only — specs\n  " + UncText.Reached(1), checkedOut);   // specs\
         Assert.Contains("\n  " + UncText.RootMissing("gone", Path.Combine(_dir, "nowhere")), checkedOut);
         Assert.Equal(FileText.BadBoolean("check", "yes"), await Invoke<UncSharesTool>(("check", "yes")));
     }
@@ -146,22 +146,23 @@ public sealed class UncToolsTests : IDisposable
     [WindowsFact]
     public async Task TheReads_AreTheFileToolsShapes_ScopedToTheShare()
     {
-        string listing = await Invoke<UncSearchTool>();
-        Assert.StartsWith(EngName + " (1 entry):", listing);   // the default share, its root's listing
+        string listing = await Invoke<UncSearchTool>(("share", "eng"));
+        Assert.StartsWith(EngName + " (1 entry):", listing);   // the share's root listing
 
-        string hits = await Invoke<UncSearchTool>(("text", "needle"));
+        string hits = await Invoke<UncSearchTool>(("share", "eng"), ("text", "needle"));
         Assert.Contains(@"specs\a.md:1: alpha needle", hits);
         Assert.Contains("under " + EngName, hits);
 
         string full = await Invoke<UncSearchTool>(("text", "one"), ("path", Path.Combine(_data, "notes.txt")));
         Assert.Contains("notes.txt:1: one", full);   // the share found from a full path
 
-        Assert.Equal(FileText.Read(new WorkingDirectory(() => _eng, _time).ReadText(@"specs\a.md", null, null)), await Invoke<UncReadTool>(("path", @"specs\a.md")));
+        Assert.Equal(FileText.Read(new WorkingDirectory(() => _eng, _time).ReadText(@"specs\a.md", null, null)), await Invoke<UncReadTool>(("share", "eng"), ("path", @"specs\a.md")));
         Assert.StartsWith(@"specs\b.md — 6 bytes, 1 line, 1 word", await Invoke<UncInfoTool>(("share", "eng"), ("path", @"specs\b.md")));
-        Assert.Equal(UncText.Scoped(FileText.OutsideRoot(@"..\data\notes.txt"), _catalog.Shares[0]), await Invoke<UncReadTool>(("path", @"..\data\notes.txt")));
-        Assert.Contains("outside " + EngName, await Invoke<UncReadTool>(("path", @"..\data\notes.txt")));
+        Assert.Equal(UncText.Scoped(FileText.OutsideRoot(@"..\data\notes.txt"), _catalog.Shares[0]), await Invoke<UncReadTool>(("share", "eng"), ("path", @"..\data\notes.txt")));
+        Assert.Contains("outside " + EngName, await Invoke<UncReadTool>(("share", "eng"), ("path", @"..\data\notes.txt")));
         Assert.Equal(FileText.PathRequired("path"), await Invoke<UncReadTool>());
         Assert.Equal(UncText.UnknownShare("hr", "eng, data"), await Invoke<UncReadTool>(("share", "hr"), ("path", "x.txt")));
+        Assert.Equal(UncText.ShareNeeded("eng, data"), await Invoke<UncReadTool>(("path", "x.txt")));   // two shares, none named, no full path (2026-10-09)
         Assert.Equal(FileText.BadBoolean("regex", "maybe"), await Invoke<UncSearchTool>(("regex", "maybe")));
     }
 
@@ -179,12 +180,12 @@ public sealed class UncToolsTests : IDisposable
         static string Limit(AIFunction tool) => tool.JsonSchema.GetProperty("properties").GetProperty("limit").GetProperty("description").GetString()!;
         static int Rows(string text) => text.Split('\n').Count(line => line.Contains(@"bulk\n", StringComparison.Ordinal));
         Assert.Equal(SearchFilesTool.LimitDescription(200), Limit(Tool<UncSearchTool>()));
-        Assert.Equal(200, Rows(await Invoke<UncSearchTool>(("text", "needle"), ("path", "bulk"), ("limit", 250))));
+        Assert.Equal(200, Rows(await Invoke<UncSearchTool>(("share", "eng"), ("text", "needle"), ("path", "bulk"), ("limit", 250))));
 
         _settings.FileSearchMaxResults = 2000;
         Assert.Equal(SearchFilesTool.LimitDescription(2000), Limit(Tool<UncSearchTool>()));
-        Assert.Equal(250, Rows(await Invoke<UncSearchTool>(("text", "needle"), ("path", "bulk"), ("limit", 250))));
-        Assert.Equal(250, Rows(await Invoke<UncSearchTool>(("files", "*.txt"), ("path", "bulk"), ("limit", 250))));
+        Assert.Equal(250, Rows(await Invoke<UncSearchTool>(("share", "eng"), ("text", "needle"), ("path", "bulk"), ("limit", 250))));
+        Assert.Equal(250, Rows(await Invoke<UncSearchTool>(("share", "eng"), ("files", "*.txt"), ("path", "bulk"), ("limit", 250))));
     }
 
     [WindowsFact]
@@ -200,7 +201,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_sandboxRoot, ".trash")));
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(_sandboxRoot, "a.md")));
 
-        Assert.Equal(UncText.Scoped(FileText.Error(FileOutcome.OutsideRoot, @"..\data", "fetch"), _catalog.Shares[0]), await Invoke<UncFetchTool>(("path", @"..\data")));
+        Assert.Equal(UncText.Scoped(FileText.Error(FileOutcome.OutsideRoot, @"..\data", "fetch"), _catalog.Shares[0]), await Invoke<UncFetchTool>(("share", "eng"), ("path", @"..\data")));
         Assert.Contains("already", await Invoke<UncFetchTool>(("share", "eng"), ("path", @"specs\a.md")));   // the working directory's end, its own words
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(_eng, @"specs\a.md")));   // nothing on the share changed
     }
@@ -211,7 +212,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(UncText.WritesOff, await Invoke<UncWriteTool>(("share", "data"), ("path", "x.txt"), ("content", "x")));
         _settings.UncWrites = true;
         Assert.Equal(UncText.ReadOnlyShare("eng"), await Invoke<UncWriteTool>(("share", "eng"), ("path", "x.txt"), ("content", "x")));
-        Assert.Equal(UncText.ReadOnlyShare("eng"), await Invoke<UncDeleteTool>(("path", @"specs\a.md")));   // the default share, read-only
+        Assert.Equal(UncText.ReadOnlyShare("eng"), await Invoke<UncDeleteTool>(("share", "eng"), ("path", @"specs\a.md")));
         Assert.Equal(UncText.ReadOnlyShare("eng"), await Invoke<UncPutTool>(("from", "nothing.txt"), ("share", "eng")));
         Assert.False(File.Exists(Path.Combine(_eng, "x.txt")));
         Assert.True(File.Exists(Path.Combine(_eng, @"specs\a.md")));
@@ -342,7 +343,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(EngName + " (2 entries):", UncText.Scoped(FileText.RootName + " (2 entries):", _catalog.Shares[0]));
         Assert.Equal("1 more share in unc.json is switched off for this profile (the UNC tab of /tools).", UncText.HiddenShares(1));
         Assert.Equal("reachable (3 entries at its root)", UncText.Reached(3));
-        Assert.Equal(UncText.NoShares, UncText.Shares(UncCatalog.Empty, null, writesOn: true));
+        Assert.Equal(UncText.NoShares, UncText.Shares(UncCatalog.Empty, writesOn: true));
         Assert.Equal("Error: UNC writes is off, so every share is read-only; the user turns it on (the UNC tab of /tools)", UncText.WritesOff);
         Assert.Equal("Error: share 'eng' is read-only (\"access\": \"read\" in unc.json); the user makes it readwrite to allow changes", UncText.ReadOnlyShare("eng"));
     }

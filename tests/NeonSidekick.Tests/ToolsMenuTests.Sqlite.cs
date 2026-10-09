@@ -32,7 +32,7 @@ public partial class ToolsMenuTests
     {
         Assert.Equal(TabIndex(ToolsText.MySqlTabTitle) + 1, TabIndex(ToolsText.SqliteTabTitle));
         Assert.Equal(
-            [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteDefaultDatabase, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
+            [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
             TabFields(ToolsText.SqliteTabTitle));
         Assert.Equal("Enter to start database wizard", SettingsMenu.SqliteAddDatabaseLabel);
         Assert.Equal("Opened 'shop' read-only: 3 tables and views.", SettingsMenu.SqliteWizardTestOk("shop", 3));
@@ -47,7 +47,7 @@ public partial class ToolsMenuTests
         string db = MakeSqliteFile("shop.db");
         string path = SqliteConfigFile.ProfilePath(_settings.ProfileDirectory);
         var (menu, _, _) = PaneMenu();
-        OpenSqliteRow(6);
+        OpenSqliteRow(5);
         Push(Keys.Enter);                         // the profile's file
         Type("my shop");                          // refused: a space
         Push([.. Enumerable.Repeat(Keys.Backspace, 7)]);
@@ -147,17 +147,15 @@ public partial class ToolsMenuTests
         Assert.Equal("changing data, creating, reading (used under read-write)", SettingsMenu.SqliteStatementsValue(null, null));
     }
 
-    /// <summary>The checklist ticks a named database, the default pick lists the offered ones, ESC out of the wizard's first page writes nothing.</summary>
+    /// <summary>The checklist ticks a named database, ESC out of the wizard's first page writes nothing.</summary>
     [Fact]
-    public async Task OnThePane_TheChecklist_TheDefault_AndEscOutOfTheWizard()
+    public async Task OnThePane_TheChecklist_AndEscOutOfTheWizard()
     {
         Assert.Null(SqliteConfigFile.AddDatabase(SqliteConfigFile.GlobalPath(_settings.StorageDirectory), "notes", new SqliteDatabaseConfig { Path = MakeSqliteFile("notes.db") }));
         var (menu, _, _) = PaneMenu();
         OpenSqliteRow(3);
         Push(Keys.Enter);                         // tick notes
         Push(Keys.Escape);
-        Push(Keys.Down, Keys.Enter);              // SQLite default database, under the checklist
-        Push(Keys.Down, Keys.Enter);              // notes
         Push(Keys.Down, Keys.Down, Keys.Enter);   // the wizard
         Push(Keys.Escape);                        // out of its first page: nothing
         Push(Keys.Escape);
@@ -165,7 +163,6 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["notes"], _settings.Current.SqliteDatabasesOffered);
-        Assert.Equal("notes", _settings.Current.SqliteDefaultDatabase);
         Assert.Contains(SettingsMenu.SqliteWizardCancelledNotice, Output);
         Assert.False(File.Exists(SqliteConfigFile.ProfilePath(_settings.ProfileDirectory)));
     }

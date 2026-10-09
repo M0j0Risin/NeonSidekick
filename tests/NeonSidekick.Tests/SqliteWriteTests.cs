@@ -294,28 +294,28 @@ public sealed class SqliteExecuteTests : IDisposable
     public void Resolve_Create_ANewFileInTheWorkingDirectory_Only()
     {
         var access = Access();
-        var made = access.Resolve("data/new.sqlite", null, create: true, out _, out bool creating)!;
+        var made = access.Resolve("data/new.sqlite", create: true, out _, out bool creating)!;
         Assert.True(creating);
         Assert.Equal((Path.Combine(_work, "data", "new.sqlite"), "data/new.sqlite"), (made.FullPath, made.Name));
 
         // A file already there is opened, a sqlite.json name wins and is never made.
-        Assert.False(access.Resolve("shop.db", null, create: true, out _, out creating) is null || creating);
-        Assert.Equal("shop", access.Resolve("shop", null, create: true, out _, out creating)!.Name);
+        Assert.False(access.Resolve("shop.db", create: true, out _, out creating) is null || creating);
+        Assert.Equal("shop", access.Resolve("shop", create: true, out _, out creating)!.Name);
         Assert.False(creating);
 
-        Assert.Null(access.Resolve(null, null, create: true, out var blank, out _));
+        Assert.Null(access.Resolve(null, create: true, out var blank, out _));
         Assert.Equal(SqliteText.CreateNeedsPath, SqliteText.Error(blank!));
-        Assert.Null(access.Resolve("notes.txt", null, create: true, out var extension, out _));
+        Assert.Null(access.Resolve("notes.txt", create: true, out var extension, out _));
         Assert.Equal(SqliteText.BadExtension("notes.txt"), SqliteText.Error(extension!));
-        Assert.Null(access.Resolve("data", null, create: true, out _, out _));
-        Assert.Null(access.Resolve("nowhere/new.db", null, create: true, out var folder, out _));
+        Assert.Null(access.Resolve("data", create: true, out _, out _));
+        Assert.Null(access.Resolve("nowhere/new.db", create: true, out var folder, out _));
         Assert.Equal(SqliteText.NoFolder("nowhere/new.db"), SqliteText.Error(folder!));
-        Assert.Null(access.Resolve("../outside.db", null, create: true, out var outside, out _));
+        Assert.Null(access.Resolve("../outside.db", create: true, out var outside, out _));
         Assert.Equal(SqlOutcome.ConnectFailed, outside!.Outcome);
-        Assert.Null(access.Resolve("data/new.db", null, create: false, out _, out _));   // without create, a missing file is unknown
+        Assert.Null(access.Resolve("data/new.db", create: false, out _, out _));   // without create, a missing file is unknown
 
         _settings.SqliteSandboxFiles = false;
-        Assert.Null(Access().Resolve("data/new.db", null, create: true, out var sandbox, out _));
+        Assert.Null(Access().Resolve("data/new.db", create: true, out var sandbox, out _));
         Assert.Equal(SqliteText.CreateNeedsSandbox, SqliteText.Error(sandbox!));
     }
 

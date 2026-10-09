@@ -16,10 +16,10 @@ public static class SqliteText
     public const string NoPath = "no \"path\" is given";
 
     /// <summary>One database as <c>sqlite_databases</c> lists it: the name, the file, the description. Pinned.</summary>
-    public static string DatabaseLine(SqliteNamedDatabase database, bool isDefault)
+    public static string DatabaseLine(SqliteNamedDatabase database)
     {
         ArgumentNullException.ThrowIfNull(database);
-        string line = $"- {database.Name}{(isDefault ? " (default)" : "")}: {database.FullPath}";
+        string line = $"- {database.Name}: {database.FullPath}";
         return string.IsNullOrWhiteSpace(database.Config.Description) ? line : line + " — " + database.Config.Description.Trim();
     }
 
@@ -40,7 +40,7 @@ public static class SqliteText
     public const string SandboxLine = "Any SQLite file in the working directory can be named by its path too (e.g. \"data/app.db\").";
 
     /// <summary><c>sqlite_databases</c>' whole answer: a count, one line each, the sandbox line when on, the problems.</summary>
-    public static string Databases(SqliteCatalog catalog, string? defaultName, bool sandbox)
+    public static string Databases(SqliteCatalog catalog, bool sandbox)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -50,11 +50,10 @@ public static class SqliteText
         }
         else
         {
-            var chosen = catalog.Named(defaultName) ?? catalog.Databases[0];
-            sb.Append(SqlText.Count(catalog.Databases.Count, "SQLite database")).Append(" (every SQLite tool takes one by name in \"database\"; the default is used when it is left out):");
+            sb.Append(SqlText.Count(catalog.Databases.Count, "SQLite database")).Append(" (every SQLite tool takes one by name in \"database\"; it may be left out only when there is one):");
             foreach (var database in catalog.Databases)
             {
-                sb.Append('\n').Append(DatabaseLine(database, ReferenceEquals(database, chosen)));
+                sb.Append('\n').Append(DatabaseLine(database));
             }
         }
 
@@ -175,6 +174,10 @@ public static class SqliteText
     public const string NoDatabases = "Error: no SQLite database is defined; the user adds one to sqlite.json (the SQLite tab of /tools)";
     public static string UnknownDatabase(string name, string names, bool sandbox) =>
         $"Error: no SQLite database is named '{name}'" + (sandbox ? " and no file by that path is in the working directory" : "") + (names.Length > 0 ? $"; the databases are {names}" : "");
+
+    /// <summary>A call that names no database while several are named in sqlite.json (2026-10-09: <c>SQLite default database</c> gone). Pinned.</summary>
+    public static string DatabaseNeeded(string names, bool sandbox) =>
+        "Error: name the SQLite database in \"database\"" + (sandbox ? " (or a file's path in the working directory)" : "") + $"; the databases are {names}";
     public static string NoFile(string path) => $"no database file at {path}";
     public static string OutsideSandbox(string path) => $"'{path}' is outside the working directory";
     public static string ConnectFailed(string database, string detail) => $"Error: could not open {database}: {detail}";

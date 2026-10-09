@@ -22,7 +22,7 @@ public sealed class UncWriteTool : UncTool
         {
           "type": "object",
           "properties": {
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when path is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\server\\share path or a folder under one." },
             "path": { "type": "string", "description": "The file to write, relative to the share (or a full path under it); missing folders are created." },
             "content": { "type": "string", "description": "The whole text to write." },
             "mode": { "type": "string", "enum": ["create", "overwrite", "append"], "description": "create (the default) refuses a file that is already there; overwrite replaces it; append adds the content at its end on a new line." }

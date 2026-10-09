@@ -82,13 +82,13 @@ public static class SqlText
 
     /// <summary>One connection as <c>sql_connections</c> lists it: the name, where, how it signs in, the description — never the password.</summary>
     /// <remarks>A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>SQL mode</c> read-write) lets it change.</remarks>
-    public static string ConnectionLine(SqlNamedConnection connection, bool isDefault, bool writes = false)
+    public static string ConnectionLine(SqlNamedConnection connection, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = config.Database?.Trim() ?? "";
         string login = config.IsWindows ? "windows sign-in" : config.IsRunAs ? $"windows sign-in as {config.User?.Trim()} (runas)" : $"sql login {config.User?.Trim()}";
-        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Server?.Trim()} / {database}, {login}{ServerWriteText.AccessNote(SqlStatementKinds.Family, config.IsReadWrite, writes)}";
+        string line = $"- {connection.Name}: {config.Server?.Trim()} / {database}, {login}{ServerWriteText.AccessNote(SqlStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -108,7 +108,7 @@ public static class SqlText
     }
 
     /// <summary><c>sql_connections</c>' whole answer: a count, then one line each, then the problems that kept any out.</summary>
-    public static string Connections(SqlCatalog catalog, string? defaultName, bool writes = false)
+    public static string Connections(SqlCatalog catalog, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -118,11 +118,10 @@ public static class SqlText
         }
         else
         {
-            var chosen = catalog.Find(null, defaultName);
-            sb.Append(Count(catalog.Connections.Count, "SQL connection")).Append(" (every SQL tool takes one by name in \"connection\"; the default is used when it is left out; each reaches its own database alone):");
+            sb.Append(Count(catalog.Connections.Count, "SQL connection")).Append(" (every SQL tool takes one by name in \"connection\"; it may be left out only when there is one; each reaches its own database alone):");
             foreach (var connection in catalog.Connections)
             {
-                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
+                sb.Append('\n').Append(ConnectionLine(connection, writes));
             }
         }
 
@@ -203,6 +202,9 @@ public static class SqlText
 
     public const string NoConnections = "Error: no SQL connection is defined; the user adds one to sql.json (the SQL tab of /tools)";
     public static string UnknownConnection(string name, string names) => $"Error: no SQL connection is named '{name}'; the connections are {names}";
+
+    /// <summary>A call that names no connection while several are offered (2026-10-09: the default-connection settings gone). Pinned.</summary>
+    public static string ConnectionNeeded(string names) => $"Error: name the SQL connection in \"connection\"; the connections are {names}";
     public static string ConnectFailed(string connection, string detail) => $"Error: could not connect to {connection}: {detail}";
     public static string Timeout(string connection, string seconds) => $"Error: the query on {connection} ran past {seconds} s and was stopped; narrow it (WHERE, TOP, fewer joins)";
     public static string Failed(string connection, string detail) => $"Error: the server refused the SQL ({connection}): {detail}";
@@ -216,7 +218,7 @@ public static class SqlText
         return run.Outcome switch
         {
             SqlOutcome.NoConnections => NoConnections,
-            SqlOutcome.UnknownConnection => UnknownConnection(run.Connection, run.Detail),
+            SqlOutcome.UnknownConnection => run.Connection.Length == 0 ? ConnectionNeeded(run.Detail) : UnknownConnection(run.Connection, run.Detail),
             SqlOutcome.ConnectFailed => ConnectFailed(run.Connection, run.Detail),
             SqlOutcome.Timeout => Timeout(run.Connection, run.Detail),
             SqlOutcome.ReadOnlyConnection => ServerWriteText.ReadOnlyConnection(SqlStatementKinds.Family, run.Connection),

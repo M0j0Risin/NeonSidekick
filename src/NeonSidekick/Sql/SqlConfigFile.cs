@@ -39,23 +39,17 @@ public sealed record SqlCatalog(IReadOnlyList<SqlNamedConnection> Connections, I
     }
 
     /// <summary>
-    /// The connection a call means: <paramref name="name"/> when given (case-insensitive), else
-    /// <paramref name="defaultName"/> when that names one, else the first. Null when nothing matches.
+    /// The connection a call means: <paramref name="name"/> when given (case-insensitive), else the only one when just one is
+    /// offered (2026-10-09, <see cref="ConnectionCatalog.Find"/>'s rule). Null when nothing matches, or when several are and none is named.
     /// </summary>
-    public SqlNamedConnection? Find(string? name, string? defaultName)
+    public SqlNamedConnection? Find(string? name)
     {
         if (!string.IsNullOrWhiteSpace(name))
         {
             return Connections.FirstOrDefault(c => string.Equals(c.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
-        if (!string.IsNullOrWhiteSpace(defaultName)
-            && Connections.FirstOrDefault(c => string.Equals(c.Name, defaultName.Trim(), StringComparison.OrdinalIgnoreCase)) is { } named)
-        {
-            return named;
-        }
-
-        return Connections.Count > 0 ? Connections[0] : null;
+        return Connections.Count == 1 ? Connections[0] : null;
     }
 }
 

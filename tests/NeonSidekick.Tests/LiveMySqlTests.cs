@@ -117,7 +117,7 @@ public sealed class LiveMySqlTests
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
-        _access.RunAsync("live", null, [sql], [], 10, timeoutSeconds, cancellationToken);
+        _access.RunAsync("live", [sql], [], 10, timeoutSeconds, cancellationToken);
 
     [LiveMySqlFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
@@ -195,7 +195,7 @@ public sealed class LiveMySqlTests
     [LiveMySqlFact]
     public async Task TheWizardsTest_SaysWhoItIs_AndReadsTheGrants()
     {
-        var run = await _access.RunAsync("live", null, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants], [], 50, 30, CancellationToken.None);
+        var run = await _access.RunAsync("live", [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants], [], 50, 30, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, run.Outcome);
         Assert.Contains("@", run.Grids[0].Rows[0][0]);
         Assert.NotEmpty(MySqlText.WritePowers(run.Grids[1].Rows.Select(r => r[0])));   // the fixtures' owner can write: the wizard warns

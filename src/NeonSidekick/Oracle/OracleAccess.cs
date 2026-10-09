@@ -76,10 +76,10 @@ public sealed class OracleAccess
     public Sql.BoundaryNames Names { get; } = new();
 
     /// <summary>
-    /// The connection a call means (<see cref="OracleCatalog.Find"/>), or null with the refusal: none defined, or a name that
+    /// The connection a call means (<see cref="OracleCatalog.Find"/>), or null with the refusal: none defined, none named among several, or a name that
     /// matches none (the names listed).
     /// </summary>
-    public OracleNamedConnection? Resolve(string? name, string? defaultName, out SqlRun? refused)
+    public OracleNamedConnection? Resolve(string? name, out SqlRun? refused)
     {
         var catalog = Catalog();
         refused = null;
@@ -89,7 +89,7 @@ public sealed class OracleAccess
             return null;
         }
 
-        var found = catalog.Find(name, defaultName);
+        var found = catalog.Find(name);
         if (found is null)
         {
             refused = SqlRun.Refused(SqlOutcome.UnknownConnection, string.Join(", ", catalog.Connections.Select(c => c.Name)), name?.Trim() ?? "");
@@ -99,18 +99,18 @@ public sealed class OracleAccess
     }
 
     /// <summary>
-    /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or the
-    /// first when blank), in its schema (<see cref="Place"/>, 2026-10-09: the lock — the connection's own, else the user's): each one's rows
+    /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (or the only one
+    /// offered when blank), in its schema (<see cref="Place"/>, 2026-10-09: the lock — the connection's own, else the user's): each one's rows
     /// read to <paramref name="maxRows"/> (<see cref="SqlGrid.ReadAsync"/>, one past to learn whether more are left), each
     /// statement bound only the parameters it names, all inside one read-only transaction that is rolled back. A timeout, a
     /// failed connect and a server error are outcomes; a cancelled token throws. The run's <see cref="SqlRun.Database"/> is the
     /// schema it worked in.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }
@@ -202,11 +202,11 @@ public sealed class OracleAccess
     /// server counts (none for DDL or a block). A timeout (ORA-01013), a failed connect and a server error are outcomes; a cancelled
     /// token throws (the server undoes the statement).
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }

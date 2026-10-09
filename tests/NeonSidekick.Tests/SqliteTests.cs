@@ -177,20 +177,23 @@ public sealed class SqliteToolsTests : IDisposable
     public void Resolve_ANameWins_ThenASandboxPath_ElseTheSentence()
     {
         var access = Access();
-        Assert.Equal("shop", access.Resolve(null, null, out _)!.Name);
-        Assert.Equal("shop", access.Resolve("Shop", null, out _)!.Name);
-        var local = access.Resolve("data/local.db", null, out _)!;
+        Assert.Null(access.Resolve(null, out var blank));   // two named, none given (2026-10-09: no default database)
+        Assert.Equal(SqliteText.DatabaseNeeded("shop, notes", sandbox: true), SqliteText.Error(blank!));
+        Assert.Equal("shop", access.Resolve("Shop", out _)!.Name);
+        var local = access.Resolve("data/local.db", out _)!;
         Assert.Equal(Path.Combine(_work, "data", "local.db"), local.FullPath);
 
-        Assert.Null(access.Resolve("../shop.db", null, out var outside));
+        Assert.Null(access.Resolve("../shop.db", out var outside));
         Assert.Equal(SqlOutcome.ConnectFailed, outside!.Outcome);
-        Assert.Null(access.Resolve("missing.db", null, out var unknown));
+        Assert.Null(access.Resolve("missing.db", out var unknown));
         Assert.Equal("Error: no SQLite database is named 'missing.db' and no file by that path is in the working directory; the databases are shop, notes", SqliteText.Error(unknown!));
 
         _settings.SqliteSandboxFiles = false;
-        Assert.Null(Access().Resolve("data/local.db", null, out _));
+        Assert.Null(Access().Resolve("data/local.db", out _));
+        _settings.SqliteDatabasesOffered = ["shop"];
+        Assert.Equal("shop", Access().Resolve(null, out _)!.Name);   // the only one offered
         _settings.SqliteDatabasesOffered = null;
-        Assert.Null(Access().Resolve(null, null, out var none));
+        Assert.Null(Access().Resolve(null, out var none));
         Assert.Equal(SqliteText.NoDatabases, SqliteText.Error(none!));
     }
 
@@ -198,42 +201,42 @@ public sealed class SqliteToolsTests : IDisposable
     public async Task Run_ReadsWithBinds_CapsTheRows_RefusesAWrite_AndInterruptsAtTheTimeout()
     {
         var access = Access();
-        var run = await access.RunAsync("shop", null, ["SELECT name FROM customers WHERE id IN (@a, :b, $c) ORDER BY id"], [new("a", 1L), new("b", 2), new("c", true)], 10, 5, CancellationToken.None);
+        var run = await access.RunAsync("shop", ["SELECT name FROM customers WHERE id IN (@a, :b, $c) ORDER BY id"], [new("a", 1L), new("b", 2), new("c", true)], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, run.Outcome);
         Assert.Equal(["Ada", "Grace"], run.Grids[0].Rows.Select(r => r[0]));
 
-        var unbound = await access.RunAsync("shop", null, ["SELECT @missing IS NULL"], [], 10, 5, CancellationToken.None);
+        var unbound = await access.RunAsync("shop", ["SELECT @missing IS NULL"], [], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, unbound.Outcome);
         Assert.Equal("1", unbound.Grids[0].Rows[0][0]);
 
         // SQLite's placeholder names are case-sensitive: :x and :X are two, each bound (code review, 2026-10-04: one was left
         // unbound and threw past the catches), a params name in the same case first, else any case.
-        var cased = await access.RunAsync("shop", null, ["SELECT :x, :X, :y IS NULL, :Y IS NULL, :z"], [new("x", 1L), new("X", 2L), new("Z", 3L)], 10, 5, CancellationToken.None);
+        var cased = await access.RunAsync("shop", ["SELECT :x, :X, :y IS NULL, :Y IS NULL, :z"], [new("x", 1L), new("X", 2L), new("Z", 3L)], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, cased.Outcome);
         Assert.Equal(["1", "2", "1", "1", "3"], cased.Grids[0].Rows[0]);
 
         // #a and @a$b are placeholders to SQLite: bound, one named and one not, where the driver threw for both (the third review).
         // A TCL form is named whole in params, its (…) or :: included (the fourth review).
-        var forms = await access.RunAsync("shop", null, ["SELECT #a, @a$b, $c::d IS NULL, $e(1), $f::g"], [new("a", 1L), new("a$b", 2L), new("e(1)", 3L), new("f::g", 4L)], 10, 5, CancellationToken.None);
+        var forms = await access.RunAsync("shop", ["SELECT #a, @a$b, $c::d IS NULL, $e(1), $f::g"], [new("a", 1L), new("a$b", 2L), new("e(1)", 3L), new("f::g", 4L)], 10, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, forms.Outcome);
         Assert.Equal(["1", "2", "1", "3", "4"], forms.Grids[0].Rows[0]);
 
-        var capped = await access.RunAsync("shop", null, ["SELECT * FROM customers"], [], 2, 5, CancellationToken.None);
+        var capped = await access.RunAsync("shop", ["SELECT * FROM customers"], [], 2, 5, CancellationToken.None);
         Assert.True(capped.Grids[0].More);
         Assert.Equal(2, capped.Grids[0].Rows.Count);
 
-        var write = await access.RunAsync("shop", null, ["DELETE FROM customers"], [], 2, 5, CancellationToken.None);
+        var write = await access.RunAsync("shop", ["DELETE FROM customers"], [], 2, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.Failed, write.Outcome);
         Assert.Contains("readonly", write.Detail);
 
-        var slow = await access.RunAsync("shop", null, [SqliteCheck.SlowQuery], [], 2, 1, CancellationToken.None);
+        var slow = await access.RunAsync("shop", [SqliteCheck.SlowQuery], [], 2, 1, CancellationToken.None);
         Assert.Equal(SqlOutcome.Timeout, slow.Outcome);
         Assert.Equal("Error: the query on shop ran past 1 s and was stopped; narrow it (WHERE, LIMIT, fewer joins)", SqliteText.Error(slow));
 
         using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => access.RunAsync("shop", null, [SqliteCheck.SlowQuery], [], 2, 30, cancel.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => access.RunAsync("shop", [SqliteCheck.SlowQuery], [], 2, 30, cancel.Token));
 
-        var gone = await access.RunAsync("notes", null, ["SELECT 1"], [], 2, 5, CancellationToken.None);
+        var gone = await access.RunAsync("notes", ["SELECT 1"], [], 2, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.ConnectFailed, gone.Outcome);
         Assert.StartsWith("Error: could not open notes: no database file at ", SqliteText.Error(gone));
     }
@@ -243,10 +246,12 @@ public sealed class SqliteToolsTests : IDisposable
     {
         var access = Access();
         string listed = new SqliteDatabasesTool(access, () => _settings).Describe();
-        Assert.StartsWith("2 SQLite databases (every SQLite tool takes one by name in \"database\"; the default is used when it is left out):\n- shop (default): ", listed);
+        Assert.StartsWith("2 SQLite databases (every SQLite tool takes one by name in \"database\"; it may be left out only when there is one):\n- shop: ", listed);
         Assert.Contains(" — the sample shop", listed);
         Assert.Contains(SqliteText.SandboxLine, listed);
+        Assert.Equal(SqliteText.DatabaseNeeded("shop, notes", sandbox: true), await new SqliteTablesTool(access, () => _settings).DescribeAsync(null, null, CancellationToken.None));   // two, none named (2026-10-09)
 
+        _settings.SqliteDatabasesOffered = ["shop"];   // the only one offered: a call may leave it out
         string tables = await new SqliteTablesTool(access, () => _settings).DescribeAsync(null, null, CancellationToken.None);
         Assert.StartsWith("3 tables and views in shop", tables);
         Assert.Contains("| big_orders | view |", tables);

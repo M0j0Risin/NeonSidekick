@@ -62,10 +62,11 @@ public static class ConnectionCatalog
     }
 
     /// <summary>
-    /// The connection a call means: <paramref name="name"/> when given (case-insensitive), else <paramref name="defaultName"/>
-    /// when that names one, else the first. Null (default) when nothing matches.
+    /// The connection a call means: <paramref name="name"/> when given (case-insensitive), else the only one when just one is
+    /// offered. Null (default) when nothing matches, or when several are offered and the call names none (2026-10-09, the
+    /// user's call: the default-connection settings are gone, and a call must name its connection unless there is one).
     /// </summary>
-    public static TNamed? Find<TNamed>(IReadOnlyList<TNamed> connections, string? name, string? defaultName)
+    public static TNamed? Find<TNamed>(IReadOnlyList<TNamed> connections, string? name)
         where TNamed : class, INamedConnection
     {
         ArgumentNullException.ThrowIfNull(connections);
@@ -74,13 +75,7 @@ public static class ConnectionCatalog
             return connections.FirstOrDefault(c => string.Equals(c.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
-        if (!string.IsNullOrWhiteSpace(defaultName)
-            && connections.FirstOrDefault(c => string.Equals(c.Name, defaultName.Trim(), StringComparison.OrdinalIgnoreCase)) is { } named)
-        {
-            return named;
-        }
-
-        return connections.Count > 0 ? connections[0] : null;
+        return connections.Count == 1 ? connections[0] : null;
     }
 }
 

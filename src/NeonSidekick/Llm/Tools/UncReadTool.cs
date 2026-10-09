@@ -18,7 +18,7 @@ public sealed class UncReadTool : UncTool
         {
           "type": "object",
           "properties": {
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when path is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\server\\share path or a folder under one." },
             "path": { "type": "string", "description": "The text file, relative to the share (or a full path under it)." },
             "start_line": { "type": "integer", "description": "The first line to return; 1 is the top. A negative number counts from the end: -20 is the last 20 lines. Leave it out to start at the top." },
             "max_lines": { "type": "integer", "description": "How many lines to return at most. Leave it out for the whole file. To read on after a partial read, call again with the start_line its header names." }

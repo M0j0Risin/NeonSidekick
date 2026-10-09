@@ -42,14 +42,14 @@ internal static class OracleCheck
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var access = new OracleAccess(() => catalog);
         var checks = new List<SmokeCheck>();
-        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name, null) is not { } target)
+        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name) is not { } target)
         {
             checks.Add(new SmokeCheck("oracle:connection", false, catalog.Connections.Count == 0 ? OracleText.NoConnections : OracleText.UnknownConnection(name, string.Join(", ", catalog.Connections.Select(c => c.Name)))));
             return Report(console, checks);
         }
 
         Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout, CancellationToken token) =>
-            access.RunAsync(name, null, statements, [], 10, timeout, token);
+            access.RunAsync(name, statements, [], 10, timeout, token);
 
         var who = await Run([OracleCatalogQueries.WhoAmI], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)
@@ -75,9 +75,9 @@ internal static class OracleCheck
         checks.Add(new SmokeCheck("oracle:gate", passed.Count == 0, passed.Count == 0 ? $"refused all {bypasses.Length.ToString(CultureInfo.InvariantCulture)} bypasses" : "let through: " + string.Join(" | ", passed)));
 
         string place = OracleAccess.Place(target.Config);
-        var names = await access.RunAsync(name, null, [OracleBoundary.Names], [], OracleBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var names = await access.RunAsync(name, [OracleBoundary.Names], [], OracleBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(BoundaryCheck(place, names));
-        var reach = await access.RunAsync(name, null, OracleCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var reach = await access.RunAsync(name, OracleCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("oracle:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
             ? OracleText.Reach(place, Column(reach, 0), Column(reach, 1))
             : OracleText.Error(reach)));

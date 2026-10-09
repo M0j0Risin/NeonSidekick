@@ -5,7 +5,7 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>oracle_connections()</c>: the named connections of <c>oracle.json</c> — data source, user, schema, description, the default marked; never a password. Touches no server.</summary>
+/// <summary><c>oracle_connections()</c>: the named connections of <c>oracle.json</c> — data source, user, schema, description; never a password. Touches no server.</summary>
 public sealed class OracleConnectionsTool : OracleTool
 {
     public const string ToolName = "oracle_connections";
@@ -19,12 +19,12 @@ public sealed class OracleConnectionsTool : OracleTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Lists the Oracle database connections the user has set up: each one's name, data source, user, schema and what it holds, the default marked. " +
+        "Lists the Oracle database connections the user has set up: each one's name, data source, user, schema and what it holds. " +
         "Pass a name as \"connection\" to the other oracle_ tools.";
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe() => OracleText.Connections(Oracle.Catalog(), Effective.OracleDefaultConnection, Sql.DatabaseWriteModes.IsReadWrite(Effective.OracleMode));
+    public string Describe() => OracleText.Connections(Oracle.Catalog(), Sql.DatabaseWriteModes.IsReadWrite(Effective.OracleMode));
 
     protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         new(Describe());

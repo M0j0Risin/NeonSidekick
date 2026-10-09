@@ -73,13 +73,13 @@ internal static class PostgresCheck
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var access = new PostgresAccess(() => catalog);
         var checks = new List<SmokeCheck>();
-        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name, null) is not { } target)
+        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name) is not { } target)
         {
             checks.Add(new SmokeCheck("postgres:connection", false, catalog.Connections.Count == 0 ? PostgresText.NoConnections : PostgresText.UnknownConnection(name, string.Join(", ", catalog.Connections.Select(c => c.Name)))));
             return Report(console, checks);
         }
 
-        Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout) => access.RunAsync(name, null, statements, [], 10, timeout, cancellationToken);
+        Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout) => access.RunAsync(name, statements, [], 10, timeout, cancellationToken);
 
         var who = await Run(PostgresCatalogQueries.WhoAmI, timeoutSeconds).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)
@@ -115,9 +115,9 @@ internal static class PostgresCheck
         checks.Add(new SmokeCheck("postgres:gate", passed.Count == 0, passed.Count == 0 ? $"refused all {bypasses.Length.ToString(CultureInfo.InvariantCulture)} bypasses" : "let through: " + string.Join(" | ", passed)));
 
         string? schema = string.IsNullOrWhiteSpace(target.Config.Schema) ? null : target.Config.Schema.Trim();
-        var names = await access.RunAsync(name, null, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var names = await access.RunAsync(name, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(BoundaryCheck(schema, names));
-        var reach = await access.RunAsync(name, null, PostgresCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var reach = await access.RunAsync(name, PostgresCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("postgres:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
             ? PostgresText.Reach(target.Config.Database?.Trim() ?? "", schema, Column(reach, 0), Column(reach, 1), Column(reach, 2))
             : PostgresText.Error(reach)));

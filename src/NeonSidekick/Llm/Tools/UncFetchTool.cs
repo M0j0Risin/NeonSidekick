@@ -22,7 +22,7 @@ public sealed class UncFetchTool : UncTool
         {
           "type": "object",
           "properties": {
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when path is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\server\\share path or a folder under one." },
             "path": { "type": "string", "description": "The file or folder on the share to copy, relative to the share (or a full path under it)." },
             "to": { "type": "string", "description": "Where it goes in the working directory, relative to it. Leave it out for the same name at the working directory's root." },
             "overwrite": { "type": "boolean", "description": "true to replace what is already at to (a folder is merged). Default false." }

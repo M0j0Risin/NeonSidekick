@@ -23,10 +23,10 @@ public sealed record PostgresCatalog(IReadOnlyList<PostgresNamedConnection> Conn
     }
 
     /// <summary>
-    /// The connection a call means: <paramref name="name"/> when given (case-insensitive), else <paramref name="defaultName"/>
-    /// when that names one, else the first. Null when nothing matches.
+    /// The connection a call means: <paramref name="name"/> when given (case-insensitive), else the only one when just one is
+    /// offered (2026-10-09). Null when nothing matches, or when several are and none is named.
     /// </summary>
-    public PostgresNamedConnection? Find(string? name, string? defaultName) => ConnectionCatalog.Find(Connections, name, defaultName);
+    public PostgresNamedConnection? Find(string? name) => ConnectionCatalog.Find(Connections, name);
 }
 
 /// <summary>

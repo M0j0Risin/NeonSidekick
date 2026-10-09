@@ -29,7 +29,7 @@ public abstract class UncTransferTool : UncTool
         {
           "type": "object",
           "properties": {
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when from is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when from is a full \\\\server\\share path or a folder under one." },
             "from": { "type": "string", "description": "The file or folder to VERB, relative to the share (or a full path under it)." },
             "to": { "type": "string", "description": "Where it goes on the same share, relative to it (or a full path under it)." },
             "overwrite": { "type": "boolean", "description": "true to replace what is already at to, for good (a folder copied over a folder merges). Default false." }

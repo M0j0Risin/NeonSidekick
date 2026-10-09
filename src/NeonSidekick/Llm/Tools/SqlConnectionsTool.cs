@@ -5,7 +5,7 @@ using NeonSidekick.Sql;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>sql_connections()</c>: the named connections of <c>sql.json</c> — server, database, sign-in, description, the default marked; never a password. Touches no server.</summary>
+/// <summary><c>sql_connections()</c>: the named connections of <c>sql.json</c> — server, database, sign-in, description; never a password. Touches no server.</summary>
 public sealed class SqlConnectionsTool : SqlTool
 {
     public const string ToolName = "sql_connections";
@@ -19,12 +19,12 @@ public sealed class SqlConnectionsTool : SqlTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Lists the SQL Server connections the user has set up: each one's name, server, database, how it signs in and what it holds, the default marked. " +
+        "Lists the SQL Server connections the user has set up: each one's name, server, database, how it signs in and what it holds. " +
         "Pass a name as \"connection\" to the other sql_ tools.";
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe() => SqlText.Connections(Sql.Catalog(), Effective.SqlDefaultConnection, DatabaseWriteModes.IsReadWrite(Effective.SqlMode));
+    public string Describe() => SqlText.Connections(Sql.Catalog(), DatabaseWriteModes.IsReadWrite(Effective.SqlMode));
 
     protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         new(Describe());

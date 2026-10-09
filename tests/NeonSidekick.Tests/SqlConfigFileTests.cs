@@ -109,7 +109,7 @@ public sealed class SqlConfigFileTests : IDisposable
     }
 
     [Fact]
-    public void TheProfilesFile_WinsByName_OverTheHomes_AndFindPicksByNameThenDefaultThenFirst()
+    public void TheProfilesFile_WinsByName_OverTheHomes_AndFindPicksByName_OrTheOnlyOne()
     {
         Profile("""{ "connections": { "Shared": { "server": "profile-server", "database": "db", "user": "u" }, "mine": { "server": "m", "database": "db", "user": "u" } } }""");
         Global("""{ "connections": { "shared": { "server": "home-server", "database": "db", "user": "u" }, "theirs": { "server": "t", "database": "db", "user": "u" } } }""");
@@ -117,11 +117,12 @@ public sealed class SqlConfigFileTests : IDisposable
         var catalog = SqlConfigFile.LoadCatalog(_profile, _home);
 
         Assert.Equal(["Shared", "mine", "theirs"], catalog.Connections.Select(c => c.Name));
-        Assert.Equal("profile-server", catalog.Find("shared", null)!.Config.Server);   // names are case-insensitive
-        Assert.Equal("theirs", catalog.Find(null, "THEIRS")!.Name);
-        Assert.Equal("Shared", catalog.Find(null, "gone")!.Name);   // a default no longer there = the first
-        Assert.Equal("Shared", catalog.Find(null, "")!.Name);
-        Assert.Null(catalog.Find("nope", null));
+        Assert.Equal("profile-server", catalog.Find("shared")!.Config.Server);   // names are case-insensitive
+        Assert.Equal("theirs", catalog.Find("THEIRS")!.Name);
+        Assert.Null(catalog.Find(null));   // several, and none named (2026-10-09: no default, no first)
+        Assert.Null(catalog.Find(""));
+        Assert.Equal("mine", catalog.Offered(["mine"]).Find(" ")!.Name);   // the only one offered
+        Assert.Null(catalog.Find("nope"));
         Assert.Equal(["Shared", "mine"], SqlConfigFile.LoadCatalog(_profile, null).Connections.Select(c => c.Name));
     }
 
@@ -442,20 +443,20 @@ public sealed class SqlConfigFileTests : IDisposable
     }
 
     [Fact]
-    public void TheListing_NamesEveryConnection_TheDefaultMarked_AndNeverThePassword()
+    public void TheListing_NamesEveryConnection_AndNeverThePassword()
     {
         Profile("""{ "connections": { "aw": { "server": "127.0.0.1,1433", "database": "AdventureWorks2022", "user": "sa", "password": "hunter2", "description": "the sample sales database" }, "corp": { "server": "corp\\inst", "database": "Reports", "auth": "windows" }, "bad": { "server": "x", "auth": "windows" } } }""");
         var catalog = SqlConfigFile.LoadCatalog(_profile, _home);
 
-        string text = SqlText.Connections(catalog, "corp");
+        string text = SqlText.Connections(catalog);
 
         Assert.Equal(
-            "2 SQL connections (every SQL tool takes one by name in \"connection\"; the default is used when it is left out; each reaches its own database alone):\n" +
+            "2 SQL connections (every SQL tool takes one by name in \"connection\"; it may be left out only when there is one; each reaches its own database alone):\n" +
             "- aw: 127.0.0.1,1433 / AdventureWorks2022, sql login sa — the sample sales database\n" +
-            "- corp (default): corp\\inst / Reports, windows sign-in\n" +
+            "- corp: corp\\inst / Reports, windows sign-in\n" +
             $"Skipped {SqlConfigFile.ProfilePath(_profile)} (bad): {SqlText.NoDatabase}",
             text);
         Assert.DoesNotContain("hunter2", text);
-        Assert.Equal(SqlText.NoConnections, SqlText.Connections(SqlCatalog.Empty, null));
+        Assert.Equal(SqlText.NoConnections, SqlText.Connections(SqlCatalog.Empty));
     }
 }

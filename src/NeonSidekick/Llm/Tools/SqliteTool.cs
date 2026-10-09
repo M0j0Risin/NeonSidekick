@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// What the SQLite tools share (2026-10-04; four, and <c>sqlite_execute</c> since 2026-10-05), <see cref="MySqlTool"/>'s shape: the <see cref="SqliteAccess"/> door, the settings
 /// in force at each call, the optional <c>database</c> (a name from <c>sqlite.json</c>, or a file in the working directory by its
-/// path while <c>SQLite sandbox files</c> is on; the default when left out), the statement timeout, and the table lookup
+/// path while <c>SQLite sandbox files</c> is on; left out, the only named one, several refused since 2026-10-09), the statement timeout, and the table lookup
 /// <c>sqlite_describe</c> needs. A refused run is <see cref="SqliteText.Error"/>'s sentence.
 /// </summary>
 public abstract class SqliteTool : AIFunction
@@ -18,7 +18,7 @@ public abstract class SqliteTool : AIFunction
     public const string TableArgument = "table";
 
     /// <summary>The <c>database</c> property every schema but <c>sqlite_databases</c> carries.</summary>
-    public const string DatabaseProperty = "\"database\": { \"type\": \"string\", \"description\": \"The database's name (sqlite_databases lists them), or a .db file in the working directory by its path; leave it out for the default one.\" }";
+    public const string DatabaseProperty = "\"database\": { \"type\": \"string\", \"description\": \"The database's name (sqlite_databases lists them), or a .db file in the working directory by its path; it may be left out only when there is one.\" }";
 
     private readonly SqliteAccess _sqlite;
     private readonly Func<AppSettingsData> _effective;
@@ -46,10 +46,10 @@ public abstract class SqliteTool : AIFunction
 
     /// <summary>Runs the app's own statements on the call's database, capped at <see cref="SqliteAccess.MaxCatalogRows"/>.</summary>
     protected Task<SqlRun> CatalogAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _sqlite.RunAsync(database, Effective.SqliteDefaultDatabase, statements, parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+        _sqlite.RunAsync(database, statements, parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
 }
 
-/// <summary><c>sqlite_databases()</c>: the named databases of <c>sqlite.json</c> — the file, the description, the default marked — and whether a working-directory file may be named too. Opens nothing.</summary>
+/// <summary><c>sqlite_databases()</c>: the named databases of <c>sqlite.json</c> — the file, the description — and whether a working-directory file may be named too. Opens nothing.</summary>
 public sealed class SqliteDatabasesTool : SqliteTool
 {
     public const string ToolName = "sqlite_databases";
@@ -63,12 +63,12 @@ public sealed class SqliteDatabasesTool : SqliteTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Lists the SQLite databases the user has named, each one's file and what it holds, the default marked, and whether a database file " +
+        "Lists the SQLite databases the user has named, each one's file and what it holds, and whether a database file " +
         "in the working directory can be named by its path. Pass a name (or such a path) as \"database\" to the other sqlite_ tools.";
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe() => SqliteText.Databases(Files.Catalog(), Effective.SqliteDefaultDatabase, Files.SandboxOn);
+    public string Describe() => SqliteText.Databases(Files.Catalog(), Files.SandboxOn);
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new(Describe());
 }
@@ -237,7 +237,7 @@ public sealed class SqliteQueryTool : SqliteTool
             return refused;
         }
 
-        var run = await Files.RunAsync(database, Effective.SqliteDefaultDatabase, [SqliteReadOnlyGate.Body(sql)], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Files.RunAsync(database, [SqliteReadOnlyGate.Body(sql)], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? SqliteText.Query(run, rows, SqlTool.ResultChars(Effective)) : SqliteText.Error(run);
     }
 
@@ -373,7 +373,7 @@ public sealed class SqliteExecuteTool : SqliteTool
             return refused;
         }
 
-        if (Files.Resolve(database, effective.SqliteDefaultDatabase, create, out var unresolved, out bool creating) is not { } target)
+        if (Files.Resolve(database, create, out var unresolved, out bool creating) is not { } target)
         {
             return SqliteText.Error(unresolved!);
         }

@@ -72,8 +72,9 @@ public sealed class MySqlToolsTests
         _catalog = new MySqlCatalog([Unreachable("down"), Unreachable("other")], []);
 
         Assert.Equal(MySqlText.UnknownConnection("nope", "down, other"), await Invoke<MySqlQueryTool>(("sql", "SELECT 1"), ("connection", "nope")));
-        Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT 1")));
-        _settings.MySqlDefaultConnection = "other";
+        Assert.Equal(MySqlText.ConnectionNeeded("down, other"), await Invoke<MySqlQueryTool>(("sql", "SELECT 1")));   // two, none named (2026-10-09: no default)
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT 1"), ("connection", "down")));
+        _catalog = new MySqlCatalog([Unreachable("other")], []);   // the only one when none is named
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlTablesTool>());
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlDescribeTool>(("table", "t")));
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlIndexesTool>());
@@ -130,7 +131,7 @@ public sealed class MySqlToolsTests
         Assert.Equal(["MySQL · 127.0.0.1:1 / shop", "MySQL · 127.0.0.1:1 / shop"], ChatScreen.MySqlChoices(all).Select(i => i.Note));
         _catalog = all.Offered(["shop"]);
         string listing = await Invoke<MySqlConnectionsTool>();
-        Assert.Contains("- shop (default): 127.0.0.1:1 / shop, user reader", listing);
+        Assert.Contains("- shop: 127.0.0.1:1 / shop, user reader", listing);
         Assert.EndsWith("\n" + MySqlText.HiddenConnections(1), listing);
         Assert.Equal(100, MySqlQueryTool.DefaultRows(new AppSettingsData()));
         Assert.Equal(600, MySqlTool.TimeoutSeconds(new AppSettingsData { MySqlQueryTimeoutSeconds = 9_999 }));

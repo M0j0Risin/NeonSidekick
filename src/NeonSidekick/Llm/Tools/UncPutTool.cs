@@ -23,7 +23,7 @@ public sealed class UncPutTool : UncTool
           "type": "object",
           "properties": {
             "from": { "type": "string", "description": "The file or folder in the working directory to copy, relative to it." },
-            "share": { "type": "string", "description": "The share's name (unc_shares lists them); leave it out for the default share, or when to is a full \\\\server\\share path or a folder under one." },
+            "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when to is a full \\\\server\\share path or a folder under one." },
             "to": { "type": "string", "description": "Where it goes on the share, relative to the share (or a full path under it). Leave it out for the same name at the share's root." },
             "overwrite": { "type": "boolean", "description": "true to replace what is already at to, for good (a folder is merged). Default false." }
           },

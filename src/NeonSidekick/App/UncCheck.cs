@@ -24,7 +24,7 @@ internal static class UncCheck
         ArgumentNullException.ThrowIfNull(name);
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var checks = new List<SmokeCheck>();
-        var share = string.IsNullOrWhiteSpace(name) ? null : catalog.Find(name, null);
+        var share = string.IsNullOrWhiteSpace(name) ? null : catalog.Find(name);
         if (share is null)
         {
             checks.Add(new SmokeCheck("unc:share", false, catalog.Shares.Count == 0 ? UncText.NoShares : UncText.UnknownShare(name, string.Join(", ", catalog.Shares.Select(s => s.Name)))));

@@ -25,12 +25,12 @@ public static class MySqlText
 
     /// <summary>One connection as <c>mysql_connections</c> lists it: the name, where, the user, the database, the description — never the password.</summary>
     /// <remarks>A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>MySQL mode</c> read-write) lets it change.</remarks>
-    public static string ConnectionLine(MySqlNamedConnection connection, bool isDefault, bool writes = false)
+    public static string ConnectionLine(MySqlNamedConnection connection, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = $" / {config.Database?.Trim()}";
-        string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(MySqlStatementKinds.Family, config.IsReadWrite, writes)}";
+        string line = $"- {connection.Name}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(MySqlStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -50,7 +50,7 @@ public static class MySqlText
     }
 
     /// <summary><c>mysql_connections</c>' whole answer: a count, then one line each, then the problems that kept any out.</summary>
-    public static string Connections(MySqlCatalog catalog, string? defaultName, bool writes = false)
+    public static string Connections(MySqlCatalog catalog, bool writes = false)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var sb = new StringBuilder();
@@ -60,11 +60,10 @@ public static class MySqlText
         }
         else
         {
-            var chosen = catalog.Find(null, defaultName);
-            sb.Append(SqlText.Count(catalog.Connections.Count, "MySQL connection")).Append(" (every MySQL tool takes one by name in \"connection\"; the default is used when it is left out; each reaches its own database alone):");
+            sb.Append(SqlText.Count(catalog.Connections.Count, "MySQL connection")).Append(" (every MySQL tool takes one by name in \"connection\"; it may be left out only when there is one; each reaches its own database alone):");
             foreach (var connection in catalog.Connections)
             {
-                sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
+                sb.Append('\n').Append(ConnectionLine(connection, writes));
             }
         }
 
@@ -144,6 +143,9 @@ public static class MySqlText
 
     public const string NoConnections = "Error: no MySQL connection is defined; the user adds one to mysql.json (the MySQL tab of /tools)";
     public static string UnknownConnection(string name, string names) => $"Error: no MySQL connection is named '{name}'; the connections are {names}";
+
+    /// <summary>A call that names no connection while several are offered (2026-10-09: the default-connection settings gone). Pinned.</summary>
+    public static string ConnectionNeeded(string names) => $"Error: name the MySQL connection in \"connection\"; the connections are {names}";
     public static string ConnectFailed(string connection, string detail) => $"Error: could not connect to {connection}: {detail}";
     public static string Timeout(string connection, string seconds) => $"Error: the query on {connection} ran past {seconds} s and was stopped; narrow it (WHERE, LIMIT, fewer joins)";
     public static string Failed(string connection, string detail) => $"Error: the server refused the SQL ({connection}): {detail}";
@@ -157,7 +159,7 @@ public static class MySqlText
         return run.Outcome switch
         {
             SqlOutcome.NoConnections => NoConnections,
-            SqlOutcome.UnknownConnection => UnknownConnection(run.Connection, run.Detail),
+            SqlOutcome.UnknownConnection => run.Connection.Length == 0 ? ConnectionNeeded(run.Detail) : UnknownConnection(run.Connection, run.Detail),
             SqlOutcome.ConnectFailed => ConnectFailed(run.Connection, run.Detail),
             SqlOutcome.Timeout => Timeout(run.Connection, run.Detail),
             SqlOutcome.ReadOnlyConnection => ServerWriteText.ReadOnlyConnection(MySqlStatementKinds.Family, run.Connection),

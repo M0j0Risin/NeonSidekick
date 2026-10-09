@@ -67,15 +67,15 @@ public sealed class SqlExecuteTool : SqlTool
             SqlWriteGate.Kinds,
             SqlReadOnlyGate.Check,
             text => text.Trim(),
-            () => Sql.Resolve(connection, effective.SqlDefaultConnection, out var refused) is { } target
+            () => Sql.Resolve(connection, out var refused) is { } target
                 ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? ""), null)
                 : (null, SqlText.Error(refused!)),
             async (body, token) =>
             {
-                var run = await Sql.RunAsync(connection, effective.SqlDefaultConnection, body, parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await Sql.RunAsync(connection, body, parameters, rows, timeout, token).ConfigureAwait(false);
                 return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, ResultChars(effective)) : SqlText.Error(run);
             },
-            (body, token) => Sql.ExecuteAsync(connection, effective.SqlDefaultConnection, body, parameters, rows, timeout, token),
+            (body, token) => Sql.ExecuteAsync(connection, body, parameters, rows, timeout, token),
             SqlText.Error,
             (body, token) => OutsideAsync(body, connection, token));
         return ServerExecute.RunAsync(SqlStatementKinds.Family, effective.SqlMode, effective.SqlStatementsAllowed, sql, rows, ResultChars(effective), hooks, _allow, cancellationToken);

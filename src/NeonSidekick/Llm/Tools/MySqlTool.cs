@@ -7,8 +7,8 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// What the MySQL tools share (2026-09-30), <see cref="OracleTool"/>'s shape: the <see cref="MySqlAccess"/> door, the
-/// settings in force at each call, the optional <c>connection</c> (a name from <c>mysql.json</c>; the setting
-/// <c>MySQL default connection</c>, else the first, when left out) — each connection reaching its own database alone since
+/// settings in force at each call, the optional <c>connection</c> (a name from <c>mysql.json</c>; left out,
+/// the only one offered, several refused since 2026-10-09) — each connection reaching its own database alone since
 /// 2026-10-09 (the user's call, SQL Server's lock carried over: <c>database</c> and <c>mysql_databases</c> went, a call that still
 /// sends one is refused, and <see cref="OutsideAsync"/> holds the model's SQL to it) — the statement timeout, and the table lookup
 /// <c>mysql_describe</c>, <c>mysql_relationships</c> and <c>mysql_indexes</c> need. A refused run is <see cref="MySqlText.Error"/>'s sentence.
@@ -21,7 +21,7 @@ public abstract class MySqlTool : AIFunction
     public const string TableArgument = "table";
 
     /// <summary>The <c>connection</c> property the server-reaching schemas carry.</summary>
-    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The MySQL connection's name (mysql_connections lists them); leave it out for the default one.\" }";
+    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The MySQL connection's name (mysql_connections lists them); it may be left out only when there is one.\" }";
 
     private readonly MySqlAccess _mysql;
     private readonly Func<AppSettingsData> _effective;
@@ -62,7 +62,7 @@ public abstract class MySqlTool : AIFunction
     /// </summary>
     protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
     {
-        if (_mysql.Resolve(connection, Effective.MySqlDefaultConnection, out _) is not { } target)
+        if (_mysql.Resolve(connection, out _) is not { } target)
         {
             return null;
         }
@@ -75,7 +75,7 @@ public abstract class MySqlTool : AIFunction
 
         // The names kept a minute per connection (the review, 2026-10-09: an alias's t.col sent every join for them).
         var (rows, failed) = await _mysql.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.Endpoint, target.Config.Database, target.Config.User),
-            token => _mysql.RunAsync(connection, Effective.MySqlDefaultConnection, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+            token => _mysql.RunAsync(connection, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
         return failed is not null ? MySqlText.Error(failed) : MySqlBoundary.Check(sql, target.Config.Database ?? "", rows!.Select(r => r[0]));
     }
 
@@ -85,7 +85,7 @@ public abstract class MySqlTool : AIFunction
 
     /// <summary>Runs the app's own statements on the call's connection (in its database), capped at <see cref="MySqlAccess.MaxCatalogRows"/>.</summary>
     protected Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _mysql.RunAsync(connection, Effective.MySqlDefaultConnection, statements, parameters, MySqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+        _mysql.RunAsync(connection, statements, parameters, MySqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
 
     /// <summary>What <see cref="FindTableAsync"/> found: the object's database, name and kind — or the <c>Error:</c> sentence.</summary>
     protected sealed record TableMatch(string Database, string Name, string Kind, string? Error)
@@ -105,7 +105,7 @@ public abstract class MySqlTool : AIFunction
             return TableMatch.Refused(MySqlText.BadTable(table));
         }
 
-        if (parts.Database is { } named && _mysql.Resolve(connection, Effective.MySqlDefaultConnection, out _) is { } target
+        if (parts.Database is { } named && _mysql.Resolve(connection, out _) is { } target
             && !named.Equals(target.Config.Database?.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             return TableMatch.Refused(MySqlText.TableElsewhere(named, target.Config.Database?.Trim() ?? ""));

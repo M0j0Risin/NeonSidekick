@@ -140,9 +140,9 @@ public sealed class SqlAccess
 
     /// <summary>
     /// The connection a call means (<see cref="SqlCatalog.Find"/>), or null with the <c>Error:</c> sentence:
-    /// none defined, or a name that matches none (the names listed).
+    /// none defined, none named among several, or a name that matches none (the names listed).
     /// </summary>
-    public SqlNamedConnection? Resolve(string? name, string? defaultName, out SqlRun? refused)
+    public SqlNamedConnection? Resolve(string? name, out SqlRun? refused)
     {
         var catalog = Catalog();
         refused = null;
@@ -152,7 +152,7 @@ public sealed class SqlAccess
             return null;
         }
 
-        var found = catalog.Find(name, defaultName);
+        var found = catalog.Find(name);
         if (found is null)
         {
             refused = SqlRun.Refused(SqlOutcome.UnknownConnection, string.Join(", ", catalog.Connections.Select(c => c.Name)), name?.Trim() ?? "");
@@ -162,18 +162,18 @@ public sealed class SqlAccess
     }
 
     /// <summary>
-    /// Runs <paramref name="sql"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or
-    /// the first when blank), in the connection's own database (2026-10-09: the one it reaches; a server that opens any other — a
+    /// Runs <paramref name="sql"/> on the connection <paramref name="name"/> names (or the only one
+    /// offered when blank), in the connection's own database (2026-10-09: the one it reaches; a server that opens any other — a
     /// login's default — is refused before the batch): every result set read to
     /// <paramref name="maxRows"/> (<see cref="SqlGrid.ReadAsync"/>), the command cancelled at the first set that has
     /// more — so the server stops, and the reader never drains a million rows on dispose — and the transaction
     /// rolled back. A timeout, a failed connect and a server error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }
@@ -290,11 +290,11 @@ public sealed class SqlAccess
     /// is the rows the server counts. A timeout, a failed connect and a server error are outcomes; a cancelled token throws (the
     /// server undoes the statement).
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }

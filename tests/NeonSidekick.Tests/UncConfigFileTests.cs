@@ -122,10 +122,10 @@ public sealed class UncConfigFileTests : IDisposable
         var catalog = UncConfigFile.LoadCatalog(_profile, _home);
 
         Assert.Equal(["eng", "data"], catalog.Shares.Select(s => s.Name));
-        Assert.Equal(@"\\profile\eng", catalog.Find("Eng", null)!.Config.Root);
-        Assert.Equal("data", catalog.Find(null, "DATA")!.Name);
-        Assert.Equal("eng", catalog.Find(null, "gone")!.Name);   // the first, when the default names none
-        Assert.Null(catalog.Find("gone", null));
+        Assert.Equal(@"\\profile\eng", catalog.Find("Eng")!.Config.Root);
+        Assert.Equal("data", catalog.Find("DATA")!.Name);
+        Assert.Null(catalog.Find(null));   // two, and none named (2026-10-09: no default, no first)
+        Assert.Null(catalog.Find("gone"));
         var offered = catalog.Offered(["data"]);
         Assert.Equal(["data"], offered.Shares.Select(s => s.Name));
         Assert.Equal(1, offered.Hidden);

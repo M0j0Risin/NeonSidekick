@@ -55,8 +55,8 @@ public sealed class MySqlAccess
     /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="Sql.BoundaryNames"/>).</summary>
     public Sql.BoundaryNames Names { get; } = new();
 
-    /// <summary>The connection a call means (<see cref="MySqlCatalog.Find"/>), or null with the refusal: none defined, or a name that matches none (the names listed).</summary>
-    public MySqlNamedConnection? Resolve(string? name, string? defaultName, out SqlRun? refused)
+    /// <summary>The connection a call means (<see cref="MySqlCatalog.Find"/>), or null with the refusal: none defined, none named among several, or a name that matches none (the names listed).</summary>
+    public MySqlNamedConnection? Resolve(string? name, out SqlRun? refused)
     {
         var catalog = Catalog();
         refused = null;
@@ -66,7 +66,7 @@ public sealed class MySqlAccess
             return null;
         }
 
-        var found = catalog.Find(name, defaultName);
+        var found = catalog.Find(name);
         if (found is null)
         {
             refused = SqlRun.Refused(SqlOutcome.UnknownConnection, string.Join(", ", catalog.Connections.Select(c => c.Name)), name?.Trim() ?? "");
@@ -79,17 +79,17 @@ public sealed class MySqlAccess
     public static bool IsMariaDb(string? serverVersion) => serverVersion?.Contains("MariaDB", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
-    /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or the first
+    /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (or the only one offered
     /// when blank), in the connection's own database (2026-10-09: the one it reaches; a session in any other runs nothing): each one's rows read to
     /// <paramref name="maxRows"/> (one past to learn whether more are left), each statement bound only the parameters it names, all
     /// inside one read-only transaction that is rolled back. A timeout, a failed connect and a server error are outcomes; a
     /// cancelled token throws. The run's <see cref="SqlRun.Database"/> is the database it worked in.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }
@@ -169,11 +169,11 @@ public sealed class MySqlAccess
     /// <c>RETURNING</c>, <c>ANALYZE TABLE</c>'s report) are read to <paramref name="maxRows"/> and the rest drained, never killed: a kill
     /// would undo the statement. <see cref="SqlRun.Changes"/> is the rows the server counts.
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (Resolve(name, defaultName, out var refused) is not { } target)
+        if (Resolve(name, out var refused) is not { } target)
         {
             return refused!;
         }

@@ -56,14 +56,14 @@ internal static class SqlCheck
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var access = new SqlAccess(() => catalog);
         var checks = new List<SmokeCheck>();
-        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name, null) is not { } target)
+        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name) is not { } target)
         {
             checks.Add(new SmokeCheck("sql:connection", false, catalog.Connections.Count == 0 ? SqlText.NoConnections : SqlText.UnknownConnection(name, string.Join(", ", catalog.Connections.Select(c => c.Name)))));
             return Report(console, checks);
         }
 
         Task<SqlRun> Run(string sql, int timeout, CancellationToken token) =>
-            access.RunAsync(name, null, sql, [], 10, timeout, token);
+            access.RunAsync(name, sql, [], 10, timeout, token);
 
         var who = await Run(WhoAmI, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)

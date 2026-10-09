@@ -202,7 +202,7 @@ What a statement's text can't show stays the login's to guard: a view, synonym, 
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `sql_connections` | — | The named connections (server, database, sign-in, description), the default marked. Touches no server. |
+| `sql_connections` | — | The named connections (server, database, sign-in, description). Touches no server. Every other tool takes one by name in `connection`, which may be left out only when there is one. |
 | `sql_tables` | `connection?, schema?, pattern?` | Tables and views as `schema.name`, with kind, approximate rows and `MS_Description`. `pattern` is text in the name or a `LIKE` pattern (`%`, `_`, `*`). |
 | `sql_columns` | `pattern, connection?, schema?` | Every column whose name matches (`EmailAddress`, `%CustomerID`): table, type, nullability, description. |
 | `sql_describe` | `table, connection?` | One table or view in full: description, columns (type, nullability, identity, computed, default, key), foreign keys both ways, indexes, CHECK constraints and triggers. A bare name finds the one schema with it. |
@@ -297,7 +297,7 @@ An unqualified name still resolves through public synonyms, and what a synonym, 
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `oracle_connections` | — | The named connections (data source, user, schema, description), the default marked. Touches no server. |
+| `oracle_connections` | — | The named connections (data source, user, schema, description). Touches no server. Every other tool takes one by name in `connection`, which may be left out only when there is one. |
 | `oracle_tables` | `connection?, pattern?` | Tables and views as `SCHEMA.NAME`, with kind, the optimizer's row count and comment. `pattern` is text in the name (any case) or a `LIKE` pattern with `%` or `*`. |
 | `oracle_columns` | `pattern, connection?` | Every column whose name matches: table, type, nullability, comment. |
 | `oracle_describe` | `table, connection?` | One table or view in full: comment, columns (type, nullability, identity, virtual, default, key, comment), foreign keys both ways, indexes, CHECK constraints and triggers. |
@@ -388,7 +388,7 @@ What the text can't show (a view or routine in the database that reads another) 
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `mysql_connections` | — | The named connections (host, database, user, description), the default marked. Touches no server. |
+| `mysql_connections` | — | The named connections (host, database, user, description). Touches no server. Every other tool takes one by name in `connection`, which may be left out only when there is one. |
 | `mysql_tables` | `connection?, pattern?` | Tables and views as `database.name`, with kind, approximate rows and comment. |
 | `mysql_columns` | `pattern, connection?` | Every column whose name matches: table, type, nullability, comment. |
 | `mysql_describe` | `table, connection?` | One table or view: comment, columns (type, nullability, auto_increment, default, key, comment), foreign keys both ways, indexes, CHECK constraints and triggers. |
@@ -447,7 +447,7 @@ The four reading tools stay read-only whatever *SQLite mode* says:
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `sqlite_databases` | — | The named databases (file, description), the default marked, and whether working-directory files may be named. Opens nothing. |
+| `sqlite_databases` | — | The named databases (file, description), and whether working-directory files may be named. Opens nothing. Every other tool takes one in `database` (a name, or a working-directory file's path), which may be left out only when one is named. |
 | `sqlite_tables` | `database?, pattern?` | Tables and views with their kind. |
 | `sqlite_describe` | `table, database?` | One table or view: columns (type, nullability, primary key, default; generated and hidden columns marked), foreign keys both ways, indexes (their columns in order, an expression shown as `(expression)`) and the `CREATE` statement. |
 | `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name`, `:name`, `$name` or `#name`, keyed by the name with or without its mark (`{"id": 5}` or `{":id": 5}`); a TCL form is given whole (`{"a(1)": 5}`); an unbound one is NULL; `max_rows` 1–100000. Cut at *SQL query result max chars*. |
@@ -526,7 +526,7 @@ What the text can't show stays the role's to guard: a view, function or foreign 
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `postgres_connections` | — | The named connections (host, database, schema lock, user, description), the default marked. Touches no server. |
+| `postgres_connections` | — | The named connections (host, database, schema lock, user, description). Touches no server. Every other tool takes one by name in `connection`, which may be left out only when there is one. |
 | `postgres_schemas` | `connection?` | The schemas the account may use (the locked one alone, under a lock), with table counts and owners. |
 | `postgres_tables` | `connection?, schema?, pattern?` | Tables and views as `schema.name`, with kind, approximate rows and comment. |
 | `postgres_columns` | `pattern, connection?, schema?` | Every column whose name matches: table, type, nullability, comment. |
@@ -607,7 +607,7 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `unc_shares` | `check?` | The named shares (path, account, access, description), the default marked; `check` lists each root now. |
+| `unc_shares` | `check?` | The named shares (path, account, access, description); `check` lists each root now. |
 | `unc_search` | `share?, text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | `search_files` on a share. |
 | `unc_info` | `share?, path?` | A file's size, dates, lines and words; a folder's counts. |
 | `unc_read` | `share?, path, start_line?, max_lines?` | Reads a text file, whole or in part. |
@@ -619,7 +619,7 @@ The UNC tools reach named network shares (`\\server\share`, or a folder under on
 | `unc_delete` | `share?, path` | Deletes a file or folder, permanently. Off by default. |
 | `unc_put` | `from, share?, to?, overwrite?` | Copies a file or folder from the working directory onto a share (with the File tools on). |
 
-`share` may be left out when `path` is a full path under a share; otherwise the default share is used. `unc_write` through `unc_put` appear only under both keys.
+`share` may be left out when `path` is a full path under a share, or when there is only one share; with several, a call that names none is refused. `unc_write` through `unc_put` appear only under both keys.
 
 `--unc-check <share>` proves the tools against a real share on the published exe (its reach, the runas token, a listing and a search).
 

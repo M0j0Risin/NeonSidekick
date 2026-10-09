@@ -210,9 +210,9 @@ public sealed class LiveSqlTests
     {
         // The second layer under the gate: the access itself, handed a write (no tool would pass it), leaves nothing behind.
         const string read = "SELECT Name FROM Sales.Currency WHERE CurrencyCode = 'AFA'";
-        var before = await _access.RunAsync(null, null, read, [], 10, 30, CancellationToken.None);
-        var during = await _access.RunAsync(null, null, "UPDATE Sales.Currency SET Name = Name + N' (changed)' WHERE CurrencyCode = 'AFA'; " + read, [], 10, 30, CancellationToken.None);
-        var after = await _access.RunAsync(null, null, read, [], 10, 30, CancellationToken.None);
+        var before = await _access.RunAsync(null, read, [], 10, 30, CancellationToken.None);
+        var during = await _access.RunAsync(null, "UPDATE Sales.Currency SET Name = Name + N' (changed)' WHERE CurrencyCode = 'AFA'; " + read, [], 10, 30, CancellationToken.None);
+        var after = await _access.RunAsync(null, read, [], 10, 30, CancellationToken.None);
 
         Assert.Equal(SqlOutcome.Ok, during.Outcome);
         Assert.Equal(before.Grids[0].Rows[0][0] + " (changed)", during.Grids[0].Rows[0][0]);   // the write happened inside the transaction

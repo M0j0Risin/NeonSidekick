@@ -131,7 +131,7 @@ public sealed class OracleConfigFileTests : IDisposable
     }
 
     [Fact]
-    public void TheProfilesFile_WinsByName_OverTheHomes_AndFindPicksByNameThenDefaultThenFirst()
+    public void TheProfilesFile_WinsByName_OverTheHomes_AndFindPicksByName_OrTheOnlyOne()
     {
         Profile("""{ "connections": { "ledger": { "dataSource": "profile:1521/x", "user": "u" } } }""");
         Global("""{ "connections": { "LEDGER": { "dataSource": "home:1521/x", "user": "u" }, "hr": { "dataSource": "home:1521/hr", "user": "u" } } }""");
@@ -139,10 +139,10 @@ public sealed class OracleConfigFileTests : IDisposable
         var catalog = OracleConfigFile.LoadCatalog(_profile, _home);
 
         Assert.Equal(["ledger", "hr"], catalog.Connections.Select(c => c.Name));
-        Assert.Equal("profile:1521/x", catalog.Find("Ledger", null)!.Config.DataSource);
-        Assert.Equal("hr", catalog.Find(null, "HR")!.Name);
-        Assert.Equal("ledger", catalog.Find(null, "gone")!.Name);
-        Assert.Null(catalog.Find("gone", null));
+        Assert.Equal("profile:1521/x", catalog.Find("Ledger")!.Config.DataSource);
+        Assert.Equal("hr", catalog.Find("HR")!.Name);
+        Assert.Null(catalog.Find(null));   // two, and none named (2026-10-09: no default)
+        Assert.Null(catalog.Find("gone"));
 
         var narrowed = catalog.Offered(["hr", "never-there"]);
         Assert.Equal(["hr"], narrowed.Connections.Select(c => c.Name));

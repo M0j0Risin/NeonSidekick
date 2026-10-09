@@ -17,8 +17,6 @@ internal sealed partial class SettingsMenu
     /// <summary>The value column of the <c>UNC set password</c> action row: only a runas share takes one. Pinned.</summary>
     public const string UncSetPasswordLabel = "Enter to set password for a runas share";
 
-    /// <summary>The value of <c>UNC default share</c> while none is saved. Pinned.</summary>
-    public const string FirstUncShareLabel = "(the first share)";
 
     /// <summary>The value of an edit row over one <c>unc.json</c>: how many shares it holds and how many entries it skips, or <c>(none)</c>.</summary>
     public static string UncSharesLabel(string path)
@@ -56,25 +54,6 @@ internal sealed partial class SettingsMenu
 
     /// <summary>What <c>UNC set password</c> says with no runas share to set one for. Pinned.</summary>
     public const string UncNoPasswordShares = "No share in unc.json signs in as another account (runas); a windows share needs no password.";
-
-    /// <summary>The <c>UNC default share</c> pick: <see cref="FirstUncShareLabel"/>, then every offered share, the cursor on the one saved.</summary>
-    private async Task<bool> PickUncShareAsync(AppSettingsData saved, CancellationToken cancellationToken)
-    {
-        var names = UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(saved.UncSharesOffered).Shares.Select(s => s.Name).ToList();
-        var rows = new List<string> { Markup.Escape(FirstUncShareLabel) };
-        rows.AddRange(names.Select(Markup.Escape));
-        int current = names.FindIndex(n => string.Equals(n, saved.UncDefaultShare, StringComparison.OrdinalIgnoreCase));
-        var page = new MenuPage(Crumb(FieldName(SettingsField.UncDefaultShare)), rows, PickKeys);
-        int? picked = await PickAsync(page, current + 1, cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
-        {
-            return Unchanged();
-        }
-
-        string name = index == 0 ? "" : names[index - 1];
-        Apply(SettingsField.UncDefaultShare, d => d.UncDefaultShare = name);
-        return true;
-    }
 
     /// <summary>
     /// <c>UNC shares offered</c>, <see cref="EditSqlOfferedAsync"/>'s twin: every share the two files hold, ticked or not, Enter or

@@ -576,7 +576,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The app's test: <see cref="MySqlAccess.RunAsync"/> over the one connection, <see cref="MySqlCatalogQueries.WhoAmI"/>, <see cref="MySqlCatalogQueries.Grants"/> and <see cref="MySqlCatalogQueries.OtherDatabases"/>, the MySQL tab's timeout.</summary>
     private Task<Sql.SqlRun> TestMySqlConnectionAsync(MySqlNamedConnection connection, CancellationToken cancellationToken) =>
         new MySqlAccess(() => new MySqlCatalog([connection], []))
-            .RunAsync(connection.Name, null, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants, MySqlCatalogQueries.OtherDatabases], [], 100, _settings.Current.MySqlQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants, MySqlCatalogQueries.OtherDatabases], [], 100, _settings.Current.MySqlQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> — its name there. Null when nothing was written.</summary>
     private bool? MySqlWizardSave(MySqlDraft draft, bool offer)

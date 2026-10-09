@@ -8,7 +8,7 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// What the PostgreSQL tools share (2026-10-04), <see cref="MySqlTool"/>'s shape: the <see cref="PostgresAccess"/> door, the
-/// settings in force at each call, the optional <c>connection</c> (a name from <c>postgres.json</c>; the default when left out) — each
+/// settings in force at each call, the optional <c>connection</c> (a name from <c>postgres.json</c>; left out, the only one offered, several refused since 2026-10-09) — each
 /// connection reaching its own database alone since 2026-10-09 (the user's call: <c>database</c> and <c>postgres_databases</c> went, a
 /// call that still sends one is refused) and, when its entry names one, its schema alone (<see cref="ScopeSchema"/>,
 /// <see cref="OutsideAsync"/>) — <c>schema</c> (the listings' scope), the statement timeout, and the table lookup the per-table tools need.
@@ -21,7 +21,7 @@ public abstract class PostgresTool : AIFunction
     public const string SchemaArgument = "schema";
     public const string TableArgument = "table";
 
-    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The PostgreSQL connection's name (postgres_connections lists them); leave it out for the default one.\" }";
+    public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The PostgreSQL connection's name (postgres_connections lists them); it may be left out only when there is one.\" }";
     public const string SchemaProperty = "\"schema\": { \"type\": \"string\", \"description\": \"Only this schema (postgres_schemas lists them); leave it out for every schema (a connection held to one keeps to it).\" }";
 
     private readonly PostgresAccess _postgres;
@@ -58,7 +58,7 @@ public abstract class PostgresTool : AIFunction
 
     /// <summary>The schema the call's connection is held to, or null (no lock, or a connection that does not resolve: the run says why).</summary>
     protected string? LockedSchema(string? connection) =>
-        _postgres.Resolve(connection, Effective.PostgresDefaultConnection, out _) is { Config.Schema: { } schema } && !string.IsNullOrWhiteSpace(schema) ? schema.Trim() : null;
+        _postgres.Resolve(connection, out _) is { Config.Schema: { } schema } && !string.IsNullOrWhiteSpace(schema) ? schema.Trim() : null;
 
     /// <summary>
     /// The schema a listing keeps to (2026-10-09): the one <paramref name="asked"/>; under a lock, the locked one — and another asked for
@@ -89,7 +89,7 @@ public abstract class PostgresTool : AIFunction
     /// </summary>
     protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
     {
-        if (_postgres.Resolve(connection, Effective.PostgresDefaultConnection, out _) is not { } target)
+        if (_postgres.Resolve(connection, out _) is not { } target)
         {
             return null;
         }
@@ -103,12 +103,12 @@ public abstract class PostgresTool : AIFunction
 
         // The names kept a minute per connection (the review, 2026-10-09: an alias's t.col sent every join for them).
         var (rows, failed) = await _postgres.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.Endpoint, target.Config.Database, target.Config.User),
-            token => _postgres.RunAsync(connection, Effective.PostgresDefaultConnection, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+            token => _postgres.RunAsync(connection, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
         return failed is not null ? PostgresText.Error(failed) : PostgresBoundary.Check(sql, schema, rows!.Select(r => r[0]));
     }
 
     protected Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _postgres.RunAsync(connection, Effective.PostgresDefaultConnection, statements, parameters, PostgresAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+        _postgres.RunAsync(connection, statements, parameters, PostgresAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
 
     protected sealed record TableMatch(string Schema, string Name, string Kind, string? Error)
     {
@@ -169,12 +169,12 @@ public sealed class PostgresConnectionsTool : PostgresTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Lists the PostgreSQL connections the user has set up: each one's name, host, database, user and what it holds, the default marked. " +
+        "Lists the PostgreSQL connections the user has set up: each one's name, host, database, user and what it holds. " +
         "Pass a name as \"connection\" to the other postgres_ tools.";
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe() => PostgresText.Connections(Server.Catalog(), Effective.PostgresDefaultConnection, DatabaseWriteModes.IsReadWrite(Effective.PostgresMode));
+    public string Describe() => PostgresText.Connections(Server.Catalog(), DatabaseWriteModes.IsReadWrite(Effective.PostgresMode));
 
     protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new(Describe());
 }
@@ -457,7 +457,7 @@ public sealed class PostgresQueryTool : PostgresTool
             return outside;
         }
 
-        var run = await Server.RunAsync(connection, Effective.PostgresDefaultConnection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Server.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? PostgresText.Query(run, rows, SqlTool.ResultChars(Effective)) : PostgresText.Error(run);
     }
 
@@ -545,15 +545,15 @@ public sealed class PostgresExecuteTool : PostgresTool
             PostgresWriteGate.Kinds,
             PostgresReadOnlyGate.Check,
             PostgresReadOnlyGate.Body,
-            () => Server.Resolve(connection, effective.PostgresDefaultConnection, out var refused) is { } target
+            () => Server.Resolve(connection, out var refused) is { } target
                 ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? ""), null)
                 : (null, PostgresText.Error(refused!)),
             async (body, token) =>
             {
-                var run = await Server.RunAsync(connection, effective.PostgresDefaultConnection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await Server.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 return run.Outcome == SqlOutcome.Ok ? PostgresText.Query(run, rows, SqlTool.ResultChars(effective)) : PostgresText.Error(run);
             },
-            (body, token) => Server.ExecuteAsync(connection, effective.PostgresDefaultConnection, body, parameters, rows, timeout, token),
+            (body, token) => Server.ExecuteAsync(connection, body, parameters, rows, timeout, token),
             PostgresText.Error,
             (body, token) => OutsideAsync(body, connection, token));
         return ServerExecute.RunAsync(PostgresStatementKinds.Family, effective.PostgresMode, effective.PostgresStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
