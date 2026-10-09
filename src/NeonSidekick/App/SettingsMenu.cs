@@ -998,8 +998,11 @@ public enum SettingsField
     /// <summary>Typed: a search's region, two letters, empty for none (<see cref="Settings.AppSettingsData.YouTubeRegion"/>). The YouTube tab (2026-10-08); no reconnect.</summary>
     YouTubeRegion,
 
-    /// <summary>Typed: the language a search favours, empty for none (<see cref="Settings.AppSettingsData.YouTubeLanguage"/>). The YouTube tab's last row (2026-10-08); no reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the language a search favours, empty for none (<see cref="Settings.AppSettingsData.YouTubeLanguage"/>). The YouTube tab's last row (2026-10-08); no reconnect.</summary>
     YouTubeLanguage,
+
+    /// <summary>Typed: the folder under the profile's images folder a clipboard picture is saved in when its message is sent (<see cref="Settings.AppSettingsData.PastedImagesFolder"/>). The Files tab's last row (2026-10-09), the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
+    PastedImagesFolder,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1415,7 +1418,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
-        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder],
+        [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncDefaultShare, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
@@ -1904,6 +1907,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageEditMetadata => "Image edit metadata",
         SettingsField.ImageEditMode => "Image edit mode",
         SettingsField.ImageEditOutputFolder => "Image edit output folder",
+        SettingsField.PastedImagesFolder => "Pasted images folder",
         SettingsField.McpServers => "MCP servers",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
         SettingsField.ShowImageThumbnails => "Show image thumbnails",
@@ -2455,6 +2459,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ImageEditMetadata => Images.ImageWords.MetadataName(data.ImageEditMetadata),
             SettingsField.ImageEditMode => Images.ImageWords.EditModeName(data.ImageEditMode),
             SettingsField.ImageEditOutputFolder => string.IsNullOrWhiteSpace(data.ImageEditOutputFolder) ? ImageEditBesideLabel : data.ImageEditOutputFolder,
+            SettingsField.PastedImagesFolder => string.IsNullOrWhiteSpace(data.PastedImagesFolder) ? CameraOutputHereLabel : data.PastedImagesFolder,
             SettingsField.McpServers => OnOff(data.McpServers),
             SettingsField.McpConnectTimeoutSeconds => Seconds(data.McpConnectTimeoutSeconds),
             SettingsField.WebBrowserNetworkMode => data.WebBrowserNetworkMode,
@@ -2841,14 +2846,14 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.TtsHttpUrl"/> (2026-10-05, the default since then, as ComfyUI URL's). Pinned.</summary>
     public const string NoTtsUrlLabel = "(not set)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyOutputFolder"/> (2026-09-24): the pictures land in the working directory itself. Pinned.</summary>
-    public const string ComfyOutputHereLabel = "(the working directory)";
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ComfyOutputFolder"/> (2026-09-24): the pictures land in the profile's images folder itself (the working directory until 2026-10-09). Pinned.</summary>
+    public const string ComfyOutputHereLabel = "(the profile's images folder)";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ComfyUrl"/>. Pinned.</summary>
     public const string ComfyUrlError = "must be an http or https URL (http://host:8188), or empty";
 
-    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ComfyOutputFolder"/>. Pinned.</summary>
-    public const string ComfyOutputFolderError = "must be a folder under the working directory (a relative path), or empty";
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ComfyOutputFolder"/> (under the images folder since 2026-10-09). Pinned.</summary>
+    public const string ComfyOutputFolderError = "must be a folder under the profile's images folder (a relative path), or empty";
 
     /// <summary>How the menu shows <see cref="AppSettingsData.ComfyMaxPicturesPerCall"/>. Pinned.</summary>
     public static string ComfyPictures(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " picture" : " pictures");
@@ -2879,6 +2884,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditOutputFolder"/> (2026-10-04): the result lands beside its source. Pinned.</summary>
     public const string ImageEditBesideLabel = "(beside the source)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ImageEditOutputFolder"/>: still a working-directory folder (the Camera output folder's words until it moved, 2026-10-09). Pinned.</summary>
+    public const string ImageEditOutputFolderError = "must be a folder under the working directory (a relative path), or empty";
 
     /// <summary>A row of the image-edit metadata picker: the name padded, what it keeps dim (2026-10-04).</summary>
     public static string ImageEditMetadataLabel(string name) =>
@@ -3506,6 +3514,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileSearchMaxResults => data.FileSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.ImageEditQuality => data.ImageEditQuality.ToString(CultureInfo.InvariantCulture),
         SettingsField.ImageEditOutputFolder => data.ImageEditOutputFolder,
+        SettingsField.PastedImagesFolder => data.PastedImagesFolder,
         SettingsField.McpConnectTimeoutSeconds => data.McpConnectTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebSearchMaxResults => data.WebSearchMaxResults.ToString(CultureInfo.InvariantCulture),
         SettingsField.YouTubeSearchMaxResults => data.YouTubeSearchMaxResults.ToString(CultureInfo.InvariantCulture),
@@ -4936,7 +4945,7 @@ internal sealed partial class SettingsMenu
 
         bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCliExecutable or SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
-            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder
+            or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder or SettingsField.PastedImagesFolder
             or SettingsField.YouTubeRegion or SettingsField.YouTubeLanguage;
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
@@ -5684,7 +5693,7 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.ComfyOutputFolder:
-                // Under the sandbox only: a rooted path or one climbing out would be refused at every call, so it is refused here once.
+                // Under the profile's images folder only (the sandbox until 2026-10-09): a rooted path or one climbing out would be refused at every call, so it is refused here once.
                 if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
                 {
                     Sink.Error($"{FieldName(field)} {ComfyOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
@@ -5695,7 +5704,7 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.CameraOutputFolder:
-                // The ComfyUI output folder's rule (2026-10-02): under the sandbox only, refused here once rather than at every shot.
+                // The ComfyUI output folder's rule (2026-10-02): under the images folder only (the sandbox until 2026-10-09), refused here once rather than at every shot.
                 if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
                 {
                     Sink.Error($"{FieldName(field)} {CameraOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
@@ -5706,7 +5715,7 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.ScreenOutputFolder:
-                // The Camera output folder's rule (2026-10-04): under the sandbox only.
+                // The Camera output folder's rule (2026-10-04): under the images folder only (the sandbox until 2026-10-09).
                 if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
                 {
                     Sink.Error($"{FieldName(field)} {CameraOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
@@ -5720,11 +5729,22 @@ internal sealed partial class SettingsMenu
                 // The Camera output folder's rule (2026-10-04): under the sandbox only; empty is beside the source.
                 if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
                 {
-                    Sink.Error($"{FieldName(field)} {CameraOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    Sink.Error($"{FieldName(field)} {ImageEditOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
                     return false;
                 }
 
                 Apply(field, d => d.ImageEditOutputFolder = text);
+                return true;
+
+            case SettingsField.PastedImagesFolder:
+                // The Camera output folder's rule (2026-10-09): under the profile's images folder only.
+                if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
+                {
+                    Sink.Error($"{FieldName(field)} {CameraOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.PastedImagesFolder = text);
                 return true;
 
             case SettingsField.ImageEditor:

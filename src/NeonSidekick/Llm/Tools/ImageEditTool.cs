@@ -73,7 +73,7 @@ public sealed class ImageEditTool : FileTool
         {
           "type": "object",
           "properties": {
-            "path": { "type": "string", "description": "The picture to edit, relative to the working directory (png, jpg, gif, bmp, tiff, webp, heic, jxl…)." },
+            "path": { "type": "string", "description": "The picture to edit, relative to the working directory or the full path a saved picture was given (png, jpg, gif, bmp, tiff, webp, heic, jxl…)." },
             "to": { "type": "string", "description": "Where to write: a file path, or a folder for the default name. Default: beside the source (or the user's image output folder) as name-edited.ext, or name.ext for a format change alone." },
             "overwrite": { "type": "boolean", "description": "Replace a file already at the output path, the source included. Default false." },
             "format": { "type": "string", "enum": ["png", "jpeg", "gif", "bmp", "tiff", "jxl", "heif"], "description": "The output format. Default: to's extension, else the source's format when it can be written, else png. webp and avif cannot be written." },
@@ -116,7 +116,11 @@ public sealed class ImageEditTool : FileTool
 
     private readonly Func<AppSettingsData> _effective;
 
-    public ImageEditTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    /// <param name="images">
+    /// The profile's images folder (2026-10-09): a picture there is read by its full path, and its edit written beside it (or wherever
+    /// <c>to</c> or <c>Image edit output folder</c> says, in the working directory); null = the working directory alone.
+    /// </param>
+    public ImageEditTool(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null) : base(files, images)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
@@ -410,7 +414,7 @@ public sealed class ImageEditTool : FileTool
     private object? Edit(string path, string to, bool overwrite, bool view, ImageEditRequest request, bool reencodes, AppSettingsData effective, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var read = Files.ReadBytes(path, ImageEditor.MaxSourceBytes);
+        var read = FilesFor(path).ReadBytes(path, ImageEditor.MaxSourceBytes);
         if (read.Outcome != FileOutcome.Ok || read.Bytes is null)
         {
             return read.Outcome == FileOutcome.TooBig ? ImageText.SourceTooBig : FileText.Error(read.Outcome, read.Relative, "read", read.Detail);
@@ -422,7 +426,7 @@ public sealed class ImageEditTool : FileTool
             return FileText.NotAnImage(read.Relative);
         }
 
-        bool toIsFolder = to.Length > 0 && Files.IsExistingDirectory(to);
+        bool toIsFolder = to.Length > 0 && FilesFor(to).IsExistingDirectory(to);
         if (request.StripOnly && MetadataStripper.ContainerOf(read.Bytes) is { } container
             && (ImageOutput.IntoFolder(to, toIsFolder) || Path.GetExtension(to).Length == 0 || MetadataStripper.Extensions(container).Contains(Path.GetExtension(to), StringComparer.OrdinalIgnoreCase)))
         {
@@ -474,7 +478,7 @@ public sealed class ImageEditTool : FileTool
         else if (replace)
         {
             // The converted picture is written: the source goes now. A refusal leaves both, and says so.
-            var deleted = Files.Delete(read.Relative);
+            var deleted = FilesFor(read.Relative).Delete(read.Relative);
             text = ImageText.Written(written.Relative, result, request.MaxKb) + (deleted.Outcome == FileOutcome.Ok
                 ? ImageText.SourceDeleted(deleted.Relative)
                 : ImageText.SourceKept(read.Relative, FileText.Error(deleted.Outcome, deleted.Relative, "delete", deleted.Detail)));
@@ -525,21 +529,22 @@ public sealed class ImageEditTool : FileTool
     // made-up name, -2, -3… (the camera's loop), which never replaces anything.
     private WriteResult Write(string target, byte[] bytes, bool inPlace, bool named, bool overwrite)
     {
+        var files = FilesFor(target);
         if (inPlace)
         {
-            return Files.WriteBytes(target, bytes, overwrite: true);
+            return files.WriteBytes(target, bytes, overwrite: true);
         }
 
         if (named || overwrite)
         {
-            return Files.WriteBytes(target, bytes, overwrite);
+            return files.WriteBytes(target, bytes, overwrite);
         }
 
         WriteResult written;
         int n = 1;
         do
         {
-            written = Files.WriteBytes(ImageOutput.Numbered(target, n), bytes, overwrite: false);
+            written = files.WriteBytes(ImageOutput.Numbered(target, n), bytes, overwrite: false);
         }
         while (written.Outcome == FileOutcome.Exists && ++n < 100);
         return written;
@@ -553,7 +558,7 @@ public sealed class ImageEditTool : FileTool
             return text;
         }
 
-        var shown = Files.ReadImage(relative);
+        var shown = FilesFor(relative).ReadImage(relative);
         return shown.Outcome == FileOutcome.Ok && shown.Image is { } image
             ? new ToolImageResult(text + "\n" + FileText.Image(shown), [image])
             : text + "\n" + FileText.Image(shown);

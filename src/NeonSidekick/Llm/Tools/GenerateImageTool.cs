@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// <c>generate_image(prompt?, workflow?, negative?, verbatim?, width?, height?, seed?, steps?, cfg?, denoise?, image?, image2?, image3?, count?)</c>
 /// (2026-09-24, the user's ask: "what can we do with comfyui?"): pictures from one of the user's ComfyUI workflows
-/// (<see cref="ComfyWorkflowCatalog"/>) on their server, saved under the working directory, and shown to the model in
+/// (<see cref="ComfyWorkflowCatalog"/>) on their server, saved in the profile's images folder (the working directory until 2026-10-09), and shown to the model in
 /// the next message the <c>view_image</c> way (<see cref="ToolImageResult"/>). The description is built from the
 /// catalog at each request — the workflows one line each, and the prompt style of each family among them
 /// (<see cref="ComfyText.Describe"/>) — so the model writes a Pony Diffusion XL prompt for a Pony workflow and prose
@@ -66,7 +66,7 @@ public sealed class GenerateImageTool : AIFunction
             "steps": { "type": "integer", "description": "Sampling steps (1 to 200); left out, the workflow's." },
             "cfg": { "type": "number", "description": "Classifier-free guidance scale (0 to 30); left out, the workflow's." },
             "denoise": { "type": "number", "description": "How much of an input image to repaint, 0 to 1 (image workflows): about 0.3 keeps it close, 0.8 changes it a lot." },
-            "image": { "type": "string", "description": "An input picture, for a workflow that takes one (img2img, upscale, inpaint): a path under the working directory, or a picture the user pasted by its label ([Image #1]) — sent at full size and saved beside the output." },
+            "image": { "type": "string", "description": "An input picture, for a workflow that takes one (img2img, upscale, inpaint): a path under the working directory, the full path a saved picture was given (a generated one, a photo, a screenshot, a paste), or a picture the user pasted by its label ([Image #1]), sent at full size." },
             "image2": { "type": "string", "description": "The second input picture, for a workflow taking two or more (a face swap's face, a second picture to compose), in the role its line names; the same forms as image." },
             "image3": { "type": "string", "description": "The third input picture, for a workflow taking three." },
             "count": { "type": "integer", "description": "How many pictures, 1 to {MAX}, each with the next seed. Default 1." }

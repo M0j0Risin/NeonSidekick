@@ -14,7 +14,7 @@ public partial class ChatScreenTests
     /// <summary>The fake screen the chat screen gets; null (the default) is a screen with no screen layer.</summary>
     private FakeScreenSystem? _screenSystem;
 
-    private string ScreenFolder => Path.Combine(WorkingDirectory.Resolve("", _settings.ProfileDirectory), _settings.Current.ScreenOutputFolder);
+    private string ScreenFolder => Path.Combine(_settings.ProfileImagesDirectory, _settings.Current.ScreenOutputFolder);
 
     private string[] ScreenFiles() => Directory.Exists(ScreenFolder) ? Directory.GetFiles(ScreenFolder) : [];
 
@@ -65,7 +65,7 @@ public partial class ChatScreenTests
         Assert.Contains(ScreenText.AllowTitle, output);
         Assert.Contains("Window \"notes.txt - Notepad\" (Notepad): To read the error.", output);
         string result = (string)Assert.Single(Results(_chat.Requests[^1])).Result!;
-        Assert.StartsWith("screenshot of window \"notes.txt - Notepad\" (Notepad) as 640x480, saved as screen_images", result);
+        Assert.StartsWith("screenshot of window \"notes.txt - Notepad\" (Notepad) as 640x480, saved as " + Path.Combine(_settings.ProfileImagesDirectory, "screen_images"), result);
         Assert.Single(ScreenFiles());
         Assert.Equal(ScreenFiles(), _shotsShown);
         Assert.Contains(_chat.Requests[^1], m => m.Contents.OfType<DataContent>().Any());
@@ -142,7 +142,7 @@ public partial class ChatScreenTests
         Assert.Contains("monitor:2  2560x1440 at 1920,0, this app's", output);
         Assert.Contains(ScreenText.BadTarget("printer"), output);
         string shot = Assert.Single(ScreenFiles());
-        Assert.Contains(ScreenText.Attached(Path.Combine("screen_images", Path.GetFileName(shot))), output);
+        Assert.Contains(ScreenText.Attached(shot), output);
         Assert.Equal(["area 0,0 4480x1440"], _screenSystem.Captures);
         Assert.Equal([shot], _shotsShown);
     }
@@ -161,7 +161,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string shot = Assert.Single(ScreenFiles());
-        Assert.Contains(ScreenText.Attached(Path.Combine("screen_images", Path.GetFileName(shot))), output);
+        Assert.Contains(ScreenText.Attached(shot), output);
         Assert.Single(_screenSystem.Captures);
     }
 

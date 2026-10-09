@@ -82,7 +82,7 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.Off(1), output);
     }
 
-    private string CameraFolder => Path.Combine(WorkingDirectory.Resolve("", _settings.ProfileDirectory), _settings.Current.CameraOutputFolder);
+    private string CameraFolder => Path.Combine(_settings.ProfileImagesDirectory, _settings.Current.CameraOutputFolder);
 
     private string[] CameraFiles() => Directory.Exists(CameraFolder) ? Directory.GetFiles(CameraFolder) : [];
 
@@ -179,7 +179,7 @@ public partial class ChatScreenTests
         string file = Assert.Single(CameraFiles());
         Assert.Contains("\n" + Titled(CameraText.PaneTitle + " │ " + CameraText.SnapButton + " · " + CameraText.RetakeButton + " "), output);
         Assert.Contains(CameraText.OwnPrompt, output);
-        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
+        Assert.Contains(CameraText.Attached(file), output);
         Assert.Equal([file], _shotsShown);   // post: the viewer on the shot
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
         Assert.StartsWith("[Image #1] what is this?", user.Text);
@@ -199,8 +199,8 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string file = Assert.Single(CameraFiles());
-        Assert.Equal(Path.Combine(WorkingDirectory.Resolve("", _settings.ProfileDirectory), AppSettingsData.DefaultComfyOutputFolder), Path.GetDirectoryName(file));
-        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultComfyOutputFolder, Path.GetFileName(file))), output);
+        Assert.Equal(Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultComfyOutputFolder), Path.GetDirectoryName(file));
+        Assert.Contains(CameraText.Attached(file), output);
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string file = Assert.Single(CameraFiles());
-        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
+        Assert.Contains(CameraText.Attached(file), output);
     }
 
     /// <summary>F9 is <c>/camera snap</c> (2026-10-05, the user's pick): the photo taken and put on the line, as typed.</summary>
@@ -263,7 +263,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string file = Assert.Single(CameraFiles());
-        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
+        Assert.Contains(CameraText.Attached(file), output);
     }
 
     /// <summary>
@@ -303,7 +303,7 @@ public partial class ChatScreenTests
         string strip = " │ " + SettingsMenu.CameraWatchButtonTitle + " · " + SettingsMenu.CameraLiveButtonTitle + " · " + SettingsMenu.CameraSnapButtonTitle + " ";
         Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.CameraTools) + strip) + "\n", output);
         string file = Assert.Single(CameraFiles());
-        Assert.Contains(CameraText.Attached(Path.Combine(AppSettingsData.DefaultCameraOutputFolder, Path.GetFileName(file))), output);
+        Assert.Contains(CameraText.Attached(file), output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -332,7 +332,7 @@ public partial class ChatScreenTests
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Contains(CameraCaptureTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         var result = Assert.Single(Results(_chat.Requests[1]));
-        Assert.StartsWith("photo taken with Fake Cam (64x48), saved as camera", result.Result as string);
+        Assert.StartsWith("photo taken with Fake Cam (64x48), saved as " + Path.Combine(_settings.ProfileImagesDirectory, "camera"), result.Result as string);
         var carrier = _chat.Requests[1].Last(m => m.Role == ChatRole.User);
         Assert.True(ConversationHistory.IsImageCarrier(carrier));
         Assert.NotNull(ConversationHistory.CameraPath(Assert.Single(carrier.Contents.OfType<DataContent>())));

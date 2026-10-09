@@ -71,15 +71,13 @@ public sealed class ComfyStudio : IDisposable
 
     private readonly ComfyWorkflowCatalog _catalog;
     private readonly WorkingDirectory _files;
+    private readonly WorkingDirectory? _images;
     private readonly Func<AppSettingsData> _effective;
     private readonly Func<Uri, ComfyClient> _clientFactory;
     private readonly Random _random;
     private readonly object _gate = new();
     private readonly Func<int, PastedPicture?>? _pasted;
     private readonly TimeProvider _time;
-    // A pasted picture already written for an input (later still on 2026-09-24): its number → the saved relative path,
-    // so the same paste used twice is one file. Under _gate.
-    private readonly Dictionary<int, string> _pastedSaved = new();
 
     // The drain (2026-09-28, the hint row's double-click on the 🖼️ / 🎨): every generation's token is linked to the one in
     // force when it starts; Drain cancels it and puts a fresh one in, so what starts later runs. Both under _gate.
@@ -90,12 +88,17 @@ public sealed class ComfyStudio : IDisposable
 
     /// <param name="clientFactory">Makes the client for a URL; null = <see cref="ComfyClient"/> over its own transport. Tests pass one over a stub handler.</param>
     /// <param name="pasted">The session's pasted pictures at full size by number (<c>UI.PasteBlocks.Original</c> in the app, later still on 2026-09-24): what an <c>image</c> of <c>[Image #N]</c> reads; null = no paste is ever an input (headless, tests that pass none).</param>
-    /// <param name="time">The clock a clipboard paste's name is stamped from (<see cref="PastedStem"/>); null = the system's.</param>
-    public ComfyStudio(ComfyWorkflowCatalog catalog, WorkingDirectory files, Func<AppSettingsData> effective, Func<Uri, ComfyClient>? clientFactory = null, Random? random = null, Func<int, PastedPicture?>? pasted = null, TimeProvider? time = null)
+    /// <param name="time">The clock a clipboard paste's upload name is stamped from when it has no file (<see cref="PastedStem"/>); null = the system's.</param>
+    /// <param name="images">
+    /// The profile's images folder (2026-10-09, the user's ask): the <c>ComfyUI output folder</c> is under it, and an input picture named by
+    /// its full path there is read from it. Null = the working directory holds both, as before (the tests that pass none).
+    /// </param>
+    public ComfyStudio(ComfyWorkflowCatalog catalog, WorkingDirectory files, Func<AppSettingsData> effective, Func<Uri, ComfyClient>? clientFactory = null, Random? random = null, Func<int, PastedPicture?>? pasted = null, TimeProvider? time = null, WorkingDirectory? images = null)
     {
         _time = time ?? TimeProvider.System;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _files = files ?? throw new ArgumentNullException(nameof(files));
+        _images = images;
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _clientFactory = clientFactory ?? (url => new ComfyClient(url));
         _random = random ?? Random.Shared;
@@ -311,7 +314,7 @@ public sealed class ComfyStudio : IDisposable
         var inputNotes = new List<string>();
         foreach (string image in inputs)
         {
-            var input = ReadInput(image, effective.ComfyOutputFolder);
+            var input = ReadInput(image);
             if (input.Error is not null)
             {
                 return Fail(input.Error);
@@ -437,16 +440,17 @@ public sealed class ComfyStudio : IDisposable
 
     /// <summary>
     /// The input picture's own bytes — never the model's downscale — and its file name, or the reason it cannot be used.
-    /// A pasted picture's label (<c>[Image #N]</c>, later still on 2026-09-24) is <see cref="ReadPasted"/>'s, with where it was saved.
+    /// A pasted picture's label (<c>[Image #N]</c>, later still on 2026-09-24) is <see cref="ReadPasted"/>'s, with where it lives.
+    /// A full path in the profile's images folder (a saved output, a photo, a paste; 2026-10-09) is read there.
     /// </summary>
-    private (byte[]? Bytes, string? FileName, string? Saved, string? Error) ReadInput(string path, string? outputFolder)
+    private (byte[]? Bytes, string? FileName, string? Saved, string? Error) ReadInput(string path)
     {
         if (ComfyText.TryPastedLabel(path, out int number))
         {
-            return ReadPasted(number, outputFolder);
+            return ReadPasted(number);
         }
 
-        var outcome = _files.Resolve(path, forWrite: false, out string full);
+        var outcome = Llm.Tools.FileTool.For(_files, _images, path).Resolve(path, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
         {
             return (null, null, null, FileText.Error(outcome, path, "read"));
@@ -478,26 +482,20 @@ public sealed class ComfyStudio : IDisposable
     }
 
     /// <summary>
-    /// The output folder's subfolder the pasted inputs are saved in (later still on 2026-09-24, the user's call): inputs apart
-    /// from outputs, a dot-folder (<c>pasted</c> until later that day) so the listings that leave dot-entries out leave it too. Pinned.
-    /// </summary>
-    public const string PastedFolderName = ".pasted";
-
-    /// <summary>
-    /// A clipboard paste's file stem, stamped with the local time it was first used (later still on 2026-09-24, the
-    /// user's call over <c>pasted-N</c>, whose N began again with every run): <c>pasted-20260924-153012</c>. Pinned.
+    /// A clipboard paste's file stem, stamped with the local time it was saved (later still on 2026-09-24, the user's call over
+    /// <c>pasted-N</c>, whose N began again with every run): <c>pasted-20260924-153012</c>. The <c>Pasted images folder</c>'s
+    /// names since 2026-10-09. Pinned.
     /// </summary>
     public static string PastedStem(DateTimeOffset local) => "pasted-" + local.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// A pasted picture as the input (later still on 2026-09-24, the user's call: saved when used): the paste's own bytes
-    /// — a clipboard picture before the 2048 downscale the model saw, a dropped file read again — written into the
-    /// output folder's <see cref="PastedFolderName"/> subfolder (<see cref="Save"/>: a free name, the sandbox's say) the
-    /// first time it is used, a clipboard one as <see cref="PastedStem"/> with the extension its bytes say, a dropped
-    /// one under its own name; then uploaded from there. A second use of the same paste reuses that file while it is
-    /// still there. The saved path comes back so the result can name it.
+    /// A pasted picture as the input (later still on 2026-09-24): the paste's own bytes — a clipboard picture before the 2048
+    /// downscale the model saw, a dropped file read again — uploaded under its file's name. Where it lives comes back so the result
+    /// can name it: a dropped file's own path, or the file the screen saved a clipboard picture as (the <c>pasted</c> hook saves one
+    /// not yet sent, 2026-10-09: the <c>.pasted</c> subfolder this wrote into until then went with the <c>Pasted images folder</c>). A
+    /// clipboard picture with no file (the write refused, a host that saves none) is uploaded under a <see cref="PastedStem"/> name.
     /// </summary>
-    private (byte[]? Bytes, string? FileName, string? Saved, string? Error) ReadPasted(int number, string? outputFolder)
+    private (byte[]? Bytes, string? FileName, string? Saved, string? Error) ReadPasted(int number)
     {
         if (_pasted?.Invoke(number) is not { } picture)
         {
@@ -509,44 +507,29 @@ public sealed class ComfyStudio : IDisposable
             return (null, null, null, ComfyText.BadInput(NeonSidekick.UI.PasteBlocks.ImageLabel(number), "over 20 MB"));
         }
 
-        string? saved;
-        lock (_gate)
-        {
-            _pastedSaved.TryGetValue(number, out saved);
-        }
-
-        if (saved is null || _files.Resolve(saved, forWrite: false, out string full) != FileOutcome.Ok || !File.Exists(full))
-        {
-            string stem = picture.FileName is { Length: > 0 } own ? SafeName(Path.GetFileNameWithoutExtension(own)) : PastedStem(_time.GetLocalNow());
-            string extension = Path.GetExtension(picture.FileName) is { Length: > 0 } e ? e.ToLowerInvariant() : ImageFile.ExtensionOf(picture.Bytes);
-            var (relative, error) = Save(Path.Combine(OutputFolder(outputFolder), PastedFolderName), stem, extension, picture.Bytes);
-            if (relative is null)
-            {
-                return (null, null, null, error);
-            }
-
-            lock (_gate)
-            {
-                _pastedSaved[number] = relative;
-            }
-
-            saved = relative;
-        }
-
-        return (picture.Bytes, Path.GetFileName(saved), saved, null);
+        string name = picture.Path is { Length: > 0 } path ? Path.GetFileName(path)
+            : picture.FileName is { Length: > 0 } own ? own
+            : PastedStem(_time.GetLocalNow()) + ImageFile.ExtensionOf(picture.Bytes);
+        return (picture.Bytes, name, picture.Path, null);
     }
 
-    /// <summary>The output folder as a sandbox path: the setting trimmed, <c>.</c> for empty.</summary>
+    /// <summary>The output folder as a path under the images folder (the sandbox until 2026-10-09): the setting trimmed, <c>.</c> for empty.</summary>
     public static string OutputFolder(string? setting) => string.IsNullOrWhiteSpace(setting) ? "." : setting.Trim();
 
-    /// <summary>Writes the picture under a free name — <c>stem.png</c>, then <c>stem-2.png</c>, … — and returns its relative path, or the sandbox's refusal.</summary>
+    /// <summary>Where the pictures are saved: the profile's images folder (2026-10-09), or the working directory when none was given.</summary>
+    public WorkingDirectory Output => _images ?? _files;
+
+    /// <summary>
+    /// Writes the picture under a free name — <c>stem.png</c>, then <c>stem-2.png</c>, … — and returns its path as <see cref="Output"/>
+    /// names it (the full path under the images folder), or the refusal.
+    /// </summary>
     private (string? Relative, string? Error) Save(string? folder, string stem, string extension, byte[] bytes)
     {
         string dir = OutputFolder(folder);
         for (int n = 1; n < 1000; n++)
         {
             string name = stem + (n == 1 ? "" : "-" + n.ToString(CultureInfo.InvariantCulture)) + extension;
-            var result = _files.WriteBytes(dir == "." ? name : Path.Combine(dir, name), bytes, overwrite: false);
+            var result = Output.WriteBytes(dir == "." ? name : Path.Combine(dir, name), bytes, overwrite: false);
             if (result.Outcome == FileOutcome.Ok)
             {
                 return (result.Relative, null);

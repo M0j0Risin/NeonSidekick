@@ -22,6 +22,10 @@ namespace NeonSidekick.UI;
 /// a folder is never picked by a slip of the mouse); one on the strip's button collapses all;
 /// the × and two off the pane close; the wheel moves the cursor a row per notch.
 /// </para>
+/// <para>
+/// <c>/browse</c> (2026-10-09, the user's ask) reads the same pane over a tree made <c>withFiles</c> (<see cref="BrowseAsync"/>): its own
+/// title and hint, Enter on a file opening it (the line it answers on the path row, the pane staying), Enter on a folder its toggle.
+/// </para>
 /// </summary>
 public sealed class FolderPane
 {
@@ -39,6 +43,9 @@ public sealed class FolderPane
     private int _first;
     private int _shown;
     private string? _status;
+    private bool _statusIsNote;
+    private string _title = FolderText.Title;
+    private string _hint = FolderText.Hint;
 
     /// <param name="mouse">Takes (true) or hands back (false) the console's mouse; null when the screen has none to take.</param>
     public FolderPane(ScreenPane pane, KeySource keys, Action<bool>? mouse = null)
@@ -53,17 +60,39 @@ public sealed class FolderPane
     public bool Enabled => _pane.Enabled;
 
     /// <summary>The strip: the label and the one button, drawn as a dim tab nobody is on. Pinned.</summary>
-    public static string StripMarkup() => InfoPane.TabStripMarkup(FolderText.Title, [FolderText.CollapseAllButton], -1);
+    public static string StripMarkup() => StripMarkup(FolderText.Title);
+
+    /// <summary>The strip under <paramref name="title"/> (2026-10-09: <c>/browse</c>'s <see cref="FolderText.BrowseTitle"/>).</summary>
+    public static string StripMarkup(string title) => InfoPane.TabStripMarkup(title, [FolderText.CollapseAllButton], -1);
 
     /// <summary>Whether column <paramref name="x"/> of the strip is the button (<see cref="InfoPane.TabAt"/>'s layout). Pure.</summary>
-    public static bool ButtonAt(int x) => InfoPane.TabAt(FolderText.Title, [FolderText.CollapseAllButton], x) == 0;
+    public static bool ButtonAt(int x) => ButtonAt(FolderText.Title, x);
+
+    /// <summary>Whether column <paramref name="x"/> of the strip under <paramref name="title"/> is the button. Pure.</summary>
+    public static bool ButtonAt(string title, int x) => InfoPane.TabAt(title, [FolderText.CollapseAllButton], x) == 0;
 
     /// <summary>
     /// Shows <paramref name="tree"/> with row <paramref name="cursor"/> highlighted and reads
     /// keys until Enter (the highlighted node's full path), ESC, the token, or the end of input
     /// (null); the pane is closed on every path.
     /// </summary>
-    public async Task<string?> PickAsync(FolderTree tree, int cursor, CancellationToken cancellationToken)
+    public Task<string?> PickAsync(FolderTree tree, int cursor, CancellationToken cancellationToken) =>
+        RunAsync(tree, cursor, FolderText.Title, FolderText.Hint, open: null, cancellationToken);
+
+    /// <summary>
+    /// <c>/browse</c>'s reading of the pane (2026-10-09, the user's ask): <paramref name="tree"/> (made <c>withFiles</c>) with row
+    /// <paramref name="cursor"/> highlighted, Enter on a file handing its full path to <paramref name="open"/> — the line it answers
+    /// shown on the path row, in the error colour when <c>Error</c> — and the pane staying open, so another can be opened; Enter on a
+    /// folder opens or closes it as Space does. Every other key is the picker's. Ends on ESC, the token or the end of input; the pane
+    /// is closed on every path.
+    /// </summary>
+    public Task BrowseAsync(FolderTree tree, int cursor, Func<string, (string Line, bool Error)> open, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(open);
+        return RunAsync(tree, cursor, FolderText.BrowseTitle, FolderText.BrowseHint, open, cancellationToken);
+    }
+
+    private async Task<string?> RunAsync(FolderTree tree, int cursor, string title, string hint, Func<string, (string Line, bool Error)>? open, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tree);
         if (!Enabled)
@@ -72,6 +101,8 @@ public sealed class FolderPane
         }
 
         _tree = tree;
+        _title = title;
+        _hint = hint;
         _cursor = Clamp(cursor);
         _first = 0;
         _status = null;
@@ -124,7 +155,7 @@ public sealed class FolderPane
                     if (at == 0)
                     {
                         _clicks.Reset();
-                        if (ButtonAt(click.X))
+                        if (ButtonAt(_title, click.X))
                         {
                             CollapseAll();
                         }
@@ -179,7 +210,24 @@ public sealed class FolderPane
 
                 if (k.Key == ConsoleKey.Enter)
                 {
-                    return tree.Visible.Count == 0 ? null : tree.Visible[_cursor].Path;
+                    if (open is null)
+                    {
+                        return tree.Visible.Count == 0 ? null : tree.Visible[_cursor].Path;
+                    }
+
+                    if (tree.Visible.Count > 0 && tree.Visible[_cursor] is { IsFile: true } file)
+                    {
+                        var (line, error) = open(file.Path);
+                        _status = line;
+                        _statusIsNote = !error;
+                        Show();
+                    }
+                    else
+                    {
+                        Toggle();
+                    }
+
+                    continue;
                 }
 
                 if (k.KeyChar == ' ')
@@ -320,11 +368,12 @@ public sealed class FolderPane
         int capacity = _pane.MenuContentRows(Height, 0) - HeaderRows;   // within Menus max height (2026-10-01)
         (_first, _shown) = MenuPane.Viewport(count, _cursor, capacity, _first);
 
-        var lines = new List<IRenderable>(HeaderRows + _shown + 1) { new Markup(StripMarkup()) };
-        string second = _status is { } status ? TranscriptRenderer.ErrorMarkup(status)
+        var lines = new List<IRenderable>(HeaderRows + _shown + 1) { new Markup(StripMarkup(_title)) };
+        string second = _status is { } status ? _statusIsNote ? TranscriptRenderer.NoticeMarkup(status) : TranscriptRenderer.ErrorMarkup(status)
             : count == 0 ? " "
             : FolderText.PathMarkup(tree.Visible[_cursor].Path);
         _status = null;
+        _statusIsNote = false;
         lines.Add(new FittedMarkup(second));
         for (int i = 0; i < _shown; i++)
         {
@@ -337,6 +386,6 @@ public sealed class FolderPane
             lines.Add(new Markup(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint(_first, _shown, count))));
         }
 
-        _pane.ShowOverlay(new Rows(lines), FolderText.Hint, close: true);
+        _pane.ShowOverlay(new Rows(lines), _hint, close: true);
     }
 }

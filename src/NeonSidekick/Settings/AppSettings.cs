@@ -136,6 +136,16 @@ public sealed class AppSettings : IDisposable
     /// <summary>The loaded profile's own splash folder: <c>splash</c> under <see cref="ProfileDirectory"/>, whose pictures stand in for the embedded set (<see cref="UI.SplashImages.FromDirectory"/>).</summary>
     public string ProfileSplashDirectory => Path.Combine(ProfileDirectory, UI.SplashImages.ProfileFolderName);
 
+    /// <summary>The name of the profile's images folder (<see cref="ProfileImagesDirectory"/>). Pinned.</summary>
+    public const string ImagesFolderName = "images";
+
+    /// <summary>
+    /// The loaded profile's images folder: <c>images</c> under <see cref="ProfileDirectory"/> (2026-10-09, the user's ask: the camera's,
+    /// the screen's, ComfyUI's and the pasted pictures kept out of the working directory). The <c>Camera output folder</c>, <c>Screen
+    /// capture output folder</c>, <c>ComfyUI output folder</c> and <c>Pasted images folder</c> settings name folders under it.
+    /// </summary>
+    public string ProfileImagesDirectory => Path.Combine(ProfileDirectory, ImagesFolderName);
+
     /// <summary>The loaded profile's ComfyUI workflows folder: <c>comfy</c> under <see cref="ProfileDirectory"/> (2026-09-24), read ahead of <see cref="GlobalComfyDirectory"/> (<see cref="Comfy.ComfyWorkflowCatalog"/>).</summary>
     public string ProfileComfyDirectory => Path.Combine(ProfileDirectory, Comfy.ComfyWorkflowCatalog.DirectoryName);
 
@@ -852,6 +862,7 @@ public sealed class AppSettings : IDisposable
         ImageEditMetadata = source.ImageEditMetadata,
         ImageEditMode = source.ImageEditMode,
         ImageEditOutputFolder = source.ImageEditOutputFolder,
+        PastedImagesFolder = source.PastedImagesFolder,
         GitLibDiffMaxLines = source.GitLibDiffMaxLines,
         GitLibLogMaxCommits = source.GitLibLogMaxCommits,
         GitLibTools = source.GitLibTools,

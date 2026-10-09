@@ -118,6 +118,19 @@ public enum SlashCommand
     Explore,
 
     /// <summary>
+    /// <c>/open &lt;file&gt;</c> (2026-10-09, the user's ask: "similar to /view but limits the choices to files"): a file under the
+    /// working directory opened in its default app, as the model's <c>open</c> tool opens one; a folder is refused (<c>/explore</c> opens those).
+    /// </summary>
+    Open,
+
+    /// <summary>
+    /// <c>/browse [&lt;folder&gt;]</c> (2026-10-09, the user's ask: "similar to /tree", the pane like <c>/cwd browse</c>'s): the working
+    /// directory's folders and files as a tree on the pane, from its root or a folder under it; Enter on a file opens it in its default
+    /// app and the pane stays.
+    /// </summary>
+    Browse,
+
+    /// <summary>
     /// <c>/terminal</c> (2026-10-03, the user's ask: "similar to /explore"): a new Windows Terminal window in the working
     /// directory, or <c>/terminal &lt;folder&gt;</c> in a folder under it (<see cref="Llm.PersonaFile.OpenTerminal"/>). Ctrl+. runs it.
     /// </summary>
@@ -326,6 +339,7 @@ public static class SlashCommands
         {
             new("/about", "show info about the app and profile"),
             new("/botchat", "let the profiles talk to each other"),
+            new("/browse", "browse the working directory's files"),
             new("/claude", "ask Claude Code from the chat"),
             new(Camera.CameraText.Word, Camera.CameraText.HelpSummary),
             new(NeonSidekick.Screen.ScreenText.Word, NeonSidekick.Screen.ScreenText.HelpSummary),
@@ -359,6 +373,7 @@ public static class SlashCommands
             new("/memory", "manage the model's memory"),
             new("/model", "pick or set the model"),
             new("/new", "start over, keeping the screen"),
+            new("/open", "open a file in its default app"),
             new("/perfbar", "show or hide the performance bar"),
             new("/plan", "plan before doing"),
             new("/pdf", "make a PDF of a file, page or reply"),
@@ -485,7 +500,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/keycheck", "/cmd", "/cmdclear", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/keycheck", "/cmd", "/cmdclear", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -564,6 +579,8 @@ public static class SlashCommands
             "/tree" => SlashCommand.Tree,
             "/vault" => SlashCommand.Vault,
             "/explore" => SlashCommand.Explore,
+            "/open" => SlashCommand.Open,
+            "/browse" => SlashCommand.Browse,
             "/terminal" => SlashCommand.Terminal,
             "/shortcut" => SlashCommand.Shortcut,
             "/view" => SlashCommand.View,
@@ -620,7 +637,7 @@ public static class SlashCommands
         or SlashCommand.Learn
         or SlashCommand.Sys
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Timer
-        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
+        or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find;

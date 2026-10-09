@@ -33,15 +33,21 @@ public static class HelpCommands
             new("/botchat --resume [<line>]", "Carry on the last bot conversation, with an optional line of your own to it first."),
             new("/botchat --kill", "Stop the extra embedded servers the bots started."),
         ]),
+        new("/browse",
+        [
+            new("/browse [<folder>]", "Browse the working directory's folders and files as a tree in a pane, from its root or a folder in it (Tab completes the folder). Space, → and ← open and close folders, `-` collapses all, Enter on a folder opens or closes it, and Enter on a file opens it in its default app, the pane staying open for another. Hidden, system and dot entries appear only when *File browser/tree mode* is `show-hidden`; `.git` folders are left out. Works while a reply runs."),
+        ]),
         new("/camera",
         [
-            new("/camera", "Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, `r` takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* (`camera_images` by default). Without the pane it takes one at once. See Camera."),
+            new("/camera", "Open the camera pane: frame the shot (live in a camera window of its own under *Camera preview* `live`), Space takes it, `r` takes it again, Enter puts it on the input line as `[Image #N]`, ESC drops it. The photo is saved in the *Camera output folder* under the profile's `images` folder (`camera_images` by default). Without the pane it takes one at once. See Camera."),
             new("/camera snap", "Take a photo at once and put it on the input line."),
             new("/camera list", "List the cameras Windows sees in a pane, numbered, the chosen one marked."),
             new("/camera use <n>|<name>", "Choose the camera by its number in the list, its name, or the start of its name (*Camera device*)."),
             new("/camera live", "Show the camera live in its own window until you close the window or `/camera off`."),
             new("/camera watch [<seconds>|off]", "Watch mode: the camera looks every *Camera watch interval* seconds (or the seconds given, 2 to 3600), and a picture that changed rides your next message (with *Camera watch speaks up*, the model may also be shown it unasked). Never on at startup; `/camera watch off` stops it."),
             new("/camera off", "Let go of `/camera live` and watch mode; the camera closes a few seconds later."),
+            new("/camera view", "Open the picture viewer on the *Camera output folder*. Works while a reply runs."),
+            new("/camera thumbs", "Open the thumbnail browser on the *Camera output folder*. Works while a reply runs."),
         ]),
         new("/claude",
         [
@@ -72,7 +78,7 @@ public static class HelpCommands
             new("/comfy edit json|markdown|md <workflow>", "Open a workflow's graph, or its `.md`, in your editor (the `.md` is created with the family filled in if it does not exist)."),
             new("/comfy view", "Open the picture viewer on the output folder. Works while a reply runs."),
             new("/comfy thumbs", "Open the thumbnail browser on the output folder. Works while a reply runs."),
-            new("/comfy purge", "Permanently delete everything in the output folder, `.pasted` inputs included, after a yes/no. Refused when the output folder is the working directory."),
+            new("/comfy purge", "Permanently delete everything in the output folder (under the profile's `images` folder), after a yes/no. Refused when the output folder is the `images` folder itself."),
         ]),
         new("/compact",
         [
@@ -190,6 +196,10 @@ public static class HelpCommands
         [
             new("/new", "Start a new conversation without clearing the screen."),
         ]),
+        new("/open",
+        [
+            new("/open <file>", "Open a file from the working directory in its default app, as double-clicking it would (Tab completes the path). A folder is refused: `/explore` or `/browse` opens one. Works while a reply runs."),
+        ]),
         new("/pdf",
         [
             new("/pdf <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]", "Make a PDF in the working directory from a file: Markdown keeps its headings, tables, lists, links, coloured code and the pictures beside it; text and code become a coloured listing; HTML is printed as the page, its scripts and anything outside the working directory left out; a picture is fitted to one page. The PDF goes beside the file unless `to=` names a file or folder; an existing one is replaced only with `overwrite`. Options go anywhere. Edge, Chrome or Brave makes it; without one, Microsoft Print to PDF (Markdown, text and pictures, in black and white). *PDF engine* chooses. On its own, `/pdf` shows how to use it. See Making PDFs."),
@@ -265,12 +275,14 @@ public static class HelpCommands
         ]),
         new("/screen",
         [
-            new("/screen", "Capture the monitor the app is on and put the screenshot on the input line as `[Image #N]`. It is saved in the *Screen capture output folder* (`screen_images` by default) and shown in the picture viewer under *Screen capture preview*. Your own command: *Screen capture tool* and *Screen capture ask* never apply. See Screen capture."),
+            new("/screen", "Capture the monitor the app is on and put the screenshot on the input line as `[Image #N]`. It is saved in the *Screen capture output folder* under the profile's `images` folder (`screen_images` by default) and shown in the picture viewer under *Screen capture preview*. Your own command: *Screen capture tool* and *Screen capture ask* never apply. See Screen capture."),
             new("/screen all|desktop", "Capture every monitor as one picture."),
             new("/screen monitor:<n>", "Capture monitor n (`/screen list` numbers them; `monitor <n>` works too)."),
             new("/screen window:<id>|<title-words>", "Capture one window, even when another covers it: by its id from `/screen list`, or words of its title (or its process name)."),
             new("/screen behind", "Capture the window right behind the app's own: the one you were just in."),
             new("/screen list", "List the monitors and the windows (front to back) in a pane, with the target that names each. The argument list after `/screen ` offers them too."),
+            new("/screen view", "Open the picture viewer on the *Screen capture output folder*. Works while a reply runs."),
+            new("/screen thumbs", "Open the thumbnail browser on the *Screen capture output folder*. Works while a reply runs."),
         ]),
         new("/server",
         [

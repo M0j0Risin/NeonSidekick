@@ -94,8 +94,8 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/cmdclear`, `/tree`, `/vault`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia` |
-| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/cmdclear`, `/tree`, `/vault`, `/browse`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia` |
+| Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/wake`, `/interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/open`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -596,13 +596,14 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | File /tree max length | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `folder-remain` opens it in the list; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
-| File browser/tree mode | `default` hides hidden, system and dot entries in the folder browsers and `/tree`; `show-hidden` lists them (`/tree` still leaves out `.git`). | `default` |
+| File browser/tree mode | `default` hides hidden, system and dot entries in the folder browsers, `/tree` and `/browse`; `show-hidden` lists them (`/tree` and `/browse` still leave out `.git`). | `default` |
 | File view image max (per call) | Pictures one `view_image` call may load (1–100). | 10 |
 | File search max results | The most rows one `search_files` or `unc_search` call returns, whatever its `limit` (1–5000). Without `limit`: 50 hits, 200 entries, 100 names or 10 recent files. | 200 |
 | Image edit quality | The quality `image_edit` writes a JPEG (or JPEG XL, HEIF) at when the model gives none (1–100), and where `max_kb` starts lowering it from. A Mac writes JPEG and HEIF with it (its ImageIO has no JPEG XL encoder). | 90 |
 | Image edit metadata | What metadata `image_edit` keeps unless the model asks otherwise: `none` (no camera, date or place), `basic` (author, copyright, title, comment, date taken, camera, exposure) or `all` (basic and the GPS position). | `none` |
 | Image edit mode | Where an edited picture goes, for the picture windows' right-click menu and `image_edit` (when the model names no `to`): `beside-original` writes a new file beside the source (`image_edit` uses *Image edit output folder* when set), `overwrite-original` replaces the source (a format change writes the new file and deletes the old). No confirmation. | `beside-original` |
 | Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the working directory, made on first use. Empty writes beside the source. | (beside the source) |
+| Pasted images folder | Where a picture pasted from the clipboard is saved when its message is sent, under the profile's `images` folder (empty = the `images` folder). The message names the file (`[Image #1, saved as …]`) so the model's picture tools can use it. A dropped file isn't copied. | `pasted_images` |
 
 ### Shell
 
@@ -675,7 +676,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Camera preview | `live`: a camera window of its own shows the camera mirrored while you frame, then the photo. `post`: the picture viewer opens on the photo. `disabled`: no window. Neither takes the keyboard. | `live` |
 | Camera device | The camera, by its Windows name (on a Mac, macOS's: the built-in camera, a USB webcam, an iPhone as Continuity Camera; a MacBook's own lists last while its lid is closed). `(first camera)`, or a camera that isn't connected, uses the first. | (first camera) |
 | Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
-| Camera output folder | Where photos are saved, under the working directory (empty = the working directory). Watch mode's saved pictures go in its `.watch` subfolder. | `camera_images` |
+| Camera output folder | Where photos are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. Watch mode's saved pictures go in its `.watch` subfolder. | `camera_images` |
 | Camera keep in sessions | Off, a stored session keeps a line naming the photo instead of the picture. | off |
 | Camera watch interval (s) | How often `/camera watch` looks (2–3600). | 10 |
 | Camera watch change (%) | How much of the picture must change to count (1–100); brightness shifts don't. `--camera-check` prints your camera's noise. | 8% |
@@ -689,7 +690,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. On a Mac the terminal app needs the Screen Recording permission (see [Screen capture](COMMANDS.md#screen-capture)). | off |
 | Screen capture ask | `ask`: a pane names what would be captured and why; Deny, Allow once, or Allow for this session. `allow`: taken without asking. | `ask` |
 | Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
-| Screen capture output folder | Where screenshots are saved, under the working directory (empty = the working directory). | `screen_images` |
+| Screen capture output folder | Where screenshots are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. | `screen_images` |
 | Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
 
 ### ClaudeCLI
@@ -755,7 +756,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 | ComfyUI reinforce negatives | When the model writes the prompt, adds a few opposite tags to the negative where the image model tends to drift (a solo figure → `multiple girls`). Skipped for verbatim prompts, a negative given for the call, `/imagine`, families without a negative and a workflow whose `.md` says `reinforce: false`. | on |
 | ComfyUI show prompts | Shows the `prompt:`, `negative:` and `params:` lines under each picture. | on |
 | ComfyUI picture strip | Keeps the session's pictures as thumbnails above the input line, newest left by when each file was made, the viewer's order (a late Botchat image async picture lands in its place). With the line empty, ←/→ highlight one (moving an open viewer to it) and Enter opens it; a double-click opens any, and a drag onto the input row attaches it. **🎞️** opens the viewer on the output folder; **×** hides the strip until the next picture; meanwhile **🎞️** on the rule over the input row (right of ⤡) brings it back. `/clear`, `/new` and a session switch empty it. | on |
-| ComfyUI output folder | Where pictures are saved, under the working directory (`comfy_images\pony-txt2img-1234.png`); empty = the working directory. | `comfy_images` |
+| ComfyUI output folder | Where pictures are saved, under the profile's `images` folder (`comfy_images\pony-txt2img-1234.png`), out of the working directory; empty = the `images` folder. | `comfy_images` |
 
 ### SQL
 

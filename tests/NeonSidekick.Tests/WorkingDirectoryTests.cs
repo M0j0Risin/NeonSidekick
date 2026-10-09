@@ -1652,6 +1652,26 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal("no app", failed.Detail);
     }
 
+    /// <summary><c>filesOnly</c> (2026-10-09, <c>/open</c> and <c>/browse</c>): a folder, the root among them, is refused before the opener; a file opens.</summary>
+    [WindowsFact]
+    public void Open_FilesOnly_RefusesAFolderBeforeTheOpener_AndOpensAFile()
+    {
+        Put(@"docs\a.txt", "");
+        var opened = new List<string>();
+
+        var folder = _files.Open("docs", opened.Add, filesOnly: true);
+        Assert.Equal(FileOutcome.IsDirectory, folder.Outcome);
+        Assert.Equal(@"docs\", folder.Relative);
+        Assert.Equal(FileOutcome.IsDirectory, _files.Open("", opened.Add, filesOnly: true).Outcome);
+        Assert.Empty(opened);
+
+        var file = _files.Open(@"docs\a.txt", opened.Add, filesOnly: true);
+        Assert.Equal(FileOutcome.Ok, file.Outcome);
+        Assert.False(file.IsDirectory);
+        Assert.Equal(new[] { Full(@"docs\a.txt") }, opened);
+        Assert.Equal(FileOutcome.Missing, _files.Open("nope.txt", opened.Add, filesOnly: true).Outcome);
+    }
+
     [WindowsFact]
     public void Open_FoldersOnly_RefusesAFileBeforeTheOpener_AndOpensAFolder()
     {

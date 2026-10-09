@@ -65,6 +65,7 @@ public partial class ChatScreenTests
             _openThumbs = (folder, select) => opened.Add((folder, select));
         }
 
+        Directory.CreateDirectory(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName));   // the output folder is no longer under it (2026-10-09)
         PushLine("/comfy thumbs");
         PushLine("/view . --thumbs");
         PushLine("/exit");

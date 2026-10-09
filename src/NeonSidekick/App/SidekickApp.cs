@@ -354,6 +354,10 @@ public sealed class SidekickApp
     public WorkingDirectory BuildWorkingDirectory() =>
         new(() => WorkingDirectory.Resolve(EffectiveSettings.WorkingDirectory, _settings.ProfileDirectory), _time);
 
+    /// <summary>The profile's images folder (2026-10-09, <see cref="AppSettings.ProfileImagesDirectory"/>), its paths named in full.</summary>
+    public WorkingDirectory BuildImagesDirectory() =>
+        new(() => _settings.ProfileImagesDirectory, _time, WorkingDirectoryOptions.Images);
+
     /// <summary>A voice session over this app's factories and models directory; the caller owns it. Never built in headless mode.</summary>
     private VoiceSession BuildVoiceSession() =>
         new(_captureFactory, _recognizerFactory, _vadFactory, new ModelStore(ModelsDirectory, _modelHttpClient), _inputDeviceCount, _wakeDetectorFactory, _microphoneRefusal);
@@ -703,7 +707,9 @@ public sealed class SidekickApp
         // The printing door before the file tools (2026-10-03): convert_to_pdf makes its PDFs with the web tools' headless browser or Microsoft Print to PDF.
         var print = new Printing.PrintService(_printSpooler, files, () => EffectiveSettings, _time);
         var pdf = new Pdf.PdfConverter(_web.Browser, _web.Fetcher, print, files, () => EffectiveSettings, _time);
-        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf);
+        // The profile's images folder (2026-10-09): ComfyUI's pictures go there, and the picture tools reach it by full path.
+        var images = BuildImagesDirectory();
+        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images);
         // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too.
         IReadOnlyList<AIFunction> standingTools = [.. clockTools, .. ChatScreen.HelpTools()];
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
@@ -735,7 +741,7 @@ public sealed class SidekickApp
         // The UNC tools (2026-09-30): no console needed, so headless has them too; every change still needs UNC writes and a readwrite share.
         var uncTools = ChatScreen.UncTools(unc, files, () => EffectiveSettings);
         // The image tools (2026-09-24): no console needed, so headless has them too.
-        using var comfy = new Comfy.ComfyStudio(ChatScreen.ComfyCatalog(_settings), files, () => EffectiveSettings, _comfyClient);
+        using var comfy = new Comfy.ComfyStudio(ChatScreen.ComfyCatalog(_settings), files, () => EffectiveSettings, _comfyClient, images: images);
         var comfyTools = ChatScreen.ComfyTools(comfy, files, () => _settings.ProfileSplashDirectory);
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);

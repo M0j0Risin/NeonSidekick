@@ -66,7 +66,7 @@ public sealed class ScreenCaptureTool : AIFunction
     public override string Description =>
         "Takes a screenshot of the user's screen (a monitor, every monitor, or one window) and shows it to you. Use it when seeing " +
         "the screen would really help: an error dialog, what an app shows, a layout the user asks about. The user may have to allow it. " +
-        "It is saved in the working directory and attached to the message after the result. If the user denies it, carry on without " +
+        "It is saved in the user's images folder (the result gives its full path, which view_image, image_info and image_edit take) and attached to the message after the result. If the user denies it, carry on without " +
         "it and do not ask again unless they ask.";
 
     public override JsonElement JsonSchema => Schema;

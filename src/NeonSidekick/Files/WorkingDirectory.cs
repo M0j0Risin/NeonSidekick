@@ -316,13 +316,25 @@ public sealed record OpenResult(FileOutcome Outcome, string Relative, bool IsDir
 /// <param name="SearchByteBudget">Bytes a content search may read before it stops with what it has (<see cref="SearchResult.Budgeted"/>).</param>
 /// <param name="MaxWalkEntries">Entries a search, find or recent walk looks at before it stops (<see cref="SearchResult.Budgeted"/>, <see cref="RecentResult.Budgeted"/>, a find's <c>Truncated</c>).</param>
 /// <param name="PreserveOnReplace">An overwrite replaces the file in place (<see cref="File.Replace(string, string, string?, bool)"/>), keeping its ACL, owner and attributes, rather than moving a new file over it.</param>
+/// <param name="FullPaths">
+/// Every path this instance names is the full one, not one relative to the root (<see cref="WorkingDirectory.Relative"/>; 2026-10-09,
+/// the profile's images folder): what it reports is what the model passes back, and a full path inside the root resolves as a
+/// relative one does, so the image tools reach a picture there by the path a result gave (<see cref="WorkingDirectory.Contains"/>).
+/// </param>
 public sealed record WorkingDirectoryOptions(
     bool CreateRoot = true,
     int SearchParallelism = 0,
     long SearchByteBudget = long.MaxValue,
     int MaxWalkEntries = int.MaxValue,
-    bool PreserveOnReplace = false)
+    bool PreserveOnReplace = false,
+    bool FullPaths = false)
 {
+    /// <summary>
+    /// The profile's images folder (2026-10-09, the user's ask: the camera's, the screen's, ComfyUI's and the pasted pictures kept out of
+    /// the working directory, under <c>&lt;profile&gt;/images</c>): created on first use as the working directory is, its paths named in full.
+    /// </summary>
+    public static readonly WorkingDirectoryOptions Images = new(FullPaths: true);
+
     /// <summary>The working directory: created on first use, no budgets.</summary>
     public static readonly WorkingDirectoryOptions Sandbox = new();
 
@@ -496,6 +508,29 @@ public sealed class WorkingDirectory
 
     /// <summary>Whether the root exists, without creating it.</summary>
     public bool Exists => Directory.Exists(Root);
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is a full path naming the root or something under it, by spelling (2026-10-09: which of the
+    /// working directory and the profile's images folder a picture tool's path belongs to, <see cref="Llm.Tools.FileTool"/>). A
+    /// relative path is never contained; <see cref="Resolve(string, bool, out string)"/> still judges the links.
+    /// </summary>
+    public bool Contains(string path)
+    {
+        string text = (path ?? "").Trim();
+        if (text.Length == 0 || !Path.IsPathFullyQualified(text))
+        {
+            return false;
+        }
+
+        try
+        {
+            return IsInside(Root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(text)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// The sandbox: <paramref name="relative"/> against the root, accepted only when it stays
@@ -672,11 +707,19 @@ public sealed class WorkingDirectory
         }
     }
 
-    /// <summary>The display form: relative to the root, <c>\</c> separated, a trailing <c>\</c> for a folder, empty for the root itself.</summary>
+    /// <summary>
+    /// The display form: relative to the root, <c>\</c> separated, a trailing <c>\</c> for a folder, empty for the root itself — or,
+    /// under <see cref="WorkingDirectoryOptions.FullPaths"/>, the full path (a trailing separator for a folder, the root's own path).
+    /// </summary>
     public string Relative(string full, bool isDirectory = false)
     {
         string root = Root;
         string trimmed = Path.TrimEndingDirectorySeparator(full);
+        if (_options.FullPaths)
+        {
+            return isDirectory ? trimmed + Path.DirectorySeparatorChar : trimmed;
+        }
+
         if (string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
         {
             return "";
@@ -2598,9 +2641,10 @@ public sealed class WorkingDirectory
     /// <summary>
     /// Hands a file or folder (blank = the root) to <paramref name="opener"/>, the shell's "open with" call.
     /// <paramref name="foldersOnly"/> refuses a file with <see cref="FileOutcome.IsAFile"/> before the opener is
-    /// called (the <c>/explore</c> command browses; the <c>open</c> tool takes either).
+    /// called (the <c>/explore</c> command browses; the <c>open</c> tool takes either). <paramref name="filesOnly"/> is the
+    /// mirror (2026-10-09, <c>/open</c> and <c>/browse</c>): a folder is <see cref="FileOutcome.IsDirectory"/>, the opener never called.
     /// </summary>
-    public OpenResult Open(string relative, Action<string> opener, bool foldersOnly = false)
+    public OpenResult Open(string relative, Action<string> opener, bool foldersOnly = false, bool filesOnly = false)
     {
         ArgumentNullException.ThrowIfNull(opener);
         var outcome = Resolve(relative, forWrite: false, out string full);
@@ -2621,6 +2665,11 @@ public sealed class WorkingDirectory
             if (foldersOnly && !isDirectory)
             {
                 return new OpenResult(FileOutcome.IsAFile, Relative(full), false);
+            }
+
+            if (filesOnly && isDirectory)
+            {
+                return new OpenResult(FileOutcome.IsDirectory, Relative(full, isDirectory), true);
             }
 
             opener(full);

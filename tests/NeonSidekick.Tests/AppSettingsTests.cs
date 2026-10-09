@@ -146,6 +146,7 @@ public class AppSettingsTests : IDisposable
         ImageEditQuality = 42,
         ImageEditMetadata = "basic",
         ImageEditOutputFolder = "thumbs",
+        PastedImagesFolder = "clips",
         WebSearxngUrl = "http://localhost:8080",
         WebBrowserMode = "chromium",
         WebBrowserNetworkMode = "both",
@@ -280,6 +281,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ImageEditQuality, actual.ImageEditQuality);
         Assert.Equal(expected.ImageEditMetadata, actual.ImageEditMetadata);
         Assert.Equal(expected.ImageEditOutputFolder, actual.ImageEditOutputFolder);
+        Assert.Equal(expected.PastedImagesFolder, actual.PastedImagesFolder);
         Assert.Equal(expected.WebSearxngUrl, actual.WebSearxngUrl);
         Assert.Equal(expected.WebBrowserMode, actual.WebBrowserMode);
         Assert.Equal(expected.WebBrowserNetworkMode, actual.WebBrowserNetworkMode);
@@ -436,6 +438,7 @@ public class AppSettingsTests : IDisposable
             d.ImageEditQuality = full.ImageEditQuality;
             d.ImageEditMetadata = full.ImageEditMetadata;
             d.ImageEditOutputFolder = full.ImageEditOutputFolder;
+            d.PastedImagesFolder = full.PastedImagesFolder;
             d.WebSearxngUrl = full.WebSearxngUrl;
             d.WebBrowserMode = full.WebBrowserMode;
             d.WebBrowserNetworkMode = full.WebBrowserNetworkMode;
@@ -581,6 +584,7 @@ public class AppSettingsTests : IDisposable
                 d.ImageEditQuality = full.ImageEditQuality;
                 d.ImageEditMetadata = full.ImageEditMetadata;
                 d.ImageEditOutputFolder = full.ImageEditOutputFolder;
+                d.PastedImagesFolder = full.PastedImagesFolder;
                 d.WebSearxngUrl = full.WebSearxngUrl;
                 d.WebBrowserMode = full.WebBrowserMode;
                 d.WebBrowserNetworkMode = full.WebBrowserNetworkMode;

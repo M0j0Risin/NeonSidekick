@@ -402,6 +402,33 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal(0.4, graph.GetProperty("3").GetProperty("inputs").GetProperty("denoise").GetDouble());
     }
 
+    /// <summary>
+    /// With the profile's images folder (2026-10-09): the pictures are saved there, named in full in the result and the attachments, and a
+    /// saved picture is an input by that full path (img2img on an earlier output, the botchat rework list) — nothing written in the sandbox.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImage_WithTheImagesFolder_SavesThere_AndTakesASavedPictureByItsFullPath()
+    {
+        string imagesRoot = Path.Combine(_dir, "images");
+        var images = new WorkingDirectory(() => imagesRoot, new ManualTimeProvider(), WorkingDirectoryOptions.Images);
+        using var studio = new ComfyStudio(new ComfyWorkflowCatalog(() => [_profileComfy, _globalComfy]), _files, () => _settings,
+            url => new ComfyClient(url, new HttpClient(_stub), TimeSpan.FromMilliseconds(1)), new Random(7), images: images);
+        Workflow("restyle", Img2Img);
+        ServeOnePicture();
+        string earlier = Path.Combine(imagesRoot, "comfy_images", "pony-1.bmp");
+        Directory.CreateDirectory(Path.GetDirectoryName(earlier)!);
+        File.WriteAllBytes(earlier, Picture());
+
+        var result = Assert.IsType<ToolImageResult>(await new GenerateImageTool(studio).InvokeAsync(Args(("prompt", "ink"), ("image", earlier), ("seed", 3))));
+
+        string made = Path.Combine(imagesRoot, "comfy_images", "restyle-3.png");
+        Assert.True(File.Exists(made));
+        Assert.Contains(made, result.Text, StringComparison.Ordinal);
+        Assert.Equal(made, Assert.Single(result.Images).Path);
+        Assert.Contains(_stub.Requests, r => r.Uri.AbsolutePath == "/upload/image");
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_root));   // the working directory untouched
+    }
+
     /// <summary>A narrowed tool (2026-09-27, <c>/botchat</c>'s bots): only its workflows are described, and another is unknown, never sent.</summary>
     [Fact]
     public async Task GenerateImage_Narrowed_DescribesItsWorkflowsAlone_AndRefusesAnother()
@@ -564,25 +591,23 @@ public sealed class ComfyTests : IDisposable
     }
 
     [Fact]
-    public async Task GenerateImage_APastedPicturesLabel_SavesItsOriginalOnce_UploadsIt_AndSaysWhere()
+    public async Task GenerateImage_APastedPicturesLabel_UploadsItsOriginal_UnderItsFilesName_AndSaysWhere()
     {
-        // A paste as the input (later still on 2026-09-24, the user's ask): [Image #1] is the paste at full size, written
-        // under the output folder the first time it is used and uploaded from there; a second use is the same file.
+        // A paste as the input (later still on 2026-09-24, the user's ask): [Image #1] is the paste at full size. Since 2026-10-09 the
+        // screen saves a clipboard picture (the Pasted images folder) and hands its path along: nothing is written here, the upload
+        // carries the file's name and the result says where it lives. Asked at every use.
         Workflow("restyle", Img2Img);
         ServeOnePicture();
         byte[] original = SmokeChecks.SolidBmp(3000, 10);   // wider than the 2048 the model was shown
         int asked = 0;
-        var time = new ManualTimeProvider();   // 2026-09-11 14:05:30 local
-        using var studio = PastingStudio(n => { asked++; return n == 1 ? new PastedPicture(original, null) : null; }, time);
+        string saved = Path.Combine(_root, "elsewhere", "pasted-20260911-140530.bmp");
+        using var studio = PastingStudio(n => { asked++; return n == 1 ? new PastedPicture(original, null, saved) : null; });
         var tool = new GenerateImageTool(studio);
 
         var first = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "watercolor"), ("image", "[Image #1]"))));
-        time.Advance(TimeSpan.FromMinutes(5));
         var second = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "ink"), ("image", "image 1"))));
 
-        string saved = Path.Combine("comfy_images", ".pasted", "pasted-20260911-140530.bmp");   // inputs apart, stamped with the first use
-        Assert.Equal(original, File.ReadAllBytes(Path.Combine(_root, saved)));
-        Assert.Single(Directory.GetFiles(Path.Combine(_root, "comfy_images", ".pasted")));   // the second use reused the file
+        Assert.False(Directory.Exists(Path.Combine(_root, "comfy_images", ".pasted")));   // nothing saved here any more
         Assert.Equal(2, asked);
         var uploads = _stub.Requests.Where(r => r.Uri.AbsolutePath == "/upload/image").ToList();
         Assert.Equal(2, uploads.Count);
@@ -598,31 +623,33 @@ public sealed class ComfyTests : IDisposable
             url => new ComfyClient(url, new HttpClient(_stub), TimeSpan.FromMilliseconds(1)), new Random(7), pasted, time ?? new ManualTimeProvider());
 
     [Fact]
-    public async Task GenerateImage_APastedPicture_WithNoOutputFolder_GoesInPasted_UnderTheWorkingDirectory_AndADroppedFileKeepsItsName()
+    public async Task GenerateImage_APastedPicture_WithNoFile_GoesUpUnderAStampedName_AndADroppedFileUnderItsOwn_NothingWritten()
     {
         Workflow("restyle", Img2Img);
         ServeOnePicture();
-        _settings.ComfyOutputFolder = "";
         byte[] bytes = SmokeChecks.SolidBmp(8, 8);
         using var studio = PastingStudio(n => n switch
         {
-            1 => new PastedPicture(bytes, null),
-            2 => new PastedPicture(bytes, "photo.BMP"),
+            1 => new PastedPicture(bytes, null),                                          // a clipboard picture whose save was refused
+            2 => new PastedPicture(bytes, "photo.BMP", Path.Combine(_root, "photo.BMP")),   // a dropped file
             _ => null,
         });
         var tool = new GenerateImageTool(studio);
 
-        Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "a"), ("image", "[Image #1]"))));
-        Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "b"), ("image", "[Image #2]"))));
+        var first = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "a"), ("image", "[Image #1]"))));
+        var second = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "b"), ("image", "[Image #2]"))));
 
-        Assert.True(File.Exists(Path.Combine(_root, ".pasted", "pasted-20260911-140530.bmp")));
-        Assert.True(File.Exists(Path.Combine(_root, ".pasted", "photo.bmp")));   // its own name, the extension lower-cased
+        var uploads = _stub.Requests.Where(r => r.Uri.AbsolutePath == "/upload/image").ToList();
+        Assert.Contains("pasted-20260911-140530.bmp", uploads[0].Body, StringComparison.Ordinal);
+        Assert.Contains("photo.BMP", uploads[1].Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("input: ", first.Text, StringComparison.Ordinal);   // no file to name
+        Assert.Contains(ComfyText.PastedInput(Path.Combine(_root, "photo.BMP"), 2), second.Text, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(_root, ".pasted")));   // nothing written for an input any more
     }
 
     [Fact]
-    public void PastedStem_AndFolder_ArePinned()
+    public void PastedStem_IsPinned()
     {
-        Assert.Equal(".pasted", ComfyStudio.PastedFolderName);
         Assert.Equal("pasted-20260924-153012", ComfyStudio.PastedStem(new DateTimeOffset(2026, 9, 24, 15, 30, 12, TimeSpan.FromHours(-7))));
     }
 

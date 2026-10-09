@@ -23,11 +23,12 @@ public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType
 }
 
 /// <summary>
-/// A pasted picture as it was before any downscale (later still on 2026-09-24): the bytes <c>generate_image</c> saves and
-/// uploads when the model names the paste by its <c>[Image #N]</c> label, and a dropped file's own name — null for a
-/// clipboard picture, which has none: the saver stamps it (<c>ComfyStudio.PastedStem</c>).
+/// A pasted picture as it was before any downscale (later still on 2026-09-24): the bytes <c>generate_image</c> uploads when the
+/// model names the paste by its <c>[Image #N]</c> label, and a dropped file's own name — null for a clipboard picture, which has
+/// none. <paramref name="Path"/> (2026-10-09) is where it lives: a dropped file's own path, or the file a clipboard picture was
+/// saved as when its message was sent (<c>Pasted images folder</c>); null for one not saved (yet, or the write refused).
 /// </summary>
-public sealed record PastedPicture(byte[] Bytes, string? FileName);
+public sealed record PastedPicture(byte[] Bytes, string? FileName, string? Path = null);
 
 /// <summary>
 /// Why <see cref="ImageFile.TryLoad"/> gave no attachment. <see cref="ImageFile.Notice"/> turns one into

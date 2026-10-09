@@ -51,12 +51,16 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/camera live` | Shows the camera live in its own window until you close it or `/camera off`. |
 | `/camera watch [<seconds>\|off]` | Looks every *Camera watch interval* (or the seconds given); a picture that changed rides your next message. Never on at startup. |
 | `/camera off` | Ends `/camera live` and watch mode; the camera closes a few seconds later. |
+| `/camera view` | Opens the picture viewer on *Camera output folder*. |
+| `/camera thumbs` | Opens the thumbnail browser on *Camera output folder*. |
 | `/screen` | Captures the monitor the app is on and puts the screenshot on the input line as `[Image #N]`. After `/screen ` the list offers the targets, then the monitors after `monitor:` and the open windows after `window:` (narrowed by id, title or program). See Screen capture. |
 | `/screen all\|desktop` | Captures every monitor as one picture. |
 | `/screen monitor:<n>` | Captures monitor n (`monitor <n>` works too). |
 | `/screen window:<id>\|<title-words>` | Captures one window, even when another covers it: by its id, or words of its title (or its program). |
 | `/screen behind` | Captures the window right behind the app's own: the one you were just in. |
 | `/screen list` | Lists the monitors and the windows in a pane, front to back, with the target that names each. |
+| `/screen view` | Opens the picture viewer on *Screen capture output folder*. |
+| `/screen thumbs` | Opens the thumbnail browser on *Screen capture output folder*. |
 | `/docker` | Docker Desktop's containers on a pane, with state, health and ports. Enter offers what fits: stop, restart or pause (asking first), start or unpause, the last 50 log lines, open a port in the browser, copy the id. Needs Windows (Docker Desktop's engine pipe). |
 | `/docker ps [<filter>]` | Lists the containers, or those whose name or image holds the filter. |
 | `/docker status` | Docker Desktop's and the engine's versions, with the container counts. |
@@ -67,6 +71,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/echo <text>` | Prints a line as a reply (spoken when speech is on). |
 | `/exit` | Exits the app. |
 | `/explore [<folder>]` | Opens the working directory in your file browser. |
+| `/browse [<folder>]` | Browses the working directory's folders and files as a tree in a pane, from its root or the folder named; Enter on a file opens it in its default app and the pane stays open. See [File browser](#file-browser). |
 | `/gituser [force]` | Writes *GitLib email* and *GitLib name* into the repository's config. An existing `[user]` section stays unless `force`. Does nothing while *GitLib tools* is off. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries and to-do lists. |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
@@ -99,6 +104,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/memory copy <profile> [overwrite]` | Adds them to another profile's memory (or replaces it with `overwrite`), after a confirmation. |
 | `/model [<id>]` | Picks or sets the model. The list is A to Z with the cursor on the model in use; type to narrow it to the ids holding the text (Backspace erases, ESC clears it, the next ESC keeps the model). On the embedded LLM, lists the installed models, and the argument list offers their ids. |
 | `/new` | Starts a new conversation without clearing the screen. |
+| `/open <file>` | Opens a file from the working directory in its default app (a folder is refused; `/explore` or `/browse` opens one). |
 | `/perfbar [off\|text\|gauge\|spark\|led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
 | `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file from the working directory (see [Printing](TOOLS.md#printing)). The printer matches by name or part of it; quote a name with spaces. *Print action policy* never applies. On a Mac a PDF goes to the printer as it is (no landscape) and an Office file is refused. |
 | `/print reply [<options>]` | Prints the last reply as formatted Markdown. |
@@ -174,7 +180,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/comfy offered` | Lists the workflows currently offered to the model in a pane, one bullet each. |
 | `/comfy view` | Opens the picture viewer on the output folder. |
 | `/comfy thumbs` | Opens the thumbnail browser on the output folder. |
-| `/comfy purge` | Deletes everything in the output folder, `.pasted` included, after a yes/no. Refused when it is the working directory. |
+| `/comfy purge` | Deletes everything in the output folder after a yes/no. Refused when it is the profile's `images` folder itself. |
 | `/wake [on\|off]` | Toggles the wake word. |
 | `/window` | Shows the terminal window's size. |
 | `/youtube`, `/youtube status` | Says what the video window is playing. |
@@ -296,13 +302,21 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * Space, → and ← open and close folders; `-` collapses all. A click on a folder's glyph or a double-click on its name opens or closes it.
 * Only Enter chooses. Choosing `⌂ profile` saves the default, like `/cwd ~`.
 
+### File browser
+
+`/browse [<folder>]` opens a tree headed **📂 Browse**, rooted at the working directory and open on the folder named (the root by default). Folders come first, then files (`◦`).
+
+* Space, → and ← open and close folders; `-` collapses all; Enter on a folder opens or closes it.
+* Enter on a file opens it in its default app, as double-clicking it would. The pane stays open, with `opened <file>` (or the error) on its path row; ESC closes it.
+* What is listed follows *File browser/tree mode*, as `/tree` does; `.git` folders and links are left out.
+
 ### Picture viewer
 
 The picture viewer is a window of its own, on Windows and on a Mac (where it needs the desktop: over SSH the file's registered app opens, and `/view` draws in the transcript). It opens from:
 
-* **A double-click on a picture in the transcript**, on that picture's folder. A picture with no file (a paste, the built-in splash) is written to the temp folder's `NeonSidekick/pictures` first. *Image viewer* can send these to another program.
+* **A double-click on a picture in the transcript**, on that picture's folder. A picture with no file (the built-in splash, a paste not yet sent) is written to the temp folder's `NeonSidekick/pictures` first. *Image viewer* can send these to another program.
 * **`/view <image or folder>`**: the image, or a folder's newest picture, following new ones.
-* **`/comfy view`** or the strip's **🎞️**: the ComfyUI output folder, following new pictures.
+* **`/comfy view`** or the strip's **🎞️**: the ComfyUI output folder, following new pictures. **`/camera view`** and **`/screen view`** do the same for the photos' and the screenshots' folders.
 
 | Key | Action |
 |---|---|
@@ -330,7 +344,7 @@ The picture viewer is a window of its own, on Windows and on a Mac (where it nee
 
 ### Thumbnail browser
 
-`/view <folder or image> --thumbs` (a folder of the working directory, or an image's folder with the image selected), `/comfy thumbs` or the toolbar's **🪟** (the ComfyUI output folder) opens the folder's pictures as thumbnails in a window of their own (on Windows, and on a Mac with its desktop), oldest first.
+`/view <folder or image> --thumbs` (a folder of the working directory, or an image's folder with the image selected), `/comfy thumbs` or the toolbar's **🪟** (the ComfyUI output folder), `/camera thumbs` or `/screen thumbs` (the photos' or the screenshots' folder) opens the folder's pictures as thumbnails in a window of their own (on Windows, and on a Mac with its desktop), oldest first.
 
 * **In step:** a click on a thumbnail moves the picture viewer to it without taking the keyboard (opening the viewer when it is closed); the viewer's own keys and the strip's arrows move the selection here.
 * **No jumping:** new pictures go on the end and nothing already shown moves. A view scrolled to the bottom of a long folder stays at the bottom as pictures arrive.
@@ -390,7 +404,7 @@ A USB or built-in webcam through Windows' Media Foundation or, on a Mac (macOS 1
 
 * **One shared stream:** the camera pane, the live view, a botchat and watch mode share one open camera, which closes a few seconds after the last lets go. A photo waits about a second for the exposure to settle (a MacBook's own camera or an iPhone about three: their first picture comes late and their exposure and focus settle over thirty frames).
 * **📷 on the hint row** shows whenever the camera is on (with its light and Windows' indicator, or a Mac's green dot and menu-bar camera icon); double-click it to end `/camera live` and watch mode.
-* **Photos** are JPEGs in *Camera output folder* (`camera_images` by default), named by time (`20261002-140203.jpg`); a retaken or declined one is deleted. Botchat and watch pictures aren't saved, but double-clicking a watch thumbnail writes it to the folder's `.watch` subfolder, which is cleared when watch mode stops and on every profile load.
+* **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder (`camera_images` by default), named by time (`20261002-140203.jpg`); a retaken or declined one is deleted. Botchat and watch pictures aren't saved, but double-clicking a watch thumbnail writes it to the folder's `.watch` subfolder, which is cleared when watch mode stops and on every profile load.
 * **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.
 * **Failures** say why: Windows' *Let desktop apps access your camera* is off (Settings › Privacy & security › Camera), another app has the camera, it was unplugged, or Media Foundation is missing (Windows N needs the Media Feature Pack).
 * **On a Mac** the cameras are the built-in FaceTime camera, USB webcams and an iPhone as Continuity Camera (Desk View is left out). A MacBook's own camera is off while its lid is closed: it lists last, and choosing it says so. The permission is your terminal's (Terminal, iTerm2…): the first photo makes macOS ask, and a refusal says to turn the terminal on in System Settings › Privacy & Security › Camera. The live view is a window of its own over AppKit, with ⌃⌘F for full screen and ⌘W or Esc to close it.
@@ -402,7 +416,7 @@ A monitor, every monitor or one window, through Windows' own GDI or, on a Mac (m
 
 * **Targets:** `screen` (the monitor the app is on, the default), `all`, `monitor:N`, `window:<id or title words>` (a title's words, or its process name; an id from `screen_list` or `/screen list` when several match) and `behind` (the window right behind the app's).
 * **A window** is drawn by itself, so it comes out whole even when another covers it; a minimized one must be restored first. Protected video and some HDR content come out black: Windows keeps it out of every screenshot.
-* **Screenshots** are JPEGs in *Screen capture output folder* (`screen_images` by default), named by time, scaled to 2048 pixels on the longer side at most.
+* **Screenshots** are JPEGs in *Screen capture output folder* under the profile's `images` folder (`screen_images` by default), named by time, scaled to 2048 pixels on the longer side at most.
 * **Asking:** under *Screen capture ask* `ask` the pane says what would be captured and the model's reason; a denial isn't retried that turn, and *Allow for this session* lasts until the session ends.
 * **Stored sessions** keep a line instead of the picture unless *Screen capture keep in sessions* is on: a screenshot can hold anything that was on the screen.
 * **On a Mac:**
@@ -414,6 +428,8 @@ A monitor, every monitor or one window, through Windows' own GDI or, on a Mac (m
 ### Pasting a picture
 
 A picture on the clipboard goes onto the input line as `[Image #n]` with the line's own paste: a right-click on the input line, Alt+V, or Ctrl+V where the terminal passes it (Windows Terminal keeps Ctrl+V and pastes text). The picture comes first; with none, the clipboard's text is pasted.
+
+When the message is sent, the picture is saved at its full size in *Pasted images folder* under the profile's `images` folder (`pasted_images\pasted-20261009-142233.png`), and the model reads its label as `[Image #1, saved as <path>]`, so it can edit the picture or use it as a ComfyUI input later. A paste deleted before sending is never saved, and a dropped file keeps its own file.
 
 **On a Mac** Cmd+V is the terminal's paste and pastes text only, so a copied picture pastes nothing with it. Use **Ctrl+V**, **Option+V** (with Option set to act as Meta) or a right-click. A screenshot copied with ⌃⇧⌘4 and a picture copied in Preview, Safari or another app all paste; Preview's copy, a TIFF that can hold the picture at more than one size, is sent at its largest as a PNG. A picture *file* copied in Finder pastes as its path and is attached by its name, as if dropped (Finder's copy also carries the file's icon, which is never the one attached).
 

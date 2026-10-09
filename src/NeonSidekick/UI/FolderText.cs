@@ -30,6 +30,18 @@ public static class FolderText
     /// <summary>A node known to have nothing under it, or one the source could not read.</summary>
     public const string LeafGlyph = "·";
 
+    /// <summary>A file, in <c>/browse</c>'s tree (2026-10-09): the open bullet, one cell, apart from an empty folder's dot.</summary>
+    public const string FileGlyph = "◦";
+
+    /// <summary><c>/browse</c>'s strip label (2026-10-09): the folder and the word, as <see cref="Title"/>.</summary>
+    public const string BrowseTitle = FolderGlyph + " Browse";
+
+    /// <summary><c>/browse</c>'s hint row (2026-10-09): Enter opens a file and the pane stays; on a folder it opens or closes it.</summary>
+    public const string BrowseHint = "Enter = open file · Space = expand/collapse · - = collapse all · ESC = back";
+
+    /// <summary><c>/browse</c> with no pane to open (a redirected console). Pinned.</summary>
+    public const string BrowseNeedsPaneNotice = "/browse needs the interactive screen.";
+
     /// <summary>Ahead of the <see cref="ProfileLabel"/> shortcut's label: the house.</summary>
     public const string ShortcutGlyph = "⌂";
 
@@ -65,7 +77,7 @@ public static class FolderText
     public static string Glyph(FolderNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
-        return node.IsLeaf ? LeafGlyph : node.Expanded ? ExpandedGlyph : CollapsedGlyph;
+        return node.IsFile ? FileGlyph : node.IsLeaf ? LeafGlyph : node.Expanded ? ExpandedGlyph : CollapsedGlyph;
     }
 
     /// <summary>

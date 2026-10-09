@@ -24,15 +24,16 @@ public sealed class ImageInfoTool : FileTool
         {
           "type": "object",
           "properties": {
-            "path": { "type": "string", "description": "One picture, relative to the working directory." },
-            "paths": { "type": "array", "items": { "type": "string" }, "description": "Several pictures in one call, each relative to the working directory." }
+            "path": { "type": "string", "description": "One picture, relative to the working directory, or the full path a saved picture was given." },
+            "paths": { "type": "array", "items": { "type": "string" }, "description": "Several pictures in one call, each relative to the working directory or a saved picture's full path." }
           }
         }
         """);
 
     private readonly Func<AppSettingsData> _effective;
 
-    public ImageInfoTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    /// <param name="images">The profile's images folder, whose pictures are read by their full paths (2026-10-09); null = the working directory alone.</param>
+    public ImageInfoTool(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null) : base(files, images)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
@@ -70,11 +71,11 @@ public sealed class ImageInfoTool : FileTool
         }
 
         var effective = _effective();
-        return await Task.Run(() => Describe(Files, paths, effective), cancellationToken).ConfigureAwait(false);
+        return await Task.Run(() => Describe(Files, paths, effective, Images), cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>The answer for <paramref name="paths"/>: one line each, success or error, then the formats line.</summary>
-    public static string Describe(WorkingDirectory files, IReadOnlyList<string> paths, AppSettingsData effective)
+    /// <summary>The answer for <paramref name="paths"/>: one line each, success or error, then the formats line. A full path in <paramref name="images"/> is read there.</summary>
+    public static string Describe(WorkingDirectory files, IReadOnlyList<string> paths, AppSettingsData effective, WorkingDirectory? images = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(paths);
@@ -82,7 +83,7 @@ public sealed class ImageInfoTool : FileTool
         var lines = new List<string>(paths.Count + 1);
         foreach (var path in paths)
         {
-            var read = files.ReadBytes(path, ImageEditor.MaxSourceBytes);
+            var read = For(files, images, path).ReadBytes(path, ImageEditor.MaxSourceBytes);
             if (read.Outcome != FileOutcome.Ok || read.Bytes is null)
             {
                 lines.Add(read.Outcome == FileOutcome.TooBig ? read.Relative + ": " + ImageText.SourceTooBig : FileText.Error(read.Outcome, read.Relative, "read", read.Detail));

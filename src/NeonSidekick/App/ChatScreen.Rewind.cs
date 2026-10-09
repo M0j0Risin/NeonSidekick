@@ -229,7 +229,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private string RewindDraft(ChatMessage picked)
     {
-        string line = ConversationRewind.UserLine(picked);
+        // A saved paste's label back as typed (2026-10-09): the recall list holds [Image #1], the message [Image #1, saved as …].
+        string line = UI.PasteBlocks.WithoutSavedPaths(ConversationRewind.UserLine(picked));
         var recall = _input.History;
         for (int i = recall.Count - 1; i >= 0; i--)
         {

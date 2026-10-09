@@ -167,7 +167,7 @@ internal sealed partial class ChatScreen
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.Tools
-            or SlashCommand.Tree or SlashCommand.Vault
+            or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Browse
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -176,7 +176,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Copy
-            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
+            or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
             or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
@@ -209,6 +209,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
+        SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsFolderWord(args) => MidTurnClass.Quick,   // /screen view | thumbs (2026-10-09): a window of its own
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
         _ => MidTurnPolicy(command, args.Length > 0),
     };
@@ -501,6 +502,10 @@ internal sealed partial class ChatScreen
                 // /tree and /vault under a reply (later on 2026-09-27): the walk on the info pane, not in the reply.
                 await ShowWalkAsync(TreeLines(args, out string? treeError), treeError, TreeText.PaneLabel("/tree", args), _flow, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Browse:
+                // /browse under a reply (2026-10-09): the tree on the pane as /tree's walk is; an open is the shell's, nothing the turn holds.
+                await HandleBrowseAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Vault:
                 await ShowWalkAsync(VaultLines(args, out string? vaultError), vaultError, TreeText.PaneLabel("/vault", args), _flow, cancellationToken).ConfigureAwait(false);
                 break;
@@ -579,6 +584,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Explore:
                 HandleExplore(args);
                 break;
+            case SlashCommand.Open:
+                HandleOpen(args);
+                break;
             case SlashCommand.Terminal:
                 HandleTerminal(args);
                 break;
@@ -629,8 +637,12 @@ internal sealed partial class ChatScreen
             }
             case SlashCommand.Camera:
                 // /camera live | watch | off | list | use alone reach here (2026-10-02, MidTurnPolicy's string form): the camera's
-                // own thread and window; nothing of the turn's is touched.
+                // own thread and window; nothing of the turn's is touched. view | thumbs (2026-10-09) too: a window of their own.
                 await HandleCameraAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Screen:
+                // /screen view | thumbs alone reach here (2026-10-09): the viewer's or the browser's window, nothing of the turn's.
+                await HandleScreenAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Unknown:
                 _transcript.Error(UnknownCommandError(CommandWord(text)));

@@ -59,6 +59,8 @@ public class SlashCommandsTests
     [InlineData("/tree", SlashCommand.Tree)]
     [InlineData("/TREE", SlashCommand.Tree)]
     [InlineData("/explore", SlashCommand.Explore)]
+    [InlineData("/open", SlashCommand.Open)]
+    [InlineData("/browse", SlashCommand.Browse)]
     [InlineData("/EXPLORE", SlashCommand.Explore)]
     [InlineData("/terminal", SlashCommand.Terminal)]   // 2026-10-03
     [InlineData("/TERMINAL", SlashCommand.Terminal)]
@@ -300,6 +302,16 @@ public class SlashCommandsTests
     }
 
     [Theory]
+    [InlineData("/open README.md", SlashCommand.Open, "README.md")]
+    [InlineData("/OPEN  sub folder/a b.txt ", SlashCommand.Open, "sub folder/a b.txt")]
+    [InlineData("/browse", SlashCommand.Browse, "")]
+    [InlineData("/Browse  docs ", SlashCommand.Browse, "docs")]
+    public void Parse_OpenAndBrowseTakeTheRestOfTheLine(string line, SlashCommand expected, string expectedArgs)
+    {
+        Assert.Equal((expected, expectedArgs), SlashCommands.Parse(line));
+    }
+
+    [Theory]
     [InlineData("/explore", "")]
     [InlineData("/explore docs", "docs")]
     [InlineData("/Explore  sub folder ", "sub folder")]
@@ -371,7 +383,7 @@ public class SlashCommandsTests
             SlashCommand.Learn,
             SlashCommand.Sys,   // /sys persona|operata|vocalia 2026-10-09: /persona, /operata and /vocalia (here since 2026-09-16) folded in
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.Profile, SlashCommand.Timer,   // /srvcopy, /cmdcopy and /keycopy here until 2026-10-09 (folded into /profile push|pull); /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
-            SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Terminal, SlashCommand.Shortcut, SlashCommand.Copy, SlashCommand.Session, SlashCommand.Rename, SlashCommand.GitUser,   // /shortcut [profile] [--log] 2026-10-07; /vault [path] 2026-09-23; /terminal [folder] 2026-10-03; /rename [name] 2026-10-05
+            SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Open, SlashCommand.Browse, SlashCommand.Terminal, SlashCommand.Shortcut, SlashCommand.Copy, SlashCommand.Session, SlashCommand.Rename, SlashCommand.GitUser,   // /shortcut [profile] [--log] 2026-10-07; /vault [path] 2026-09-23; /terminal [folder] 2026-10-03; /rename [name] 2026-10-05
             SlashCommand.Loop, SlashCommand.Plan, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Cmd, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.YouTube, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Perf, SlashCommand.Toolbar, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Log, SlashCommand.Process, SlashCommand.Tools, SlashCommand.Settings, SlashCommand.Find,   // /cmd <command> 2026-10-09; /find [words] 2026-10-07; /process [id] 2026-10-05; /settings <words> | changed 2026-10-04; /pdf later on 2026-10-03; /tools <group> 2026-10-03; /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /toolbar [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perfbar later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())
@@ -607,12 +619,12 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(69, SlashCommands.HelpEntries.Count);   // /persona, /operata and /vocalia gone 2026-10-09 (into /sys)     // /cmdlist and /police gone 2026-10-09 (into /tools shell)   // /cmd 2026-10-09   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
+        Assert.Equal(71, SlashCommands.HelpEntries.Count);   // /open and /browse 2026-10-09   // /persona, /operata and /vocalia gone 2026-10-09 (into /sys)     // /cmdlist and /police gone 2026-10-09 (into /tools shell)   // /cmd 2026-10-09   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
         Assert.Equal(
         [
-            "/about", "/botchat", "/camera", "/claude", "/clear", "/cmd", "/cmdclear", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
+            "/about", "/botchat", "/browse", "/camera", "/claude", "/clear", "/cmd", "/cmdclear", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/docker", "/draft", "/echo", "/exit", "/expand", "/explore", "/find", "/gituser", "/ha", "/header", "/help", "/imagine", "/interrupt", "/keycheck", "/learn", "/log",
-            "/loop", "/mcp", "/memory", "/model", "/new", "/pdf", "/perfbar", "/plan", "/print", "/process", "/profile", "/queue", "/reasoning",
+            "/loop", "/mcp", "/memory", "/model", "/new", "/open", "/pdf", "/perfbar", "/plan", "/print", "/process", "/profile", "/queue", "/reasoning",
             "/remember", "/rename", "/rewind", "/sampling", "/screen", "/server", "/sessions", "/settings", "/shortcut", "/skills", "/speak", "/splash", "/stt", "/sys", "/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/wake", "/window", "/youtube",
         ], SlashCommands.HelpEntries.Select(e => e.Command));

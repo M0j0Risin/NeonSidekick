@@ -803,14 +803,15 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 | `set_splash_image` | `path, name?` | Copies a picture from the working directory into the profile's `splash` folder, so it shows at start and on `/splash`. The first one replaces the bundled set. |
 
 * A refused run names the node and input at fault (a missing checkpoint, a bad value).
-* `image` is a path under the working directory or a pasted picture's `[Image #N]`. A pasted picture goes at its original size and is saved first into the output folder's `.pasted\` subfolder.
+* `image` is a path under the working directory, the full path a saved picture was given (a generated one, a photo, a screenshot, a paste), or a pasted picture's `[Image #N]`. A pasted picture goes at its original size, from the file it was saved as in *Pasted images folder* (saved first if its message wasn't sent yet).
+* The pictures are saved in *ComfyUI output folder* under the profile's `images` folder, out of the working directory; the result gives each one's full path.
 * `image2` and `image3` take the roles the workflow's `.md` names. Without a workflow name, the one taking that many pictures is used.
 
 ## Media
 
 ### Images
 
-These are file tools: *File tools* offers them, and they reach only the working directory.
+These are file tools: *File tools* offers them. They reach the working directory and, by the full path a result gave, the pictures saved in the profile's `images` folder (photos, screenshots, ComfyUI's pictures, pastes); nothing else outside the working directory.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -837,7 +838,7 @@ These are file tools: *File tools* offers them, and they reach only the working 
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `camera_capture` | `prompt` | Shows the model's request ("Hold the label up to the camera."), then waits for you to take the photo (*Camera shutter* `user`) or for your permission (`model`). The photo is saved in *Camera output folder* and attached after the result; a decline isn't retried that turn. Allowed in plan mode. |
+| `camera_capture` | `prompt` | Shows the model's request ("Hold the label up to the camera."), then waits for you to take the photo (*Camera shutter* `user`) or for your permission (`model`). The photo is saved in *Camera output folder* under the profile's `images` folder (the result gives its full path) and attached after the result; a decline isn't retried that turn. Allowed in plan mode. |
 
 On Windows the camera is Media Foundation's; on a Mac (macOS 14 or later) AVFoundation's: the built-in camera, a USB webcam, or an iPhone as Continuity Camera. A Mac asks once whether your terminal may use the camera (System Settings › Privacy & Security › Camera holds the answer); until it is allowed the tool's result says so, never a black picture.
 
@@ -845,7 +846,7 @@ On Windows the camera is Media Foundation's; on a Mac (macOS 14 or later) AVFoun
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see [Screen capture](COMMANDS.md#screen-capture)), after your yes under *Screen capture ask* `ask`. The screenshot is saved in *Screen capture output folder* and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
+| `screen_capture` | `target?, prompt` | Captures a monitor, every monitor or one window (see [Screen capture](COMMANDS.md#screen-capture)), after your yes under *Screen capture ask* `ask`. The screenshot is saved in *Screen capture output folder* under the profile's `images` folder (the result gives its full path) and attached after the result; a denial isn't retried that turn. Allowed in plan mode. |
 | `screen_list` | (none) | Lists the monitors and the windows with the target that names each. Titles and sizes only. Allowed in plan mode. |
 
 On Windows the pictures come from GDI; on a Mac (macOS 14 or later) from ScreenCaptureKit, at full pixels (a Retina screen at twice its points). A Mac needs Screen Recording for your terminal app (System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen the terminal); without it no picture is sent, only the sentence saying how to turn it on, and `screen_list` gives the monitors without the windows.

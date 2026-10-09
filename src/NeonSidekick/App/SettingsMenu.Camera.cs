@@ -124,11 +124,11 @@ internal sealed partial class SettingsMenu
         return buttons;
     }
 
-    /// <summary>How the menu shows an empty <c>Camera output folder</c> (2026-10-02): the photos land in the working directory itself. Pinned.</summary>
-    public const string CameraOutputHereLabel = "(the working directory)";
+    /// <summary>How the menu shows an empty <c>Camera output folder</c> (2026-10-02; the Screen and Pasted images folders' too): the pictures land in the profile's images folder itself (the working directory until 2026-10-09). Pinned.</summary>
+    public const string CameraOutputHereLabel = "(the profile's images folder)";
 
-    /// <summary>The settings-menu wording for a bad <c>Camera output folder</c>. Pinned.</summary>
-    public const string CameraOutputFolderError = "must be a folder under the working directory (a relative path), or empty";
+    /// <summary>The settings-menu wording for a bad <c>Camera output folder</c> (the Screen and Pasted images folders' too; under the images folder since 2026-10-09). Pinned.</summary>
+    public const string CameraOutputFolderError = "must be a folder under the profile's images folder (a relative path), or empty";
 
     /// <summary>The <c>Camera device</c> value with none saved: the first camera. Pinned.</summary>
     public const string FirstCameraLabel = "(first camera)";

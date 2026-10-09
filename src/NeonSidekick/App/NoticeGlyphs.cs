@@ -58,6 +58,9 @@ public static class NoticeGlyphs
     /// <summary>The working directory: <c>/cwd</c>, <c>/explore</c>.</summary>
     public const string Folder = "📂 ";
 
+    /// <summary><c>/open</c>'s notice and <c>/browse</c>'s status line (2026-10-09): a file handed to its default app.</summary>
+    public const string OpenFile = "📄 ";
+
     /// <summary><c>/terminal</c>'s notice (2026-10-03).</summary>
     public const string Terminal = "💻 ";
 

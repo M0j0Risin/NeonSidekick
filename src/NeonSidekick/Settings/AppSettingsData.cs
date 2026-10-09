@@ -1420,10 +1420,11 @@ public sealed class AppSettingsData
     public bool CameraKeepInSessions { get; set; }
 
     /// <summary>
-    /// The folder under the working directory the camera's photos are saved in (2026-10-02, the user's call: the
-    /// <see cref="ComfyOutputFolder"/> shape, so it may even be the same folder), made on first use; empty = the working
-    /// directory itself. Watch mode's double-clicked pictures go in its <c>.watch</c> subfolder. A path that leaves the sandbox
-    /// is refused on the settings row and at every save. <c>camera_images</c>, after <c>comfy_images</c>.
+    /// The folder the camera's photos are saved in (2026-10-02, the user's call: the <see cref="ComfyOutputFolder"/> shape, so it
+    /// may even be the same folder), made on first use. Under the profile's images folder since 2026-10-09 (the user's ask: kept
+    /// out of the working directory; <see cref="AppSettings.ProfileImagesDirectory"/>), under the working directory until then — no
+    /// migration, no files moved; empty = the images folder itself. Watch mode's double-clicked pictures go in its <c>.watch</c>
+    /// subfolder. A path that leaves the folder is refused on the settings row and at every save. <c>camera_images</c>, after <c>comfy_images</c>.
     /// </summary>
     public string CameraOutputFolder { get; set; } = DefaultCameraOutputFolder;
 
@@ -1491,9 +1492,9 @@ public sealed class AppSettingsData
     public bool ScreenKeepInSessions { get; set; }
 
     /// <summary>
-    /// The folder under the working directory the screenshots are saved in (2026-10-04, <see cref="CameraOutputFolder"/>'s shape),
-    /// made on first use; empty = the working directory itself. A path that leaves the sandbox is refused on the settings row and
-    /// at every save. <c>screen_images</c>.
+    /// The folder the screenshots are saved in (2026-10-04, <see cref="CameraOutputFolder"/>'s shape), made on first use: under the
+    /// profile's images folder since 2026-10-09, as the camera's; empty = the images folder itself. A path that leaves the folder is
+    /// refused on the settings row and at every save. <c>screen_images</c>.
     /// </summary>
     public string ScreenOutputFolder { get; set; } = DefaultScreenOutputFolder;
 
@@ -1604,6 +1605,17 @@ public sealed class AppSettingsData
     /// and Screen output folders' shape): empty (the default) = beside the source picture. Made on first write. Read at each call. No variable.
     /// </summary>
     public string ImageEditOutputFolder { get; set; } = "";
+
+    /// <summary>
+    /// The folder a picture pasted from the clipboard is saved in when its message is sent (2026-10-09, the user's ask; until then a
+    /// paste lived in memory, written only as <c>generate_image</c>'s input or for a double-click): under the profile's images folder
+    /// (<see cref="AppSettings.ProfileImagesDirectory"/>), made on first use; empty = the images folder itself. The sent text names the
+    /// file (<c>[Image #1, saved as …]</c>) so the picture tools can reach it. A dropped file keeps its own and is not copied. A path
+    /// that leaves the folder is refused on the settings row. Read at each send. No variable.
+    /// </summary>
+    public string PastedImagesFolder { get; set; } = DefaultPastedImagesFolder;
+
+    public const string DefaultPastedImagesFolder = "pasted_images";
 
     // ─── GitLib ─────────────────────────────────────────────────────────────────
     // Renamed Git native … on 2026-09-21 (the user's call): the in-process LibGit2Sharp tools as
@@ -2174,8 +2186,9 @@ public sealed class AppSettingsData
     public const int DefaultComfyMaxPicturesPerCall = 5;
 
     /// <summary>
-    /// The folder under the working directory the generated pictures are saved in (2026-09-24), made on first use;
-    /// empty = the working directory itself. A path that leaves the sandbox is refused at the call, as any file tool's.
+    /// The folder the generated pictures are saved in (2026-09-24), made on first use: under the profile's images folder since
+    /// 2026-10-09 (the user's ask; <see cref="AppSettings.ProfileImagesDirectory"/>), under the working directory until then — no
+    /// migration; empty = the images folder itself. A path that leaves the folder is refused at the call.
     /// <c>comfy_images</c> since later still on 2026-09-24 (the user's call: <c>images</c> said nothing of where they came
     /// from); a profile saved with the old <c>images</c> keeps it — no migration, no files moved.
     /// </summary>

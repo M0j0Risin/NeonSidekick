@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using NeonSidekick.Files;
 
 namespace NeonSidekick.UI;
@@ -24,7 +25,7 @@ namespace NeonSidekick.UI;
 /// the draft with each token replaced by its label (what the pane draws). The two index mappings
 /// carry the cursor and the selection one way and a click the other. Every rule pinned.</para>
 /// </summary>
-public sealed class PasteBlocks
+public sealed partial class PasteBlocks
 {
     /// <summary>A paste of more lines than this is a token.</summary>
     public const int InlineMaxLines = 3;
@@ -48,6 +49,9 @@ public sealed class PasteBlocks
     private sealed record Block(int Number, string? Text, ImageAttachment? Image, byte[]? Original = null, string? SourcePath = null, char? Glyph = null);
 
     private readonly List<Block> _blocks = new();
+
+    /// <summary>A clipboard picture's file once its message was sent (2026-10-09), by its number: <see cref="MarkSaved"/>. Under the blocks' lock.</summary>
+    private readonly Dictionary<int, string> _saved = new();
 
     /// <summary>The literal token of each private-use character seen so far: one per character, however often it is pasted.</summary>
     private readonly Dictionary<char, char> _literals = new();
@@ -230,16 +234,16 @@ public sealed class PasteBlocks
             return null;
         }
 
-        if (block.Original is { } bytes)
+        if (block.Original is { } bytes && block.SourcePath is null)
         {
-            return new PastedPicture(bytes, null);
+            return new PastedPicture(bytes, null, SavedPath(number));
         }
 
         if (block.SourcePath is { } path)
         {
             try
             {
-                return File.Exists(path) ? new PastedPicture(File.ReadAllBytes(path), Path.GetFileName(path)) : null;
+                return File.Exists(path) ? new PastedPicture(File.ReadAllBytes(path), Path.GetFileName(path), path) : null;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -249,6 +253,66 @@ public sealed class PasteBlocks
 
         return null;
     }
+
+    /// <summary>The number of the pasted picture <paramref name="image"/> is (the very attachment the draft's token stands for); null for any other picture.</summary>
+    public int? NumberOf(ImageAttachment image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        lock (_blocks)
+        {
+            return _blocks.Find(b => ReferenceEquals(b.Image, image))?.Number;
+        }
+    }
+
+    /// <summary>
+    /// Whether picture <paramref name="number"/> came off the clipboard (2026-10-09): its own bytes kept and no file of its own, so it is
+    /// saved when its message is sent. A dropped file has its file, and a picture kept without its source is not saved.
+    /// </summary>
+    public bool IsClipboard(int number)
+    {
+        lock (_blocks)
+        {
+            return _blocks.Find(b => b.Image is not null && b.Number == number) is { Original: not null, SourcePath: null };
+        }
+    }
+
+    /// <summary>Where clipboard picture <paramref name="number"/> was saved (<see cref="MarkSaved"/>); null until then.</summary>
+    public string? SavedPath(int number)
+    {
+        lock (_blocks)
+        {
+            return _saved.GetValueOrDefault(number);
+        }
+    }
+
+    /// <summary>Records that clipboard picture <paramref name="number"/> was saved as <paramref name="path"/> (a full path), so a resend reuses the file.</summary>
+    public void MarkSaved(int number, string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        lock (_blocks)
+        {
+            _saved[number] = path;
+        }
+    }
+
+    /// <summary>
+    /// The label a saved clipboard picture carries in the sent text (2026-10-09, the user's pick): <c>[Image #1, saved as C:\…\pasted-…png]</c>,
+    /// so the model can hand the file to its picture tools. The transcript's line keeps <see cref="ImageLabel"/>. Pinned.
+    /// </summary>
+    public static string SavedLabel(int number, string path) => $"[Image #{number}, saved as {path}]";
+
+    /// <summary>
+    /// <paramref name="text"/> with every <see cref="SavedLabel"/> put back as its <see cref="ImageLabel"/>: a sent message read back as
+    /// it was typed (<c>/rewind</c>'s draft, a withdrawn line). Pure.
+    /// </summary>
+    public static string WithoutSavedPaths(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return SavedLabelPattern().Replace(text, "[Image #$1]");
+    }
+
+    [GeneratedRegex(@"\[Image #(\d+), saved as [^\]\r\n]*\]", RegexOptions.CultureInvariant)]
+    private static partial Regex SavedLabelPattern();
 
     private char Keep(Block block)
     {

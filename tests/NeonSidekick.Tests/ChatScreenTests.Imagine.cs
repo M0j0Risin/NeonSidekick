@@ -47,7 +47,8 @@ public partial class ChatScreenTests
         return stub;
     }
 
-    private static string Generated(int seed) => ComfyText.TextToImageGlyph + $@"generated 1 picture with pony (seed {seed}, 1024×1024): comfy_images\pony-{seed}.png";
+    // The head of the line: the full path under the profile's images folder follows it since 2026-10-09, wrapped at the console's width.
+    private static string Generated(int seed) => ComfyText.TextToImageGlyph + $"generated 1 picture with pony (seed {seed}, 1024×1024): ";
 
     /// <summary>
     /// A generation past the grace goes behind the line with the notice; a message sent meanwhile is answered at once and goes
@@ -102,7 +103,7 @@ public partial class ChatScreenTests
         Assert.StartsWith("(the user made a picture with /imagine", second.Text);
         Assert.EndsWith("what did you make?", second.Text);
         Assert.Single(second.Contents.OfType<DataContent>());
-        Assert.True(File.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", "pony-5.png")));
+        Assert.True(File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", "pony-5.png")));
     }
 
     /// <summary>Two behind the line, the second done first: drawn in the order sent, the second held back until the first ends.</summary>
@@ -150,7 +151,7 @@ public partial class ChatScreenTests
 
         // The second's picture is on disk before the first is: its generation has ended, its drawing waits.
         bool PictureSaved(int seed) =>
-            File.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", $"pony-{seed}.png"));
+            File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", $"pony-{seed}.png"));
     }
 
     /// <summary>The strip's 🖼️ double-clicked at the idle line: the generation behind the line is cancelled with one notice, and no picture comes.</summary>

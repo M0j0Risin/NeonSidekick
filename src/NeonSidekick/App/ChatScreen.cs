@@ -611,6 +611,13 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _clockTools;
     private readonly IReadOnlyList<AIFunction> _helpTools = HelpTools();
     private readonly WorkingDirectory _files;
+
+    /// <summary>
+    /// The profile's images folder (2026-10-09, the user's ask: the camera's, the screen's, ComfyUI's and the pasted pictures kept out
+    /// of the working directory): <c>&lt;profile&gt;/images</c>, read live so a profile switch moves it, its paths named in full
+    /// (<see cref="WorkingDirectoryOptions.Images"/>) — what the picture tools reach besides the sandbox.
+    /// </summary>
+    private readonly WorkingDirectory _images;
     private readonly IReadOnlyList<AIFunction> _fileTools;
     private readonly WebAccess _web;
     private readonly PdfConverter _pdf;
@@ -1057,6 +1064,7 @@ internal sealed partial class ChatScreen
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05).
         _files.Databases = () => _effective().SqliteTools ? SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
         _files.ServerDatabases = () => Shell.ServerDatabasePolice.For(_effective(), _settings.ProfileDirectory, _settings.StorageDirectory);
+        _images = new WorkingDirectory(() => _settings.ProfileImagesDirectory, time, WorkingDirectoryOptions.Images);
         // The UNC shares' door (2026-09-30) before the file tools: open reaches the offered shares too (2026-10-01).
         // The profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
         _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
@@ -1066,7 +1074,7 @@ internal sealed partial class ChatScreen
         // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time);
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf);
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images);
         _timers = new TimerBoard(time, SignalAlert);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
@@ -1094,8 +1102,9 @@ internal sealed partial class ChatScreen
         _uncTools = UncTools(_unc, _files, _effective);
         // The image tools (2026-09-24): the profile's comfy folder over the home's, rescanned at every call; the client made for the ComfyUI URL in force.
         // A pasted picture as generate_image's input (later still on 2026-09-24): the line's store at full size, read at
-        // call time — the input line is built below, so the lambda reads the field then, not now.
-        _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: n => _input?.Pastes.Original(n), time: _time);
+        // call time — the input line is built below, so the lambda reads the field then, not now. Saved first when it was not
+        // sent yet (2026-10-09, PastedForComfy). The pictures go to the profile's images folder (2026-10-09).
+        _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: PastedForComfy, time: _time, images: _images);
         _comfyTools = ComfyTools(_comfy, _files, () => _settings.ProfileSplashDirectory);
         // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
         _ha = new HaSession(_effective, haClient, _time);
@@ -1105,7 +1114,7 @@ internal sealed partial class ChatScreen
         _dockerTools = DockerTools(_docker, ConfirmDockerAsync);
         // The camera (2026-10-02): one shared stream; photos into the Camera output folder; the model's tool asks on the pane.
         _camera = new CameraSession(camera, () => CameraSettings.Options(_effective()), _time);
-        _cameraCapture = new CameraCapture(_camera, () => _files, () => _effective().CameraOutputFolder, () => CameraSettings.Options(_effective()), _time);
+        _cameraCapture = new CameraCapture(_camera, () => _images, () => _effective().CameraOutputFolder, () => CameraSettings.Options(_effective()), _time);
         _cameraTools = CameraTools(ShootForModelAsync);
         _cameraWatch = new CameraWatch(_camera, _time, () => _effective().CameraWatchThreshold, OnWatchChanged);
         _liveView = liveView;
@@ -1115,7 +1124,7 @@ internal sealed partial class ChatScreen
         _hotkeyProbe = hotkeyProbe;
         // /shortcut (2026-10-07): the shell's ShellLink in the app on Windows, a .command file on a Mac (2026-10-08), a fake in tests, none elsewhere.
         _shortcutWriter = shortcutWriter;
-        _screenCapture = screenSystem is null ? null : new Screen.ScreenCapture(screenSystem, () => _files, () => _effective().ScreenOutputFolder, _time);
+        _screenCapture = screenSystem is null ? null : new Screen.ScreenCapture(screenSystem, () => _images, () => _effective().ScreenOutputFolder, _time);
         _screenTools = ScreenTools(CaptureForModelAsync, screenSystem);
         // The YouTube tools (2026-10-05): the Data API over the web tools' client, the video window when there is one.
         _videoPlayer = videoPlayer;
@@ -4233,7 +4242,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Cwd:
                 return MentionCompleter.Matches([new(CwdHomeWord, CwdDefaultNote), new(CwdBrowseWord, FolderText.BrowseNote)], argText);
 
-            case SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal:
+            case SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Browse:
                 return MentionCompleter.Matches(sources.Folders(argText).Select(folder => new CompletionItem(folder, "")).ToList(), argText);
 
             case SlashCommand.Vault:
@@ -4452,11 +4461,12 @@ internal sealed partial class ChatScreen
     /// argument list's (2026-09-30), since the command takes a bare path. The file lists of <see cref="ArgumentPaths"/>
     /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c>, <c>/terminal</c> and <c>/vault</c>
     /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>), and
-    /// <c>/cwd</c>'s list of any drive's folders (2026-10-05). Pinned.
+    /// <c>/cwd</c>'s list of any drive's folders (2026-10-05), and <c>/open</c>'s files and <c>/browse</c>'s folders (2026-10-09). Pinned.
     /// </summary>
     public static bool TakesPathArgument(string command) =>
         SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
-            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault or SlashCommand.Cwd;
+            or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault or SlashCommand.Cwd
+            or SlashCommand.Open or SlashCommand.Browse;
 
     /// <summary>
     /// The path list for a command whose argument is a sandbox path — <c>/speak</c> (2026-09-17),
@@ -4494,6 +4504,11 @@ internal sealed partial class ChatScreen
             return CwdPaths(argText, sources);
         }
 
+        if (kind == SlashCommand.Open)
+        {
+            return OpenPaths(argText, sources);
+        }
+
         if (kind is not (SlashCommand.Speak or SlashCommand.View))
         {
             return null;
@@ -4520,6 +4535,32 @@ internal sealed partial class ChatScreen
         }
 
         return flag.Length == 0 ? found : found with { Paths = [.. found.Paths.Select(p => flag + p)] };
+    }
+
+    /// <summary>
+    /// <c>/open</c>'s path list (2026-10-09): any file of the working directory, folders listed to go into, as <c>/view</c>'s list
+    /// with every file in place of the pictures; the same closing rules (whitespace at the end, a file typed in full). Null without
+    /// the file list. Pure over <paramref name="sources"/>.
+    /// </summary>
+    private static MentionResult? OpenPaths(string argText, ArgumentSources sources)
+    {
+        if (sources.AnyFiles is not { } files)
+        {
+            return null;
+        }
+
+        if (argText.Length > 0 && char.IsWhiteSpace(argText[^1]))
+        {
+            return new MentionResult(FileOutcome.Ok, [], false);
+        }
+
+        var found = files(argText);
+        if (found.Paths.Count == 1 && string.Equals(found.Paths[0], argText, StringComparison.OrdinalIgnoreCase))
+        {
+            return new MentionResult(FileOutcome.Ok, [], false);
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -4976,7 +5017,8 @@ internal sealed partial class ChatScreen
     /// 2026-10-04: <c>image_info</c> and <c>image_edit</c> after <c>open</c>, so the PDF tool stays last; they read
     /// <c>Image edit quality</c>, <c>metadata</c> and <c>output folder</c> from <paramref name="effective"/> at every call.
     /// </summary>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null)
+    /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there; null = the working directory alone.</param>
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null)
     {
         var tools = new List<AIFunction>(17)
         {
@@ -4999,9 +5041,9 @@ internal sealed partial class ChatScreen
         // place, fifth.
         if (ImageCodecs.Available)
         {
-            tools.Insert(4, new ViewImageTool(files, effective));
-            tools.Add(new ImageInfoTool(files, effective));
-            tools.Add(new ImageEditTool(files, effective));
+            tools.Insert(4, new ViewImageTool(files, effective, images));
+            tools.Add(new ImageInfoTool(files, effective, images));
+            tools.Add(new ImageEditTool(files, effective, images));
         }
 
         if (pdf is not null)
@@ -7704,6 +7746,98 @@ internal sealed partial class ChatScreen
         _transcript.Notice(ExploreOpenedNotice(result.Relative));
     }
 
+    // ── /open (2026-10-09) ──────────────────────────────────────────────────
+
+    /// <summary>The <c>/open</c> notice: the file as the file tools name it. Pinned.</summary>
+    public static string OpenOpenedNotice(string relative) => "(" + NoticeGlyphs.OpenFile + "opened " + FileText.Name(relative) + " in its default app)";
+
+    /// <summary><c>/open</c> with no file. Pinned.</summary>
+    public const string OpenUsageError = "Usage: /open <file>";
+
+    /// <summary>What follows <c>/open</c>'s error on a folder: the two commands that take one. Pinned.</summary>
+    public const string OpenFolderHint = " (/explore or /browse opens a folder)";
+
+    /// <summary>
+    /// <c>/open &lt;file&gt;</c> (2026-10-09, the user's ask: "similar to /view but limits the choices to files"): a file under the
+    /// working directory, resolved through the sandbox, handed to the same shell-execute opener the <c>open</c> tool and
+    /// <see cref="HandleExplore"/> use — its default app. A folder is refused (<see cref="WorkingDirectory.Open"/>'s
+    /// <c>filesOnly</c>), with the commands that take one named. Nothing is refused by its kind: a program or a script runs, as
+    /// a double-click in Explorer runs it and as the <c>open</c> tool does; the hand is the user's own.
+    /// </summary>
+    private void HandleOpen(string args)
+    {
+        if (args.Trim().Length == 0)
+        {
+            _transcript.Error(OpenUsageError);
+            return;
+        }
+
+        var result = _files.Open(args.Trim(), _openFile, filesOnly: true);
+        if (result.Outcome != FileOutcome.Ok)
+        {
+            _transcript.Error(FileText.Opened(result) + (result.Outcome == FileOutcome.IsDirectory ? OpenFolderHint : ""));
+            return;
+        }
+
+        _transcript.Notice(OpenOpenedNotice(result.Relative));
+    }
+
+    // ── /browse (2026-10-09) ────────────────────────────────────────────────
+
+    /// <summary><c>/browse</c>'s line on the pane's path row after Enter opened a file. Pinned.</summary>
+    public static string BrowseOpenedLine(string relative) => NoticeGlyphs.OpenFile + "opened " + FileText.Name(relative) + " in its default app";
+
+    /// <summary>
+    /// <c>/browse [folder]</c> (2026-10-09, the user's ask: "similar to /tree", the pane like <c>/cwd browse</c>'s): the working
+    /// directory's folders and files as a tree on the pane (<see cref="FolderPane.BrowseAsync"/> over <see cref="SandboxEntries"/>),
+    /// rooted at the sandbox's root and opened on the folder named — resolved through the sandbox as <c>/tree</c> resolves one, outside
+    /// the root, missing or a file the usual error. Enter on a file hands it to <see cref="WorkingDirectory.Open"/> (<c>filesOnly</c>, the
+    /// sandbox checked again on every open) and the default app, the line shown on the pane, which stays open (the user's pick).
+    /// With no pane there is no tree, as <c>/cwd browse</c>. Under a reply it is a <see cref="MidTurnClass.Pane"/> as <c>/tree</c> is:
+    /// its lines go to <paramref name="sink"/>, the flow there.
+    /// </summary>
+    private async Task HandleBrowseAsync(string args, INoticeSink sink, CancellationToken cancellationToken)
+    {
+        if (!_folderPane.Enabled)
+        {
+            sink.Notice(FolderText.BrowseNeedsPaneNotice);
+            return;
+        }
+
+        string folder = args.Trim();
+        var outcome = _files.Resolve(folder, forWrite: false, out string full);
+        if (outcome == FileOutcome.Ok && folder.Length > 0 && !Directory.Exists(full))
+        {
+            outcome = File.Exists(full) ? FileOutcome.IsAFile : FileOutcome.Missing;
+        }
+
+        if (outcome != FileOutcome.Ok)
+        {
+            sink.Error(FileText.Error(outcome, folder, "browse"));
+            return;
+        }
+
+        string root = _files.Root;
+        try
+        {
+            Directory.CreateDirectory(root);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Left to the tree: the root opens as denied.
+        }
+
+        var tree = new FolderTree(new SandboxEntries(root, FileBrowserMode.Resolve(_effective())), withFiles: true);
+        int cursor = tree.ExpandTo(folder.Length == 0 ? root : full);
+        tree.Expand(cursor);   // the folder named (or the root) open, its entries in view
+
+        await _folderPane.BrowseAsync(tree, cursor, path =>
+        {
+            var result = _files.Open(_files.Relative(path), _openFile, filesOnly: true);
+            return result.Outcome == FileOutcome.Ok ? (BrowseOpenedLine(result.Relative), false) : (FileText.Opened(result), true);
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
     // ── /terminal (2026-10-03) ──────────────────────────────────────────────
 
     /// <summary>The <c>/terminal</c> notice: the folder as the file tools name it (blank = the working directory). Pinned.</summary>
@@ -8188,8 +8322,8 @@ internal sealed partial class ChatScreen
 
     public static string ComfyPurgedNotice(string path, int files, int folders, long bytes) => $"({TrashGlyph}purged {path}: {TrashContents(files, folders, bytes)})";
 
-    /// <summary>A <c>/comfy purge</c> with the output folder set to the working directory itself: refused, it would take everything. Pinned.</summary>
-    public const string ComfyPurgeHereError = "Not purging: the ComfyUI output folder is the working directory itself; set a folder under it first.";
+    /// <summary>A <c>/comfy purge</c> with the output folder set to the profile's images folder itself (the working directory until 2026-10-09): refused, it would take the camera's, the screen's and the pasted pictures too. Pinned.</summary>
+    public const string ComfyPurgeHereError = "Not purging: the ComfyUI output folder is the profile's images folder itself; set a folder under it first.";
 
     public static string ComfyPurgeFailedError(string path, string detail) => $"Could not purge {path}: {detail}";
 
@@ -8202,8 +8336,8 @@ internal sealed partial class ChatScreen
     private async Task PurgeComfyAsync(CancellationToken cancellationToken)
     {
         string folder = ComfyStudio.OutputFolder(_effective().ComfyOutputFolder);
-        var outcome = _files.Resolve(folder, forWrite: true, out string full);
-        if (outcome == FileOutcome.Ok && string.Equals(full, _files.Root, StringComparison.OrdinalIgnoreCase))
+        var outcome = _images.Resolve(folder, forWrite: true, out string full);
+        if (outcome == FileOutcome.Ok && string.Equals(full, _images.Root, StringComparison.OrdinalIgnoreCase))
         {
             _flow.Error(ComfyPurgeHereError);
             return;
@@ -8215,7 +8349,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var info = _files.Info(folder);
+        var info = _images.Info(folder);
         if (info.Outcome == FileOutcome.Missing || (info.Outcome == FileOutcome.Ok && info.Files == 0 && info.Folders == 0))
         {
             _flow.Notice(ComfyPurgeEmptyNotice(full));
@@ -8242,7 +8376,7 @@ internal sealed partial class ChatScreen
 
         RunOrPost(() =>
         {
-            var result = _files.PurgeFolder(folder);
+            var result = _images.PurgeFolder(folder);
             if (result.Outcome == FileOutcome.Ok)
             {
                 _transcript.Notice(ComfyPurgedNotice(full, result.Files, result.Folders, result.Bytes));
@@ -11189,6 +11323,14 @@ internal sealed partial class ChatScreen
                 HandleExplore(args);
                 return false;
 
+            case SlashCommand.Open:
+                HandleOpen(args);
+                return false;
+
+            case SlashCommand.Browse:
+                await HandleBrowseAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Terminal:
                 HandleTerminal(args);
                 return false;
@@ -13549,6 +13691,8 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // The clipboard's pictures saved into the Pasted images folder (2026-10-09, the user's ask), each label in the sent text naming its file.
+        (text, images) = SavePastedPictures(text, images);
         // The camera's photos (2026-10-02): marked so a stored session keeps a line instead; watch mode's changed picture rides along.
         images = MarkScreenImages(MarkCameraImages(images));
         if (_session.EmbeddedServer is not { Vision: false } && _cameraWatch.Running && _cameraWatch.TakePending() is { } seen)
@@ -13608,7 +13752,7 @@ internal sealed partial class ChatScreen
                 // the history recalls it (its tokens intact; a spoken request was remembered too).
                 // A drained message went through the same Enter arm, so it comes back the same way,
                 // and the idle loop reads that draft before it drains the next (2026-09-18).
-                _restoreDraft = _sentDraft ?? text;
+                _restoreDraft = _sentDraft ?? PasteBlocks.WithoutSavedPaths(text);
                 // Back on the row at once (2026-09-25), ahead of whatever was typed under the reply.
                 _input.Chat.Load(_restoreDraft, prependToCurrent: true);
                 return false;
@@ -14301,7 +14445,7 @@ internal sealed partial class ChatScreen
             }
 
             // What /copy sees: the reply as shown, partial or whole, with the line that asked for it.
-            _log.Add(text, reply.ToString(), thoughts.Thoughts);
+            _log.Add(PasteBlocks.WithoutSavedPaths(text), reply.ToString(), thoughts.Thoughts);   // a saved paste as it was typed (2026-10-09)
             _lastReply = reply.ToString();
             // What the session store keeps (2026-09-18): the same pair, the model's call count and
             // the request's tokens, then the whole history as it stands. A withdrawn turn left the
@@ -14498,7 +14642,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private (DateTime? CreatedUtc, string Path) PictureFileStamp(ImageAttachment image)
     {
-        if (_files.Resolve(image.Path, forWrite: false, out string resolved) == FileOutcome.Ok && File.Exists(resolved))
+        if (ResolvePicture(image.Path, out string resolved) == FileOutcome.Ok && File.Exists(resolved))
         {
             try
             {
@@ -14677,7 +14821,7 @@ internal sealed partial class ChatScreen
         string? full = null;
         if (sandbox)
         {
-            if (_files.Resolve(image.Path, forWrite: false, out string resolved) == FileOutcome.Ok && File.Exists(resolved))
+            if (ResolvePicture(image.Path, out string resolved) == FileOutcome.Ok && File.Exists(resolved))
             {
                 full = resolved;
             }
@@ -14698,12 +14842,24 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// A picture's path resolved where it lives (2026-10-09): a full path in the profile's images folder there, anything else in the
+    /// working directory (<see cref="FileTool.For"/>), each with its own checks.
+    /// </summary>
+    private FileOutcome ResolvePicture(string path, out string full) => FileTool.For(_files, _images, path).Resolve(path, forWrite: false, out full);
+
+    /// <summary>
     /// The picture viewer on the ComfyUI output folder (2026-09-27, the user's ask): the strip's button and <c>/comfy view</c>.
     /// The folder resolves in the sandbox as <c>/comfy purge</c>'s does and is made when it is not there yet, so the window
     /// can watch it before the first picture. A click opens it silently, as a picture's double-click does; the typed
     /// command says so (<paramref name="notice"/>). Errors go through the flow sink, so they wait for a running reply. Any thread.
     /// </summary>
-    private void OpenViewer(bool notice = false)
+    private void OpenViewer(bool notice = false) => OpenViewerOn(_effective().ComfyOutputFolder, notice);
+
+    /// <summary>
+    /// The picture viewer on <paramref name="folderSetting"/>'s folder under the profile's images folder (<see cref="OpenViewer"/>'s body;
+    /// <c>/camera view</c> and <c>/screen view</c> since 2026-10-09, the user's ask), made when it is not there yet. Any thread.
+    /// </summary>
+    private void OpenViewerOn(string? folderSetting, bool notice)
     {
         if (_openViewer is null)
         {
@@ -14711,8 +14867,8 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        string folder = ComfyStudio.OutputFolder(_effective().ComfyOutputFolder);
-        var outcome = _files.Resolve(folder, forWrite: true, out string full);
+        string folder = ComfyStudio.OutputFolder(folderSetting);
+        var outcome = _images.Resolve(folder, forWrite: true, out string full);
         if (outcome != FileOutcome.Ok)
         {
             _flow.Error(FileText.Error(outcome, folder, "watch"));

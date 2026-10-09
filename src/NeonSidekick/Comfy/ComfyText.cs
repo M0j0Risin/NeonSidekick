@@ -45,7 +45,7 @@ public static class ComfyText
     public static string TakesNoImage(string name) => $"Error: workflow '{name}' takes no input image (it has no {{{{image}}}} placeholder)";
 
     /// <summary>A workflow with <c>{{image}}</c> called without one. Pinned.</summary>
-    public static string NeedsImage(string name) => $"Error: workflow '{name}' needs an input image: give \"image\" (a picture under the working directory, or a pasted one's [Image #N] label)";
+    public static string NeedsImage(string name) => $"Error: workflow '{name}' needs an input image: give \"image\" (a picture under the working directory, a saved picture's full path, or a pasted one's [Image #N] label)";
 
     /// <summary>A multi-image workflow (later still on 2026-09-24, the face swap) given another number of pictures than it takes. Pinned.</summary>
     public static string WrongImageCount(ComfyWorkflow workflow, int given)
@@ -404,7 +404,7 @@ public static class ComfyText
     {
         ArgumentNullException.ThrowIfNull(workflows);
         var sb = new StringBuilder(
-            "Generates pictures on the user's ComfyUI server from one of their workflows and saves them under the working directory; you see them in the next message. " +
+            "Generates pictures on the user's ComfyUI server from one of their workflows and saves them in the user's images folder (the result gives each full path); you see them in the next message. " +
             "When the user describes a picture in their own words, write the prompt yourself in the dialect of the workflow's family (below). " +
             "When the user gives a ready-made prompt — tags, score_9 / score_8_up, (tag:1.2) weights, or says to use their prompt as is — pass it unchanged in prompt with verbatim true, and their negative the same way; never rewrite, reorder or add to it. " +
             "For an edit, restyle or upscale of an existing picture, give its path — or, for a picture the user pasted, its label ([Image #1]), which sends it at full size — as image and pick a workflow that takes one. " +

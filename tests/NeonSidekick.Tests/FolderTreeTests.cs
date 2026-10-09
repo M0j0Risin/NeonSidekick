@@ -39,6 +39,41 @@ public class FolderTreeTests
     /// <summary>The bare roots: two drives on Windows, the one <c>/</c> elsewhere.</summary>
     private static string[] Roots => OperatingSystem.IsWindows() ? [C, D] : [C];
 
+    /// <summary>A tree made <c>withFiles</c> (2026-10-09, <c>/browse</c>): each folder's files after its subfolders, at its depth, leaves that never expand; a picker's tree over the same source lists none.</summary>
+    [Fact]
+    public void WithFiles_ListsTheFilesAfterTheFolders_AsLeaves_AndAPickerListsNone()
+    {
+        var folders = new FakeFolders().Root(C).Add(C, "docs", "src").AddFiles(C, "a.txt", "b.md").AddFiles(P(C, "docs"), "c.md");
+        var tree = new FolderTree(folders, withFiles: true);
+
+        Assert.True(tree.Expand(0));
+        Assert.Equal([C, "docs", "src", "a.txt", "b.md"], Names(tree));
+        Assert.Equal([false, false, false, true, true], tree.Visible.Select(n => n.IsFile).ToArray());
+        Assert.All(tree.Visible.Skip(1), n => Assert.Equal(1, n.Depth));
+        Assert.Equal(P(C, "a.txt"), tree.Visible[3].Path);
+
+        // A file is a leaf: no read, no expand, its own glyph.
+        int reads = folders.Reads;
+        Assert.True(tree.Visible[3].IsLeaf);
+        Assert.False(tree.Expand(3));
+        Assert.False(tree.Toggle(3));
+        Assert.Equal(reads, folders.Reads);
+        Assert.Equal(FolderText.FileGlyph, FolderText.Glyph(tree.Visible[3]));
+
+        // A folder holding only files opens on them.
+        Assert.True(tree.Expand(1));
+        Assert.Equal([C, "docs", "c.md", "src", "a.txt", "b.md"], Names(tree));
+        Assert.Equal(2, tree.Visible[2].Depth);
+
+        // ExpandTo stops at the folder above a file named on the way.
+        var again = new FolderTree(folders, withFiles: true);
+        Assert.Equal(0, again.ExpandTo(P(C, "a.txt", "x")));
+
+        var picker = new FolderTree(folders);
+        picker.Expand(0);
+        Assert.Equal([C, "docs", "src"], Names(picker));
+    }
+
     [Fact]
     public void Opens_OnTheRootsAlone_EachAtDepthZero_NothingRead()
     {

@@ -10257,7 +10257,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 117;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more
+        _console.Profile.Height = 120;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);
@@ -10298,7 +10298,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt_Unix()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 117;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more
+        _console.Profile.Height = 120;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);
@@ -12843,6 +12843,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Copy, false, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Remember, true, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Explore, false, MidTurnClass.Quick)]
+    [InlineData(SlashCommand.Open, true, MidTurnClass.Quick)]   // a window of its own, as /explore (2026-10-09)
     [InlineData(SlashCommand.Terminal, false, MidTurnClass.Quick)]   // 2026-10-03
     [InlineData(SlashCommand.Shortcut, true, MidTurnClass.Quick)]   // 2026-10-07
     [InlineData(SlashCommand.Timer, true, MidTurnClass.Quick)]
@@ -12859,6 +12860,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Cwd, false, MidTurnClass.Quick)]   // the bare /cwd, later on 2026-09-27
     [InlineData(SlashCommand.Cwd, true, MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Tree, false, MidTurnClass.Pane)]   // the info pane, later on 2026-09-27
+    [InlineData(SlashCommand.Browse, true, MidTurnClass.Pane)]   // the tree pane, as /tree (2026-10-09)
     [InlineData(SlashCommand.Vault, true, MidTurnClass.Pane)]
     [InlineData(SlashCommand.HomeAssistant, false, MidTurnClass.Pane)]   // 2026-09-30: on the watcher, the reply streaming on
     [InlineData(SlashCommand.HomeAssistant, true, MidTurnClass.Pane)]
@@ -14551,6 +14553,142 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    // ── /open and /browse (2026-10-09) ──────────────────────────────────────
+
+    /// <summary><c>/open &lt;file&gt;</c>: a file goes to the opener and says so; no argument is the usage, a folder is refused with the commands that take one, a missing or outside path is the usual file error.</summary>
+    [Fact]
+    public async Task Open_OpensAFile_AndRefusesAFolder_AMissingPath_AndOneOutside()
+    {
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "1");
+        PushLine("/open");
+        PushLine("/open notes.txt");
+        PushLine("/open docs");
+        PushLine("/open nope.txt");
+        PushLine("/open ../x.txt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(new[] { Path.Combine(files, "notes.txt") }, _openedFiles);
+        Assert.Contains("  ✗ " + ChatScreen.OpenUsageError, output);
+        Assert.Contains("  · " + ChatScreen.OpenOpenedNotice("notes.txt"), output);
+        Assert.Contains("  · (📄 opened notes.txt in its default app)", output);
+        Assert.Contains("  ✗ " + FileText.IsDirectory("docs" + Path.DirectorySeparatorChar) + ChatScreen.OpenFolderHint, output);
+        Assert.Contains("  ✗ " + FileText.Missing("nope.txt"), output);
+        Assert.Contains("  ✗ " + FileText.OutsideRoot("../x.txt"), output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary><c>/open</c> when the opener throws (no app for the file): the failure is an error line, nothing more.</summary>
+    [Fact]
+    public async Task Open_WhenTheOpenerThrows_SaysSo()
+    {
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "1");
+        _openFile = _ => throw new System.ComponentModel.Win32Exception("no app");
+        PushLine("/open notes.txt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ ", output);
+        Assert.Contains("no app", output);
+        Assert.DoesNotContain(ChatScreen.OpenOpenedNotice("notes.txt"), output);
+    }
+
+    /// <summary><c>/open</c>'s argument list: folders to go into and every file, not the pictures alone; a file typed in full closes it.</summary>
+    [Fact]
+    public void Open_ArgumentList_OffersEveryFile()
+    {
+        var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], _ => new MentionResult(FileOutcome.Ok, [], false), _ => new MentionResult(FileOutcome.Ok, [], false))
+        {
+            AnyFiles = prefix => new MentionResult(FileOutcome.Ok, new[] { "docs/", "notes.txt", "run.ps1" }.Where(p => p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList(), false),
+        };
+
+        Assert.Equal(["docs/", "notes.txt", "run.ps1"], ChatScreen.ArgumentPaths("/open", "", sources)!.Paths);
+        Assert.Equal(["notes.txt"], ChatScreen.ArgumentPaths("/open", "n", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/open", "notes.txt", sources)!.Paths);   // typed in full: Enter sends
+        Assert.Empty(ChatScreen.ArgumentPaths("/open", "notes.txt ", sources)!.Paths);
+    }
+
+    /// <summary><c>/browse</c> without the pane (a redirected console): the notice, nothing opened.</summary>
+    [Fact]
+    public async Task Browse_WithoutThePane_NeedsTheScreen()
+    {
+        PushLine("/browse");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + FolderText.BrowseNeedsPaneNotice, output);
+        Assert.Empty(_openedFiles);
+    }
+
+    /// <summary>
+    /// <c>/browse</c> on the pane (2026-10-09): the working directory's root open, its folders and then its files (a dot-file left out
+    /// under the default mode); Enter on a folder opens it, Enter on a file opens that file and the pane stays for the next, ESC closes.
+    /// </summary>
+    [Fact]
+    public async Task Browse_OnThePane_EnterOpensAFolder_AndOpensFiles_ThePaneStaying()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "docs", "a.md"), "1");
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "1");
+        File.WriteAllText(Path.Combine(files, ".secret"), "1");
+        StepsWhenIdle(
+            Line("/browse"),
+            input => input.Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        string strip = FolderText.BrowseTitle + " │ " + FolderText.CollapseAllButton + " ";
+        Assert.Contains(Titled(strip), output);
+        Assert.Equal(new[] { Path.Combine(files, "docs", "a.md"), Path.Combine(files, "notes.txt") }, _openedFiles);
+        Assert.Contains(ChatScreen.BrowseOpenedLine(Path.Combine("docs", "a.md")), output);
+        Assert.Contains(ChatScreen.BrowseOpenedLine("notes.txt"), output);
+        Assert.Contains(FolderText.FileGlyph + " notes.txt", output);
+        Assert.DoesNotContain(".secret", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary><c>/browse &lt;folder&gt;</c> opens on that folder, its entries in view; a missing path, a file and one outside the root are the usual file errors.</summary>
+    [Fact]
+    public async Task Browse_AFolder_OpensThere_AndRefusesAMissingPath_AFile_AndOneOutside()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(Path.Combine(files, "docs"));
+        File.WriteAllText(Path.Combine(files, "docs", "a.md"), "1");
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "1");
+        StepsWhenIdle(
+            Line("/browse docs/"),                                 // typed in full: the folder list has nothing under it, so Enter sends
+            input => input.Push(Keys.Down, Keys.Enter, Keys.Escape),
+            Line("/browse nope"),
+            Line("/browse notes.txt"),
+            Line("/browse .."),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(new[] { Path.Combine(files, "docs", "a.md") }, _openedFiles);
+        Assert.Contains("\n" + Path.Combine(files, "docs") + "\n", output);   // the path row: the cursor on the folder named
+        Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
+        Assert.Contains("  ✗ " + FileText.IsAFile("notes.txt"), output);
+        Assert.Contains("  ✗ " + FileText.OutsideRoot(".."), output);
+    }
+
     // ── /terminal (2026-10-03) ──────────────────────────────────────────────
 
     [WindowsFact]
@@ -15632,8 +15770,8 @@ public partial class ChatScreenTests : IDisposable
         string body = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
         Assert.Contains("\"text\":\"score_9, score_8_up, (1girl:1.2)\"", body);   // as typed, nothing added
         Assert.Contains("\"text\":\"score_4\"", body);
-        Assert.Contains(NeonSidekick.Comfy.ComfyText.TextToImageGlyph + @"generated 1 picture with pony (seed 5, 1024×1024): comfy_images\pony-5.png", output);
-        Assert.True(File.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", "pony-5.png")));
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.TextToImageGlyph + "generated 1 picture with pony (seed 5, 1024×1024): ", output);   // the full path after it (2026-10-09), wrapped at the console's width
+        Assert.True(File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", "pony-5.png")));
         Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);   // drawn as /view draws, centred
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
         Assert.StartsWith("(the user made a picture with /imagine", user.Text);
@@ -15678,7 +15816,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── The picture strip (later still on 2026-09-24) ───────────────────────
 
-    private string ComfyPicture(string name) => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images", name);
+    private string ComfyPicture(string name) => Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", name);
 
     /// <summary>The model's picture and an /imagine one gather in the strip, the newest leftmost: → takes the newest, → again the older, Enter opens it.</summary>
     [Fact]
@@ -16063,6 +16201,52 @@ public partial class ChatScreenTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// /camera view | thumbs and /screen view | thumbs (2026-10-09, the user's ask: /comfy view's twins): the viewer and the browser on the
+    /// Camera and Screen capture output folders under the profile's images folder, each made first; no screen system needed for /screen's.
+    /// </summary>
+    [Fact]
+    public async Task CameraAndScreen_ViewAndThumbs_OpenOnTheirOutputFolders()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        var viewed = new List<string>();
+        var browsed = new List<string>();
+        _openViewer = viewed.Add;
+        _openThumbs = (folder, _) => browsed.Add(folder);
+        PushLine("/camera view");
+        PushLine("/camera THUMBS");
+        PushLine("/screen view");
+        PushLine("/screen thumbs");
+        PushLine("/camera view now");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string camera = Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultCameraOutputFolder);
+        string screen = Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultScreenOutputFolder);
+        Assert.Equal([camera, screen], viewed);
+        Assert.Equal([camera, screen], browsed);
+        Assert.True(Directory.Exists(camera) && Directory.Exists(screen));
+        Assert.Contains("  ✗ " + Camera.CameraText.Usage, output);   // a word after it
+        Assert.DoesNotContain(NeonSidekick.Screen.ScreenText.Unsupported, output);
+    }
+
+    [Fact]
+    public void CameraAndScreen_ViewAndThumbs_RunAtOnceUnderAReply_AndAreOffered()
+    {
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Camera, "view"));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Camera, "thumbs"));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Screen, " VIEW "));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Screen, "thumbs"));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Screen, "all"));
+        Assert.Equal(Camera.CameraVerb.View, Camera.CameraCommand.Parse("View").Verb);
+        Assert.Equal(Camera.CameraVerb.Thumbs, Camera.CameraCommand.Parse("thumbs").Verb);
+        Assert.Contains(Camera.CameraCommand.Words, w => w.Word == "view");
+        Assert.Contains(Camera.CameraCommand.Words, w => w.Word == "thumbs");
+        Assert.Contains(NeonSidekick.Screen.ScreenText.CompletionWords, w => w.Word == "view");
+        Assert.Contains(NeonSidekick.Screen.ScreenText.CompletionWords, w => w.Word == "thumbs");
+    }
+
     /// <summary>Off, or after a /clear, there is no strip: the arrows and the Enter are the line's, nothing opens.</summary>
     [Theory]
     [InlineData(false)]
@@ -16244,16 +16428,16 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    private string ComfyImagesDir => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, AppSettingsData.DefaultComfyOutputFolder);
+    private string ComfyImagesDir => Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultComfyOutputFolder);
 
-    /// <summary>/comfy purge (later still on 2026-09-24, the user's ask): the output folder emptied after a yes, .pasted included; anything else keeps.</summary>
+    /// <summary>/comfy purge (later still on 2026-09-24, the user's ask): the output folder emptied after a yes, a subfolder included; anything else keeps.</summary>
     [Fact]
     public async Task ComfyPurge_Y_DeletesEverythingInTheOutputFolder_NoKeeps()
     {
         _settings.Update(d => d.TtsOutput = false);
-        Directory.CreateDirectory(Path.Combine(ComfyImagesDir, NeonSidekick.Comfy.ComfyStudio.PastedFolderName));
+        Directory.CreateDirectory(Path.Combine(ComfyImagesDir, "sub"));
         File.WriteAllText(Path.Combine(ComfyImagesDir, "a.png"), "12345");
-        File.WriteAllText(Path.Combine(ComfyImagesDir, NeonSidekick.Comfy.ComfyStudio.PastedFolderName, "pasted-1.png"), "678");
+        File.WriteAllText(Path.Combine(ComfyImagesDir, "sub", "pasted-1.png"), "678");
         PushLine("/comfy purge");
         _console.Input.PushKey(Keys.Enter);   // No is on the cursor
         PushLine("/comfy PURGE");
@@ -18721,13 +18905,84 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync(input);
 
+        // Saved as the message went (2026-10-09): the clipboard's own bytes in the Pasted images folder, the sent label naming the file;
+        // the transcript's line keeps the plain label.
+        string saved = Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultPastedImagesFolder, "pasted-20260911-140530.bmp");
+        Assert.Equal(SmokeChecks.SolidBmp(4, 4), File.ReadAllBytes(saved));
         var first = Assert.Single(_chat.Requests).Single(m => m.Role == ChatRole.User);
-        Assert.Equal("what is [Image #1]?", first.Text);
+        Assert.Equal("what is " + PasteBlocks.SavedLabel(1, saved) + "?", first.Text);
         var part = Assert.Single(first.Contents.OfType<DataContent>());
         Assert.Equal(ImageFile.Png, part.MediaType);
         Assert.Contains("› what is [Image #1]?\n  ▀▀▀▀\n  ▀▀▀▀\n", output);
         Assert.DoesNotContain("clipboard-1.png", output);
+        Assert.False(Directory.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, AppSettingsData.DefaultPastedImagesFolder)));
         Assert.StartsWith("> what is [Image #1]?\r\n\r\nA pink square.", Assert.Single(_copied));
+    }
+
+    private string PastedFolder => Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultPastedImagesFolder);
+
+    /// <summary>
+    /// A clipboard picture is saved when its message goes, once (2026-10-09): one pasted and deleted from the draft never reaches the disk,
+    /// and the same paste sent again (Up recalls the line, its token intact) reuses the file.
+    /// </summary>
+    [Fact]
+    public async Task APastedPicture_IsSavedOnceWhenSent_ADeletedOneNever_AndAResendReusesTheFile()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two.");
+        _clipboardImage = () => SmokeChecks.SolidBmp(4, 4);
+        var paste = new ConsoleKeyInfo('v', ConsoleKey.V, false, true, false);
+        var input = new ScriptedInput();
+        input.Push(paste).Push(Keys.Backspace);                             // pasted, then deleted: [Image #1] never sent
+        input.Push(Keys.Char('a')).Push(paste).Push(Keys.Enter);            // [Image #2] sent
+        input.Push(Keys.Up).Push(Keys.Enter);                               // the same line again
+        PushLine(input, "/exit");
+
+        await RunAsync(input);
+
+        string saved = Assert.Single(Directory.GetFiles(PastedFolder));
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("a" + PasteBlocks.SavedLabel(2, saved), _chat.Requests[0].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal("a" + PasteBlocks.SavedLabel(2, saved), _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    /// <summary>A dropped picture file keeps its own: nothing is copied into the Pasted images folder and its label is sent as typed.</summary>
+    [Fact]
+    public async Task ADroppedPicture_IsNotCopied()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("A square.");
+        string file = Bmp("one.bmp");
+        var input = new ScriptedInput();
+        input.PushPaste(file).Push(Keys.Enter);
+        PushLine(input, "/exit");
+
+        await RunAsync(input);
+
+        Assert.Equal("[Image #1]", _chat.Requests[0].Last(m => m.Role == ChatRole.User).Text);
+        Assert.False(Directory.Exists(PastedFolder));
+    }
+
+    /// <summary>A save the folder refuses (a file where the folder should be): the picture goes all the same, with a warning and no path.</summary>
+    [Fact]
+    public async Task APastedPicture_ThatCannotBeSaved_IsSentWithoutAPath_AndAWarning()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        Directory.CreateDirectory(_settings.ProfileImagesDirectory);
+        File.WriteAllText(PastedFolder, "in the way");
+        _chat.EnqueueText("A square.");
+        _clipboardImage = () => SmokeChecks.SolidBmp(4, 4);
+        var input = new ScriptedInput();
+        input.Push(new ConsoleKeyInfo('v', ConsoleKey.V, false, true, false)).Push(Keys.Enter);
+        PushLine(input, "/exit");
+
+        string output = await RunAsync(input);
+
+        var sent = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
+        Assert.Equal("[Image #1]", sent.Text);
+        Assert.Single(sent.Contents.OfType<DataContent>());
+        Assert.Contains("[Image #1] was not saved (", output);
     }
 
     /// <summary>Two pictures on one line are tiled side by side under it, a gap between.</summary>
@@ -22680,6 +22935,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(ChatScreen.TakesPathArgument("/tree") && ChatScreen.TakesPathArgument("/explore") && ChatScreen.TakesPathArgument("/vault") && ChatScreen.TakesPathArgument("/terminal"));   // their folder lists
         Assert.False(ChatScreen.TakesPathArgument("/loop") || ChatScreen.TakesPathArgument("/plan") || ChatScreen.TakesPathArgument("/claude"));   // off and the looks (later on 2026-09-29)
         Assert.True(ChatScreen.TakesPathArgument("/cwd"));   // any drive's folders (2026-10-05)
+        Assert.True(ChatScreen.TakesPathArgument("/open") && ChatScreen.TakesPathArgument("/browse"));   // any file, the folders (2026-10-09)
         Assert.Equal([new CompletionItem("gauge", PerfBarMode.Describe("gauge"))], ChatScreen.ArgumentItems("/perfbar", "g", sources));
 
         // /profile: the names (the loaded one marked) then the verbs; a verb typed opens the names behind it.

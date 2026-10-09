@@ -13,12 +13,34 @@ public abstract class FileTool : AIFunction
     public const string PathArgument = "path";
     public const string OverwriteArgument = "overwrite";
 
-    protected FileTool(WorkingDirectory files)
+    /// <param name="images">
+    /// The profile's images folder (2026-10-09), for the picture tools: a full path inside it is read and written there
+    /// (<see cref="FilesFor"/>); null = the working directory alone.
+    /// </param>
+    protected FileTool(WorkingDirectory files, WorkingDirectory? images = null)
     {
         Files = files ?? throw new ArgumentNullException(nameof(files));
+        Images = images;
     }
 
     protected WorkingDirectory Files { get; }
+
+    /// <summary>The profile's images folder the picture tools reach besides the working directory; null for every other tool.</summary>
+    protected WorkingDirectory? Images { get; }
+
+    /// <summary>
+    /// Where <paramref name="path"/> lives (2026-10-09, the user's call: the model reaches the camera's, the screen's, ComfyUI's and
+    /// the pasted pictures by the full paths their results give): the profile's images folder for a full path inside it — unless it
+    /// is inside the working directory too, which comes first — else the working directory, which judges every other path as before.
+    /// </summary>
+    protected WorkingDirectory FilesFor(string path) => For(Files, Images, path);
+
+    /// <summary><see cref="FilesFor"/> for a caller without a tool: <paramref name="images"/> when <paramref name="path"/> is a full path in it and not in <paramref name="files"/>. Pure over the two roots.</summary>
+    public static WorkingDirectory For(WorkingDirectory files, WorkingDirectory? images, string path)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        return images is not null && !files.Contains(path) && images.Contains(path) ? images : files;
+    }
 
     protected static string ReadPath(AIFunctionArguments arguments) => ToolArguments.ReadString(arguments, PathArgument);
 

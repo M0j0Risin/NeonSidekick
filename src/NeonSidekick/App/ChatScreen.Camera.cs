@@ -313,6 +313,13 @@ internal sealed partial class ChatScreen
             case CameraVerb.Off:
                 _transcript.Notice(CameraText.Off(CameraOff()));
                 return;
+            case CameraVerb.View:
+                // /comfy view's twin (2026-10-09, the user's ask): the viewer on the Camera output folder; a window of its own.
+                OpenViewerOn(_effective().CameraOutputFolder, notice: true);
+                return;
+            case CameraVerb.Thumbs:
+                OpenThumbsOn(_effective().CameraOutputFolder);
+                return;
             default:
                 _transcript.Error(parsed.Error ?? CameraText.Usage);
                 return;
@@ -447,9 +454,9 @@ internal sealed partial class ChatScreen
         return stopped;
     }
 
-    /// <summary>The watch folder (<see cref="CameraWatch.FolderFor"/> the Camera output folder) as a full path; null when the sandbox refuses it (the temp folder is used then).</summary>
+    /// <summary>The watch folder (<see cref="CameraWatch.FolderFor"/> the Camera output folder, under the profile's images folder since 2026-10-09) as a full path; null when that folder refuses it (the temp folder is used then).</summary>
     private string? WatchFolderPath() =>
-        _files.Resolve(CameraWatch.FolderFor(_effective().CameraOutputFolder), forWrite: true, out string full) == FileOutcome.Ok ? full : null;
+        _images.Resolve(CameraWatch.FolderFor(_effective().CameraOutputFolder), forWrite: true, out string full) == FileOutcome.Ok ? full : null;
 
     /// <summary>
     /// Deletes the watch folder (<see cref="CameraWatch.FolderFor"/>) and the watch pictures a double-click wrote there (2026-10-02,

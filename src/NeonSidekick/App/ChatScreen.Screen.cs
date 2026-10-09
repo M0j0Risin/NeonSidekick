@@ -172,6 +172,21 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleScreenAsync(string args, CancellationToken cancellationToken)
     {
+        // /screen view | thumbs (2026-10-09, the user's ask: /comfy view's twins): the folder in a window, whether or not there is a screen to capture.
+        if (ScreenText.IsFolderWord(args))
+        {
+            if (string.Equals(args.Trim(), ScreenText.ViewWord, StringComparison.OrdinalIgnoreCase))
+            {
+                OpenViewerOn(_effective().ScreenOutputFolder, notice: true);
+            }
+            else
+            {
+                OpenThumbsOn(_effective().ScreenOutputFolder);
+            }
+
+            return;
+        }
+
         if (_screenCapture is not { } capture || _screenSystem is not { } system)
         {
             _transcript.Error(ScreenText.Unsupported);

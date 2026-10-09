@@ -33,7 +33,7 @@ public abstract record CameraAnswer
 /// <summary>
 /// <c>camera_capture(prompt)</c> (2026-10-02, the user's ask: the model asks for a photo when it needs to see something): the
 /// prompt is shown to the user, who takes the photo on the shutter pane (or allows the app to take it, by the <c>Camera
-/// shutter</c> setting); the photo is saved in the working directory's <c>camera</c> folder and comes back the
+/// shutter</c> setting); the photo is saved in the profile's images folder (the <c>Camera output folder</c> under it, 2026-10-09) and comes back the
 /// <c>view_image</c> way — a result line, then the picture in the carrier message. A decline is a sentence that tells the model
 /// to carry on, and the rest of the turn's calls answer it without asking again (the screen keeps the turn's stamp). Read-only
 /// in the plan-mode sense, like <c>ask_user</c>: it asks the user, it changes nothing of theirs.
@@ -66,7 +66,7 @@ public sealed class CameraCaptureTool : AIFunction
     public override string Description =>
         "Asks the user for a photo from their camera and shows it to you. Use it only when seeing something would really help " +
         "(an object, a label, a screen, a gesture, the user themselves when they ask). The prompt is shown to the user, who takes the " +
-        "photo; it is saved in the working directory and attached to the message after the result. If the user " +
+        "photo; it is saved in the user's images folder (the result gives its full path, which view_image, image_info and image_edit take) and attached to the message after the result. If the user " +
         "declines, carry on without it and do not ask again unless they ask.";
 
     public override JsonElement JsonSchema => Schema;

@@ -70,7 +70,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary><c>/comfy thumbs</c>: the browser on the ComfyUI output folder, made when it is not there yet (<see cref="OpenViewer"/>'s twin). Any thread.</summary>
-    private void OpenComfyThumbs()
+    private void OpenComfyThumbs() => OpenThumbsOn(_effective().ComfyOutputFolder);
+
+    /// <summary>
+    /// The browser on <paramref name="folderSetting"/>'s folder under the profile's images folder (<c>/comfy thumbs</c>; <c>/camera thumbs</c> and
+    /// <c>/screen thumbs</c> since 2026-10-09), made when it is not there yet. Any thread.
+    /// </summary>
+    private void OpenThumbsOn(string? folderSetting)
     {
         if (_openThumbs is null)
         {
@@ -78,8 +84,8 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        string folder = ComfyStudio.OutputFolder(_effective().ComfyOutputFolder);
-        var outcome = _files.Resolve(folder, forWrite: true, out string full);
+        string folder = ComfyStudio.OutputFolder(folderSetting);
+        var outcome = _images.Resolve(folder, forWrite: true, out string full);
         if (outcome != FileOutcome.Ok)
         {
             _flow.Error(FileText.Error(outcome, folder, "watch"));

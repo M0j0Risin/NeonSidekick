@@ -762,7 +762,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(100, ViewImageTool.LimitOf(new AppSettingsData { FileViewImageMaxPerCall = 500 }));
 
         Assert.Equal(
-            "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory): one as path, or up to 10 per call as paths " +
+            "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory), or by the full path a camera, screen, generate_image or pasted picture was saved under: one as path, or up to 10 per call as paths " +
             "(more than 10 shows the first 10 and names the rest for the next call; a batch per call, not a call per picture). They are attached to the message after the result, so you can describe or analyse them; read_file cannot read images.",
             view.Description);
         Assert.Equal(ViewImageTool.Describe(10), view.Description);

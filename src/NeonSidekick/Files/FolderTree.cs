@@ -15,6 +15,12 @@ public interface IFolderSource
 
     /// <summary>Whether <paramref name="path"/> is a folder — listed by <see cref="Children"/> or not (a hidden one on the way to the working directory is shown anyway).</summary>
     bool Exists(string path);
+
+    /// <summary>
+    /// The files of <paramref name="path"/> as full paths, in list order (2026-10-09, <c>/browse</c>): read only by a tree made
+    /// <c>withFiles</c>, after <see cref="Children"/>; none by default, so a folder picker's source never lists one.
+    /// </summary>
+    IReadOnlyList<string> Files(string path) => [];
 }
 
 /// <summary>
@@ -105,13 +111,17 @@ public readonly record struct FolderShortcut(string Label, string Path, string G
 /// <summary>One folder in the <see cref="FolderTree"/>: a root at depth 0, its subfolders one deeper.</summary>
 public sealed class FolderNode
 {
-    internal FolderNode(string path, string name, int depth, string? shortcutGlyph = null)
+    internal FolderNode(string path, string name, int depth, string? shortcutGlyph = null, bool isFile = false)
     {
         Path = path;
         Name = name;
         Depth = depth;
         ShortcutGlyph = shortcutGlyph;
+        IsFile = isFile;
     }
+
+    /// <summary>A file, listed by a tree made <c>withFiles</c> (2026-10-09, <c>/browse</c>): a leaf never read or expanded.</summary>
+    public bool IsFile { get; }
 
     /// <summary>A <see cref="FolderShortcut"/>'s root: <see cref="Name"/> is its label, drawn behind <see cref="ShortcutGlyph"/>.</summary>
     public bool IsShortcut => ShortcutGlyph is not null;
@@ -138,7 +148,7 @@ public sealed class FolderNode
     public IReadOnlyList<FolderNode>? Children => Loaded;
 
     /// <summary>Known to have nothing under it: read and found empty, or denied. Drawn with the leaf glyph.</summary>
-    public bool IsLeaf => Denied || Loaded is { Count: 0 };
+    public bool IsLeaf => IsFile || Denied || Loaded is { Count: 0 };
 
     internal List<FolderNode>? Loaded { get; set; }
 }
@@ -156,12 +166,15 @@ public sealed class FolderTree
     private readonly List<FolderNode> _roots;
     private readonly List<FolderNode> _visible = new();
     private readonly StringComparison _comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    private readonly bool _withFiles;
 
     /// <param name="source">Where the folders come from.</param>
     /// <param name="shortcuts">Named roots listed above the source's, in the order given; none by default.</param>
-    public FolderTree(IFolderSource source, IReadOnlyList<FolderShortcut>? shortcuts = null)
+    /// <param name="withFiles">Each folder's files listed after its subfolders, Explorer's order (2026-10-09, <c>/browse</c>); folders alone by default.</param>
+    public FolderTree(IFolderSource source, IReadOnlyList<FolderShortcut>? shortcuts = null, bool withFiles = false)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
+        _withFiles = withFiles;
         _roots = new List<FolderNode>();
         foreach (var shortcut in shortcuts ?? [])
         {
@@ -326,6 +339,12 @@ public sealed class FolderTree
             }
 
             var child = FindChild(node, segment);
+            if (child is { IsFile: true })
+            {
+                // A file on the way: the folder above it is as deep as the path goes.
+                break;
+            }
+
             if (child is null)
             {
                 string candidate = Path.Combine(node.Path, segment);
@@ -388,7 +407,7 @@ public sealed class FolderTree
     // Reads the node's children once; false when it is denied (now or before).
     private bool Load(FolderNode node)
     {
-        if (node.Denied)
+        if (node.Denied || node.IsFile)
         {
             return false;
         }
@@ -404,6 +423,14 @@ public sealed class FolderTree
             foreach (var path in _source.Children(node.Path))
             {
                 loaded.Add(new FolderNode(path, NameOf(path), node.Depth + 1));
+            }
+
+            if (_withFiles)
+            {
+                foreach (var path in _source.Files(node.Path))
+                {
+                    loaded.Add(new FolderNode(path, NameOf(path), node.Depth + 1, isFile: true));
+                }
             }
 
             node.Loaded = loaded;
@@ -430,12 +457,12 @@ public sealed class FolderTree
         return null;
     }
 
-    // Keeps the parent's list in its order: the child goes before the first name after it.
+    // Keeps the parent's list in its order: the child (a folder) goes before the first name after it, and before the files.
     private static void Insert(FolderNode parent, FolderNode child)
     {
         var list = parent.Loaded!;
         int at = 0;
-        while (at < list.Count && StringComparer.OrdinalIgnoreCase.Compare(list[at].Name, child.Name) < 0)
+        while (at < list.Count && !list[at].IsFile && StringComparer.OrdinalIgnoreCase.Compare(list[at].Name, child.Name) < 0)
         {
             at++;
         }

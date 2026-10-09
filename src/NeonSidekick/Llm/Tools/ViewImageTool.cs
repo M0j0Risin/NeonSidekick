@@ -33,7 +33,8 @@ public sealed class ViewImageTool : FileTool
 
     /// <param name="files">The sandbox the paths are read from.</param>
     /// <param name="effective">The settings the cap (<c>File view image max (per call)</c>) is read from at every use.</param>
-    public ViewImageTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    /// <param name="images">The profile's images folder, whose pictures are read by their full paths (2026-10-09); null = the sandbox alone.</param>
+    public ViewImageTool(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null) : base(files, images)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
@@ -61,7 +62,7 @@ public sealed class ViewImageTool : FileTool
 
     /// <summary>The description under the given cap. Pinned.</summary>
     public static string Describe(int limit) =>
-        "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory): one as path, or up to " + N(limit) + " per call as paths " +
+        "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory), or by the full path a camera, screen, generate_image or pasted picture was saved under: one as path, or up to " + N(limit) + " per call as paths " +
         "(more than " + N(limit) + " shows the first " + N(limit) + " and names the rest for the next call; a batch per call, not a call per picture). They are attached to the message after the result, so you can describe or analyse them; read_file cannot read images.";
 
     public override JsonElement JsonSchema
@@ -82,8 +83,8 @@ public sealed class ViewImageTool : FileTool
     /// <summary>The schema under the given cap: the <c>paths</c> array's description quotes it. Pinned.</summary>
     public static JsonElement SchemaFor(int limit) => ToolSchema.Parse(
         "{ \"type\": \"object\", \"properties\": { " +
-        "\"path\": { \"type\": \"string\", \"description\": \"One image file to look at (png, jpg, gif, webp or bmp), relative to the working directory.\" }, " +
-        "\"paths\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Several image files to look at in one call (at most " + N(limit) + "), each relative to the working directory. Prefer this over one call per picture; call again for the rest.\" } " +
+        "\"path\": { \"type\": \"string\", \"description\": \"One image file to look at (png, jpg, gif, webp or bmp), relative to the working directory, or the full path a saved picture was given.\" }, " +
+        "\"paths\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Several image files to look at in one call (at most " + N(limit) + "), each relative to the working directory or a saved picture's full path. Prefer this over one call per picture; call again for the rest.\" } " +
         "} }");
 
     private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
@@ -105,7 +106,7 @@ public sealed class ViewImageTool : FileTool
         var images = new List<ImageAttachment>(paths.Count);
         foreach (var path in paths.Take(limit))
         {
-            var result = Files.ReadImage(path);
+            var result = FilesFor(path).ReadImage(path);
             lines.Add(FileText.Image(result));
             if (result.Outcome == FileOutcome.Ok && result.Image is { } image)
             {

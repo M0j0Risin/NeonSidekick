@@ -15,6 +15,12 @@ public enum CameraVerb
     Watch,
     Off,
 
+    /// <summary><c>/camera view</c> (2026-10-09, the user's ask: <c>/comfy view</c>'s twin): the picture viewer on the Camera output folder.</summary>
+    View,
+
+    /// <summary><c>/camera thumbs</c> (2026-10-09, <c>/comfy thumbs</c>' twin): the thumbnail browser on the Camera output folder.</summary>
+    Thumbs,
+
     /// <summary>A word <c>/camera</c> does not know (the error says so).</summary>
     Unknown,
 }
@@ -37,6 +43,8 @@ public static class CameraCommand
         ("live", "the camera live in a window of its own"),
         ("watch", "watch the camera: a change rides your next message; /camera watch [seconds|off]"),
         ("off", "let the camera go (live and watch)"),
+        ("view", "open the picture viewer on the camera's folder"),
+        ("thumbs", "open the camera's folder as thumbnails"),
     ];
 
     public static CameraCommandLine Parse(string? args)
@@ -58,13 +66,15 @@ public static class CameraCommand
             "live" => CameraVerb.Live,
             "watch" => CameraVerb.Watch,
             "off" => CameraVerb.Off,
+            "view" => CameraVerb.View,
+            "thumbs" => CameraVerb.Thumbs,
             _ => CameraVerb.Unknown,
         };
         return verb switch
         {
             CameraVerb.Unknown => new CameraCommandLine(verb, rest, CameraText.Unknown(word)),
             CameraVerb.Use when rest.Length == 0 => new CameraCommandLine(CameraVerb.Unknown, "", CameraText.Usage),
-            CameraVerb.Snap or CameraVerb.List or CameraVerb.Live or CameraVerb.Off when rest.Length > 0 => new CameraCommandLine(CameraVerb.Unknown, rest, CameraText.Usage),
+            CameraVerb.Snap or CameraVerb.List or CameraVerb.Live or CameraVerb.Off or CameraVerb.View or CameraVerb.Thumbs when rest.Length > 0 => new CameraCommandLine(CameraVerb.Unknown, rest, CameraText.Usage),
             _ => new CameraCommandLine(verb, rest),
         };
     }

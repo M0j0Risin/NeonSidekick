@@ -170,7 +170,7 @@ public static class CameraText
 
     public const string HelpSummary = "take a photo with the camera";
 
-    public const string Usage = "Usage: /camera [snap | list | use <n|name> | live | watch [seconds|off] | off]";
+    public const string Usage = "Usage: /camera [snap | list | use <n|name> | live | watch [seconds|off] | off | view | thumbs]";
 
     public static string Unknown(string word) => $"'{word}' is not a /camera word. " + Usage;
 

@@ -639,6 +639,25 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
     }
 
     [UnixFact]
+    public void Open_FilesOnly_RefusesAFolderBeforeTheOpener_AndOpensAFile_Unix()
+    {
+        Put(@"docs/a.txt", "");
+        var opened = new List<string>();
+
+        var folder = _files.Open("docs", opened.Add, filesOnly: true);
+        Assert.Equal(FileOutcome.IsDirectory, folder.Outcome);
+        Assert.Equal(@"docs/", folder.Relative);
+        Assert.Equal(FileOutcome.IsDirectory, _files.Open("", opened.Add, filesOnly: true).Outcome);
+        Assert.Empty(opened);
+
+        var file = _files.Open(@"docs/a.txt", opened.Add, filesOnly: true);
+        Assert.Equal(FileOutcome.Ok, file.Outcome);
+        Assert.False(file.IsDirectory);
+        Assert.Equal(new[] { Full(@"docs/a.txt") }, opened);
+        Assert.Equal(FileOutcome.Missing, _files.Open("nope.txt", opened.Add, filesOnly: true).Outcome);
+    }
+
+    [UnixFact]
     public void Open_FoldersOnly_RefusesAFileBeforeTheOpener_AndOpensAFolder_Unix()
     {
         Put(@"docs/a.txt", "");

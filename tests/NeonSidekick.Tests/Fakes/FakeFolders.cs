@@ -15,6 +15,7 @@ public sealed class FakeFolders : IFolderSource
     private readonly List<string> _roots = new();
     private readonly Dictionary<string, List<string>> _children = new(PathComparer);
     private readonly HashSet<string> _denied = new(PathComparer);
+    private readonly Dictionary<string, List<string>> _files = new(PathComparer);
 
     /// <summary>The platform's first root: <c>C:\</c> on Windows, <c>/</c> elsewhere.</summary>
     public static string RootPath => OperatingSystem.IsWindows() ? @"C:\" : "/";
@@ -75,4 +76,19 @@ public sealed class FakeFolders : IFolderSource
     }
 
     public bool Exists(string path) => _children.ContainsKey(path) || _roots.Contains(path, PathComparer);
+
+    /// <summary>Lists the files <paramref name="names"/> under <paramref name="parent"/> (in the order given): what a tree made <c>withFiles</c> reads (2026-10-09).</summary>
+    public FakeFolders AddFiles(string parent, params string[] names)
+    {
+        if (!_files.TryGetValue(parent, out var list))
+        {
+            list = new List<string>();
+            _files[parent] = list;
+        }
+
+        list.AddRange(names);
+        return this;
+    }
+
+    public IReadOnlyList<string> Files(string path) => (_files.GetValueOrDefault(path) ?? []).Select(name => Path.Combine(path, name)).ToList();
 }

@@ -31,7 +31,7 @@ public partial class ChatScreenTests
 
     private static IList<AITool> ToolsOf(ChatOptions? options) => options?.Tools ?? [];
 
-    private string ComfyImages => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "comfy_images");
+    private string ComfyImages => Path.Combine(_settings.ProfileImagesDirectory, "comfy_images");
 
     /// <summary>
     /// The app's picture is drawn at <c>Image thumbnail size</c> (later on 2026-09-25, the user's report: it filled the window
@@ -670,7 +670,7 @@ public partial class ChatScreenTests
         string next = Assert.Single(ToolsOf(_chat.Options[2])).Description!;
         Assert.Contains("hatter", next);
         Assert.DoesNotContain("other-t2i", next);
-        Assert.EndsWith(BotChat.ReworkCaption(["hatter"], [new ReworkPicture(1, "default", true, @"comfy_images\pony-7.png")]), _chat.Requests[2][^1].Text, StringComparison.Ordinal);
+        Assert.EndsWith(BotChat.ReworkCaption(["hatter"], [new ReworkPicture(1, "default", true, Path.Combine(ComfyImages, "pony-7.png"))]), _chat.Requests[2][^1].Text, StringComparison.Ordinal);
     }
 
     /// <summary>

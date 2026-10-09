@@ -36,7 +36,19 @@ public static class ScreenText
         ("behind", "the window behind the app"),
         (MonitorPrefix, "a monitor by number"),
         (WindowPrefix, "a window by id or title"),
+        (ViewWord, "open the picture viewer on the screenshots' folder"),
+        (ThumbsWord, "open the screenshots' folder as thumbnails"),
     ];
+
+    /// <summary><c>/screen view</c> (2026-10-09, the user's ask: <c>/comfy view</c>'s twin): the picture viewer on the Screen capture output folder. Pinned.</summary>
+    public const string ViewWord = "view";
+
+    /// <summary><c>/screen thumbs</c> (2026-10-09, <c>/comfy thumbs</c>' twin): the thumbnail browser on that folder. Pinned.</summary>
+    public const string ThumbsWord = "thumbs";
+
+    /// <summary>Whether <c>/screen</c>'s <paramref name="args"/> are <see cref="ViewWord"/> or <see cref="ThumbsWord"/> alone, any case: a folder to look at, no capture. Pure.</summary>
+    public static bool IsFolderWord(string? args) =>
+        string.Equals(args?.Trim(), ViewWord, StringComparison.OrdinalIgnoreCase) || string.Equals(args?.Trim(), ThumbsWord, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The two words a target follows without a space: <c>monitor:2</c>, <c>window:1234</c>.</summary>
     public const string MonitorPrefix = "monitor:";
@@ -216,7 +228,7 @@ public static class ScreenText
 
     public const string HelpSummary = "capture a monitor or a window";
 
-    public const string Usage = "Usage: /screen [screen | all | monitor:N | window:<id or title words> | behind | list]";
+    public const string Usage = "Usage: /screen [screen | all | monitor:N | window:<id or title words> | behind | list | view | thumbs]";
 
     public const string Capturing = "Capturing the screen…";
 
