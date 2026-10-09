@@ -30,8 +30,11 @@ public static class MySqlBoundary
     public const int MaxNames = 100_000;
 
     /// <summary>
-    /// What of <paramref name="sql"/> the server must be asked about: its qualifiers but the connection's own database — none for
-    /// most statements, which then need no names read — or, when one is the server's own, the refusal at once.
+    /// What of <paramref name="sql"/> the server must be asked about: its qualifiers — none for most statements, which then need no
+    /// names read — or, when one is the server's own, the refusal at once. The connection's own database written in another case stays
+    /// one to ask about (the review, 2026-10-09): the lexer upper-cases a bare word, and on a server whose names are case-sensitive
+    /// <c>Shop</c> and <c>shop</c> are two databases, which only the server's names tell apart. Only a quoted name spelled exactly as
+    /// the connection's own is its own.
     /// </summary>
     public static (IReadOnlyList<string> Heads, string? Refused) Qualifiers(string sql, string database)
     {
@@ -43,7 +46,7 @@ public static class MySqlBoundary
         }
 
         string own = database.Trim();
-        var heads = ServerWriteGate.Qualifiers(tokens).Where(h => !h.Equals(own, StringComparison.OrdinalIgnoreCase)).ToList();
+        var heads = ServerWriteGate.Qualifiers(tokens).Where(h => !h.Equals(own, StringComparison.Ordinal)).ToList();
         return heads.FirstOrDefault(SystemDatabases.Contains) is { } system
             ? (heads, MySqlText.ServerCatalog(system.ToLowerInvariant()))
             : (heads, null);
@@ -63,17 +66,24 @@ public static class MySqlBoundary
             return null;
         }
 
+        // The connection's own as the server spells it, then every other name a qualifier could mean, whatever its case: a twin that
+        // differs from the own only in case (a case-sensitive server's Shop beside shop) is another database, and is refused.
         string own = database.Trim();
-        var others = new HashSet<string>(visible, StringComparer.OrdinalIgnoreCase);
-        others.UnionWith(SystemDatabases);
-        others.Remove(own);
-        if (ServerWriteGate.NamesAny(tokens, others) is not { } head)
+        var names = visible.ToList();
+        string spelled = names.FirstOrDefault(v => v.Equals(own, StringComparison.Ordinal)) ?? names.FirstOrDefault(v => v.Equals(own, StringComparison.OrdinalIgnoreCase)) ?? own;
+        foreach (string head in ServerWriteGate.Qualifiers(tokens).Where(h => !h.Equals(own, StringComparison.Ordinal)))
         {
-            return null;
+            if (SystemDatabases.Contains(head))
+            {
+                return MySqlText.ServerCatalog(head.ToLowerInvariant());
+            }
+
+            if (names.FirstOrDefault(v => v.Equals(head, StringComparison.OrdinalIgnoreCase) && !v.Equals(spelled, StringComparison.Ordinal)) is { } named)
+            {
+                return MySqlText.OtherDatabase(named, own);
+            }
         }
 
-        // The lexer upper-cases a bare word: name the database as the server spells it.
-        others.TryGetValue(head, out var named);
-        return SystemDatabases.Contains(head) ? MySqlText.ServerCatalog(named ?? head) : MySqlText.OtherDatabase(named ?? head, own);
+        return null;
     }
 }

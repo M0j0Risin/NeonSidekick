@@ -275,6 +275,41 @@ public static class ServerWriteGate
         return heads;
     }
 
+    /// <summary>
+    /// Every part of every <c>x.y.z</c> chain but its last, in order, as tokens (so a caller can fold a bare word and keep a quoted name
+    /// as written): <c>shop.payroll.salaries</c> gives <c>shop</c> and <c>payroll</c> (the review, 2026-10-09: PostgreSQL's three-part
+    /// name kept its schema in the middle, which <see cref="Qualifiers"/> never looked at); a chain ending in <c>.*</c> gives all of it.
+    /// A chain after <c>:</c> (a bind's) is none.
+    /// </summary>
+    public static IReadOnlyList<GateToken> Prefixes(IReadOnlyList<GateToken> tokens)
+    {
+        ArgumentNullException.ThrowIfNull(tokens);
+        var prefixes = new List<GateToken>();
+        for (int i = 0; i + 1 < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".")
+                || (i > 0 && (tokens[i - 1].IsSymbol(".") || tokens[i - 1].IsSymbol(":"))))
+            {
+                continue;
+            }
+
+            var chain = new List<GateToken> { t };
+            int j = i;
+            while (j + 2 < tokens.Count && tokens[j + 1].IsSymbol(".") && tokens[j + 2].Kind is GateTokenKind.Word or GateTokenKind.Name)
+            {
+                chain.Add(tokens[j + 2]);
+                j += 2;
+            }
+
+            bool star = j + 2 < tokens.Count && tokens[j + 1].IsSymbol(".") && tokens[j + 2].IsSymbol("*");
+            prefixes.AddRange(star ? chain : chain.Take(chain.Count - 1));
+            i = j;
+        }
+
+        return prefixes;
+    }
+
     /// <summary>A word list as a set, ordinal (the lexers upper-case words).</summary>
     public static IReadOnlySet<string> Words(params string[] words) => new HashSet<string>(words, StringComparer.Ordinal);
 

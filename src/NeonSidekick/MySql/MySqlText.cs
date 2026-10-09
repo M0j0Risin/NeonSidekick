@@ -120,13 +120,15 @@ public static class MySqlText
     public static string Reach(string database, IReadOnlyList<string> others)
     {
         ArgumentNullException.ThrowIfNull(others);
+        // The server's own databases are left out of the list (information_schema is every account's), so an empty one says no other
+        // user database, not that the server holds the account to one (the review, 2026-10-09).
         if (others.Count == 0)
         {
-            return $"The account sees no other database: the server holds it to {database} too.";
+            return $"The account sees no other user database than {database} (the server's own aside).";
         }
 
         string names = string.Join(", ", others.Take(10)) + (others.Count > 10 ? $" and {Invariant(others.Count - 10)} more" : "");
-        return $"The account could also reach {names}. The tools keep to {database}; an account granted only it is the lock the server keeps too.";
+        return $"The account could also reach {names} (and the server's own). The tools keep to {database}; an account granted only it is the lock the server keeps too.";
     }
 
     // ─── arguments ──────────────────────────────────────────────────────────────

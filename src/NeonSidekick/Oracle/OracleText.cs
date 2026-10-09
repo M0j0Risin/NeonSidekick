@@ -118,9 +118,11 @@ public static class OracleText
     {
         ArgumentNullException.ThrowIfNull(owners);
         ArgumentNullException.ThrowIfNull(anyPrivileges);
+        // Oracle's own schemas are left out of the list (the dictionary's ALL_ views are every account's), so an empty one says no
+        // other user schema, not that the database holds the account to one (the review, 2026-10-09).
         if (owners.Count == 0 && anyPrivileges.Count == 0)
         {
-            return $"The account reads nothing beyond schema {schema}: the database holds it there too.";
+            return $"The account reads no other schema's tables than {schema}'s and holds no SELECT ANY privilege (Oracle's own schemas aside).";
         }
 
         string names = string.Join(", ", owners.Take(10)) + (owners.Count > 10 ? $" and {Invariant(owners.Count - 10)} more" : "");

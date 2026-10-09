@@ -115,7 +115,7 @@ internal static class OracleCheck
 
     /// <summary>
     /// The lock's line, over the users the database lists: the dictionary's views of the whole database, SYS and another user (when
-    /// there is one) refused; the schema's own written out, an alias and a sequence's NEXTVAL passed.
+    /// there is one) refused; the schema's own written out, an alias, a sequence's NEXTVAL and a column that only looks like a view passed.
     /// </summary>
     private static SmokeCheck BoundaryCheck(string place, SqlRun names)
     {
@@ -124,16 +124,16 @@ internal static class OracleCheck
             return new SmokeCheck("oracle:boundary", false, OracleText.Error(names));
         }
 
-        var visible = Column(names, 0);
+        var rows = names.Grids.FirstOrDefault()?.Rows ?? [];
         var outside = new List<string> { "SELECT * FROM all_tables", "SELECT * FROM v$session", "SELECT * FROM dba_users", "SELECT * FROM sys.obj$" };
-        if (visible.FirstOrDefault(v => !v.Equals(place, StringComparison.Ordinal) && v != "SYS") is { } other)
+        if (rows.FirstOrDefault(r => r[0] == OracleBoundary.UserKind && r[1] != place && r[1] != "SYS") is { } other)
         {
-            outside.Add($"SELECT 1 FROM \"{other}\".t");
+            outside.Add($"SELECT 1 FROM \"{other[1]}\".t");
         }
 
-        string[] inside = [$"SELECT * FROM \"{place}\".t", "SELECT e.id FROM t e", "SELECT s.NEXTVAL FROM dual", "SELECT * FROM user_tables"];
-        var passed = outside.Where(s => OracleBoundary.Check(s, place, visible) is null).ToList();
-        var refused = inside.Where(s => OracleBoundary.Check(s, place, visible) is not null).ToList();
+        string[] inside = [$"SELECT * FROM \"{place}\".t", "SELECT e.id FROM t e", "SELECT s.NEXTVAL FROM dual", "SELECT * FROM user_tables", "SELECT c.dba_name FROM t c"];
+        var passed = outside.Where(s => OracleBoundary.Check(s, place, rows) is null).ToList();
+        var refused = inside.Where(s => OracleBoundary.Check(s, place, rows) is not null).ToList();
         bool ok = passed.Count == 0 && refused.Count == 0;
         return new SmokeCheck("oracle:boundary", ok, ok
             ? $"held to schema {place}: refused all {outside.Count.ToString(CultureInfo.InvariantCulture)} reaches outside it"

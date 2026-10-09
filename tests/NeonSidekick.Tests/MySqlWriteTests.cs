@@ -163,8 +163,23 @@ public sealed class MySqlWriteGateTests
     {
         Assert.Equal(MySqlText.ServerCatalog(named), MySqlBoundary.Qualifiers(sql, "scratch").Refused);
         Assert.Equal(MySqlText.ServerCatalog(named), MySqlBoundary.Check(sql, "scratch", []));
-        Assert.Empty(MySqlBoundary.Qualifiers("SELECT * FROM scratch.t WHERE scratch.t.a = 1", "Scratch").Heads);   // nothing to ask the server
+        Assert.Empty(MySqlBoundary.Qualifiers("SELECT * FROM `scratch`.t", "scratch").Heads);   // its own, quoted as spelled: nothing to ask the server
+        Assert.Equal(["SCRATCH"], MySqlBoundary.Qualifiers("SELECT * FROM scratch.t", "scratch").Heads);   // a bare word: the server's case decides
         Assert.Equal(["T"], MySqlBoundary.Qualifiers("SELECT t.a FROM t", "scratch").Heads);
+    }
+
+    /// <summary>
+    /// A database that differs from the connection's only in case (the review, 2026-10-09: a case-sensitive server's Shop beside shop):
+    /// refused, a bare word too since the lexer cannot tell; with no such twin the own in any case passes, the server's spelling found.
+    /// </summary>
+    [Fact]
+    public void TheBoundary_RefusesACaseTwin_OfTheConnectionsOwn()
+    {
+        Assert.Equal(MySqlText.OtherDatabase("Shop", "shop"), MySqlBoundary.Check("SELECT * FROM `Shop`.orders", "shop", ["shop", "Shop"]));
+        Assert.Equal(MySqlText.OtherDatabase("Shop", "shop"), MySqlBoundary.Check("SELECT * FROM shop.orders", "shop", ["shop", "Shop"]));
+        Assert.Null(MySqlBoundary.Check("SELECT * FROM `shop`.orders", "shop", ["shop", "Shop"]));
+        Assert.Null(MySqlBoundary.Check("SELECT * FROM SHOP.orders", "shop", ["shop"]));
+        Assert.Null(MySqlBoundary.Check("SELECT * FROM shop.orders", "Shop", ["shop"]));   // a case-blind server: the entry's Shop is its shop
     }
 
     [Fact]
@@ -199,8 +214,8 @@ public sealed class MySqlExecuteTests
         });
 
         Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, [new("id", 1L)], null, CancellationToken.None));
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM sales.t", "shop", [], null, CancellationToken.None));
-        Assert.Equal([("shop", "sales", "DELETE FROM t WHERE id = @id"), ("shop", "sales", "DELETE FROM sales.t")], asked);
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM `sales`.t", "shop", [], null, CancellationToken.None));   // its own, quoted as spelled: no names to read
+        Assert.Equal([("shop", "sales", "DELETE FROM t WHERE id = @id"), ("shop", "sales", "DELETE FROM `sales`.t")], asked);
 
         // The server's own databases are refused before the pane (2026-10-09); another's name sends for the server's names first.
         asked.Clear();

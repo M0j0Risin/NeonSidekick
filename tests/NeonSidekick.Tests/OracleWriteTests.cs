@@ -146,7 +146,7 @@ public sealed class OracleExecuteTests
         asked.Clear();
         Assert.Equal(ServerWriteText.ReadOnlyConnection(OracleStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
         Assert.Equal(OracleText.NoSchemaArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "DELETE FROM t", ["schema"] = "APP" }))!);   // 2026-10-09
-        Assert.Equal(OracleText.Dictionary("DBA_USERS", "HR"), await tool.RunAsync("SELECT * FROM dba_users", null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("SELECT * FROM dba_users", null, [], null, CancellationToken.None));   // the names read first
         Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("DELETE FROM app.t", "hr", [], null, CancellationToken.None));   // the names read first, never the pane
         Assert.StartsWith("Error: the SQL uses UTL_HTTP", await tool.RunAsync("SELECT UTL_HTTP.REQUEST('x') FROM dual", null, [], null, CancellationToken.None));
         _settings.OracleMode = "read-only";

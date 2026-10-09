@@ -980,10 +980,10 @@ public partial class ToolsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("The login could also open HR, Payroll.", Output);
-        Assert.Equal("The login could also open HR, Payroll. The tools keep to Sales; a login that opens only it is the lock the server keeps too.", NeonSidekick.Sql.SqlText.Reach("Sales", ["HR", "Payroll"]));
-        Assert.Equal("The login opens no other database: the server holds it to Sales too.", NeonSidekick.Sql.SqlText.Reach("Sales", []));
-        Assert.EndsWith(" and 2 more. The tools keep to Sales; a login that opens only it is the lock the server keeps too.", NeonSidekick.Sql.SqlText.Reach("Sales", Enumerable.Range(1, 12).Select(i => "db" + i).ToList()));
+        Assert.Contains("The login could also open HR, Payroll (and", Output);
+        Assert.Equal("The login could also open HR, Payroll (and the server's own master, tempdb and msdb). The tools keep to Sales; a login that opens only it is the lock the server keeps too.", NeonSidekick.Sql.SqlText.Reach("Sales", ["HR", "Payroll"]));
+        Assert.Equal("The login opens no other user database than Sales (the server's own master, tempdb and msdb aside).", NeonSidekick.Sql.SqlText.Reach("Sales", []));
+        Assert.EndsWith(" and 2 more (and the server's own master, tempdb and msdb). The tools keep to Sales; a login that opens only it is the lock the server keeps too.", NeonSidekick.Sql.SqlText.Reach("Sales", Enumerable.Range(1, 12).Select(i => "db" + i).ToList()));
     }
 
     /// <summary>The Unix twin of <see cref="OnThePane_TheSqlWizard_WalksASqlLogin_TestsTheDraft_AndSavesIt"/> (2026-10-06, the macOS build): a <c>keychain:</c> value, where Windows writes <c>dpapi:</c>.</summary>

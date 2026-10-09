@@ -73,10 +73,10 @@ public abstract class MySqlTool : AIFunction
             return refused;
         }
 
-        var run = await _mysql.RunAsync(connection, Effective.MySqlDefaultConnection, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
-        return run.Outcome != SqlOutcome.Ok
-            ? MySqlText.Error(run)
-            : MySqlBoundary.Check(sql, target.Config.Database ?? "", run.Grids.Count > 0 ? run.Grids[0].Rows.Select(r => r[0]) : []);
+        // The names kept a minute per connection (the review, 2026-10-09: an alias's t.col sent every join for them).
+        var (rows, failed) = await _mysql.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.Endpoint, target.Config.Database, target.Config.User),
+            token => _mysql.RunAsync(connection, Effective.MySqlDefaultConnection, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+        return failed is not null ? MySqlText.Error(failed) : MySqlBoundary.Check(sql, target.Config.Database ?? "", rows!.Select(r => r[0]));
     }
 
     /// <summary>A string argument, or null when blank.</summary>

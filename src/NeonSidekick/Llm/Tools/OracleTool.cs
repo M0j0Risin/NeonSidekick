@@ -59,9 +59,9 @@ public abstract class OracleTool : AIFunction
     protected abstract ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The model's own SQL held to the connection's schema (<see cref="OracleBoundary"/>, 2026-10-09): a dictionary view of the whole
-    /// database refused at once; a qualifier but the schema's own sends for the users' names (<see cref="OracleBoundary.Names"/>), and
-    /// one among them is refused. A statement with no such qualifier asks the database nothing. Null when it keeps to the schema, or
+    /// The model's own SQL held to the connection's schema (<see cref="OracleBoundary"/>, 2026-10-09): a qualifier but the schema's own,
+    /// or a word with a dictionary prefix, sends for the database's names (<see cref="OracleBoundary.Names"/>, kept a minute), and a user
+    /// or a dictionary view among them is refused. A statement with neither asks the database nothing. Null when it keeps to the schema, or
     /// when the connection does not resolve (the run that follows says why); a failed read of the names is its error, never a pass.
     /// </summary>
     protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
@@ -72,16 +72,16 @@ public abstract class OracleTool : AIFunction
         }
 
         string place = OracleAccess.Place(target.Config);
-        var (heads, refused) = OracleBoundary.Qualifiers(sql, place);
-        if (refused is not null || heads.Count == 0)
+        var (heads, dictionary) = OracleBoundary.Qualifiers(sql, place);
+        if (heads.Count == 0 && dictionary.Count == 0)
         {
-            return refused;
+            return null;
         }
 
-        var run = await _oracle.RunAsync(connection, Effective.OracleDefaultConnection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
-        return run.Outcome != SqlOutcome.Ok
-            ? OracleText.Error(run)
-            : OracleBoundary.Check(sql, place, run.Grids.Count > 0 ? run.Grids[0].Rows.Select(r => r[0]) : []);
+        // The names kept a minute per connection (the review, 2026-10-09: an alias's e.id sent every join for them).
+        var (rows, failed) = await _oracle.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, place),
+            token => _oracle.RunAsync(connection, Effective.OracleDefaultConnection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+        return failed is not null ? OracleText.Error(failed) : OracleBoundary.Check(sql, place, rows!);
     }
 
     /// <summary>Runs the app's own statements on the call's connection (in its schema), capped at <see cref="OracleAccess.MaxCatalogRows"/>.</summary>

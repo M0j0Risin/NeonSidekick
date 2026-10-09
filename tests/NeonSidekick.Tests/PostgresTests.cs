@@ -284,7 +284,10 @@ public sealed class PostgresToolsTests : IDisposable
 
     [Theory]
     [InlineData("SELECT * FROM archive.orders", "sales", "archive")]
-    [InlineData("SELECT * FROM \"ARCHIVE\".orders", "sales", "archive")]   // a quoted name compared case-blind: refused rather than missed
+    [InlineData("SELECT * FROM \"ARCHIVE\".orders", "sales", null)]   // quoted, as written: no schema "ARCHIVE" (the review, 2026-10-09)
+    [InlineData("SELECT * FROM shop.archive.orders", "sales", "archive")]   // a three-part name's schema in the middle (the review)
+    [InlineData("SELECT * FROM shop.sales.orders", "sales", null)]
+    [InlineData("SELECT o.* FROM orders o", "sales", null)]
     [InlineData("SELECT o.id FROM orders o", "sales", null)]
     [InlineData("SELECT * FROM orders AS archive WHERE archive.id = 1", "sales", "archive")]
     [InlineData("SELECT sales.orders.id FROM sales.orders", "sales", null)]
@@ -294,6 +297,24 @@ public sealed class PostgresToolsTests : IDisposable
     {
         string[] visible = ["sales", "archive", "public", "pg_catalog", "information_schema"];
         Assert.Equal(other is null ? null : PostgresText.OtherSchema(other, schema!), PostgresBoundary.Check(sql, schema, visible));
+    }
+
+    /// <summary>
+    /// What the review of 2026-10-09 found under a schema lock: a quoted name is a schema of its own case ("Sales" beside sales), and the
+    /// XML exports read a schema, a table or the database named in a string; without a lock the exports stay in the database.
+    /// </summary>
+    [Fact]
+    public void TheBoundary_ACaseTwin_AndTheXmlExports()
+    {
+        Assert.Equal(PostgresText.OtherSchema("Sales", "sales"), PostgresBoundary.Check("SELECT * FROM \"Sales\".t", "sales", ["sales", "Sales"]));
+        Assert.Null(PostgresBoundary.Check("SELECT * FROM SALES.t", "sales", ["sales", "Sales"]));   // a bare word folds to sales, the lock's own
+        Assert.Equal(PostgresText.OtherSchema("sales", "Sales"), PostgresBoundary.Check("SELECT * FROM sales.t", "Sales", ["sales", "Sales"]));
+        foreach (string export in new[] { "schema_to_xml('archive', true, false, '')", "table_to_xml('archive.t', true, false, '')", "database_to_xml(true, false, '')" })
+        {
+            string name = export[..export.IndexOf('(', StringComparison.Ordinal)];
+            Assert.Equal(PostgresText.XmlExport(name, "sales"), PostgresBoundary.Qualifiers("SELECT " + export, "sales").Refused);
+            Assert.Null(PostgresBoundary.Check("SELECT " + export, null, []));
+        }
     }
 
     [Theory]

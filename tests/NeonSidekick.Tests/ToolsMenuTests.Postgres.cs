@@ -64,7 +64,7 @@ public partial class ToolsMenuTests
         Assert.Contains("The role could also connect to postgres; use the schemas public.", Output);
         Assert.Equal("The role could also connect to postgres; use the schemas public. The tools keep to shop.sales; a role granted only it is the lock the server keeps too.",
             PostgresText.Reach("shop", "sales", ["postgres"], [], ["public"]));
-        Assert.Equal("The role reaches nothing beyond shop: the server holds it there too.", PostgresText.Reach("shop", null, [], [], ["public"]));
+        Assert.Equal("The role reaches no other database, foreign server beyond shop (the system catalogs aside).", PostgresText.Reach("shop", null, [], [], ["public"]));
         Assert.Equal("s3cret", PostgresSecrets.Resolve(shop).Value);
         Assert.Contains(PostgresText.TestOk("shop", "postgres", "shop", "PostgreSQL 17.2"), Output);
         Assert.Contains("This account can change data (superuser). As readwrite, postgres_execute may use those powers", Output);

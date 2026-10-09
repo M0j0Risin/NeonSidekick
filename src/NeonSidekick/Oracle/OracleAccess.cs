@@ -72,6 +72,9 @@ public sealed class OracleAccess
     /// <summary>The connections as the files hold them now.</summary>
     public OracleCatalog Catalog() => _catalog();
 
+    /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="Sql.BoundaryNames"/>).</summary>
+    public Sql.BoundaryNames Names { get; } = new();
+
     /// <summary>
     /// The connection a call means (<see cref="OracleCatalog.Find"/>), or null with the refusal: none defined, or a name that
     /// matches none (the names listed).

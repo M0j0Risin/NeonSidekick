@@ -76,10 +76,28 @@ public abstract class SqlTool : AIFunction
 
     /// <summary>
     /// The model's own SQL held to the connection's database (<see cref="SqlBoundary"/>): null when it keeps to it, or when the
-    /// connection does not resolve (the run that follows says why); else the <c>Error:</c> sentence.
+    /// connection does not resolve (the run that follows says why); else the <c>Error:</c> sentence. A call that may be another
+    /// database's or an alias's column method sends for the server's database names (<see cref="SqlCatalogQueries.DatabaseNames"/>,
+    /// kept a minute, <see cref="SqlAccess.Names"/>; the review, 2026-10-09); a failed read of them is its error, never a pass.
     /// </summary>
-    protected string? Boundary(string sql, string? connection) =>
-        Sql.Resolve(connection, Effective.SqlDefaultConnection, out _) is { } target ? SqlBoundary.Check(sql, target.Config.Database ?? "") : null;
+    protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
+    {
+        if (Sql.Resolve(connection, Effective.SqlDefaultConnection, out _) is not { } target)
+        {
+            return null;
+        }
+
+        string database = target.Config.Database ?? "";
+        var (refused, ambiguous) = SqlBoundary.Inspect(sql, database);
+        if (refused is not null || ambiguous.Count == 0)
+        {
+            return refused;
+        }
+
+        var (rows, failed) = await Sql.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.Server, database),
+            token => Sql.RunAsync(connection, Effective.SqlDefaultConnection, SqlCatalogQueries.DatabaseNames, [], 100_000, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+        return failed is not null ? SqlText.Error(failed) : SqlBoundary.Check(sql, database, rows!.Select(r => r[0]));
+    }
 
     /// <summary>What <see cref="FindTableAsync"/> found: the object's id, schema, name and kind — or the <c>Error:</c> sentence.</summary>
     protected sealed record TableMatch(int Id, string Schema, string Name, string Kind, string? Error)

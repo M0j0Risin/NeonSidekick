@@ -52,6 +52,9 @@ public sealed class PostgresAccess
 
     public PostgresCatalog Catalog() => _catalog();
 
+    /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="Sql.BoundaryNames"/>).</summary>
+    public Sql.BoundaryNames Names { get; } = new();
+
     public PostgresNamedConnection? Resolve(string? name, string? defaultName, out SqlRun? refused)
     {
         var catalog = Catalog();

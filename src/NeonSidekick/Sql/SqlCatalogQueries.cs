@@ -17,6 +17,10 @@ public static class SqlCatalogQueries
     /// keeps the tools out of but the login could reach, for the wizard's test and <c>--sql-check</c> (2026-10-09; <c>sql_databases</c>'
     /// listing until the lock). Empty when the server holds the login to its database too.
     /// </summary>
+    /// <summary>Every database's name on the server, for the boundary to settle a call that may be another's (2026-10-09; the app's own read, never the model's).</summary>
+    public const string DatabaseNames = "SELECT name FROM sys.databases";
+
+    /// <summary>The other user databases the login may open (see <see cref="SqlText.Reach"/>).</summary>
     public const string OtherDatabases =
         """
         SELECT d.name AS [database]

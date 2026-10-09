@@ -153,9 +153,31 @@ public sealed class SqlWriteGateTests
     [InlineData("SELECT * FROM INFORMATION_SCHEMA.TABLES", null)]
     [InlineData("SELECT DB_NAME(), DB_ID()", null)]
     [InlineData("SELECT * FROM dbo.databases", null)]
+    [InlineData("SELECT OBJECT_NAME(object_id, 7) FROM sys.objects", "OBJECT_NAME()")]
+    [InlineData("SELECT OBJECT_SCHEMA_NAME(object_id, 7) FROM sys.objects", "OBJECT_SCHEMA_NAME()")]
+    [InlineData("SELECT SUSER_NAME(1)", "SUSER_NAME()")]
+    [InlineData("SELECT HAS_PERMS_BY_NAME('payroll', 'DATABASE', 'ANY')", "HAS_PERMS_BY_NAME()")]
+    [InlineData("SELECT IS_SRVROLEMEMBER('sysadmin', 'bob')", "IS_SRVROLEMEMBER()")]
+    [InlineData("SELECT DB_ID('payroll')", "DB_ID()")]
+    [InlineData("SELECT DATABASEPROPERTYEX(DB_NAME(), 'Status'), DB_ID('Scratch'), DATABASE_PRINCIPAL_ID('dbo')", null)]
+    [InlineData("SELECT SUSER_SNAME(), OBJECT_NAME(object_id), IS_SRVROLEMEMBER('sysadmin') FROM sys.objects", null)]
     public void TheBoundary_RefusesTheServersCatalog(string sql, string? what)
     {
         Assert.Equal(what is null ? null : SqlText.ServerCatalog(what), SqlBoundary.Check(sql, "scratch"));
+    }
+
+    /// <summary>
+    /// A call through a table's alias spelled like another database (the review, 2026-10-09): ScriptDom cannot tell <c>payroll.dbo.f()</c>
+    /// from an alias's column method, so the server's database names decide.
+    /// </summary>
+    [Fact]
+    public void TheBoundary_AnAliasSpelledLikeADatabase_IsSettledByTheServersNames()
+    {
+        const string Sql = "SELECT payroll.dbo.fn_salary(1) FROM dbo.employees AS payroll";
+        Assert.Equal(["payroll"], SqlBoundary.Inspect(Sql, "scratch").Ambiguous);
+        Assert.Equal(SqlText.AliasLikeDatabase("payroll", "scratch"), SqlBoundary.Check(Sql, "scratch", ["master", "scratch", "Payroll"]));
+        Assert.Null(SqlBoundary.Check(Sql, "scratch", ["master", "scratch"]));
+        Assert.Empty(SqlBoundary.Inspect("SELECT scratch.dbo.f() FROM dbo.t AS scratch", "scratch").Ambiguous);   // its own
     }
 
     [Theory]

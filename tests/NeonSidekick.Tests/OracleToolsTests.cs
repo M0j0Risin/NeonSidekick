@@ -126,8 +126,8 @@ public sealed class OracleToolsTests
     }
 
     /// <summary>
-    /// The lock to the connection's schema (2026-10-09): every tool refuses a <c>schema</c>; the dictionary's views of the whole database
-    /// and a table named in another schema are refused before any connect; a qualifier but the schema's own sends for the users' names.
+    /// The lock to the connection's schema (2026-10-09): every tool refuses a <c>schema</c>; a table named in another schema is refused
+    /// before any connect; a qualifier but the schema's own, or a word that may be a dictionary view, sends for the database's names.
     /// </summary>
     [Fact]
     public async Task EveryTool_KeepsToTheConnectionsSchema()
@@ -138,8 +138,8 @@ public sealed class OracleToolsTests
             Assert.Equal(OracleText.NoSchemaArgument, (string)(await tool.InvokeAsync(Args(("sql", "SELECT 1 FROM dual"), ("table", "t"), ("pattern", "x"), ("schema", "HR"))))!);
         }
 
-        Assert.Equal(OracleText.Dictionary("ALL_TABLES", "READER"), await Invoke<OracleQueryTool>(("sql", "SELECT table_name FROM all_tables")));
-        Assert.Equal(OracleText.Dictionary("V$SESSION", "READER"), await Invoke<OracleQueryTool>(("sql", "SELECT * FROM v$session")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT table_name FROM all_tables")));   // the names read first
+        Assert.Null((await new OracleAccess(() => _catalog).Names.GetAsync("k", _ => Task.FromResult(SqlRun.Refused(SqlOutcome.ConnectFailed, "x")), CancellationToken.None)).Rows);
         Assert.Equal(OracleText.TableElsewhere("HR", "READER"), await Invoke<OracleDescribeTool>(("table", "hr.employees")));
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM reader.t")));
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM reader.all_orders")));   // its own, written out
@@ -155,10 +155,12 @@ public sealed class OracleToolsTests
     [InlineData("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN :NEW.a := 1; END;", null)]
     [InlineData("SELECT DBMS_LOB.GETLENGTH(c) FROM t", null)]
     [InlineData("SELECT * FROM sys.obj$", "SYS")]
+    [InlineData("SELECT * FROM \"Hr\".t", null)]   // quoted, as written: no user "Hr" (the review, 2026-10-09)
     public void TheBoundary_RefusesAnotherSchema(string sql, string? other)
     {
         string[] visible = ["NEON", "HR", "SYS", "SYSTEM"];
-        Assert.Equal(other is null ? null : OracleText.OtherSchema(other, "NEON"), OracleBoundary.Check(sql, "NEON", visible));
+        Assert.Equal(other is null ? null : OracleText.OtherSchema(other, "NEON"), OracleBoundary.Check(sql, "NEON", visible, []));
+        Assert.Equal(other is null ? null : OracleText.OtherSchema(other, "NEON"), OracleBoundary.Check(sql, "NEON", visible.Select(v => new[] { OracleBoundary.UserKind, v })));
     }
 
     [Theory]
@@ -168,9 +170,14 @@ public sealed class OracleToolsTests
     [InlineData("SELECT * FROM \"CDB_DATA_FILES\"", "CDB_DATA_FILES")]
     public void TheBoundary_RefusesTheDictionarysWholeDatabaseViews(string sql, string named)
     {
-        Assert.Equal(OracleText.Dictionary(named, "NEON"), OracleBoundary.Check(sql, "NEON", []));
-        Assert.Null(OracleBoundary.Check("SELECT * FROM user_tables", "NEON", []));
-        Assert.Null(OracleBoundary.Check("SELECT * FROM neon.all_orders", "NEON", ["NEON"]));
+        string[] views = ["ALL_USERS", "ALL_ORDERS", "DBA_TABLES", "GV$SQL", "CDB_DATA_FILES"];
+        Assert.Equal(OracleText.Dictionary(named, "NEON"), OracleBoundary.Check(sql, "NEON", ["NEON", "SYS"], views));
+        Assert.Null(OracleBoundary.Check("SELECT * FROM user_tables", "NEON", [], views));
+        Assert.Null(OracleBoundary.Check("SELECT * FROM neon.all_orders", "NEON", ["NEON"], views));
+
+        // A column or alias that only looks like a view (the review, 2026-10-09): no such view, so it stands.
+        Assert.Null(OracleBoundary.Check("SELECT c.dba_name, c.all_day_flag, total AS \"ALL_TOTAL\" FROM customers c", "NEON", [], views));
+        Assert.Equal(["DBA_NAME", "ALL_DAY_FLAG", "ALL_TOTAL"], OracleBoundary.Qualifiers("SELECT c.dba_name, c.all_day_flag, total AS \"ALL_TOTAL\" FROM customers c", "NEON").Dictionary);
     }
 
     [Fact]

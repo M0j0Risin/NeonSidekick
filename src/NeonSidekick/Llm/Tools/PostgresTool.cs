@@ -101,10 +101,10 @@ public abstract class PostgresTool : AIFunction
             return refused;
         }
 
-        var run = await _postgres.RunAsync(connection, Effective.PostgresDefaultConnection, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
-        return run.Outcome != SqlOutcome.Ok
-            ? PostgresText.Error(run)
-            : PostgresBoundary.Check(sql, schema, run.Grids.Count > 0 ? run.Grids[0].Rows.Select(r => r[0]) : []);
+        // The names kept a minute per connection (the review, 2026-10-09: an alias's t.col sent every join for them).
+        var (rows, failed) = await _postgres.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.Endpoint, target.Config.Database, target.Config.User),
+            token => _postgres.RunAsync(connection, Effective.PostgresDefaultConnection, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
+        return failed is not null ? PostgresText.Error(failed) : PostgresBoundary.Check(sql, schema, rows!.Select(r => r[0]));
     }
 
     protected Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>

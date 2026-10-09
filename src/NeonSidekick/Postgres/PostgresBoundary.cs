@@ -31,7 +31,21 @@ public static class PostgresBoundary
     public static readonly IReadOnlyList<string> ServerCatalogPrefixes = ["pg_stat_get_backend_"];
 
     /// <summary>The qualifiers a schema lock lets stand beside its own: the language's catalog and the session's temporary schema.</summary>
-    public static readonly IReadOnlySet<string> AlwaysSchemas = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "pg_catalog", "pg_temp" };
+    public static readonly IReadOnlySet<string> AlwaysSchemas = new HashSet<string>(StringComparer.Ordinal) { "pg_catalog", "pg_temp" };
+
+    /// <summary>
+    /// The functions that read a table, a schema or the whole database named in a string (the review, 2026-10-09:
+    /// <c>schema_to_xml('payroll', …)</c> read another schema under a lock, no qualifier in sight). Refused under a schema lock; without
+    /// one they stay in the connection's database.
+    /// </summary>
+    public static readonly IReadOnlySet<string> XmlExports = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "table_to_xml", "table_to_xmlschema", "table_to_xml_and_xmlschema", "schema_to_xml", "schema_to_xmlschema", "schema_to_xml_and_xmlschema",
+        "database_to_xml", "database_to_xmlschema", "database_to_xml_and_xmlschema",
+    };
+
+    /// <summary>A name as PostgreSQL reads it: a bare word folded to lower case, a quoted name as written (the review, 2026-10-09: <c>"Sales"</c> is not <c>sales</c>).</summary>
+    private static string Fold(GateToken token) => token.Kind == GateTokenKind.Name ? token.Text : token.Text.ToLowerInvariant();
 
     /// <summary>The schemas' names in the database, read before the model's statement under a schema lock.</summary>
     public const string Names = "SELECT nspname FROM pg_namespace";
@@ -40,9 +54,10 @@ public static class PostgresBoundary
     public const int MaxNames = 100_000;
 
     /// <summary>
-    /// What of <paramref name="sql"/> the server must be asked about: under a lock to <paramref name="schema"/>, its qualifiers but the
+    /// What of <paramref name="sql"/> the server must be asked about: under a lock to <paramref name="schema"/>, every part of a dotted
+    /// name but its last (<see cref="ServerWriteGate.Prefixes"/>: a three-part name's schema too), as PostgreSQL reads it, but the
     /// schema's own and <see cref="AlwaysSchemas"/> (none for most statements); none without a lock. Or the refusal at once: a server
-    /// catalog, or <c>information_schema</c> under a lock.
+    /// catalog, or under a lock <c>information_schema</c> and the <see cref="XmlExports"/>.
     /// </summary>
     public static (IReadOnlyList<string> Heads, string? Refused) Qualifiers(string sql, string? schema)
     {
@@ -67,8 +82,13 @@ public static class PostgresBoundary
         }
 
         string own = schema.Trim();
-        var heads = ServerWriteGate.Qualifiers(tokens).Where(h => !h.Equals(own, StringComparison.OrdinalIgnoreCase) && !AlwaysSchemas.Contains(h)).ToList();
-        return heads.FirstOrDefault(h => h.Equals("information_schema", StringComparison.OrdinalIgnoreCase)) is not null
+        if (tokens.FirstOrDefault(t => t.Kind is GateTokenKind.Word or GateTokenKind.Name && XmlExports.Contains(t.Text)) is { Text: { } export })
+        {
+            return ([], PostgresText.XmlExport(export.ToLowerInvariant(), own));
+        }
+
+        var heads = ServerWriteGate.Prefixes(tokens).Select(Fold).Where(h => !h.Equals(own, StringComparison.Ordinal) && !AlwaysSchemas.Contains(h)).ToList();
+        return heads.Contains("information_schema")
             ? (heads, PostgresText.OtherSchema("information_schema", own))
             : (heads, null);
     }
@@ -86,14 +106,8 @@ public static class PostgresBoundary
             return refused;
         }
 
-        var others = new HashSet<string>(visible, StringComparer.OrdinalIgnoreCase);
-        if (heads.FirstOrDefault(others.Contains) is not { } head)
-        {
-            return null;
-        }
-
-        // The lexer upper-cases a bare word: name the schema as the database spells it.
-        others.TryGetValue(head, out var named);
-        return PostgresText.OtherSchema(named ?? head, schema!.Trim());
+        // The heads are folded as PostgreSQL folds them, so the schemas' names compare exactly.
+        var others = new HashSet<string>(visible, StringComparer.Ordinal);
+        return heads.FirstOrDefault(others.Contains) is { } head ? PostgresText.OtherSchema(head, schema!.Trim()) : null;
     }
 }

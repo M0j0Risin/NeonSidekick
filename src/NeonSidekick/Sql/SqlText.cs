@@ -154,6 +154,10 @@ public static class SqlText
     public static string OtherDatabase(string named, string database) =>
         $"Error: the SQL names database '{named}', but this connection reaches '{database}' alone; another database needs a connection of its own, which the user adds (sql_connections lists them)";
 
+    /// <summary>A call whose head is a table's alias spelled like another database on the server (the review, 2026-10-09). Pinned.</summary>
+    public static string AliasLikeDatabase(string named, string database) =>
+        $"Error: the SQL calls through '{named}', which is also another database on this server; rename the alias (or the table) so the call cannot reach '{named}' — this connection reaches '{database}' alone";
+
     /// <summary>A view or function of the whole server rather than the database. Pinned.</summary>
     public static string ServerCatalog(string what) =>
         $"Error: the SQL reads {what}, which describes the whole server rather than this connection's database; the SQL tools keep to the connection's database (sql_tables, sql_columns and sql_describe read its catalog)";
@@ -169,13 +173,15 @@ public static class SqlText
     public static string Reach(string database, IReadOnlyList<string> others)
     {
         ArgumentNullException.ThrowIfNull(others);
+        // The server's own four are left out of the list (every login opens master and tempdb, and msdb as guest by default), so an
+        // empty list says no other user database, not that the server holds the login to one (the review, 2026-10-09).
         if (others.Count == 0)
         {
-            return $"The login opens no other database: the server holds it to {database} too.";
+            return $"The login opens no other user database than {database} (the server's own master, tempdb and msdb aside).";
         }
 
         string names = string.Join(", ", others.Take(10)) + (others.Count > 10 ? $" and {Invariant(others.Count - 10)} more" : "");
-        return $"The login could also open {names}. The tools keep to {database}; a login that opens only it is the lock the server keeps too.";
+        return $"The login could also open {names} (and the server's own master, tempdb and msdb). The tools keep to {database}; a login that opens only it is the lock the server keeps too.";
     }
 
     /// <summary>The backstop after the sign-in: the server opened another database than the entry's (a login's default where the entry's was refused). Pinned.</summary>

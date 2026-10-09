@@ -63,7 +63,7 @@ public sealed class SqlExecuteTool : SqlTool
 
         int timeout = TimeoutSeconds(effective);
         var hooks = new ServerExecuteHooks(
-            (text, kinds) => SqlWriteGate.Check(text, kinds) ?? Boundary(text, connection),
+            SqlWriteGate.Check,
             SqlWriteGate.Kinds,
             SqlReadOnlyGate.Check,
             text => text.Trim(),
@@ -76,7 +76,8 @@ public sealed class SqlExecuteTool : SqlTool
                 return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, ResultChars(effective)) : SqlText.Error(run);
             },
             (body, token) => Sql.ExecuteAsync(connection, effective.SqlDefaultConnection, body, parameters, rows, timeout, token),
-            SqlText.Error);
+            SqlText.Error,
+            (body, token) => OutsideAsync(body, connection, token));
         return ServerExecute.RunAsync(SqlStatementKinds.Family, effective.SqlMode, effective.SqlStatementsAllowed, sql, rows, ResultChars(effective), hooks, _allow, cancellationToken);
     }
 

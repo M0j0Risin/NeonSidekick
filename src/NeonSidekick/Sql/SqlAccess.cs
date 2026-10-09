@@ -135,6 +135,9 @@ public sealed class SqlAccess
     /// <summary>The connections as the files hold them now.</summary>
     public SqlCatalog Catalog() => _catalog();
 
+    /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="BoundaryNames"/>).</summary>
+    public BoundaryNames Names { get; } = new();
+
     /// <summary>
     /// The connection a call means (<see cref="SqlCatalog.Find"/>), or null with the <c>Error:</c> sentence:
     /// none defined, or a name that matches none (the names listed).

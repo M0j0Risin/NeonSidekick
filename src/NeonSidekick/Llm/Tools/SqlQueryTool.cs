@@ -127,7 +127,7 @@ public sealed class SqlQueryTool : SqlTool
             return SqlText.BadMaxRows(MinRows, MaxRows);
         }
 
-        if ((SqlReadOnlyGate.Check(sql) ?? Boundary(sql, connection)) is { } refused)
+        if ((SqlReadOnlyGate.Check(sql) ?? await OutsideAsync(sql, connection, cancellationToken).ConfigureAwait(false)) is { } refused)
         {
             return refused;
         }

@@ -107,6 +107,10 @@ public static class PostgresText
     public static string OtherSchema(string named, string schema) =>
         $"Error: the SQL names '{named}', another schema of this database (an alias spelled like it reads the same: rename it), but this connection is held to schema '{schema}'; another schema needs a connection of its own, which the user adds";
 
+    /// <summary>A function that reads a table, schema or database named in a string, under a schema lock (the review, 2026-10-09). Pinned.</summary>
+    public static string XmlExport(string named, string schema) =>
+        $"Error: the SQL uses {named}, which reads the table, schema or database its argument names, but this connection is held to schema '{schema}'; select from the schema's tables instead";
+
     /// <summary>A tool's <c>schema</c> (or a <c>schema.name</c> table) naming another under a schema lock. Pinned.</summary>
     public static string SchemaElsewhere(string named, string schema) =>
         $"Error: this connection is held to schema '{schema}', so '{named}' is out of its reach; leave \"schema\" out or give {schema}";
@@ -139,8 +143,9 @@ public static class PostgresText
             parts.Add("use the schemas " + Names(schemas));
         }
 
+        // An empty report says nothing more is in reach than the lists cover (the review, 2026-10-09): the system catalogs are every role's.
         return parts.Count == 0
-            ? $"The role reaches nothing beyond {place}: the server holds it there too."
+            ? $"The role reaches no other database, foreign server{(string.IsNullOrWhiteSpace(schema) ? "" : " or schema")} beyond {place} (the system catalogs aside)."
             : $"The role could also {string.Join("; ", parts)}. The tools keep to {place}; a role granted only it is the lock the server keeps too.";
     }
 
