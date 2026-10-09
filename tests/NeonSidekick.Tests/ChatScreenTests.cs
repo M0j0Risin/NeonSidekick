@@ -5062,7 +5062,8 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// On a Mac the groups that need Windows say so on <c>/tools</c> (2026-10-06, the tidy-up before the first Mac release): UNC with
-    /// a share named and offered, Docker and printing, all three switched on, each heading <c>(off: it needs Windows)</c>.
+    /// a share named and offered and Docker, both switched on, each heading <c>(off: it needs Windows)</c>; printing, which a Mac does
+    /// since 2026-10-08 (CUPS), switched on too and offered, its heading with no such reason.
     /// </summary>
     [UnixFact]
     public async Task Tools_OnMacOS_TheWindowsOnlyGroups_SayTheyNeedWindows()
@@ -5082,7 +5083,8 @@ public partial class ChatScreenTests : IDisposable
         string reason = "(off: " + ToolsText.NeedsWindowsReason + ")\n";
         Assert.Matches(@"·   UNC \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
         Assert.Matches(@"·   Docker \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
-        Assert.Matches(@"·   Print \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
+        Assert.DoesNotMatch(@"·   Print \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);
+        Assert.Matches(@"Print \(2\)", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -15151,32 +15153,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x.png"), output);
     }
 
-    /// <summary><c>/print</c> on a Mac (2026-10-06, the tidy-up before the first Mac release): no spooler there yet, so every form says printing needs Windows, and nothing is printed.</summary>
-    [UnixFact]
-    public async Task Print_OnMacOS_SaysItNeedsWindows()
-    {
-        if (!OperatingSystem.IsMacOS())
-        {
-            return;
-        }
-
-        _settings.Update(d => d.TtsOutput = false);
-        PushLine("/print printers");
-        PushLine("/print reply");
-        PushLine("/exit");
-
-        string output = await RunAsync();
-
-        Assert.Equal(2, Count(output, NeonSidekick.Printing.PrintText.NeedsWindows));
-        Assert.Empty(_printSpooler.Jobs);
-        Assert.Empty(_chat.Requests);
-    }
-
     /// <summary>
     /// <c>/print</c> (2026-09-28): a file of the working directory to the default printer and to a named one sideways, the
     /// printers listed, and a missing file, a bad option and a reply not yet there as error lines; nothing reaches the model.
     /// </summary>
-    [WindowsFact]   // printing needs Windows: a Mac's /print says so (Print_OnMacOS_SaysItNeedsWindows, 2026-10-06)
+    [Fact]   // on a Mac too since 2026-10-08 (CUPS); Windows-only from 2026-10-06 until then
     public async Task Print_SendsAFile_ListsThePrinters_AndSaysWhy()
     {
         _settings.Update(d => d.TtsOutput = false);
@@ -15196,7 +15177,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([(FakePrintSpooler.Laser, false, 1), (FakePrintSpooler.Color, true, 2)], _printSpooler.Jobs.Select(j => (j.Printer, j.Landscape, j.Copies)));
         Assert.Contains("Printed notes.txt: 1 page to Office Laser", output);
         Assert.Contains("Printed notes.txt: 1 page × 2 copies, landscape to Office Color", output);
-        Assert.Contains("- Office Laser (Windows default)", output);
+        Assert.Contains("- Office Laser (" + NeonSidekick.Printing.PrintText.DefaultMark + ")", output);
         Assert.Contains("  ✗ " + FileText.Missing("nope.txt"), output);
         Assert.Contains("  ✗ " + NeonSidekick.Printing.PrintText.BadCopies("99"), output);
         Assert.Contains("  ✗ " + NeonSidekick.Printing.PrintText.NoReply, output);

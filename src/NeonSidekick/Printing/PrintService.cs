@@ -71,7 +71,7 @@ public sealed class PrintService
         ArgumentNullException.ThrowIfNull(printers);
         if (printers.Count == 0)
         {
-            return (null, PrintText.NoPrinter);
+            return (null, PrintText.NoPrinterHere);
         }
 
         string wanted = (requested ?? "").Trim();
@@ -82,7 +82,7 @@ public sealed class PrintService
 
         if (wanted.Length == 0)
         {
-            return printers.FirstOrDefault(p => p.IsDefault) is { } fallback ? (fallback.Name, null) : (null, PrintText.NoDefault(printers));
+            return printers.FirstOrDefault(p => p.IsDefault) is { } fallback ? (fallback.Name, null) : (null, PrintText.NoDefaultHere(printers));
         }
 
         if (printers.FirstOrDefault(p => string.Equals(p.Name, wanted, StringComparison.OrdinalIgnoreCase)) is { } exact)
@@ -90,7 +90,14 @@ public sealed class PrintService
             return (exact.Name, null);
         }
 
-        var near = printers.Where(p => p.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+        // A Mac's printer by the name System Settings shows too (2026-10-08, the user's call): CUPS' queue is Brother_HL_L2340D_series,
+        // its description Brother HL-L2340D series. Windows sets no description, so nothing changes there.
+        if (printers.FirstOrDefault(p => string.Equals(p.Description, wanted, StringComparison.OrdinalIgnoreCase)) is { } described)
+        {
+            return (described.Name, null);
+        }
+
+        var near = printers.Where(p => p.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase) || (p.Description?.Contains(wanted, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
         return near.Count switch
         {
             1 => (near[0].Name, null),
@@ -150,9 +157,21 @@ public sealed class PrintService
             {
                 return (null, error);
             }
+
+            // A PDF whose head is all ASCII reads as text; where PDFs go to the printer as they are (a Mac, 2026-10-08) it goes so,
+            // never as a listing of its source. Windows' spooler takes no options, so nothing changes there.
+            if (kind == PrintKind.Listing && _spooler.ShellPrintTakesOptions && _spooler.CanShellPrint(resolved))
+            {
+                kind = PrintKind.Shell;
+            }
         }
 
         var printers = _spooler.Printers();
+        if (kind == PrintKind.Shell && _spooler.ShellPrintTakesOptions)
+        {
+            return PrepareAsItIs(request, display, full!, printers);
+        }
+
         if (kind == PrintKind.Shell)
         {
             if (request.OutputFile is not null)
@@ -200,6 +219,48 @@ public sealed class PrintService
 
         var job = new PrintJob(printer, display, pages.Where(p => chosen.Contains(p.Number)).ToList(), request.Landscape, request.Copies, request.OutputFile);
         return (new PrintPlan(kind, display, printer, pages.Count, [.. chosen], request.Copies, request.Landscape, job, null), null);
+    }
+
+    /// <summary>
+    /// A file sent to the printer as it is (2026-10-08, a Mac's PDF straight to CUPS; the user's call: printer, copies and pages
+    /// as for a drawn file). Its pages are counted so a range is judged and the pane says how many; landscape is refused, the
+    /// PDF's pages keeping their own orientation, and so is an output file.
+    /// </summary>
+    private (PrintPlan? Plan, string? Error) PrepareAsItIs(PrintRequest request, string display, string full, IReadOnlyList<PrinterInfo> printers)
+    {
+        if (request.OutputFile is not null)
+        {
+            return (null, PrintText.PdfNoFileOutput(display));
+        }
+
+        if (!_spooler.CanShellPrint(full))
+        {
+            return (null, PrintText.MacNoHandler(display));
+        }
+
+        if (request.Landscape)
+        {
+            return (null, PrintText.PdfLandscape(display));
+        }
+
+        var (printer, printerError) = ResolvePrinter(request.Printer, printers);
+        if (printer is null)
+        {
+            return (null, printerError);
+        }
+
+        int total = _spooler.ShellPageCount(full);
+        if (total <= 0)
+        {
+            return (null, PrintText.NotAPdf(display));
+        }
+
+        if (!PrintLayout.PageRange(request.Pages, total, out var chosen, out string rangeError))
+        {
+            return (null, rangeError);
+        }
+
+        return (new PrintPlan(PrintKind.Shell, display, printer, total, [.. chosen], request.Copies, false, null, full), null);
     }
 
     /// <summary>What the file is and its content: a picture decoded, text read (markdown by its extension), anything else the shell's.</summary>
@@ -250,14 +311,17 @@ public sealed class PrintService
     public async Task<string> PrintAsync(PrintPlan plan, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        string? error = await Task.Run(() => plan.Kind == PrintKind.Shell ? _spooler.ShellPrint(plan.ShellPath!) : _spooler.Print(plan.Job!, cancellationToken), cancellationToken).ConfigureAwait(false);
+        // A file sent as it is with its pages counted (a Mac's PDF) takes the plan's printer, copies and pages; Windows' shell plans count none.
+        bool asItIs = plan.Kind == PrintKind.Shell && plan.TotalPages > 0;
+        IReadOnlyList<int>? pages = plan.Pages.Count == plan.TotalPages ? null : plan.Pages;
+        string? error = await Task.Run(() => asItIs ? _spooler.ShellPrint(plan.ShellPath!, plan.Printer, plan.Copies, pages, cancellationToken) : plan.Kind == PrintKind.Shell ? _spooler.ShellPrint(plan.ShellPath!) : _spooler.Print(plan.Job!, cancellationToken), cancellationToken).ConfigureAwait(false);
         if (error is not null)
         {
             DiagnosticLog.Warn(PrintText.Category, error);
             return error;
         }
 
-        string done = plan.Kind == PrintKind.Shell ? PrintText.ShellStarted(plan) : PrintText.Printed(plan);
+        string done = plan.Kind == PrintKind.Shell && !asItIs ? PrintText.ShellStarted(plan) : PrintText.Printed(plan);
         DiagnosticLog.Info(PrintText.Category, done);
         return done;
     }

@@ -156,6 +156,9 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Equal(@"no password in Windows Credential Manager for NeonSidekick/unc/x; set it on the UNC tab of /tools, or: cmdkey /generic:NeonSidekick/unc/x /user:<DOMAIN\name> /pass", UncText.NoCredential("NeonSidekick/unc/x"));
         Assert.Equal(@"The database file: a full path (D:\data\app.db), or one relative to sqlite.json's folder.", SettingsMenu.SqliteWizardPathQuestion);
         Assert.Equal("(Windows default)", SettingsMenu.WindowsDefaultPrinterLabel);
+        Assert.Equal("Windows default", Printing.PrintText.DefaultMark);
+        Assert.Equal(Printing.PrintText.NoPrinter, Printing.PrintText.NoPrinterHere);
+        Assert.Equal("Error: Windows has no default printer; name one: A", Printing.PrintText.NoDefaultHere([new("A", false)]));
     }
 
     // ── what the model and the screen read ──
@@ -178,7 +181,13 @@ public sealed class MacTidyUpTests : IDisposable
         Assert.Equal(Claude.ClaudeText.MacNotFound, Claude.ClaudeText.NotFound);
         Assert.DoesNotContain("USERPROFILE", Claude.ClaudeText.NotFound);
         Assert.Equal("a\\b is not a path every system's folders can hold safely", SkillInstallText.UnsafePathRefusal("a\\b"));
-        Assert.Equal("(none: printing needs Windows)", SettingsMenu.WindowsDefaultPrinterLabel);
+        Assert.Equal("(system default)", SettingsMenu.WindowsDefaultPrinterLabel);   // a Mac prints since 2026-10-08
+        Assert.Equal("system default", Printing.PrintText.DefaultMark);
+        Assert.Equal("Error: no printer is set up on this Mac; add one in System Settings › Printers & Scanners", Printing.PrintText.NoPrinterHere);
+        Assert.Equal("Error: this Mac has no default printer; name one: A", Printing.PrintText.NoDefaultHere([new("A", false)]));
+        Assert.True(Printing.PrintText.Supported);
+        Assert.Equal(PrintFileTool.MacDescriptionText, new PrintFileTool(new Printing.PrintService(Printing.NullPrintSpooler.Instance, files, () => new Settings.AppSettingsData()), null).Description);
+        Assert.Equal(ListPrintersTool.MacDescriptionText, new ListPrintersTool(new Printing.PrintService(Printing.NullPrintSpooler.Instance, files, () => new Settings.AppSettingsData())).Description);
         Assert.Equal("GPU load", Perf.PerfText.GpuNote);   // read through IOKit since 2026-10-07
         Assert.Equal("GMEM", Perf.PerfText.VramLabel);
         Assert.Equal("GPU's share of unified memory", Perf.PerfText.VramNote);
@@ -272,7 +281,8 @@ public sealed class MacTidyUpTests : IDisposable
         }
 
         Assert.DoesNotContain("Explorer", forms["/view <image>|<folder>"]);
-        Assert.Equal(Printing.PrintText.NeedsWindows, forms["/print printers"]);
+        Assert.Equal(HelpMac.PrintFileForm, forms["/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]"]);   // a Mac prints since 2026-10-08
+        Assert.DoesNotContain("Windows", forms["/print printers"]);
         Assert.Equal(HelpMac.TerminalForm, forms["/terminal [<folder>]"]);   // an opener since 2026-10-07
         Assert.Contains("Ctrl+]", forms["/terminal [<folder>]"]);
     }

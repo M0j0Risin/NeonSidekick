@@ -58,6 +58,26 @@ public sealed class FakePrintSpooler : IPrintSpooler
 
     public bool CanShellPrint(string path) => ShellTypes.Contains(Path.GetExtension(path));
 
+    /// <summary>A Mac's spooler (2026-10-08): a PDF goes as it is, with a printer, copies and pages. Off: Windows' shell verb.</summary>
+    public bool TakesOptions { get; set; }
+
+    /// <summary>The pages a file sent as it is has, by file name; one missing counts 0 (unreadable).</summary>
+    public Dictionary<string, int> PageCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Every file sent as it is, with its options.</summary>
+    public List<(string Path, string Printer, int Copies, IReadOnlyList<int>? Pages)> SentAsItIs { get; } = [];
+
+    public bool ShellPrintTakesOptions => TakesOptions;
+
+    public int ShellPageCount(string path) => PageCounts.GetValueOrDefault(Path.GetFileName(path));
+
+    public string? ShellPrint(string path, string printer, int copies, IReadOnlyList<int>? pages, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        SentAsItIs.Add((path, printer, copies, pages));
+        return FailWith;
+    }
+
     public string? ShellPrint(string path)
     {
         ShellPrinted.Add(path);

@@ -39,13 +39,32 @@ public static class PrintText
 
     public const string NoPrinter = "Error: no printer is installed on this PC";
 
-    /// <summary>Printing off Windows (2026-10-06, the macOS build: no spooler there yet, so the print group is not offered and <c>/print</c> says this). Pinned.</summary>
-    public const string NeedsWindows = "Printing needs Windows for now: this build has no printer support.";
+    /// <summary>A Mac with no printer set up (2026-10-08): where to add one. Pinned.</summary>
+    public const string MacNoPrinter = "Error: no printer is set up on this Mac; add one in System Settings › Printers & Scanners";
+
+    /// <summary>No printer: <see cref="NoPrinter"/>, or on a Mac <see cref="MacNoPrinter"/>.</summary>
+    public static string NoPrinterHere => OperatingSystem.IsMacOS() ? MacNoPrinter : NoPrinter;
+
+    /// <summary>
+    /// Printing on neither Windows nor a Mac (2026-10-06 as NeedsWindows, the macOS build before its spooler; since 2026-10-08,
+    /// when a Mac prints through CUPS, only other systems say it: the print group is not offered and <c>/print</c> says this). Pinned.
+    /// </summary>
+    public const string NotHere = "Printing needs Windows or a Mac: this build has no printer support.";
+
+    /// <summary>Whether this system prints: Windows (winspool) or a Mac (CUPS, 2026-10-08).</summary>
+    public static bool Supported => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
 
     public const string NoReply = "Error: there is no reply to print yet";
 
     public static string NoDefault(IReadOnlyList<PrinterInfo> printers) =>
         "Error: Windows has no default printer; name one: " + Names(printers);
+
+    /// <summary><see cref="NoDefault"/> on a Mac (2026-10-08). Pinned.</summary>
+    public static string MacNoDefault(IReadOnlyList<PrinterInfo> printers) =>
+        "Error: this Mac has no default printer; name one: " + Names(printers);
+
+    /// <summary>No default: <see cref="NoDefault"/>, or on a Mac <see cref="MacNoDefault"/>.</summary>
+    public static string NoDefaultHere(IReadOnlyList<PrinterInfo> printers) => OperatingSystem.IsMacOS() ? MacNoDefault(printers) : NoDefault(printers);
 
     public static string UnknownPrinter(string name, IReadOnlyList<PrinterInfo> printers) =>
         $"Error: no printer named '{name.Trim()}'; the printers are: " + Names(printers);
@@ -70,6 +89,24 @@ public static class PrintText
     public static string NoFileOutput(string file) =>
         $"Error: {file} is printed by the program Windows has for {Extension(file)} files, which cannot print to a file";
 
+    // ─── a file sent as it is (2026-10-08, a Mac's PDF straight to CUPS: IPrintSpooler.ShellPrintTakesOptions) ──
+
+    /// <summary>A file the app does not draw and CUPS does not take as it is (an Office file). Pinned.</summary>
+    public static string MacNoHandler(string file) =>
+        $"Error: {file} cannot be printed from here on a Mac: only PDF files go to the printer as they are, and the sidekick itself prints text, code, markdown and pictures; print {Extension(file)} files from the program that made them";
+
+    /// <summary>A PDF asked for landscape: its pages keep their own orientation. Pinned.</summary>
+    public static string PdfLandscape(string file) =>
+        $"Error: {file} goes to the printer as it is, each page as the PDF lays it out; leave out landscape";
+
+    /// <summary>A PDF asked to print to a file. Pinned.</summary>
+    public static string PdfNoFileOutput(string file) =>
+        $"Error: {file} goes to the printer as it is and cannot print to a file";
+
+    /// <summary>A PDF CoreGraphics cannot open, or one locked by a password. Pinned.</summary>
+    public static string NotAPdf(string file) =>
+        $"Error: {file} could not be read as a PDF (a damaged file, or one locked by a password)";
+
     public static string TooLarge(string file) =>
         $"Error: {file} is over {(MaxTextBytes / 1_000_000).ToString(CultureInfo.InvariantCulture)} MB, too long to print";
 
@@ -87,7 +124,8 @@ public static class PrintText
     public static string ConfirmQuestion(PrintPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        if (plan.Kind == PrintKind.Shell)
+        // A file sent as it is with its pages counted (a Mac's PDF, 2026-10-08) asks as a drawn one does; Windows' shell plans count none.
+        if (plan.Kind == PrintKind.Shell && plan.TotalPages == 0)
         {
             return $"Let the model print {plan.Display} with the program Windows has for it, on {plan.Printer}?";
         }
@@ -167,7 +205,7 @@ public static class PrintText
         ArgumentNullException.ThrowIfNull(printers);
         if (printers.Count == 0)
         {
-            return NoPrinters;
+            return OperatingSystem.IsMacOS() ? MacNoPrinters : NoPrinters;
         }
 
         return Count(printers.Count, "printer") + "\n" + string.Join("\n", printers.Select(p => "- " + PrinterLine(p, setting)));
@@ -175,14 +213,23 @@ public static class PrintText
 
     public const string NoPrinters = "No printers are installed";
 
-    /// <summary>One printer with its marks: the Windows default, the <c>Print default printer</c> setting.</summary>
+    /// <summary>A Mac's <see cref="NoPrinters"/> (2026-10-08). Pinned.</summary>
+    public const string MacNoPrinters = "No printers are set up on this Mac";
+
+    /// <summary>The default printer's mark: <c>Windows default</c>, on a Mac (2026-10-08) <c>system default</c>.</summary>
+    public static string DefaultMark => OperatingSystem.IsMacOS() ? "system default" : "Windows default";
+
+    /// <summary>
+    /// One printer with its marks: the system's default, the <c>Print default printer</c> setting. A Mac's printer (2026-10-08)
+    /// shows its description after the queue name, the name <c>printer=</c> wants: <c>Brother_HL_L2340D_series — Brother HL-L2340D series</c>.
+    /// </summary>
     public static string PrinterLine(PrinterInfo printer, string? setting)
     {
         ArgumentNullException.ThrowIfNull(printer);
         var marks = new List<string>(2);
         if (printer.IsDefault)
         {
-            marks.Add("Windows default");
+            marks.Add(DefaultMark);
         }
 
         if (!string.IsNullOrWhiteSpace(setting) && string.Equals(printer.Name, setting.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -190,7 +237,8 @@ public static class PrintText
             marks.Add("Print default printer");
         }
 
-        return printer.Name + (marks.Count == 0 ? "" : " (" + string.Join(", ", marks) + ")");
+        string description = string.IsNullOrEmpty(printer.Description) ? "" : " — " + printer.Description;
+        return printer.Name + description + (marks.Count == 0 ? "" : " (" + string.Join(", ", marks) + ")");
     }
 
     // ─── /print ─────────────────────────────────────────────────────────────────

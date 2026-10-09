@@ -4696,7 +4696,7 @@ internal sealed partial class ChatScreen
             SettingsField.UncTools => !effective.UncTools ? ToolsText.SwitchOffReason(field) : OperatingSystem.IsMacOS() ? ToolsText.NeedsWindowsReason : ToolsText.NoneOfferedReason("share", "unc.json"),
             // The groups that need Windows say so on a Mac (2026-10-06, the macOS build), the switch first as everywhere; on Windows null as before.
             SettingsField.DockerTools => !OperatingSystem.IsMacOS() ? null : !effective.DockerTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
-            SettingsField.PrintTools => !OperatingSystem.IsMacOS() ? null : !effective.PrintTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
+            SettingsField.PrintTools => PrintText.Supported ? null : !effective.PrintTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,   // a Mac prints since 2026-10-08
             SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
             SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,
             SettingsField.HomeAssistantTools => !effective.HomeAssistantTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoHomeAssistantReason,

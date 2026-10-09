@@ -47,9 +47,17 @@ public sealed class PrintFileTool : AIFunction
 
     public override string Name => ToolName;
 
-    public override string Description =>
+    public override string Description => OperatingSystem.IsMacOS() ? MacDescriptionText : DescriptionText;
+
+    /// <summary>The description on Windows. Pinned.</summary>
+    public const string DescriptionText =
         "Prints a file from the working directory on the user's printer: text and code as a listing, markdown formatted, a picture on one page; " +
         "a PDF or an Office file goes to its own program on the default printer. Only print when the user asks you to.";
+
+    /// <summary>The description on a Mac (2026-10-08, CUPS): a PDF goes as it is with the options but landscape, an Office file is refused. Pinned.</summary>
+    public const string MacDescriptionText =
+        "Prints a file from the working directory on the user's printer: text and code as a listing, markdown formatted, a picture on one page; " +
+        "a PDF goes to the printer as it is (printer, copies and pages, not landscape); an Office file cannot be printed here. Only print when the user asks you to.";
 
     public override JsonElement JsonSchema => Schema;
 

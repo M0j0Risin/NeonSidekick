@@ -2,8 +2,13 @@ using NeonSidekick.Viewer;
 
 namespace NeonSidekick.Printing;
 
-/// <summary>A printer the spooler knows: its name as Windows spells it, and whether it is the Windows default.</summary>
-public sealed record PrinterInfo(string Name, bool IsDefault);
+/// <summary>
+/// A printer the spooler knows: its name as the system spells it, and whether it is the system's default. On a Mac
+/// (2026-10-08) <paramref name="Description"/> is CUPS' <c>printer-info</c>, the name System Settings shows ("Brother HL-L2340D
+/// series" for the queue <c>Brother_HL_L2340D_series</c>), listed beside the name and matched by <c>printer=</c> too; Windows
+/// never sets it.
+/// </summary>
+public sealed record PrinterInfo(string Name, bool IsDefault, string? Description = null);
 
 /// <summary>The two faces a printed page uses: a proportional one for prose, a fixed one for code and listings.</summary>
 public enum PrintFace
@@ -83,4 +88,20 @@ public interface IPrintSpooler
 
     /// <summary>Hands <paramref name="path"/> to that program's <c>print</c> command: null when it started, else why not.</summary>
     string? ShellPrint(string path);
+
+    /// <summary>
+    /// Whether a file the app does not draw goes to the printer as it is, so it takes a printer, copies and pages (2026-10-08,
+    /// a Mac's PDF straight to CUPS). False by default: Windows' <c>print</c> verb prints on the default printer as it is set up.
+    /// </summary>
+    bool ShellPrintTakesOptions => false;
+
+    /// <summary>The pages of a file <see cref="ShellPrint(string)"/> takes when <see cref="ShellPrintTakesOptions"/>: 0 when it cannot be read.</summary>
+    int ShellPageCount(string path) => 0;
+
+    /// <summary>
+    /// <paramref name="path"/> sent as it is to <paramref name="printer"/>: <paramref name="copies"/>, and <paramref name="pages"/>
+    /// (null: all). Null when the printer took it, else why not; cancelling withdraws a job half sent. By default the plain
+    /// <see cref="ShellPrint(string)"/>, the options ignored, for a spooler that never says it takes them.
+    /// </summary>
+    string? ShellPrint(string path, string printer, int copies, IReadOnlyList<int>? pages, CancellationToken cancellationToken) => ShellPrint(path);
 }

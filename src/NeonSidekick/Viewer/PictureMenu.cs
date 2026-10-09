@@ -86,10 +86,7 @@ public static class PictureMenu
         rows.Add(Row(PictureMenuText.CopyPath, PictureCommand.CopyPath));
         rows.Add(Row(OperatingSystem.IsMacOS() ? PictureMenuText.ShowInFinder : PictureMenuText.ShowInExplorer, PictureCommand.ShowInExplorer));
         rows.Add(Row(PictureMenuText.Attach, PictureCommand.Attach));
-        if (!OperatingSystem.IsMacOS())
-        {
-            rows.Add(Row(PictureMenuText.Print, PictureCommand.Print));   // printing needs Windows (2026-10-07: the Mac's menu leaves it out)
-        }
+        rows.Add(Row(PictureMenuText.Print, PictureCommand.Print));   // a Mac's too since 2026-10-08 (CUPS; left out from 2026-10-07 until then)
 
         rows.Add(ContextMenuItem.Separator);
         rows.Add(Row(PictureMenuText.Delete, PictureCommand.Delete));

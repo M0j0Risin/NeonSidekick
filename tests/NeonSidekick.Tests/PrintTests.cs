@@ -353,6 +353,19 @@ public sealed class PrintTests : IDisposable
         Assert.Empty(_spooler.Opened);
     }
 
+    /// <summary>The Unix twin of <see cref="Service_KeepsToTheSandbox"/> (2026-10-08, printing on a Mac): its paths with <c>/</c>.</summary>
+    [UnixFact]
+    public void Service_KeepsToTheSandbox_Unix()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "sub"));
+
+        Assert.Equal(FileText.OutsideRoot("../x.txt"), _print.Prepare(new PrintRequest("../x.txt")).Error);
+        Assert.Equal(FileText.Missing("nope.txt"), _print.Prepare(new PrintRequest("nope.txt")).Error);
+        Assert.Equal(FileText.IsDirectory("sub"), _print.Prepare(new PrintRequest("sub")).Error);
+        Assert.Equal(FileText.PathRequired(FileTool.PathArgument), _print.Prepare(new PrintRequest(" ")).Error);
+        Assert.Empty(_spooler.Opened);
+    }
+
     [Fact]
     public void Service_ResolvesThePrinter()
     {
@@ -370,8 +383,8 @@ public sealed class PrintTests : IDisposable
 
         _settings.PrintDefaultPrinter = "";
         List<PrinterInfo> noDefault = [new("A", false), new("B", false)];
-        Assert.Equal((null, PrintText.NoDefault(noDefault)), _print.ResolvePrinter(null, noDefault));
-        Assert.Equal((null, PrintText.NoPrinter), _print.ResolvePrinter(null, []));
+        Assert.Equal((null, PrintText.NoDefaultHere(noDefault)), _print.ResolvePrinter(null, noDefault));
+        Assert.Equal((null, PrintText.NoPrinterHere), _print.ResolvePrinter(null, []));
     }
 
     [Fact]
@@ -488,9 +501,9 @@ public sealed class PrintTests : IDisposable
 
         string text = (string)(await new ListPrintersTool(_print).InvokeAsync(new AIFunctionArguments()))!;
 
-        Assert.Equal("3 printers\n- Office Laser (Windows default)\n- Office Color (Print default printer)\n- Microsoft Print to PDF", text);
+        Assert.Equal("3 printers\n- Office Laser (" + PrintText.DefaultMark + ")\n- Office Color (Print default printer)\n- Microsoft Print to PDF", text);
         Assert.Equal("3 printers", PrintText.Note(text));
-        Assert.Equal(PrintText.NoPrinters, PrintText.PrinterList([], null));
+        Assert.Equal(OperatingSystem.IsMacOS() ? PrintText.MacNoPrinters : PrintText.NoPrinters, PrintText.PrinterList([], null));
     }
 
     [Fact]
@@ -545,7 +558,7 @@ public sealed class PrintTests : IDisposable
         var usage = await PrintCommand.RunAsync(_print, "", () => null, CancellationToken.None);
         Assert.False(usage.Failed);
         Assert.Equal(PrintText.Usage, usage.Lines[0]);
-        Assert.Contains("- Office Laser (Windows default)", usage.Lines);
+        Assert.Contains("- Office Laser (" + PrintText.DefaultMark + ")", usage.Lines);
 
         var list = await PrintCommand.RunAsync(_print, "printers", () => null, CancellationToken.None);
         Assert.Equal("3 printers", list.Lines[0]);
@@ -625,7 +638,7 @@ public sealed class PrintTests : IDisposable
         Assert.Equal("10 pt", SettingsMenu.FieldValue(SettingsField.PrintFontSize, data, _dir));
 
         List<PrinterInfo> printers = [new("A", true), new("B", false)];
-        Assert.Contains("Windows default", SettingsMenu.PrinterRow("A", printers));
+        Assert.Contains(PrintText.DefaultMark, SettingsMenu.PrinterRow("A", printers));
         Assert.Contains("not installed", SettingsMenu.PrinterRow("Gone", printers));
         Assert.Equal("B", SettingsMenu.PrinterRow("B", printers));
         Assert.Equal(SettingsMenu.WindowsDefaultPrinterLabel, SettingsMenu.PrinterRow("", printers));

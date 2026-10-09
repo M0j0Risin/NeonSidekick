@@ -2797,7 +2797,7 @@ internal sealed partial class SettingsMenu
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Pdf.PdfEngine.Describe(name));
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.PrintDefaultPrinter"/> (2026-09-28), and the picker's first row.</summary>
-    public static string WindowsDefaultPrinterLabel => OperatingSystem.IsMacOS() ? "(none: printing needs Windows)" : "(Windows default)";   // the Mac's, 2026-10-06: no printers there yet
+    public static string WindowsDefaultPrinterLabel => OperatingSystem.IsMacOS() ? "(system default)" : Printing.PrintText.Supported ? "(Windows default)" : "(none: printing needs Windows or a Mac)";   // a Mac's since 2026-10-08, CUPS' default
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.PrintFontSize"/>.</summary>
     public static string PrintFontSizeRangeError =>
@@ -6188,7 +6188,9 @@ internal sealed partial class SettingsMenu
         }
 
         var found = printers.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
-        string note = found is null ? "  not installed" : found.IsDefault ? "  Windows default" : "";
+        // A Mac's printer shows the name System Settings gives it beside the queue's (2026-10-08).
+        string described = string.IsNullOrEmpty(found?.Description) ? "" : "  " + found.Description;
+        string note = found is null ? "  not installed" : described + (found.IsDefault ? "  " + Printing.PrintText.DefaultMark : "");
         return Markup.Escape(name) + (note.Length > 0 ? Theme.DimMarkup(note) : "");
     }
 

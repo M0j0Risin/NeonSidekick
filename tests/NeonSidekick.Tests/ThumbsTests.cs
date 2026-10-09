@@ -495,9 +495,9 @@ public sealed class ThumbsTests
     {
         var rows = PictureMenu.Build(thumbs: true, @"D:\pics\cat.png", "beside-original");
 
-        // A Mac's file rows (2026-10-07): Show in Finder, and no Print (printing needs Windows).
+        // A Mac's file rows (2026-10-07): Show in Finder; Print on both since 2026-10-08 (CUPS).
         string[] files = OperatingSystem.IsMacOS()
-            ? [PictureMenuText.CopyPath, PictureMenuText.ShowInFinder, PictureMenuText.Attach]
+            ? [PictureMenuText.CopyPath, PictureMenuText.ShowInFinder, PictureMenuText.Attach, PictureMenuText.Print]
             : [PictureMenuText.CopyPath, PictureMenuText.ShowInExplorer, PictureMenuText.Attach, PictureMenuText.Print];
         Assert.Equal(
             [PictureMenuText.OpenInViewer, "", PictureMenuText.Rotate, PictureMenuText.Colour, PictureMenuText.Resize, PictureMenuText.Convert, PictureMenuText.Shrink,

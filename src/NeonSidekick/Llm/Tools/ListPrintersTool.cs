@@ -29,7 +29,13 @@ public sealed class ListPrintersTool : AIFunction
 
     public override string Name => ToolName;
 
-    public override string Description => "Lists the printers installed on the user's PC, marking their default, for print_file.";
+    public override string Description => OperatingSystem.IsMacOS() ? MacDescriptionText : DescriptionText;
+
+    /// <summary>The description on Windows. Pinned.</summary>
+    public const string DescriptionText = "Lists the printers installed on the user's PC, marking their default, for print_file.";
+
+    /// <summary>The description on a Mac (2026-10-08): CUPS' queue names with the names System Settings shows. Pinned.</summary>
+    public const string MacDescriptionText = "Lists the printers set up on the user's Mac (each queue name with the name System Settings shows), marking their default, for print_file.";
 
     public override JsonElement JsonSchema => Schema;
 

@@ -34,11 +34,14 @@ internal sealed partial class ChatScreen
         PrintFileTool.ToolName,
     };
 
-    /// <summary>Whether the print group is offered (2026-09-28): the setting <c>Print tools</c>.</summary>
+    /// <summary>
+    /// Whether the print group is offered (2026-09-28): the setting <c>Print tools</c>, on a system that prints — Windows, and a Mac
+    /// since 2026-10-08 (CUPS; it was cut there from 2026-10-06, the macOS build, until then).
+    /// </summary>
     public static bool PrintOffered(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.PrintTools && !OperatingSystem.IsMacOS();   // printing needs Windows for now (2026-10-06, the macOS build); /tools says so
+        return effective.PrintTools && PrintText.Supported;
     }
 
     /// <summary>
@@ -85,9 +88,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandlePrintAsync(string args, CancellationToken cancellationToken)
     {
-        if (OperatingSystem.IsMacOS())
+        if (!PrintText.Supported)
         {
-            _transcript.Error(PrintText.NeedsWindows);   // 2026-10-06: no spooler on a Mac yet; Windows unchanged
+            _transcript.Error(PrintText.NotHere);   // neither Windows nor a Mac (a Mac prints since 2026-10-08)
             return;
         }
 
