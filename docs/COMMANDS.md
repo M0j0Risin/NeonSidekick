@@ -83,7 +83,6 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/ha say <sentence>` | Hands a sentence to Home Assistant's Assist agent. |
 | `/header [on\|off]` | Shows or hides the banner (*Show header*), from the next clear. Alone, it flips the setting. |
 | `/help` | The commands, on the Basic and Advanced tabs (each with a short description and its forms), and the keys. |
-| `/interrupt [on\|off]` | Toggles the wake-word interrupt during a spoken reply. |
 | `/learn [<note>]` | Writes or improves a skill in the background from the last turn. |
 | `/learn sessions [<n>\|<search>]` | The same from stored sessions: the newest 5, the newest n (up to 20), or those a search finds. |
 | `/log` | Opens the [log window](#log-window). Works without `--log`. |
@@ -149,6 +148,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/speak [<file> [<n>]\|<n>]` | Reads a text file from the working directory aloud. Alone it resumes; a number starts at that sentence. |
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
+| `/stt wake [on\|off]` | Toggles the wake word (turning it off turns the interrupt off too). |
+| `/stt interrupt [on\|off]` | Toggles the wake-word interrupt during a spoken reply; it needs the wake word on. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
 | `/sys persona [reset]` | Edits `persona.md` (the personality; seeded with the built-in persona) in your editor, or resets it to the default after a yes. |
 | `/sys operata [reset]` | The same for `operata.md` (the operating rules). A missing file is created with the rules in use now, the sentences for the tools that are on included; from then on it stands as written. |
@@ -181,7 +182,6 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/comfy view` | Opens the picture viewer on the output folder. |
 | `/comfy thumbs` | Opens the thumbnail browser on the output folder. |
 | `/comfy purge` | Deletes everything in the output folder after a yes/no. Refused when it is the profile's `images` folder itself. |
-| `/wake [on\|off]` | Toggles the wake word. |
 | `/window` | Shows the terminal window's size. |
 | `/youtube`, `/youtube status` | Says what the video window is playing. |
 | `/youtube <words>` | Searches YouTube (with a *YouTube API key*; 100 quota units a search) and opens a picker of the videos found; Enter plays one in the video window. Words that start with a verb below search too, unless what follows fits the verb; `/youtube search <words>` searches whatever they are. |

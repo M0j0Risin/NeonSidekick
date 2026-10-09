@@ -45,9 +45,9 @@ public enum SlashCommand
     /// <summary><c>/mcp</c>: the MCP pane (2026-09-20, the user's ask) — the servers the two <c>mcp.json</c> files name, on or off one by one and connected or not (the Servers tab), their tools on or off by their prefixed names (the Tools tab), then its Options tab (the master switch and the connect timeout). No argument: bare like <see cref="Tools"/>.</summary>
     Mcp,
     Tts,
+
+    /// <summary><c>/stt [on|off]</c>: voice input; <c>/stt wake [on|off]</c> the wake word and <c>/stt interrupt [on|off]</c> its interrupt since 2026-10-09 (the user's call: <c>/wake</c> and <c>/interrupt</c>, their own commands until then, folded in; unknown commands now).</summary>
     Voice,
-    Wake,
-    Interrupt,
 
     /// <summary><c>/remember &lt;text&gt;</c>: keep one fact across sessions.</summary>
     Remember,
@@ -313,7 +313,7 @@ public enum SlashCommand
 /// The slash-command classifier. A line is a command only when it starts with <c>/</c>, and the
 /// first token must match exactly: <c>/exit the program please</c> is not <c>/exit</c>, and
 /// <c>what does /clear do?</c> is a question for the model. <c>//</c> is <c>/settings</c>, the one alias (<c>///</c> for <c>/tools</c> and <c>////</c> for <c>/skills</c> came and went on 2026-09-21, the user's ask both times); every other one (<c>/?</c>, <c>/cls</c>, <c>/exit</c>, <c>/srv</c>, <c>/prof</c> …) went on 2026-09-16 with the argument completion, the user's call, and reads as an unknown command now (<c>/config</c> had gone the same day). <c>/new</c> is its own command (a new conversation, the screen kept) since 2026-09-16; <c>/splash</c> (a new conversation, the screen wiped and the welcome splash shown) since 2026-09-19. Only <c>/server</c>, <c>/model</c>, <c>/reasoning</c>, <c>/theme</c> (2026-09-23), <c>/tts</c>,
-/// <c>/stt</c>, <c>/wake</c>, <c>/interrupt</c>, <c>/speak</c>, <c>/echo</c>, <c>/view</c>, <c>/learn</c>, <c>/remember</c>, <c>/memory</c> (2026-09-22, the user's ask, twice: <c>forget</c>, the standalone <c>/forget</c> folded in, then <c>copy &lt;profile&gt; [overwrite]</c>, the standalone <c>/memcopy</c> folded in the same way — <c>/forget</c> and <c>/memcopy</c> are unknown commands now), <c>/profile</c> (its push and pull sections since 2026-10-09: <c>/cmdcopy</c>, <c>/keycopy</c> and <c>/srvcopy</c> folded in, unknown commands now), <c>/timer</c>, <c>/cwd</c>, <c>/tree</c>, <c>/explore</c>, <c>/copy</c>, <c>/compact</c>, <c>/gituser</c>, <c>/loop</c>, <c>/skills</c> (2026-09-21), <c>/test</c> (2026-09-28) and <c>/sys</c> (since 2026-10-09: <c>persona|operata|vocalia</c> and, as <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c> took on their own from 2026-09-16 until then, <c>reset</c> or <c>copy &lt;profile&gt; [force]</c>; those three are unknown commands now) take an argument (<see cref="TakesArgument"/>); any other command given one is <see cref="SlashCommand.Overloaded"/>, so <c>/about me</c> is told the command takes nothing rather than called unknown (2026-09-17). <c>/draft</c> takes nothing (2026-09-19: the editor is the argument); nor did <c>/cmdlist</c> and <c>/police</c> (2026-09-21 and 2026-09-22: the allowed-commands list and the police page on a pane), which became <c>/tools shell allowed</c> and <c>/tools shell police</c> on 2026-10-09 (the user's call) and read as unknown commands now. <c>/skills</c> opens the Skills pane, or <c>/skills edit &lt;name&gt;</c> the skill's file (2026-09-21; it took nothing before) (the plural since 2026-09-19, beside <c>/tools</c>; a bare <c>/skill</c> from later on 2026-09-18, in place of <c>/skill list</c>; <c>/skills</c> before that; <c>/skill &lt;name&gt; [message]</c> took a name until later that day; <c>/skill</c> is unknown now). The three tool switches <c>/web</c>, <c>/files</c>, <c>/ask</c> went later on 2026-09-18 (the user's call: the settings rows <c>Web tools</c>, <c>File tools</c>, <c>Ask user</c> are the one place now) and read as unknown commands.
+/// <c>/stt</c> (its <c>wake</c> and <c>interrupt</c> since 2026-10-09: <c>/wake</c> and <c>/interrupt</c> folded in, unknown commands now), <c>/speak</c>, <c>/echo</c>, <c>/view</c>, <c>/learn</c>, <c>/remember</c>, <c>/memory</c> (2026-09-22, the user's ask, twice: <c>forget</c>, the standalone <c>/forget</c> folded in, then <c>copy &lt;profile&gt; [overwrite]</c>, the standalone <c>/memcopy</c> folded in the same way — <c>/forget</c> and <c>/memcopy</c> are unknown commands now), <c>/profile</c> (its push and pull sections since 2026-10-09: <c>/cmdcopy</c>, <c>/keycopy</c> and <c>/srvcopy</c> folded in, unknown commands now), <c>/timer</c>, <c>/cwd</c>, <c>/tree</c>, <c>/explore</c>, <c>/copy</c>, <c>/compact</c>, <c>/gituser</c>, <c>/loop</c>, <c>/skills</c> (2026-09-21), <c>/test</c> (2026-09-28) and <c>/sys</c> (since 2026-10-09: <c>persona|operata|vocalia</c> and, as <c>/persona</c>, <c>/operata</c> and <c>/vocalia</c> took on their own from 2026-09-16 until then, <c>reset</c> or <c>copy &lt;profile&gt; [force]</c>; those three are unknown commands now) take an argument (<see cref="TakesArgument"/>); any other command given one is <see cref="SlashCommand.Overloaded"/>, so <c>/about me</c> is told the command takes nothing rather than called unknown (2026-09-17). <c>/draft</c> takes nothing (2026-09-19: the editor is the argument); nor did <c>/cmdlist</c> and <c>/police</c> (2026-09-21 and 2026-09-22: the allowed-commands list and the police page on a pane), which became <c>/tools shell allowed</c> and <c>/tools shell police</c> on 2026-10-09 (the user's call) and read as unknown commands now. <c>/skills</c> opens the Skills pane, or <c>/skills edit &lt;name&gt;</c> the skill's file (2026-09-21; it took nothing before) (the plural since 2026-09-19, beside <c>/tools</c>; a bare <c>/skill</c> from later on 2026-09-18, in place of <c>/skill list</c>; <c>/skills</c> before that; <c>/skill &lt;name&gt; [message]</c> took a name until later that day; <c>/skill</c> is unknown now). The three tool switches <c>/web</c>, <c>/files</c>, <c>/ask</c> went later on 2026-09-18 (the user's call: the settings rows <c>Web tools</c>, <c>File tools</c>, <c>Ask user</c> are the one place now) and read as unknown commands.
 /// </summary>
 public static class SlashCommands
 {
@@ -364,7 +364,6 @@ public static class SlashCommands
             new("/header", HeaderToggle.HelpSummary),
             new("/help", "show the commands and keys"),
             new("/imagine", "make a picture on ComfyUI"),
-            new("/interrupt", "toggle the wake-word interrupt"),
             new("/keycheck", "check which key chords are held"),
             new("/learn", "write or improve a skill"),
             new("/log", "show the diagnostic log"),
@@ -392,7 +391,7 @@ public static class SlashCommands
             new("/skills", "manage and install skills"),
             new("/speak", "read a text file aloud"),
             new("/splash", "start over with the splash screen"),
-            new("/stt", "toggle voice input"),
+            new("/stt", "toggle voice input and the wake word"),
             new("/sys", "show or edit the system prompt"),
             new("/terminal", "open a terminal in a folder"),
             new("/test", "benchmark the connected model"),
@@ -405,7 +404,6 @@ public static class SlashCommands
             new("/usage", "show token usage and statistics"),
             new("/vault", "show the Obsidian vault's tree"),
             new("/view", "view images or a folder of them"),
-            new("/wake", "toggle the wake word"),
             new("/window", "show the terminal window's size"),
             new(YouTube.YouTubeCommand.Word, YouTube.YouTubeText.HelpSummary),
         }.OrderBy(entry => entry.Command, StringComparer.Ordinal).ToArray();
@@ -413,7 +411,7 @@ public static class SlashCommands
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
     /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perfbar</c>,
-    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick). Every other command (<c>/log</c> among them) is on
+    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
@@ -421,7 +419,6 @@ public static class SlashCommands
     {
         "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perfbar", "/profile",
         "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
-        "/wake",
     };
 
     /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>
@@ -500,7 +497,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/wake", "/interrupt", "/speak", "/remember", "/memory", "/keycheck", "/cmd", "/cmdclear", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/speak", "/remember", "/memory", "/keycheck", "/cmd", "/cmdclear", "/sys", "/usage", "/perfbar", "/toolbar", "/header", "/profile", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/camera", "/screen", "/youtube", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -560,8 +557,6 @@ public static class SlashCommands
             "/mcp" => SlashCommand.Mcp,
             "/tts" => SlashCommand.Tts,
             "/stt" => SlashCommand.Voice,
-            "/wake" => SlashCommand.Wake,
-            "/interrupt" => SlashCommand.Interrupt,
             "/speak" => SlashCommand.Speak,
             "/remember" => SlashCommand.Remember,
             "/memory" => SlashCommand.Memory,
@@ -633,7 +628,7 @@ public static class SlashCommands
     /// </summary>
     public static bool TakesArgument(SlashCommand command) => command is
         SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme
-        or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt or SlashCommand.Speak or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
+        or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Speak or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Sys
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Timer

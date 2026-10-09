@@ -1727,13 +1727,13 @@ public partial class SidekickAppTests : IDisposable
         PushLine("/help");
         PushLine("/bogus now");
         PushLine("/stt");
-        PushLine("/wake");
+        PushLine("/stt wake");
         PushLine("/exit");
 
         string output = await InteractiveAsync();
 
         Assert.Contains("  · Commands:", output);
-        Assert.True(_settings.Current.SttWake);   // /wake toggled the saved switch; voice was on, so it re-probed
+        Assert.True(_settings.Current.SttWake);   // /stt wake toggled the saved switch; voice was on, so it re-probed
         Assert.Equal(2, output.Split("STT: model ggml-base.en.bin missing").Length - 1);
         Assert.Contains("/settings", output);
         Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/bogus"), output);

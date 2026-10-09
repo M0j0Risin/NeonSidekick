@@ -13,7 +13,7 @@ internal sealed class InterruptTracker
 
     /// <summary>Printed as a warning, once, when the threshold is reached. Pinned.</summary>
     public const string DisabledWarning =
-        "Interrupting switched off for this session: the microphone keeps hearing the assistant. Headphones fix this; /interrupt on turns it back on.";
+        "Interrupting switched off for this session: the microphone keeps hearing the assistant. Headphones fix this; /stt interrupt on turns it back on.";
 
     /// <summary>The notice after an interruption that heard nothing. Pinned.</summary>
     public static string SilentHint(int silentInARow) => $"({NoticeGlyphs.Stt}heard nothing — {silentInARow} of {Threshold})";

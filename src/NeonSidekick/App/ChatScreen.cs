@@ -295,7 +295,7 @@ public readonly record struct MemoryAction(MemoryActionKind Kind, string Profile
 /// the phrase the seed is transcribed at once.</para>
 ///
 /// <para>The interrupt (M6): the second and last arm site is a <em>spoken</em> turn with
-/// <c>/interrupt</c> on. <see cref="RunTurnAsync"/> arms the same listener with the turn's token
+/// <c>/stt interrupt</c> on. <see cref="RunTurnAsync"/> arms the same listener with the turn's token
 /// and disarms it in the turn's <c>finally</c>; the phrase cancels the turn the way ESC does, the
 /// hit's audio is discarded, and <see cref="RunMessageAsync"/> listens for the request next. Over
 /// the tail the idle read arms it again (<see cref="ReadLineAsync"/>, keyword mode, the turn's
@@ -363,16 +363,16 @@ internal sealed partial class ChatScreen
     public const string ScanningLabel = "scanning the local network for LLM servers";
     public const string TurnFailedPrefix = "Turn failed: ";
     public const string TtsUsageError = "/tts takes on or off, or nothing to toggle.";
-    public const string VoiceUsageError = "/stt takes on or off, or nothing to toggle.";
+    public const string VoiceUsageError = "/stt takes on or off, or nothing to toggle; or wake or interrupt, each with on or off.";
     public const string VoiceOffHint = NoticeGlyphs.Stt + "Voice input is off; /stt turns it on.";
-    public const string WakeUsageError = "/wake takes on or off, or nothing to toggle.";
+    public const string WakeUsageError = "/stt wake takes on or off, or nothing to toggle.";
     public const string WakeOnNeedsVoiceNotice = NoticeGlyphs.Wake + "Wake word on; it listens once voice input is on (/stt).";
     public const string WakeOffNotice = NoticeGlyphs.Wake + "Wake word off.";
-    public const string InterruptUsageError = "/interrupt takes on or off, or nothing to toggle.";
+    public const string InterruptUsageError = "/stt interrupt takes on or off, or nothing to toggle.";
     public const string InterruptOnNeedsVoiceNotice = NoticeGlyphs.Interrupt + "Interrupting on; it works once voice input (/stt) and speech output (/tts) are on.";
     public const string InterruptOffNotice = NoticeGlyphs.Interrupt + "Interrupting off.";
     public const string InterruptNeedsSpeechNotice = NoticeGlyphs.Interrupt + "Interrupting works only while a reply is spoken; /tts turns speech output on.";
-    public const string InterruptNeedsWakeNotice = NoticeGlyphs.Interrupt + "Interrupting needs the wake word; /wake on turns it on.";
+    public const string InterruptNeedsWakeNotice = NoticeGlyphs.Interrupt + "Interrupting needs the wake word; /stt wake on turns it on.";
     public const string InterruptOffWithWakeNotice = NoticeGlyphs.Interrupt + "Interrupting off with the wake word.";
     public const string InterruptedNotice = "(" + NoticeGlyphs.Interrupt + "interrupted)";
     public const string InterruptDisabledReason = "switched off after two interruptions heard nothing";
@@ -1975,17 +1975,18 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The switch a double-click on a strip glyph turns off (2026-09-18): the glyph is drawn only
-    /// while its feature is on, so the click is always <c>/x off</c> — <c>/tts</c>, <c>/stt</c>,
-    /// <c>/wake</c>, <c>/interrupt</c>; null for anything else, the brain included (its click is
+    /// while its feature is on, so the click is always <c>… off</c> — <c>/tts off</c>, <c>/stt off</c>,
+    /// <c>/stt wake off</c>, <c>/stt interrupt off</c> (<c>/wake off</c> and <c>/interrupt off</c> until 2026-10-09, when the two
+    /// folded into <c>/stt</c>): the command and its argument; null for anything else, the brain included (its click is
     /// <see cref="LlmSession.CancelLearning"/>, no command) and the tag (no action: a click on it
     /// is the row's, <c>/settings</c>). Pinned.
     /// </summary>
-    public static SlashCommand? SwitchForGlyph(string glyph) => glyph switch
+    public static (SlashCommand Command, string Off)? SwitchForGlyph(string glyph) => glyph switch
     {
-        TtsGlyph => SlashCommand.Tts,
-        SttGlyph => SlashCommand.Voice,
-        WakeGlyph => SlashCommand.Wake,
-        InterruptGlyph => SlashCommand.Interrupt,
+        TtsGlyph => (SlashCommand.Tts, "off"),
+        SttGlyph => (SlashCommand.Voice, "off"),
+        WakeGlyph => (SlashCommand.Voice, SttWakeWord + " off"),
+        InterruptGlyph => (SlashCommand.Voice, SttInterruptWord + " off"),
         _ => null,
     };
 
@@ -2211,7 +2212,7 @@ internal sealed partial class ChatScreen
 
         if (wakeReady)
         {
-            rows.Add(new($"say \"{wakePhrase}\"", "talk without a key · during a spoken reply, cut it short", "/interrupt"));
+            rows.Add(new($"say \"{wakePhrase}\"", "talk without a key · during a spoken reply, cut it short", "/stt " + SttInterruptWord));
         }
 
         // The first bare F-key chords (2026-10-05, the user's pick: the Ctrl+Alt letters were running low), after the talk keys.
@@ -3937,10 +3938,27 @@ internal sealed partial class ChatScreen
     {
         SlashCommand.Tts => "speech output",
         SlashCommand.Voice => "voice input",
-        SlashCommand.Wake => "the wake word",
-        SlashCommand.Interrupt => "the wake word interrupt",
         _ => "",
     };
+
+    /// <summary>
+    /// <c>/stt</c>'s two words (2026-10-09, the user's call: <c>/wake</c> and <c>/interrupt</c> folded in, unknown commands now):
+    /// <c>/stt wake [on|off]</c> and <c>/stt interrupt [on|off]</c>, each with what its switch is, the note beside it on the
+    /// completion list and beside its <c>on</c> / <c>off</c>. Pinned.
+    /// </summary>
+    public const string SttWakeWord = "wake";
+
+    /// <inheritdoc cref="SttWakeWord"/>
+    public const string SttInterruptWord = "interrupt";
+
+    /// <inheritdoc cref="SttWakeWord"/>
+    public const string SttWakeSubject = "the wake word";
+
+    /// <inheritdoc cref="SttWakeWord"/>
+    public const string SttInterruptSubject = "the wake word interrupt";
+
+    /// <summary><c>/stt</c>'s words with their switches' subjects, in the completion's order.</summary>
+    private static readonly (string Word, string Subject)[] SttWords = [(SttWakeWord, SttWakeSubject), (SttInterruptWord, SttInterruptSubject)];
 
     /// <summary>The <c>/gituser</c> list: <c>force</c> alone (2026-09-26; <c>/git</c>'s <c>user</c> and <c>user force</c> from 2026-09-21 until then). Pinned.</summary>
     public static readonly IReadOnlyList<CompletionItem> GitVerbs =
@@ -4081,7 +4099,25 @@ internal sealed partial class ChatScreen
         var (kind, _) = SlashCommands.Parse(command);
         switch (kind)
         {
-            case SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt:
+            case SlashCommand.Voice:
+            {
+                // on / off, then wake and interrupt with their own on / off (2026-10-09, /wake and /interrupt folded in).
+                foreach (var (word, subject) in SttWords)
+                {
+                    string head = word + " ";
+                    if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return MentionCompleter.Matches([new(head + "on", subject + " on"), new(head + "off", subject + " off")], argText);
+                    }
+                }
+
+                string voice = SwitchSubject(kind);
+                return argText.Contains(' ', StringComparison.Ordinal)
+                    ? []
+                    : MentionCompleter.Matches([new("on", voice + " on"), new("off", voice + " off"), .. SttWords.Select(w => new CompletionItem(w.Word, w.Subject))], argText);
+            }
+
+            case SlashCommand.Tts:
             {
                 string subject = SwitchSubject(kind);
                 return MentionCompleter.Matches([new("on", subject + " on"), new("off", subject + " off")], argText);
@@ -8892,7 +8928,7 @@ internal sealed partial class ChatScreen
     /// <summary>One listen for a request: the text (empty when nothing usable was heard), or null when discarded or failed; <see cref="Exit"/> when the app token ended it.</summary>
     public sealed record ListenOutcome(string? Text, bool Exit, bool Discarded);
 
-    /// <summary><c>/tts</c>, <c>/stt</c> and <c>/wake</c> arguments: nothing (toggle, null), <c>on</c> or <c>off</c>. False for anything else.</summary>
+    /// <summary><c>/tts</c>, <c>/stt</c>, <c>/stt wake</c> and <c>/stt interrupt</c> arguments: nothing (toggle, null), <c>on</c> or <c>off</c>. False for anything else.</summary>
     public static bool TryParseSwitch(string args, out bool? on)
     {
         switch ((args ?? "").Trim().ToLowerInvariant())
@@ -9174,7 +9210,7 @@ internal sealed partial class ChatScreen
                         }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && SwitchForGlyph(hint.Hit.Glyph) is { } glyphSwitch)
                         {
-                            await HandleSwitchAsync(glyphSwitch, "off", midTurn: false, cancellationToken).ConfigureAwait(false);
+                            await HandleSwitchAsync(glyphSwitch.Command, glyphSwitch.Off, midTurn: false, cancellationToken).ConfigureAwait(false);
                         }
                         else
                         {
@@ -11258,7 +11294,7 @@ internal sealed partial class ChatScreen
                 await OpenSettingsAsync(cancellationToken, words: args).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Wake or SlashCommand.Interrupt:
+            case SlashCommand.Tts or SlashCommand.Voice:
                 await HandleSwitchAsync(command, args, midTurn: false, cancellationToken).ConfigureAwait(false);
                 return false;
 
@@ -11596,7 +11632,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The four speech switches — <c>/tts</c>, <c>/stt</c>, <c>/wake</c>, <c>/interrupt</c> — one
+    /// The four speech switches — <c>/tts</c>, <c>/stt</c>, <c>/stt wake</c>, <c>/stt interrupt</c> (<c>/wake</c> and <c>/interrupt</c> until 2026-10-09) — one
     /// body for the idle line and the turn (<paramref name="midTurn"/>): the setting is saved
     /// either way; the reconnect that shows it runs here at the idle line and is owed to the
     /// turn's end mid-turn (<see cref="Defer"/>, with <see cref="MidTurnSwitchNotice"/> as the
@@ -11631,7 +11667,25 @@ internal sealed partial class ChatScreen
                 return;
 
             case SlashCommand.Voice:
-                if (!TryParseSwitch(args, out bool? voiceOn))
+            {
+                // /stt wake and /stt interrupt (2026-10-09, the user's call): /wake and /interrupt folded in, their bodies as they were.
+                string trimmed = args.Trim();
+                int space = trimmed.IndexOf(' ', StringComparison.Ordinal);
+                string word = space < 0 ? trimmed : trimmed[..space];
+                string rest = space < 0 ? "" : trimmed[(space + 1)..];
+                if (string.Equals(word, SttWakeWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    await SwitchWakeAsync(rest, midTurn, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                if (string.Equals(word, SttInterruptWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    await SwitchInterruptAsync(rest, midTurn, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                if (!TryParseSwitch(trimmed, out bool? voiceOn))
                 {
                     _transcript.Error(VoiceUsageError);
                     return;
@@ -11647,89 +11701,92 @@ internal sealed partial class ChatScreen
 
                 await ConnectVoiceAsync(cancellationToken).ConfigureAwait(false);
                 return;
+            }
+        }
+    }
 
-            case SlashCommand.Wake:
-                if (!TryParseSwitch(args, out bool? wakeOn))
-                {
-                    _transcript.Error(WakeUsageError);
-                    return;
-                }
+    /// <summary><c>/stt wake [on|off]</c> (<c>/wake</c> until 2026-10-09): the wake word's switch, the interrupt off with it.</summary>
+    private async Task SwitchWakeAsync(string args, bool midTurn, CancellationToken cancellationToken)
+    {
+        if (!TryParseSwitch(args, out bool? wakeOn))
+        {
+            _transcript.Error(WakeUsageError);
+            return;
+        }
 
-                bool wakeWanted = wakeOn ?? !_settings.Current.SttWake;
-                bool takesInterrupt = !wakeWanted && _settings.Current.SttInterrupt;   // the interrupt needs the wake word: off with it
-                _settings.Update(d =>
-                {
-                    d.SttWake = wakeWanted;
-                    if (!wakeWanted)
-                    {
-                        d.SttInterrupt = false;
-                    }
-                });
-                if (!_effective().SttInput)
-                {
-                    // Nothing to probe: the switch is saved and takes effect with /stt.
-                    _transcript.Notice(wakeWanted ? WakeOnNeedsVoiceNotice : WakeOffNotice);
-                    if (takesInterrupt)
-                    {
-                        _transcript.Notice(InterruptOffWithWakeNotice);
-                    }
+        bool wakeWanted = wakeOn ?? !_settings.Current.SttWake;
+        bool takesInterrupt = !wakeWanted && _settings.Current.SttInterrupt;   // the interrupt needs the wake word: off with it
+        _settings.Update(d =>
+        {
+            d.SttWake = wakeWanted;
+            if (!wakeWanted)
+            {
+                d.SttInterrupt = false;
+            }
+        });
+        if (!_effective().SttInput)
+        {
+            // Nothing to probe: the switch is saved and takes effect with /stt.
+            _transcript.Notice(wakeWanted ? WakeOnNeedsVoiceNotice : WakeOffNotice);
+            if (takesInterrupt)
+            {
+                _transcript.Notice(InterruptOffWithWakeNotice);
+            }
 
-                    return;
-                }
+            return;
+        }
 
-                if (midTurn)
-                {
-                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(WakeWordWord, wakeWanted, LoadRunning));
-                }
-                else
-                {
-                    await ConnectVoiceAsync(cancellationToken).ConfigureAwait(false);
-                }
+        if (midTurn)
+        {
+            Defer(SettingsChanges.Voice, MidTurnSwitchNotice(WakeWordWord, wakeWanted, LoadRunning));
+        }
+        else
+        {
+            await ConnectVoiceAsync(cancellationToken).ConfigureAwait(false);
+        }
 
-                if (takesInterrupt)
-                {
-                    _transcript.Notice(InterruptOffWithWakeNotice);
-                }
+        if (takesInterrupt)
+        {
+            _transcript.Notice(InterruptOffWithWakeNotice);
+        }
+    }
 
-                return;
+    /// <summary><c>/stt interrupt [on|off]</c> (<c>/interrupt</c> until 2026-10-09): the wake word's interrupt, refused on while the wake word is off.</summary>
+    private async Task SwitchInterruptAsync(string args, bool midTurn, CancellationToken cancellationToken)
+    {
+        if (!TryParseSwitch(args, out bool? interruptOn))
+        {
+            _transcript.Error(InterruptUsageError);
+            return;
+        }
 
-            case SlashCommand.Interrupt:
-                if (!TryParseSwitch(args, out bool? interruptOn))
-                {
-                    _transcript.Error(InterruptUsageError);
-                    return;
-                }
+        bool interruptWanted = interruptOn ?? !_settings.Current.SttInterrupt;
+        if (interruptWanted && !_settings.Current.SttWake)
+        {
+            // Nothing saved: the interrupt is the wake phrase during a reply, so it needs the wake word on.
+            _transcript.Notice(InterruptNeedsWakeNotice);
+            return;
+        }
 
-                bool interruptWanted = interruptOn ?? !_settings.Current.SttInterrupt;
-                if (interruptWanted && !_settings.Current.SttWake)
-                {
-                    // Nothing saved: the interrupt is the wake phrase during a reply, so it needs the wake word on.
-                    _transcript.Notice(InterruptNeedsWakeNotice);
-                    return;
-                }
+        _settings.Update(d => d.SttInterrupt = interruptWanted);
+        if (!_effective().SttInput)
+        {
+            _transcript.Notice(_settings.Current.SttInterrupt ? InterruptOnNeedsVoiceNotice : InterruptOffNotice);
+            return;
+        }
 
-                _settings.Update(d => d.SttInterrupt = interruptWanted);
-                if (!_effective().SttInput)
-                {
-                    _transcript.Notice(_settings.Current.SttInterrupt ? InterruptOnNeedsVoiceNotice : InterruptOffNotice);
-                    return;
-                }
+        if (midTurn)
+        {
+            Defer(SettingsChanges.Voice, MidTurnSwitchNotice(InterruptWord, interruptWanted, LoadRunning));
+        }
+        else
+        {
+            await ConnectVoiceAsync(cancellationToken).ConfigureAwait(false);
+        }
 
-                if (midTurn)
-                {
-                    Defer(SettingsChanges.Voice, MidTurnSwitchNotice(InterruptWord, interruptWanted, LoadRunning));
-                }
-                else
-                {
-                    await ConnectVoiceAsync(cancellationToken).ConfigureAwait(false);
-                }
-
-                if (_settings.Current.SttInterrupt && !_effective().TtsOutput)
-                {
-                    _transcript.Notice(InterruptNeedsSpeechNotice);
-                }
-
-                return;
+        if (_settings.Current.SttInterrupt && !_effective().TtsOutput)
+        {
+            _transcript.Notice(InterruptNeedsSpeechNotice);
         }
     }
 

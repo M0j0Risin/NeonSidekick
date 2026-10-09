@@ -94,7 +94,7 @@ public class VoiceSessionTests : IDisposable
         Assert.Equal("🎤 👂 STT: F4 to talk or say \"neon\"", VoiceSession.ReadyLine("F4", "neon"));
         Assert.Equal("🎤 👂 ✋ STT: F4 to talk or say \"neon\" (interrupt enabled)", VoiceSession.ReadyLine("F4", "neon", interrupt: true));
         Assert.Equal("🎤 STT: F4 to talk", VoiceSession.ReadyLine("F4", null, interrupt: true));   // no wake word: the interrupt switch alone says nothing
-        Assert.Equal("✋ Interrupt: unavailable (HTTP 404); push-to-talk still works, /interrupt on retries", VoiceSession.InterruptUnavailableLine("HTTP 404"));
+        Assert.Equal("✋ Interrupt: unavailable (HTTP 404); push-to-talk still works, /stt interrupt on retries", VoiceSession.InterruptUnavailableLine("HTTP 404"));
         Assert.Equal(TimeSpan.FromSeconds(4), VoiceSession.InterruptionOptions.NoSpeechTimeout);
         Assert.Equal(VoicePipelineOptions.Default.MaxUtterance, VoiceSession.InterruptionOptions.MaxUtterance);
         Assert.Equal("👂 Wake word: unavailable (HTTP 404); push-to-talk still works, /stt retries", VoiceSession.WakeUnavailableLine("HTTP 404"));

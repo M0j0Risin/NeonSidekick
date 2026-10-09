@@ -2575,16 +2575,16 @@ public partial class ChatScreenTests : IDisposable
     {
         VoiceOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir);
-        PushLine("/wake");
-        PushLine("/wake off");
-        PushLine("/wake on");
-        PushLine("/wake maybe");
+        PushLine("/stt wake");
+        PushLine("/stt wake off");
+        PushLine("/stt wake on");
+        PushLine("/stt wake maybe");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(1, Count(output, "  · " + VoiceSession.ReadyLine("F4") + "\n"));           // /wake off (startup prints nothing under the banner)
-        Assert.Equal(2, Count(output, "  · " + VoiceSession.ReadyLine("F4", "hey neon")));      // /wake and /wake on, with the default phrase
+        Assert.Equal(1, Count(output, "  · " + VoiceSession.ReadyLine("F4") + "\n"));           // /stt wake off (startup prints nothing under the banner)
+        Assert.Equal(2, Count(output, "  · " + VoiceSession.ReadyLine("F4", "hey neon")));      // /stt wake and /stt wake on, with the default phrase
         Assert.Contains("  ✗ " + ChatScreen.WakeUsageError, output);
         Assert.True(_settings.Current.SttWake);
         Assert.Equal(1, _synth.ListCalls);   // no TTS re-probe
@@ -2593,8 +2593,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Wake_WithVoiceOff_SavesTheSwitch_AndSaysSo()
     {
-        PushLine("/wake on");
-        PushLine("/wake");
+        PushLine("/stt wake on");
+        PushLine("/stt wake");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -2606,7 +2606,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(0, _recognizersBuilt);
     }
 
-    // ── /interrupt ──────────────────────────────────────────────────────────
+    // ── /stt interrupt ──────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Interrupt_ToggleOnOff_AndBadArgument()
@@ -2614,18 +2614,18 @@ public partial class ChatScreenTests : IDisposable
         VoiceOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir);
         _settings.Update(d => d.SttWake = true);   // the interrupt needs the wake word
-        PushLine("/interrupt");
-        PushLine("/interrupt off");
-        PushLine("/interrupt on");
-        PushLine("/interrupt maybe");
+        PushLine("/stt interrupt");
+        PushLine("/stt interrupt off");
+        PushLine("/stt interrupt on");
+        PushLine("/stt interrupt maybe");
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Contains("  ✗ " + ChatScreen.InterruptUsageError, output);
         Assert.True(_settings.Current.SttInterrupt);
-        Assert.Equal(2, Count(output, "  · " + VoiceSession.ReadyLine("F4", "hey neon", interrupt: true)));   // /interrupt and /interrupt on
-        Assert.Equal(1, Count(output, "  · " + VoiceSession.ReadyLine("F4", "hey neon") + "\n"));            // /interrupt off (startup prints nothing under the banner)
+        Assert.Equal(2, Count(output, "  · " + VoiceSession.ReadyLine("F4", "hey neon", interrupt: true)));   // /stt interrupt and /stt interrupt on
+        Assert.Equal(1, Count(output, "  · " + VoiceSession.ReadyLine("F4", "hey neon") + "\n"));            // /stt interrupt off (startup prints nothing under the banner)
         Assert.DoesNotContain(ChatScreen.InterruptNeedsSpeechNotice, output);   // speech output is on
         Assert.Equal(1, _synth.ListCalls);   // no TTS re-probe
     }
@@ -2635,8 +2635,8 @@ public partial class ChatScreenTests : IDisposable
     {
         VoiceOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir);
-        PushLine("/interrupt on");
-        PushLine("/interrupt");
+        PushLine("/stt interrupt on");
+        PushLine("/stt interrupt");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -2653,7 +2653,7 @@ public partial class ChatScreenTests : IDisposable
         VoiceOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir);
         _settings.Update(d => { d.SttWake = true; d.SttInterrupt = true; });
-        PushLine("/wake off");
+        PushLine("/stt wake off");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -2668,7 +2668,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Wake_Off_WithVoiceOff_TakesTheInterruptDown_AndSaysSo()
     {
         _settings.Update(d => { d.SttWake = true; d.SttInterrupt = true; });
-        PushLine("/wake");
+        PushLine("/stt wake");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -2683,8 +2683,8 @@ public partial class ChatScreenTests : IDisposable
     public async Task Interrupt_WithVoiceOff_SavesTheSwitch_AndSaysSo()
     {
         _settings.Update(d => d.SttWake = true);   // the interrupt needs the wake word
-        PushLine("/interrupt on");
-        PushLine("/interrupt");
+        PushLine("/stt interrupt on");
+        PushLine("/stt interrupt");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -3658,7 +3658,7 @@ public partial class ChatScreenTests : IDisposable
         VoiceOn();
         FakeModelFiles.WriteVoskModelUnder(ModelsDir);
         _settings.Update(d => { d.TtsOutput = false; d.SttWake = true; });
-        PushLine("/interrupt on");
+        PushLine("/stt interrupt on");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -6797,7 +6797,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("✋ Interrupting on; it works once voice input (/stt) and speech output (/tts) are on.", ChatScreen.InterruptOnNeedsVoiceNotice);
         Assert.Equal("✋ Interrupting off.", ChatScreen.InterruptOffNotice);
         Assert.Equal("✋ Interrupting works only while a reply is spoken; /tts turns speech output on.", ChatScreen.InterruptNeedsSpeechNotice);
-        Assert.Equal("✋ Interrupting needs the wake word; /wake on turns it on.", ChatScreen.InterruptNeedsWakeNotice);
+        Assert.Equal("✋ Interrupting needs the wake word; /stt wake on turns it on.", ChatScreen.InterruptNeedsWakeNotice);
         Assert.Equal("✋ Interrupting off with the wake word.", ChatScreen.InterruptOffWithWakeNotice);
         Assert.Equal("(✋ interrupted)", ChatScreen.InterruptedNotice);
         Assert.Equal("interrupted — say your request…  F4 or Enter = done   ESC = discard", ChatScreen.InterruptedLabel("F4"));
@@ -11415,10 +11415,10 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void SwitchForGlyph_IsPinned()
     {
-        Assert.Equal(SlashCommand.Tts, ChatScreen.SwitchForGlyph(ChatScreen.TtsGlyph));
-        Assert.Equal(SlashCommand.Voice, ChatScreen.SwitchForGlyph(ChatScreen.SttGlyph));
-        Assert.Equal(SlashCommand.Wake, ChatScreen.SwitchForGlyph(ChatScreen.WakeGlyph));
-        Assert.Equal(SlashCommand.Interrupt, ChatScreen.SwitchForGlyph(ChatScreen.InterruptGlyph));
+        Assert.Equal((SlashCommand.Tts, "off"), ChatScreen.SwitchForGlyph(ChatScreen.TtsGlyph));
+        Assert.Equal((SlashCommand.Voice, "off"), ChatScreen.SwitchForGlyph(ChatScreen.SttGlyph));
+        Assert.Equal((SlashCommand.Voice, "wake off"), ChatScreen.SwitchForGlyph(ChatScreen.WakeGlyph));         // /wake off until 2026-10-09
+        Assert.Equal((SlashCommand.Voice, "interrupt off"), ChatScreen.SwitchForGlyph(ChatScreen.InterruptGlyph));   // /interrupt off until 2026-10-09
         Assert.Null(ChatScreen.SwitchForGlyph(""));
         Assert.Null(ChatScreen.SwitchForGlyph("x"));
     }
@@ -11490,7 +11490,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(wakeReady, rows.Any(r => r.Key == "say \"hey neon\""));
         if (wakeReady)
         {
-            Assert.Equal(new KeyRow("say \"hey neon\"", "talk without a key · during a spoken reply, cut it short", "/interrupt"), rows[17]);
+            Assert.Equal(new KeyRow("say \"hey neon\"", "talk without a key · during a spoken reply, cut it short", "/stt interrupt"), rows[17]);
         }
 
         Assert.Equal(
@@ -11594,7 +11594,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(31, basicEntries.Length);   // /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(30, basicEntries.Length);   // /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
         Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
@@ -11604,7 +11604,6 @@ public partial class ChatScreenTests : IDisposable
         [
             "/about", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/new", "/perfbar", "/profile",
             "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
-            "/wake",
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
@@ -12848,8 +12847,6 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Reasoning, true, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Tts, false, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Voice, true, MidTurnClass.Quick)]
-    [InlineData(SlashCommand.Wake, false, MidTurnClass.Quick)]
-    [InlineData(SlashCommand.Interrupt, false, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Copy, false, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Remember, true, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Explore, false, MidTurnClass.Quick)]
@@ -13610,6 +13607,29 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(ChatScreen.VaultToolsOffError, output);
         Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>/stt with a word that is none of its own (2026-10-09) is its usage error; /wake and /interrupt are unknown commands.</summary>
+    [Fact]
+    public async Task Stt_AnUnknownWord_IsItsUsageError_AndTheOldWordsAreUnknown()
+    {
+        PushLine("/stt bogus");
+        PushLine("/stt wake maybe");
+        PushLine("/wake");
+        PushLine("/interrupt on");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + ChatScreen.VoiceUsageError, output);
+        Assert.Equal("/stt takes on or off, or nothing to toggle; or wake or interrupt, each with on or off.", ChatScreen.VoiceUsageError);
+        Assert.Contains("  ✗ " + ChatScreen.WakeUsageError, output);
+        Assert.Equal("/stt wake takes on or off, or nothing to toggle.", ChatScreen.WakeUsageError);
+        Assert.Equal("/stt interrupt takes on or off, or nothing to toggle.", ChatScreen.InterruptUsageError);
+        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/wake"), output);
+        Assert.Contains("  ✗ " + ChatScreen.UnknownCommandError("/interrupt"), output);
+        Assert.False(_settings.Current.SttWake);
+        Assert.False(_settings.Current.SttInput);
     }
 
     /// <summary>/sys with a word that is none of the three files (2026-10-09) is its usage error; the old words are unknown commands.</summary>
@@ -22900,17 +22920,32 @@ public partial class ChatScreenTests : IDisposable
 
     private static IEnumerable<string> Texts(IReadOnlyList<CompletionItem> items) => items.Select(i => i.Text);
 
-    [Theory]
-    [InlineData("/tts", "speech output")]
-    [InlineData("/stt", "voice input")]
-    [InlineData("/wake", "the wake word")]
-    [InlineData("/interrupt", "the wake word interrupt")]
-    public void ArgumentItems_ASwitch_OffersOnAndOff_WithItsSubject(string command, string subject)
+    [Fact]
+    public void ArgumentItems_ASwitch_OffersOnAndOff_WithItsSubject()
     {
-        Assert.Equal([new CompletionItem("on", subject + " on"), new CompletionItem("off", subject + " off")], ChatScreen.ArgumentItems(command, "", Sources()));
-        Assert.Equal(["off"], Texts(ChatScreen.ArgumentItems(command, "of", Sources())));
-        Assert.Empty(ChatScreen.ArgumentItems(command, "on", Sources()));     // typed in full: the list closes
-        Assert.Empty(ChatScreen.ArgumentItems(command, "on x", Sources()));
+        Assert.Equal([new CompletionItem("on", "speech output on"), new CompletionItem("off", "speech output off")], ChatScreen.ArgumentItems("/tts", "", Sources()));
+        Assert.Equal(["off"], Texts(ChatScreen.ArgumentItems("/tts", "of", Sources())));
+        Assert.Empty(ChatScreen.ArgumentItems("/tts", "on", Sources()));     // typed in full: the list closes
+        Assert.Empty(ChatScreen.ArgumentItems("/tts", "on x", Sources()));
+    }
+
+    /// <summary>/stt's list (2026-10-09, /wake and /interrupt folded in): on and off, then wake and interrupt, each with its own on and off.</summary>
+    [Fact]
+    public void ArgumentItems_Stt_OffersOnOff_ThenWakeAndInterrupt_EachWithOnAndOff()
+    {
+        Assert.Equal(
+            [new CompletionItem("on", "voice input on"), new CompletionItem("off", "voice input off"), new CompletionItem("wake", "the wake word"), new CompletionItem("interrupt", "the wake word interrupt")],
+            ChatScreen.ArgumentItems("/stt", "", Sources()));
+        Assert.Equal(["off"], Texts(ChatScreen.ArgumentItems("/stt", "of", Sources())));
+        Assert.Equal(["wake"], Texts(ChatScreen.ArgumentItems("/stt", "wa", Sources())));
+        Assert.Equal(
+            [new CompletionItem("wake on", "the wake word on"), new CompletionItem("wake off", "the wake word off")],
+            ChatScreen.ArgumentItems("/stt", "wake ", Sources()));
+        Assert.Equal(["interrupt off"], Texts(ChatScreen.ArgumentItems("/stt", "INTERRUPT of", Sources())));
+        Assert.Empty(ChatScreen.ArgumentItems("/stt", "wake on", Sources()));     // typed in full: the list closes
+        Assert.Empty(ChatScreen.ArgumentItems("/stt", "on x", Sources()));
+        Assert.Equal("wake", ChatScreen.SttWakeWord);
+        Assert.Equal("interrupt", ChatScreen.SttInterruptWord);
     }
 
     [Fact]

@@ -180,7 +180,7 @@ internal sealed class VoiceSession : IDisposable
             : $"STT: {key} to talk or say \"{wakePhrase}\"" + (interrupt ? " (interrupt enabled)" : ""));
 
     /// <summary>The interrupt's own line when voice is ready but interrupting is not.</summary>
-    public static string InterruptUnavailableLine(string detail) => $"{ChatScreen.InterruptGlyph} Interrupt: unavailable ({detail}); push-to-talk still works, /interrupt on retries";
+    public static string InterruptUnavailableLine(string detail) => $"{ChatScreen.InterruptGlyph} Interrupt: unavailable ({detail}); push-to-talk still works, /stt interrupt on retries";
 
     public static string NoMicrophoneLine(string detail) => $"{ChatScreen.SttGlyph} STT: no microphone ({detail}); voice off until /stt";
 

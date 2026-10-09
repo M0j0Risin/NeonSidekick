@@ -154,10 +154,6 @@ public static class HelpCommands
             new("/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]", "The size's `x` may be `X` or `*`. Flags go anywhere on the line, any case; a value with spaces goes in double quotes."),
             new("/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]", "The guidance and denoise strength, and up to three input pictures (a path, or a pasted picture's label such as `\"[Image #1]\"`); `--image2` needs `--image`, `--image3` needs `--image2`."),
         ]),
-        new("/interrupt",
-        [
-            new("/interrupt [on|off]", "Toggle the wake-word interrupt during a spoken reply. It needs the wake word on."),
-        ]),
         new("/keycheck",
         [
             new("/keycheck", "List the app's key chords (the Keys tab of `/help`) and whether another program holds each as a global hotkey, the held ones first. A held chord never reaches the app: free it in the program that holds it, such as a graphics card's overlay. Only hotkeys registered with Windows show; a keyboard hook or a Windows Terminal key binding can still take a key."),
@@ -322,6 +318,8 @@ public static class HelpCommands
         new("/stt",
         [
             new("/stt [on|off]", "Toggle voice input."),
+            new("/stt wake [on|off]", "Toggle the speech-input wake word (turning it off turns the interrupt off too)."),
+            new("/stt interrupt [on|off]", "Toggle the wake-word interrupt during a spoken reply. It needs the wake word on."),
         ]),
         new("/sys",
         [
@@ -381,10 +379,6 @@ public static class HelpCommands
             new("/view <image>|<folder>", "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. In the viewer the arrows or the mouse wheel step through the pictures, and a right-click opens the picture menu (rotate, flip, colour, resize, convert, shrink, copy the path, show in Explorer, attach, print, delete; edits go where *Image edit mode* says). Works while a reply runs."),
             new("/view <image> --chat", "Draw the image in the transcript instead. `--chat` can be the first or last word."),
             new("/view <image>|<folder> --thumbs", "Open the folder (an image's folder, with the image selected) as thumbnails in a window of its own, in step with the picture viewer and the picture strip: a click shows the picture in the viewer, a double-click or Enter opens it there, and the viewer's own moves select it here. New pictures go on the end, so nothing moves. The tiles fit the window; + and − or Ctrl+wheel resize them, F5 lists and fits again. A right-click opens the picture menu, as in the viewer. `--thumbs` can be the first or last word. Works while a reply runs."),
-        ]),
-        new("/wake",
-        [
-            new("/wake [on|off]", "Toggle the speech-input wake word (turning it off turns the interrupt off too)."),
         ]),
         new("/window",
         [
