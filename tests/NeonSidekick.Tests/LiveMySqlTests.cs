@@ -117,13 +117,16 @@ public sealed class LiveMySqlTests
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
-        _access.RunAsync("live", null, null, [sql], [], 10, timeoutSeconds, cancellationToken);
+        _access.RunAsync("live", null, [sql], [], 10, timeoutSeconds, cancellationToken);
 
     [LiveMySqlFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
     {
         string db = LiveMySql.Database;
-        Assert.Contains("| " + db + " |", await Invoke<MySqlDatabasesTool>());
+        // The lock (2026-10-09): the server's own databases and another the account sees are refused; its own written out reads.
+        Assert.Equal(MySqlText.ServerCatalog("information_schema"), await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM information_schema.TABLES")));
+        Assert.StartsWith("1 row", await Invoke<MySqlQueryTool>(("sql", $"SELECT COUNT(*) FROM `{db}`.ns_orders")));
+        Assert.Equal(MySqlText.NoDatabaseArgument, await Invoke<MySqlTablesTool>(("database", db)));
         string tables = await Invoke<MySqlTablesTool>(("pattern", "ns_"));
         Assert.Contains("| " + db + " | ns_customers | table |", tables);
         Assert.Contains("People who buy things", tables);
@@ -192,7 +195,7 @@ public sealed class LiveMySqlTests
     [LiveMySqlFact]
     public async Task TheWizardsTest_SaysWhoItIs_AndReadsTheGrants()
     {
-        var run = await _access.RunAsync("live", null, null, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants], [], 50, 30, CancellationToken.None);
+        var run = await _access.RunAsync("live", null, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants], [], 50, 30, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, run.Outcome);
         Assert.Contains("@", run.Grids[0].Rows[0][0]);
         Assert.NotEmpty(MySqlText.WritePowers(run.Grids[1].Rows.Select(r => r[0])));   // the fixtures' owner can write: the wizard warns

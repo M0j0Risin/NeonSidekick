@@ -86,28 +86,30 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// A statement that qualifies a name with another database is asked about although the call's database is allowed for the
-    /// session (the review, 2026-10-05: <c>UPDATE payroll.t</c> under an allow for <c>sales</c>), its caption saying why.
+    /// A statement that reaches past the connection's database is refused before the pane (2026-10-09; the review of 2026-10-05 asked
+    /// about it every time instead): the server's own databases at once, another's name after the server's names are read — no server
+    /// here, so that read's error — never the pane; the connection's own database by name runs under the session's allow.
     /// </summary>
     [Fact]
-    public async Task MySqlExecute_ANameQualifiedElsewhere_IsAsked_DespiteTheSessionsAllow()
+    public async Task MySqlExecute_ANameQualifiedElsewhere_IsRefused_BeforeThePane()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MySqlTools = true; d.MySqlMode = "read-write"; d.MySqlConnectionsOffered = ["shop"]; d.MySqlStatementsAllowed = ["data"]; });
         string path = MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "{ \"connections\": { \"shop\": { \"host\": \"127.0.0.1\", \"port\": 9, \"database\": \"sales\", \"user\": \"u\", \"password\": \"p\", \"connectTimeoutSeconds\": 1, \"access\": \"readwrite\" } } }");
-        ExecuteFixture(MySql.MySqlStatementKinds.Family, [[Keys.Char('s'), Keys.Enter], [Keys.Enter]], "Done.",
+        ExecuteFixture(MySql.MySqlStatementKinds.Family, [[Keys.Char('s'), Keys.Enter]], "Done.",
             new() { ["sql"] = "INSERT INTO t VALUES (1)" },
             new() { ["sql"] = "UPDATE sales.t SET a = 2" },
+            new() { ["sql"] = "UPDATE mysql.user SET a = 3" },
             new() { ["sql"] = "UPDATE payroll.t SET a = 3" });
 
-        string output = await RunAsync();
+        await RunAsync();
 
         var results = Results(_chat.Requests[^1]).Select(r => (string)r.Result!).ToList();
         Assert.StartsWith("Error: could not connect to shop", results[0]);   // allowed for the session, then no server
         Assert.StartsWith("Error: could not connect to shop", results[1]);   // its own database by name: not asked
-        Assert.Equal(ServerWriteText.Declined, results[2]);                  // payroll: asked again, and denied
-        Assert.Contains(ServerWriteText.NamesElsewhere(MySql.MySqlStatementKinds.Family)[..30], output);
+        Assert.Equal(MySql.MySqlText.ServerCatalog("mysql"), results[2]);  // the server's own: refused, no server asked
+        Assert.StartsWith("Error: could not connect to shop", results[3]);   // payroll: the names read first (no server), never the pane
     }
 
     [Fact]

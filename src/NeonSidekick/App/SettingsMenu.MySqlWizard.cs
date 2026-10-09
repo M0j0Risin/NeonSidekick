@@ -23,10 +23,11 @@ internal sealed partial class SettingsMenu
     public const string MySqlWizardFileQuestion = "Which mysql.json: this profile's or the global one?";
     public const string MySqlWizardHostQuestion = "The server's host name or address (localhost, db01.example.com).";
     public const string MySqlWizardPortQuestion = "The TCP port; empty for 3306.";
-    public const string MySqlWizardDatabaseQuestion = "The database a call works in when it names none; empty to work across every database the user can see.";
+    public const string MySqlWizardDatabaseQuestion = "The database: the one this connection reaches (the tools never leave it; another database is another connection).";
     public const string MySqlWizardUserQuestion = "The database user (the real guard is an account with only SELECT grants).";
     public const string MySqlWizardTlsQuestion = "Encryption of the connection.";
     public const string MySqlWizardHostRequired = "A host is required.";
+    public const string MySqlWizardDatabaseRequired = "A database is required: the connection reaches that one alone.";
     public const string MySqlWizardSaveHiddenRow = "Save, hidden from the model until ticked in MySQL connections offered";
 
     public static string MySqlWizardPortError(string typed) => $"'{typed}' is not a port (1 to 65535).";
@@ -90,10 +91,11 @@ internal sealed partial class SettingsMenu
     private string MySqlWizardPath(bool global) =>
         global ? MySqlConfigFile.GlobalPath(_settings.StorageDirectory) : MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
 
-    /// <summary>The first step the draft still lacks (a name, a host, a user, a password), or null.</summary>
+    /// <summary>The first step the draft still lacks (a name, a host, a database, a user, a password), or null.</summary>
     private static MySqlWizardStep? MySqlWizardMissing(MySqlDraft draft) =>
         draft.Name.Length == 0 ? MySqlWizardStep.Name
         : string.IsNullOrWhiteSpace(draft.Config.Host) ? MySqlWizardStep.Host
+        : string.IsNullOrWhiteSpace(draft.Config.Database) ? MySqlWizardStep.Database
         : string.IsNullOrWhiteSpace(draft.Config.User) ? MySqlWizardStep.User
         : draft.Password.Length == 0 ? MySqlWizardStep.Password
         : null;
@@ -109,7 +111,7 @@ internal sealed partial class SettingsMenu
             MySqlWizardStep.Name => OrUnset(draft.Name),
             MySqlWizardStep.Host => OrUnset(c.Host),
             MySqlWizardStep.Port => Invariant(c.Port ?? MySqlConnectionConfig.DefaultPort),
-            MySqlWizardStep.Database => string.IsNullOrWhiteSpace(c.Database) ? "(every database)" : c.Database.Trim(),
+            MySqlWizardStep.Database => OrUnset(c.Database),
             MySqlWizardStep.User => OrUnset(c.User),
             MySqlWizardStep.Store => c.InCredentialManager ? MySqlConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : MySqlConnectionConfig.FileStore,
             MySqlWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
@@ -317,9 +319,14 @@ internal sealed partial class SettingsMenu
                 }, cancellationToken).ConfigureAwait(false);
 
             case MySqlWizardStep.Database:
-                return await MySqlWizardTypeAsync(step, draft, MySqlWizardDatabaseQuestion, c.Database ?? "", allowEmpty: true, mask: false, text =>
+                return await MySqlWizardTypeAsync(step, draft, MySqlWizardDatabaseQuestion, c.Database ?? "", allowEmpty: false, mask: false, text =>
                 {
-                    c.Database = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        return MySqlWizardDatabaseRequired;
+                    }
+
+                    c.Database = text.Trim();
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -508,7 +515,11 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>The draft tried as it stands, nothing written: who it signed in as and the server on the status line, then a warning when the account could write; a failure still lets it be saved.</summary>
+    /// <summary>
+    /// The draft tried as it stands, nothing written: who it signed in as and the server on the status line, then a warning when the
+    /// account could write; then what else it could reach (2026-10-09, <see cref="MySqlCatalogQueries.OtherDatabases"/>, the third result):
+    /// a warning naming them, or that the server holds it to the database too. A failure still lets it be saved.
+    /// </summary>
     private async Task MySqlWizardTestAsync(MySqlDraft draft, CancellationToken cancellationToken)
     {
         var c = draft.Config;
@@ -546,12 +557,26 @@ internal sealed partial class SettingsMenu
         {
             Sink.Warning(MySqlText.CanWrite(powers, c.IsReadWrite));
         }
+
+        if (run.Grids.Count > 2)
+        {
+            var others = run.Grids[2].Rows.Select(r => r[0]).ToList();
+            string reach = MySqlText.Reach(c.Database!.Trim(), others);
+            if (others.Count > 0)
+            {
+                Sink.Warning(reach);
+            }
+            else
+            {
+                Sink.Notice(reach);
+            }
+        }
     }
 
-    /// <summary>The app's test: <see cref="MySqlAccess.RunAsync"/> over the one connection, <see cref="MySqlCatalogQueries.WhoAmI"/> then <see cref="MySqlCatalogQueries.Grants"/>, the MySQL tab's timeout.</summary>
+    /// <summary>The app's test: <see cref="MySqlAccess.RunAsync"/> over the one connection, <see cref="MySqlCatalogQueries.WhoAmI"/>, <see cref="MySqlCatalogQueries.Grants"/> and <see cref="MySqlCatalogQueries.OtherDatabases"/>, the MySQL tab's timeout.</summary>
     private Task<Sql.SqlRun> TestMySqlConnectionAsync(MySqlNamedConnection connection, CancellationToken cancellationToken) =>
         new MySqlAccess(() => new MySqlCatalog([connection], []))
-            .RunAsync(connection.Name, null, null, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants], [], 50, _settings.Current.MySqlQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, null, [MySqlCatalogQueries.WhoAmI, MySqlCatalogQueries.Grants, MySqlCatalogQueries.OtherDatabases], [], 100, _settings.Current.MySqlQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> — its name there. Null when nothing was written.</summary>
     private bool? MySqlWizardSave(MySqlDraft draft, bool offer)

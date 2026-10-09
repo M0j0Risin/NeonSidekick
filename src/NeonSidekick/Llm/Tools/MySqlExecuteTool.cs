@@ -7,10 +7,11 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>mysql_execute(sql, connection?, database?, params?, max_rows?)</c> (2026-10-05, the user's ask: <c>postgres_execute</c>'s twin):
+/// <c>mysql_execute(sql, connection?, params?, max_rows?)</c> (2026-10-05, the user's ask: <c>postgres_execute</c>'s twin):
 /// one statement that may change a MySQL or MariaDB database, offered only while <c>MySQL mode</c> is <c>read-write</c>, a pane can ask,
 /// <c>MySQL statements allowed</c> ticks a kind and an offered connection says <c>"access": "readwrite"</c>. <see cref="MySqlWriteGate"/>,
-/// the connection, a read unasked, else the user's allow per connection and database, then <see cref="MySqlAccess.ExecuteAsync(string?, string?, string?, string, IReadOnlyList{SqlParameterValue}, int, int, CancellationToken)"/>
+/// the connection, the lock to its database (<see cref="MySqlTool.OutsideAsync"/>, 2026-10-09: another is refused, never asked about), a read
+/// unasked, else the user's allow per connection, then <see cref="MySqlAccess.ExecuteAsync(string?, string?, string, IReadOnlyList{SqlParameterValue}, int, int, CancellationToken)"/>
 /// committed as it runs and written to the log (<see cref="ServerExecute"/>). Plan mode drops it.
 /// </summary>
 public sealed class MySqlExecuteTool : MySqlTool
@@ -21,7 +22,6 @@ public sealed class MySqlExecuteTool : MySqlTool
         "{ \"type\": \"object\", \"properties\": { " +
         "\"sql\": { \"type\": \"string\", \"description\": \"One MySQL statement of a kind this tool's description lists. No START TRANSACTION/COMMIT, SET, GRANT, LOAD DATA or second statement.\" }, " +
         ConnectionProperty + ", " +
-        "\"database\": { \"type\": \"string\", \"description\": \"The database unqualified names resolve in; leave it out for the connection's own.\" }, " +
         "\"params\": { \"type\": \"object\", \"description\": \"Values for @name placeholders in the SQL, e.g. {\\\"id\\\": 101} for @id; strings, numbers, true, false or null.\" }, " +
         "\"max_rows\": { \"type\": \"integer\", \"description\": \"How many returned rows to show at most, 1 to 100000. Leave it out for the user's default.\" } }, \"required\": [\"sql\"] }");
 
@@ -44,7 +44,7 @@ public sealed class MySqlExecuteTool : MySqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public Task<string> RunAsync(string sql, string? connection, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    public Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -62,26 +62,20 @@ public sealed class MySqlExecuteTool : MySqlTool
             MySqlReadOnlyGate.Check,
             MySqlReadOnlyGate.Body,
             () => Server.Resolve(connection, effective.MySqlDefaultConnection, out var refused) is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, Place(target.Config, database)), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? ""), null)
                 : (null, MySqlText.Error(refused!)),
             async (body, token) =>
             {
-                var run = await Server.RunAsync(connection, effective.MySqlDefaultConnection, database, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await Server.RunAsync(connection, effective.MySqlDefaultConnection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 return run.Outcome == SqlOutcome.Ok ? MySqlText.Query(run, rows, SqlTool.ResultChars(effective)) : MySqlText.Error(run);
             },
-            (body, token) => Server.ExecuteAsync(connection, effective.MySqlDefaultConnection, database, body, parameters, rows, timeout, token),
-            MySqlText.Error);
+            (body, token) => Server.ExecuteAsync(connection, effective.MySqlDefaultConnection, body, parameters, rows, timeout, token),
+            MySqlText.Error,
+            (body, token) => OutsideAsync(body, connection, token));
         return ServerExecute.RunAsync(MySqlStatementKinds.Family, effective.MySqlMode, effective.MySqlStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
     }
 
-    /// <summary>The database a call works in: the one it names, else the connection's own, else none (the server's default).</summary>
-    public static string Place(MySqlConnectionConfig config, string? database)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-        return !string.IsNullOrWhiteSpace(database) ? database.Trim() : config.Database?.Trim() ?? "";
-    }
-
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, MySqlQueryTool.MaxRowsArgument, out var max, out var raw))
@@ -105,6 +99,6 @@ public sealed class MySqlExecuteTool : MySqlTool
             parameters = read;
         }
 
-        return await RunAsync(ToolArguments.ReadString(arguments, MySqlQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        return await RunAsync(ToolArguments.ReadString(arguments, MySqlQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
     }
 }

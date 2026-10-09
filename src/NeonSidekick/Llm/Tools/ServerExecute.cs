@@ -16,6 +16,8 @@ public sealed record ExecuteTarget(string Connection, bool ReadWrite, string Pla
 /// One family's hooks for <see cref="ServerExecute.RunAsync"/>: its write gate (<paramref name="Check"/>, <paramref name="Kinds"/>), its
 /// read gate (a read runs only if it passes it too), what of the text runs (<paramref name="Body"/>), the target a call names (an
 /// <c>Error:</c> sentence when none), the read-only run (the <c>_query</c> tool's answer), the write run, and its error sentences.
+/// <paramref name="Outside"/> (2026-10-09, the lock to a connection's place) is the family's check that needs the server — the names of
+/// the other databases or schemas there, which a lexer cannot tell from an alias — run before a read or the pane: the refusal, or null.
 /// </summary>
 public sealed record ServerExecuteHooks(
     Func<string, IReadOnlyList<ServerStatementKind>, string?> Check,
@@ -25,7 +27,8 @@ public sealed record ServerExecuteHooks(
     Func<(ExecuteTarget? Target, string? Error)> Resolve,
     Func<string, CancellationToken, Task<string>> Read,
     Func<string, CancellationToken, Task<SqlRun>> Execute,
-    Func<SqlRun, string> Error);
+    Func<SqlRun, string> Error,
+    Func<string, CancellationToken, Task<string?>>? Outside = null);
 
 /// <summary>
 /// The server families' <c>_execute</c> tools' one order of checks (2026-10-05, <c>sqlite_execute</c>'s, mirrored): the mode
@@ -69,6 +72,10 @@ public static class ServerExecute
         }
 
         string body = hooks.Body(sql);
+        if (hooks.Outside is { } outside && await outside(body, cancellationToken).ConfigureAwait(false) is { } beyond)
+        {
+            return beyond;
+        }
 
         // A read asks nothing (sqlite_execute's way): it runs as the _query tool's do, read-only, so it cannot change anything and is no
         // change to audit — and only what the read gate passes counts as one, so a WITH that only looks like a read cannot slip past.

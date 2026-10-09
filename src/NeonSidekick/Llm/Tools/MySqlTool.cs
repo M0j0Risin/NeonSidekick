@@ -6,15 +6,17 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// What the eight MySQL tools share (2026-09-30), <see cref="OracleTool"/>'s shape: the <see cref="MySqlAccess"/> door, the
+/// What the MySQL tools share (2026-09-30), <see cref="OracleTool"/>'s shape: the <see cref="MySqlAccess"/> door, the
 /// settings in force at each call, the optional <c>connection</c> (a name from <c>mysql.json</c>; the setting
-/// <c>MySQL default connection</c>, else the first, when left out) and <c>database</c> (a MySQL database is its schema, so it is
-/// the SQL tools' word, not Oracle's), the statement timeout, and the table lookup <c>mysql_describe</c>,
-/// <c>mysql_relationships</c> and <c>mysql_indexes</c> need. A refused run is <see cref="MySqlText.Error"/>'s sentence.
+/// <c>MySQL default connection</c>, else the first, when left out) — each connection reaching its own database alone since
+/// 2026-10-09 (the user's call, SQL Server's lock carried over: <c>database</c> and <c>mysql_databases</c> went, a call that still
+/// sends one is refused, and <see cref="OutsideAsync"/> holds the model's SQL to it) — the statement timeout, and the table lookup
+/// <c>mysql_describe</c>, <c>mysql_relationships</c> and <c>mysql_indexes</c> need. A refused run is <see cref="MySqlText.Error"/>'s sentence.
 /// </summary>
 public abstract class MySqlTool : AIFunction
 {
     public const string ConnectionArgument = "connection";
+    /// <summary>The argument the tools took until 2026-10-09; a call that still sends it is refused.</summary>
     public const string DatabaseArgument = "database";
     public const string TableArgument = "table";
 
@@ -41,13 +43,49 @@ public abstract class MySqlTool : AIFunction
         return Math.Clamp(effective.MySqlQueryTimeoutSeconds, AppSettingsData.MinSqlQueryTimeoutSeconds, AppSettingsData.MaxSqlQueryTimeoutSeconds);
     }
 
+    /// <summary>Every MySQL tool's call: refused when it still names a <c>database</c>, else the tool's own <see cref="InvokeToolAsync"/>.</summary>
+    protected sealed override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return Optional(arguments, DatabaseArgument) is not null ? new(MySqlText.NoDatabaseArgument) : InvokeToolAsync(arguments, cancellationToken);
+    }
+
+    /// <summary>The tool's own call, its arguments read.</summary>
+    protected abstract ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The model's own SQL held to the connection's database (<see cref="MySqlBoundary"/>, 2026-10-09): a qualifier naming one of the
+    /// server's own databases refused at once; any other but the connection's own sends for the names of the databases on the server
+    /// (<see cref="MySqlBoundary.Names"/>), and one among them is refused. A statement with no such qualifier asks the server nothing.
+    /// Null when it keeps to the database, or when the connection does not resolve (the run that follows says why); a failed read of
+    /// the names is its error, never a pass.
+    /// </summary>
+    protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
+    {
+        if (_mysql.Resolve(connection, Effective.MySqlDefaultConnection, out _) is not { } target)
+        {
+            return null;
+        }
+
+        var (heads, refused) = MySqlBoundary.Qualifiers(sql, target.Config.Database ?? "");
+        if (refused is not null || heads.Count == 0)
+        {
+            return refused;
+        }
+
+        var run = await _mysql.RunAsync(connection, Effective.MySqlDefaultConnection, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        return run.Outcome != SqlOutcome.Ok
+            ? MySqlText.Error(run)
+            : MySqlBoundary.Check(sql, target.Config.Database ?? "", run.Grids.Count > 0 ? run.Grids[0].Rows.Select(r => r[0]) : []);
+    }
+
     /// <summary>A string argument, or null when blank.</summary>
     protected static string? Optional(AIFunctionArguments arguments, string name) =>
         ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
 
-    /// <summary>Runs the app's own statements on the call's connection, capped at <see cref="MySqlAccess.MaxCatalogRows"/>; <paramref name="database"/> is bound as <c>@database</c> (the listing's scope), not opened.</summary>
+    /// <summary>Runs the app's own statements on the call's connection (in its database), capped at <see cref="MySqlAccess.MaxCatalogRows"/>.</summary>
     protected Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _mysql.RunAsync(connection, Effective.MySqlDefaultConnection, null, statements, parameters, MySqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+        _mysql.RunAsync(connection, Effective.MySqlDefaultConnection, statements, parameters, MySqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
 
     /// <summary>What <see cref="FindTableAsync"/> found: the object's database, name and kind — or the <c>Error:</c> sentence.</summary>
     protected sealed record TableMatch(string Database, string Name, string Kind, string? Error)
@@ -56,18 +94,24 @@ public abstract class MySqlTool : AIFunction
     }
 
     /// <summary>
-    /// The table or view <paramref name="table"/> means (<see cref="MySqlCatalogQueries.Resolve"/>, case-insensitive):
-    /// <c>database.name</c> as written, else the one in <paramref name="database"/> or the connection's database, else the only one
-    /// of that name in any database; none is not found, several is ambiguous with the candidates named.
+    /// The table or view <paramref name="table"/> means in the connection's database (<see cref="MySqlCatalogQueries.Resolve"/>,
+    /// case-insensitive): <c>name</c>, or <c>database.name</c> with the connection's own database — another is refused (2026-10-09);
+    /// none is not found, several is ambiguous with the candidates named.
     /// </summary>
-    protected async Task<TableMatch> FindTableAsync(string? connection, string? database, string table, CancellationToken cancellationToken)
+    protected async Task<TableMatch> FindTableAsync(string? connection, string table, CancellationToken cancellationToken)
     {
         if (MySqlAccess.Split(table) is not { } parts)
         {
             return TableMatch.Refused(MySqlText.BadTable(table));
         }
 
-        var run = await CatalogAsync(connection, [MySqlCatalogQueries.Resolve], [new SqlParameterValue("db", parts.Database ?? database), new SqlParameterValue("name", parts.Name)], cancellationToken).ConfigureAwait(false);
+        if (parts.Database is { } named && _mysql.Resolve(connection, Effective.MySqlDefaultConnection, out _) is { } target
+            && !named.Equals(target.Config.Database?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return TableMatch.Refused(MySqlText.TableElsewhere(named, target.Config.Database?.Trim() ?? ""));
+        }
+
+        var run = await CatalogAsync(connection, [MySqlCatalogQueries.Resolve], [new SqlParameterValue("name", parts.Name)], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return TableMatch.Refused(MySqlText.Error(run));

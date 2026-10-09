@@ -74,18 +74,8 @@ public static class MySqlWriteGate
         return Lex(sql, out _) is { } tokens ? ServerWriteGate.Kinds(Rules, tokens) : null;
     }
 
-    /// <summary>
-    /// Whether <paramref name="sql"/> qualifies a name with anything but the database <paramref name="place"/> (the review, 2026-10-05:
-    /// <see cref="ServerWriteGate.NamesElsewhere"/> — <c>DELETE FROM otherdb.t</c>; a table's <c>t.col</c> counts too, since a lexer
-    /// cannot tell them apart). Text that does not lex counts.
-    /// </summary>
-    public static bool NamesElsewhere(string sql, string place)
-    {
-        ArgumentNullException.ThrowIfNull(sql);
-        return Lex(sql, out _) is not { } tokens || ServerWriteGate.NamesElsewhere(tokens, place);
-    }
-
-    private static List<GateToken>? Lex(string sql, out string? error)
+    /// <summary>The text as <see cref="ServerWriteGate"/>'s tokens (<see cref="MySqlBoundary"/> reads them too, 2026-10-09); null with the error when it does not lex.</summary>
+    internal static List<GateToken>? Lex(string sql, out string? error)
     {
         if (MySqlReadOnlyGate.Tokenize(sql, out error) is not { } tokens)
         {
@@ -529,8 +519,5 @@ public static class MySqlStatementKinds
 
     public static readonly ServerWriteFamily Family = new(
         "MySQL", "MySQL", "mysql_execute", "mysql.json", "database", MySqlConfigFile.Category,
-        nameof(Settings.AppSettingsData.MySqlMode), Statements)
-    {
-        NamesElsewhere = MySqlWriteGate.NamesElsewhere,
-    };
+        nameof(Settings.AppSettingsData.MySqlMode), Statements);   // no NamesElsewhere since 2026-10-09: MySqlBoundary refuses another database outright
 }

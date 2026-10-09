@@ -7,7 +7,7 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>mysql_indexes(connection?, database?, table?)</c>: the indexes of a table or a database — kind, key columns, the cardinality
+/// <c>mysql_indexes(connection?, table?)</c>: the indexes of a table or a database — kind, key columns, the cardinality
 /// estimate — then each one's reads and writes since the server started (<c>performance_schema</c>), a separate statement so an
 /// account (or a MariaDB with it off) still gets the indexes, with a line saying why the rest is missing.
 /// </summary>
@@ -21,8 +21,7 @@ public sealed class MySqlIndexesTool : MySqlTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            "database": { "type": "string", "description": "Only this database's indexes; leave it out for the connection's own (or every one)." },
-            "table": { "type": "string", "description": "Only this table's indexes (database.name); leave it out for more." }
+            "table": { "type": "string", "description": "Only this table's indexes; leave it out for the whole database." }
           }
         }
         """);
@@ -39,24 +38,23 @@ public sealed class MySqlIndexesTool : MySqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string? connection, string? database, string? table, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string? connection, string? table, CancellationToken cancellationToken)
     {
-        string? db = null;
         string? name = null;
-        string scope = database is null ? "" : $"in database {database}";
+        string scope = "";
         if (table is not null)
         {
-            var match = await FindTableAsync(connection, database, table, cancellationToken).ConfigureAwait(false);
+            var match = await FindTableAsync(connection, table, cancellationToken).ConfigureAwait(false);
             if (match.Error is { } refused)
             {
                 return refused;
             }
 
-            (db, name) = (match.Database, match.Name);
+            name = match.Name;
             scope = $"on {match.Database}.{match.Name}";
         }
 
-        SqlParameterValue[] parameters = [new("db", db), new("name", name), new("database", database)];
+        SqlParameterValue[] parameters = [new("name", name)];
         var run = await CatalogAsync(connection, [MySqlCatalogQueries.Indexes], parameters, cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
@@ -70,9 +68,9 @@ public sealed class MySqlIndexesTool : MySqlTool
         return MySqlText.Indexes(scope, run, grid, usageError, Files.WorkingDirectory.MaxReadChars);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
     }
 }

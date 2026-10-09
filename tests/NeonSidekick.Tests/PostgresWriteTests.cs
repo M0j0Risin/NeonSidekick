@@ -74,7 +74,7 @@ public sealed class ServerWriteTests
         Assert.Equal("readwrite", ConnectionAccess.Stored(true));
 
         Assert.Equal(ConnectionAccess.Problem("rw"), new PostgresConnectionConfig { Host = "db", User = "u", Access = "rw" }.Problem);
-        Assert.Equal(ConnectionAccess.Problem("rw"), new MySql.MySqlConnectionConfig { Host = "db", User = "u", Access = "rw" }.Problem);
+        Assert.Equal(ConnectionAccess.Problem("rw"), new MySql.MySqlConnectionConfig { Host = "db", Database = "d", User = "u", Access = "rw" }.Problem);
         Assert.Equal(ConnectionAccess.Problem("rw"), new Oracle.OracleConnectionConfig { DataSource = "db:1521/x", User = "u", Access = "rw" }.Problem);
         Assert.Equal(ConnectionAccess.Problem("rw"), new SqlConnectionConfig { Server = "db", Database = "d", Auth = "windows", Access = "rw" }.Problem);
         Assert.True(new PostgresConnectionConfig { Access = "readwrite" }.IsReadWrite);

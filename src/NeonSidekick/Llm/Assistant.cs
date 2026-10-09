@@ -250,7 +250,7 @@ public sealed class Assistant
     /// </summary>
     public const string MySqlRule =
         "The MySQL tools read MySQL and MariaDB databases (MySQL SQL: LIMIT n, not TOP; `backticks` for names) on the user's named connections and never change data: " +
-        NeonSidekick.Llm.Tools.MySqlConnectionsTool.ToolName + " lists the connections and " + NeonSidekick.Llm.Tools.MySqlDatabasesTool.ToolName + " a server's databases; " +
+        NeonSidekick.Llm.Tools.MySqlConnectionsTool.ToolName + " lists the connections, each one held to its own database (another database needs its own connection, which the user adds); " +
         NeonSidekick.Llm.Tools.MySqlTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.MySqlColumnsTool.ToolName + " a column, " +
         NeonSidekick.Llm.Tools.MySqlDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.MySqlRelationshipsTool.ToolName + " the joins and " +
         NeonSidekick.Llm.Tools.MySqlIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +

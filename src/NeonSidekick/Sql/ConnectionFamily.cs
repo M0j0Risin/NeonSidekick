@@ -179,7 +179,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
             string? reason = config is null ? NullEntry : config.Problem;
             if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim(), Entry: config));
                 continue;
             }
 

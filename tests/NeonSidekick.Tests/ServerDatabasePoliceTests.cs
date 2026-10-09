@@ -84,6 +84,7 @@ public sealed class ServerDatabasePoliceTests : IDisposable
         string profile = Path.Combine(_dir, "profiles", "default");
         Directory.CreateDirectory(profile);
         File.WriteAllText(Path.Combine(profile, "postgres.json"), """{ "connections": { "shop": { "host": "pg01", "user": "u" }, "local": { "host": "localhost", "port": 5433, "user": "u" } } }""");
+        // No "database": a problem the tools skip since 2026-10-09, but its host is still guarded.
         File.WriteAllText(Path.Combine(_dir, "mysql.json"), """{ "connections": { "m": { "host": "my01", "user": "u" } } }""");
         Assert.Null(ServerDatabasePolice.For(new AppSettingsData(), profile, _dir));
 

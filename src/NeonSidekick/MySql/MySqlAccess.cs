@@ -77,12 +77,12 @@ public sealed class MySqlAccess
 
     /// <summary>
     /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or the first
-    /// when blank), in <paramref name="database"/> when given (else the connection's own): each one's rows read to
+    /// when blank), in the connection's own database (2026-10-09: the one it reaches; a session in any other runs nothing): each one's rows read to
     /// <paramref name="maxRows"/> (one past to learn whether more are left), each statement bound only the parameters it names, all
     /// inside one read-only transaction that is rolled back. A timeout, a failed connect and a server error are outcomes; a
-    /// cancelled token throws. The run's <see cref="SqlRun.Database"/> is the database it worked in (empty with none in force).
+    /// cancelled token throws. The run's <see cref="SqlRun.Database"/> is the database it worked in.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -112,17 +112,16 @@ public sealed class MySqlAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, LogText.Excerpt(ex.Message), target.Name);
         }
 
+        string workIn = connection.Database ?? "";
+        if (!string.Equals(workIn, target.Config.Database?.Trim() ?? "", StringComparison.OrdinalIgnoreCase))
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, MySqlText.WrongDatabase(target.Config.Database?.Trim() ?? "", workIn), target.Name);
+        }
+
         var watch = Stopwatch.StartNew();
         var grids = new List<SqlGrid>();
-        string workIn = "";
         try
         {
-            if (!string.IsNullOrWhiteSpace(database))
-            {
-                await connection.ChangeDatabaseAsync(database.Trim(), cancellationToken).ConfigureAwait(false);
-            }
-
-            workIn = connection.Database ?? "";
             await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds), timeoutSeconds, cancellationToken).ConfigureAwait(false);
             await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, isReadOnly: true, cancellationToken).ConfigureAwait(false);
             try
@@ -160,14 +159,14 @@ public sealed class MySqlAccess
     /// <summary>
     /// <c>mysql_execute</c>'s run (2026-10-05, <c>MySQL mode</c> <c>read-write</c>): one statement the write gate passed, on a connection
     /// whose entry says <c>"access": "readwrite"</c> (any other is <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the caller
-    /// checked), in <paramref name="database"/> when given. The session as for a read — <c>sql_mode</c> without
+    /// checked), in the connection's own database. The session as for a read — <c>sql_mode</c> without
     /// <c>NO_BACKSLASH_ESCAPES</c>/<c>ANSI_QUOTES</c>, so the server splits strings as the gate does, and the statement cap (MariaDB's caps
     /// every statement, MySQL's a SELECT alone; the command timeout stops the rest, the driver killing the query) — and no transaction:
     /// autocommit, so the statement commits on its own, atomically (DDL commits anyway). The rows a statement gives back (MariaDB's
     /// <c>RETURNING</c>, <c>ANALYZE TABLE</c>'s report) are read to <paramref name="maxRows"/> and the rest drained, never killed: a kill
     /// would undo the statement. <see cref="SqlRun.Changes"/> is the rows the server counts.
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? database, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -202,18 +201,17 @@ public sealed class MySqlAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, LogText.Excerpt(ex.Message), target.Name);
         }
 
+        string workIn = connection.Database ?? "";
+        if (!string.Equals(workIn, target.Config.Database?.Trim() ?? "", StringComparison.OrdinalIgnoreCase))
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, MySqlText.WrongDatabase(target.Config.Database?.Trim() ?? "", workIn), target.Name);
+        }
+
         var watch = Stopwatch.StartNew();
         var grids = new List<SqlGrid>();
-        string workIn = "";
         int? changes;
         try
         {
-            if (!string.IsNullOrWhiteSpace(database))
-            {
-                await connection.ChangeDatabaseAsync(database.Trim(), cancellationToken).ConfigureAwait(false);
-            }
-
-            workIn = connection.Database ?? "";
             await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds), timeoutSeconds, cancellationToken).ConfigureAwait(false);
             await using var command = new MySqlCommand(sql, connection) { CommandTimeout = timeoutSeconds };
             var named = MySqlReadOnlyGate.Binds(sql);

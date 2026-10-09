@@ -798,13 +798,13 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 
 | Setting | What it does | Default |
 |---|---|---|
-| MySQL tools | Offers the MySQL tools (connections, databases, tables, columns, describe, relationships, indexes, query), for MySQL 8.0.16+ and MariaDB 10.2+. | off |
+| MySQL tools | Offers the MySQL tools (connections, tables, columns, describe, relationships, indexes, query), for MySQL 8.0.16+ and MariaDB 10.2+, each connection held to its own database. | off |
 | MySQL mode | `read-only`: the tools only read. `read-write`: `mysql_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [MySQL › Changes](TOOLS.md#changes-2). | read-only |
 | MySQL statements allowed | Under `read-write`: the kinds of statement `mysql_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [MySQL › Changes](TOOLS.md#changes-2). | changing data, creating, reading |
 | MySQL connections offered | As *SQL connections offered*. | none |
 | MySQL default connection | As *SQL default connection*. | (the first connection) |
 | MySQL set password | As *SQL set password*. | — |
-| MySQL add/edit connection | The wizard (new or edit); its test shows who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. See [MySQL](TOOLS.md#mysql-and-mariadb). | — |
+| MySQL add/edit connection | The wizard (new or edit); the database is required. Its test shows who it signs in as, the version, a warning when `SHOW GRANTS` allows changes, and the other databases the account could reach. See [MySQL](TOOLS.md#mysql-and-mariadb). | — |
 | MySQL %-mention enabled | Lists the MySQL connections in the `%` list too, marked `MySQL ·`. | on |
 | MySQL max rows | As *SQL max rows*, for `mysql_query`. | 100 |
 | MySQL query timeout (s) | How long one statement may run (1–600), enforced by the server and the driver. | 30 |

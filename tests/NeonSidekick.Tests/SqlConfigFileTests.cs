@@ -90,8 +90,12 @@ public sealed class SqlConfigFileTests : IDisposable
                 new SqlConfigProblem($"{path} (slow)", SqlText.BadConnectTimeout(0, SqlConnectionConfig.MaxConnectTimeoutSeconds), Name: "slow"),
                 new SqlConfigProblem($"{path} (empty)", SqlText.NoServer, Name: "empty"),
             ],
-            loaded.Problems);
+            loaded.Problems.Select(p => p with { Entry = null }));
         Assert.True(loaded.Connections[1].Config.IsWindows);
+
+        // A skipped entry is kept as read (2026-10-09), for the shell police's hosts; a null one has none.
+        Assert.Equal("x", Assert.IsType<SqlConnectionConfig>(loaded.Problems[0].Entry).Server);
+        Assert.Null(loaded.Problems[^1].Entry);
     }
 
     [Fact]

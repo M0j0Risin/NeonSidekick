@@ -7,7 +7,7 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>mysql_describe(table, connection?, database?)</c>: one table or view's columns (types as declared, nullability,
+/// <c>mysql_describe(table, connection?)</c>: one table or view's columns (types as declared, nullability,
 /// auto_increment, default, primary key, comment), its foreign keys out and in, its indexes, CHECK constraints and triggers.
 /// </summary>
 public sealed class MySqlDescribeTool : MySqlTool
@@ -19,9 +19,8 @@ public sealed class MySqlDescribeTool : MySqlTool
         {
           "type": "object",
           "properties": {
-            "table": { "type": "string", "description": "The table or view as database.name (shop.orders); a bare name works when the database in force or only one database has it." },
-            {{ConnectionProperty}},
-            "database": { "type": "string", "description": "The database a bare table name is looked up in first; leave it out for the connection's own." }
+            "table": { "type": "string", "description": "The table or view's name (orders), or as database.name with the connection's database (shop.orders)." },
+            {{ConnectionProperty}}
           },
           "required": ["table"]
         }
@@ -39,14 +38,14 @@ public sealed class MySqlDescribeTool : MySqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string table, string? connection, string? database, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string table, string? connection, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(table))
         {
             return MySqlText.NoTable;
         }
 
-        var match = await FindTableAsync(connection, database, table.Trim(), cancellationToken).ConfigureAwait(false);
+        var match = await FindTableAsync(connection, table.Trim(), cancellationToken).ConfigureAwait(false);
         if (match.Error is { } refused)
         {
             return refused;
@@ -56,9 +55,9 @@ public sealed class MySqlDescribeTool : MySqlTool
         return run.Outcome == SqlOutcome.Ok ? MySqlText.Describe(match.Database, match.Name, match.Kind, run, Files.WorkingDirectory.MaxReadChars) : MySqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, ConnectionArgument), cancellationToken).ConfigureAwait(false);
     }
 }

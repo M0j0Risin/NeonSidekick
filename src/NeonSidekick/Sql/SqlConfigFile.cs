@@ -11,7 +11,11 @@ namespace NeonSidekick.Sql;
 /// read at all (2026-10-04): the offered checklists never prune a name against a load that lost a whole file, and a name a problem
 /// names still counts as there (<see cref="App.OfferedNames"/>).
 /// </summary>
-public sealed record SqlConfigProblem(string Source, string Reason, string? Name = null, bool WholeFile = false);
+/// <remarks>
+/// <paramref name="Entry"/> (2026-10-09) is the skipped entry as read, when one was: the tools never use it, but the shell's
+/// <c>ServerDatabasePolice</c> still guards its host — an entry from before the database was required must not open a way round it.
+/// </remarks>
+public sealed record SqlConfigProblem(string Source, string Reason, string? Name = null, bool WholeFile = false, object? Entry = null);
 
 /// <summary>
 /// What <see cref="SqlConfigFile.LoadCatalog"/> found: the usable connections (the profile's first, then the
@@ -219,7 +223,7 @@ public sealed class SqlConfigFile
             string? reason = config is null ? SqlText.NoServer : config.Problem;
             if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim(), Entry: config));
                 continue;
             }
 

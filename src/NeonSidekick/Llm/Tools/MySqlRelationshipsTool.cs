@@ -6,7 +6,7 @@ using NeonSidekick.Sql;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>mysql_relationships(connection?, database?, table?)</c>: the foreign-key join paths <c>from.col -&gt; to.col</c>, every one in a database or those touching a table.</summary>
+/// <summary><c>mysql_relationships(connection?, table?)</c>: the foreign-key join paths <c>from.col -&gt; to.col</c>, every one in a database or those touching a table.</summary>
 public sealed class MySqlRelationshipsTool : MySqlTool
 {
     public const string ToolName = "mysql_relationships";
@@ -17,8 +17,7 @@ public sealed class MySqlRelationshipsTool : MySqlTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            "database": { "type": "string", "description": "Only the keys into or out of this database's tables; leave it out for the connection's own (or every one)." },
-            "table": { "type": "string", "description": "Only the keys into or out of this table (database.name); leave it out for more." }
+            "table": { "type": "string", "description": "Only the keys into or out of this table; leave it out for every one in the database." }
           }
         }
         """);
@@ -35,31 +34,30 @@ public sealed class MySqlRelationshipsTool : MySqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string? connection, string? database, string? table, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string? connection, string? table, CancellationToken cancellationToken)
     {
-        string? db = null;
         string? name = null;
-        string? label = database is null ? null : "database " + database;
+        string? label = null;
         if (table is not null)
         {
-            var match = await FindTableAsync(connection, database, table, cancellationToken).ConfigureAwait(false);
+            var match = await FindTableAsync(connection, table, cancellationToken).ConfigureAwait(false);
             if (match.Error is { } refused)
             {
                 return refused;
             }
 
-            (db, name) = (match.Database, match.Name);
+            name = match.Name;
             label = match.Database + "." + match.Name;
         }
 
         var run = await CatalogAsync(connection, [MySqlCatalogQueries.Relationships],
-            [new SqlParameterValue("db", db), new SqlParameterValue("name", name), new SqlParameterValue("database", database)], cancellationToken).ConfigureAwait(false);
+            [new SqlParameterValue("name", name)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? MySqlText.Relationships(label, run, Files.WorkingDirectory.MaxReadChars) : MySqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(Optional(arguments, ConnectionArgument), Optional(arguments, TableArgument), cancellationToken).ConfigureAwait(false);
     }
 }

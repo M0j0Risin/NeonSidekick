@@ -85,11 +85,11 @@ public sealed class MySqlConfigFileTests : IDisposable
               "connections": {
                 "shop": { "host": "localhost", "port": 3307, "database": "shop", "user": "reader" },
                 "nohost": { "user": "u" },
-                "nouser": { "host": "h" },
-                "badport": { "host": "h", "user": "u", "port": 70000 },
-                "badtls": { "host": "h", "user": "u", "sslMode": "sometimes" },
-                "badstore": { "host": "h", "user": "u", "passwordStore": "vault" },
-                "slow": { "host": "h", "user": "u", "connectTimeoutSeconds": 0 },
+                "nouser": { "host": "h", "database": "db" },
+                "badport": { "host": "h", "database": "db", "user": "u", "port": 70000 },
+                "badtls": { "host": "h", "database": "db", "user": "u", "sslMode": "sometimes" },
+                "badstore": { "host": "h", "database": "db", "user": "u", "passwordStore": "vault" },
+                "slow": { "host": "h", "database": "db", "user": "u", "connectTimeoutSeconds": 0 },
                 "empty": null,
               }
             }
@@ -107,8 +107,8 @@ public sealed class MySqlConfigFileTests : IDisposable
     [Fact]
     public void TheProfilesFile_WinsByName_OverTheHomes()
     {
-        Profile("""{ "connections": { "shop": { "host": "profile", "user": "u" } } }""");
-        File.WriteAllText(MySqlConfigFile.GlobalPath(_home), """{ "connections": { "SHOP": { "host": "home", "user": "u" }, "billing": { "host": "home", "user": "u" } } }""");
+        Profile("""{ "connections": { "shop": { "host": "profile", "database": "db", "user": "u" } } }""");
+        File.WriteAllText(MySqlConfigFile.GlobalPath(_home), """{ "connections": { "SHOP": { "host": "home", "database": "db", "user": "u" }, "billing": { "host": "home", "database": "db", "user": "u" } } }""");
 
         var catalog = MySqlConfigFile.LoadCatalog(_profile, _home);
 

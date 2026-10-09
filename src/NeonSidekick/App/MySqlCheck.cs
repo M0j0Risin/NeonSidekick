@@ -10,8 +10,10 @@ namespace NeonSidekick.App;
 /// <c>--mysql-check &lt;connection&gt;</c> (2026-09-30), <see cref="OracleCheck"/>'s twin: the MySQL tools' proof on the published binary
 /// against a real MySQL or MariaDB server, over a connection of the loaded profile's <c>mysql.json</c>, nothing seeded, nothing
 /// written: who it signs in as; every type from literals (a 65-digit DECIMAL, unsigned BIGINT, JSON, BIT, TIME, geometry); the
-/// gate refusing the bypasses; the server refusing a write inside the read-only transaction (ERROR 1792 on a temporary table); a
-/// cancel and the server-side time cap stopping a query. Exit 0 only when every line passes. Not part of the build gate.
+/// gate refusing the bypasses; the lock to the connection's database (2026-10-09, <see cref="MySqlBoundary"/> over the server's
+/// own names) and the other databases the account could reach; the server refusing a write inside the read-only transaction
+/// (ERROR 1792 on a temporary table); a cancel and the server-side time cap stopping a query. Exit 0 only when every line passes. Not
+/// part of the build gate.
 /// </summary>
 internal static class MySqlCheck
 {
@@ -38,14 +40,14 @@ internal static class MySqlCheck
         console.MarkupLine(Markup.Escape(IntroLine(name)));
         var access = new MySqlAccess(() => catalog);
         var checks = new List<SmokeCheck>();
-        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name, null) is null)
+        if (string.IsNullOrWhiteSpace(name) || catalog.Find(name, null) is not { } target)
         {
             checks.Add(new SmokeCheck("mysql:connection", false, catalog.Connections.Count == 0 ? MySqlText.NoConnections : MySqlText.UnknownConnection(name, string.Join(", ", catalog.Connections.Select(c => c.Name)))));
             return Report(console, checks);
         }
 
         Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout, CancellationToken token) =>
-            access.RunAsync(name, null, null, statements, [], 10, timeout, token);
+            access.RunAsync(name, null, statements, [], 10, timeout, token);
 
         var who = await Run([MySqlCatalogQueries.WhoAmI], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)
@@ -75,6 +77,13 @@ internal static class MySqlCheck
         bool sameString = escaped.Outcome == SqlOutcome.Ok && escaped.Grids[0].Rows.FirstOrDefault()?[0] == "a'; DROP TABLE t; --";
         checks.Add(new SmokeCheck("mysql:escapes", sameString, sameString ? "the server read the backslash escape as the gate did (sql_mode stripped)" : escaped.Outcome + " " + escaped.Detail));
 
+        var names = await access.RunAsync(name, null, [MySqlBoundary.Names], [], MySqlBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        checks.Add(BoundaryCheck(target.Config.Database?.Trim() ?? "", names));
+        var reach = await Run([MySqlCatalogQueries.OtherDatabases], timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        checks.Add(new SmokeCheck("mysql:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
+            ? MySqlText.Reach(target.Config.Database?.Trim() ?? "", reach.Grids.FirstOrDefault()?.Rows.Select(r => r[0]).ToList() ?? [])
+            : MySqlText.Error(reach)));
+
         var written = await Run(["CREATE TEMPORARY TABLE neonsidekick_check (x INT)"], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         bool refused = written.Outcome == SqlOutcome.Failed && written.Detail.Contains("1792", StringComparison.Ordinal);
         checks.Add(new SmokeCheck("mysql:read-only", refused, written.Outcome == SqlOutcome.Ok ? "a write ran inside the read-only transaction" : written.Detail));
@@ -101,6 +110,33 @@ internal static class MySqlCheck
         var timedOut = await Run([SlowQuery], 1, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("mysql:timeout", timedOut.Outcome == SqlOutcome.Timeout, timedOut.Outcome == SqlOutcome.Timeout ? "stopped after 1 s" : timedOut.Outcome + " " + timedOut.Detail));
         return Report(console, checks);
+    }
+
+    /// <summary>
+    /// The lock's line, over the names the server lists: the server's own databases and another the account sees (when there is one)
+    /// refused; the connection's own written out and a table alias passed.
+    /// </summary>
+    private static SmokeCheck BoundaryCheck(string database, SqlRun names)
+    {
+        if (names.Outcome != SqlOutcome.Ok)
+        {
+            return new SmokeCheck("mysql:boundary", false, MySqlText.Error(names));
+        }
+
+        var visible = names.Grids.FirstOrDefault()?.Rows.Select(r => r[0]).ToList() ?? [];
+        var outside = new List<string> { "SELECT * FROM information_schema.TABLES", "SELECT user FROM mysql.user", "SELECT * FROM performance_schema.threads" };
+        if (visible.FirstOrDefault(v => !MySqlBoundary.SystemDatabases.Contains(v) && !v.Equals(database, StringComparison.OrdinalIgnoreCase)) is { } other)
+        {
+            outside.Add($"SELECT 1 FROM `{other}`.t");
+        }
+
+        string[] inside = [$"SELECT * FROM `{database}`.t", "SELECT t.a FROM t"];
+        var passed = outside.Where(s => MySqlBoundary.Check(s, database, visible) is null).ToList();
+        var refused = inside.Where(s => MySqlBoundary.Check(s, database, visible) is not null).ToList();
+        bool ok = passed.Count == 0 && refused.Count == 0;
+        return new SmokeCheck("mysql:boundary", ok, ok
+            ? $"held to {database}: refused all {outside.Count.ToString(CultureInfo.InvariantCulture)} reaches outside it"
+            : (passed.Count > 0 ? "let through: " + string.Join(" | ", passed) : "") + (refused.Count > 0 ? " refused: " + string.Join(" | ", refused) : ""));
     }
 
     private static SmokeCheck TypesCheck(SqlRun run)

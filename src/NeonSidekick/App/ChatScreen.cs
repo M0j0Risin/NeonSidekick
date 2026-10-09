@@ -5202,11 +5202,10 @@ internal sealed partial class ChatScreen
         return effective.OracleTools && oracle.Catalog().Connections.Count > 0;
     }
 
-    /// <summary>The eight MySQL tools (2026-09-30), <see cref="OracleTools"/>' twin, offered while <see cref="MySqlOffered"/> says so (headless too).</summary>
+    /// <summary>The MySQL tools (2026-09-30), <see cref="OracleTools"/>' twin, offered while <see cref="MySqlOffered"/> says so (headless too); <c>mysql_databases</c> gone 2026-10-09 with the lock to each connection's database.</summary>
     public static IReadOnlyList<AIFunction> MySqlTools(MySqlAccess mysql, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
     {
         new MySqlConnectionsTool(mysql, effective),
-        new MySqlDatabasesTool(mysql, effective),
         new MySqlTablesTool(mysql, effective),
         new MySqlColumnsTool(mysql, effective),
         new MySqlDescribeTool(mysql, effective),
@@ -5220,7 +5219,6 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlySet<string> MySqlToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
         MySqlConnectionsTool.ToolName,
-        MySqlDatabasesTool.ToolName,
         MySqlTablesTool.ToolName,
         MySqlColumnsTool.ToolName,
         MySqlDescribeTool.ToolName,

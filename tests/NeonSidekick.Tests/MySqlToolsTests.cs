@@ -35,7 +35,7 @@ public sealed class MySqlToolsTests
 
     /// <summary>A connection to a loopback port nothing listens on: the connect fails fast.</summary>
     private static MySqlNamedConnection Unreachable(string name) =>
-        new(name, new MySqlConnectionConfig { Host = "127.0.0.1", Port = 1, User = "reader", Password = "x", ConnectTimeoutSeconds = 1 }, "test");
+        new(name, new MySqlConnectionConfig { Host = "127.0.0.1", Port = 1, Database = "shop", User = "reader", Password = "x", ConnectTimeoutSeconds = 1 }, "test");
 
     [Fact]
     public void Names_AndSchemas_ArePinned()
@@ -44,13 +44,13 @@ public sealed class MySqlToolsTests
         Assert.Equal(MySqlToolNames.WithExecute.Order(StringComparer.Ordinal), ChatScreen.MySqlToolNames.Order(StringComparer.Ordinal));
         static string[] Properties(AIFunction tool) => tool.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray();
         Assert.Empty(Properties(Tool<MySqlConnectionsTool>()));
-        Assert.Equal(["connection"], Properties(Tool<MySqlDatabasesTool>()));
-        Assert.Equal(["connection", "database", "pattern"], Properties(Tool<MySqlTablesTool>()));
-        Assert.Equal(["table", "connection", "database"], Properties(Tool<MySqlDescribeTool>()));
-        Assert.Equal(["connection", "database", "table"], Properties(Tool<MySqlRelationshipsTool>()));
-        Assert.Equal(["pattern", "connection", "database"], Properties(Tool<MySqlColumnsTool>()));
-        Assert.Equal(["connection", "database", "table"], Properties(Tool<MySqlIndexesTool>()));
-        Assert.Equal(["sql", "connection", "database", "params", "max_rows"], Properties(Tool<MySqlQueryTool>()));
+        Assert.Equal(["connection", "pattern"], Properties(Tool<MySqlTablesTool>()));
+        Assert.Equal(["table", "connection"], Properties(Tool<MySqlDescribeTool>()));
+        Assert.Equal(["connection", "table"], Properties(Tool<MySqlRelationshipsTool>()));
+        Assert.Equal(["pattern", "connection"], Properties(Tool<MySqlColumnsTool>()));
+        Assert.Equal(["connection", "table"], Properties(Tool<MySqlIndexesTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<MySqlQueryTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<MySqlExecuteTool>()));
         Assert.Contains("LIMIT n", Tool<MySqlQueryTool>().JsonSchema.GetProperty("properties").GetProperty("sql").GetProperty("description").GetString());
     }
 
@@ -58,7 +58,6 @@ public sealed class MySqlToolsTests
     public async Task WithNoConnection_EveryServerTool_SaysHowToAddOne()
     {
         Assert.Equal(MySqlText.NoConnections, await Invoke<MySqlConnectionsTool>());
-        Assert.Equal(MySqlText.NoConnections, await Invoke<MySqlDatabasesTool>());
         Assert.Equal(MySqlText.NoConnections, await Invoke<MySqlTablesTool>());
         Assert.Equal(MySqlText.NoConnections, await Invoke<MySqlDescribeTool>(("table", "shop.orders")));
         Assert.Equal(MySqlText.NoConnections, await Invoke<MySqlRelationshipsTool>());
@@ -75,11 +74,11 @@ public sealed class MySqlToolsTests
         Assert.Equal(MySqlText.UnknownConnection("nope", "down, other"), await Invoke<MySqlQueryTool>(("sql", "SELECT 1"), ("connection", "nope")));
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT 1")));
         _settings.MySqlDefaultConnection = "other";
-        Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlDatabasesTool>());
+        Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlTablesTool>());
         Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlDescribeTool>(("table", "t")));
-        Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlIndexesTool>(("database", "shop")));
+        Assert.StartsWith("Error: could not connect to other: ", await Invoke<MySqlIndexesTool>());
 
-        _catalog = new MySqlCatalog([new MySqlNamedConnection("bare", new MySqlConnectionConfig { Host = "127.0.0.1", Port = 1, User = "u" }, "test")], []);
+        _catalog = new MySqlCatalog([new MySqlNamedConnection("bare", new MySqlConnectionConfig { Host = "127.0.0.1", Port = 1, Database = "shop", User = "u" }, "test")], []);
         Assert.Equal(MySqlText.ConnectFailed("bare", MySqlText.NoPassword("bare")), await Invoke<MySqlQueryTool>(("sql", "SELECT 1")));
     }
 
@@ -101,14 +100,37 @@ public sealed class MySqlToolsTests
         Assert.Equal(MySqlText.NoPattern, await Invoke<MySqlColumnsTool>());
     }
 
+    /// <summary>
+    /// The lock to the connection's database (2026-10-09): a call that still sends <c>database</c> is refused by every tool; the server's
+    /// own databases and a table named in another are refused before any connect, and a statement qualifying nothing but its own database
+    /// goes straight on (no names read); any other qualifier sends for the server's names first.
+    /// </summary>
+    [Fact]
+    public async Task EveryTool_KeepsToTheConnectionsDatabase()
+    {
+        _catalog = new MySqlCatalog([Unreachable("down")], []);
+
+        foreach (var tool in _tools)
+        {
+            Assert.Equal(MySqlText.NoDatabaseArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["sql"] = "SELECT 1", ["table"] = "t", ["pattern"] = "x", ["database"] = "payroll" })))!);
+        }
+
+        Assert.Equal(MySqlText.ServerCatalog("information_schema"), await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM information_schema.TABLES")));
+        Assert.Equal(MySqlText.ServerCatalog("mysql"), await Invoke<MySqlQueryTool>(("sql", "SELECT user FROM `mysql`.user")));
+        Assert.Equal(MySqlText.TableElsewhere("payroll", "shop"), await Invoke<MySqlDescribeTool>(("table", "payroll.salaries")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM shop.orders")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM payroll.salaries")));   // the names are read first
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlDescribeTool>(("table", "SHOP.orders")));
+    }
+
     [Fact]
     public async Task TheMention_TheHiddenConnections_TheCaps_AndTheGroup()
     {
         var all = new MySqlCatalog([Unreachable("shop"), Unreachable("secret")], []);
-        Assert.Equal(["MySQL · 127.0.0.1:1", "MySQL · 127.0.0.1:1"], ChatScreen.MySqlChoices(all).Select(i => i.Note));
+        Assert.Equal(["MySQL · 127.0.0.1:1 / shop", "MySQL · 127.0.0.1:1 / shop"], ChatScreen.MySqlChoices(all).Select(i => i.Note));
         _catalog = all.Offered(["shop"]);
         string listing = await Invoke<MySqlConnectionsTool>();
-        Assert.Contains("- shop (default): 127.0.0.1:1, user reader", listing);
+        Assert.Contains("- shop (default): 127.0.0.1:1 / shop, user reader", listing);
         Assert.EndsWith("\n" + MySqlText.HiddenConnections(1), listing);
         Assert.Equal(100, MySqlQueryTool.DefaultRows(new AppSettingsData()));
         Assert.Equal(600, MySqlTool.TimeoutSeconds(new AppSettingsData { MySqlQueryTimeoutSeconds = 9_999 }));
@@ -127,7 +149,7 @@ public sealed class MySqlToolsTests
         Assert.True(all.IndexOf(Assistant.OracleRule, StringComparison.Ordinal) < all.IndexOf(Assistant.MySqlRule, StringComparison.Ordinal));
         Assert.Contains("mysql_query reads the MySQL databases (not mysql or mariadb)", Assistant.ShellNativeRule(false, false, false, false, mysql: true));
         Assert.All(MySqlToolNames.All, name => Assert.True(NeonSidekick.Plans.PlanTools.Allowed(name), name));
-        var facts = new SystemPromptFacts(null, null, null, false, [], false, false, MySqlEnabled: true, MySqlTools: 8);
+        var facts = new SystemPromptFacts(null, null, null, false, [], false, false, MySqlEnabled: true, MySqlTools: 7);
         Assert.Contains(Assistant.MySqlRule, SystemPromptSummary.SystemPrompt(facts));
         var group = Assert.Single(SystemPromptSummary.ToolGroups([], [], [], [], false, mysql: _tools, mysqlEnabled: false), g => g.Label == ToolsText.MySqlTabTitle);
         Assert.Contains(SystemPromptSummary.MySqlOffSuffix, group.Note);

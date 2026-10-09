@@ -755,7 +755,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         string path = NeonSidekick.MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(_settings.ProfileDirectory);
-        File.WriteAllText(path, """{ "connections": { "shop": { "host": "localhost", "user": "reader" }, "billing": { "host": "db", "user": "ro" } } }""");
+        File.WriteAllText(path, """{ "connections": { "shop": { "host": "localhost", "database": "db", "user": "reader" }, "billing": { "host": "db", "database": "db", "user": "ro" } } }""");
         var (menu, _, _) = PaneMenu();
         OpenMySqlRow(5);
         Push(Keys.Enter);                                    // shop

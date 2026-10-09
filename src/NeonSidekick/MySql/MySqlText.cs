@@ -29,7 +29,7 @@ public static class MySqlText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string database = string.IsNullOrWhiteSpace(config.Database) ? "" : $" / {config.Database.Trim()}";
+        string database = $" / {config.Database?.Trim()}";
         string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(MySqlStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
@@ -45,7 +45,7 @@ public static class MySqlText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string where = "MySQL · " + config.Endpoint + (string.IsNullOrWhiteSpace(config.Database) ? "" : " / " + config.Database.Trim());
+        string where = "MySQL · " + config.Endpoint + " / " + config.Database?.Trim();
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 
@@ -61,7 +61,7 @@ public static class MySqlText
         else
         {
             var chosen = catalog.Find(null, defaultName);
-            sb.Append(SqlText.Count(catalog.Connections.Count, "MySQL connection")).Append(" (every MySQL tool takes one by name in \"connection\"; the default is used when it is left out):");
+            sb.Append(SqlText.Count(catalog.Connections.Count, "MySQL connection")).Append(" (every MySQL tool takes one by name in \"connection\"; the default is used when it is left out; each reaches its own database alone):");
             foreach (var connection in catalog.Connections)
             {
                 sb.Append('\n').Append(ConnectionLine(connection, ReferenceEquals(connection, chosen), writes));
@@ -90,6 +90,44 @@ public static class MySqlText
     public static string NotOneStatement(int count) => $"Error: the SQL is {Invariant(count)} statements; send exactly one SELECT per call (a WITH clause may lead it)";
     public static string NotASelect(string word) => $"Error: the SQL starts with {word}; the MySQL tools only read — send one SELECT (a WITH clause may lead it)";
     public static string Forbidden(string what) => $"Error: the SELECT uses {what}, which the MySQL tools refuse (it reaches outside this database or changes state a rollback cannot undo)";
+
+    // ─── the connection's database (2026-10-09, MySqlBoundary) ──────────────────
+
+    /// <summary>An entry with no <c>database</c>: a connection reaches that one database alone, so it must name it. Pinned.</summary>
+    public const string NoDatabase = "no \"database\" is given; a connection reaches one database, so it must name it";
+
+    /// <summary>A qualifier naming another database on the server (or an alias spelled like one, which a lexer cannot tell apart). Pinned.</summary>
+    public static string OtherDatabase(string named, string database) =>
+        $"Error: the SQL names '{named}', another database on this server (an alias spelled like it reads the same: rename it), but this connection reaches '{database}' alone; another database needs a connection of its own, which the user adds (mysql_connections lists them)";
+
+    /// <summary>A qualifier naming one of the server's own databases (information_schema, mysql, performance_schema, sys). Pinned.</summary>
+    public static string ServerCatalog(string named) =>
+        $"Error: the SQL reads {named}, which describes the whole server rather than this connection's database; the MySQL tools keep to the connection's database (mysql_tables, mysql_columns and mysql_describe read its catalog)";
+
+    /// <summary>A call that still sends <c>database</c>. Pinned.</summary>
+    public const string NoDatabaseArgument =
+        "Error: \"database\" is not an argument: a MySQL connection reaches its own database alone (mysql_connections names each one's); another database needs a connection of its own, which the user adds";
+
+    /// <summary>A table named in another database (<c>payroll.salaries</c> as a catalog tool's <c>table</c>). Pinned.</summary>
+    public static string TableElsewhere(string named, string database) =>
+        $"Error: '{named}' is another database, but this connection reaches '{database}' alone; give the table as name or {database}.name";
+
+    /// <summary>The backstop after the sign-in: the session's database is not the entry's. Pinned.</summary>
+    public static string WrongDatabase(string configured, string opened) =>
+        $"the session is in '{opened}' rather than the connection's database '{configured}', so nothing was run";
+
+    /// <summary>What else the account could open (the wizard's test and <c>--mysql-check</c>, 2026-10-09). Pinned.</summary>
+    public static string Reach(string database, IReadOnlyList<string> others)
+    {
+        ArgumentNullException.ThrowIfNull(others);
+        if (others.Count == 0)
+        {
+            return $"The account sees no other database: the server holds it to {database} too.";
+        }
+
+        string names = string.Join(", ", others.Take(10)) + (others.Count > 10 ? $" and {Invariant(others.Count - 10)} more" : "");
+        return $"The account could also reach {names}. The tools keep to {database}; an account granted only it is the lock the server keeps too.";
+    }
 
     // ─── arguments ──────────────────────────────────────────────────────────────
 

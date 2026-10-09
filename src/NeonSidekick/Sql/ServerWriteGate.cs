@@ -266,6 +266,44 @@ public static class ServerWriteGate
         return false;
     }
 
+    /// <summary>
+    /// The first qualifier in a statement that is one of <paramref name="names"/> (2026-10-09, the lock to a connection's place): the
+    /// head of an <c>x.y</c> chain, as <see cref="NamesElsewhere"/> reads them, compared case-blind. A lexer cannot tell a table's alias
+    /// (<c>t.col</c>) from a database's or schema's name (<c>payroll.salaries</c>), so the caller hands the names that exist on the
+    /// server (and the server's own): a head among them reaches that place — or is an alias spelled like it, which the refusal says
+    /// to rename. Null when none is.
+    /// </summary>
+    public static string? NamesAny(IReadOnlyList<GateToken> tokens, IReadOnlySet<string> names, IReadOnlySet<string>? members = null)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return Qualifiers(tokens, members).FirstOrDefault(names.Contains);
+    }
+
+    /// <summary>Every qualifier in a statement, in order: the heads of its <c>x.y</c> chains, as <see cref="NamesAny"/> reads them.</summary>
+    public static IReadOnlyList<string> Qualifiers(IReadOnlyList<GateToken> tokens, IReadOnlySet<string>? members = null)
+    {
+        ArgumentNullException.ThrowIfNull(tokens);
+        var heads = new List<string>();
+        for (int i = 0; i + 1 < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".")
+                || (i > 0 && (tokens[i - 1].IsSymbol(".") || tokens[i - 1].IsSymbol(":"))))
+            {
+                continue;
+            }
+
+            if (members is not null && i + 2 < tokens.Count && tokens[i + 2].Kind == GateTokenKind.Word && members.Contains(tokens[i + 2].Text))
+            {
+                continue;
+            }
+
+            heads.Add(t.Text);
+        }
+
+        return heads;
+    }
+
     /// <summary>A word list as a set, ordinal (the lexers upper-case words).</summary>
     public static IReadOnlySet<string> Words(params string[] words) => new HashSet<string>(words, StringComparer.Ordinal);
 

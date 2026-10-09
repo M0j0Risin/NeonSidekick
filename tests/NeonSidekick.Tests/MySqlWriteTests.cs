@@ -132,18 +132,40 @@ public sealed class MySqlWriteGateTests
     [InlineData("CREATE TRIGGER tr AFTER INSERT ON t FOR EACH ROW FOLLOWS other BEGIN INSERT INTO log VALUES (NEW.id); END")]
     public void Allows_ABodyItReads(string sql) => Assert.Null(MySqlWriteGate.Check(sql, Every));
 
-    /// <summary>What may reach past the database a call names (the review, 2026-10-05): any qualifier but the place, a table's too.</summary>
+    /// <summary>
+    /// What reaches past the connection's database (the review, 2026-10-05, asked about every time; refused since 2026-10-09,
+    /// <see cref="MySqlBoundary"/>): a qualifier among the server's database names, or one of its own, whatever the case; a table's alias
+    /// or the connection's own database passes.
+    /// </summary>
     [Theory]
-    [InlineData("DELETE FROM payroll.salaries WHERE id = 1", "scratch", true)]
-    [InlineData("DELETE FROM salaries WHERE id = 1", "scratch", false)]
-    [InlineData("UPDATE scratch.t SET a = 1", "SCRATCH", false)]
-    [InlineData("UPDATE `payroll`.t SET a = 1", "scratch", true)]
-    [InlineData("UPDATE t SET t.a = 1", "scratch", true)]
-    [InlineData("INSERT INTO t VALUES (1.5)", "scratch", false)]
-    public void NamesElsewhere_AnyQualifierButThePlace(string sql, string place, bool elsewhere)
+    [InlineData("DELETE FROM payroll.salaries WHERE id = 1", "payroll")]
+    [InlineData("DELETE FROM salaries WHERE id = 1", null)]
+    [InlineData("UPDATE SCRATCH.t SET a = 1", null)]
+    [InlineData("UPDATE `Payroll`.t SET a = 1", "payroll")]
+    [InlineData("UPDATE t SET t.a = 1", null)]
+    [InlineData("SELECT o.id FROM orders o JOIN payroll.salaries s ON s.id = o.id", "payroll")]
+    [InlineData("SELECT payroll.f(1)", "payroll")]
+    [InlineData("SELECT * FROM t AS payroll WHERE payroll.a = 1", "payroll")]
+    [InlineData("INSERT INTO t VALUES (1.5)", null)]
+    [InlineData("SELECT 'payroll.salaries'", null)]
+    public void TheBoundary_RefusesAnotherDatabase(string sql, string? other)
     {
-        Assert.Equal(elsewhere, MySqlWriteGate.NamesElsewhere(sql, place));
-        Assert.Equal(elsewhere, MySqlStatementKinds.Family.NamesElsewhere!(sql, place));
+        string[] visible = ["scratch", "payroll", "information_schema"];
+        Assert.Equal(other is null ? null : MySqlText.OtherDatabase(other, "scratch"), MySqlBoundary.Check(sql, "scratch", visible));
+        Assert.Null(MySqlStatementKinds.Family.NamesElsewhere);
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM information_schema.TABLES", "information_schema")]
+    [InlineData("SELECT * FROM `performance_schema`.threads", "performance_schema")]
+    [InlineData("SELECT user FROM mysql.user", "mysql")]
+    [InlineData("SELECT * FROM sys.session", "sys")]
+    public void TheBoundary_RefusesTheServersOwnDatabases_WithoutAskingTheServer(string sql, string named)
+    {
+        Assert.Equal(MySqlText.ServerCatalog(named), MySqlBoundary.Qualifiers(sql, "scratch").Refused);
+        Assert.Equal(MySqlText.ServerCatalog(named), MySqlBoundary.Check(sql, "scratch", []));
+        Assert.Empty(MySqlBoundary.Qualifiers("SELECT * FROM scratch.t WHERE scratch.t.a = 1", "Scratch").Heads);   // nothing to ask the server
+        Assert.Equal(["T"], MySqlBoundary.Qualifiers("SELECT t.a FROM t", "scratch").Heads);
     }
 
     [Fact]
@@ -168,7 +190,7 @@ public sealed class MySqlExecuteTests
         new(() => new MySqlCatalog([new MySqlNamedConnection("shop", Config("readwrite"), "x.json"), new MySqlNamedConnection("ro", Config(null), "x.json")], []).Offered(_settings.MySqlConnectionsOffered));
 
     [Fact]
-    public async Task TheTool_ChecksInOrder_ThenAsks_PerConnectionAndDatabase()
+    public async Task TheTool_ChecksInOrder_ThenAsks_PerConnection()
     {
         var asked = new List<(string Connection, string Place, string Sql)>();
         var tool = new MySqlExecuteTool(Access(), () => _settings, (_, connection, place, sql, _) =>
@@ -177,19 +199,25 @@ public sealed class MySqlExecuteTests
             return Task.FromResult<bool?>(false);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, null, [new("id", 1L)], null, CancellationToken.None));
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t", "shop", "archive", [], null, CancellationToken.None));
-        Assert.Equal([("shop", "sales", "DELETE FROM t WHERE id = @id"), ("shop", "archive", "DELETE FROM t")], asked);
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM sales.t", "shop", [], null, CancellationToken.None));
+        Assert.Equal([("shop", "sales", "DELETE FROM t WHERE id = @id"), ("shop", "sales", "DELETE FROM sales.t")], asked);
+
+        // The server's own databases are refused before the pane (2026-10-09); another's name sends for the server's names first.
+        asked.Clear();
+        Assert.Equal(MySqlText.ServerCatalog("mysql"), await tool.RunAsync("DELETE FROM mysql.user", "shop", [], null, CancellationToken.None));
+        Assert.StartsWith("Error: could not connect to shop: ", await tool.RunAsync("DELETE FROM archive.t", "shop", [], null, CancellationToken.None));
+        Assert.Empty(asked);
 
         asked.Clear();
-        Assert.Equal(ServerWriteText.ReadOnlyConnection(MySqlStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", null, [], null, CancellationToken.None));
-        Assert.StartsWith("Error: the SQL uses GRANT", await tool.RunAsync("GRANT ALL ON t TO bob", null, null, [], null, CancellationToken.None));
-        Assert.StartsWith("Error: the SQL uses LOAD_FILE()", await tool.RunAsync("SELECT LOAD_FILE('/etc/passwd')", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyConnection(MySqlStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
+        Assert.StartsWith("Error: the SQL uses GRANT", await tool.RunAsync("GRANT ALL ON t TO bob", null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: the SQL uses LOAD_FILE()", await tool.RunAsync("SELECT LOAD_FILE('/etc/passwd')", null, [], null, CancellationToken.None));
         _settings.MySqlMode = "read-only";
-        Assert.Equal(ServerWriteText.ReadOnlyMode(MySqlStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyMode(MySqlStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         Assert.Empty(asked);
         _settings.MySqlMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(MySqlStatementKinds.Family), await new MySqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(MySqlStatementKinds.Family), await new MySqlExecuteTool(Access(), () => _settings, null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -249,26 +277,26 @@ public sealed class LiveMySqlWriteTests
         string table = "ns_write_" + id, proc = "ns_bump_" + id;
         try
         {
-            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id INT PRIMARY KEY, a VARCHAR(10))", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Changed 2 rows in live/", await tool.RunAsync($"INSERT INTO {table} VALUES (1, @a), (2, 'b')", null, null, [new("a", "x")], null, CancellationToken.None));
+            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id INT PRIMARY KEY, a VARCHAR(10))", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Changed 2 rows in live/", await tool.RunAsync($"INSERT INTO {table} VALUES (1, @a), (2, 'b')", null, [new("a", "x")], null, CancellationToken.None));
             Assert.StartsWith("Ran it", await tool.RunAsync(
                 $"CREATE PROCEDURE {proc}(IN n INT) BEGIN DECLARE i INT DEFAULT 0; WHILE i < n DO UPDATE {table} SET a = CONCAT(a, '+'); SET i = i + 1; END WHILE; END",
-                null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Ran it", await tool.RunAsync($"CALL {proc}(2)", null, null, [], null, CancellationToken.None));
-            string rows = await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, null, [], null, CancellationToken.None);
+                null, [], null, CancellationToken.None));
+            Assert.StartsWith("Ran it", await tool.RunAsync($"CALL {proc}(2)", null, [], null, CancellationToken.None));
+            string rows = await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, [], null, CancellationToken.None);
             Assert.Contains("| x++ |", rows);
             Assert.Equal(4, asked.Count);   // the read asked nothing
-            Assert.StartsWith("Error: the server refused it", await tool.RunAsync($"INSERT INTO {table} VALUES (1, 'dup')", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, null, [], null, CancellationToken.None));
+            Assert.StartsWith("Error: the server refused the SQL (live): ", await tool.RunAsync($"INSERT INTO {table} VALUES (1, 'dup')", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, [], null, CancellationToken.None));
         }
         finally
         {
-            await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, null, [], null, CancellationToken.None);
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, null, [], null, CancellationToken.None));
+            await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, [], null, CancellationToken.None);
+            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None));
         }
 
         var (readOnly, roAsked) = Tool(null);
-        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE ns_never (a INT)", null, null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE ns_never (a INT)", null, [], null, CancellationToken.None));
         Assert.Empty(roAsked);
     }
 }

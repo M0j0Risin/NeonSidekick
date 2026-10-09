@@ -67,8 +67,8 @@ public sealed class MySqlConfigFile
     public const string WindowsEmptyText =
         "{\n" +
         "  // One entry per connection. Its name is what the model passes as \"connection\", and what %name picks on the input\n" +
-        "  // line. \"host\" and \"user\" are required. Remove the leading // from an example to use it, and put it inside\n" +
-        "  // \"connections\" below.\n" +
+        "  // line. \"host\", \"database\" and \"user\" are required: a connection reaches its database alone, and another database\n" +
+        "  // is another entry. Remove the leading // from an example to use it, and put it inside \"connections\" below.\n" +
         "  //\n" +
         "  // MySQL or MariaDB, the password kept in this file: typed in plain text, it is encrypted (\"dpapi:…\") when the app\n" +
         "  // next starts or reads this file.\n" +
@@ -84,10 +84,10 @@ public sealed class MySqlConfigFile
         "  //   \"sslMode\": \"verify-full\"\n" +
         "  // },\n" +
         "  //\n" +
-        "  // port: 3306 by default; database: the one a call works in when it names none (the listings then cover them all);\n" +
+        "  // port: 3306 by default; database: the one the connection reaches (the tools never leave it);\n" +
         "  // sslMode: preferred (the default), required, verify-ca, verify-full or none; allowPublicKeyRetrieval: true only for a\n" +
         "  // caching_sha2_password account over a connection without TLS; connectTimeoutSeconds: 1 to 120 (15 by default).\n" +
-        "  // access: read (the default) or readwrite — mysql_execute may change a readwrite connection's databases while MySQL\n" +
+        "  // access: read (the default) or readwrite — mysql_execute may change a readwrite connection's database while MySQL\n" +
         "  // mode is read-write, each change allowed by you. An account with SELECT grants alone is the real guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";

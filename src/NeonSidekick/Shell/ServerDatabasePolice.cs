@@ -48,7 +48,8 @@ public static partial class ServerDatabasePolice
 
     /// <summary>
     /// The guard for the families whose tools are on in <paramref name="effective"/>, their hosts from every connection their files
-    /// name (offered or not); null when none is on.
+    /// name (offered or not, and skipped with a problem too — 2026-10-09: an entry from before the database was required is no
+    /// connection the tools use, but its server is still one the shell must not reach); null when none is on.
     /// </summary>
     public static ServerDatabaseGuard? For(AppSettingsData effective, string profileDirectory, string? storageDirectory)
     {
@@ -57,30 +58,37 @@ public static partial class ServerDatabasePolice
         var families = new List<ServerDatabaseGuard.Family>();
         if (effective.SqlTools)
         {
-            var hosts = Sql.SqlConfigFile.LoadCatalog(profileDirectory, storageDirectory).Connections.SelectMany(c => SqlServerHosts(c.Config.Server));
+            var catalog = Sql.SqlConfigFile.LoadCatalog(profileDirectory, storageDirectory);
+            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<Sql.SqlConnectionConfig>(catalog.Problems)).SelectMany(c => SqlServerHosts(c.Server));
             families.Add(new("SQL Server", Llm.Tools.SqlQueryTool.ToolName, Llm.Tools.SqlExecuteTool.ToolName, SqlServerWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         if (effective.OracleTools)
         {
-            var hosts = Oracle.OracleConfigFile.LoadCatalog(profileDirectory, storageDirectory).Connections.SelectMany(c => OracleHosts(c.Config.DataSource));
+            var catalog = Oracle.OracleConfigFile.LoadCatalog(profileDirectory, storageDirectory);
+            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<Oracle.OracleConnectionConfig>(catalog.Problems)).SelectMany(c => OracleHosts(c.DataSource));
             families.Add(new("Oracle", Llm.Tools.OracleQueryTool.ToolName, Llm.Tools.OracleExecuteTool.ToolName, OracleWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         if (effective.MySqlTools)
         {
-            var hosts = MySql.MySqlConfigFile.LoadCatalog(profileDirectory, storageDirectory).Connections.SelectMany(c => Hosts(c.Config.Host, c.Config.Port ?? MySql.MySqlConnectionConfig.DefaultPort));
+            var catalog = MySql.MySqlConfigFile.LoadCatalog(profileDirectory, storageDirectory);
+            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<MySql.MySqlConnectionConfig>(catalog.Problems)).SelectMany(c => Hosts(c.Host, c.Port ?? MySql.MySqlConnectionConfig.DefaultPort));
             families.Add(new("MySQL", Llm.Tools.MySqlQueryTool.ToolName, Llm.Tools.MySqlExecuteTool.ToolName, MySqlWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         if (effective.PostgresTools)
         {
-            var hosts = Postgres.PostgresConfigFile.LoadCatalog(profileDirectory, storageDirectory).Connections.SelectMany(c => Hosts(c.Config.Host, c.Config.Port ?? Postgres.PostgresConnectionConfig.DefaultPort));
+            var catalog = Postgres.PostgresConfigFile.LoadCatalog(profileDirectory, storageDirectory);
+            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<Postgres.PostgresConnectionConfig>(catalog.Problems)).SelectMany(c => Hosts(c.Host, c.Port ?? Postgres.PostgresConnectionConfig.DefaultPort));
             families.Add(new("PostgreSQL", Llm.Tools.PostgresQueryTool.ToolName, Llm.Tools.PostgresExecuteTool.ToolName, PostgresWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         return families.Count == 0 ? null : new ServerDatabaseGuard(families);
     }
+
+    /// <summary>The entries a family's loader skipped with a problem, as read (a blank name or an unreadable file has none).</summary>
+    private static IEnumerable<T> Skipped<T>(IEnumerable<Sql.SqlConfigProblem> problems) where T : class => problems.Select(p => p.Entry).OfType<T>();
 
     /// <summary>What a host matches as: a loopback one only with its port (<c>host:port</c> and SQL Server's <c>host,port</c>), else the host alone.</summary>
     public static IEnumerable<string> Hosts(string? host, int port)

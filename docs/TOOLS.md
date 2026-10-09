@@ -324,11 +324,11 @@ With *Oracle mode* set to `read-write`, the model gets `oracle_execute` beside t
 
 ## MySQL and MariaDB
 
-The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (fully managed, MIT), over `mysql.json` (home and profile files, as for SQL).
+The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (fully managed, MIT), over `mysql.json` (home and profile files, as for SQL). As for SQL, each connection reaches one database, its own.
 
 ### Connection settings
 
-* **`host`**, **`port`** (3306 by default), **`database`** (the default for calls; without one, the listings cover every database the user sees).
+* **`host`**, **`port`** (3306 by default), **`database`** (required: the one database the connection reaches).
 * **`user`**, and **`passwordStore`** `file` or `credman` (`NeonSidekick/mysql/<connection_name>`), as for SQL.
 * **`sslMode`**: `preferred` (default), `required`, `verify-ca`, `verify-full` or `none`.
 * **`allowPublicKeyRetrieval`**: `true` only for a `caching_sha2_password` account without TLS (off by default; a man in the middle could supply its own key).
@@ -357,7 +357,7 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 }
 ```
 
-**MySQL add/edit connection** (the MySQL tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, and a warning when `SHOW GRANTS` allows changes. It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
+**MySQL add/edit connection** (the MySQL tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when `SHOW GRANTS` allows changes, and the other databases the account could reach (or that it sees none). It asks for the access too (`read` or `readwrite`). **MySQL set password** updates a password.
 
 ### Safety
 
@@ -366,23 +366,33 @@ The same tools for MySQL 8.0.16+ and MariaDB 10.2+, through MySqlConnector (full
 3. **The transaction.** `START TRANSACTION READ ONLY`, always rolled back.
 4. **The account.** Give the user `SELECT` grants alone.
 
+### The connection's database (MySQL)
+
+A MySQL connection reaches its own `database` and nothing else on the server, as SQL's does:
+
+* No tool takes a database, and there's no tool that lists the server's databases. A call that still sends `database` is refused, and so is a catalog tool's `table` in another database (`payroll.salaries`).
+* The session stays in its database (`USE` is refused by both gates). If it's in any other, nothing runs.
+* A MySQL database is reached by qualifying a name (`payroll.salaries`, `` `payroll`.salaries ``, `payroll.f()`), and a lexer can't tell that from a table's alias (`t.col`). So when a statement qualifies a name with anything but the connection's own database, the tools first read the names of the databases the account can see, and refuse a qualifier among them. An alias spelled like another database's name is refused too; rename it. A statement that qualifies nothing, or only its own database, asks the server nothing more.
+* The server's own databases are refused as a qualifier whatever the account sees: `information_schema` (every database's tables), `performance_schema` (other sessions' statements), `mysql` (the accounts) and `sys`. The catalog tools read the connection's own database instead.
+
+What the text can't show (a view or routine in the database that reads another) stays the account's to guard. The wizard's test and `--mysql-check` name the other databases the account could reach. An account granted only its database is the lock the server keeps too.
+
 | Tool | Arguments | What it does |
 |---|---|---|
 | `mysql_connections` | — | The named connections (host, database, user, description), the default marked. Touches no server. |
-| `mysql_databases` | `connection?` | The databases the account can see, with table and view counts and character set. |
-| `mysql_tables` | `connection?, database?, pattern?` | Tables and views as `database.name`, with kind, approximate rows and comment. |
-| `mysql_columns` | `pattern, connection?, database?` | Every column whose name matches: table, type, nullability, comment. |
-| `mysql_describe` | `table, connection?, database?` | One table or view: comment, columns (type, nullability, auto_increment, default, key, comment), foreign keys both ways, indexes, CHECK constraints and triggers. |
-| `mysql_relationships` | `connection?, database?, table?` | Foreign-key join paths: a database's or a table's. |
-| `mysql_indexes` | `connection?, database?, table?` | Indexes: kind, key columns, cardinality, and reads and writes since restart where `performance_schema` allows. |
-| `mysql_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` as for SQL (`@id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
-| `mysql_execute` | `sql, connection?, database?, params?, max_rows?` | Only under *MySQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *MySQL statements allowed* ticks. Answers with the rows changed and any rows the statement returned (MariaDB's `RETURNING`, `ANALYZE TABLE`'s report). |
+| `mysql_tables` | `connection?, pattern?` | Tables and views as `database.name`, with kind, approximate rows and comment. |
+| `mysql_columns` | `pattern, connection?` | Every column whose name matches: table, type, nullability, comment. |
+| `mysql_describe` | `table, connection?` | One table or view: comment, columns (type, nullability, auto_increment, default, key, comment), foreign keys both ways, indexes, CHECK constraints and triggers. |
+| `mysql_relationships` | `connection?, table?` | Foreign-key join paths: the database's or a table's. |
+| `mysql_indexes` | `connection?, table?` | Indexes: kind, key columns, cardinality, and reads and writes since restart where `performance_schema` allows. |
+| `mysql_query` | `sql, connection?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` as for SQL (`@id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+| `mysql_execute` | `sql, connection?, params?, max_rows?` | Only under *MySQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *MySQL statements allowed* ticks. Answers with the rows changed and any rows the statement returned (MariaDB's `RETURNING`, `ANALYZE TABLE`'s report). |
 
-`--mysql-check <connection>` proves the tools against a real server on the published exe (every type, the gate, the session, the transaction, a cancel and a timeout).
+`--mysql-check <connection>` proves the tools against a real server on the published exe (every type, the gate, the session, the lock to the connection's database and the other databases the account could reach, the transaction, a cancel and a timeout).
 
 ### Changes
 
-With *MySQL mode* set to `read-write`, the model gets `mysql_execute` beside the eight reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
+With *MySQL mode* set to `read-write`, the model gets `mysql_execute` beside the seven reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
 
 1. **The kinds.** *MySQL statements allowed* decides which kinds of statement may run; a statement needs every kind it does, and the refusal names the kinds that are ticked.
 
@@ -398,7 +408,7 @@ With *MySQL mode* set to `read-write`, the model gets `mysql_execute` beside the
    | reading | `SELECT`: never asks, and runs as `mysql_query` does (read-only, rolled back) once its gate passes it too | ✓ |
 
 2. **The gate.** One statement per call, lexed by the same rules as the reading gate (executable comments still refused). A `CREATE PROCEDURE`, `FUNCTION` or `TRIGGER` body between `BEGIN` and its `END` may hold its own `;`s; a body with a column, parameter or label named `begin` or `end` is refused until the name is in backticks. An allow-list: a statement it doesn't know is refused. Always refused: `START TRANSACTION`/`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`XA` (each call is its own transaction), `GRANT`/`REVOKE`, users and roles, `DEFINER =`, `SET`/`USE`, `PREPARE`/`EXECUTE`, `LOAD DATA`, `INTO OUTFILE`/`DUMPFILE`, `HANDLER`, `DO`, `LOCK`/`UNLOCK`, `FLUSH`, `KILL`, `SHUTDOWN`, `RESET`, `PURGE`, `INSTALL`, `CREATE`/`DROP` of a database, server, tablespace or event, and the reading gate's denied functions (MariaDB's `NEXTVAL`/`SETVAL` are allowed here).
-3. **Your allow.** Every change asks on the pane, as for [SQL](#changes); *Allow for this session* covers that connection and database only. A statement that qualifies a name with anything but the database (`payroll.salaries`, and so a table's `t.col` too) is asked about every time, whatever was allowed.
+3. **Your allow.** Every change asks on the pane, as for [SQL](#changes); *Allow for this session* covers that connection only. A statement that reaches another database never gets this far: it's refused (see [The connection's database (MySQL)](#the-connections-database-mysql)).
 4. **The run.** The session starts as for a read (`sql_mode` without `NO_BACKSLASH_ESCAPES`/`ANSI_QUOTES`, the statement cap) but with no transaction of the app's: the statement commits as it runs (autocommit; DDL commits anyway). MariaDB caps every statement's run time; MySQL caps a `SELECT` only, and the query timeout stops the rest. A failed, timed-out or cancelled statement changes nothing.
 5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
 6. **The account.** It's still the real guard. Give a `readwrite` connection an account with only the grants you want the model to use.

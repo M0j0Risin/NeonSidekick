@@ -6,7 +6,7 @@ using NeonSidekick.Sql;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>mysql_columns(pattern, connection?, database?)</c>: every table and view column whose name matches — where a value lives before the model guesses a table — with its type, nullability and comment.</summary>
+/// <summary><c>mysql_columns(pattern, connection?)</c>: every table and view column whose name matches — where a value lives before the model guesses a table — with its type, nullability and comment.</summary>
 public sealed class MySqlColumnsTool : MySqlTool
 {
     public const string ToolName = "mysql_columns";
@@ -18,8 +18,7 @@ public sealed class MySqlColumnsTool : MySqlTool
           "type": "object",
           "properties": {
             "pattern": { "type": "string", "description": "The column name, or part of it (email, customer_id), or a LIKE pattern with %; case-insensitive." },
-            {{ConnectionProperty}},
-            "database": { "type": "string", "description": "Only this database's tables and views; leave it out for the connection's own (or every one, when it has none)." }
+            {{ConnectionProperty}}
           },
           "required": ["pattern"]
         }
@@ -37,20 +36,20 @@ public sealed class MySqlColumnsTool : MySqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public async Task<string> DescribeAsync(string pattern, string? connection, string? database, CancellationToken cancellationToken)
+    public async Task<string> DescribeAsync(string pattern, string? connection, CancellationToken cancellationToken)
     {
         if (OracleTablesTool.LikePattern(pattern) is not { } like)
         {
             return MySqlText.NoPattern;
         }
 
-        var run = await CatalogAsync(connection, [MySqlCatalogQueries.Columns], [new SqlParameterValue("pattern", like), new SqlParameterValue("database", database)], cancellationToken).ConfigureAwait(false);
-        return run.Outcome == SqlOutcome.Ok ? MySqlText.Columns(pattern.Trim(), run with { Database = database ?? run.Database }, Files.WorkingDirectory.MaxReadChars) : MySqlText.Error(run);
+        var run = await CatalogAsync(connection, [MySqlCatalogQueries.Columns], [new SqlParameterValue("pattern", like)], cancellationToken).ConfigureAwait(false);
+        return run.Outcome == SqlOutcome.Ok ? MySqlText.Columns(pattern.Trim(), run, Files.WorkingDirectory.MaxReadChars) : MySqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return await DescribeAsync(ToolArguments.ReadString(arguments, PatternArgument), Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), cancellationToken).ConfigureAwait(false);
+        return await DescribeAsync(ToolArguments.ReadString(arguments, PatternArgument), Optional(arguments, ConnectionArgument), cancellationToken).ConfigureAwait(false);
     }
 }

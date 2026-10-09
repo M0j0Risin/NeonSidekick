@@ -7,8 +7,8 @@ using NeonSidekick.Sql;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>mysql_query(sql, connection?, database?, params?, max_rows?)</c>: one read-only SELECT (a WITH clause may lead it), passed by
-/// <see cref="MySqlReadOnlyGate"/> first, then run in a hardened session and a read-only transaction that is rolled back, with the
+/// <c>mysql_query(sql, connection?, params?, max_rows?)</c>: one read-only SELECT (a WITH clause may lead it), passed by
+/// <see cref="MySqlReadOnlyGate"/> first and held to the connection's database (<see cref="MySqlTool.OutsideAsync"/>, 2026-10-09), then run in a hardened session and a read-only transaction that is rolled back, with the
 /// setting's timeout; the rows as a Markdown table under a header that says when the cap cut it. <c>params</c> is one object, each
 /// name bound as <c>@name</c> — the values never spliced into the text.
 /// </summary>
@@ -29,7 +29,6 @@ public sealed class MySqlQueryTool : MySqlTool
           "properties": {
             "sql": { "type": "string", "description": "One MySQL SELECT (LIMIT n, not TOP); a WITH clause may lead it. No INSERT, UPDATE, DELETE, DDL, CALL, INTO, FOR UPDATE, /*! */ comments or second statement." },
             {{ConnectionProperty}},
-            "database": { "type": "string", "description": "The database unqualified names resolve in; leave it out for the connection's own." },
             "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 101} for @id; strings, numbers, true, false or null." },
             "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
           },
@@ -57,7 +56,7 @@ public sealed class MySqlQueryTool : MySqlTool
         return Math.Clamp(effective.MySqlQueryMaxRows, MinRows, MaxRows);
     }
 
-    public async Task<string> RunAsync(string sql, string? connection, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    public async Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -72,11 +71,17 @@ public sealed class MySqlQueryTool : MySqlTool
             return refused;
         }
 
-        var run = await Server.RunAsync(connection, Effective.MySqlDefaultConnection, database, [MySqlReadOnlyGate.Body(sql)], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        string body = MySqlReadOnlyGate.Body(sql);
+        if (await OutsideAsync(body, connection, cancellationToken).ConfigureAwait(false) is { } outside)
+        {
+            return outside;
+        }
+
+        var run = await Server.RunAsync(connection, Effective.MySqlDefaultConnection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? MySqlText.Query(run, rows, SqlTool.ResultChars(Effective)) : MySqlText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, MaxRowsArgument, out var max, out var raw))
@@ -101,6 +106,6 @@ public sealed class MySqlQueryTool : MySqlTool
         }
 
         string sql = ToolArguments.ReadString(arguments, SqlArgument);
-        return await RunAsync(sql, Optional(arguments, ConnectionArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        return await RunAsync(sql, Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
     }
 }

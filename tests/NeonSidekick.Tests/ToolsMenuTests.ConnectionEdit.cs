@@ -142,7 +142,7 @@ public partial class ToolsMenuTests
                 break;
             case "mysql":
                 path = NeonSidekick.MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-                File.WriteAllText(path, "{ \"connections\": { // mine\n\"old\": { \"host\": \"localhost\", \"user\": \"neon\", \"password\": \"pw\" } } }");
+                File.WriteAllText(path, "{ \"connections\": { // mine\n\"old\": { \"host\": \"localhost\", \"database\": \"shop\", \"user\": \"neon\", \"password\": \"pw\" } } }");
                 names = () => NeonSidekick.MySql.MySqlConfigFile.Load(path).Connections.Select(c => c.Name).ToList();
                 password = () => NeonSidekick.MySql.MySqlSecrets.Resolve(NeonSidekick.MySql.MySqlConfigFile.Load(path).Connections[0]).Value;
                 open = () => OpenMySqlRow(6);

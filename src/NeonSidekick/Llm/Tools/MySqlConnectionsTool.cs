@@ -27,6 +27,6 @@ public sealed class MySqlConnectionsTool : MySqlTool
 
     public string Describe() => MySqlText.Connections(Server.Catalog(), Effective.MySqlDefaultConnection, DatabaseWriteModes.IsReadWrite(Effective.MySqlMode));
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+    protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         new(Describe());
 }

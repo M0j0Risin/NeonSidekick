@@ -41,7 +41,11 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
     /// <summary>The TCP port, 1 to 65535; <see cref="DefaultPort"/> when absent.</summary>
     public int? Port { get; set; }
 
-    /// <summary>The database a call works in when it names none; the listings then cover every database the user can see.</summary>
+    /// <summary>
+    /// The one database the connection reaches (required since 2026-10-09, the user's call, SQL Server's lock carried over: no tool takes
+    /// another, <see cref="MySqlBoundary"/> refuses a statement that names another or the server's own, and another database is another
+    /// connection).
+    /// </summary>
     public string? Database { get; set; }
 
     /// <summary>The database user.</summary>
@@ -87,7 +91,7 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
     [JsonIgnore]
     public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
-    /// <summary>The reason this entry cannot connect, or null: no host, no user, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
+    /// <summary>The reason this entry cannot connect, or null: no host, no database, no user, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
     [JsonIgnore]
     public string? Problem
     {
@@ -96,6 +100,11 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
             if (string.IsNullOrWhiteSpace(Host))
             {
                 return MySqlText.NoHost;
+            }
+
+            if (string.IsNullOrWhiteSpace(Database))
+            {
+                return MySqlText.NoDatabase;
             }
 
             if (string.IsNullOrWhiteSpace(User))
@@ -164,11 +173,7 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
                 _ => MySqlSslMode.Preferred,
             },
         };
-        if (!string.IsNullOrWhiteSpace(Database))
-        {
-            builder.Database = Database.Trim();
-        }
-
+        builder.Database = Database?.Trim() ?? "";
         return builder;
     }
 }
