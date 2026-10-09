@@ -552,7 +552,7 @@ Every list pane works the same way: ↑/↓ move, Enter picks the highlighted ro
 | `/docker` | Enter opens · `r` refresh · type to filter |
 | `/youtube list` | Enter plays · `d` remove selected (asks) · `c` clear all (asks) · type to filter |
 | `/cmdlist` (*Shell allowed commands*) | Enter removes (asks) · `a` ask · `y` yolo · type to filter |
-| *Shell police forbidden strings* | the top row adds · Enter removes (asks) |
+| *Shell police forbidden strings* | the top row adds · Enter removes (asks) · `r` restore defaults (asks) |
 | `/police` | `s` the forbidden strings |
 | `/tools web` | `d` default · `h` httpclient · `c` chromium |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |

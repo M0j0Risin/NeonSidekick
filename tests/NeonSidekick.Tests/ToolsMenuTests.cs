@@ -2177,14 +2177,61 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["Format"], _settings.Current.ShellPoliceForbiddenStrings);
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", Output);
-        Assert.Contains(SettingsMenu.ForbiddenKeys, Output);
+        Assert.Contains("\n" + Titled(ForbiddenListTitle) + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", Output);
+        Assert.Contains(SettingsMenu.ForbiddenPaneKeys, Output);
         Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("rm -rf") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  rm -rf\n", Output);
         Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("Format") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  Format\n  rm -rf\n", Output);
         Assert.Contains("  · Shell police forbidden strings: RM -RF is already in the list\n", Output);
         Assert.Contains("  · Shell police forbidden strings: rm -rf removed\n", Output);
         Assert.Contains("\n▸ Shell police forbidden strings  1 string\n  Shell prefer native tools       on\n", Output);
         pane.Dispose();
+    }
+
+    /// <summary>The forbidden-strings list's title row on the pane: the crumb, then its restore-defaults button (2026-10-08).</summary>
+    private static string ForbiddenListTitle => ToolsText.Label + " › Shell police forbidden strings │ " + SettingsMenu.RestoreForbiddenButton + " ";
+
+    /// <summary>
+    /// The restore-defaults button (2026-10-08, the user's ask): R asks first and No keeps the list; Yes replaces it with the
+    /// defaults whole (the user's own string gone); R on the defaults says so and asks nothing.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheForbiddenStringsList_RestoreDefaults_AsksFirst_ReplacesTheList_SaysWhenAlreadyThere()
+    {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = ["rm -rf"]);
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('s'));                        // /police' strings button: the list
+        Push(Keys.Char('r'), Keys.Char('n'), Keys.Enter);   // asked, No: kept
+        Push(Keys.Char('r'), Keys.Char('y'), Keys.Enter);   // asked, Yes: the defaults
+        Push(Keys.Char('r'));                        // already the defaults: nothing asked
+        Push(Keys.Escape, Keys.Escape);              // the list, then the police page
+
+        await menu.ShowPoliceAsync(CancellationToken.None);
+
+        var defaults = NeonSidekick.Shell.ForbiddenStrings.Defaults;
+        Assert.Equal(defaults, _settings.Current.ShellPoliceForbiddenStrings);
+        Assert.DoesNotContain("rm -rf", _settings.Current.ShellPoliceForbiddenStrings);
+        Assert.Contains("\n" + Titled(ForbiddenListTitle) + "\n", Output);
+        Assert.Contains(SettingsMenu.ForbiddenPaneKeys, Output);
+        string question = SettingsMenu.RestoreForbiddenQuestion(1, defaults.Count);
+        int asked = Output.IndexOf(question, StringComparison.Ordinal);
+        int kept = Output.IndexOf("  · " + ChatScreen.KeptNotice + "\n", StringComparison.Ordinal);
+        int restored = Output.IndexOf("  · " + SettingsMenu.ForbiddenRestoredNotice(defaults.Count) + "\n", StringComparison.Ordinal);
+        int already = Output.IndexOf("  · " + SettingsMenu.ForbiddenAlreadyDefaultsNotice + "\n", StringComparison.Ordinal);
+        Assert.True(asked >= 0 && asked < kept && kept < restored && restored < already, Output);
+        Assert.True(Output.LastIndexOf(question, StringComparison.Ordinal) < restored, Output);   // never asked once the list is the defaults
+        pane.Dispose();
+    }
+
+    /// <summary>The restore-defaults wording (2026-10-08): an empty list is filled, a list with strings is replaced and says so.</summary>
+    [Fact]
+    public void RestoreForbiddenDefaults_Wording()
+    {
+        Assert.Equal("Restore the 49 default forbidden strings?", SettingsMenu.RestoreForbiddenQuestion(0, 49));
+        Assert.Equal("Replace the list (1 string) with the 49 default strings? Any you added are removed.", SettingsMenu.RestoreForbiddenQuestion(1, 49));
+        Assert.Equal("Replace the list (12 strings) with the 48 default strings? Any you added are removed.", SettingsMenu.RestoreForbiddenQuestion(12, 48));
+        Assert.Equal("Shell police forbidden strings: 49 defaults restored", SettingsMenu.ForbiddenRestoredNotice(49));
+        Assert.Equal("Shell police forbidden strings: already the defaults", SettingsMenu.ForbiddenAlreadyDefaultsNotice);
+        Assert.Equal([new MenuButton("↺ restore defaults", 'r')], SettingsMenu.ForbiddenButtons);
     }
 
     /// <summary>
@@ -2218,7 +2265,7 @@ public partial class ToolsMenuTests : IDisposable
         // The button counts the strings (2026-10-04): none before, one when the page comes back.
         string police = "\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (none) ") + "\n";
         string policeAfter = "\n" + Titled(ToolsText.Label + " › Shell police │ ≡ strings (1) ") + "\n";
-        string list = "\n" + Titled(ToolsText.Label + " › Shell police forbidden strings") + "\n";
+        string list = "\n" + Titled(ForbiddenListTitle) + "\n";
         Assert.Contains(SettingsMenu.PoliceToggleKeys, Output);
         Assert.True(Output.IndexOf(police, StringComparison.Ordinal) < Output.IndexOf(list, StringComparison.Ordinal), Output);
         Assert.True(Output.IndexOf(list, StringComparison.Ordinal) < Output.LastIndexOf(policeAfter, StringComparison.Ordinal), Output);   // back on the page

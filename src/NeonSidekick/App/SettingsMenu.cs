@@ -3049,6 +3049,36 @@ internal sealed partial class SettingsMenu
     public static string ForbiddenRemovedNotice(string entry) => FieldName(SettingsField.ShellPoliceForbiddenStrings) + ": " + entry + " removed";
 
     /// <summary>
+    /// The forbidden-strings list's title-row button (2026-10-08, the user's ask): the list back to
+    /// <see cref="Shell.ForbiddenStrings.Defaults"/> after a yes to <see cref="RestoreForbiddenQuestion"/>, for a profile from before
+    /// the defaults shipped or one whose list was edited. Replaces, never merges: a string the user added goes with the rest. Pinned.
+    /// </summary>
+    public const string RestoreForbiddenButton = "↺ restore defaults";
+
+    /// <summary>The key that is <see cref="RestoreForbiddenButton"/>.</summary>
+    public const char RestoreForbiddenKey = 'r';
+
+    /// <summary>The forbidden-strings list's buttons (2026-10-08): <see cref="RestoreForbiddenButton"/> alone. Pinned.</summary>
+    public static readonly IReadOnlyList<MenuButton> ForbiddenButtons = [new(RestoreForbiddenButton, RestoreForbiddenKey)];
+
+    /// <summary>The forbidden-strings list's hint on the pane, where the button is (2026-10-08); the prompt keeps <see cref="ForbiddenKeys"/>. Pinned.</summary>
+    public const string ForbiddenPaneKeys = "Enter = add or remove · r = restore defaults · ESC = back";
+
+    /// <summary>
+    /// The yes/no before <see cref="RestoreForbiddenButton"/> replaces the list (2026-10-08): an empty list is filled, a list with
+    /// strings is replaced and the question says what goes. Pinned.
+    /// </summary>
+    public static string RestoreForbiddenQuestion(int count, int defaults) => count == 0
+        ? $"Restore the {defaults} default forbidden strings?"
+        : $"Replace the list ({Strings(count)}) with the {defaults} default strings? Any you added are removed.";
+
+    /// <summary>The notice after the defaults are back: <c>Shell police forbidden strings: 49 defaults restored</c>. Pinned.</summary>
+    public static string ForbiddenRestoredNotice(int defaults) => FieldName(SettingsField.ShellPoliceForbiddenStrings) + ": " + defaults.ToString(CultureInfo.InvariantCulture) + " defaults restored";
+
+    /// <summary>The notice when the list already is the defaults (case ignored): nothing asked, nothing saved. Pinned.</summary>
+    public static string ForbiddenAlreadyDefaultsNotice => FieldName(SettingsField.ShellPoliceForbiddenStrings) + ": already the defaults";
+
+    /// <summary>
     /// The police's on/off page's button (2026-10-03, the user's pick): the forbidden-strings list, opened from wherever that page
     /// opens — <c>/police</c>, Ctrl+Alt+O, the toolbar's officer, the Shell tab's row. The list glyph before it since later on
     /// 2026-10-03. The word the button's title starts with since 2026-10-04 (<see cref="PoliceStringsTitle"/>). Pinned.
@@ -7585,7 +7615,9 @@ internal sealed partial class SettingsMenu
     /// string (<see cref="Shell.ForbiddenStrings.Sorted"/>). Enter on the top row opens the input slot under it (without the pane, the
     /// prompt line) and a typed string is saved at once (<see cref="ForbiddenAddedNotice"/>, or <see cref="ForbiddenDuplicateNotice"/> and
     /// nothing saved); Enter on a string removes it (<see cref="ForbiddenRemovedNotice"/>). The list is shown again until ESC. The
-    /// <c>EditAllowedCommandsAsync</c> shape, opened from the Shell tab's row and the police page's strings button. True when anything changed.
+    /// <c>EditAllowedCommandsAsync</c> shape, opened from the Shell tab's row and the police page's strings button. On the pane the title
+    /// row carries <see cref="RestoreForbiddenButton"/> (2026-10-08, the user's ask): the list back to the defaults after a yes, or
+    /// <see cref="ForbiddenAlreadyDefaultsNotice"/> and nothing asked when it already is. True when anything changed.
     /// </summary>
     internal async Task<bool> EditForbiddenStringsAsync(CancellationToken cancellationToken)
     {
@@ -7597,8 +7629,8 @@ internal sealed partial class SettingsMenu
             var forbidden = Shell.ForbiddenStrings.Sorted(_settings.Current.ShellPoliceForbiddenStrings);
             IReadOnlyList<string> rows = [Markup.Escape(AddForbiddenRow), .. forbidden.Select(Markup.Escape)];
             // Each string whole under the list (2026-10-07, the user's ask: a long one was cut at the edge).
-            var page = new MenuPage(Crumb(title), rows, ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= forbidden.Count ? new MenuFooter(forbidden[row - 1], ForbiddenStringNote) : null };
-            if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)
+            var page = new MenuPage(Crumb(title), rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= forbidden.Count ? new MenuFooter(forbidden[row - 1], ForbiddenStringNote) : null };
+            if (await PickChecklistAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
             {
                 if (!changed)
                 {
@@ -7608,6 +7640,14 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
+            if (pick.Button >= 0)
+            {
+                cursor = pick.Row;
+                changed |= await RestoreForbiddenDefaultsAsync(forbidden, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            int index = pick.Row;
             cursor = index;
             if (index > 0)
             {
@@ -7653,6 +7693,32 @@ internal sealed partial class SettingsMenu
             Sink.Notice(ForbiddenAddedNotice(typed));
             changed = true;
         }
+    }
+
+    /// <summary>
+    /// <see cref="RestoreForbiddenButton"/>'s press (2026-10-08): <paramref name="forbidden"/> (the list as shown) already the
+    /// defaults, case ignored, is <see cref="ForbiddenAlreadyDefaultsNotice"/> and nothing asked; otherwise
+    /// <see cref="RestoreForbiddenQuestion"/> on No, and a yes saves <see cref="Shell.ForbiddenStrings.Defaults"/> whole. True when saved.
+    /// </summary>
+    private async Task<bool> RestoreForbiddenDefaultsAsync(IReadOnlyList<string> forbidden, CancellationToken cancellationToken)
+    {
+        var defaults = Shell.ForbiddenStrings.Defaults;
+        if (forbidden.SequenceEqual(defaults, StringComparer.OrdinalIgnoreCase))
+        {
+            Sink.Notice(ForbiddenAlreadyDefaultsNotice);
+            return false;
+        }
+
+        var restoring = new MenuPage(RestoreForbiddenQuestion(forbidden.Count, defaults.Count), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+        if (await PickAsync(restoring, 0, cancellationToken).ConfigureAwait(false) != 1)
+        {
+            Sink.Notice(ChatScreen.KeptNotice);
+            return false;
+        }
+
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = Shell.ForbiddenStrings.Defaults);
+        Sink.Notice(ForbiddenRestoredNotice(defaults.Count));
+        return true;
     }
 
     /// <summary>
