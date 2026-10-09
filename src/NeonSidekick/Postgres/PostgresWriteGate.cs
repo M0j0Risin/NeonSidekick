@@ -73,7 +73,8 @@ public static class PostgresWriteGate
         return Lex(sql, out _) is { } tokens ? ServerWriteGate.Kinds(Rules, tokens) : null;
     }
 
-    private static List<GateToken>? Lex(string sql, out string? error)
+    /// <summary>The text as <see cref="ServerWriteGate"/>'s tokens (<see cref="PostgresBoundary"/> reads them too, 2026-10-09); null with the error when it does not lex.</summary>
+    internal static List<GateToken>? Lex(string sql, out string? error)
     {
         if (PostgresReadOnlyGate.Tokenize(sql, out error) is not { } tokens)
         {

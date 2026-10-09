@@ -149,7 +149,7 @@ public partial class ToolsMenuTests
                 break;
             case "postgres":
                 path = NeonSidekick.Postgres.PostgresConfigFile.ProfilePath(_settings.ProfileDirectory);
-                File.WriteAllText(path, "{ \"connections\": { // mine\n\"old\": { \"host\": \"localhost\", \"user\": \"neon\", \"password\": \"pw\" } } }");
+                File.WriteAllText(path, "{ \"connections\": { // mine\n\"old\": { \"host\": \"localhost\", \"database\": \"shop\", \"user\": \"neon\", \"password\": \"pw\" } } }");
                 names = () => NeonSidekick.Postgres.PostgresConfigFile.Load(path).Connections.Select(c => c.Name).ToList();
                 password = () => NeonSidekick.Postgres.PostgresSecrets.Resolve(NeonSidekick.Postgres.PostgresConfigFile.Load(path).Connections[0]).Value;
                 open = () => OpenPostgresRow(6);

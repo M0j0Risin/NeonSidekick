@@ -27,7 +27,7 @@ public static class PostgresText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string database = string.IsNullOrWhiteSpace(config.Database) ? "" : $" / {config.Database.Trim()}";
+        string database = $" / {config.Database?.Trim()}" + (string.IsNullOrWhiteSpace(config.Schema) ? "" : $" (schema {config.Schema.Trim()} alone)");
         string line = $"- {connection.Name}{(isDefault ? " (default)" : "")}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(PostgresStatementKinds.Family, config.IsReadWrite, writes)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
@@ -41,7 +41,7 @@ public static class PostgresText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string where = "PostgreSQL · " + config.Endpoint + (string.IsNullOrWhiteSpace(config.Database) ? "" : " / " + config.Database.Trim());
+        string where = "PostgreSQL · " + config.Endpoint + " / " + config.Database?.Trim() + (string.IsNullOrWhiteSpace(config.Schema) ? "" : "." + config.Schema.Trim());
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 
@@ -86,6 +86,63 @@ public static class PostgresText
     public static string NotOneStatement(int count) => $"Error: the SQL is {Invariant(count)} statements; send exactly one SELECT per call (a WITH clause may lead it)";
     public static string NotASelect(string word) => $"Error: the SQL starts with {word}; the PostgreSQL tools only read — send one SELECT (a WITH clause may lead it)";
     public static string Forbidden(string what) => $"Error: the SQL uses {what}, which the PostgreSQL tools refuse (it changes something a rollback cannot undo, or reaches outside the query)";
+
+    // ─── the connection's database and schema (2026-10-09, PostgresBoundary) ────
+
+    /// <summary>An entry with no <c>database</c>: a connection reaches that one database alone, so it must name it. Pinned.</summary>
+    public const string NoDatabase = "no \"database\" is given; a connection reaches one database, so it must name it";
+
+    /// <summary>A <c>schema</c> key the session's options cannot carry. Pinned.</summary>
+    public static string BadSchemaKey(string schema) => $"\"schema\" is '{schema}'; a schema to hold the connection to is one name, without spaces, commas, quotes or backslashes";
+
+    /// <summary>A call that still sends <c>database</c>. Pinned.</summary>
+    public const string NoDatabaseArgument =
+        "Error: \"database\" is not an argument: a PostgreSQL connection reaches its own database alone (postgres_connections names each one's); another database needs a connection of its own, which the user adds";
+
+    /// <summary>A view or function of the whole cluster rather than the database. Pinned.</summary>
+    public static string ServerCatalog(string named) =>
+        $"Error: the SQL reads {named}, which describes the whole server rather than this connection's database; the PostgreSQL tools keep to the connection's database (postgres_tables, postgres_columns and postgres_describe read its catalog)";
+
+    /// <summary>A qualifier naming another schema under a schema lock (or an alias spelled like one). Pinned.</summary>
+    public static string OtherSchema(string named, string schema) =>
+        $"Error: the SQL names '{named}', another schema of this database (an alias spelled like it reads the same: rename it), but this connection is held to schema '{schema}'; another schema needs a connection of its own, which the user adds";
+
+    /// <summary>A tool's <c>schema</c> (or a <c>schema.name</c> table) naming another under a schema lock. Pinned.</summary>
+    public static string SchemaElsewhere(string named, string schema) =>
+        $"Error: this connection is held to schema '{schema}', so '{named}' is out of its reach; leave \"schema\" out or give {schema}";
+
+    /// <summary>
+    /// What else the role could reach (the wizard's test and <c>--postgres-check</c>, 2026-10-09): the other databases it may connect to
+    /// (PUBLIC may connect to a new database unless that is revoked), the foreign servers it may use, and under a schema lock the other
+    /// schemas it may use; or that it reaches none. Pinned.
+    /// </summary>
+    public static string Reach(string database, string? schema, IReadOnlyList<string> databases, IReadOnlyList<string> servers, IReadOnlyList<string> schemas)
+    {
+        ArgumentNullException.ThrowIfNull(databases);
+        ArgumentNullException.ThrowIfNull(servers);
+        ArgumentNullException.ThrowIfNull(schemas);
+        static string Names(IReadOnlyList<string> names) => string.Join(", ", names.Take(10)) + (names.Count > 10 ? $" and {Invariant(names.Count - 10)} more" : "");
+        string place = string.IsNullOrWhiteSpace(schema) ? database : database + "." + schema.Trim();
+        var parts = new List<string>();
+        if (databases.Count > 0)
+        {
+            parts.Add("connect to " + Names(databases));
+        }
+
+        if (servers.Count > 0)
+        {
+            parts.Add("use the foreign servers " + Names(servers));
+        }
+
+        if (!string.IsNullOrWhiteSpace(schema) && schemas.Count > 0)
+        {
+            parts.Add("use the schemas " + Names(schemas));
+        }
+
+        return parts.Count == 0
+            ? $"The role reaches nothing beyond {place}: the server holds it there too."
+            : $"The role could also {string.Join("; ", parts)}. The tools keep to {place}; a role granted only it is the lock the server keeps too.";
+    }
 
     // ─── arguments ──────────────────────────────────────────────────────────────
 

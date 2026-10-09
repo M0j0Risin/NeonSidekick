@@ -67,8 +67,8 @@ public sealed class PostgresConfigFile
     public const string WindowsEmptyText =
         "{\n" +
         "  // One entry per connection. Its name is what the model passes as \"connection\", and what %name picks on the input\n" +
-        "  // line. \"host\" and \"user\" are required. Remove the leading // from an example to use it, and put it inside\n" +
-        "  // \"connections\" below.\n" +
+        "  // line. \"host\", \"database\" and \"user\" are required: a connection reaches its database alone, and another database\n" +
+        "  // is another entry. Remove the leading // from an example to use it, and put it inside \"connections\" below.\n" +
         "  //\n" +
         "  // PostgreSQL, the password kept in this file: typed in plain text, it is encrypted (\"dpapi:…\") when the app next\n" +
         "  // starts or reads this file.\n" +
@@ -80,14 +80,15 @@ public sealed class PostgresConfigFile
         "  // TLS checked against the host name, the password in Windows Credential Manager as NeonSidekick/postgres/<name> — set it\n" +
         "  // with PostgreSQL set password on the PostgreSQL tab of /tools, or: cmdkey /generic:NeonSidekick/postgres/billing /user:billing_ro /pass\n" +
         "  // \"billing\": {\n" +
-        "  //   \"host\": \"db01.example.com\", \"database\": \"billing\", \"user\": \"billing_ro\", \"passwordStore\": \"credman\",\n" +
-        "  //   \"sslMode\": \"verify-full\"\n" +
+        "  //   \"host\": \"db01.example.com\", \"database\": \"billing\", \"schema\": \"invoices\", \"user\": \"billing_ro\",\n" +
+        "  //   \"passwordStore\": \"credman\", \"sslMode\": \"verify-full\"\n" +
         "  // },\n" +
         "  //\n" +
-        "  // port: 5432 by default; database: the one a call works in when it names none (postgres when absent); sslMode: prefer\n" +
-        "  // (the default), require, verify-ca, verify-full or disable; connectTimeoutSeconds: 1 to 120 (15 by default). access:\n" +
-        "  // read (the default) or readwrite — postgres_execute may change a readwrite connection's databases while PostgreSQL\n" +
-        "  // mode is read-write, each change allowed by you. An account with SELECT grants alone is the real guard for the rest.\n" +
+        "  // port: 5432 by default; database: the one the connection reaches; schema (optional): hold it to that schema alone;\n" +
+        "  // sslMode: prefer (the default), require, verify-ca, verify-full or disable; connectTimeoutSeconds: 1 to 120 (15 by\n" +
+        "  // default). access: read (the default) or readwrite — postgres_execute may change a readwrite connection's database\n" +
+        "  // while PostgreSQL mode is read-write, each change allowed by you. An account with SELECT grants alone is the real\n" +
+        "  // guard for the rest.\n" +
         "  \"connections\": {}\n" +
         "}\n";
 

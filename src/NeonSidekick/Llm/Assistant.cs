@@ -321,7 +321,7 @@ public sealed class Assistant
     /// </summary>
     public const string PostgresRule =
         "The PostgreSQL tools read PostgreSQL databases (PostgreSQL SQL: LIMIT n; \"double quotes\" for mixed-case names; schema.table) on the user's named connections and never change data: " +
-        NeonSidekick.Llm.Tools.PostgresConnectionsTool.ToolName + " lists the connections, " + NeonSidekick.Llm.Tools.PostgresDatabasesTool.ToolName + " a server's databases and " +
+        NeonSidekick.Llm.Tools.PostgresConnectionsTool.ToolName + " lists the connections, each one held to its own database (and to one schema when the user set one; another needs its own connection, which the user adds), and " +
         NeonSidekick.Llm.Tools.PostgresSchemasTool.ToolName + " a database's schemas; " + NeonSidekick.Llm.Tools.PostgresTablesTool.ToolName + " finds a table and " +
         NeonSidekick.Llm.Tools.PostgresColumnsTool.ToolName + " a column, " + NeonSidekick.Llm.Tools.PostgresDescribeTool.ToolName + " shows a table's columns, keys and constraints, " +
         NeonSidekick.Llm.Tools.PostgresRelationshipsTool.ToolName + " the joins and " + NeonSidekick.Llm.Tools.PostgresIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +

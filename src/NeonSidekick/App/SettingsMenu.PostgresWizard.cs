@@ -18,12 +18,15 @@ internal sealed partial class SettingsMenu
 {
     /// <summary>The wizard's rows, one per <see cref="PostgresWizardStep"/> before the summary, in its order. Pinned.</summary>
     public static readonly IReadOnlyList<string> PostgresWizardLabels =
-        ["File", "Name", "Host", "Port", "Database", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Access", "Description"];
+        ["File", "Name", "Host", "Port", "Database", "Schema", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Access", "Description"];
 
     public const string PostgresWizardFileQuestion = "Which postgres.json: this profile's or the global one?";
     public const string PostgresWizardHostQuestion = "The server's host name or address (localhost, db01.example.com).";
     public const string PostgresWizardPortQuestion = "The TCP port; empty for 5432.";
-    public const string PostgresWizardDatabaseQuestion = "The database a call works in when it names none; empty for postgres.";
+    public const string PostgresWizardDatabaseQuestion = "The database: the one this connection reaches (the tools never leave it; another database is another connection).";
+    public const string PostgresWizardSchemaQuestion = "A schema to hold the connection to, or empty to leave every schema of the database open.";
+    public const string PostgresWizardDatabaseRequired = "A database is required: the connection reaches that one alone.";
+    public const string PostgresWizardEverySchema = "(every schema)";
     public const string PostgresWizardUserQuestion = "The database user (the real guard is an account with only SELECT grants).";
     public const string PostgresWizardTlsQuestion = "Encryption of the connection.";
     public const string PostgresWizardHostRequired = "A host is required.";
@@ -56,6 +59,7 @@ internal sealed partial class SettingsMenu
         Host,
         Port,
         Database,
+        Schema,
         User,
         Store,
         Password,
@@ -90,10 +94,11 @@ internal sealed partial class SettingsMenu
     private string PostgresWizardPath(bool global) =>
         global ? PostgresConfigFile.GlobalPath(_settings.StorageDirectory) : PostgresConfigFile.ProfilePath(_settings.ProfileDirectory);
 
-    /// <summary>The first step the draft still lacks (a name, a host, a user, a password), or null.</summary>
+    /// <summary>The first step the draft still lacks (a name, a host, a database, a user, a password), or null.</summary>
     private static PostgresWizardStep? PostgresWizardMissing(PostgresDraft draft) =>
         draft.Name.Length == 0 ? PostgresWizardStep.Name
         : string.IsNullOrWhiteSpace(draft.Config.Host) ? PostgresWizardStep.Host
+        : string.IsNullOrWhiteSpace(draft.Config.Database) ? PostgresWizardStep.Database
         : string.IsNullOrWhiteSpace(draft.Config.User) ? PostgresWizardStep.User
         : draft.Password.Length == 0 ? PostgresWizardStep.Password
         : null;
@@ -109,7 +114,8 @@ internal sealed partial class SettingsMenu
             PostgresWizardStep.Name => OrUnset(draft.Name),
             PostgresWizardStep.Host => OrUnset(c.Host),
             PostgresWizardStep.Port => Invariant(c.Port ?? PostgresConnectionConfig.DefaultPort),
-            PostgresWizardStep.Database => string.IsNullOrWhiteSpace(c.Database) ? PostgresConnectionConfig.DefaultDatabase : c.Database.Trim(),
+            PostgresWizardStep.Database => OrUnset(c.Database),
+            PostgresWizardStep.Schema => string.IsNullOrWhiteSpace(c.Schema) ? PostgresWizardEverySchema : c.Schema.Trim(),
             PostgresWizardStep.User => OrUnset(c.User),
             PostgresWizardStep.Store => c.InCredentialManager ? PostgresConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : PostgresConnectionConfig.FileStore,
             PostgresWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
@@ -317,9 +323,26 @@ internal sealed partial class SettingsMenu
                 }, cancellationToken).ConfigureAwait(false);
 
             case PostgresWizardStep.Database:
-                return await PostgresWizardTypeAsync(step, draft, PostgresWizardDatabaseQuestion, c.Database ?? "", allowEmpty: true, mask: false, text =>
+                return await PostgresWizardTypeAsync(step, draft, PostgresWizardDatabaseQuestion, c.Database ?? "", allowEmpty: false, mask: false, text =>
                 {
-                    c.Database = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        return PostgresWizardDatabaseRequired;
+                    }
+
+                    c.Database = text.Trim();
+                    return null;
+                }, cancellationToken).ConfigureAwait(false);
+
+            case PostgresWizardStep.Schema:
+                return await PostgresWizardTypeAsync(step, draft, PostgresWizardSchemaQuestion, c.Schema ?? "", allowEmpty: true, mask: false, text =>
+                {
+                    if (PostgresConnectionConfig.SchemaProblem(text) is { } problem)
+                    {
+                        return problem;
+                    }
+
+                    c.Schema = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
                     return null;
                 }, cancellationToken).ConfigureAwait(false);
 
@@ -508,7 +531,11 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>The draft tried as it stands, nothing written: who it signed in as, the database and the server on the status line, then a warning when the role could change data; a failure still lets it be saved.</summary>
+    /// <summary>
+    /// The draft tried as it stands, nothing written: who it signed in as, the database and the server on the status line, then a warning
+    /// when the role could change data; then what else it could reach (2026-10-09, <see cref="PostgresCatalogQueries.Reach"/>, the third
+    /// to fifth results): a warning naming them, or that the server holds it to its place too. A failure still lets it be saved.
+    /// </summary>
     private async Task PostgresWizardTestAsync(PostgresDraft draft, CancellationToken cancellationToken)
     {
         var c = draft.Config;
@@ -517,6 +544,7 @@ internal sealed partial class SettingsMenu
             Host = c.Host,
             Port = c.Port,
             Database = c.Database,
+            Schema = c.Schema,
             User = c.User,
             Password = draft.Password,
             PasswordStore = PostgresConnectionConfig.FileStore,
@@ -545,6 +573,22 @@ internal sealed partial class SettingsMenu
         {
             Sink.Warning(PostgresText.CanWrite(powers, c.IsReadWrite));
         }
+
+        if (run.Grids.Count > 4)
+        {
+            List<string> Column(int set) => run.Grids[set].Rows.Select(r => r[0]).ToList();
+            string? schema = string.IsNullOrWhiteSpace(c.Schema) ? null : c.Schema.Trim();
+            var (databases, servers, schemas) = (Column(2), Column(3), Column(4));
+            string reach = PostgresText.Reach(c.Database!.Trim(), schema, databases, servers, schemas);
+            if (databases.Count > 0 || servers.Count > 0 || (schema is not null && schemas.Count > 0))
+            {
+                Sink.Warning(reach);
+            }
+            else
+            {
+                Sink.Notice(reach);
+            }
+        }
     }
 
     /// <summary>
@@ -555,7 +599,7 @@ internal sealed partial class SettingsMenu
 
     private Task<Sql.SqlRun> TestPostgresConnectionAsync(PostgresNamedConnection connection, CancellationToken cancellationToken) =>
         new PostgresAccess(() => new PostgresCatalog([connection], []))
-            .RunAsync(connection.Name, null, null, PostgresCatalogQueries.WhoAmI, [], 50, _settings.Current.PostgresQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, null, [.. PostgresCatalogQueries.WhoAmI, .. PostgresCatalogQueries.Reach], [], 100, _settings.Current.PostgresQueryTimeoutSeconds, cancellationToken);
 
     /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> — its name there. Null when nothing was written.</summary>
     private bool? PostgresWizardSave(PostgresDraft draft, bool offer)

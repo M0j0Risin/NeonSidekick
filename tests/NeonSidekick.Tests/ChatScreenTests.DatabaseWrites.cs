@@ -67,10 +67,11 @@ public partial class ChatScreenTests
         };
     }
 
+    /// <summary>Allow for this session holds for the connection; a call that names another database is refused, never asked (2026-10-09).</summary>
     [Fact]
-    public async Task PostgresExecute_AllowForTheSession_HoldsForThatDatabase_AnotherAsksAgain()
+    public async Task PostgresExecute_AllowForTheSession_HoldsForTheConnection_AnotherDatabaseIsRefused()
     {
-        PostgresExecuteFixture([[Keys.Char('s'), Keys.Enter], [Keys.Enter]], "Done.",
+        PostgresExecuteFixture([[Keys.Char('s'), Keys.Enter]], "Done.",
             new() { ["sql"] = "INSERT INTO t VALUES (1)" },
             new() { ["sql"] = "UPDATE t SET a = 2" },
             new() { ["sql"] = "DELETE FROM t", ["database"] = "archive" });
@@ -82,7 +83,7 @@ public partial class ChatScreenTests
         var results = Results(_chat.Requests[^1]).Select(r => (string)r.Result!).ToList();
         Assert.StartsWith("Error: could not connect to shop", results[0]);   // allowed, then no server: it was run
         Assert.StartsWith("Error: could not connect to shop", results[1]);   // not asked: allowed for shop/sales
-        Assert.Equal(ServerWriteText.Declined, results[2]);                  // shop/archive asked again, and denied
+        Assert.Equal(PostgresText.NoDatabaseArgument, results[2]);             // another database: refused, never asked
     }
 
     /// <summary>

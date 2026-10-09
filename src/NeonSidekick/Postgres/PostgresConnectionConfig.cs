@@ -22,9 +22,6 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     public const int DefaultPort = 5432;
 
-    /// <summary>The database a connection without one works in: every server has it.</summary>
-    public const string DefaultDatabase = "postgres";
-
     public const int DefaultConnectTimeoutSeconds = 15;
 
     public const int MaxConnectTimeoutSeconds = 120;
@@ -36,8 +33,18 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     public int? Port { get; set; }
 
-    /// <summary>The database a call works in when it names none; <see cref="DefaultDatabase"/> when absent.</summary>
+    /// <summary>
+    /// The one database the connection reaches (required since 2026-10-09, the user's call, SQL Server's lock carried over; <c>postgres</c>
+    /// was the default before): no tool takes another, and another database is another connection.
+    /// </summary>
     public string? Database { get; set; }
+
+    /// <summary>
+    /// The schema the connection is held to, or none (2026-10-09, the user's pick: the schemas stay open unless one is named). Named, it
+    /// is the session's whole <c>search_path</c> (<see cref="SearchPath"/>), the listings keep to it, a tool's <c>schema</c> naming another
+    /// is refused, and so is a statement qualifying a name with another (<see cref="PostgresBoundary"/>).
+    /// </summary>
+    public string? Schema { get; set; }
 
     public string? User { get; set; }
 
@@ -70,7 +77,7 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     [JsonIgnore]
     public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
-    /// <summary>The reason this entry cannot connect, or null: no host, no user, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
+    /// <summary>The reason this entry cannot connect, or null: no host, no database, no user, a schema it cannot set, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
     [JsonIgnore]
     public string? Problem
     {
@@ -81,9 +88,19 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
                 return PostgresText.NoHost;
             }
 
+            if (string.IsNullOrWhiteSpace(Database))
+            {
+                return PostgresText.NoDatabase;
+            }
+
             if (string.IsNullOrWhiteSpace(User))
             {
                 return PostgresText.NoUser;
+            }
+
+            if (SchemaProblem(Schema) is { } schema)
+            {
+                return schema;
             }
 
             if (Port is { } port && (port < 1 || port > 65535))
@@ -117,9 +134,29 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
         }
     }
 
+    /// <summary>The reason <paramref name="schema"/> cannot be the session's search path, or null (none is fine): a space, a comma, a quote or a backslash, which the session's options would split.</summary>
+    public static string? SchemaProblem(string? schema)
+    {
+        if (string.IsNullOrWhiteSpace(schema))
+        {
+            return null;
+        }
+
+        string s = schema.Trim();
+        return s.Any(c => char.IsWhiteSpace(c) || c is ',' or '"' or '\\' or '\'') ? PostgresText.BadSchemaKey(s) : null;
+    }
+
+    /// <summary>The <c>search_path</c> a schema lock sets: a plain lower-case name as it is, any other in double quotes (its case kept).</summary>
+    public static string SearchPath(string schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        string s = schema.Trim();
+        return s.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_' or '$') && !char.IsDigit(s[0]) ? s : "\"" + s + "\"";
+    }
+
     /// <summary>
-    /// The Npgsql connection string for this entry in <paramref name="database"/> (the entry's own, else <see cref="DefaultDatabase"/>,
-    /// when blank), <paramref name="password"/> the resolved one. The session is set at startup through <c>Options</c> — every
+    /// The Npgsql connection string for this entry, in its own <see cref="Database"/> alone (the per-call one went 2026-10-09, with the
+    /// lock) and, under a <see cref="Schema"/>, that schema as the whole <c>search_path</c>; <paramref name="password"/> the resolved one. The session is set at startup through <c>Options</c> — every
     /// transaction read-only by default, and <c>statement_timeout</c> and <c>lock_timeout</c> at <paramref name="timeoutSeconds"/> — so the
     /// server enforces both even for a statement the gate let through; a connection per call (<see cref="PostgresAccess"/> builds a data
     /// source per call, unpooled, disposed after). <c>standard_conforming_strings</c> is pinned on (the 2026-10-04 review, MySQL's
@@ -129,14 +166,14 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     /// on a <c>readwrite</c> connection) leaves <c>default_transaction_read_only</c> out and nothing else: the strings and the timeouts
     /// stay as the gate and the reads have them.
     /// </summary>
-    public NpgsqlConnectionStringBuilder Builder(string? password, string? database, int timeoutSeconds, bool readOnly = true)
+    public NpgsqlConnectionStringBuilder Builder(string? password, int timeoutSeconds, bool readOnly = true)
     {
         long millis = Math.Max(1, timeoutSeconds) * 1000L;
         return new NpgsqlConnectionStringBuilder
         {
             Host = Host!.Trim(),
             Port = Port ?? DefaultPort,
-            Database = !string.IsNullOrWhiteSpace(database) ? database.Trim() : !string.IsNullOrWhiteSpace(Database) ? Database.Trim() : DefaultDatabase,
+            Database = Database?.Trim() ?? "",
             Username = User!.Trim(),
             Password = password ?? "",
             Timeout = ConnectTimeoutSeconds ?? DefaultConnectTimeoutSeconds,
@@ -144,7 +181,8 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
             ApplicationName = "NeonSidekick",
             Pooling = false,
             Options = (readOnly ? "-c default_transaction_read_only=on " : "") + "-c standard_conforming_strings=on -c statement_timeout=" + millis.ToString(CultureInfo.InvariantCulture)
-                + " -c lock_timeout=" + millis.ToString(CultureInfo.InvariantCulture) + " -c idle_in_transaction_session_timeout=" + (millis * 2).ToString(CultureInfo.InvariantCulture),
+                + " -c lock_timeout=" + millis.ToString(CultureInfo.InvariantCulture) + " -c idle_in_transaction_session_timeout=" + (millis * 2).ToString(CultureInfo.InvariantCulture)
+                + (string.IsNullOrWhiteSpace(Schema) ? "" : " -c search_path=" + SearchPath(Schema)),
             SslMode = (SslMode?.Trim().ToLowerInvariant() ?? "") switch
             {
                 "require" => Npgsql.SslMode.Require,

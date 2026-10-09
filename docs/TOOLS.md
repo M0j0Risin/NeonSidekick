@@ -476,11 +476,12 @@ With *SQLite mode* set to `read-write`, the model gets `sqlite_execute` beside t
 
 ## PostgreSQL
 
-The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence, built slim for NativeAOT), over `postgres.json` (home and profile files, as for SQL).
+The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence, built slim for NativeAOT), over `postgres.json` (home and profile files, as for SQL). As for SQL, each connection reaches one database, its own, and it can be held to one schema too.
 
 ### Connection settings
 
-* **`host`**, **`port`** (5432 by default), **`database`** (the default for calls; `postgres` when absent).
+* **`host`**, **`port`** (5432 by default), **`database`** (required: the one database the connection reaches).
+* **`schema`** (optional): hold the connection to that one schema. Without it, every schema of the database stays open. See [The connection's database (PostgreSQL)](#the-connections-database-postgresql).
 * **`user`**, and **`passwordStore`** `file` or `credman` (`NeonSidekick/postgres/<connection_name>`), as for SQL.
 * **`sslMode`**: `prefer` (default), `require`, `verify-ca`, `verify-full` or `disable`.
 * **`connectTimeoutSeconds`**: 1–120 (default 15).
@@ -490,12 +491,12 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 {
   "connections": {
     "shop": { "host": "localhost", "database": "shop", "user": "shop_reader", "password": "type-password-here-once", "description": "The sample retail database" },
-    "billing": { "host": "db01.example.com", "database": "billing", "user": "billing_ro", "passwordStore": "credman", "sslMode": "verify-full" }
+    "billing": { "host": "db01.example.com", "database": "billing", "schema": "invoices", "user": "billing_ro", "passwordStore": "credman", "sslMode": "verify-full" }
   }
 }
 ```
 
-**PostgreSQL add/edit connection** (the Postgres tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, and a warning when the role is a superuser or holds write grants. It asks for the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
+**PostgreSQL add/edit connection** (the Postgres tab of `/tools`) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when the role is a superuser or holds write grants, and what else the role could reach (other databases, foreign servers, and other schemas under a schema lock), or that it reaches nothing more. It asks for the schema and the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
 
 ### Safety
 
@@ -504,24 +505,33 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 3. **The transaction.** `SET TRANSACTION READ ONLY`, always rolled back: Postgres refuses every write, `nextval` and a temporary table.
 4. **The account.** Give the role `SELECT` grants alone.
 
+### The connection's database (PostgreSQL)
+
+A PostgreSQL session can't leave its database: a three-part name in another database is the server's own error, and `dblink` is refused by the gates. On top of that:
+
+* No tool takes a database, and there's no tool that lists the server's databases. A call that still sends `database` is refused.
+* What describes the whole server rather than the database is refused in the model's own SQL, locked or not: `pg_database`, `pg_roles`, `pg_user`, `pg_authid`, `pg_shadow`, `pg_auth_members`, `pg_settings`, `pg_hba_file_rules`, `pg_tablespace`, `pg_stat_activity` (other sessions' queries), `pg_stat_database`, `pg_stat_replication`, `pg_replication_slots`, `pg_user_mappings` (their passwords), `pg_subscription` and the shared catalogs, and `pg_database_size`, `has_database_privilege`, `pg_stat_get_activity` and `pg_stat_get_backend_*`. The database's own catalog (`pg_class`, `pg_namespace`…) reads as before.
+* **A schema lock** (`"schema"` in the entry): the session's `search_path` is that schema alone, so an unqualified name finds only its objects (and `pg_catalog`'s). The listings keep to it, `postgres_schemas` lists only it, and a tool's `schema` (or a `table` written as `schema.name`) naming another is refused. In the model's SQL, a qualifier naming another schema is refused. A lexer can't tell `sales.orders` from an alias's `o.id`, so the tools first read the schemas' names when a statement qualifies a name with anything but its own schema or `pg_catalog`; an alias spelled like a schema's name is refused too (rename it). `information_schema` is refused at once, since it lists every schema's tables.
+
+What the text can't show stays the role's to guard: a view, function or foreign table in the database that reads another schema, database or server. The wizard's test and `--postgres-check` name the other databases the role may connect to (PostgreSQL lets every role connect to a new database unless `CONNECT` is revoked from `PUBLIC`), the foreign servers it may use and, under a schema lock, the other schemas it may use.
+
 | Tool | Arguments | What it does |
 |---|---|---|
-| `postgres_connections` | — | The named connections (host, database, user, description), the default marked. Touches no server. |
-| `postgres_databases` | `connection?` | The databases the account may connect to, with size and encoding. |
-| `postgres_schemas` | `connection?, database?` | The schemas the account may use, with table counts and owners. |
-| `postgres_tables` | `connection?, database?, schema?, pattern?` | Tables and views as `schema.name`, with kind, approximate rows and comment. |
-| `postgres_columns` | `pattern, connection?, database?, schema?` | Every column whose name matches: table, type, nullability, comment. |
-| `postgres_describe` | `table, connection?, database?, schema?` | One table or view: comment, columns (type, nullability, default, primary key, comment), foreign keys both ways, indexes and CHECK constraints. |
-| `postgres_relationships` | `connection?, database?, schema?, table?` | Foreign keys: a schema's, or a table's either way. |
-| `postgres_indexes` | `connection?, database?, schema?, table?` | Indexes: unique, primary, the definition, scans since the statistics reset. |
-| `postgres_query` | `sql, connection?, database?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name` (straight after an operator, as in `id=@id`, only a name `params` gives: `<@tags` stays the operator and a column, and an unbound `id=@id` fails with a hint to pass `id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
-| `postgres_execute` | `sql, connection?, database?, params?, max_rows?` | Only under *PostgreSQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *PostgreSQL statements allowed* ticks (`RETURNING` allowed). Answers with the rows changed and any rows the statement returned. |
+| `postgres_connections` | — | The named connections (host, database, schema lock, user, description), the default marked. Touches no server. |
+| `postgres_schemas` | `connection?` | The schemas the account may use (the locked one alone, under a lock), with table counts and owners. |
+| `postgres_tables` | `connection?, schema?, pattern?` | Tables and views as `schema.name`, with kind, approximate rows and comment. |
+| `postgres_columns` | `pattern, connection?, schema?` | Every column whose name matches: table, type, nullability, comment. |
+| `postgres_describe` | `table, connection?, schema?` | One table or view: comment, columns (type, nullability, default, primary key, comment), foreign keys both ways, indexes and CHECK constraints. |
+| `postgres_relationships` | `connection?, schema?, table?` | Foreign keys: a schema's, or a table's either way. |
+| `postgres_indexes` | `connection?, schema?, table?` | Indexes: unique, primary, the definition, scans since the statistics reset. |
+| `postgres_query` | `sql, connection?, params?, max_rows?` | One read-only `SELECT` (`LIMIT n`). `params` binds `@name` (straight after an operator, as in `id=@id`, only a name `params` gives: `<@tags` stays the operator and a column, and an unbound `id=@id` fails with a hint to pass `id`); `max_rows` 1–100000. Cut at *SQL query result max chars*. |
+| `postgres_execute` | `sql, connection?, params?, max_rows?` | Only under *PostgreSQL mode* `read-write`, on a `readwrite` connection. One statement that may change the database, of a kind *PostgreSQL statements allowed* ticks (`RETURNING` allowed). Answers with the rows changed and any rows the statement returned. |
 
-`--postgres-check <connection>` proves the tools against a real server on the published exe (who it is, every type, the gate, a write refused, the timeout).
+`--postgres-check <connection>` proves the tools against a real server on the published exe (who it is, every type, the gate, the lock to its database and schema and what else the role could reach, a write refused, the timeout).
 
 ### Changes
 
-With *PostgreSQL mode* set to `read-write`, the model gets `postgres_execute` beside the nine reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
+With *PostgreSQL mode* set to `read-write`, the model gets `postgres_execute` beside the eight reading tools, for the connections whose entry says `"access": "readwrite"`. Either key off and a connection only reads. It is never offered headless or in plan mode.
 
 1. **The kinds.** *PostgreSQL statements allowed* decides which kinds of statement may run; a statement needs every kind it does (a `WITH` that deletes and inserts needs deleting and changing data), and the refusal names the kinds that are ticked.
 
@@ -537,7 +547,7 @@ With *PostgreSQL mode* set to `read-write`, the model gets `postgres_execute` be
    | reading | `SELECT`, `VALUES`, `TABLE`: never asks, and runs as `postgres_query` does (read-only, rolled back) once its gate passes it too | ✓ |
 
 2. **The gate.** One statement per call, lexed by the same rules as the reading gate (a function's or `DO` block's body is dollar-quoted, so its `;`s don't count). An allow-list: a statement it doesn't know is refused. Always refused: `BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT` (each call is its own transaction), `GRANT`/`REVOKE`, roles, users, policies and `OWNER TO`, `SET`/`RESET`/`DISCARD`, `PREPARE`/`EXECUTE`, `COPY`, `LOAD`, `LOCK`, `LISTEN`/`NOTIFY`, `CHECKPOINT`, `CREATE`/`DROP` of a database, tablespace, extension, server, foreign table or language, `ALTER SYSTEM`, and the reading gate's denied functions (`nextval`/`setval` are allowed here).
-3. **Your allow.** Every change asks on the pane, as for [SQL](#changes); *Allow for this session* covers that connection and database only.
+3. **Your allow.** Every change asks on the pane, as for [SQL](#changes); *Allow for this session* covers that connection only. A statement that reaches past the connection's database or schema lock never gets this far: it's refused (see [The connection's database (PostgreSQL)](#the-connections-database-postgresql)).
 4. **The run.** The session starts as for a read but without the read-only default; `statement_timeout`, `lock_timeout` and `standard_conforming_strings` stay. There's no transaction of the app's, so the statement commits as it runs, atomically, and `VACUUM` can run. A failed, timed-out or cancelled statement changes nothing.
 5. **The log.** Every change is written to the log: the connection and database, the rows changed and the statement.
 6. **The account.** It's still the real guard: give a `readwrite` connection a role with only the grants you want the model to use.

@@ -832,13 +832,13 @@ The Oracle, MySQL, Postgres and UNC tabs work like this one, over `oracle.json`,
 
 | Setting | What it does | Default |
 |---|---|---|
-| PostgreSQL tools | Offers the PostgreSQL tools (connections, databases, schemas, tables, columns, describe, relationships, indexes, query). | off |
+| PostgreSQL tools | Offers the PostgreSQL tools (connections, schemas, tables, columns, describe, relationships, indexes, query), each connection held to its own database (and to one schema when its entry names one). | off |
 | PostgreSQL mode | `read-only`: the tools only read. `read-write`: `postgres_execute` is offered too, on connections whose entry says `"access": "readwrite"`, each change allowed by you. See [PostgreSQL › Changes](TOOLS.md#changes-4). | read-only |
 | PostgreSQL statements allowed | Under `read-write`: the kinds of statement `postgres_execute` may run (a checklist; `a` / `n` / `d` pick all, none or the default). See [PostgreSQL › Changes](TOOLS.md#changes-4). | changing data, creating, reading |
 | PostgreSQL connections offered | As *SQL connections offered*. | none |
-| PostgreSQL default connection | As *SQL default connection*; `database` works in another database on the same server. | (the first connection) |
+| PostgreSQL default connection | As *SQL default connection*. | (the first connection) |
 | PostgreSQL set password | As *SQL set password*. | — |
-| PostgreSQL add/edit connection | The wizard (new or edit); its test shows who it signs in as, the version, and a warning when the role could change data (a superuser is warned of, not refused). See [PostgreSQL](TOOLS.md#postgresql). | — |
+| PostgreSQL add/edit connection | The wizard (new or edit); the database is required, a schema to hold the connection to optional. Its test shows who it signs in as, the version, a warning when the role could change data (a superuser is warned of, not refused), and what else the role could reach. See [PostgreSQL](TOOLS.md#postgresql). | — |
 | PostgreSQL %-mention enabled | Lists the PostgreSQL connections in the `%` list too, marked `PostgreSQL ·`. | on |
 | PostgreSQL max rows | As *SQL max rows*, for `postgres_query`. | 100 |
 | PostgreSQL query timeout (s) | How long one statement may run (1–600): the server's own `statement_timeout`. | 30 |

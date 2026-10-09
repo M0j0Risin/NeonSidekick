@@ -32,14 +32,21 @@ public static class PostgresCatalogQueries
             "UNION ALL SELECT DISTINCT privilege_type FROM information_schema.table_privileges WHERE grantee = current_user AND privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')) w",
     ];
 
-    public const string Databases =
-        "SELECT datname AS database, pg_size_pretty(pg_database_size(datname)) AS size, pg_encoding_to_char(encoding) AS encoding " +
-        "FROM pg_database WHERE datallowconn AND NOT datistemplate AND has_database_privilege(datname, 'CONNECT') ORDER BY datname";
+    /// <summary>
+    /// What else the role could reach (2026-10-09, the wizard's test and <c>--postgres-check</c>; <c>postgres_databases</c>' listing until the
+    /// lock): the other databases it may connect to, the foreign servers it may use, and the schemas off its search path it may use.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Reach =
+    [
+        "SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate AND datname <> current_database() AND has_database_privilege(datname, 'CONNECT') ORDER BY 1",
+        "SELECT srvname FROM pg_foreign_server WHERE has_server_privilege(oid, 'USAGE') ORDER BY 1",
+        "SELECT n.nspname FROM pg_namespace n WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') AND NOT n.nspname = ANY(current_schemas(false)) ORDER BY 1",
+    ];
 
     public const string Schemas =
         "SELECT n.nspname AS schema, count(c.oid) FILTER (WHERE c.relkind IN ('r','p','v','m','f')) AS tables, pg_get_userbyid(n.nspowner) AS owner " +
         "FROM pg_namespace n LEFT JOIN pg_class c ON c.relnamespace = n.oid WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') " +
-        "GROUP BY n.nspname, n.nspowner ORDER BY n.nspname";
+        "AND (@schema::text IS NULL OR n.nspname = @schema::text) GROUP BY n.nspname, n.nspowner ORDER BY n.nspname";
 
     public const string Tables =
         "SELECT n.nspname || '.' || c.relname AS name, " + Kind + " AS kind, CASE WHEN c.reltuples < 0 THEN NULL ELSE c.reltuples::bigint END AS rows, " +

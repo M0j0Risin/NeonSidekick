@@ -127,26 +127,31 @@ public sealed class PostgresToolsTests : IDisposable
         }
     }
 
-    private static PostgresConnectionConfig Config() => new() { Host = "db", User = "reader", Password = "p" };
+    private static PostgresConnectionConfig Config() => new() { Host = "db", Database = "shop", User = "reader", Password = "p" };
 
     [Fact]
     public void AnEntry_SaysWhatIsWrong_AndBuildsAReadOnlySession()
     {
         Assert.Null(Config().Problem);
         Assert.Equal(PostgresText.NoHost, new PostgresConnectionConfig { User = "u" }.Problem);
-        Assert.Equal(PostgresText.NoUser, new PostgresConnectionConfig { Host = "h" }.Problem);
-        Assert.Equal(PostgresText.BadPort(0), new PostgresConnectionConfig { Host = "h", User = "u", Port = 0 }.Problem);
-        Assert.Equal(PostgresText.BadSslMode("maybe"), new PostgresConnectionConfig { Host = "h", User = "u", SslMode = "maybe" }.Problem);
-        Assert.Equal(SqlText.BadPasswordStore("vault"), new PostgresConnectionConfig { Host = "h", User = "u", PasswordStore = "vault" }.Problem);
+        Assert.Equal(PostgresText.NoDatabase, new PostgresConnectionConfig { Host = "h", User = "u" }.Problem);   // required since 2026-10-09
+        Assert.Equal(PostgresText.NoUser, new PostgresConnectionConfig { Host = "h", Database = "d" }.Problem);
+        Assert.Equal(PostgresText.BadPort(0), new PostgresConnectionConfig { Host = "h", Database = "d", User = "u", Port = 0 }.Problem);
+        Assert.Equal(PostgresText.BadSslMode("maybe"), new PostgresConnectionConfig { Host = "h", Database = "d", User = "u", SslMode = "maybe" }.Problem);
+        Assert.Equal(SqlText.BadPasswordStore("vault"), new PostgresConnectionConfig { Host = "h", Database = "d", User = "u", PasswordStore = "vault" }.Problem);
+        Assert.Equal(PostgresText.BadSchemaKey("a b"), new PostgresConnectionConfig { Host = "h", Database = "d", User = "u", Schema = "a b" }.Problem);
 
-        var builder = new PostgresConnectionConfig { Host = "db", User = "reader", SslMode = "verify-full" }.Builder("secret", null, 30);
-        Assert.Equal(("db", 5432, "postgres", "reader", "secret", false), (builder.Host, builder.Port, builder.Database, builder.Username, builder.Password, builder.Pooling));
+        var builder = new PostgresConnectionConfig { Host = "db", Database = "shop", User = "reader", SslMode = "verify-full" }.Builder("secret", 30);
+        Assert.Equal(("db", 5432, "shop", "reader", "secret", false), (builder.Host, builder.Port, builder.Database, builder.Username, builder.Password, builder.Pooling));
         Assert.Equal(SslMode.VerifyFull, builder.SslMode);
         Assert.Contains("-c default_transaction_read_only=on", builder.Options);
         Assert.Contains("-c standard_conforming_strings=on", builder.Options);
         Assert.Contains("-c statement_timeout=30000", builder.Options);
-        Assert.Equal("shop", new PostgresConnectionConfig { Host = "db", User = "reader", Database = "shop" }.Builder(null, null, 30).Database);
-        Assert.Equal("other", new PostgresConnectionConfig { Host = "db", User = "reader", Database = "shop" }.Builder(null, "other", 30).Database);
+        Assert.DoesNotContain("search_path", builder.Options);   // every schema open without a lock
+
+        // A schema lock (2026-10-09) is the session's whole search path: a plain name as it is, another quoted.
+        Assert.EndsWith(" -c search_path=sales", new PostgresConnectionConfig { Host = "db", Database = "shop", User = "reader", Schema = " sales " }.Builder(null, 30).Options);
+        Assert.EndsWith(" -c search_path=\"Sales\"", new PostgresConnectionConfig { Host = "db", Database = "shop", User = "reader", Schema = "Sales" }.Builder(null, 30).Options);
         Assert.Equal("db:5432", Config().Endpoint);
         Assert.Equal("NeonSidekick/postgres/shop", Config().CredentialTarget("shop"));
     }
@@ -157,8 +162,8 @@ public sealed class PostgresToolsTests : IDisposable
         string home = Path.Combine(_dir, "home");
         string profile = Path.Combine(home, "profiles", "default");
         Directory.CreateDirectory(profile);
-        File.WriteAllText(PostgresConfigFile.GlobalPath(home), """{ "connections": { "shop": { "host": "global", "user": "u" }, "bad": { "user": "u" } } }""");
-        Assert.Null(PostgresConfigFile.AddConnection(PostgresConfigFile.ProfilePath(profile), "shop", new PostgresConnectionConfig { Host = "local", User = "reader", SslMode = "require" }));
+        File.WriteAllText(PostgresConfigFile.GlobalPath(home), """{ "connections": { "shop": { "host": "global", "database": "shop", "user": "u" }, "bad": { "user": "u" } } }""");
+        Assert.Null(PostgresConfigFile.AddConnection(PostgresConfigFile.ProfilePath(profile), "shop", new PostgresConnectionConfig { Host = "local", Database = "shop", User = "reader", SslMode = "require" }));
         Assert.Contains("// One entry per connection.", File.ReadAllText(PostgresConfigFile.ProfilePath(profile)));
 
         var catalog = PostgresConfigFile.LoadCatalog(profile, home);
@@ -225,24 +230,84 @@ public sealed class PostgresToolsTests : IDisposable
         var catalog = new PostgresCatalog([new PostgresNamedConnection("shop", Config(), "x.json")], []);
         var access = new PostgresAccess(() => catalog.Offered(_settings.PostgresConnectionsOffered));
         var tools = ChatScreen.PostgresTools(access, () => _settings);
-        Assert.Equal(10, tools.Count);   // the nine reads and postgres_execute (2026-10-05), which plan mode drops
+        Assert.Equal(9, tools.Count);   // the eight reads (postgres_databases gone 2026-10-09) and postgres_execute (2026-10-05), which plan mode drops
         Assert.Equal(ChatScreen.PostgresToolNames, tools.Select(t => t.Name).ToHashSet());
         Assert.All(tools.Where(t => t is not PostgresExecuteTool), t => Assert.True(PlanTools.Allowed(t.Name), t.Name));
         Assert.StartsWith("1 PostgreSQL connection (every PostgreSQL tool", tools.OfType<PostgresConnectionsTool>().Single().Describe());
 
         var query = tools.OfType<PostgresQueryTool>().Single();
-        Assert.StartsWith("Error: the SQL starts with DELETE", await query.RunAsync("DELETE FROM t", null, null, [], null, CancellationToken.None));
-        Assert.Equal(SqlText.BadMaxRows(PostgresQueryTool.MinRows, PostgresQueryTool.MaxRows), await query.RunAsync("SELECT 1", null, null, [], 0, CancellationToken.None));
+        Assert.StartsWith("Error: the SQL starts with DELETE", await query.RunAsync("DELETE FROM t", null, [], null, CancellationToken.None));
+        Assert.Equal(SqlText.BadMaxRows(PostgresQueryTool.MinRows, PostgresQueryTool.MaxRows), await query.RunAsync("SELECT 1", null, [], 0, CancellationToken.None));
         Assert.Equal(PostgresText.NoPattern, await tools.OfType<PostgresColumnsTool>().Single().InvokeAsync(new AIFunctionArguments()));
-        Assert.Equal(PostgresText.NoTable, await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync(" ", null, null, null, CancellationToken.None));
-        Assert.Equal(PostgresText.BadTable("a.b.c"), await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("a.b.c", null, null, null, CancellationToken.None));
+        Assert.Equal(PostgresText.NoTable, await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync(" ", null, null, CancellationToken.None));
+        Assert.Equal(PostgresText.BadTable("a.b.c"), await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("a.b.c", null, null, CancellationToken.None));
 
         _settings.PostgresConnectionsOffered = null;
-        Assert.Equal(PostgresText.NoConnections, await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, null, null, null, CancellationToken.None));
+        Assert.Equal(PostgresText.NoConnections, await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, null, null, CancellationToken.None));
         Assert.False(ChatScreen.PostgresOffered(_settings, access));
         _settings.PostgresConnectionsOffered = ["shop"];
         Assert.True(ChatScreen.PostgresOffered(_settings, access));
-        Assert.Equal("PostgreSQL · db:5432", Assert.Single(ChatScreen.PostgresChoices(catalog)).Note);
+        Assert.Equal("PostgreSQL · db:5432 / shop", Assert.Single(ChatScreen.PostgresChoices(catalog)).Note);
+    }
+
+    /// <summary>
+    /// The lock (2026-10-09): every tool refuses a <c>database</c>; the cluster's own catalogs are refused before any server; under a
+    /// schema lock another schema — as a tool's <c>schema</c>, a <c>schema.name</c> table or <c>information_schema</c> in the SQL — is
+    /// refused at once, and a qualifier the server must be asked about sends for the schemas' names first.
+    /// </summary>
+    [Fact]
+    public async Task TheTools_KeepToTheConnectionsDatabase_AndALockedSchema()
+    {
+        var config = new PostgresConnectionConfig { Host = "127.0.0.1", Port = 1, Database = "shop", User = "reader", Password = "p", ConnectTimeoutSeconds = 1 };
+        var catalog = new PostgresCatalog([new PostgresNamedConnection("shop", config, "x.json")], []);
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => catalog.Offered(_settings.PostgresConnectionsOffered)), () => _settings);
+        foreach (var tool in tools)
+        {
+            Assert.Equal(PostgresText.NoDatabaseArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "SELECT 1", ["table"] = "t", ["pattern"] = "x", ["database"] = "other" }))!);
+        }
+
+        var query = tools.OfType<PostgresQueryTool>().Single();
+        Assert.Equal(PostgresText.ServerCatalog("pg_stat_activity"), await query.RunAsync("SELECT query FROM pg_stat_activity", null, [], null, CancellationToken.None));
+        Assert.Equal(PostgresText.ServerCatalog("pg_database"), await query.RunAsync("SELECT datname FROM pg_catalog.pg_database", null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: could not connect to shop", await query.RunAsync("SELECT * FROM public.t", null, [], null, CancellationToken.None));   // no lock: no names needed
+        Assert.Contains("- shop (default): 127.0.0.1:1 / shop, user reader", tools.OfType<PostgresConnectionsTool>().Single().Describe());
+
+        config.Schema = "sales";
+        Assert.Contains("- shop (default): 127.0.0.1:1 / shop (schema sales alone), user reader", tools.OfType<PostgresConnectionsTool>().Single().Describe());
+        Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "public", null, CancellationToken.None));
+        Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("public.orders", null, null, CancellationToken.None));
+        Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), (string)(await tools.OfType<PostgresIndexesTool>().Single().InvokeAsync(new AIFunctionArguments { ["schema"] = "public" }))!);
+        Assert.Equal(PostgresText.OtherSchema("information_schema", "sales"), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: could not connect to shop", await query.RunAsync("SELECT * FROM sales.orders o WHERE o.id = 1", null, [], null, CancellationToken.None));   // the alias sends for the names
+        Assert.StartsWith("Error: could not connect to shop", await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("SALES.orders", null, null, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM archive.orders", "sales", "archive")]
+    [InlineData("SELECT * FROM \"ARCHIVE\".orders", "sales", "archive")]   // a quoted name compared case-blind: refused rather than missed
+    [InlineData("SELECT o.id FROM orders o", "sales", null)]
+    [InlineData("SELECT * FROM orders AS archive WHERE archive.id = 1", "sales", "archive")]
+    [InlineData("SELECT sales.orders.id FROM sales.orders", "sales", null)]
+    [InlineData("SELECT pg_catalog.now(), x::text FROM orders", "sales", null)]
+    [InlineData("SELECT * FROM archive.orders", null, null)]
+    public void TheBoundary_HoldsALockedSchema(string sql, string? schema, string? other)
+    {
+        string[] visible = ["sales", "archive", "public", "pg_catalog", "information_schema"];
+        Assert.Equal(other is null ? null : PostgresText.OtherSchema(other, schema!), PostgresBoundary.Check(sql, schema, visible));
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM pg_roles", "pg_roles")]
+    [InlineData("SELECT usename, passwd FROM pg_shadow", "pg_shadow")]
+    [InlineData("SELECT * FROM pg_settings WHERE name = 'data_directory'", "pg_settings")]
+    [InlineData("SELECT pg_database_size('other')", "pg_database_size")]
+    [InlineData("SELECT pg_stat_get_backend_activity(1)", "pg_stat_get_backend_activity")]
+    [InlineData("SELECT * FROM \"pg_stat_activity\"", "pg_stat_activity")]
+    public void TheBoundary_RefusesTheClustersCatalogs_LockedOrNot(string sql, string named)
+    {
+        Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.Check(sql, null, []));
+        Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.Qualifiers(sql, "sales").Refused);
+        Assert.Null(PostgresBoundary.Check("SELECT relname FROM pg_class", null, []));
     }
 
     [Fact]
@@ -377,13 +442,14 @@ public sealed class LivePostgresTests
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
-        _access.RunAsync("live", null, null, [sql], [], 10, timeoutSeconds, cancellationToken);
+        _access.RunAsync("live", null, [sql], [], 10, timeoutSeconds, cancellationToken);
 
     [LivePostgresFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
     {
         Assert.Contains("| public |", await Invoke<PostgresSchemasTool>());
-        Assert.Contains("| postgres |", await Invoke<PostgresDatabasesTool>());
+        Assert.Equal(PostgresText.NoDatabaseArgument, await Invoke<PostgresTablesTool>(("database", "postgres")));
+        Assert.Equal(PostgresText.ServerCatalog("pg_database"), await Invoke<PostgresQueryTool>(("sql", "SELECT datname FROM pg_database")));
         string tables = await Invoke<PostgresTablesTool>(("pattern", "ns_"));
         Assert.Contains("| public.ns_customers | table |", tables);
         Assert.Contains("People who buy things", tables);
@@ -403,14 +469,32 @@ public sealed class LivePostgresTests
         Assert.StartsWith("Error: no table or view 'nope'", await Invoke<PostgresDescribeTool>(("table", "nope")));
     }
 
+    /// <summary>
+    /// A schema lock against a real server (2026-10-09): the session's search path is the schema alone, a statement whose qualifiers are
+    /// an alias reads after the schemas' names are read, its own schema written out reads, and information_schema is refused.
+    /// </summary>
+    [LivePostgresFact]
+    public async Task ASchemaLock_SetsTheSearchPath_AndKeepsTheModelInIt()
+    {
+        var c = LivePostgres.Config!;
+        var locked = new PostgresConnectionConfig { Host = c.Host, Port = c.Port, Database = c.Database, User = c.User, Password = c.Password, SslMode = c.SslMode, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds, Schema = "public" };
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => new PostgresCatalog([new PostgresNamedConnection("live", locked, "test")], [])), () => _settings);
+        var query = tools.OfType<PostgresQueryTool>().Single();
+        Assert.Contains("| {public} |", await query.RunAsync("SELECT current_schemas(false)::text AS path", null, [], null, CancellationToken.None));
+        Assert.StartsWith("1 row", await query.RunAsync("SELECT count(o.id) FROM ns_orders o", null, [], null, CancellationToken.None));
+        Assert.StartsWith("1 row", await query.RunAsync("SELECT count(*) FROM public.ns_orders", null, [], null, CancellationToken.None));
+        Assert.Equal(PostgresText.OtherSchema("information_schema", "public"), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
+        Assert.Contains("| public |", (string)(await tools.OfType<PostgresSchemasTool>().Single().InvokeAsync(new AIFunctionArguments()))!);
+    }
+
     [LivePostgresFact]
     public async Task TheQuery_BindsReadsTypesAndCaps()
     {
-        string rows = await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT id, total, tags FROM ns_orders WHERE customer_id = @c ORDER BY id", null, null, [new("c", 2L)], null, CancellationToken.None);
+        string rows = await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT id, total, tags FROM ns_orders WHERE customer_id = @c ORDER BY id", null, [new("c", 2L)], null, CancellationToken.None);
         Assert.StartsWith("2 rows × 3 columns from live/", rows);
         Assert.Contains("| 11 | 7.00 | NULL |", rows);
-        Assert.Contains("{gift, rush}", await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT tags FROM ns_orders WHERE id = 10", null, null, [], null, CancellationToken.None));
-        Assert.Contains("the first 1 shown", await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT * FROM ns_orders", null, null, [], 1, CancellationToken.None));
+        Assert.Contains("{gift, rush}", await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT tags FROM ns_orders WHERE id = 10", null, [], null, CancellationToken.None));
+        Assert.Contains("the first 1 shown", await _tools.OfType<PostgresQueryTool>().Single().RunAsync("SELECT * FROM ns_orders", null, [], 1, CancellationToken.None));
         var unbound = await Raw("SELECT * FROM ns_orders WHERE id=@id");
         Assert.Equal(SqlOutcome.Failed, unbound.Outcome);
         Assert.EndsWith(PostgresText.UnboundOperatorBind(["id"]), unbound.Detail);
@@ -442,7 +526,7 @@ public sealed class LivePostgresTests
         using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Raw(PostgresCheck.SlowQuery, 30, cancel.Token));
 
-        var who = await _access.RunAsync("live", null, null, PostgresCatalogQueries.WhoAmI, [], 10, 30, CancellationToken.None);
+        var who = await _access.RunAsync("live", null, PostgresCatalogQueries.WhoAmI, [], 10, 30, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, who.Outcome);
         Assert.StartsWith("PostgreSQL ", who.Grids[0].Rows[0][2]);
     }

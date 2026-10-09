@@ -20,7 +20,10 @@ public partial class ToolsMenuTests
             TabFields(ToolsText.PostgresTabTitle));
     }
 
-    /// <summary><c>PostgreSQL add connection</c>: every page, the draft tested (a superuser warned of, not refused), saved and offered, the password encrypted.</summary>
+    /// <summary>
+    /// <c>PostgreSQL add connection</c>: every page, the draft tested (a superuser warned of, not refused; what else the role could reach,
+    /// 2026-10-09), saved and offered, the password encrypted; the schema lock saved.
+    /// </summary>
     [Fact]
     public async Task OnThePane_ThePostgresWizard_WalksAConnection_WarnsOfASuperuser_AndSavesIt()
     {
@@ -31,7 +34,8 @@ public partial class ToolsMenuTests
         {
             tested.Add(c);
             return Task.FromResult(new SqlRun(SqlOutcome.Ok, "", c.Name, "shop",
-                [new SqlGrid(["user", "database", "version"], [["postgres", "shop", "PostgreSQL 17.2"]], false), new SqlGrid(["p"], [["superuser"]], false)], TimeSpan.Zero));
+                [new SqlGrid(["user", "database", "version"], [["postgres", "shop", "PostgreSQL 17.2"]], false), new SqlGrid(["p"], [["superuser"]], false),
+                 new SqlGrid(["datname"], [["postgres"]], false), new SqlGrid(["srvname"], [], false), new SqlGrid(["nspname"], [["public"]], false)], TimeSpan.Zero));
         };
         OpenPostgresRow(6);
         Push(Keys.Enter);                         // the profile's file
@@ -39,6 +43,7 @@ public partial class ToolsMenuTests
         Type("localhost");
         Type("5433");
         Type("shop");
+        Type("sales");                            // the schema lock (2026-10-09)
         Type("postgres");
         Push(Keys.Enter);                         // file
         Type("s3cret");
@@ -54,7 +59,12 @@ public partial class ToolsMenuTests
 
         Assert.Equal("s3cret", Assert.Single(tested).Config.Password);
         var shop = Assert.Single(PostgresConfigFile.Load(path).Connections);
-        Assert.Equal(("localhost", 5433, "shop", "postgres", "require"), (shop.Config.Host, shop.Config.Port, shop.Config.Database, shop.Config.User, shop.Config.SslMode));
+        Assert.Equal(("localhost", 5433, "shop", "sales", "postgres", "require"), (shop.Config.Host, shop.Config.Port, shop.Config.Database, shop.Config.Schema, shop.Config.User, shop.Config.SslMode));
+        Assert.Equal("sales", Assert.Single(tested).Config.Schema);
+        Assert.Contains("The role could also connect to postgres; use the schemas public.", Output);
+        Assert.Equal("The role could also connect to postgres; use the schemas public. The tools keep to shop.sales; a role granted only it is the lock the server keeps too.",
+            PostgresText.Reach("shop", "sales", ["postgres"], [], ["public"]));
+        Assert.Equal("The role reaches nothing beyond shop: the server holds it there too.", PostgresText.Reach("shop", null, [], [], ["public"]));
         Assert.Equal("s3cret", PostgresSecrets.Resolve(shop).Value);
         Assert.Contains(PostgresText.TestOk("shop", "postgres", "shop", "PostgreSQL 17.2"), Output);
         Assert.Contains("This account can change data (superuser). As readwrite, postgres_execute may use those powers", Output);

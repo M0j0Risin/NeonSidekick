@@ -73,7 +73,7 @@ public sealed class ServerWriteTests
         Assert.Null(ConnectionAccess.Stored(false));   // read is the default, left out of the file
         Assert.Equal("readwrite", ConnectionAccess.Stored(true));
 
-        Assert.Equal(ConnectionAccess.Problem("rw"), new PostgresConnectionConfig { Host = "db", User = "u", Access = "rw" }.Problem);
+        Assert.Equal(ConnectionAccess.Problem("rw"), new PostgresConnectionConfig { Host = "db", Database = "d", User = "u", Access = "rw" }.Problem);
         Assert.Equal(ConnectionAccess.Problem("rw"), new MySql.MySqlConnectionConfig { Host = "db", Database = "d", User = "u", Access = "rw" }.Problem);
         Assert.Equal(ConnectionAccess.Problem("rw"), new Oracle.OracleConnectionConfig { DataSource = "db:1521/x", User = "u", Access = "rw" }.Problem);
         Assert.Equal(ConnectionAccess.Problem("rw"), new SqlConnectionConfig { Server = "db", Database = "d", Auth = "windows", Access = "rw" }.Problem);
@@ -244,33 +244,34 @@ public sealed class PostgresExecuteTests
             return Task.FromResult(answer);
         });
 
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, null, [new("id", 1L)], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t WHERE id = @id;", null, [new("id", 1L)], null, CancellationToken.None));
         Assert.Equal([("PostgreSQL", "shop", "sales", "DELETE FROM t WHERE id = @id")], asked);
-        Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM t", "shop", "archive", [], null, CancellationToken.None));
-        Assert.Equal(("shop", "archive"), (asked[^1].Connection, asked[^1].Place));
+        Assert.Equal(PostgresText.NoDatabaseArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "DELETE FROM t", ["database"] = "archive" }))!);   // 2026-10-09
+        Assert.Equal(PostgresText.ServerCatalog("pg_settings"), await tool.RunAsync("UPDATE pg_settings SET setting = '1'", "shop", [], null, CancellationToken.None));
+        Assert.Single(asked);
         answer = null;
-        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await tool.RunAsync("DELETE FROM t", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await tool.RunAsync("DELETE FROM t", null, [], null, CancellationToken.None));
 
         asked.Clear();
-        Assert.Equal(ServerWriteText.ReadOnlyConnection(PostgresStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", null, [], null, CancellationToken.None));
-        Assert.StartsWith("Error: no PostgreSQL connection is named 'nope'", await tool.RunAsync("DELETE FROM t", "nope", null, [], null, CancellationToken.None));
-        Assert.StartsWith("Error: the SQL uses GRANT", await tool.RunAsync("GRANT ALL ON t TO bob", null, null, [], null, CancellationToken.None));
-        Assert.Equal(SqlText.BadMaxRows(PostgresQueryTool.MinRows, PostgresQueryTool.MaxRows), await tool.RunAsync("DELETE FROM t", null, null, [], 0, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyConnection(PostgresStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
+        Assert.StartsWith("Error: no PostgreSQL connection is named 'nope'", await tool.RunAsync("DELETE FROM t", "nope", [], null, CancellationToken.None));
+        Assert.StartsWith("Error: the SQL uses GRANT", await tool.RunAsync("GRANT ALL ON t TO bob", null, [], null, CancellationToken.None));
+        Assert.Equal(SqlText.BadMaxRows(PostgresQueryTool.MinRows, PostgresQueryTool.MaxRows), await tool.RunAsync("DELETE FROM t", null, [], 0, CancellationToken.None));
         Assert.StartsWith("Error: \"params\" must be one object of names and values", (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "DELETE FROM t", ["params"] = new[] { 1, 2 } }))!);
         // A read the read gate refuses is no read: never asked, never run.
-        Assert.StartsWith("Error: the SQL uses pg_sleep()", await tool.RunAsync("SELECT pg_sleep(5)", null, null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: the SQL uses pg_sleep()", await tool.RunAsync("SELECT pg_sleep(5)", null, [], null, CancellationToken.None));
 
         _settings.PostgresStatementsAllowed = ["data"];
-        Assert.StartsWith("Error: the SQL is deleting (DELETE, TRUNCATE, a MERGE that deletes), which the user has not allowed", await tool.RunAsync("DELETE FROM t", null, null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: the SQL is deleting (DELETE, TRUNCATE, a MERGE that deletes), which the user has not allowed", await tool.RunAsync("DELETE FROM t", null, [], null, CancellationToken.None));
         _settings.PostgresStatementsAllowed = [];
-        Assert.Equal(ServerWriteText.NoKindsAllowed(PostgresStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoKindsAllowed(PostgresStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         _settings.PostgresStatementsAllowed = ["data"];
         _settings.PostgresMode = "read-only";
-        Assert.Equal(ServerWriteText.ReadOnlyMode(PostgresStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.ReadOnlyMode(PostgresStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
         Assert.Empty(asked);   // every refusal comes before the ask
 
         _settings.PostgresMode = "read-write";
-        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await new PostgresExecuteTool(Access(), () => _settings, allow: null).RunAsync("INSERT INTO t VALUES (1)", null, null, [], null, CancellationToken.None));
+        Assert.Equal(ServerWriteText.NoPane(PostgresStatementKinds.Family), await new PostgresExecuteTool(Access(), () => _settings, allow: null).RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
     }
 
     [Fact]
@@ -290,7 +291,7 @@ public sealed class PostgresExecuteTests
     {
         var access = Access();
         var all = ChatScreen.PostgresTools(access, () => _settings);
-        Assert.Equal(10, all.Count);
+        Assert.Equal(9, all.Count);
         Assert.Contains(PostgresExecuteTool.ToolName, ChatScreen.PostgresToolNames);
         Assert.Contains(PostgresExecuteTool.ToolName, PlanTools.Mutating);
         Assert.False(PlanTools.Allowed(PostgresExecuteTool.ToolName));
@@ -306,7 +307,7 @@ public sealed class PostgresExecuteTests
         Assert.DoesNotContain(PostgresExecuteTool.ToolName, Names(pane: true));   // no readwrite connection offered
         _settings.PostgresConnectionsOffered = ["shop", "ro"];
         _settings.PostgresMode = "read-only";
-        Assert.Equal(9, Names(pane: true).Count());
+        Assert.Equal(8, Names(pane: true).Count());
         Assert.Equal(ServerWrites.None, ChatScreen.ServerWritesOf(ChatScreen.PostgresToolsFor(all, _settings, true, access.Catalog())));
     }
 
@@ -333,8 +334,8 @@ public sealed class PostgresExecuteTests
     [Fact]
     public void TheWriteSession_DropsOnlyTheReadOnlyDefault()
     {
-        string read = Config(null).Builder("p", null, 30).Options!;
-        string write = Config(null).Builder("p", null, 30, readOnly: false).Options!;
+        string read = Config(null).Builder("p", 30).Options!;
+        string write = Config(null).Builder("p", 30, readOnly: false).Options!;
         Assert.Contains("default_transaction_read_only=on", read);
         Assert.DoesNotContain("default_transaction_read_only", write);
         Assert.Equal(read.Replace("-c default_transaction_read_only=on ", "", StringComparison.Ordinal), write);
@@ -376,32 +377,32 @@ public sealed class LivePostgresWriteTests
         DiagnosticLog.Emitted += Collect;
         try
         {
-            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id int PRIMARY KEY, a text)", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Changed 2 rows in live/", await tool.RunAsync($"INSERT INTO {table} VALUES (1, @a), (2, 'b')", null, null, [new("a", "x")], null, CancellationToken.None));
-            string returned = await tool.RunAsync($"UPDATE {table} SET a = 'y' WHERE id = 1 RETURNING id, a", null, null, [], null, CancellationToken.None);
+            Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id int PRIMARY KEY, a text)", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Changed 2 rows in live/", await tool.RunAsync($"INSERT INTO {table} VALUES (1, @a), (2, 'b')", null, [new("a", "x")], null, CancellationToken.None));
+            string returned = await tool.RunAsync($"UPDATE {table} SET a = 'y' WHERE id = 1 RETURNING id, a", null, [], null, CancellationToken.None);
             Assert.StartsWith("Changed 1 row in live/", returned);
             Assert.Contains("| 1 | y |", returned);
             Assert.Equal(3, asked.Count);
 
             // A read asks nothing and runs read-only.
-            string rows = await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, null, [], null, CancellationToken.None);
+            string rows = await tool.RunAsync($"SELECT a FROM {table} ORDER BY id", null, [], null, CancellationToken.None);
             Assert.StartsWith("2 rows × 1 column from live/", rows);
             Assert.Equal(3, asked.Count);
 
             // A failed statement changes nothing and says why.
-            Assert.StartsWith("Error: the server refused it", await tool.RunAsync($"INSERT INTO {table} VALUES (1, 'dup')", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, null, [], null, CancellationToken.None));
-            Assert.StartsWith("Ran it", await tool.RunAsync($"VACUUM {table}", null, null, [], null, CancellationToken.None));
+            Assert.StartsWith("Error: the server refused the SQL (live/", await tool.RunAsync($"INSERT INTO {table} VALUES (1, 'dup')", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Changed 2 rows", await tool.RunAsync($"DELETE FROM {table}", null, [], null, CancellationToken.None));
+            Assert.StartsWith("Ran it", await tool.RunAsync($"VACUUM {table}", null, [], null, CancellationToken.None));
             Assert.Contains(audit, line => line.Contains("2 rows changed by INSERT INTO " + table, StringComparison.Ordinal));
         }
         finally
         {
             DiagnosticLog.Emitted -= Collect;
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, null, [], null, CancellationToken.None));
+            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None));
         }
 
         var (readOnly, roAsked) = Tool(null);
-        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE ns_never (a int)", null, null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE ns_never (a int)", null, [], null, CancellationToken.None));
         Assert.Empty(roAsked);
     }
 }

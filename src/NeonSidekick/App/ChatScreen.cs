@@ -5244,13 +5244,12 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The PostgreSQL tools (2026-10-04), <see cref="MySqlTools"/>' twin, offered while <see cref="PostgresOffered"/> says so (headless too):
-    /// the nine reads, and <c>postgres_execute</c> (2026-10-05) behind <paramref name="allow"/> — null where nothing can ask, and there
-    /// <see cref="PostgresToolsFor"/> never offers it.
+    /// the reads (<c>postgres_databases</c> gone 2026-10-09 with the lock to each connection's database), and <c>postgres_execute</c>
+    /// (2026-10-05) behind <paramref name="allow"/> — null where nothing can ask, and there <see cref="PostgresToolsFor"/> never offers it.
     /// </summary>
     public static IReadOnlyList<AIFunction> PostgresTools(Postgres.PostgresAccess postgres, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
     {
         new PostgresConnectionsTool(postgres, effective),
-        new PostgresDatabasesTool(postgres, effective),
         new PostgresSchemasTool(postgres, effective),
         new PostgresTablesTool(postgres, effective),
         new PostgresColumnsTool(postgres, effective),
@@ -5264,7 +5263,7 @@ internal sealed partial class ChatScreen
     /// <summary>The PostgreSQL tools' names: their results are a table the model reads, the transcript a note.</summary>
     public static readonly IReadOnlySet<string> PostgresToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
-        PostgresConnectionsTool.ToolName, PostgresDatabasesTool.ToolName, PostgresSchemasTool.ToolName, PostgresTablesTool.ToolName, PostgresColumnsTool.ToolName,
+        PostgresConnectionsTool.ToolName, PostgresSchemasTool.ToolName, PostgresTablesTool.ToolName, PostgresColumnsTool.ToolName,
         PostgresDescribeTool.ToolName, PostgresRelationshipsTool.ToolName, PostgresIndexesTool.ToolName, PostgresQueryTool.ToolName,
         PostgresExecuteTool.ToolName,
     };

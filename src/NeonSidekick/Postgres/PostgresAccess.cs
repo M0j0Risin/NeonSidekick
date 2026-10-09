@@ -24,8 +24,8 @@ namespace NeonSidekick.Postgres;
 /// <item>the account last: the wizard warns of a superuser or a role with write grants (the user's call: a dev container signs in as
 /// <c>postgres</c>, so it warns rather than refuses).</item>
 /// </list>
-/// A call is a list of statements, one result set each, all in the one transaction. A database other than the connection's own is a
-/// connection to that database (Postgres cannot switch inside a session). The password never leaves the connection string.
+/// A call is a list of statements, one result set each, all in the one transaction, in the connection's own database alone (2026-10-09:
+/// the per-call one went with the lock). The password never leaves the connection string.
 /// </summary>
 public sealed class PostgresAccess
 {
@@ -89,11 +89,11 @@ public sealed class PostgresAccess
 
     /// <summary>
     /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (<paramref name="defaultName"/> or the first when
-    /// blank), in <paramref name="database"/> when given (else the connection's own): each one's rows read to <paramref name="maxRows"/>,
+    /// blank), in the connection's own database: each one's rows read to <paramref name="maxRows"/>,
     /// each bound only the <c>@names</c> it uses, all inside one read-only transaction that is rolled back. A timeout, a failed connect
     /// and a server error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string? defaultName, string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? name, string? defaultName, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -108,7 +108,7 @@ public sealed class PostgresAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        var builder = target.Config.Builder(secret.Value, database, timeoutSeconds);
+        var builder = target.Config.Builder(secret.Value, timeoutSeconds);
         await using var source = Build(builder.ConnectionString);
         NpgsqlConnection connection;
         try
@@ -180,14 +180,14 @@ public sealed class PostgresAccess
     /// <summary>
     /// <c>postgres_execute</c>'s run (2026-10-05, <c>PostgreSQL mode</c> <c>read-write</c>): one statement the write gate passed, on a
     /// connection whose entry says <c>"access": "readwrite"</c> (any other is <see cref="SqlOutcome.ReadOnlyConnection"/>, whatever the
-    /// caller checked), in <paramref name="database"/> when given. The session as for a read but for <c>default_transaction_read_only</c>
+    /// caller checked), in the connection's own database. The session as for a read but for <c>default_transaction_read_only</c>
     /// (<see cref="PostgresConnectionConfig.Builder"/>: <c>statement_timeout</c>, <c>lock_timeout</c> and the strings stay), and no
     /// transaction of the app's: the statement commits on its own, atomically, so VACUUM runs and a failed one changes nothing. The rows a
     /// RETURNING gives back are read to <paramref name="maxRows"/> (the rest drained, never cancelled: a cancel would undo the
     /// statement); <see cref="SqlRun.Changes"/> is the rows the server counts (null for DDL). A timeout, a failed connect and a server
     /// error are outcomes; a cancelled token throws (the server undoes the statement).
     /// </summary>
-    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string? database, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> ExecuteAsync(string? name, string? defaultName, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -207,7 +207,7 @@ public sealed class PostgresAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        var builder = target.Config.Builder(secret.Value, database, timeoutSeconds, readOnly: false);
+        var builder = target.Config.Builder(secret.Value, timeoutSeconds, readOnly: false);
         await using var source = Build(builder.ConnectionString);
         NpgsqlConnection connection;
         try
