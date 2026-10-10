@@ -331,7 +331,7 @@ public sealed class AppSettingsData
     /// <c>/tools shell allowed</c> (<c>/cmdlist</c> until 2026-10-09) that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPolice"/>
     /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
     /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, Tools, Skills, Memory, Shell
-    /// allowed commands, Shell police, the Shell, Files and Web switches and the path since 2026-10-05 (the user's pick; the last
+    /// allowed commands, Shell police, the Shell, Files, Image (2026-10-10) and Web switches and the path since 2026-10-05 (the user's pick; the last
     /// seven alone from 2026-10-03; Shell allowed commands,
     /// Shell police and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on 2026-09-29,
     /// every item before); an empty list draws no row at all.

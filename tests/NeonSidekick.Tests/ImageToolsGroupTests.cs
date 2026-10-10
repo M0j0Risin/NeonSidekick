@@ -45,7 +45,7 @@ public sealed class ImageToolsGroupTests : IDisposable
         Assert.Equal("Image", ToolbarItems.Title(ToolbarItems.Image));
         Assert.Equal(ToolbarItems.Image, ChatScreen.ToolbarItemOf(ChatScreen.ImageToolGlyph));
         Assert.Equal(ToolsText.SwitchLine(ToolbarItems.Image), ChatScreen.ToolbarWord(ChatScreen.ImageToolGlyph));
-        Assert.DoesNotContain(ToolbarItems.Image, ToolbarItems.Defaults);   // a new item starts off the toolbar
+        Assert.Equal(ToolbarItems.Defaults.ToList().IndexOf(ToolbarItems.Files) + 1, ToolbarItems.Defaults.ToList().IndexOf(ToolbarItems.Image));   // a default since later on 2026-10-10 (the user's ask), after the folder
         Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Image, new AppSettingsData()));
         Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Image, new AppSettingsData { ImageTools = true }));
         Assert.NotEqual(ChatScreen.ImageToolGlyph, "🖼️");   // the frame is the hint row's ComfyUI generation
