@@ -124,6 +124,38 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
+    public async Task OnThePane_TheAdvisorListsBand_AndItsEditor_NameEachAdvisorsServerAndModel()
+    {
+        Profiles.Create(_dir, "doug", new AppSettingsData { LlmUrl = "docker:vllm", LlmModel = "Qwen3.8-27B-NVFP4-RTX5090" });
+        Profiles.Create(_dir, "einstein", new AppSettingsData { LlmUrl = "claude-code" });
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("doug", "expert .NET solution architect"), new AdvisorEntry("einstein", "UX designer")]);
+        var doug = new AdvisorServerFacts(AdvisorServer.Docker, "Qwen3.8-27B-NVFP4-RTX5090");
+        var einstein = new AdvisorServerFacts(AdvisorServer.ClaudeCode, "sonnet");
+
+        var (menu, pane) = PaneMenu();
+        var footer = menu.FieldFooter(SettingsField.AdvisorList, _settings.Current);
+        Assert.True(footer.KeepLines);
+        Assert.Equal(AdvisorText.Detail(new AdvisorEntry("doug", "expert .NET solution architect"), doug, true) + "\n" + AdvisorText.Detail(new AdvisorEntry("einstein", "UX designer"), einstein, true), footer.Text);
+        Assert.Equal(SettingsMenu.FieldFooter(SettingsField.AdvisorList).Last + SettingsMenu.ChangedNote, footer.Last);
+
+        GoTo(SettingsTab.Advisors);
+        Down(1);                                // Advisor list: the band
+        Push(Keys.Enter);                       // the editor
+        Push(Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("doug — expert .NET solution architect · docker · Qwen3.8-27B", Output);
+        Assert.Contains("einstein — UX designer · claudecode · sonnet", Output);
+        Assert.Contains("doug      expert .NET solution architect · docker · Qwen3.8-27B", Output);
+        Assert.Contains("einstein  " + "UX designer".PadRight("expert .NET solution architect".Length) + " · claudecode · sonnet · tools", Output);
+        pane.Dispose();
+
+        // With none listed, the band is the field's description again.
+        _settings.Update(d => d.AdvisorList = null);
+        Assert.False(menu.FieldFooter(SettingsField.AdvisorList, _settings.Current).KeepLines);
+    }
+
+    [Fact]
     public async Task OnThePane_TheAdvisorRows_PickTheContextAndEmbeddedMode_AndRefuseACapOutOfRange()
     {
         var (menu, pane) = PaneMenu();

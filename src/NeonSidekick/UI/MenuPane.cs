@@ -70,7 +70,15 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
 /// What a page's <see cref="MenuPage.Footer"/> says under the list for the cursor's row (2026-10-04): <paramref name="Text"/>
 /// word-wrapped, then <paramref name="Last"/> (null for none) on the last row of its own, so a long text never cuts it.
 /// </summary>
-public sealed record MenuFooter(string Text, string? Last = null);
+public sealed record MenuFooter(string Text, string? Last = null)
+{
+    /// <summary>
+    /// <see cref="Text"/> is lines, one a row, each cut to the width, not one text to wrap (2026-10-10, <c>Advisor list</c>'s band: an
+    /// advisor a line); more lines than rows end on <see cref="MenuPane.MoreLines"/>. Off for every other footer, whose texts (an MCP
+    /// tool's description) may carry line breaks that were always read as spaces.
+    /// </summary>
+    public bool KeepLines { get; init; }
+}
 
 /// <summary>
 /// A button on a one-list page's title row (2026-09-21, the queue pane's <c>clear all</c>): drawn
@@ -353,10 +361,34 @@ public sealed class MenuPane : INoticeSink
     public static IReadOnlyList<string> FooterLines(MenuFooter footer, int width)
     {
         ArgumentNullException.ThrowIfNull(footer);
-        var rows = new List<string>(CaptionRows(footer.Text, width, footer.Last is null ? FooterRows : FooterRows - 1));
+        int room = footer.Last is null ? FooterRows : FooterRows - 1;
+        var rows = new List<string>(footer.KeepLines ? KeptLines(footer.Text, width, room) : CaptionRows(footer.Text, width, room));
         if (footer.Last is { } last && width > 0)
         {
             rows.AddRange(CaptionRows(last, width, 1));
+        }
+
+        return rows;
+    }
+
+    /// <summary>The last of a <see cref="MenuFooter.KeepLines"/> footer's rows when its lines are more than it has (2026-10-10). Pinned.</summary>
+    public static string MoreLines(int count) => "+" + count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " more";
+
+    /// <summary><paramref name="text"/>'s lines, each cut to <paramref name="width"/>, at most <paramref name="maxRows"/>, the last saying how many more. Pure.</summary>
+    private static List<string> KeptLines(string text, int width, int maxRows)
+    {
+        var rows = new List<string>();
+        if (width <= 0 || maxRows <= 0)
+        {
+            return rows;
+        }
+
+        var lines = text.ReplaceLineEndings("\n").Split('\n');
+        int shown = lines.Length <= maxRows ? lines.Length : maxRows - 1;
+        rows.AddRange(lines.Take(shown).Select(line => ScreenPane.Fit(line, width)));
+        if (shown < lines.Length)
+        {
+            rows.Add(ScreenPane.Fit(MoreLines(lines.Length - shown), width));
         }
 
         return rows;

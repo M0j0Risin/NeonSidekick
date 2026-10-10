@@ -29,7 +29,10 @@ internal sealed partial class SettingsMenu
     public const string NoAdvisorProfilesNotice = "(no other profile to add: make one with /profile add, or every one is an advisor already)";
 
     /// <summary>A missing profile's mark on its row and in the value. Pinned.</summary>
-    public const string MissingAdvisorMark = "(missing)";
+    public const string MissingAdvisorMark = AdvisorText.MissingMark;
+
+    /// <summary>The widest the editor pads a role to before its server; a longer one is cut (2026-10-10). Pinned.</summary>
+    public const int AdvisorRoleWidth = 32;
 
     /// <summary>The role prompt's label. Pinned.</summary>
     public static string AdvisorRolePrompt(string profile) => $"{profile}'s role (e.g. database architect, UX designer)";
@@ -61,37 +64,103 @@ internal sealed partial class SettingsMenu
         "must be " + AppSettingsData.MinAdvisorThreadPairs.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxAdvisorThreadPairs.ToString(CultureInfo.InvariantCulture) + " questions";
 
     /// <summary>
-    /// One row of the list editor: the profile padded, then its role dim; a profile no longer in the home says so, and one on the Claude
-    /// Code server says whether it gets the tools (<paramref name="mark"/>, <see cref="AdvisorText.ClaudeCodeMark"/>, 2026-10-10). Pinned.
+    /// One row of the list editor: the profile padded, then dim its role and what it runs on (2026-10-10, the user's ask): the role
+    /// padded to <paramref name="roleWidth"/> (cut past it), <c>· docker · Qwen3-32B</c> from <paramref name="facts"/>, then
+    /// <paramref name="mark"/> — on the Claude Code server whether it gets the tools (<see cref="AdvisorText.ClaudeCodeMark"/>), or
+    /// <see cref="AdvisorText.UnreadableMark"/>. A profile no longer in the home says so in their place. Pinned.
     /// </summary>
-    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width, string? mark = null)
+    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width, AdvisorServerFacts? facts = null, int roleWidth = 0, string? mark = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         string role = entry.Role.Length == 0 ? "(no role)" : entry.Role;
-        string tail = !exists ? "  " + MissingAdvisorMark : mark is null ? "" : "  · " + mark;
+        if (!exists)
+        {
+            return Markup.Escape(entry.Profile.PadRight(width)) + Theme.DimMarkup(Markup.Escape(role + "  " + MissingAdvisorMark));
+        }
+
+        string tail = (facts is null ? "" : " · " + facts.Kind + " · " + facts.Model) + (mark is null ? "" : " · " + mark);
+        if (tail.Length > 0 && roleWidth > 0)
+        {
+            role = ScreenPane.Fit(role, roleWidth).PadRight(roleWidth);
+        }
+
         return Markup.Escape(entry.Profile.PadRight(width)) + Theme.DimMarkup(Markup.Escape(role + tail));
     }
 
-    /// <summary>The Claude Code mark of each listed advisor (2026-10-10, <see cref="AdvisorClaudeGate"/>): null for one on any other server.</summary>
-    private Func<AdvisorEntry, string?> ClaudeCodeMarks(IReadOnlyList<AdvisorEntry> entries)
+    /// <summary>The editor's role column: the longest role (or <c>(no role)</c>), at most <see cref="AdvisorRoleWidth"/>.</summary>
+    public static int AdvisorRoleColumn(IReadOnlyList<AdvisorEntry> entries) =>
+        entries.Count == 0 ? 0 : Math.Min(AdvisorRoleWidth, entries.Max(e => e.Role.Length == 0 ? "(no role)".Length : e.Role.Length));
+
+    /// <summary>
+    /// The mark of each listed advisor (2026-10-10): on the Claude Code server whether it gets the tools (<see cref="AdvisorClaudeGate"/>),
+    /// an unreadable profile said so; null for the rest.
+    /// </summary>
+    private Func<AdvisorEntry, string?> AdvisorMarks(IReadOnlyList<AdvisorEntry> entries)
     {
-        var onClaudeCode = entries.Where(e => SavedOnClaudeCode(e.Profile)).Select(e => e.Profile).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var onClaudeCode = entries.Where(e => AdvisorFactsOf(e.Profile).Facts?.Kind == AdvisorServer.ClaudeCode).Select(e => e.Profile).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool master = Claude.ClaudeCliEndpoint.IsClaudeCli(_settings.Current.LlmUrl);
         string? holder = AdvisorClaudeGate.Holder(entries, onClaudeCode.Contains, master);
-        return entry => onClaudeCode.Contains(entry.Profile) ? AdvisorText.ClaudeCodeMark(AdvisorRoster.SameProfile(entry.Profile, holder)) : null;
+        return entry => onClaudeCode.Contains(entry.Profile) ? AdvisorText.ClaudeCodeMark(AdvisorRoster.SameProfile(entry.Profile, holder))
+            : AdvisorFactsOf(entry.Profile) is { Exists: true, Facts: null } ? AdvisorText.UnreadableMark
+            : null;
     }
 
-    private bool SavedOnClaudeCode(string profile)
+    /// <summary>Each advisor's profile as last read, with the write time it was read at (2026-10-10).</summary>
+    private readonly Dictionary<string, (DateTime Written, bool Exists, AdvisorServerFacts? Facts)> _advisorFacts = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether advisor <paramref name="profile"/> is in the home and what it runs on (null when its file cannot be read), read again
+    /// only when its <c>profile.json</c> was written since: <c>Advisor list</c>'s band asks on every move of the cursor.
+    /// </summary>
+    private (bool Exists, AdvisorServerFacts? Facts) AdvisorFactsOf(string profile)
     {
+        string home = _settings.StorageDirectory;
+        DateTime written;
         try
         {
-            return Profiles.Resolve(_settings.StorageDirectory, profile) is { } onDisk
-                && Claude.ClaudeCliEndpoint.IsClaudeCli(Profiles.ReadProfileFile(Profiles.ProfileFile(_settings.StorageDirectory, onDisk)).LlmUrl);
+            written = File.GetLastWriteTimeUtc(Profiles.ProfileFile(home, profile));
         }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return false;
+            written = DateTime.MinValue;
         }
+
+        lock (_advisorFacts)
+        {
+            if (_advisorFacts.TryGetValue(profile, out var kept) && kept.Written == written)
+            {
+                return (kept.Exists, kept.Facts);
+            }
+        }
+
+        bool exists = Profiles.Exists(home, profile);
+        var facts = exists ? AdvisorServer.Read(home, profile) : null;
+        lock (_advisorFacts)
+        {
+            _advisorFacts[profile] = (written, exists, facts);
+        }
+
+        return (exists, facts);
+    }
+
+    /// <summary>
+    /// <c>Advisor list</c>'s band (2026-10-10, the user's ask): an advisor a line (<see cref="AdvisorText.Detail"/>) over the field's
+    /// <c>Default:</c> line, in place of its description; null with none listed, when the description shows as on every row.
+    /// </summary>
+    private MenuFooter? AdvisorListFooter(AppSettingsData saved)
+    {
+        var entries = AdvisorRoster.Entries(saved.AdvisorList);
+        if (entries.Count == 0)
+        {
+            return null;
+        }
+
+        var lines = entries.Select(e =>
+        {
+            var (exists, facts) = AdvisorFactsOf(e.Profile);
+            return AdvisorText.Detail(e, facts, exists);
+        });
+        return new MenuFooter(string.Join("\n", lines), FieldFooter(SettingsField.AdvisorList).Last) { KeepLines = true };
     }
 
     /// <summary>The advisor-context picker (2026-10-10): the Claude Code advisor's rows, this setting's value under the cursor.</summary>
@@ -140,8 +209,13 @@ internal sealed partial class SettingsMenu
         {
             var entries = AdvisorRoster.Entries(_settings.Current.AdvisorList);
             int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => e.Profile.Length) + 2);
-            var marks = ClaudeCodeMarks(entries);
-            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), .. entries.Select(e => AdvisorRow(e, Profiles.Exists(_settings.StorageDirectory, e.Profile), width, marks(e)))];
+            int roleWidth = AdvisorRoleColumn(entries);
+            var marks = AdvisorMarks(entries);
+            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), .. entries.Select(e =>
+            {
+                var (exists, facts) = AdvisorFactsOf(e.Profile);
+                return AdvisorRow(e, exists, width, facts, roleWidth, marks(e));
+            })];
             var page = new MenuPage(Crumb(title), rows, AdvisorListKeys);
             if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)
             {

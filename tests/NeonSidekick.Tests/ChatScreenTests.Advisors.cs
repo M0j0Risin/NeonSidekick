@@ -123,7 +123,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(AdvisorText.ListHeading, output);
-        Assert.Contains(AdvisorText.ListLine(new AdvisorEntry("dba", "database architect"), exists: true), output);
+        Assert.Contains(AdvisorText.ListLine(new AdvisorEntry("dba", "database architect"), new AdvisorServerFacts(AdvisorServer.Scan, AdvisorServer.DefaultModel), exists: true), output);
         Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", output);
         Assert.Contains("\"nobody\" names no single advisor", output);
         Assert.Contains(AdvisorText.UsageError, output);

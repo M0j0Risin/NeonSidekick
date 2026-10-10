@@ -1903,7 +1903,7 @@ public sealed class SidekickApp
             await HeadlessNoticeLineAsync("[notice] " + Advisors.AdvisorText.ListHeading).ConfigureAwait(false);
             foreach (var entry in advisors)
             {
-                await HeadlessNoticeLineAsync("[notice] " + Advisors.AdvisorText.ListLine(entry, Profiles.Exists(_settings.StorageDirectory, entry.Profile))).ConfigureAwait(false);
+                await HeadlessNoticeLineAsync("[notice] " + Advisors.AdvisorText.ListLine(entry, Advisors.AdvisorServer.Read(_settings.StorageDirectory, entry.Profile), Profiles.Exists(_settings.StorageDirectory, entry.Profile))).ConfigureAwait(false);
             }
 
             return null;

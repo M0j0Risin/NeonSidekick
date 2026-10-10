@@ -94,8 +94,31 @@ public static class AdvisorText
     /// <summary>A Claude Code advisor's footer note while another holds the server's tools (2026-10-10, the user's rule: the first listed keeps them). Pinned.</summary>
     public static string OtherClaudeCodeNote(string holder) => $"no tools: {holder} is the Claude Code advisor with tools";
 
-    /// <summary>The list editor's mark on a Claude Code advisor: whether it gets the tools. Pinned.</summary>
-    public static string ClaudeCodeMark(bool tools) => tools ? "Claude Code, tools" : "Claude Code, text only";
+    /// <summary>
+    /// The list editor's mark on a Claude Code advisor: whether it gets the tools. Pinned. ("Claude Code, tools" until 2026-10-10, when
+    /// the row came to name every advisor's server kind, <see cref="AdvisorServer.ClaudeCode"/> among them.)
+    /// </summary>
+    public static string ClaudeCodeMark(bool tools) => tools ? "tools" : "text only";
+
+    /// <summary>A listed advisor whose profile is gone. Pinned.</summary>
+    public const string MissingMark = "(missing)";
+
+    /// <summary>A listed advisor whose <c>profile.json</c> could not be read. Pinned.</summary>
+    public const string UnreadableMark = "(unreadable profile)";
+
+    /// <summary>
+    /// One advisor on a line (2026-10-10, the user's ask): <c>doug — expert .NET solution architect · docker · Qwen3-32B</c>, the role
+    /// left out when there is none, a missing profile marked in place of its server, an unreadable one said so. What
+    /// <c>Advisor list</c>'s band and a bare <c>/advisor</c> print. Pinned.
+    /// </summary>
+    public static string Detail(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists)
+    {
+        ArgumentNullException.ThrowIfNull(advisor);
+        string head = advisor.Profile + (advisor.Role.Length == 0 ? "" : " — " + advisor.Role);
+        return !exists ? head + "  " + MissingMark
+            : facts is null ? head + " · " + UnreadableMark
+            : head + " · " + facts.Kind + " · " + facts.Model;
+    }
 
     /// <summary>The confirm pane's title (<c>Advisor confirm</c> on). Pinned.</summary>
     public static string ConfirmQuestion(AdvisorEntry advisor, string question) =>
@@ -171,9 +194,8 @@ public static class AdvisorText
     /// <summary>The list's heading. Pinned.</summary>
     public const string ListHeading = "Advisors (/advisor <name> <question>):";
 
-    /// <summary>One advisor on the list: <c>dba — database architect</c>, a missing profile marked. Pinned.</summary>
-    public static string ListLine(AdvisorEntry advisor, bool exists) =>
-        "  " + advisor.Profile + (advisor.Role.Length == 0 ? "" : " — " + advisor.Role) + (exists ? "" : "  (missing)");
+    /// <summary>One advisor on the list: <see cref="Detail"/> indented (its server and model since 2026-10-10). Pinned.</summary>
+    public static string ListLine(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists) => "  " + Detail(advisor, facts, exists);
 
     /// <summary>The asking line as the model's history keeps it: the exchange read as one put to someone else (as <c>/claude</c>'s). Pinned.</summary>
     public static string HistoryUser(string profile, string question) => "[to " + profile + "] " + question.Trim();

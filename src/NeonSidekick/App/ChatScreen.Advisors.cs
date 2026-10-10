@@ -126,7 +126,7 @@ internal sealed partial class ChatScreen
             _transcript.Notice(AdvisorText.ListHeading);
             foreach (var entry in advisors)
             {
-                _transcript.Notice(AdvisorText.ListLine(entry, Profiles.Exists(_settings.StorageDirectory, entry.Profile)));
+                _transcript.Notice(AdvisorText.ListLine(entry, AdvisorServer.Read(_settings.StorageDirectory, entry.Profile), Profiles.Exists(_settings.StorageDirectory, entry.Profile)));
             }
 
             return;

@@ -35,7 +35,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | Command | What it does |
 |---|---|
 | `/about` | Shows the version, the GitHub repository, runtime, folders, components, the embedded models (each Hugging Face repository with its link, the Models tab) and licence. |
-| `/advisor` | Lists the advisors: the *Advisor list*'s profiles and their roles. See [Advisor](#advisor). |
+| `/advisor` | Lists the advisors: the *Advisor list*'s profiles, their roles, and the kind of server and the model each one's profile is on. See [Advisor](#advisor). |
 | `/advisor <name> <question>` | Asks one advisor, named by its profile or a word of its role, on its own profile's server; the answer joins the conversation. |
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
@@ -259,7 +259,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * The transcript shows the question, each tool it calls, its answer and a footer with its model and tokens (and, under *Advisor embedded mode* `parent-server`, which model it wanted).
 * The pair joins the conversation tagged `[to dba]` and `[dba]`, so the model can build on it, and the advisor's thread remembers it for its next question (the model's calls and yours share one thread per advisor).
 * Works whether *Advisors enabled* is on or off, never capped or confirmed. ESC stops it. Headless, the answer prints as `dba: …`.
-* A bare `/advisor` lists the advisors; one whose profile is gone is marked `(missing)`.
+* A bare `/advisor` lists the advisors one a line, each with the kind of server its profile is on and its model (`doug — expert .NET solution architect · docker · Qwen3-32B`; the kind is `claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` (any other server by URL) or `scan` (no URL saved)); one whose profile is gone is marked `(missing)`.
 
 ### Your own shell line
 

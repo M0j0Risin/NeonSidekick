@@ -26,8 +26,8 @@ public partial class NeonAdvisorToolTests
         Assert.Null(AdvisorClaudeGate.TextOnlyReason("DBA", "dba", masterOnClaudeCode: false));
         Assert.Equal("no tools: dba is the Claude Code advisor with tools", AdvisorClaudeGate.TextOnlyReason("qa", "dba", masterOnClaudeCode: false));
         Assert.Equal("no tools: this chat is on the Claude Code server", AdvisorClaudeGate.TextOnlyReason("dba", null, masterOnClaudeCode: true));
-        Assert.Equal("Claude Code, tools", AdvisorText.ClaudeCodeMark(tools: true));
-        Assert.Equal("Claude Code, text only", AdvisorText.ClaudeCodeMark(tools: false));
+        Assert.Equal("tools", AdvisorText.ClaudeCodeMark(tools: true));
+        Assert.Equal("text only", AdvisorText.ClaudeCodeMark(tools: false));
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public partial class NeonAdvisorToolTests
     [Fact]
     public void TheListEditorsRow_MarksAClaudeCodeAdvisor()
     {
-        Assert.Equal(Spectre.Console.Markup.Escape("dba  ") + NeonSidekick.UI.Theme.DimMarkup("architect  · Claude Code, tools"),
-            SettingsMenu.AdvisorRow(new AdvisorEntry("dba", "architect"), exists: true, 5, AdvisorText.ClaudeCodeMark(tools: true)));
+        Assert.Equal(Spectre.Console.Markup.Escape("dba  ") + NeonSidekick.UI.Theme.DimMarkup("architect    · claudecode · sonnet · tools"),
+            SettingsMenu.AdvisorRow(new AdvisorEntry("dba", "architect"), exists: true, 5, new AdvisorServerFacts(AdvisorServer.ClaudeCode, "sonnet"), 12, AdvisorText.ClaudeCodeMark(tools: true)));
     }
 }

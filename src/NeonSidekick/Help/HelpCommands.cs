@@ -29,7 +29,7 @@ public static class HelpCommands
         ]),
         new("/advisor",
         [
-            new("/advisor", "List the advisors: the profiles of *Advisor list* and their roles, a missing one marked."),
+            new("/advisor", "List the advisors: the profiles of *Advisor list*, their roles, and the kind of server and the model each is on, a missing one marked."),
             new("/advisor <name> <question>", "Ask one advisor (named by its profile, or a word of its role) on its own profile's server and model; it may use this chat's read-only tools. The answer joins the conversation, so the model can build on it. Works whether or not *Advisors enabled* is on. See Advisors."),
         ]),
         new("/botchat",

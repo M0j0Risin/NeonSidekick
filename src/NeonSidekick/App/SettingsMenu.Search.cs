@@ -73,7 +73,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The footer for <paramref name="field"/> as this profile has it: <see cref="FieldFooter(SettingsField)"/>, its last line noting a value that is not the default.</summary>
     internal MenuFooter FieldFooter(SettingsField field, AppSettingsData saved)
     {
-        var footer = FieldFooter(field);
+        var footer = (field == SettingsField.AdvisorList ? AdvisorListFooter(saved) : null) ?? FieldFooter(field);
         return IsChanged(field, saved, _settings.ProfileDirectory) ? footer with { Last = footer.Last + ChangedNote } : footer;
     }
 
