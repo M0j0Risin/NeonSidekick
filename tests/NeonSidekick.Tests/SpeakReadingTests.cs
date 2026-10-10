@@ -125,6 +125,10 @@ public class SpeakReadingTests
         Assert.Equal("💬 1/2 stopped", SpeakReading.EchoStoppedLine(1, 2));
         Assert.Equal("💬 2/2 spoken", SpeakReading.SpokenLine(2));
         Assert.Equal("\U0001F4AC", SpeakReading.EchoGlyph);
+        // The keys' leads (2026-10-10, the user's pick): the arrows and Space while they step and pause, Space alone once read through.
+        Assert.Equal("← → ␣ pause", SpeakReading.PlayingKeys);
+        Assert.Equal("← → ␣ play", SpeakReading.PausedKeys);
+        Assert.Equal("␣ replay", SpeakReading.ReplayKeys);
     }
 
     [Fact]

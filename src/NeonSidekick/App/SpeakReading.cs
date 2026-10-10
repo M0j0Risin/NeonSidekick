@@ -145,6 +145,19 @@ internal sealed class SpeakReading
 
     public static string ReadLine(string file, int total) => $"{Glyph} {N(total)}/{N(total)} read {Name(file)}";
 
+    /// <summary>
+    /// The hint row's lead while the empty line's keys drive a playing file reading (2026-10-10, the user's pick: the keys had no
+    /// hint, and the splash's or the strip's arrows lead stood there while the arrows were the reading's): ←/→ step, Space pauses.
+    /// ␣ as the camera's snap button has it. Pinned.
+    /// </summary>
+    public const string PlayingKeys = "← → ␣ pause";
+
+    /// <summary>The lead over a paused file reading: ←/→ move the cue, Space plays from it. Pinned.</summary>
+    public const string PausedKeys = "← → ␣ play";
+
+    /// <summary>The lead once a file reading ran through: Space plays it from the top; the arrows are the splash's or the strip's again. Pinned.</summary>
+    public const string ReplayKeys = "␣ replay";
+
     /// <summary>The speech balloon ahead of an echo's count (U+1F4AC). Pinned.</summary>
     public const string EchoGlyph = "💬";
 

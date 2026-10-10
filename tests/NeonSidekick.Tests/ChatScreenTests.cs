@@ -15888,6 +15888,59 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
+    public async Task WithGeometry_Read_TheHintRowLeadsWithTheKeys_PlayingPausedAndReadThrough()
+    {
+        // The keys' lead (2026-10-10, the user's pick): ← → ␣ pause while it plays, ← → ␣ play while paused, ␣ replay once read through.
+        _playback.HoldBytes = true;
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var input = ReadingKeysScript("notes.txt", "One. Two.", async input =>
+        {
+            await SpokenAsync(2, 2);
+            _time.Advance(ScreenPane.Tick);
+            input.Push(Keys.Char(' '));     // pause at One
+            while (!Output.Contains(ChatScreen.SpeechStoppedNotice, StringComparison.Ordinal))
+            {
+                await Task.Delay(5);
+            }
+
+            input.Push(Keys.Char(' '));     // play from One again
+            await SpokenAsync(4);
+            _playback.Release();            // heard whole: read through
+            while (!Output.Contains(SpeakReading.ReplayKeys, StringComparison.Ordinal))
+            {
+                _time.Advance(ScreenPane.Tick);
+                await Task.Delay(5);
+            }
+        });
+
+        string output = await RunAsync(input);
+
+        string join = ChatScreen.HintJoin;
+        Assert.Contains(SpeakReading.PlayingKeys + join + SpeakReading.ReadingLine("notes.txt", 1, 2), output);
+        Assert.Contains(SpeakReading.PausedKeys + join + SpeakReading.StoppedLine("notes.txt", 1, 2), output);
+        Assert.Contains(SpeakReading.ReplayKeys + join + SpeakReading.ReadLine("notes.txt", 2), output);
+    }
+
+    [Fact]
+    public async Task WithGeometry_Read_WithSpeechOff_TheHintRowHasNoKeys()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
+        PushLine("/read notes.txt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SpeakReading.ReadLine("notes.txt", 2), output);
+        Assert.DoesNotContain("␣", output);
+    }
+
+    [Fact]
     public void HintLine_TheReadingTakesTheUsagePart_AndRidesAfterTheTimers()
     {
         Assert.Equal("", ChatScreen.HintLine(null));

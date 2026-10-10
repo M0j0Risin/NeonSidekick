@@ -2115,6 +2115,8 @@ internal sealed partial class ChatScreen
     /// while the welcome splash stands with an empty draft and the arrows would walk it
     /// (<see cref="SplashArrowsOffered"/>, <see cref="ScreenPane.DraftEmpty"/> — the pane redraws
     /// the row on the key that empties or fills the draft), else the timers / usage / reading line.
+    /// The <c>/read</c> keys' lead (<see cref="ReadingKeysHint"/>, 2026-10-10) takes the splash's or the strip's place while the
+    /// reading holds the arrows, and follows it once only Space is the reading's.
     /// </summary>
     private string HintText()
     {
@@ -2134,19 +2136,39 @@ internal sealed partial class ChatScreen
         }
 
         string rest = HintLine(TimerText.StatusLine(_timers.Snapshot()), UsageText.HintPart(_session.Usage, _session.ContextLength), ReadingHintPart());
-        if (!SplashArrowsOffered() && _pane.DraftEmpty && PictureStripOffered())
+        // The /read keys' lead (2026-10-10, the user's pick): over a playing or paused reading the arrows are its, so its lead stands
+        // in the splash's or the strip's place; once it ran through only Space is, and its lead follows theirs.
+        string? keys = ReadingKeysHint();
+        string? lead = keys is SpeakReading.PlayingKeys or SpeakReading.PausedKeys ? keys
+            : ArrowsLead() is not { } arrows ? keys
+            : keys is null ? arrows
+            : arrows + HintJoin + keys;
+        return lead is null ? rest : SplashHintLine(rest, lead);
+    }
+
+    /// <summary>
+    /// The lead for the empty line's arrows when no <c>/read</c> reading holds them: the picture strip's (later still on 2026-09-24)
+    /// unless the splash stands, which keeps them; the splash's page or slideshow; null over a draft or with neither.
+    /// </summary>
+    private string? ArrowsLead()
+    {
+        if (!_pane.DraftEmpty)
         {
-            // The picture strip's arrows (later still on 2026-09-24): the splash keeps them while it stands.
+            return null;
+        }
+
+        if (!SplashArrowsOffered())
+        {
+            if (!PictureStripOffered())
+            {
+                return null;
+            }
+
             int at = _pictureStrip.Selected;
-            return SplashHintLine(rest, at >= 0 ? ComfyText.StripSelectedHint(at + 1, _pictureStrip.Count) : ComfyText.StripHint);
+            return at >= 0 ? ComfyText.StripSelectedHint(at + 1, _pictureStrip.Count) : ComfyText.StripHint;
         }
 
-        if (!SplashArrowsOffered() || !_pane.DraftEmpty)
-        {
-            return rest;
-        }
-
-        return _splashPage is { } page ? SplashHintLine(rest, SplashPageHint(page, _splashCount)) : SplashHintLine(rest);
+        return _splashPage is { } page ? SplashPageHint(page, _splashCount) : SplashHint;
     }
 
     /// <summary>A first Ctrl+C is still fresh: the next one exits.</summary>
@@ -8183,6 +8205,29 @@ internal sealed partial class ChatScreen
         return seek > 0 && reading is { Source: SpeakReading.Kind.File } ? SpeakReading.ReadingLine(reading.File, seek, reading.Count) : reading?.StatusLine();
     }
 
+    /// <summary>
+    /// The hint row's lead for the empty line's reading keys (2026-10-10, the user's pick): <see cref="SpeakReading.PlayingKeys"/> while
+    /// the reading plays or a seek waits for the loop top, <see cref="SpeakReading.PausedKeys"/> while it is paused,
+    /// <see cref="SpeakReading.ReplayKeys"/> once it ran through — only where <see cref="StepReading"/> and <see cref="ToggleReading"/>
+    /// would take the keys: an empty draft, the <c>/read</c> file reading on the row, speech on and ready. Null otherwise. The pane's tick
+    /// may call it from the timer thread.
+    /// </summary>
+    private string? ReadingKeysHint()
+    {
+        if (!_pane.DraftEmpty || _hintReading is not { Source: SpeakReading.Kind.File } reading || !ReferenceEquals(reading, _reading)
+            || !_effective().TtsOutput || !_speech.IsReady)
+        {
+            return null;
+        }
+
+        if (ReadSeekReady || PlayingFileReading() is not null)
+        {
+            return SpeakReading.PlayingKeys;
+        }
+
+        return reading.Paused ? SpeakReading.PausedKeys : reading.Done ? SpeakReading.ReplayKeys : null;
+    }
+
     /// <summary>The <c>/read</c> file reading on the hint row while it plays — its speaker the one sounding — or null. Never an <c>/echo</c>.</summary>
     private SpeakReading? PlayingFileReading() =>
         _hintReading is { Source: SpeakReading.Kind.File, Playing: true } reading && ReferenceEquals(reading, _reading) && ReferenceEquals(reading.Speaker, _speech.Playing)
@@ -8917,7 +8962,7 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlyList<(string Word, ProfileSection Section, string Note)> ProfileSectionWords =
     [
         ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
-        ("servers", ProfileSection.Servers, "the server settings: LLM URL, model, scan mode, reasoning, sampling, Embedded, Docker, Anthropic API, OpenAI API, Claude Code server"),
+        ("servers", ProfileSection.Servers, "the server settings for LLM, Embedded, Docker, Anthropic and OpenAI"),
         ("commands", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
         ("history", ProfileSection.History, "the command history, added (or replaced with overwrite)"),
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),

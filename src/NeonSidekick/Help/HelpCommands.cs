@@ -248,7 +248,7 @@ public static class HelpCommands
         ]),
         new("/read",
         [
-            new("/read [<file> [<n>]|<n>]", "Read a text file from the working directory aloud as a reply. On its own it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes it, and Left and Right step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from it)."),
+            new("/read [<file> [<n>]|<n>]", "Read a text file from the working directory aloud as a reply. On its own it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes it, and Left and Right step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from it). The hint row leads with `← → ␣ pause`, `← → ␣ play` or `␣ replay` while those keys apply."),
         ]),
         new("/reasoning",
         [
