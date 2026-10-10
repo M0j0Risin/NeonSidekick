@@ -72,6 +72,8 @@ public static class SkillsText
     /// What the version cell says for <paramref name="skill"/> (2026-10-07, the user's pick): its <see cref="VersionLabel"/>, led by the
     /// lock (<c>🔒v4</c>) when it is locked, and by the lock's two blank cells (<c>  v1</c>) when another listed skill is, so the numbers
     /// stay in one column; with none locked, the label alone. Empty without a version source. Pinned.
+    /// <para>A disabled skill (2026-10-09, the user's pick) leads with <see cref="SkillRecordText.DisabledGlyph"/> in the same place, over
+    /// the lock when it is both (the footer says both); the column's lead is there while any listed skill is either.</para>
     /// </summary>
     public static string VersionText(SkillsFacts facts, Skill skill)
     {
@@ -82,7 +84,10 @@ public static class SkillsText
             return "";
         }
 
-        string lead = !facts.Skills.Any(s => s.Locked) ? "" : skill.Locked ? SkillRecordText.LockGlyph : new string(' ', TextCells.Width(SkillRecordText.LockGlyph));
+        string lead = !facts.Skills.Any(s => s.Locked || s.Disabled) ? ""
+            : skill.Disabled ? SkillRecordText.DisabledGlyph
+            : skill.Locked ? SkillRecordText.LockGlyph
+            : new string(' ', TextCells.Width(SkillRecordText.LockGlyph));
         return lead + VersionLabel(version(skill));
     }
 
@@ -210,7 +215,9 @@ public static class SkillsText
         int versions = VersionWidth(facts);   // the version column (2026-10-07), sized on the whole list so a filter does not shift it
         foreach (var skill in facts.Skills.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)))
         {
-            rows.Add((Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape("  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + skill.Description), skill));
+            // A disabled skill's row is dim whole, its name too (2026-10-09, the user's ask: the shadowed rows' look).
+            string rest = "  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + skill.Description;
+            rows.Add((skill.Disabled ? Theme.DimMarkup(skill.Name.PadRight(width) + rest) : Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape(rest), skill));
             if (skill.Warning is { } warning)
             {
                 rows.Add((Theme.DimMarkup(new string(' ', width + 2) + "(" + warning + ")"), null));

@@ -38,6 +38,9 @@ public enum SkillRevertOutcome
 
     /// <summary>The skill is locked (2026-10-07, <see cref="SkillLock"/>): nothing kept, nothing written.</summary>
     Locked,
+
+    /// <summary>The skill is disabled (2026-10-09, <see cref="SkillDisable"/>): nothing kept, nothing written.</summary>
+    Disabled,
 }
 
 /// <summary>The outcome, the revision it read (null for none) and the editor's result when it wrote.</summary>
@@ -439,6 +442,12 @@ public sealed class SkillRecords
             return new SkillRevert(SkillRevertOutcome.Locked, revision, null);
         }
 
+        if (SkillDisable.IsDisabled(skill.Directory))
+        {
+            // Disabled (2026-10-09): its content stays as the user left it until they enable it.
+            return new SkillRevert(SkillRevertOutcome.Disabled, revision, null);
+        }
+
         var listed = Revisions(skill);
         if (!listed.Any(r => r.Id == revision.Id))
         {
@@ -569,6 +578,30 @@ public sealed class SkillRecords
             string profile = CurrentProfile;
             _store.AddEvent(skill.Scope, profile, skill.FolderName, locked ? SkillEventKinds.Locked : SkillEventKinds.Unlocked, SkillActors.User, profile, now);
             DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.LockedLogLine(skill.Scope, skill.FolderName, locked));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The skill disabled or enabled (2026-10-09, the skill's page in <c>/skills</c>): <see cref="SkillDisable.Set"/> at the clock's moment,
+    /// then a <see cref="SkillEventKinds.Disabled"/> or <see cref="SkillEventKinds.Enabled"/> event by the user, <see cref="SetLocked"/>'s
+    /// shape. Null when done, else the file layer's message (no event then).
+    /// </summary>
+    public string? SetDisabled(Skill skill, bool disabled)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        var now = _time.GetUtcNow();
+        if (SkillDisable.Set(skill.Directory, disabled, now) is { } error)
+        {
+            return error;
+        }
+
+        if (skill.Scope != SkillScope.External)
+        {
+            string profile = CurrentProfile;
+            _store.AddEvent(skill.Scope, profile, skill.FolderName, disabled ? SkillEventKinds.Disabled : SkillEventKinds.Enabled, SkillActors.User, profile, now);
+            DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.DisabledLogLine(skill.Scope, skill.FolderName, disabled));
         }
 
         return null;
@@ -711,13 +744,14 @@ public sealed class SkillRecords
     /// <summary>
     /// The skills in the current profile's view (global and the profile's own) not used since <paramref name="cutoff"/>,
     /// measured by <see cref="SkillRecord.Reference"/>, oldest first. A locked skill is never one (2026-10-07, <see cref="SkillLock"/>):
-    /// <c>/skills purge</c> neither lists nor deletes it.
+    /// <c>/skills purge</c> neither lists nor deletes it. Nor is a disabled one (2026-10-09, the user's pick, <see cref="SkillDisable"/>):
+    /// never offered, it is never used, and switching it off was keeping it.
     /// </summary>
     public IReadOnlyList<SkillRecord> UnusedSince(DateTimeOffset cutoff)
     {
         var roots = _roots();
         return _store.List(CurrentProfile)
-            .Where(r => r.Reference < cutoff && !SkillLock.IsLocked(Path.Combine(roots.Of(r.Scope), r.Folder)))
+            .Where(r => r.Reference < cutoff && !SkillLock.IsLocked(Path.Combine(roots.Of(r.Scope), r.Folder)) && !SkillDisable.IsDisabled(Path.Combine(roots.Of(r.Scope), r.Folder)))
             .OrderBy(r => r.Reference).ThenBy(r => r.Folder, StringComparer.OrdinalIgnoreCase).ToList();
     }
 }

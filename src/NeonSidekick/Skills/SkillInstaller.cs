@@ -129,6 +129,12 @@ public static class SkillInstaller
             }
 
             File.WriteAllText(Path.Combine(stage, SkillProvenance.FileName), provenance.ToJson(), Utf8NoBom);
+            if (exists && SkillDisable.IsDisabled(target))
+            {
+                // An update keeps a disabled skill disabled (2026-10-09, SkillDisable): the sidecar rides into the new folder.
+                File.Copy(Path.Combine(target, SkillDisable.FileName), Path.Combine(stage, SkillDisable.FileName), overwrite: true);
+            }
+
             Directory.CreateDirectory(root);
             string? previous = null;
             if (exists)

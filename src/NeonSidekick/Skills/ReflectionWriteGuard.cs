@@ -60,6 +60,12 @@ public sealed class ReflectionWriteGuard
         }
 
         string directory = Path.Combine(roots.Of(scope), name);
+        if (SkillDisable.IsDisabled(directory))
+        {
+            // Disabled (2026-10-09): said first, not "load it first" — load_skill never serves a disabled skill.
+            return SkillText.Disabled(name);
+        }
+
         if (_installed == ReflectionInstalledPolicy.ReadOnly && SkillProvenance.Read(directory) is { } origin)
         {
             return SkillText.InstalledReadOnly(name, origin.Repo);

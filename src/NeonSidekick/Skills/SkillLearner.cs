@@ -397,8 +397,10 @@ public static class SkillLearner
             tools.Add(new SessionManagerTool(sessions.Store, sessions.Effective, () => sessions.Current, sessions.Time));
         }
 
-        var usage0 = records is null ? null : UsageLines(records, catalog.Skills);
-        var messages = Build(material, catalog.Skills, usage0, sessions?.Time.LocalTimeZone ?? records?.Zone ?? TimeZoneInfo.Utc, files is not null);
+        // The catalog it reads lists the disabled skills too (2026-10-09, the user's ask: SkillsPrompt.DisabledTag), so it writes no
+        // duplicate of one; load_skill above stays over the offered ones.
+        var usage0 = records is null ? null : UsageLines(records, catalog.All);
+        var messages = Build(material, catalog.All, usage0, sessions?.Time.LocalTimeZone ?? records?.Zone ?? TimeZoneInfo.Utc, files is not null);
         var usage = TokenUsage.Zero;
         int requests = 0;
         try

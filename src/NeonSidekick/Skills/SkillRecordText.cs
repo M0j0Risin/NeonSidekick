@@ -284,6 +284,7 @@ public static class SkillRecordText
             SkillRevertOutcome.Unchanged => (false, UnchangedNotice(name)),
             SkillRevertOutcome.NotKept => (false, NotKeptError(name, revert.Revision?.Path ?? SkillCatalog.FileName)),
             SkillRevertOutcome.Locked => (false, LockedNotice(name)),
+            SkillRevertOutcome.Disabled => (false, DisabledNotice(name)),
             _ => (false, RevertFailedError(name, revert.Edit?.Detail ?? "")),
         };
     }
@@ -351,6 +352,29 @@ public static class SkillRecordText
 
     /// <summary><c>Skill locked: profile/haiku</c> / <c>Skill unlocked: …</c>. Pinned.</summary>
     public static string LockedLogLine(SkillScope scope, string folder, bool locked) => "Skill " + (locked ? "locked: " : "unlocked: ") + Key(scope, folder);
+
+    // ── The disable (2026-10-09, the user's ask: SkillDisable) ───────
+
+    /// <summary>The disable's glyph (the user's pick), in the lock's place on the Offered tab's version cell (it wins over the lock), the notices and the footer.</summary>
+    public const string DisabledGlyph = "⛔";
+
+    /// <summary>The enable's glyph, its notice's.</summary>
+    public const string EnabledGlyph = "✅";
+
+    /// <summary>A content change refused on the pane because the skill is disabled: <c>(⛔ haiku is disabled: enable it first)</c>. Pinned.</summary>
+    public static string DisabledNotice(string name) => "(" + DisabledGlyph + " " + name + " is disabled: enable it first)";
+
+    /// <summary>After the page's disable row: <c>(⛔ disabled haiku)</c> / <c>(✅ enabled haiku)</c>. Pinned.</summary>
+    public static string DisableSetNotice(string name, bool disabled) => "(" + (disabled ? DisabledGlyph + " disabled " : EnabledGlyph + " enabled ") + name + ")";
+
+    /// <summary>The disable file could not be written or removed. Pinned.</summary>
+    public static string DisableFailedError(string name, string detail) => "Could not change whether " + name + " is disabled: " + detail;
+
+    /// <summary>The Offered tab's footer line under a disabled skill's description. Pinned.</summary>
+    public const string DisabledFooter = DisabledGlyph + " Disabled: never offered; a reflection sees it but cannot change it. Enable it on its page.";
+
+    /// <summary><c>Skill disabled: profile/haiku</c> / <c>Skill enabled: …</c>. Pinned.</summary>
+    public static string DisabledLogLine(SkillScope scope, string folder, bool disabled) => "Skill " + (disabled ? "disabled: " : "enabled: ") + Key(scope, folder);
 
     /// <summary>The undo glyph the revert's notices wear.</summary>
     public const string RevertGlyph = "↩️ ";

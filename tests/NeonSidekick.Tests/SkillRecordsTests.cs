@@ -51,7 +51,7 @@ public class SkillRecordsTests : IDisposable
     {
         var catalog = new SkillCatalog(() => _roots);
         catalog.Scan(external: true);
-        return _records.Reconcile(catalog.Skills.Concat(catalog.Shadowed));
+        return _records.Reconcile(catalog.All.Concat(catalog.Shadowed));   // the screen's list (2026-10-09: the disabled ones too)
     }
 
     [Fact]
@@ -629,6 +629,41 @@ public class SkillRecordsTests : IDisposable
         Assert.Equal([SkillEventKinds.Locked, SkillEventKinds.Unlocked], _store.Events(id).Where(e => e.Kind is SkillEventKinds.Locked or SkillEventKinds.Unlocked).Select(e => e.Kind));
         Assert.All(_store.Events(id).Where(e => e.Kind is SkillEventKinds.Locked or SkillEventKinds.Unlocked), e => Assert.Equal(SkillActors.User, e.Actor));
         Assert.Equal("Skill locked: profile/haiku", SkillRecordText.LockedLogLine(SkillScope.Profile, "haiku", true));
+    }
+
+    /// <summary>The disable (2026-10-09): its events by the user, purge leaving it out (the user's pick), a revert refused, its row kept by a reconcile.</summary>
+    [Fact]
+    public void SetDisabled_RecordsIt_PurgeLeavesItOut_ARevertIsRefused_AndItsRowStays()
+    {
+        Write(_roots.Profile, "haiku");
+        Reconcile();
+        var editor = Editor(SkillActors.Model);
+        editor.Describe("update", "", "haiku", null, "Version one.");
+        var skill = SkillOf("haiku");
+        string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
+        string text = File.ReadAllText(path);
+        long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
+        var later = _time.GetUtcNow().AddDays(60);
+
+        Assert.Null(_records.SetDisabled(skill, true));
+        Assert.True(SkillDisable.IsDisabled(skill.Directory));
+        Assert.DoesNotContain(_records.UnusedSince(later), r => r.Folder == "haiku");
+
+        int kept = _records.Revisions(skill).Count;
+        var revert = _records.Restore(skill, _records.Revisions(skill)[0]);
+        Assert.Equal(SkillRevertOutcome.Disabled, revert.Outcome);
+        Assert.Equal((false, SkillRecordText.DisabledNotice("haiku")), SkillRecordText.RevertText("haiku", revert, _time.LocalTimeZone));
+        Assert.Equal(kept, _records.Revisions(skill).Count);
+        Assert.Equal(text, File.ReadAllText(path));
+
+        Reconcile();
+        Assert.Equal(id, _store.Find(SkillScope.Profile, "neon", "haiku")?.Id);
+
+        Assert.Null(_records.SetDisabled(skill, false));
+        Assert.False(SkillDisable.IsDisabled(skill.Directory));
+        Assert.Single(_records.UnusedSince(later), r => r.Folder == "haiku");
+        Assert.Equal([SkillEventKinds.Disabled, SkillEventKinds.Enabled], _store.Events(id).Where(e => e.Kind is SkillEventKinds.Disabled or SkillEventKinds.Enabled).Select(e => e.Kind));
+        Assert.All(_store.Events(id).Where(e => e.Kind is SkillEventKinds.Disabled or SkillEventKinds.Enabled), e => Assert.Equal(SkillActors.User, e.Actor));
     }
 
     /// <summary>The dry run's table (2026-09-30, the user's ask): a header, one row per skill, every column padded to its widest cell.</summary>

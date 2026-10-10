@@ -63,6 +63,8 @@ public sealed class SkillCatalog
     private readonly HashSet<string> _shadowNoted = new(StringComparer.Ordinal);
     private readonly object _gate = new();
     private IReadOnlyList<Skill> _skills = [];
+    private IReadOnlyList<Skill> _disabled = [];
+    private IReadOnlyList<Skill> _all = [];
     private IReadOnlyList<Skill> _shadowed = [];
     private IReadOnlyList<SkillProblem> _problems = [];
     private string _names = "";
@@ -76,8 +78,17 @@ public sealed class SkillCatalog
     /// <summary>The roots as of the last scan (or right now, before any).</summary>
     public SkillRoots Roots => _roots();
 
-    /// <summary>The skills the model is offered, in precedence order then by folder name within a root.</summary>
+    /// <summary>The skills the model is offered, in precedence order then by folder name within a root; a disabled one never (2026-10-09, <see cref="Disabled"/>).</summary>
     public IReadOnlyList<Skill> Skills { get { lock (_gate) { return _skills; } } }
+
+    /// <summary>
+    /// The skills the user switched off (2026-10-09, <see cref="SkillDisable"/>), same order: they hold their names (a lower root's twin
+    /// stays <see cref="Shadowed"/>) but are not offered. The <c>/skills</c> pane lists them, a reflection sees them, the records keep them.
+    /// </summary>
+    public IReadOnlyList<Skill> Disabled { get { lock (_gate) { return _disabled; } } }
+
+    /// <summary>Every skill that holds its name, offered or disabled, in <see cref="Skills"/>' order (2026-10-09): the pane's list and a reflection's.</summary>
+    public IReadOnlyList<Skill> All { get { lock (_gate) { return _all; } } }
 
     /// <summary>The skills a higher scope hides, same order.</summary>
     public IReadOnlyList<Skill> Shadowed { get { lock (_gate) { return _shadowed; } } }
@@ -119,7 +130,7 @@ public sealed class SkillCatalog
     public void Scan(bool external)
     {
         var roots = _roots();
-        var skills = new List<Skill>();
+        var all = new List<Skill>();
         var shadowed = new List<Skill>();
         var problems = new List<SkillProblem>();
         var seen = new Dictionary<string, Skill>(StringComparer.Ordinal);
@@ -146,6 +157,7 @@ public sealed class SkillCatalog
                 var skill = new Skill(entry.Frontmatter.Name, Cap(entry.Frontmatter.Description), scope, directory, Warn(entry.Frontmatter, Path.GetFileName(directory)))
                 {
                     Locked = scope != SkillScope.External && SkillLock.IsLocked(directory),
+                    Disabled = scope != SkillScope.External && SkillDisable.IsDisabled(directory),
                 };
                 if (seen.TryGetValue(skill.Name, out var winner))
                 {
@@ -158,10 +170,13 @@ public sealed class SkillCatalog
                     continue;
                 }
 
+                // A disabled skill still holds its name (2026-10-09, the user's pick): seen, so a lower twin stays shadowed.
                 seen.Add(skill.Name, skill);
-                skills.Add(skill);
+                all.Add(skill);
             }
         }
+
+        var skills = all.Where(s => !s.Disabled).ToList();
 
         lock (_gate)
         {
@@ -178,6 +193,8 @@ public sealed class SkillCatalog
             }
 
             _skills = skills;
+            _disabled = all.Where(s => s.Disabled).ToList();
+            _all = all;
             _shadowed = shadowed;
             _problems = problems;
             ExternalEnabled = external;
@@ -378,9 +395,9 @@ public sealed class SkillCatalog
         foreach (var file in Directory.EnumerateFiles(directory))
         {
             // The SKILL.md itself, and the sidecar /skills add writes (2026-09-26): the app's, never the skill's.
-            // The lock (2026-10-07) is the app's too.
+            // The lock (2026-10-07) and the disable (2026-10-09) are the app's too.
             if (depth == 0 && (string.Equals(Path.GetFileName(file), FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(file), SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(Path.GetFileName(file), SkillLock.FileName, StringComparison.OrdinalIgnoreCase)))
+                || string.Equals(Path.GetFileName(file), SkillLock.FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(file), SkillDisable.FileName, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }

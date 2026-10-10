@@ -81,7 +81,7 @@ public class SkillsMenuTests : IDisposable
         }
 
         _catalog.Scan(_external);
-        return new SkillsFacts(true, _catalog.Skills, _catalog.Shadowed, _catalog.Problems, _roots);
+        return new SkillsFacts(true, _catalog.All, _catalog.Shadowed, _catalog.Problems, _roots);   // the screen's list: the disabled ones too (2026-10-09)
     }
 
     /// <summary>The settings menu the Options tab's rows are edited through (the /tools fixture's shape).</summary>
@@ -210,7 +210,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  revert   pick an earlier version to put back\n  lock     keep the model, reflection and updates from changing it\n  delete   remove the folder and everything in it\n", Output);
+        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  revert   pick an earlier version to put back\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Output);
         Assert.Contains("  · " + SkillRecordText.NoVersionsNotice("haiku") + "\n", Output);
         Assert.DoesNotContain(SkillsMenu.VersionsTitle("haiku"), Output);
         Assert.Empty(_restored);
@@ -447,7 +447,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  delete   remove the folder and everything in it\n" + Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n" + Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
         Assert.Contains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n" + Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.False(Exists(SkillScope.Profile, "haiku"));
@@ -520,15 +520,15 @@ public class SkillsMenuTests : IDisposable
         File.WriteAllText(Path.Combine(_roots.Global, "haiku", "scripts", "run.py"), "p");
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                                       // the scope page on global
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete (past rename, 2026-09-21, edit, 2026-09-23, and lock, 2026-10-07)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete (past rename, 2026-09-21, edit, 2026-09-23, lock, 2026-10-07, and disable, 2026-10-09)
         Push(Keys.Enter);                                       // No: kept
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete again
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete again
         Push(Keys.Char('y'), Keys.Enter);                       // Yes by hotkey
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("  profile  " + _roots.Profile) + "\n" + Fitted("▸ global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  delete   remove the folder and everything in it\n", Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("  profile  " + _roots.Profile) + "\n" + Fitted("▸ global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Output);
         Assert.Contains("\n" + Titled(SkillsMenu.DeletePrompt("haiku", SkillScope.Global)) + "\n \n▸ No\n  Yes\n", Output);
         Assert.Contains("\n  · " + SkillsMenu.KeptNotice + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.DeletedNotice("haiku", SkillScope.Global) + "\n" + Fitted("▸ " + SkillsText.NoneLine) + "\n", Output);
@@ -550,7 +550,7 @@ public class SkillsMenuTests : IDisposable
 
         string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
         Assert.Equal([path], _opened);
-        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  delete   remove the folder and everything in it\n", Output);   // the delete row after it, always (2026-09-23)
+        Assert.Contains("\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Output);   // the delete row after it, always (2026-09-23)
         Assert.Contains("\n  · " + SkillsMenu.EditOpenedNotice("haiku", "")[..^1], Output);   // the path fitted to the width after it
         Assert.Contains("\n▸ haiku  profile  Writes haiku.\n", Output);
         Assert.True(Exists(SkillScope.Profile, "haiku"));
@@ -611,7 +611,7 @@ public class SkillsMenuTests : IDisposable
         Push(Keys.Enter);                                            // the page again: now unlock
         Push(Keys.Down, Keys.Down, Keys.Enter);                      // rename: refused
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete: refused
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete: refused (past disable, 2026-10-09)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -625,6 +625,32 @@ public class SkillsMenuTests : IDisposable
         Assert.Contains(SkillRecordText.LockedFooter, Output);
         Assert.DoesNotContain(SkillsMenu.DeletePrompt("haiku", SkillScope.Profile), Output);
         Assert.Equal("lock     [#9A8BB8]keep the model, reflection and updates from changing it[/]", SkillsMenu.LockRow(false));
+    }
+
+    /// <summary>
+    /// The disable row (2026-10-09, the user's ask): after lock, disable at once with its notice; the skill stays on the list with the
+    /// footer saying so, its row reads enable, and enable offers it again.
+    /// </summary>
+    [Fact]
+    public async Task DisableRow_DisablesTheSkill_ItStaysListed_AndEnableBringsItBack()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        string folder = Path.Combine(_roots.Profile, "haiku");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);                                                       // the page, on profile
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // disable (past global, rename, edit, lock)
+        Push(Keys.Enter);                                                       // the page again: now enable
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // enable
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.False(SkillDisable.IsDisabled(folder));
+        Assert.Contains("  · " + SkillRecordText.DisableSetNotice("haiku", true) + "\n▸ haiku  profile  Writes haiku.\n", Output);   // still listed
+        Assert.Contains(SkillRecordText.DisabledFooter, Output);
+        Assert.Contains("\n▸ enable   offer it to the model again\n", Output);
+        Assert.Contains("  · " + SkillRecordText.DisableSetNotice("haiku", false) + "\n", Output);
+        Assert.True(File.Exists(Path.Combine(folder, SkillCatalog.FileName)));
     }
 
     /// <summary>The rename row (2026-09-21): the slot pre-filled with the name; what is typed is kebab-cased, the folder and the name line follow, the list read again.</summary>
@@ -645,7 +671,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n▸ rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  delete   remove the folder and everything in it\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, Output);
+        Assert.Contains("\n▸ rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.RenamedNotice("haiku", "my-haiku") + "\n▸ my-haiku  profile  Writes haiku.\n", Output);
         Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "haiku")));
         Assert.True(Exists(SkillScope.Profile, "my-haiku"));

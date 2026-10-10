@@ -341,7 +341,7 @@ public sealed class SidekickApp
         if (records is not null)
         {
             catalog.Scan(EffectiveSettings.ExternalSkills);
-            records.Reconcile(catalog.Skills.Concat(catalog.Shadowed));
+            records.Reconcile(catalog.All.Concat(catalog.Shadowed));   // a disabled skill is still known (2026-10-09)
         }
 
         return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(_time), records), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile);

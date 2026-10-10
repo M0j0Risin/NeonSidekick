@@ -36,6 +36,12 @@ public static class SkillsPrompt
     /// <summary>A locked skill's line in its catalog entry (2026-10-07): the user locked it, and <c>skill_editor</c> refuses any change to it. Pinned.</summary>
     public const string LockedTag = "<locked>the user locked this skill: it can be loaded, not changed</locked>";
 
+    /// <summary>
+    /// A disabled skill's line in its catalog entry (2026-10-09, <see cref="SkillDisable"/>): only a reflection's catalog lists one (the main
+    /// prompt's is the offered skills), so it knows the topic is taken and writes no second skill for it. Pinned.
+    /// </summary>
+    public const string DisabledTag = "<disabled>the user turned this skill off: it is not offered and cannot be loaded or changed; do not create another skill that covers its topic</disabled>";
+
     public const string CatalogOpen = "<available_skills>";
     public const string CatalogClose = "</available_skills>";
 
@@ -71,7 +77,12 @@ public static class SkillsPrompt
             sb.Append("\n  <skill>");
             sb.Append("\n    <name>").Append(Escape(skill.Name)).Append("</name>");
             sb.Append("\n    <description>").Append(Escape(skill.Description)).Append("</description>");
-            if (skill.Locked)
+            if (skill.Disabled)
+            {
+                // Switched off (2026-10-09, SkillDisable): the one tag, the lock's said by it (nothing changes it either way).
+                sb.Append("\n    ").Append(DisabledTag);
+            }
+            else if (skill.Locked)
             {
                 // The user's lock (2026-10-07, SkillLock): said up front, so neither the model nor a reflection spends a call finding out.
                 sb.Append("\n    ").Append(LockedTag);

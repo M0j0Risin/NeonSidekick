@@ -18,6 +18,9 @@ public sealed record Skill(string Name, string Description, SkillScope Scope, st
 
     /// <summary>Locked by the user when the catalog scanned (2026-10-07, <see cref="SkillLock"/>); never for an external skill.</summary>
     public bool Locked { get; init; }
+
+    /// <summary>Disabled by the user when the catalog scanned (2026-10-09, <see cref="SkillDisable"/>): not offered; never for an external skill.</summary>
+    public bool Disabled { get; init; }
 }
 
 /// <summary>A folder the catalog skipped and why: no description, no fence, unreadable.</summary>

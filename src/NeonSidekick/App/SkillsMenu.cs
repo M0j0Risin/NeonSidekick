@@ -46,7 +46,7 @@ namespace NeonSidekick.App;
 internal sealed class SkillsMenu
 {
     // The key hints. Pinned.
-    public const string LoadedKeys = "Enter = move, rename, edit, revert, lock or delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03; lock since 2026-10-07
+    public const string LoadedKeys = "Enter = move, rename, edit, revert, lock, disable, delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;   // the filter since 2026-10-03; lock since 2026-10-07; disable since 2026-10-09
     public const string OtherKeys = "←/→ tabs · ESC = close";
     public const string ScopeKeys = SettingsMenu.PickKeys;
 
@@ -169,14 +169,39 @@ internal sealed class SkillsMenu
         ? Markup.Escape(UnlockWord.PadRight(9)) + Theme.DimMarkup("let it be changed again")
         : Markup.Escape(LockWord.PadRight(9)) + Theme.DimMarkup("keep the model, reflection and updates from changing it");
 
+    /// <summary>The disable row's words (2026-10-09, the user's ask: <see cref="SkillDisable"/>). Pinned.</summary>
+    public const string DisableWord = "disable";
+    public const string EnableWord = "enable";
+
+    /// <summary>The skill page's disable row, between lock and delete: <c>disable</c> on an offered skill, <c>enable</c> on a disabled one. Pinned.</summary>
+    public static string DisableRow(bool disabled) => disabled
+        ? Markup.Escape(EnableWord.PadRight(9)) + Theme.DimMarkup("offer it to the model again")
+        : Markup.Escape(DisableWord.PadRight(9)) + Theme.DimMarkup("stop offering it; a reflection still sees it, and changes nothing");
+
     /// <summary>
-    /// The Offered footer's last line for <paramref name="skill"/>: its warning, and on a locked skill <see cref="SkillRecordText.LockedFooter"/>
-    /// (2026-10-07), the two joined when both; null for neither.
+    /// The Offered footer's last line for <paramref name="skill"/>: its warning, then <see cref="SkillRecordText.DisabledFooter"/> on a disabled
+    /// skill (2026-10-09) and <see cref="SkillRecordText.LockedFooter"/> on a locked one (2026-10-07), those there joined by <c> · </c>; null for none.
     /// </summary>
     public static string? LockedLast(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        return !skill.Locked ? skill.Warning : skill.Warning is { } warning ? warning + " · " + SkillRecordText.LockedFooter : SkillRecordText.LockedFooter;
+        var parts = new List<string>(3);
+        if (skill.Warning is { } warning)
+        {
+            parts.Add(warning);
+        }
+
+        if (skill.Disabled)
+        {
+            parts.Add(SkillRecordText.DisabledFooter);
+        }
+
+        if (skill.Locked)
+        {
+            parts.Add(SkillRecordText.LockedFooter);
+        }
+
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
     }
 
     /// <summary>The version list's title: <c>Skills › haiku › revert</c> (2026-10-04).</summary>
@@ -466,6 +491,9 @@ internal sealed class SkillsMenu
         // The lock row (2026-10-07, the user's ask), between revert and delete; its own index, so the delete below is the last row only.
         int lockRow = rows.Count;
         rows.Add(LockRow(skill.Locked));
+        // The disable row (2026-10-09, the user's ask), after lock.
+        int disableRow = rows.Count;
+        rows.Add(DisableRow(skill.Disabled));
         int deleteRow = rows.Count;
         rows.Add(DeleteRow);
 
@@ -479,6 +507,11 @@ internal sealed class SkillsMenu
         if (row == lockRow)
         {
             return SetLocked(skill, !skill.Locked);
+        }
+
+        if (row == disableRow)
+        {
+            return SetDisabled(skill, !skill.Disabled);
         }
 
         // A locked skill (2026-10-07): rename, move and delete refused before any question; edit (the user's own editor) and the
@@ -588,6 +621,23 @@ internal sealed class SkillsMenu
     }
 
     /// <summary>
+    /// The disable row's act (2026-10-09): <see cref="SkillRecords.SetDisabled"/> (the sidecar and its event), or the file alone without the
+    /// records; at once, no yes/no (nothing is lost), the notice on the list's status line. True when it changed (the facts are stale).
+    /// </summary>
+    private bool SetDisabled(Skill skill, bool disabled)
+    {
+        string? error = _records is { } records ? records.SetDisabled(skill, disabled) : SkillDisable.Set(skill.Directory, disabled, TimeProvider.System.GetUtcNow());
+        if (error is not null)
+        {
+            Sink.Error(SkillRecordText.DisableFailedError(skill.Name, error));
+            return false;
+        }
+
+        Sink.Notice(SkillRecordText.DisableSetNotice(skill.Name, disabled));
+        return true;
+    }
+
+    /// <summary>
     /// The revert row's list (2026-10-04, the user's ask): every kept version of the skill, newest first, the one the file holds now marked,
     /// the cursor on the newest that is not; Enter puts the pick back (<see cref="SkillRecords.Restore"/>: the current text kept first) after
     /// a yes with No on the cursor (later on 2026-10-07, the user's ask; no yes/no until then, nothing being lost — the rename's rule; a No
@@ -661,10 +711,10 @@ internal sealed class SkillsMenu
                 continue;
             }
 
-            if (skill.Locked)
+            if (skill.Locked || skill.Disabled)
             {
-                // Locked (2026-10-07): nothing put back; the list stays, its d and c still forgetting kept versions.
-                Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
+                // Locked (2026-10-07) or disabled (2026-10-09): nothing put back; the list stays, its d and c still forgetting kept versions.
+                Sink.Notice(skill.Locked ? SkillRecordText.LockedNotice(skill.Name) : SkillRecordText.DisabledNotice(skill.Name));
                 cursor = picked;
                 continue;
             }

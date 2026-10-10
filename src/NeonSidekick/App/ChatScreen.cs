@@ -2413,7 +2413,14 @@ internal sealed partial class ChatScreen
     private SkillsFacts SkillsFacts()
     {
         var effective = _effective();
-        var skills = Catalog(effective);
+        // The offered skills and the disabled ones in place (2026-10-09, SkillDisable): the pane lists both.
+        IReadOnlyList<Skill> skills = [];
+        if (effective.AgentSkills)
+        {
+            _catalog.Scan(effective.ExternalSkills);
+            skills = _catalog.All;
+        }
+
         // Each skill's version from the records (2026-10-07): the Offered tab's v column.
         return new SkillsFacts(effective.AgentSkills, skills, effective.AgentSkills ? _catalog.Shadowed : [], effective.AgentSkills ? _catalog.Problems : [], _catalog.Roots, _skillRecords.Versions());
     }
@@ -4931,7 +4938,7 @@ internal sealed partial class ChatScreen
     private void ReconcileSkills()
     {
         _catalog.Scan(_effective().ExternalSkills);
-        var known = _catalog.Skills.Concat(_catalog.Shadowed).ToList();
+        var known = _catalog.All.Concat(_catalog.Shadowed).ToList();   // a disabled skill is still known (2026-10-09)
         _skillRecords.Reconcile(known);
         _skillRecords.ImportFrom(_sessions, known);
     }

@@ -48,6 +48,12 @@ public enum SkillEditOutcome
 
     /// <summary>The skill is locked (2026-10-07, <see cref="SkillLock"/>): no change of any kind until the user unlocks it.</summary>
     Locked,
+
+    /// <summary>
+    /// The skill is disabled (2026-10-09, <see cref="SkillDisable"/>): its content is not changed — an update, a file action, a revert —
+    /// and its name is not created again until the user enables it; the pane's rename, move and delete still act.
+    /// </summary>
+    Disabled,
 }
 
 /// <summary>
@@ -149,7 +155,8 @@ public static class SkillEditor
         string directory = Path.Combine(roots.Of(scope), name);
         if (Directory.Exists(directory) || File.Exists(directory))
         {
-            return new SkillEditResult(SkillEditOutcome.Exists, name, scope);
+            // A disabled skill's name says why it is taken (2026-10-09): the model sees no such skill in its catalog.
+            return new SkillEditResult(SkillDisable.IsDisabled(directory) ? SkillEditOutcome.Disabled : SkillEditOutcome.Exists, name, scope);
         }
 
         // The name is one skill across the roots: a copy here would shadow the one there.
@@ -158,7 +165,7 @@ public static class SkillEditor
             case SkillScope.External:
                 return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
             case { } elsewhere:
-                return new SkillEditResult(SkillEditOutcome.ExistsElsewhere, name, elsewhere);
+                return new SkillEditResult(SkillDisable.IsDisabled(Path.Combine(roots.Of(elsewhere), name)) ? SkillEditOutcome.Disabled : SkillEditOutcome.ExistsElsewhere, name, elsewhere);
         }
 
         return Write(directory, name, scope, SkillFrontmatter.Write(name, flat, [], instructions), SkillEditOutcome.Created);
@@ -203,6 +210,11 @@ public static class SkillEditor
         if (SkillLock.IsLocked(directory))
         {
             return new SkillEditResult(SkillEditOutcome.Locked, name, scope);
+        }
+
+        if (SkillDisable.IsDisabled(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Disabled, name, scope);
         }
 
         bool hasDescription = !string.IsNullOrWhiteSpace(description);
@@ -270,6 +282,11 @@ public static class SkillEditor
         if (SkillLock.IsLocked(directory))
         {
             return new SkillEditResult(SkillEditOutcome.Locked, name, scope);
+        }
+
+        if (SkillDisable.IsDisabled(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Disabled, name, scope);
         }
 
         bool skillFile = string.Equals(path, SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase);
@@ -392,6 +409,11 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.Locked, name, scope);
         }
 
+        if (SkillDisable.IsDisabled(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Disabled, name, scope);
+        }
+
         var files = new WorkingDirectory(() => directory, time);
         var resolved = files.Resolve(relative, forWrite: true, out string full);
         if (resolved != FileOutcome.Ok)
@@ -441,7 +463,7 @@ public static class SkillEditor
         var segments = relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length == 1
             && (string.Equals(segments[0], SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(segments[0], SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(segments[0], SkillLock.FileName, StringComparison.OrdinalIgnoreCase)))
+                || string.Equals(segments[0], SkillLock.FileName, StringComparison.OrdinalIgnoreCase) || string.Equals(segments[0], SkillDisable.FileName, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }

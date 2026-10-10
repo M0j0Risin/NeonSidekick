@@ -494,7 +494,7 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 
 ### Offered
 
-The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see [Skill history](#skill-history)), lock or unlock it (see [Locking a skill](#locking-a-skill)), or delete it after a confirmation. A locked skill's version reads `🔒v4`, and its footer says it is locked.
+The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see [Skill history](#skill-history)), lock or unlock it (see [Locking a skill](#locking-a-skill)), disable or enable it (see [Disabling a skill](#disabling-a-skill)), or delete it after a confirmation. A locked skill's version reads `🔒v4`, and its footer says it is locked. A disabled skill's reads `⛔v4` (also when it is locked), its whole row is dim, and its footer says it is disabled.
 
 ### Reflection
 
@@ -571,6 +571,18 @@ On `/skills`, Enter on a skill, then `lock`, keeps it as it is until you choose 
 - **`/skills add`** refuses to update it, and **`/skills purge`** leaves it out.
 - **The lock** is a small `.neon-lock` file in the skill's folder, so it moves with the folder; `load_skill` doesn't list it and `skill_editor` can't write it. It is the app's refusal, not a file-system guard: a shell command or script can still reach the folder.
 - Locking and unlocking are logged in the skill's history.
+
+### Disabling a skill
+
+On `/skills`, Enter on a skill, then `disable`, switches it off without removing it; `enable` on the same page switches it back on. While it is disabled:
+
+- **The model** is never offered it: it isn't in the skill list of the system prompt, `load_skill` can't load it, `#` mentions and `/botchat` bots don't list it, and `skill_editor` refuses to change it or create a skill of its name.
+- **Reflection** sees it in its skill list, marked as turned off, so it knows the topic is taken and writes no second skill for it. It can't load it or change it.
+- **Your own actions** on its page still work: rename, move, delete and `edit`. Putting back a kept version refuses with "enable it first" (`d` and `c` still remove kept versions).
+- **It still holds its name:** a global skill of the same name under a disabled profile skill stays shadowed.
+- **`/skills add`** can update it, and it stays disabled; **`/skills purge`** leaves it out.
+- **The switch** is a small `.neon-disabled` file in the skill's folder, so it moves with the folder, and a disabled global skill is off in every profile. `load_skill` doesn't list it and `skill_editor` can't write it.
+- Disabling and enabling are logged in the skill's history.
 
 ## Tools settings (`/tools`)
 

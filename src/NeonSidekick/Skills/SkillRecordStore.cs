@@ -48,6 +48,12 @@ public static class SkillEventKinds
     /// <summary>The user unlocked it.</summary>
     public const string Unlocked = "unlocked";
 
+    /// <summary>The user disabled it on its page in <c>/skills</c> (2026-10-09, <see cref="SkillDisable"/>).</summary>
+    public const string Disabled = "disabled";
+
+    /// <summary>The user enabled it again.</summary>
+    public const string Enabled = "enabled";
+
     /// <summary>The kinds that changed the skill's files.</summary>
     public static readonly IReadOnlyList<string> Written = [Created, Updated, File];
 }

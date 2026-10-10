@@ -170,6 +170,13 @@ public static class SkillText
     public static string Locked(string name) =>
         $"Error: skill '{name}' is locked by the user; it cannot be changed until they unlock it on /skills. To keep what these turns taught, create a companion skill (a new name) instead";
 
+    /// <summary>
+    /// A change, or a create of its name, refused for a disabled skill (2026-10-09, <see cref="SkillDisable"/>), the model's and a
+    /// reflection's alike: the user switched it off, and a second skill for its topic would bring back what they turned off. Pinned.
+    /// </summary>
+    public static string Disabled(string name) =>
+        $"Error: skill '{name}' is disabled by the user: it is not offered and cannot be changed until they enable it on /skills. Do not write another skill for the same topic";
+
     /// <summary>A reflection's write refused for an installed skill under <c>Reflection downloaded skills</c> = <c>read-only</c> (2026-10-02). Pinned.</summary>
     public static string InstalledReadOnly(string name, string origin) =>
         $"Error: skill '{name}' was installed from {(string.IsNullOrWhiteSpace(origin) ? "a skill source" : origin)}, and a reflection leaves an installed skill as it is; to keep what these turns taught, create a companion skill (a new name) instead";
@@ -307,6 +314,7 @@ public static class SkillText
             SkillEditOutcome.FileWritten or SkillEditOutcome.FileEdited or SkillEditOutcome.FileRefused => InSkill(result),
             SkillEditOutcome.ProtectedFile => ProtectedFile(result.Name, result.Path),
             SkillEditOutcome.Locked => Locked(result.Name),
+            SkillEditOutcome.Disabled => Disabled(result.Name),
             _ => CouldNot("write", result.Name, result.Detail),
         };
     }

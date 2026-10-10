@@ -110,6 +110,28 @@ public class SkillInstallerTests : IDisposable
         }
     }
 
+    /// <summary>An update keeps a disabled skill disabled (2026-10-09): the sidecar rides into the new folder.</summary>
+    [Fact]
+    public void Install_AnUpdate_KeepsADisabledSkillDisabled()
+    {
+        var (first, firstCandidate) = Pdf();
+        using (first)
+        {
+            Assert.True(SkillInstaller.Install(_roots, SkillScope.Profile, first, firstCandidate, Origin(), replace: false).Ok);
+        }
+
+        string folder = Path.Combine(_roots.Profile, "pdf");
+        Assert.Null(SkillDisable.Set(folder, true, DateTimeOffset.UnixEpoch));
+        var (second, secondCandidate) = Pdf("print('v2')\n");
+        using (second)
+        {
+            var updated = SkillInstaller.Install(_roots, SkillScope.Profile, second, secondCandidate, Origin(), replace: true);
+            Assert.True(updated.Ok, updated.Error);
+            Assert.Equal("print('v2')\n", File.ReadAllText(Path.Combine(folder, "scripts", "run.py")));
+            Assert.True(SkillDisable.IsDisabled(folder));
+        }
+    }
+
     [Fact]
     public void Install_ARefusedCandidate_WritesNothing()
     {
