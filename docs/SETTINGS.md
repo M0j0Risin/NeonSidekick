@@ -39,6 +39,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * A tool result that failed is marked ✗ in the warning colour, and a folded tool run counts them (`· 1 failed`).
 * A reply keeps one left edge: the ● sits on its first text (never on a tool line) and every stretch after a tool keeps its indent; a notice or tool line that wraps continues under its text. Headings: level 1 in the accent, level 2 in the tertiary colour, level 3 and below bold in the body colour.
 * ESC twice on an empty line opens `/rewind` (the hint row prompts for the second press).
+* Over a `/read` reading (the hint row's 📖), Space on an empty line pauses and resumes it, and while it plays ←/→ step a sentence back or forward instead of moving the splash or the picture strip.
 
 ## Keyboard shortcuts
 Each shortcut runs its command as if typed on its own; a draft on the row stays.

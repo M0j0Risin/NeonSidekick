@@ -20,6 +20,10 @@ namespace NeonSidekick.App;
 /// <c>/read &lt;file&gt;</c>, <c>/clear</c>, <c>/new</c>, a profile switch or a <c>/cwd</c> change)
 /// and decides itself whether the status is on the hint row. <see cref="StatusLine"/> reads the
 /// speaker's counters alone, so the pane's tick may call it from the timer thread.</para>
+///
+/// <para>Since 2026-10-09 (the user's ask) the empty input line drives a file reading too: Left and Right while it plays
+/// restart it a sentence back or forward from <see cref="Position"/>, and Space pauses it or resumes it at <see cref="Resume"/>
+/// — the screen's <c>StepReading</c>, <c>ToggleReading</c> and <c>TakeReadSeekAsync</c>, through <see cref="Started"/> again.</para>
 /// </summary>
 internal sealed class SpeakReading
 {

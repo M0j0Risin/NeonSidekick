@@ -15432,6 +15432,144 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// The script for the empty line's reading keys (2026-10-09): one driver started at the first wait, so the count of waits
+    /// (each read that finds the queue empty, a seek's nudged read among them) never decides what comes next — the speech does.
+    /// </summary>
+    private ScriptedInput ReadingKeysScript(string file, string text, Func<ScriptedInput, Task> drive)
+    {
+        _playback.HoldBytes = true;   // the device plays nothing until released: the play head is the test's
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, file), text);
+        var input = Scripted();
+        int waits = 0;
+        input.OnWait = () =>
+        {
+            if (++waits == 1)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await drive(input);
+                    PushLine(input, "/exit");
+                });
+            }
+        };
+        PushLine(input, "/read " + file);
+        return input;
+    }
+
+    /// <summary>Waits until at least <paramref name="spoken"/> sentences were synthesised and <paramref name="writes"/> buffers written.</summary>
+    private async Task SpokenAsync(int spoken, int writes = 0)
+    {
+        while (_synth.Spoken.Count < spoken || _playback.Writes.Count < writes)
+        {
+            await Task.Delay(5);
+        }
+    }
+
+    [Fact]
+    public async Task Read_RightAndLeft_WhilePlaying_StepASentence_AndNothingIsReprinted()
+    {
+        var input = ReadingKeysScript("notes.txt", "One. Two. Three. Four.", async input =>
+        {
+            await SpokenAsync(4, 4);
+            input.Push(Keys.Right);   // on One: the reading restarts at Two
+            await SpokenAsync(7);
+            input.Push(Keys.Left);    // on Two: back to One
+            await SpokenAsync(11);
+            _playback.Release();      // the rest heard whole
+        });
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(new[] { "One.", "Two.", "Three.", "Four.", "Two.", "Three.", "Four.", "One.", "Two.", "Three.", "Four." }, _synth.SpokenText);
+        Assert.Equal(1, Count(output, "● One. Two. Three. Four.\n"));   // the block once: a seek restarts the voice alone
+        Assert.DoesNotContain("● Two. Three. Four.", output);
+        Assert.DoesNotContain(ChatScreen.SpeechStoppedNotice, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task Read_LeftOnTheFirstSentence_IsSpent_AndRightsAddUpToTheLast()
+    {
+        var input = ReadingKeysScript("notes.txt", "One. Two. Three.", async input =>
+        {
+            await SpokenAsync(3, 3);
+            input.Push(Keys.Left);                // already on One: nothing restarts
+            input.Push(Keys.Right, Keys.Right, Keys.Right);   // past the end clamps to Three
+            while (_synth.SpokenText.Count < 4 || _synth.SpokenText[^1] != "Three.")
+            {
+                await Task.Delay(5);
+            }
+
+            _playback.Release();
+        });
+
+        string output = await RunAsync(input);
+
+        var spoken = _synth.SpokenText;
+        Assert.Equal(new[] { "One.", "Two.", "Three." }, spoken.Take(3));
+        Assert.Equal("Three.", spoken[^1]);
+        Assert.Equal(1, spoken.Count(s => s == "One."));   // the Left at the top restarted nothing
+        Assert.Equal(1, Count(output, "● One. Two. Three.\n"));
+    }
+
+    [Fact]
+    public async Task Read_Space_PausesAPlayingReading_AndResumesAStoppedOne_WhereItStopped()
+    {
+        var input = ReadingKeysScript("notes.txt", "One. Two. Three.", async input =>
+        {
+            await SpokenAsync(3, 3);
+            _playback.Release(4800 + 10);   // into Two
+            input.Push(Keys.Char(' '));     // pause: ESC's own stop
+            while (!Output.Contains(ChatScreen.SpeechStoppedNotice, StringComparison.Ordinal))
+            {
+                await Task.Delay(5);
+            }
+
+            input.Push(Keys.Char(' '));     // play: from Two again
+            await SpokenAsync(5);
+            _playback.Release();
+        });
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(new[] { "One.", "Two.", "Three.", "Two.", "Three." }, _synth.SpokenText);
+        Assert.Equal(1, Count(output, ChatScreen.SpeechStoppedNotice));
+        Assert.Equal(1, Count(output, "● One. Two. Three.\n"));
+        Assert.DoesNotContain("● Two. Three.", output);   // resumed without a reprint (a bare /read reprints)
+        Assert.Empty(_chat.Requests);   // no space was typed: /exit was a command
+    }
+
+    [Fact]
+    public async Task Read_TheKeys_WithSpeechOff_AreTheLinesOwn()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
+        var input = Scripted();
+        int waits = 0;
+        input.OnWait = () =>
+        {
+            if (++waits == 1)
+            {
+                input.Push(Keys.Right, Keys.Left, Keys.Char(' '));   // nothing plays: the arrows are the strip's, the space is typed
+                PushLine(input, "hi");
+                PushLine(input, "/exit");
+            }
+        };
+        _chat.EnqueueText("Hello.");
+        PushLine(input, "/read notes.txt");
+
+        string output = await RunAsync(input);
+
+        Assert.Empty(_synth.Spoken);
+        Assert.Single(_chat.Requests);
+        Assert.Equal(" hi", UserText(_chat.Requests[0]));   // the space typed ahead of the line: nothing played to take it
+    }
+
     [Fact]
     public async Task WithGeometry_Speak_ShowsTheProgressOnTheHintRow_AndATurnClearsIt()
     {

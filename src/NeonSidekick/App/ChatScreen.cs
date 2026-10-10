@@ -940,6 +940,13 @@ internal sealed partial class ChatScreen
     /// </summary>
     private volatile SpeakReading? _hintReading;
 
+    /// <summary>
+    /// The sentence (1-based) the <c>/read</c> reading is to restart at (2026-10-09, the user's ask): set by the empty line's Left
+    /// and Right while it plays (<see cref="StepReading"/>) and by Space over a stopped one (<see cref="ToggleReading"/>), taken
+    /// at the loop top (<see cref="TakeReadSeekAsync"/>). 0 = none. Written on the read's task, read by the pane's tick.
+    /// </summary>
+    private int _readSeek;
+
     /// <param name="effective">The settings in force (flags over variables over the file), read fresh on every connect and turn.</param>
     /// <param name="overriddenBy">For the menus: the variable or flag that outranks a saved field, or null.</param>
     /// <param name="openFile">Opens a file in an external editor without waiting for it; <c>/sys persona</c>, <c>/sys operata</c> and <c>/sys vocalia</c> call it with the file's path. The app passes <see cref="PersonaFile.OpenInEditor"/>; tests record the call. A throw is reported as an error line.</param>
@@ -2115,7 +2122,7 @@ internal sealed partial class ChatScreen
             return SplashDeleteArmedHint(armed);
         }
 
-        string rest = HintLine(TimerText.StatusLine(_timers.Snapshot()), UsageText.HintPart(_session.Usage, _session.ContextLength), _hintReading?.StatusLine());
+        string rest = HintLine(TimerText.StatusLine(_timers.Snapshot()), UsageText.HintPart(_session.Usage, _session.ContextLength), ReadingHintPart());
         if (!SplashArrowsOffered() && _pane.DraftEmpty && PictureStripOffered())
         {
             // The picture strip's arrows (later still on 2026-09-24): the splash keeps them while it stands.
@@ -8027,17 +8034,24 @@ internal sealed partial class ChatScreen
         return true;
     }
 
-    /// <summary>The block from sentence <paramref name="from"/> on, then the sentences to the speaker; the status onto the hint row.</summary>
-    private void StartReading(SpeakReading reading, int from, CancellationToken cancellationToken)
+    /// <summary>
+    /// The block from sentence <paramref name="from"/> on, then the sentences to the speaker; the status onto the hint row.
+    /// Without <paramref name="print"/> (2026-10-09, the empty line's keys: <see cref="TakeReadSeekAsync"/>) the speech and the
+    /// hint restart alone — the block on the screen already holds every sentence, and a reprint per arrow press would flood it.
+    /// </summary>
+    private void StartReading(SpeakReading reading, int from, CancellationToken cancellationToken, bool print = true)
     {
         var effective = _effective();
         var speaker = effective.TtsOutput && _speech.IsReady ? _speech.BeginTurn(cancellationToken) : null;
-        _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled));
-        _transcript.AppendDelta(reading.Text[reading.Sentences[from - 1].Offset..]);
-        _transcript.EndAssistant();
-        if (reading.Cut)
+        if (print)
         {
-            _transcript.Notice(ReadCutNotice(WorkingDirectory.MaxReadChars));
+            _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled));
+            _transcript.AppendDelta(reading.Text[reading.Sentences[from - 1].Offset..]);
+            _transcript.EndAssistant();
+            if (reading.Cut)
+            {
+                _transcript.Notice(ReadCutNotice(WorkingDirectory.MaxReadChars));
+            }
         }
 
         if (speaker is not null)
@@ -8058,6 +8072,104 @@ internal sealed partial class ChatScreen
         _tailInterrupt = speaker is not null && _voice.InterruptReady;
         DrainDiagnostics();
         _pane.RefreshHint();
+    }
+
+    // ── The empty line's keys over a /read reading (2026-10-09) ─────────────
+
+    /// <summary>The hint row's reading part: a pending seek's sentence while it waits for the loop top (held presses count up at once), else the reading's own status.</summary>
+    private string? ReadingHintPart()
+    {
+        var reading = _hintReading;
+        int seek = Volatile.Read(ref _readSeek);
+        return seek > 0 && reading is { Source: SpeakReading.Kind.File } ? SpeakReading.ReadingLine(reading.File, seek, reading.Count) : reading?.StatusLine();
+    }
+
+    /// <summary>The <c>/read</c> file reading on the hint row while it plays — its speaker the one sounding — or null. Never an <c>/echo</c>.</summary>
+    private SpeakReading? PlayingFileReading() =>
+        _hintReading is { Source: SpeakReading.Kind.File, Playing: true } reading && ReferenceEquals(reading, _reading) && ReferenceEquals(reading.Speaker, _speech.Playing)
+            ? reading
+            : null;
+
+    /// <summary>
+    /// Left or Right at an empty idle line while a <c>/read</c> reading plays (2026-10-09, the user's ask: <c>/read &lt;n&gt;</c> from
+    /// the arrows), the input line's <c>emptyArrow</c> hook ahead of the splash and the strip: the previous or next sentence, from a
+    /// seek still pending so quick presses add up, clamped to the file. The restart is the loop top's (<see cref="TakeReadSeekAsync"/>):
+    /// the read is nudged out, since the wake listener may be armed over the speaker's probe. A press at either end moves nothing
+    /// but is still spent, so the strip never jumps under a reading. False — the key is the splash's or the strip's — when no
+    /// reading plays (the user's call: a stopped one restarts by Space or <c>/read</c>).
+    /// </summary>
+    private bool StepReading(int step)
+    {
+        if (PlayingFileReading() is not { } reading)
+        {
+            return false;
+        }
+
+        int pending = Volatile.Read(ref _readSeek);
+        int at = pending > 0 ? pending : reading.Position;
+        int target = Math.Clamp(at + step, 1, reading.Count);
+        if (target != at)
+        {
+            Volatile.Write(ref _readSeek, target);
+            _pane.RefreshHint();
+            SignalAlert();
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// A plain Space at an empty idle line over the <c>/read</c> reading on the hint row (2026-10-09, the user's ask: play and pause),
+    /// the input line's <c>emptySpace</c> hook: while it plays, <paramref name="stopTail"/> — ESC's own first job, so the one
+    /// <see cref="SpeechStoppedNotice"/> follows — and the key is spent even when the stop is already under way; while it is
+    /// stopped or ran through, with speech on and ready, a restart where a bare <c>/read</c> would (<see cref="SpeakReading.Resume"/>),
+    /// through the seek. False — a space typed — with no file reading on the row, under an <c>/echo</c>, or with speech off.
+    /// </summary>
+    private bool ToggleReading(Func<bool> stopTail)
+    {
+        if (PlayingFileReading() is not null)
+        {
+            stopTail();
+            return true;
+        }
+
+        var effective = _effective();
+        if (_hintReading is not { Source: SpeakReading.Kind.File, Playing: false } reading || !ReferenceEquals(reading, _reading) || !effective.TtsOutput || !_speech.IsReady)
+        {
+            return false;
+        }
+
+        Volatile.Write(ref _readSeek, reading.Resume);
+        _pane.RefreshHint();
+        SignalAlert();
+        return true;
+    }
+
+    /// <summary>A seek is waiting for the loop top: the read returns at once.</summary>
+    private bool ReadSeekReady => Volatile.Read(ref _readSeek) > 0;
+
+    /// <summary>
+    /// The loop top's half of the empty line's reading keys (2026-10-09): the pending sentence taken, whatever plays stopped, and
+    /// the reading restarted there — the speech and the hint alone, no block reprinted, no notice (the hint row's count is the
+    /// news). A reading dropped meanwhile (<see cref="ForgetReading"/>) or speech switched off takes nothing further.
+    /// </summary>
+    private async Task TakeReadSeekAsync(CancellationToken cancellationToken)
+    {
+        int target = Interlocked.Exchange(ref _readSeek, 0);
+        if (target == 0)
+        {
+            return;
+        }
+
+        if (_hintReading is not { Source: SpeakReading.Kind.File } reading || !ReferenceEquals(reading, _reading) || target > reading.Count
+            || !_effective().TtsOutput || !_speech.IsReady)
+        {
+            _pane.RefreshHint();
+            return;
+        }
+
+        await _speech.StopAsync().ConfigureAwait(false);
+        StartReading(reading, target, cancellationToken, print: false);
     }
 
     // ── /echo (2026-09-17) ──────────────────────────────────────────────────
@@ -9030,6 +9142,8 @@ internal sealed partial class ChatScreen
 
                 // The picture windows' menus (2026-10-04): a print runs now, an attach becomes the line's paste below.
                 await TakeWindowWorkAsync(cancellationToken).ConfigureAwait(false);
+                // The empty line's arrows or Space over a /read reading (2026-10-09): the restart at the sentence they named.
+                await TakeReadSeekAsync(cancellationToken).ConfigureAwait(false);
 
                 IReadOnlyList<InputEvent>? replay = null;
                 SubmittedLine? send = null;
@@ -9402,7 +9516,7 @@ internal sealed partial class ChatScreen
         }
 
         Volatile.Write(ref _alertSignal, alert);
-        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady)
+        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -9472,7 +9586,8 @@ internal sealed partial class ChatScreen
                 intercept: TypoInterceptAsync,
                 beforeCommit: DismissSplash,
                 replay: replay,
-                emptyArrow: step => CycleSplash(step) || StepPictureStrip(step),
+                // A /read reading takes the arrows first while it plays, and Space plays and pauses it (2026-10-09, the user's ask).
+                emptyArrow: step => StepReading(step) || CycleSplash(step) || StepPictureStrip(step),
                 emptyDelete: DeleteSplash,
                 emptyEnter: OpenStripPicture,
                 // The chat line's own editor (2026-09-25): its draft lives on under the replies. A /draft replay reads on
@@ -9480,7 +9595,8 @@ internal sealed partial class ChatScreen
                 editor: replay is null ? _input.Chat : null,
                 shortcuts: true,
                 // STT destination draft (2026-10-02): the key listens over a draft too, unless it is one the editor moves with.
-                pushToTalkOverDraft: SpokenToDraft() && SttDestinationMode.PushToTalkOverDraft(_voice.PushToTalk)).ConfigureAwait(false);
+                pushToTalkOverDraft: SpokenToDraft() && SttDestinationMode.PushToTalkOverDraft(_voice.PushToTalk),
+                emptySpace: replay is null ? () => ToggleReading(StopTailFirst) : null).ConfigureAwait(false);
         }
         finally
         {
@@ -10091,6 +10207,7 @@ internal sealed partial class ChatScreen
         _reading = null;
         _echo = null;
         _hintReading = null;
+        Volatile.Write(ref _readSeek, 0);
     }
 
     /// <summary>

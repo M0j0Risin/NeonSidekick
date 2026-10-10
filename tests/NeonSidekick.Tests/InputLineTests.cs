@@ -258,6 +258,43 @@ public class InputLineTests : IDisposable
     }
 
     [Fact]
+    public async Task EmptySpace_IsAskedOnAPlainSpaceOverAnEmptyDraftOnly()
+    {
+        // The /read reading's play and pause (2026-10-09): a plain Space with nothing on the line is the screen's and is spent;
+        // with a draft the space is typed as ever.
+        int asked = 0;
+        Push(Keys.Char(' '), Keys.Char(' '));
+        Type("a");
+        Push(Keys.Char(' '));
+        Type("b");
+        Push(Keys.Enter);
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await _line.ReadAsync(emptySpace: () => { asked++; return true; }));
+
+        Assert.Equal("a b", submitted.Text);
+        Assert.Equal(2, asked);
+    }
+
+    [Fact]
+    public async Task EmptySpace_ThatDeclines_TypesTheSpace_AndAModifiedSpaceIsNeverAsked()
+    {
+        int asked = 0;
+        Push(Keys.Char(' '));
+        Type("x");
+        Push(Keys.Enter);
+        Push(new ConsoleKeyInfo(' ', ConsoleKey.Spacebar, true, false, false));
+        Type("y");
+        Push(Keys.Enter);
+
+        var declined = Assert.IsType<InputResult.Submitted>(await _line.ReadAsync(emptySpace: () => { asked++; return false; }));
+        var shifted = Assert.IsType<InputResult.Submitted>(await _line.ReadAsync(emptySpace: () => { asked++; return true; }));
+
+        Assert.Equal(" x", declined.Text);   // typed
+        Assert.Equal(" y", shifted.Text);
+        Assert.Equal(1, asked);   // Shift+Space over the empty line types, never asks
+    }
+
+    [Fact]
     public async Task EmptyDelete_IsAskedOnAPlainDeleteOverAnEmptyDraft_WithWhetherTheLastEventWasOne()
     {
         // The splash's Delete Delete (2026-09-24): the line says "in a row" — any other key between is a first again.

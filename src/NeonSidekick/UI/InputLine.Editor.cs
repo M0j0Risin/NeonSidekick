@@ -70,7 +70,8 @@ public sealed partial class InputLine
         Func<bool, bool>? EmptyDelete = null,
         Func<bool>? EmptyEnter = null,
         bool Shortcuts = false,
-        bool PushToTalkOverDraft = false);
+        bool PushToTalkOverDraft = false,
+        Func<bool>? EmptySpace = null);
 
     /// <summary>
     /// The input line's editing state and its keys, pulled out of <see cref="ReadAsync"/> on 2026-09-25 (the user's ask:
@@ -447,6 +448,13 @@ public sealed partial class InputLine
             // The one exception is a chord with Alt alone, which the console reports with the
             // letter in it (Alt+V is 'v' + Alt): that is a chord, never typing. AltGr is Ctrl+Alt
             // and still types, and an Alt+NumPad character arrives on the Alt release, Alt up.
+            // A plain Space over an empty draft is the emptySpace hook's first (2026-10-09, the /read reading's play and pause):
+            // true spends it, false or null types the space as ever.
+            if (k.KeyChar == ' ' && k.Modifiers == 0 && _text.Length == 0 && _o.EmptySpace is not null && _o.EmptySpace())
+            {
+                return EditOutcome.Handled;
+            }
+
             if (k.KeyChar != '\0' && !char.IsControl(k.KeyChar) && !(alt && !control))
             {
                 DeleteSelection();
