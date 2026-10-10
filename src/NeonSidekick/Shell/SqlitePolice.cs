@@ -14,7 +14,9 @@ namespace NeonSidekick.Shell;
 /// script only quoted or after a slash, so <c>self.db</c> is no file. A line's own script files (<see cref="ScriptFiles"/>) are read
 /// as scripts: <c>write_file insert.py</c> then <c>python insert.py</c> is caught at the second call. A tripwire like
 /// <see cref="ForbiddenStrings"/>, not a sandbox: text built in pieces gets past it; only the <c>ask</c> policy shows the user every
-/// command. Pure but for <see cref="ScriptFiles"/>' reads.
+/// command. A package-manager command that only installs, removes, restores or lists packages is not judged (2026-10-10, the
+/// user's call, <see cref="PackageCommands"/>): <c>dotnet add package Microsoft.Data.Sqlite</c> declares a dependency, reaches no
+/// database. Pure but for <see cref="ScriptFiles"/>' reads.
 /// </summary>
 public static partial class SqlitePolice
 {
@@ -124,7 +126,8 @@ public static partial class SqlitePolice
     public static (string Token, string? File)? Judge(string command, string workdir, string root, DatabaseGuard guard)
     {
         ArgumentNullException.ThrowIfNull(guard);
-        if (Find(command, script: false, guard) is { } token)
+        // The line less its package-manager segments (2026-10-10); its script files are read whole, as before.
+        if (Find(PackageCommands.Strip(command), script: false, guard) is { } token)
         {
             return (token, null);
         }

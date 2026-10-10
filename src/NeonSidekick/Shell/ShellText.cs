@@ -387,7 +387,7 @@ public static class ShellText
     /// </summary>
     public const string SqlitePoliced = SqliteHead + ": while the SQLite tools are on, a SQLite database is reached only through them — " +
         "sqlite_query to read, and sqlite_execute to change one when SQLite mode allows it. Do not try another way (a script, another driver, " +
-        "the file tools); tell the user if a change is needed that the tools refuse.";
+        "the file tools); tell the user if a change is needed that the tools refuse. Installing or removing a package is allowed: run the package command on its own.";
 
     /// <summary>The 👮 line the user reads for <see cref="SqlitePoliced"/>: <c>SQLite: 'sqlite3' in insert.py — not run</c>. Pinned.</summary>
     public static string SqliteShown(string token, string? file) =>
@@ -412,7 +412,7 @@ public static class ShellText
         ArgumentNullException.ThrowIfNull(family);
         return $"{ServerDatabaseHead}: while the {family.Title} tools are on, a {family.Title} database is reached only through them — " +
             $"{family.QueryTool} to read, and {family.ExecuteTool} to change one when its mode allows it. Do not try another way (a client, a script, " +
-            "another driver); tell the user if a change is needed that the tools refuse.";
+            "another driver); tell the user if a change is needed that the tools refuse. Installing or removing a package is allowed: run the package command on its own.";
     }
 
     /// <summary>The 👮 line the user reads for <see cref="ServerDatabasePoliced"/>: <c>PostgreSQL: 'psql' in load.py — not run</c>. Pinned.</summary>

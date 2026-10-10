@@ -479,7 +479,7 @@ With *SQLite mode* set to `read-write`, the model gets `sqlite_execute` beside t
 5. **The log.** Every change is written to the log: the database, its file, the rows changed and the statement.
 
 **Shell and files.** While *SQLite tools* is on, the rest of the app keeps out of the databases, in either mode:
-* The shell police's SQLite rule (Shell guards) refuses a command, script or process input that reaches SQLite, so `sqlite_execute` and its Allow pane can't be walked around by a script. It's a tripwire that reads text, not a sandbox; only Shell command policy `ask` shows you every command.
+* The shell police's SQLite rule (Shell guards) refuses a command, script or process input that reaches SQLite (a package command such as `dotnet add package Microsoft.Data.Sqlite` passes), so `sqlite_execute` and its Allow pane can't be walked around by a script. It's a tripwire that reads text, not a sandbox; only Shell command policy `ask` shows you every command.
 * The file tools never change a database file: a `.db`/`.db3`/`.sqlite`/`.sqlite3` file (or its journal), or one *sqlite.json* names. That covers `write_file`, `patch_file`, `move`, `copy` onto one, `delete` (a folder holding one too), `unzip` into one, `download_file` and `unc_fetch`. Reading one and copying from one still work.
 
 **Creating a database.** `create: true` needs creating ticked in *SQLite statements allowed* and *SQLite sandbox files* on. The new file must end `.db`, `.sqlite`, `.sqlite3` or `.db3`, and its folder must already exist. A file already there is just opened, and a name from `sqlite.json` is never made. If the statement fails, the new file is removed again. To make an empty database, create it with a first table, or with `PRAGMA user_version = 0`.

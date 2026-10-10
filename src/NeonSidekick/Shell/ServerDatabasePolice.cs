@@ -24,7 +24,9 @@ public sealed record ServerDatabaseGuard(IReadOnlyList<ServerDatabaseGuard.Famil
 /// longer name (<c>pymysql</c>, <c>Microsoft.Data.SqlClient</c>, <c>psycopg2</c>) unless it is short enough to be part of anything
 /// (<see cref="WholeWords"/>: <c>bcp</c>, <c>psql</c>, <c>osql</c>, <c>rman</c>, <c>sqlcl</c>), which counts only standing alone. A
 /// tripwire like <see cref="ForbiddenStrings"/>, not a sandbox: text built in pieces gets past it; only the <c>ask</c> policy shows
-/// the user every command. Pure but for <see cref="For"/>'s reads of the connections files and <see cref="Judge"/>'s of scripts.
+/// the user every command. A package-manager command that only installs, removes, restores or lists packages is not judged
+/// (2026-10-10, the user's call, <see cref="PackageCommands"/>). Pure but for <see cref="For"/>'s reads of the connections files and
+/// <see cref="Judge"/>'s of scripts.
 /// </summary>
 public static partial class ServerDatabasePolice
 {
@@ -183,7 +185,8 @@ public static partial class ServerDatabasePolice
     public static (string Family, string Token, string? File)? Judge(string command, string workdir, string root, ServerDatabaseGuard guard)
     {
         ArgumentNullException.ThrowIfNull(guard);
-        if (Find(command, guard) is { } found)
+        // The line less its package-manager segments (2026-10-10, PackageCommands: dotnet add package Npgsql reaches no database).
+        if (Find(PackageCommands.Strip(command), guard) is { } found)
         {
             return (found.Family, found.Token, null);
         }

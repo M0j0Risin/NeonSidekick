@@ -215,7 +215,7 @@ public sealed class ProcessTool : AIFunction
                 }
 
                 // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a process's stdin (a shell, a REPL) is read as a script.
-                if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Find(data, script: true, databases) is { } sqlite)
+                if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Find(PackageCommands.Strip(data), script: true, databases) is { } sqlite)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
                     DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(refused, sqlite, null));
@@ -224,7 +224,7 @@ public sealed class ProcessTool : AIFunction
                 }
 
                 // The server-database police (2026-10-05): a process's stdin that reaches a server family whose tools are on.
-                if (effective.ShellPolice && _files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Find(data, servers) is { } server)
+                if (effective.ShellPolice && _files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Find(PackageCommands.Strip(data), servers) is { } server)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
                     DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(refused, server.Family, server.Token, null));

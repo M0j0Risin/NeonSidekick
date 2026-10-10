@@ -108,7 +108,7 @@ public sealed class ServerDatabasePoliceTests : IDisposable
     public void TheWording_AndTheRules()
     {
         Assert.Equal(
-            "Error: refused by the shell police — database: while the PostgreSQL tools are on, a PostgreSQL database is reached only through them — postgres_query to read, and postgres_execute to change one when its mode allows it. Do not try another way (a client, a script, another driver); tell the user if a change is needed that the tools refuse.",
+            "Error: refused by the shell police — database: while the PostgreSQL tools are on, a PostgreSQL database is reached only through them — postgres_query to read, and postgres_execute to change one when its mode allows it. Do not try another way (a client, a script, another driver); tell the user if a change is needed that the tools refuse. Installing or removing a package is allowed: run the package command on its own.",
             ShellText.ServerDatabasePoliced(Postgres));
         Assert.True(ShellText.IsPoliced(ShellText.ServerDatabasePoliced(Postgres)));
         Assert.Equal("PostgreSQL: 'psql' in load.py — not run", ShellText.ServerDatabaseShown("PostgreSQL", "psql", "load.py"));
