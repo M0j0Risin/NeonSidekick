@@ -68,7 +68,7 @@ internal sealed class LlmSession : IDisposable
     private readonly ContextLengthProbe _contextProbe;
     private readonly ServerSamplingProbe? _samplingProbe;
     private (string Key, ServerSampling? Found)? _serverSampling;
-    private readonly Func<LlmEndpoint, LlmTimeouts, IChatClient> _factory;
+    private readonly Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> _factory;
     private readonly TimeProvider _time;
     private readonly IEmbeddedLlm? _embedded;
     private readonly IClaudeServerHost? _claudeServer;
@@ -108,6 +108,17 @@ internal sealed class LlmSession : IDisposable
     /// <param name="dockerServers">The chosen Docker containers' switcher (2026-10-02): their <c>/server</c> rows and the switch a Docker URL makes; null offers none.</param>
     public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null,
         IClaudeServerHost? claudeServer = null, Func<AppSettingsData, bool>? claudeCliOffered = null, IDockerServers? dockerServers = null)
+        : this(probe, contextProbe, Wrap(factory), time, samplingProbe, embedded, claudeServer, claudeCliOffered, dockerServers)
+    {
+    }
+
+    /// <summary>
+    /// The session over a <paramref name="factory"/> that is told whose settings the client is for (2026-10-10, for the profile
+    /// advisors): null for the loaded profile (the main connect, and a link that borrows its server), else the linked profile —
+    /// so a bot's or an advisor's client carries its own profile's output caps and headers, not the loaded one's.
+    /// </summary>
+    public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null,
+        IClaudeServerHost? claudeServer = null, Func<AppSettingsData, bool>? claudeCliOffered = null, IDockerServers? dockerServers = null)
     {
         _embedded = embedded;
         _docker = dockerServers;
@@ -119,6 +130,12 @@ internal sealed class LlmSession : IDisposable
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _time = time ?? TimeProvider.System;
         Meter = new StreamMeter(_time);
+    }
+
+    private static Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> Wrap(Func<LlmEndpoint, LlmTimeouts, IChatClient> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        return (endpoint, timeouts, _) => factory(endpoint, timeouts);
     }
 
     /// <summary>The main assistant's request as it streams (2026-09-25): the busy row's <c>estimate</c> (<see cref="StreamMeter"/>); a botchat bot's assistant has none.</summary>
@@ -693,7 +710,7 @@ internal sealed class LlmSession : IDisposable
 
         try
         {
-            _client = _factory(Endpoint, Timeouts);
+            _client = _factory(Endpoint, Timeouts, null);
             Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId) };
             return true;
         }
@@ -747,6 +764,7 @@ internal sealed class LlmSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(profile);
         (string Wanted, string Running)? shared = null;
+        bool borrowed = string.IsNullOrWhiteSpace(profile.LlmUrl);
         string? model = string.IsNullOrWhiteSpace(profile.LlmModel) ? null : profile.LlmModel.Trim();
         LlmEndpoint endpoint;
         if (string.IsNullOrWhiteSpace(profile.LlmUrl))
@@ -833,7 +851,8 @@ internal sealed class LlmSession : IDisposable
         var timeouts = LlmTimeouts.Resolve(profile);
         try
         {
-            return (new BotLink(_factory(endpoint, timeouts), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)) { SharedEmbedded = shared }, null);
+            // The client is told the profile (2026-10-10): its own server takes its own caps and headers; a borrowed one the loaded profile's.
+            return (new BotLink(_factory(endpoint, timeouts, borrowed ? null : profile), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)) { SharedEmbedded = shared }, null);
         }
         catch (Exception ex)
         {

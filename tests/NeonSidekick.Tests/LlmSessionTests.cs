@@ -121,6 +121,40 @@ public class LlmSessionTests
     }
 
     [Fact]
+    public async Task TheFactory_IsToldTheLinkedProfile_OnItsOwnServerOnly()
+    {
+        // 2026-10-10 (the profile advisors): the main connect and a link that borrows its server build for the loaded
+        // profile (null); a link to the profile's own server builds for that profile, so its caps and headers go with it.
+        ServerOn1234("llama");
+        _http.Map("http://127.0.0.1:8000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
+        var told = new List<AppSettingsData?>();
+        using var session = new LlmSession(
+            new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
+            new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
+            (LlmEndpoint _, LlmTimeouts _, AppSettingsData? profile) =>
+            {
+                told.Add(profile);
+                return new FakeChatClient();
+            });
+        Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));
+
+        var own = new AppSettingsData { LlmUrl = "http://127.0.0.1:8000/v1", AnthropicApiMaxTokens = 1234 };
+        var (link, problem) = await session.LinkAsync(own, CancellationToken.None);
+        var (borrowed, why) = await session.LinkAsync(new AppSettingsData { LlmModel = "llama" }, CancellationToken.None);
+
+        Assert.Null(problem);
+        Assert.Null(why);
+        using (link)
+        using (borrowed)
+        {
+            Assert.Equal(3, told.Count);
+            Assert.Null(told[0]);
+            Assert.Same(own, told[1]);
+            Assert.Null(told[2]);
+        }
+    }
+
+    [Fact]
     public async Task ListModels_UsesTheConnectedEndpoint_OrTheConfiguredUrl_OrNothing()
     {
         using var session = Session();

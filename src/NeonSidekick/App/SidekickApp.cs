@@ -64,7 +64,7 @@ public sealed class SidekickApp
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;
     private readonly ServerSamplingProbe _samplingProbe;
-    private readonly Func<LlmEndpoint, LlmTimeouts, IChatClient> _chatClientFactory;
+    private readonly Func<LlmEndpoint, LlmTimeouts, AppSettingsData?, IChatClient> _chatClientFactory;
     private readonly Func<PcmFormat, IAudioPlayback> _playbackFactory;
     private readonly Func<SynthesizerRequest, ISpeechSynthesizer> _synthesizerFactory;
     private readonly Func<PcmFormat, IAudioCapture> _captureFactory;
@@ -292,7 +292,7 @@ public sealed class SidekickApp
         _smokeChecks = smokeChecks ?? (() => SmokeChecks.Run(AppContext.BaseDirectory, ModelsDirectory));
         _probe = probe ?? new LlmEndpointProbe(new HttpClient());
         _contextProbe = contextProbe ?? new ContextLengthProbe(new HttpClient());
-        _chatClientFactory = chatClientFactory ?? DefaultChatClient;
+        _chatClientFactory = chatClientFactory is null ? DefaultChatClient : (endpoint, timeouts, _) => chatClientFactory(endpoint, timeouts);
         _playbackFactory = playbackFactory ?? AudioSupport.DefaultPlayback;
         _synthesizerFactory = synthesizerFactory ?? (request => request.Engine == TtsEngine.InProcess ? new KokoroInProcessSynthesizer(request.ModelPath!) : new KokoroHttpSynthesizer(request.Url!));
         _captureFactory = captureFactory ?? AudioSupport.DefaultCapture;
@@ -2242,22 +2242,24 @@ public sealed class SidekickApp
     /// hold at the connect; the Claude CLI's (<see cref="Claude.ClaudeCliChatClient"/>, 2026-09-30) over this run's one
     /// process on its sentinel; the OpenAI API's (<see cref="Llm.OpenAIPlatform.OpenAIApiChatClient"/>, 2026-10-03, the Responses API) on its host, with
     /// the output cap, organization and project held at the connect; the OpenAI-compatible one everywhere else. Every connect and every <c>/botchat</c> link
-    /// comes through here, so the provider is the URL's wherever it came from.
+    /// comes through here, so the provider is the URL's wherever it came from. <paramref name="profile"/> (2026-10-10, for the
+    /// profile advisors) is the linked profile whose own server this is: its caps, headers and reasoning estimate rather than
+    /// the loaded profile's; null is the loaded profile, read live as before.
     /// </summary>
-    private IChatClient DefaultChatClient(LlmEndpoint endpoint, LlmTimeouts timeouts)
+    private IChatClient DefaultChatClient(LlmEndpoint endpoint, LlmTimeouts timeouts, AppSettingsData? profile)
     {
         if (Claude.ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl))
         {
             var host = _claudeServer ?? throw new InvalidOperationException(Claude.ClaudeCliText.NotRunningError);
             var context = new Claude.ClaudeCliContext(
-                () => Claude.ClaudeExecutable.Locate(EffectiveSettings.ClaudeCodeExecutable, _environment.System, File.Exists),
+                () => Claude.ClaudeExecutable.Locate((profile ?? EffectiveSettings).ClaudeCodeExecutable, _environment.System, File.Exists),
                 ClaudeCliDirectory);
             return new Claude.ClaudeCliChatClient(endpoint, host, context, timeouts.Request);
         }
 
         if (Llm.OpenAIPlatform.OpenAIApi.IsOpenAIApi(endpoint.BaseUrl))
         {
-            var settings = EffectiveSettings;
+            var settings = profile ?? EffectiveSettings;
             return new Llm.OpenAIPlatform.OpenAIApiChatClient(
                 endpoint, timeouts.Request, settings.OpenAIApiMaxTokens,
                 Llm.OpenAIPlatform.OpenAIApi.Organization(settings), Llm.OpenAIPlatform.OpenAIApi.Project(settings), time: _time);
@@ -2266,10 +2268,10 @@ public sealed class SidekickApp
         if (!Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl))
         {
             // The reasoning estimate is read at each request (2026-09-29): a change of the setting needs no reconnect.
-            return new OpenAICompatibleChatClient(endpoint, timeouts.Request, reasoningEstimate: () => ReasoningEstimates.Resolve(EffectiveSettings));
+            return new OpenAICompatibleChatClient(endpoint, timeouts.Request, reasoningEstimate: () => ReasoningEstimates.Resolve(profile ?? EffectiveSettings));
         }
 
-        var effective = EffectiveSettings;
+        var effective = profile ?? EffectiveSettings;
         return new Llm.Anthropic.AnthropicChatClient(endpoint, timeouts.Request, effective.AnthropicApiMaxTokens, effective.AnthropicApiPromptCaching, time: _time);
     }
 
