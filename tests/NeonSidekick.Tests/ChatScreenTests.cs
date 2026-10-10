@@ -346,17 +346,53 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>Stands in for the app's banner; a line the transcript never prints, so a refresh is countable.</summary>
     private const string ScreenMarker = "<<screen>>";
 
+    /// <summary>
+    /// Each banner draw (<see cref="RenderScreen"/>) as the markers in the output ahead of its own, in order. Counted where the
+    /// banner is drawn, not by its markers in the output (2026-10-09): the pane writes the flow back from its store after a tall
+    /// pane closes, the marker with it, so the output holds more markers than draws.
+    /// </summary>
+    private readonly List<int> _screenAt = new();
+
+    /// <summary>The draws whose marker is in <paramref name="output"/>.</summary>
+    private int ScreenDraws(string output)
+    {
+        int markers = Count(output, ScreenMarker);
+        return _screenAt.Count(before => before < markers);
+    }
+
+    /// <summary>
+    /// <paramref name="rows"/> ending a pane's frame in the capture: followed by a line break, or — when the pane closed over a
+    /// transcript it had pushed off the top (2026-10-09) — by that transcript written back from the screen's top row, the banner's
+    /// marker first (the capture keeps no cursor moves, so it follows on the same line).
+    /// </summary>
+    private static void AssertPaneEnds(string output, string rows) =>
+        Assert.True(
+            output.Contains(rows + "\n", StringComparison.Ordinal) || output.Contains(rows + ScreenMarker, StringComparison.Ordinal),
+            "not found ending a row: " + rows);
+
+    /// <summary>
+    /// The transcript once, as the screen last wrote it (2026-10-09): from the last banner marker in the capture to the end. A pane
+    /// that closes over a transcript it pushed off writes the store back from the top, the banner first, so a capture can hold
+    /// the same lines several times; a short transcript's last copy, and whatever came after it, is each line once. A count of
+    /// something said goes over this, not the whole capture.
+    /// </summary>
+    private static string LastTranscript(string output) => output[output.LastIndexOf(ScreenMarker, StringComparison.Ordinal)..];
+
+    /// <summary>The same as a pattern's tail: a line break, or the transcript written back from the top.</summary>
+    private const string PaneEndPattern = "(?:\n|" + ScreenMarker + ")";
+
     /// <summary>The screen redraws past the one the start draws (the banner into the alternate buffer, 2026-09-17): /clear's, a profile switch's.</summary>
-    private static int Refreshes(string output) => Count(output, ScreenMarker) - 1;
+    private int Refreshes(string output) => ScreenDraws(output) - 1;
 
     /// <summary>Where the last screen redraw starts (the start's banner is the first).</summary>
-    private static int LastScreen(string output) => output.LastIndexOf(ScreenMarker, StringComparison.Ordinal);
+    private int LastScreen(string output) => NthScreen(output, ScreenDraws(output) - 1);
 
     /// <summary>Where the <paramref name="n"/>th screen draw starts, 0 the start's banner.</summary>
-    private static int NthScreen(string output, int n)
+    private int NthScreen(string output, int n)
     {
+        Assert.True(n >= 0 && n < _screenAt.Count, $"no screen draw #{n}");
         int at = -1;
-        for (int i = 0; i <= n; i++)
+        for (int i = 0; i <= _screenAt[n]; i++)
         {
             at = output.IndexOf(ScreenMarker, at + 1, StringComparison.Ordinal);
             Assert.True(at >= 0, $"no screen draw #{n}");
@@ -379,6 +415,7 @@ public partial class ChatScreenTests : IDisposable
             pane.Clear(home: true);
         }
 
+        _screenAt.Add(Count(Output, ScreenMarker));
         console.WriteLine(ScreenMarker);
     }
 
@@ -10131,7 +10168,7 @@ public partial class ChatScreenTests : IDisposable
         // (The startup connect's spinner ran before speech was connected, so it has no strip — only the reply's is checked.)
         Assert.DoesNotContain(rule + "\n" + Theme.SpinnerFrames[0] + " " + ChatScreen.ThinkingLabel, output);
         // The info pane's hint keeps it too, and the idle line has it as before.
-        Assert.Contains(rule + "\n" + Row(InfoPane.HintText, strip: strip) + "\n", output);
+        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText, strip: strip));
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null), strip: strip), output);
     }
 
@@ -10177,7 +10214,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/botchat ", output);   // /about first until 2026-10-03, when it moved to the basic tab
         Assert.Contains(HelpRow("/timer", Entry("/timer").Summary) + new string(' ', SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap - Entry("/timer").Summary.Length) + "/timer [<duration> [<name>]]", output);
         Assert.Contains("\n" + new string(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap) + "/timer stop <name>|all", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04; on a Mac, 2026-10-07,
@@ -10226,7 +10263,7 @@ public partial class ChatScreenTests : IDisposable
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
         const string strip = SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
         Assert.Contains(rule + "\n" + Titled(strip) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);
-        Assert.Contains(rule + "\n" + Row(SettingsMenu.SettingsTabKeys) + "\n", output);
+        AssertPaneEnds(output, rule + "\n" + Row(SettingsMenu.SettingsTabKeys));
         Assert.Contains("\n" + Titled(strip) + "\n  · Memory mode: read-only\n", output);
         Assert.Contains("\n" + Titled(strip) + "\n  · 🖥️ LLM model: qwen3\n", output);
         // The typed edit ran in the pane: the edit keys in the hint row, no › line in the transcript.
@@ -10280,7 +10317,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Also sent", output);
         Assert.DoesNotContain("Opening clock call", output);
         Assert.DoesNotContain("Request — ", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
         // → the Tools tab: every group, the memory group offered.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
@@ -10321,7 +10358,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Also sent", output);
         Assert.DoesNotContain("Opening clock call", output);
         Assert.DoesNotContain("Request — ", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
         // → the Tools tab: every group, the memory group offered.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
@@ -10389,7 +10426,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // 12 rows: 8 overlay rows, 6 of content, one of them the more row: the first page is five lines.
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
-        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph) + "\n"), output);   // speech on here: the strip stays under the pane's hint
+        Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + Row(InfoPane.HintText, strip: ChatScreen.TtsGlyph)) + PaneEndPattern, output);   // speech on here: the strip stays under the pane's hint
         Assert.DoesNotContain("── Memory ── read-write", output[..output.IndexOf("\n ▼ 1–", StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
         Assert.Contains("── Memory ── read-write, directive (the list rides the opening recall_memory call) ─", output);
@@ -10485,7 +10522,7 @@ public partial class ChatScreenTests : IDisposable
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
         Assert.Contains(strip.TrimEnd() + "\n\nNeonSidekick " + SidekickApp.Version + "\n" + AboutText.CopyrightLine + "\n" + AboutText.RepositoryLine + "\n\nRuntime      " + RuntimeInformation.FrameworkDescription + " · JIT · ", output);
         Assert.Contains("\nHome         " + _settings.StorageDirectory + "\nProfile      " + _settings.ProfileDirectory + "\nModels       " + _settings.ModelsDirectory + "\n\nLLM servers  any OpenAI-compatible /v1 endpoint", output);
-        Assert.Contains(rule + "\n" + Row(InfoPane.HintText) + "\n", output);
+        AssertPaneEnds(output, rule + "\n" + Row(InfoPane.HintText));
         // → the Components tab, → the Models tab, → the Licence tab.
         Assert.Contains(strip.TrimEnd() + "\n\nComponent", output);
         Assert.Contains("\nSpectre.Console", output);
@@ -16587,11 +16624,16 @@ public partial class ChatScreenTests : IDisposable
         _splash = new SplashSource(images.Keys.ToArray(), name => { _splashLoads.Add(name); return images[name]; });
     }
 
-    /// <summary>The pane on a 240×40 screen: the splash needs the pane (and the fixture's banner is the marker, never a wipe).</summary>
+    /// <summary>
+    /// The pane on a 240×40 screen: the splash needs the pane. The fixture's banner wipes the pane first as the app's does
+    /// (<see cref="_renderClears"/>, 2026-10-09; the marker alone until then): a pane that closes over a flow it pushed off writes
+    /// the store back, and a banner that left the store whole would bring back what the wipe took.
+    /// </summary>
     private void PaneOf40Rows()
     {
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null, () => 100);
+        _renderClears = true;
     }
 
     [WindowsFact]
@@ -16629,7 +16671,9 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        int rows = output.Split('\n').Count(l => l.Contains('▀'));
+        // The picture as first drawn, its rows in a run: typing /exit opens and closes the completion list, and each close writes
+        // the picture back from the store (2026-10-09), so the capture holds it more than once.
+        int rows = output.Split('\n').SkipWhile(l => !l.Contains('▀')).TakeWhile(l => l.Contains('▀')).Count();
         // 40 rows less the banner's marker, the pane's four, the input row and Fit's own one: 33 at most, and the flow's
         // startup lines (the fixture connects quietly) take nothing more than a couple.
         Assert.InRange(rows, 30, 33);

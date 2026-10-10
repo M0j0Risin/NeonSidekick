@@ -69,7 +69,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal(5, _chat.Requests.Count);
-        Assert.Equal(1, CountOccurrences(output, PlanText.IncompleteNotice(PlanPath, 0, 1)));   // the count did not move on the second turn
+        Assert.Equal(1, CountOccurrences(LastTranscript(output), PlanText.IncompleteNotice(PlanPath, 0, 1)));   // the count did not move on the second turn
         Assert.Contains(PlanText.DoneNotice(PlanPath), output);
         Assert.Equal(PlanStatus.Done, PlanFileHeader!.Status);
     }

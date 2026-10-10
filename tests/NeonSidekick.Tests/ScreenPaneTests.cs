@@ -2195,6 +2195,66 @@ public class ScreenPaneTests : IDisposable
         Assert.Equal(2, more.RowsBelow);
     }
 
+    /// <summary>A pane as tall as the window allows (six content rows over one transcript row): /tools, /skills.</summary>
+    private static Markup TallOverlay() => new(string.Join('\n', Enumerable.Range(1, 30).Select(i => "line " + i)));
+
+    /// <summary>
+    /// A tall pane pushed a short transcript off the top, and closing it wrote nothing back: the store fit the region, so PgUp
+    /// and the wheel had nothing to scroll (2026-10-09, the user's report). The close writes the store's rows back now.
+    /// </summary>
+    [Fact]
+    public void ATallOverlay_Closed_WritesAShortTranscriptBack()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Scrollable(lines: 3);
+        pane.ShowOverlay(TallOverlay(), "menu");
+        Assert.Equal(1, pane.FlowRow);   // two of the three rows went off the top
+
+        int mark = Output.Length;
+        pane.CloseOverlay();
+        Assert.EndsWith(Lines(1, 3) + "\n\n\n" + PaneRows(""), Strip(Output[mark..]).TrimEnd());
+        Assert.Equal(3, pane.FlowRow);
+        Assert.Equal(3, pane.Padding);
+
+        // Whole on the screen again, so still nothing to scroll; a second draw writes nothing back.
+        mark = Output.Length;
+        pane.ScrollPage(-1);
+        Assert.False(pane.Scrolled);
+        Assert.Equal(mark, Output.Length);
+        pane.Write(new Markup("L04" + Environment.NewLine));
+        Assert.DoesNotContain("L01", Strip(Output[mark..]));
+    }
+
+    /// <summary>The long transcript's case of the same: the region's last rows written back at once, paging as before.</summary>
+    [Fact]
+    public void ATallOverlay_Closed_WritesALongTranscriptsTailBack()
+    {
+        using var pane = Scrollable();
+        pane.ShowOverlay(TallOverlay(), "menu");
+
+        int mark = Output.Length;
+        pane.CloseOverlay();
+        Assert.EndsWith(Lines(7, 12) + PaneRows(""), Strip(Output[mark..]).TrimEnd());
+        Assert.Equal(6, pane.FlowRow);
+        Assert.Equal(0, pane.Padding);
+
+        pane.ScrollPage(-1);
+        Assert.Equal(3, pane.ScrollTop);
+    }
+
+    /// <summary>A pane that never pushed the flow off closes without writing the flow again (no full rewrite for a small menu).</summary>
+    [Fact]
+    public void AnOverlayThatFits_Closed_DoesNotRewriteTheFlow()
+    {
+        using var pane = Scrollable(lines: 3);
+        pane.ShowOverlay(new Markup("a"), "menu");
+
+        int mark = Output.Length;
+        pane.CloseOverlay();
+        Assert.DoesNotContain("L0", Output[mark..]);
+        Assert.Equal(3, pane.FlowRow);
+    }
+
     [Fact]
     public void ScrollBy_MovesByRows_AndAnOpenLastLine_IsARow()
     {

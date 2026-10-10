@@ -29,7 +29,8 @@ namespace NeonSidekick.UI;
 /// count on a row of its own over the upper rule (<see cref="ScrolledRow"/>; on the hint row until 2026-10-01), the anchor a store row so rows arriving below never
 /// move what is read. Flow writes meanwhile go to the store alone. Paging back to the bottom,
 /// Ctrl+End (<see cref="ScrollToEnd"/>, 2026-09-17), a resize (the buffer is not reflowed by the
-/// terminal) and a sent line write the store's tail back as the flow and draw the pane as before.
+/// terminal), a sent line and a pane that shrinks after flow rows went off the top (a tall menu
+/// closed, 2026-10-09) write the store's tail back as the flow and draw the pane as before.
 /// The wheel scrolls it too, <see cref="WheelRows"/> a notch (<see cref="ScrollWheel"/>).</para>
 ///
 /// <para>Where the transcript ends is <em>counted</em> from the segments Spectre emits (line breaks
@@ -128,6 +129,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private bool _drawnScrolled;
     private bool _blank = true;
     private int _liveCount;
+
+    // Flow rows went off the screen's top since the flow was last written from the store (2026-10-09, the user's report: a
+    // tall pane — /tools, /skills — pushed a short transcript off, and once it closed nothing brought it back: the store fit
+    // the region, so PgUp and the wheel had nothing to scroll). Set where the terminal scrolls the flow (Count past the last
+    // row, Draw's overflow); a draw at the bottom that leaves room over the pane then writes the store's tail back, as a
+    // resize does. A flag, not a count against the store: a cursor report that corrects the row must not rewrite every tick.
+    private bool _flowCut;
 
     // The live slot: the reply in progress (a ReplyBlock), laid out afresh on every draw between the
     // flow and the padding, its rows lifted with the pane's; repainted on the tick when dirty, never
@@ -2288,6 +2296,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         var rows = _store.Rows(Width);
         int region = RegionRows(_paneRows);
         int first = Math.Max(0, rows.Count - region);
+        _flowCut = first > 0;
         _row = 0;
         _col = 0;
         _lineFull = false;
@@ -2305,6 +2314,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             Count(segments);
         }
     }
+
+    /// <summary>
+    /// Flow rows went off the top (<see cref="_flowCut"/>) and the pane this draw lays out leaves room over it for more than the
+    /// flow on the screen (2026-10-09): a tall pane closed, a long draft sent, the strip put away. Read after the draw set
+    /// <see cref="_paneRows"/>. A reply streaming counts its rows as the last draw laid them out (<see cref="_liveCount"/>), so a
+    /// tick under a stream, the live block filling the room, never rewrites the screen.
+    /// </summary>
+    private bool FlowCutWithRoom() =>
+        _flowCut && (_col > 0 ? _row + 1 : _row) + (_live is null ? 0 : _liveCount) + _paneRows < Height;
 
     public void WriteAnsi(Action<AnsiWriter> write) => _inner.WriteAnsi(write);
 
@@ -2329,6 +2347,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _store.Clear();
             _top = -1;
             _blank = false;
+            _flowCut = false;
             ForgetLive();
         }
     }
@@ -3900,7 +3919,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        _row = Math.Min(_row, Height - 1);
+        if (_row > Height - 1)
+        {
+            // Written past the last row: the terminal scrolled the flow's top rows away.
+            _flowCut = true;
+            _row = Height - 1;
+        }
     }
 
     /// <summary>
@@ -4055,7 +4079,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
         else
         {
-            if (reshaped && !_blank)
+            // A pane that shrank after flow rows went off the top (2026-10-09, FlowCutWithRoom) writes them back the same way.
+            if ((reshaped || FlowCutWithRoom()) && !_blank)
             {
                 _inner.Cursor.Move(CursorDirection.Up, _row);
                 ColumnZero();
@@ -4176,6 +4201,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             if (overflow > 0)
             {
                 _row = Math.Max(0, _row - overflow);
+                _flowCut = true;
             }
         }
 

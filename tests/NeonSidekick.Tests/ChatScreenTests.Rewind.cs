@@ -100,7 +100,7 @@ public partial class ChatScreenTests
 
         Assert.DoesNotContain(RewindText.ArmedHint, output);
         Assert.Contains("· " + RewindText.NothingNotice, output);
-        Assert.Equal(2, output.Split(RewindText.UsageError(1)).Length - 1);
+        Assert.Equal(2, LastTranscript(output).Split(RewindText.UsageError(1)).Length - 1);   // once per command, in the transcript as it stands
         Assert.DoesNotContain(Titled(RewindText.Title), output);
     }
 
