@@ -80,7 +80,7 @@ public class PersonaFileTests : IDisposable
     [Fact]
     public void CopyTo_CreatesTheDirectory_AndReplacesWhatIsThere()
     {
-        // 2026-09-21: /persona copy <profile> [force] — byte for byte, the directory made, a file there replaced (the force rule is the caller's).
+        // 2026-09-21: /persona copy <profile> [force] (/profile push persona <name> [overwrite] since 2026-10-10) — byte for byte, the directory made, a file there replaced (the force rule is the caller's).
         WriteFile("You are Rex.");
         var persona = new PersonaFile(_dir);
         string other = Path.Combine(_dir, "other");
@@ -98,6 +98,30 @@ public class PersonaFileTests : IDisposable
         File.Delete(FilePath);
         Assert.Throws<FileNotFoundException>(() => persona.CopyTo(other));   // an IOException: the command reports it
         Assert.Throws<ArgumentException>(() => persona.CopyTo(""));
+    }
+
+    [Fact]
+    public void CopyFrom_ReplacesThisFile_AndTheNextReadSeesIt()
+    {
+        // 2026-10-10: /profile pull persona <name> [overwrite] — the other folder's file byte for byte over this one, read again at once.
+        string other = Path.Combine(_dir, "other");
+        Directory.CreateDirectory(other);
+        File.WriteAllText(Path.Combine(other, PersonaFile.FileName), "You are Morgan, a calm librarian.");
+        var persona = new PersonaFile(Path.Combine(_dir, "mine"));   // no folder yet: made by the copy
+
+        persona.CopyFrom(other);
+        Assert.Equal("You are Morgan, a calm librarian.", persona.Read());
+
+        WriteFile("You are Rex.");
+        persona = new PersonaFile(_dir);
+        Assert.Equal("You are Rex.", persona.Read());
+        persona.CopyFrom(other);
+        Assert.Equal("You are Morgan, a calm librarian.", persona.Read());   // a cached read does not hide it
+        Assert.Equal("You are Morgan, a calm librarian.", File.ReadAllText(Path.Combine(other, PersonaFile.FileName)));   // the source stays
+
+        File.Delete(Path.Combine(other, PersonaFile.FileName));
+        Assert.Throws<FileNotFoundException>(() => persona.CopyFrom(other));   // an IOException: the command reports it
+        Assert.Throws<ArgumentException>(() => persona.CopyFrom(""));
     }
 
     [Fact]

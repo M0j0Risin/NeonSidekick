@@ -191,7 +191,7 @@ internal static class NeonHelp
     private static bool TabMatches(string tab, string words) =>
         string.Equals(tab, words, StringComparison.OrdinalIgnoreCase)
         || (words.Length >= 3 && tab.StartsWith(words, StringComparison.OrdinalIgnoreCase))
-        || (string.Equals(tab, ToolsText.HomeAssistantTabTitle, StringComparison.Ordinal) && words is "home assistant" or "homeassistant");
+        || (string.Equals(tab, ToolsText.HomeAssistantTabTitle, StringComparison.Ordinal) && words is "home assistant");   // "homeassistant" is the title itself since 2026-10-10
 
     private static bool IsKeysWord(string q) => q.ToLowerInvariant() is "keys" or "key" or "keyboard" or "shortcuts" or "keyboard shortcuts" or "hotkeys" or "key bindings";
 

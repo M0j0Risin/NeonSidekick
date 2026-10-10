@@ -102,11 +102,20 @@ public enum ProfileSection
     /// <summary><c>commands [overwrite]</c>: <c>Shell allowed commands</c>, added or replaced. <c>/cmdcopy</c> until 2026-10-09.</summary>
     Commands,
 
-    /// <summary><c>history [overwrite]</c>: the command history in <c>sessions.db</c>, appended or replaced. <c>/cmdcopy --history</c> until 2026-10-09.</summary>
+    /// <summary><c>history [overwrite]</c>: the message history in <c>sessions.db</c>, appended or replaced. <c>/cmdcopy --history</c> until 2026-10-09.</summary>
     History,
 
     /// <summary><c>policestrings [overwrite]</c> (2026-10-09, the user's ask): <c>Shell police forbidden strings</c>, added or replaced.</summary>
     PoliceStrings,
+
+    /// <summary><c>persona [overwrite]</c> (2026-10-10, the user's ask): <c>persona.md</c>, byte for byte; a file already in the target only replaced with overwrite. <c>/sys persona copy &lt;profile&gt; [force]</c> until then.</summary>
+    Persona,
+
+    /// <summary><c>operata [overwrite]</c> (2026-10-10): <c>operata.md</c>, as <see cref="Persona"/>. <c>/sys operata copy</c> until then.</summary>
+    Operata,
+
+    /// <summary><c>vocalia [overwrite]</c> (2026-10-10): <c>vocalia.md</c>, as <see cref="Persona"/>. <c>/sys vocalia copy</c> until then.</summary>
+    Vocalia,
 }
 
 /// <summary>
@@ -385,7 +394,7 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/find</c> without the screen to scroll (2026-10-07). Pinned.</summary>
     public const string FindNeedsPaneNotice = "/find needs the interactive screen.";
-    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|commands|history|policestrings] <name> [overwrite], edit or reload.";
+    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|commands|history|policestrings|persona|operata|vocalia] <name> [overwrite], edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
@@ -478,7 +487,7 @@ internal sealed partial class ChatScreen
     // The /gituser word (2026-09-21; /git user until 2026-09-26, the user's call). Pinned.
     public const string GitForceWord = ForceWord;
 
-    /// <summary>The <c>force</c> word: <c>/gituser force</c> (2026-09-21) and, later that day, <c>/persona copy &lt;profile&gt; force</c> and its siblings. Pinned.</summary>
+    /// <summary>The <c>force</c> word: <c>/gituser force</c> (2026-09-21) and, from later that day until 2026-10-10, <c>/persona copy &lt;profile&gt; force</c> and its siblings (<c>/profile push|pull persona &lt;name&gt; overwrite</c> since). Pinned.</summary>
     public const string ForceWord = "force";
     public const string GitUsageError = "/gituser takes nothing or force.";
     public const string GitUserForceNote = "the same, replacing a [user] section already there";
@@ -4062,6 +4071,9 @@ internal sealed partial class ChatScreen
     /// <summary>The note on <c>overwrite</c> after a list section's name (2026-10-09; <c>/cmdcopy</c>'s overwrite note until then). Pinned.</summary>
     public const string ProfileSectionOverwriteNote = "replace the target's list instead of adding to it";
 
+    /// <summary>The note on <c>overwrite</c> after a prompt file's name (2026-10-10; <c>/sys persona copy &lt;profile&gt; force</c>'s note until then). Pinned.</summary>
+    public const string ProfilePromptFileOverwriteNote = "replace the target's file if it has one";
+
     /// <summary>
     /// <c>/profile push </c> and <c>pull </c>'s argument list (2026-10-09): the section words (<see cref="ProfileSectionWords"/>) and
     /// every profile but the loaded one, default included (the user's call, 2026-09-28); after a section word, the profiles; after a
@@ -4085,7 +4097,7 @@ internal sealed partial class ChatScreen
                 {
                     if (argText.StartsWith(sectionHead + name + " ", StringComparison.OrdinalIgnoreCase))
                     {
-                        return [new(sectionHead + name + " " + OverwriteWord, ProfileSectionOverwriteNote)];
+                        return [new(sectionHead + name + " " + OverwriteWord, IsPromptFileSection(section) ? ProfilePromptFileOverwriteNote : ProfileSectionOverwriteNote)];
                     }
                 }
             }
@@ -4119,8 +4131,9 @@ internal sealed partial class ChatScreen
         ProfileSection.Keys => "API keys",
         ProfileSection.Servers => "server settings",
         ProfileSection.Commands => "allowed commands",
-        ProfileSection.History => "command history",
+        ProfileSection.History => "message history",
         ProfileSection.PoliceStrings => "forbidden strings",
+        _ when IsPromptFileSection(section) => PromptFileOf(section),
         _ => ProfileSettingsSubject,
     };
 
@@ -4176,10 +4189,6 @@ internal sealed partial class ChatScreen
     /// <summary>The note on <c>reset</c> after a prompt-file command. Pinned.</summary>
     public static string PromptFileResetNote(string fileName) => $"remove {fileName} and go back to the default";
 
-    /// <summary>The notes on <c>copy</c>, the profile after it and <c>force</c> after that (2026-09-21). Pinned.</summary>
-    public static string PromptFileCopyNote(string fileName) => $"copy {fileName} into another profile";
-    public static string PromptFileCopyTargetNote(string fileName) => $"copy {fileName} into it";
-    public static string PromptFileCopyForceNote(string fileName) => $"replace its {fileName} if it has one";
 
     /// <summary>
     /// The input line's argument list (<see cref="MentionCompleter.TryFindArgument"/>): what
@@ -4457,13 +4466,13 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Sys:
             {
-                // The three files (2026-10-09), then each one's reset or copy as /persona and its siblings offered them.
+                // The three files (2026-10-09), then each one's reset as /persona and its siblings offered it (and copy, until 2026-10-10).
                 foreach (var (word, file) in SysFileWords)
                 {
                     string head = word + " ";
                     if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
                     {
-                        return PromptFileChoices(file, argText[head.Length..], sources).Select(item => item with { Text = head + item.Text }).ToList();
+                        return PromptFileChoices(file, argText[head.Length..]).Select(item => item with { Text = head + item.Text }).ToList();
                     }
                 }
 
@@ -5000,13 +5009,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The profile's command history onto the input line (2026-09-25, <c>Keep command history</c>), at startup and after
+    /// The profile's message history onto the input line (2026-09-25, <c>Keep message history</c>), at startup and after
     /// every switch — the user's call: Up recalls the loaded profile's lines, never the last one's. Off, the stored lines
     /// go (the setting's promise: deleted at the next load) and the line starts empty.
     /// </summary>
     private void LoadCommandHistory()
     {
-        if (_effective().KeepCommandHistory)
+        if (_effective().KeepMessageHistory)
         {
             _input.ReplaceHistory(_sessions.CommandHistory());
             return;
@@ -5015,28 +5024,28 @@ internal sealed partial class ChatScreen
         int cleared = _sessions.ClearCommandHistory();
         if (cleared > 0)
         {
-            DiagnosticLog.Debug(SessionsCategory, CommandHistoryDroppedLogLine(cleared));
+            DiagnosticLog.Debug(SessionsCategory, MessageHistoryDroppedLogLine(cleared));
         }
 
         _input.ReplaceHistory([]);
     }
 
     /// <summary>
-    /// A line the input line's history gained, stored while <c>Keep command history</c> is on (2026-09-25) — unless it holds
+    /// A line the input line's history gained, stored while <c>Keep message history</c> is on (2026-09-25) — unless it holds
     /// a collapsed paste or a picture, whose block is this session's alone. <see cref="_sessions"/> is read at each line, so
     /// the store follows a profile switch.
     /// </summary>
     private void StoreCommand(string line)
     {
-        if (_effective().KeepCommandHistory && !line.Any(PasteBlocks.IsToken))
+        if (_effective().KeepMessageHistory && !line.Any(PasteBlocks.IsToken))
         {
             _sessions.AppendCommand(line);
         }
     }
 
-    /// <summary>The Debug line when a load with <c>Keep command history</c> off drops the stored lines. Pinned.</summary>
-    public static string CommandHistoryDroppedLogLine(int count) =>
-        $"Keep command history is off: dropped {CommandLines(count)} from {SessionStore.FileName}.";
+    /// <summary>The Debug line when a load with <c>Keep message history</c> off drops the stored lines. Pinned.</summary>
+    public static string MessageHistoryDroppedLogLine(int count) =>
+        $"Keep message history is off: dropped {HistoryMessages(count)} from {SessionStore.FileName}.";
 
     /// <summary>The session tool (<c>session_manager</c>, 2026-09-18), offered while the setting <c>Session tool</c> is on; the conversation on screen (<paramref name="current"/>) is left out of its answers. Shared with headless.</summary>
     public static IReadOnlyList<AIFunction> SessionTools(SessionStore store, Func<AppSettingsData> effective, Func<long?> current, TimeProvider time) => new AIFunction[]
@@ -6182,28 +6191,45 @@ internal sealed partial class ChatScreen
     /// <summary>The word after <c>/sys persona</c>, <c>/sys operata</c> or <c>/sys vocalia</c> (the bare words until 2026-10-09) that removes the file (2026-09-16).</summary>
     public const string ResetWord = "reset";
 
-    /// <summary>The word after <c>/sys persona</c>, <c>/sys operata</c> or <c>/sys vocalia</c> that copies the file into another profile: <c>copy &lt;profile&gt; [force]</c> (2026-09-21).</summary>
+    /// <summary>The word of <c>/memory copy &lt;profile&gt; [overwrite]</c>; <c>/sys persona copy &lt;profile&gt; [force]</c> and its siblings' too from 2026-09-21 until 2026-10-10, when those became <c>/profile push|pull persona</c> and its siblings.</summary>
     public const string CopyWord = "copy";
 
-    /// <summary>The usage line for a prompt-file command with words that are neither <see cref="ResetWord"/> nor <c>copy &lt;profile&gt; [force]</c>. Pinned.</summary>
-    public static string PromptFileUsageError(string command, string fileName) => $"{command} takes nothing (open {fileName} in your editor), {ResetWord}, or {CopyWord} <profile> [{ForceWord}].";
+    /// <summary>The usage line for a prompt-file command with words other than <see cref="ResetWord"/> (<c>copy &lt;profile&gt; [force]</c> until 2026-10-10). Pinned.</summary>
+    public static string PromptFileUsageError(string command, string fileName) => $"{command} takes nothing (open {fileName} in your editor) or {ResetWord}.";
 
-    /// <summary>The copy names the loaded profile as its target. Pinned.</summary>
-    public static string PromptFileCopySelfError(string command) => $"{command} {CopyWord} copies into another profile; that one is loaded.";
+    /// <summary>
+    /// A push or pull of a prompt file with no file to copy: on a push the default is in use here; on a pull the other profile has none
+    /// (<c>("work" has no persona.md; nothing to copy)</c>). Pinned.
+    /// </summary>
+    public static string PromptFileNothingToCopyNotice(string fileName, string inUse, string profile = "", bool pull = false) => pull
+        ? $"({NoticeGlyphs.PromptFile(fileName)}\"{profile}\" has no {fileName}; nothing to copy)"
+        : $"({NoticeGlyphs.PromptFile(fileName)}{fileName} is not there; {inUse} is in use, so there is nothing to copy)";
 
-    /// <summary>A copy with no file to copy: the default is in use here. Pinned.</summary>
-    public static string PromptFileNothingToCopyNotice(string fileName, string inUse) => $"({NoticeGlyphs.PromptFile(fileName)}{fileName} is not there; {inUse} is in use, so there is nothing to copy)";
-
-    /// <summary>The target has the file and <c>force</c> was not given (the user's rule, 2026-09-21): an error naming the way past it, nothing written. Pinned.</summary>
-    public static string PromptFileTargetExistsError(string command, string fileName, string profile) => $"\"{profile}\" already has a {fileName}; {command} {CopyWord} {profile} {ForceWord} replaces it.";
+    /// <summary>
+    /// The target has the file and <see cref="OverwriteWord"/> was not given (the user's rule, 2026-09-21, <c>force</c> until 2026-10-10; a pull
+    /// held to it too, the user's pick): an error naming the way past it, nothing written. Pinned.
+    /// </summary>
+    public static string PromptFileTargetExistsError(string word, string fileName, string profile, bool pull = false) => pull
+        ? $"This profile already has a {fileName}; {SlashCommands.ProfileWord} {PullWord} {word} {profile} {OverwriteWord} replaces it."
+        : $"\"{profile}\" already has a {fileName}; {SlashCommands.ProfileWord} {PushWord} {word} {profile} {OverwriteWord} replaces it.";
 
     /// <summary>The question before a copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open); <paramref name="replacing"/> when the target's file goes under it. Pinned.</summary>
-    public static string PromptFileCopyPrompt(string fileName, string profile, bool replacing) =>
-        replacing ? $"Replace \"{profile}\"'s {fileName} with this one?" : $"Copy {fileName} into \"{profile}\"?";
+    public static string PromptFileCopyPrompt(string fileName, string profile, bool replacing, bool pull = false) => (pull, replacing) switch
+    {
+        (false, false) => $"Copy {fileName} into \"{profile}\"?",
+        (false, true) => $"Replace \"{profile}\"'s {fileName} with this one?",
+        (true, false) => $"Copy \"{profile}\"'s {fileName} into this profile?",
+        (true, true) => $"Replace this profile's {fileName} with \"{profile}\"'s?",
+    };
 
-    /// <summary><c>(copied persona.md into "work")</c>, or <c>(replaced "work"'s persona.md)</c>. Pinned.</summary>
-    public static string PromptFileCopiedNotice(string fileName, string profile, bool replacing) =>
-        replacing ? $"(replaced \"{profile}\"'s {fileName})" : $"(copied {fileName} into \"{profile}\")";
+    /// <summary><c>(copied persona.md into "work")</c>, <c>(replaced "work"'s persona.md)</c>; pulled, <c>(copied persona.md from "work")</c>, <c>(replaced this profile's persona.md with "work"'s)</c>. Pinned.</summary>
+    public static string PromptFileCopiedNotice(string fileName, string profile, bool replacing, bool pull = false) => (pull, replacing) switch
+    {
+        (false, false) => $"(copied {fileName} into \"{profile}\")",
+        (false, true) => $"(replaced \"{profile}\"'s {fileName})",
+        (true, false) => $"(copied {fileName} from \"{profile}\")",
+        (true, true) => $"(replaced this profile's {fileName} with \"{profile}\"'s)",
+    };
 
     public static string PromptFileCopyFailedError(string fileName, string detail) => $"Could not copy {fileName}: {detail}";
 
@@ -6222,8 +6248,8 @@ internal sealed partial class ChatScreen
     /// <c>/sys persona</c>, <c>/sys operata</c> and <c>/sys vocalia</c> (the bare words until 2026-10-09) with their argument: nothing opens the
     /// file (<see cref="OpenPromptFile"/>); <see cref="ResetWord"/> removes it after a confirmation
     /// (the user's call, 2026-09-16: the file may hold a hand-written text and the profile folder
-    /// has no trash) so the default is back at the next turn; <c>copy &lt;profile&gt; [force]</c>
-    /// (2026-09-21, the user's ask) is <see cref="CopyPromptFileAsync"/>; any other words are the usage line. <paramref name="seed"/>
+    /// has no trash) so the default is back at the next turn; any other words are the usage line (<c>copy &lt;profile&gt; [force]</c>,
+    /// 2026-09-21 until 2026-10-10, is <c>/profile push|pull persona</c> and its siblings now: <see cref="CopyPromptFileSectionAsync"/>). <paramref name="seed"/>
     /// gives a missing file its text in place of the default (<c>/sys operata</c>'s <see cref="CurrentOperatingRules"/>, 2026-10-04).
     /// </summary>
     private async Task HandlePromptFileAsync(PromptFile file, string command, string args, string createdNotice, string openedNotice, Func<string, string> openFailedError, bool spoken, CancellationToken cancellationToken, Func<string>? seed = null)
@@ -6236,16 +6262,6 @@ internal sealed partial class ChatScreen
         }
 
         string fileName = file.CurrentFileName;
-        if (words[0].Equals(CopyWord, StringComparison.OrdinalIgnoreCase) && words.Length is 2 or 3)
-        {
-            bool force = words.Length == 3 && words[2].Equals(ForceWord, StringComparison.OrdinalIgnoreCase);
-            if (words.Length == 2 || force)
-            {
-                await CopyPromptFileAsync(file, command, words[1], force, cancellationToken).ConfigureAwait(false);
-                return;
-            }
-        }
-
         if (words.Length != 1 || !words[0].Equals(ResetWord, StringComparison.OrdinalIgnoreCase))
         {
             _flow.Error(PromptFileUsageError(command, fileName));
@@ -6276,44 +6292,33 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/sys persona copy &lt;profile&gt; [force]</c> and its siblings (2026-09-21, the user's ask; <c>/persona copy</c> until 2026-10-09): the loaded
-    /// profile's file into another profile's folder, byte for byte (<see cref="PromptFile.CopyTo"/>). The
-    /// target is named as <c>/profile</c> resolves it and is never the loaded one; no file here is a notice
-    /// (the default is in use, nothing to copy); a file already there is an error unless <c>force</c> (the
-    /// user's rule: a hand-written text, no trash); either way the copy asks first (the user's call, like
-    /// <c>/memory copy</c>). <c>force</c> on a target without the file is a plain copy, and reads as one.
+    /// <c>/profile push|pull persona|operata|vocalia &lt;name&gt; [overwrite]</c> (2026-10-10, the user's ask; <c>/sys persona copy &lt;profile&gt; [force]</c>
+    /// and its siblings from 2026-09-21 until then, push alone): the file byte for byte, the loaded profile's into <paramref name="other"/>'s
+    /// folder (<see cref="PromptFile.CopyTo"/>) or <paramref name="other"/>'s over the loaded one's (<see cref="PromptFile.CopyFrom"/>, read
+    /// again at the next turn). <see cref="CopyProfileSectionAsync"/> has already resolved the name and refused the loaded one. No file in
+    /// the source is a notice (nothing to copy); a file already in the target is an error unless <see cref="OverwriteWord"/> (the user's
+    /// rule: a hand-written text, no trash; a pull held to it too); either way the copy asks first (like <c>/memory copy</c>).
+    /// <c>overwrite</c> on a target without the file is a plain copy, and reads as one.
     /// </summary>
-    private async Task CopyPromptFileAsync(PromptFile file, string command, string typed, bool force, CancellationToken cancellationToken)
+    private async Task CopyPromptFileSectionAsync(PromptFile file, string word, string home, string other, bool overwrite, bool pull, CancellationToken cancellationToken)
     {
         string fileName = file.CurrentFileName;
-        string home = _settings.StorageDirectory;
-        if (Profiles.Resolve(home, typed) is not { } target)
+        string directory = Profiles.Directory(home, other);
+        string theirs = Path.Combine(directory, fileName);
+        if (!File.Exists(pull ? theirs : file.FilePath))
         {
-            _flow.Error(ProfileMissingError(typed));
+            _flow.Notice(PromptFileNothingToCopyNotice(fileName, file.DefaultInUse, other, pull));
             return;
         }
 
-        if (Profiles.NameEquals(target, _settings.ProfileName))
+        bool replacing = File.Exists(pull ? file.FilePath : theirs);
+        if (replacing && !overwrite)
         {
-            _flow.Error(PromptFileCopySelfError(command));
+            _flow.Error(PromptFileTargetExistsError(word, fileName, other, pull));
             return;
         }
 
-        if (!File.Exists(file.FilePath))
-        {
-            _flow.Notice(PromptFileNothingToCopyNotice(fileName, file.DefaultInUse));
-            return;
-        }
-
-        string directory = Profiles.Directory(home, target);
-        bool replacing = File.Exists(Path.Combine(directory, fileName));
-        if (replacing && !force)
-        {
-            _flow.Error(PromptFileTargetExistsError(command, fileName, target));
-            return;
-        }
-
-        if (!await ConfirmAsync(PromptFileCopyPrompt(fileName, target, replacing), cancellationToken).ConfigureAwait(false))
+        if (!await ConfirmAsync(PromptFileCopyPrompt(fileName, other, replacing, pull), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
@@ -6321,14 +6326,31 @@ internal sealed partial class ChatScreen
 
         try
         {
-            file.CopyTo(directory);
-            _flow.Notice(PromptFileCopiedNotice(fileName, target, replacing));
+            if (pull)
+            {
+                file.CopyFrom(directory);
+            }
+            else
+            {
+                file.CopyTo(directory);
+            }
+
+            _flow.Notice(PromptFileCopiedNotice(fileName, other, replacing, pull));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _flow.Error(PromptFileCopyFailedError(fileName, ex.Message));
         }
     }
+
+    /// <summary>The prompt file a section names (2026-10-10): <c>persona.md</c>, <c>operata.md</c>, <c>vocalia.md</c>.</summary>
+    private static string PromptFileOf(ProfileSection section) => section switch
+    {
+        ProfileSection.Persona => PersonaFile.FileName,
+        ProfileSection.Operata => OperataFile.FileName,
+        ProfileSection.Vocalia => VocaliaFile.FileName,
+        _ => throw new ArgumentOutOfRangeException(nameof(section), section, "Not a prompt file section."),
+    };
 
     /// <summary>
     /// <c>/sys persona</c>, <c>/sys operata</c> and <c>/sys vocalia</c>: make sure the file exists (seeded with its default, if it has one), then
@@ -6977,47 +6999,48 @@ internal sealed partial class ChatScreen
     public static string ProfilePoliceStringsCopiedNotice(int added, int duplicates, string profile, bool overwrite, bool pull = false) =>
         ListSectionNotice(ForbiddenStringCount(added), duplicates, "forbidden strings", profile, overwrite, pull);
 
-    // The command history (/cmdcopy --history, 2026-09-25).
+    // The message history (/cmdcopy --history, 2026-09-25).
 
-    /// <summary><c>history</c> with nothing to copy: <c>(nothing to copy: this profile has no command history)</c>, or <c>"work"</c> on a pull.</summary>
-    public static string ProfileHistoryNothingNotice(string profile, bool pull = false) => $"(nothing to copy: {SourceName(profile, pull)} has no command history)";
+    /// <summary><c>history</c> with nothing to copy: <c>(nothing to copy: this profile has no message history)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfileHistoryNothingNotice(string profile, bool pull = false) => $"(nothing to copy: {SourceName(profile, pull)} has no message history)";
 
-    /// <summary><c>history</c> into a profile whose <c>Keep command history</c> is off: its next load would drop the lines.</summary>
+    /// <summary><c>history</c> into a profile whose <c>Keep message history</c> is off: its next load would drop the lines.</summary>
     public static string ProfileHistoryOffError(string profile, bool pull = false) => pull
-        ? "This profile has Keep command history off, so its next load would drop the lines; switch it on first."
-        : $"\"{profile}\" has Keep command history off, so its next load would drop the lines; switch it on there first.";
+        ? "This profile has Keep message history off, so its next load would drop the messages; switch it on first."
+        : $"\"{profile}\" has Keep message history off, so its next load would drop the messages; switch it on there first.";
 
     /// <summary>The question before a <c>history</c> copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open).</summary>
     public static string ProfileHistoryPrompt(int count, string profile, bool overwrite, bool pull = false) => (pull, overwrite) switch
     {
-        (false, false) => $"Copy {CommandLines(count)} of command history into \"{profile}\"?",
-        (false, true) => $"Replace \"{profile}\"'s command history with these {CommandLines(count)}?",
-        (true, false) => $"Copy {CommandLines(count)} of command history from \"{profile}\" into this profile?",
-        (true, true) => $"Replace this profile's command history with \"{profile}\"'s {CommandLines(count)}?",
+        (false, false) => $"Copy {HistoryMessages(count)} from the message history into \"{profile}\"?",
+        (false, true) => $"Replace \"{profile}\"'s message history with these {HistoryMessages(count)}?",
+        (true, false) => $"Copy {HistoryMessages(count)} from \"{profile}\"'s message history into this profile?",
+        (true, true) => $"Replace this profile's message history with \"{profile}\"'s {HistoryMessages(count)}?",
     };
 
-    /// <summary><c>(12 command lines copied into "work")</c>; a replace reads <c>(replaced "work"'s command history with 12 command lines)</c>; a pull says from.</summary>
+    /// <summary><c>(12 messages copied into "work")</c>; a replace reads <c>(replaced "work"'s message history with 12 messages)</c>; a pull says from.</summary>
     public static string ProfileHistoryCopiedNotice(int added, string profile, bool overwrite, bool pull = false) => (pull, overwrite) switch
     {
-        (false, false) => $"({CommandLines(added)} copied into \"{profile}\")",
-        (false, true) => $"(replaced \"{profile}\"'s command history with {CommandLines(added)})",
-        (true, false) => $"({CommandLines(added)} copied from \"{profile}\")",
-        (true, true) => $"(replaced this profile's command history with {CommandLines(added)} from \"{profile}\")",
+        (false, false) => $"({HistoryMessages(added)} copied into \"{profile}\")",
+        (false, true) => $"(replaced \"{profile}\"'s message history with {HistoryMessages(added)})",
+        (true, false) => $"({HistoryMessages(added)} copied from \"{profile}\")",
+        (true, true) => $"(replaced this profile's message history with {HistoryMessages(added)} from \"{profile}\")",
     };
 
     /// <summary>The target's <c>sessions.db</c> would not open: the other profile's on a push, this one's on a pull.</summary>
     public static string ProfileHistoryFailedError(string profile, bool pull = false) =>
         $"Could not open {(pull ? "this profile" : $"\"{profile}\"")}'s {SessionStore.FileName}; nothing was copied.";
 
-    public const string CmdClearNothingNotice = "(nothing to clear: the command history is empty)";
+    public const string MsgClearNothingNotice = "(nothing to clear: the message history is empty)";
 
-    /// <summary>The question before a <c>/cmdclear</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
-    public static string CmdClearPrompt(int count) => $"Clear {CommandLines(count)} of command history?";
+    /// <summary>The question before a <c>/msgclear</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open). Pinned.</summary>
+    public static string MsgClearPrompt(int count) => $"Clear {HistoryMessages(count)} from the message history?";
 
-    /// <summary><c>(cleared 12 command lines)</c>. Pinned.</summary>
-    public static string CmdClearedNotice(int count) => $"(cleared {CommandLines(count)})";
+    /// <summary><c>(cleared 12 messages)</c>. Pinned.</summary>
+    public static string MsgClearedNotice(int count) => $"(cleared {HistoryMessages(count)})";
 
-    private static string CommandLines(int count) => count == 1 ? "1 command line" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} command lines";
+    /// <summary><c>1 message</c>, <c>12 messages</c>: the message history's lines counted (<c>command lines</c> until 2026-10-10, the user's rename).</summary>
+    private static string HistoryMessages(int count) => count == 1 ? "1 message" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} messages";
 
     // The keys (/keycopy, 2026-09-28).
 
@@ -7268,6 +7291,16 @@ internal sealed partial class ChatScreen
         {
             await CopyCommandHistoryAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
         }
+        else if (IsPromptFileSection(action.Section))
+        {
+            var file = action.Section switch
+            {
+                ProfileSection.Persona => (PromptFile)_persona,
+                ProfileSection.Operata => _operata,
+                _ => _vocalia,
+            };
+            await CopyPromptFileSectionAsync(file, ProfileSectionWordOf(action.Section), home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
         else
         {
             await CopyProfileFieldsAsync(home, other, action.Section, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
@@ -7331,10 +7364,10 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>history [overwrite]</c> (<c>/cmdcopy --history</c> 2026-09-25, a section since 2026-10-09): the source's stored command history
+    /// <c>history [overwrite]</c> (<c>/cmdcopy --history</c> 2026-09-25, a section since 2026-10-09): the source's stored message history
     /// into the target's <c>sessions.db</c> — appended, a line equal to the one before it skipped, or in place of it — after a
     /// confirmation. The stored lines, not the line's list: what the setting keeps is what is copied. Refused when the target has
-    /// <c>Keep command history</c> off (its next load would drop them). The other profile's store is opened for the copy alone; a pull
+    /// <c>Keep message history</c> off (its next load would drop them). The other profile's store is opened for the copy alone; a pull
     /// puts the loaded one's lines back on the input line, as a load does.
     /// </summary>
     private async Task CopyCommandHistoryAsync(string home, string other, bool overwrite, bool pull, CancellationToken cancellationToken)
@@ -7349,7 +7382,7 @@ internal sealed partial class ChatScreen
 
         try
         {
-            bool keeps = pull ? _effective().KeepCommandHistory : Profiles.ReadProfileFile(Profiles.ProfileFile(home, other)).KeepCommandHistory;
+            bool keeps = pull ? _effective().KeepMessageHistory : Profiles.ReadProfileFile(Profiles.ProfileFile(home, other)).KeepMessageHistory;
             if (!keeps)
             {
                 _flow.Error(ProfileHistoryOffError(other, pull));
@@ -7385,20 +7418,20 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/cmdclear</c> (2026-09-25, the user's ask): one confirmation, then the stored command history and the input line's
-    /// list both emptied (the user's call: Up recalls nothing after it), whatever <c>Keep command history</c> says. The count
+    /// <c>/msgclear</c> (<c>/cmdclear</c> from 2026-09-25, the user's ask, until 2026-10-10): one confirmation, then the stored message history and the input line's
+    /// list both emptied (the user's call: Up recalls nothing after it), whatever <c>Keep message history</c> says. The count
     /// asked about is the larger of the two, so a session with the setting off still has something to clear.
     /// </summary>
-    private async Task CmdClearAsync(CancellationToken cancellationToken)
+    private async Task MsgClearAsync(CancellationToken cancellationToken)
     {
         int count = Math.Max(_sessions.CommandHistoryCount, _input.History.Count);
         if (count == 0)
         {
-            _flow.Notice(CmdClearNothingNotice);
+            _flow.Notice(MsgClearNothingNotice);
             return;
         }
 
-        if (!await ConfirmAsync(CmdClearPrompt(count), cancellationToken).ConfigureAwait(false))
+        if (!await ConfirmAsync(MsgClearPrompt(count), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
@@ -7409,7 +7442,7 @@ internal sealed partial class ChatScreen
         {
             _sessions.ClearCommandHistory();
             _input.ReplaceHistory([]);
-            _transcript.Notice(CmdClearedNotice(count));
+            _transcript.Notice(MsgClearedNotice(count));
             DrainDiagnostics();
         });
     }
@@ -8966,9 +8999,15 @@ internal sealed partial class ChatScreen
         ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
         ("servers", ProfileSection.Servers, "the server settings for LLM, Embedded, Docker, Anthropic and OpenAI"),
         ("commands", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
-        ("history", ProfileSection.History, "the command history, added (or replaced with overwrite)"),
+        ("history", ProfileSection.History, "the message history, added (or replaced with overwrite)"),
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),
+        ("persona", ProfileSection.Persona, "persona.md, the persona (overwrite replaces the target's)"),
+        ("operata", ProfileSection.Operata, "operata.md, the operating rules (overwrite replaces the target's)"),
+        ("vocalia", ProfileSection.Vocalia, "vocalia.md, the voice directive (overwrite replaces the target's)"),
     ];
+
+    /// <summary>The word that names <paramref name="section"/> (2026-10-10), as typed in the lines that name the way past a refusal.</summary>
+    public static string ProfileSectionWordOf(ProfileSection section) => ProfileSectionWords.First(item => item.Section == section).Word;
 
     /// <summary>The section a word names, any case; null for none.</summary>
     public static ProfileSection? ProfileSectionOf(string word)
@@ -8984,9 +9023,16 @@ internal sealed partial class ChatScreen
         return null;
     }
 
-    /// <summary>Whether a section takes <see cref="OverwriteWord"/>: the lists, which are added to by default. Keys and servers are mirrored, so replacing is all they do.</summary>
+    /// <summary>
+    /// Whether a section takes <see cref="OverwriteWord"/>: the lists, which are added to by default, and the prompt files (2026-10-10), whose
+    /// copy refuses to replace one already there without it. Keys and servers are mirrored, so replacing is all they do.
+    /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
-        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.PoliceStrings;
+        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.PoliceStrings || IsPromptFileSection(section);
+
+    /// <summary>Whether a section is one of the prompt files (2026-10-10): persona, operata, vocalia.</summary>
+    public static bool IsPromptFileSection(ProfileSection section) =>
+        section is ProfileSection.Persona or ProfileSection.Operata or ProfileSection.Vocalia;
 
     public static string ProfileMissingError(string name) => $"No profile named \"{name}\"; /profile lists them.";
 
@@ -11629,7 +11675,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Sys when args.Trim().Length > 0:
-                // /sys persona|operata|vocalia [reset | copy <profile> [force]] (2026-10-09, the user's ask: /persona, /operata and /vocalia folded in).
+                // /sys persona|operata|vocalia [reset] (2026-10-09, the user's ask: /persona, /operata and /vocalia folded in; copy <profile> [force] until 2026-10-10, /profile push|pull persona since).
                 await HandleSysFileAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
@@ -11795,8 +11841,8 @@ internal sealed partial class ChatScreen
                 await HandleDraftAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.CmdClear:
-                await CmdClearAsync(cancellationToken).ConfigureAwait(false);
+            case SlashCommand.MsgClear:
+                await MsgClearAsync(cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Log:

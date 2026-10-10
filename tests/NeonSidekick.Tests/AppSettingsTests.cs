@@ -36,7 +36,7 @@ public class AppSettingsTests : IDisposable
         EmbeddedLlmServer = false,
         EmbeddedDrafter = false,
         CommandTypoIntercept = false,
-        KeepCommandHistory = false,
+        KeepMessageHistory = false,
         CopyUserPrompt = false,
         DraftEditor = "code --wait",
         HideExitAutocomplete = false,
@@ -188,7 +188,7 @@ public class AppSettingsTests : IDisposable
     {
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
         Assert.Equal(expected.CommandTypoIntercept, actual.CommandTypoIntercept);
-        Assert.Equal(expected.KeepCommandHistory, actual.KeepCommandHistory);
+        Assert.Equal(expected.KeepMessageHistory, actual.KeepMessageHistory);
         Assert.Equal(expected.CopyUserPrompt, actual.CopyUserPrompt);
         Assert.Equal(expected.DraftEditor, actual.DraftEditor);
         Assert.Equal(expected.HideExitAutocomplete, actual.HideExitAutocomplete);
@@ -348,7 +348,7 @@ public class AppSettingsTests : IDisposable
             d.EmbeddedLlmServer = full.EmbeddedLlmServer;
             d.EmbeddedDrafter = full.EmbeddedDrafter;
             d.CommandTypoIntercept = full.CommandTypoIntercept;
-            d.KeepCommandHistory = full.KeepCommandHistory;
+            d.KeepMessageHistory = full.KeepMessageHistory;
             d.CopyUserPrompt = full.CopyUserPrompt;
             d.DraftEditor = full.DraftEditor;
             d.HideExitAutocomplete = full.HideExitAutocomplete;
@@ -494,7 +494,7 @@ public class AppSettingsTests : IDisposable
                 d.EmbeddedLlmServer = full.EmbeddedLlmServer;
                 d.EmbeddedDrafter = full.EmbeddedDrafter;
                 d.CommandTypoIntercept = full.CommandTypoIntercept;
-                d.KeepCommandHistory = full.KeepCommandHistory;
+                d.KeepMessageHistory = full.KeepMessageHistory;
                 d.CopyUserPrompt = full.CopyUserPrompt;
                 d.DraftEditor = full.DraftEditor;
                 d.HideExitAutocomplete = full.HideExitAutocomplete;
@@ -1504,7 +1504,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(200, s.SttInterruptConfirmMs);   // 150 until 2026-09-17
         Assert.Equal("", s.WorkingDirectory);
         Assert.True(s.CommandTypoIntercept);
-        Assert.True(s.KeepCommandHistory);   // 2026-09-25
+        Assert.True(s.KeepMessageHistory);   // 2026-09-25
         Assert.True(s.CopyUserPrompt);
         Assert.True(s.HideExitAutocomplete);
         Assert.Equal(0, s.LlmContextLength);

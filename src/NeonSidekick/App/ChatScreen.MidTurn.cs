@@ -141,7 +141,7 @@ internal sealed partial class ChatScreen
     /// is a pane as the list is, and so is <c>copy &lt;profile&gt;</c>'s — it writes another
     /// profile's file, nothing the turn holds —, so the word never changes the class; the standalone
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
-    /// <c>/cmdclear</c>'s (2026-09-25) confirmation (<c>/emptytrash</c>'s too until 2026-10-01) and the <c>/reasoning</c>
+    /// <c>/msgclear</c>'s (2026-09-25) confirmation (<c>/emptytrash</c>'s too until 2026-10-01) and the <c>/reasoning</c>
     /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as were <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police</c> row the same way) until they became <c>/tools shell allowed|police</c> (2026-10-09), panes with <c>/tools</c>; the four speech switches, <c>/reasoning</c>
     /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/remember</c>, <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c>, <c>/comfy view</c> (2026-09-27, the string form of this policy) and an unknown
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19), <c>/rewind</c> (2026-09-30: it rewrites the history the turn appends to, so the reply stops and the picker opens at the idle line) and <c>/exit</c> cancel; the rest
@@ -166,7 +166,7 @@ internal sealed partial class ChatScreen
     {
         SlashCommand.None => MidTurnClass.Message,
         SlashCommand.Help or SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
-            or SlashCommand.Usage or SlashCommand.About or SlashCommand.CmdClear or SlashCommand.Mcp or SlashCommand.Tools
+            or SlashCommand.Usage or SlashCommand.About or SlashCommand.MsgClear or SlashCommand.Mcp or SlashCommand.Tools
             or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Browse
             or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.KeyCheck or SlashCommand.YouTube => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
@@ -501,9 +501,9 @@ internal sealed partial class ChatScreen
                 // The list alone: every pick is refused there, so nothing comes back to restore.
                 await _sessionsMenu.ShowAsync(cancellationToken, midTurn: true).ConfigureAwait(false);
                 break;
-            case SlashCommand.CmdClear:
-                // /cmdclear (2026-09-25): the confirmation is a pane; the wipe is posted to the turn task.
-                await CmdClearAsync(cancellationToken).ConfigureAwait(false);
+            case SlashCommand.MsgClear:
+                // /msgclear (2026-09-25): the confirmation is a pane; the wipe is posted to the turn task.
+                await MsgClearAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Tree:
                 // /tree and /vault under a reply (later on 2026-09-27): the walk on the info pane, not in the reply.

@@ -48,10 +48,11 @@ public sealed class AppSettingsData
     /// history gains is stored in the profile's <c>sessions.db</c> (<c>command_history</c>, the newest
     /// <see cref="Sessions.SessionStore.CommandHistoryCap"/>) and loaded again at startup and after a switch to the
     /// profile; a line holding a collapsed paste or a picture is not stored (its block is the session's). Off, nothing
-    /// is stored and what is stored goes the next time the profile loads. <c>/cmdclear</c> empties it either way.
-    /// Read at each remembered line and at each load. No variable.
+    /// is stored and what is stored goes the next time the profile loads. <c>/msgclear</c> empties it either way.
+    /// Read at each remembered line and at each load. No variable. <c>KeepCommandHistory</c> (the row <c>Keep command history</c>) until
+    /// 2026-10-10, renamed with its row at the user's ask, no migration: an old key is ignored and the default (on) applies.
     /// </summary>
-    public bool KeepCommandHistory { get; set; } = true;
+    public bool KeepMessageHistory { get; set; } = true;
 
     /// <summary>
     /// Whether <c>/copy</c> puts the user's own prompt (as a blockquote) above each reply it

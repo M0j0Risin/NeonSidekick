@@ -63,10 +63,6 @@ public static class HelpCommands
             new("/cmd <command>", "Run a shell line yourself in the working directory, in *Shell default*'s shell, its output drawn as it prints; ESC kills it. It passes the model's checks: *Shell command policy* off refuses, the shell police refuse what they refuse whatever the policy, and under ask a line not on *Shell allowed commands* is put to the approval pane. The line and its output (cut at *Shell output max chars*, the whole in `.shell\\cmd_….log`) go into the conversation, so the model sees them."),
             new("/cmd --shell <shell> <command>", "The same in another shell: `powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac."),
         ]),
-        new("/cmdclear",
-        [
-            new("/cmdclear", "Clear this profile's command history, both stored and in memory, after you confirm."),
-        ]),
         new("/collapse",
         [
             new("/collapse", "Fold the tool runs, code blocks, diffs and thinking again."),
@@ -188,6 +184,10 @@ public static class HelpCommands
         [
             new("/model [<id>]", "Pick a model from the server's list, or set one by its id (as typed; the server is not asked). The list is A to Z, the cursor on the model in use; type to narrow it to the ids that hold the text, Backspace erases, ESC clears it, the next ESC keeps the model. On the embedded LLM, this lists the installed embedded models. Ctrl+M runs it too."),
         ]),
+        new("/msgclear",
+        [
+            new("/msgclear", "Clear this profile's message history, both stored and in memory, after you confirm."),
+        ]),
         new("/new",
         [
             new("/new", "Start a new conversation without clearing the screen."),
@@ -238,8 +238,11 @@ public static class HelpCommands
             new("/profile push|pull keys <name>", "Copy the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* to another profile or from it, after you confirm. The keys are mirrored: a key not set in the source clears the target's. Only saved keys are copied, and encrypted ones as they are; a key set only by a `NEONSIDEKICK_*` variable is not copied."),
             new("/profile push|pull servers <name>", "Copy the server settings to another profile or from it, replacing the target's, after you confirm: *LLM server scan mode*, *LLM URL* and *LLM model*; *LLM reasoning*, *LLM reasoning estimate*, *LLM sampling* (every model's overrides) and *LLM sampling from Hugging Face*; *Embedded servers enabled*, *Embedded backend* and the embedded context size, GPU layers, VRAM budget, VRAM only, vision and drafter; *Docker servers enabled*, *Docker server containers* and the Docker server timings and stop on exit; *Claude Code server*; *Anthropic API*, *Anthropic API max tokens* and *Anthropic API prompt caching*; *OpenAI API*, *OpenAI API max tokens*, *OpenAI API organization* and *OpenAI API project*. The saved values are copied, not a `--url` or variable that only overrides this run. Installed embedded models are shared by every profile already."),
             new("/profile push|pull commands <name> [overwrite]", "Copy *Shell allowed commands* to another profile or from it: added to the target's list, or replacing it with `overwrite`."),
-            new("/profile push|pull history <name> [overwrite]", "Copy the command history to another profile or from it: added to the target's, or replacing it with `overwrite`. Refused while the target has *Keep command history* off."),
+            new("/profile push|pull history <name> [overwrite]", "Copy the message history to another profile or from it: added to the target's, or replacing it with `overwrite`. Refused while the target has *Keep message history* off."),
             new("/profile push|pull policestrings <name> [overwrite]", "Copy *Shell police forbidden strings* to another profile or from it: added to the target's list, or replacing it with `overwrite`."),
+            new("/profile push|pull persona <name> [overwrite]", "Copy this profile's `persona.md` (the personality) to another profile, or another's into this one, after you confirm. A `persona.md` already in the target is replaced only with `overwrite`."),
+            new("/profile push|pull operata <name> [overwrite]", "Copy this profile's `operata.md` (the operating rules) to another profile, or another's into this one, after you confirm. A `operata.md` already in the target is replaced only with `overwrite`."),
+            new("/profile push|pull vocalia <name> [overwrite]", "Copy this profile's `vocalia.md` (the spoken-reply directive) to another profile, or another's into this one, after you confirm. A `vocalia.md` already in the target is replaced only with `overwrite`."),
             new("/profile edit|reload", "`edit` opens `profile.json` in your editor; `reload` reads it back and reconnects only what changed."),
         ]),
         new("/queue",
@@ -327,7 +330,6 @@ public static class HelpCommands
             new("/sys persona [reset]", "Edit `persona.md` (the personality) in your editor, or reset it to the default."),
             new("/sys operata [reset]", "Edit `operata.md` (the operating rules) in your editor — created, when missing, with the rules in use now, the sentences for the tools that are on included — or reset it to the default."),
             new("/sys vocalia [reset]", "Edit `vocalia.md` (the spoken-reply directive: empty by default, its text added last to every spoken reply) in your editor, or remove it."),
-            new("/sys persona|operata|vocalia copy <profile> [force]", "Copy that file to another profile (`force` replaces theirs)."),
         ]),
         new("/terminal",
         [

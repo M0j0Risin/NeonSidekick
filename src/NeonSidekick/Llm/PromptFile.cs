@@ -110,9 +110,9 @@ public abstract class PromptFile
 
     /// <summary>
     /// Copies the file, byte for byte, into <paramref name="directory"/> under its own name
-    /// (<c>/sys persona copy &lt;profile&gt; [force]</c> and its siblings, 2026-09-21: another profile's
-    /// folder), creating the directory and replacing a file already there. Whether replacing is
-    /// allowed is the caller's rule (the <c>force</c> word, checked before the confirmation); this
+    /// (<c>/profile push persona &lt;name&gt; [overwrite]</c> and its siblings, <c>/sys persona copy &lt;profile&gt; [force]</c> from 2026-09-21
+    /// until 2026-10-10: another profile's folder), creating the directory and replacing a file already there. Whether replacing is
+    /// allowed is the caller's rule (the <c>overwrite</c> word, checked before the confirmation); this
     /// just copies. Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>
     /// (a missing source among them); the slash command reports those.
     /// </summary>
@@ -122,6 +122,20 @@ public abstract class PromptFile
         string root = Path.GetFullPath(directory);
         Directory.CreateDirectory(root);
         File.Copy(FilePath, Path.Combine(root, CurrentFileName), overwrite: true);
+    }
+
+    /// <summary>
+    /// <see cref="CopyTo"/>'s other way (2026-10-10, <c>/profile pull persona &lt;name&gt; [overwrite]</c> and its siblings): the file of the
+    /// same name in <paramref name="directory"/> (another profile's folder), byte for byte, over this one, its folder made. The next
+    /// <see cref="Read"/> sees the new write time and length and reads it. Replacing is the caller's rule, as there. Throws
+    /// <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/> (a missing source among them); the slash command reports those.
+    /// </summary>
+    public void CopyFrom(string directory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        string path = FilePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.Copy(Path.Combine(Path.GetFullPath(directory), CurrentFileName), path, overwrite: true);
     }
 
     /// <summary>

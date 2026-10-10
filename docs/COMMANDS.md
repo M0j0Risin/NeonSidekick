@@ -40,7 +40,6 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/cmd <command>` | Runs a shell line yourself in the working directory, in *Shell default*'s shell, its output drawn as it prints. It passes the model's checks. See [Your own shell line](#your-own-shell-line). |
 | `/cmd --shell <shell> <command>` | The same in another shell (`powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac). |
 | `/keycheck` | Lists the app's key chords and whether another program holds each as a global hotkey, the held ones first, in a pane. A held chord never reaches the app. Only hotkeys registered with Windows show; a keyboard hook (AutoHotkey, PowerToys Keyboard Manager) or a Windows Terminal key binding can still take a key. Needs Windows. |
-| `/cmdclear` | Clears the command history, stored and in memory, after a confirmation. |
 | `/compact [<focus>]` | Shrinks the context; a focus tells the summary what to concentrate on. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply (or the last *n*, or the whole transcript) as Markdown. `--thinking` includes the thinking, quoted under `💭 **Thinking**`. |
 | `/cwd [<path>\|~\|browse]` | Shows or changes the working directory. A path that starts with a drive (`D:\`), or with `/` on a Mac, completes its folders as you type. `~` returns to the profile's `files\`; `browse` opens the [folder picker](#folder-picker). |
@@ -102,6 +101,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/memory forget\|edit` | `forget` forgets all, after a confirmation; `edit` opens `memory.json` in your editor. |
 | `/memory copy <profile> [overwrite]` | Adds them to another profile's memory (or replaces it with `overwrite`), after a confirmation. |
 | `/model [<id>]` | Picks or sets the model. The list is A to Z with the cursor on the model in use; type to narrow it to the ids holding the text (Backspace erases, ESC clears it, the next ESC keeps the model). On the embedded LLM, lists the installed models, and the argument list offers their ids. |
+| `/msgclear` | Clears the profile's message history (the ↑/↓ recall), stored and in memory, after a confirmation. |
 | `/new` | Starts a new conversation without clearing the screen. |
 | `/open <file>` | Opens a file from the working directory in its default app (a folder is refused; `/explore` or `/browse` opens one). |
 | `/perfbar [off\|text\|gauge\|spark\|led]` | Hides the performance bar, or brings it back with its last meters; a look name sets that look and shows it. |
@@ -121,8 +121,11 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile push\|pull keys <name>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* to or from another profile after a confirmation, mirrored: a key unset in the source clears the target's. Keys set only by environment variable aren't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings to or from another profile after a confirmation, replacing the target's: scan mode, LLM URL and model, LLM reasoning and its estimate, LLM sampling (every model's overrides) and sampling from Hugging Face, and the embedded, Docker, Anthropic API (with its max tokens and prompt caching), OpenAI API (with its max tokens, organization and project) and Claude Code server settings. Saved values only, not a `--url` or variable. |
 | `/profile push\|pull commands <name> [overwrite]` | Copies *Shell allowed commands* to or from another profile (added, or replacing with `overwrite`). |
-| `/profile push\|pull history <name> [overwrite]` | Copies the command history to or from another profile (added, or replacing with `overwrite`); refused when the target has *Keep command history* off. |
+| `/profile push\|pull history <name> [overwrite]` | Copies the message history to or from another profile (added, or replacing with `overwrite`); refused when the target has *Keep message history* off. |
 | `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* to or from another profile (added, or replacing with `overwrite`). |
+| `/profile push\|pull persona <name> [overwrite]` | Copies `persona.md` (the personality) to or from another profile after a confirmation; a `persona.md` already in the target is replaced only with `overwrite`. |
+| `/profile push\|pull operata <name> [overwrite]` | Copies `operata.md` (the operating rules) to or from another profile after a confirmation; a `operata.md` already in the target is replaced only with `overwrite`. |
+| `/profile push\|pull vocalia <name> [overwrite]` | Copies `vocalia.md` (the spoken-reply directive) to or from another profile after a confirmation; a `vocalia.md` already in the target is replaced only with `overwrite`. |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
 | `/queue [clear]` | Lists and prunes the queued messages (Enter removes one after a yes; `⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. Under *Queue mode* `manual`, `➤ send` is always there: each press sends the next message, and under a reply it goes when the reply ends. `/queue clear` drops them without the pane. |
 | `/read [<file> [<n>]\|<n>]` | Reads a text file from the working directory aloud. Alone it resumes; a number starts at that sentence. On an empty line, Space pauses and resumes it, and ←/→ step a sentence back or forward (while paused they only move the position; Space or `/read` plays from it). The hint row leads with `← → ␣ pause`, `← → ␣ play` or, once it has run through, `␣ replay` while the keys apply. |
@@ -154,7 +157,6 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/sys persona [reset]` | Edits `persona.md` (the personality; seeded with the built-in persona) in your editor, or resets it to the default after a yes. |
 | `/sys operata [reset]` | The same for `operata.md` (the operating rules). A missing file is created with the rules in use now, the sentences for the tools that are on included; from then on it stands as written. |
 | `/sys vocalia [reset]` | The same for `vocalia.md` (the voice directive, empty by default, added last to every spoken reply); reset removes it. |
-| `/sys persona\|operata\|vocalia copy <profile> [force]` | Copies that file to another profile (`force` replaces theirs). |
 | `/terminal [<folder>]` | Opens a new terminal in the working directory, or in a folder under it (Tab completes the folder): Windows Terminal (else a console window); on a Mac a new Terminal window, or a tab in iTerm2's front window when the app runs in iTerm2. Ctrl+. runs it (Ctrl+] on a Mac). |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. Alone, lists them with their last verdicts. See Benchmark tests. |
 | `/theme [<name>]` | Switches the colour theme, built-in or [custom](#custom-themes); alone, opens a picker with a live preview (79+ columns); a typed letter jumps to the next theme starting with it. Nothing changes until Enter; during a reply it waits. |

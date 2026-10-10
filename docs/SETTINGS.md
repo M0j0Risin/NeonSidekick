@@ -34,7 +34,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * `/`, `@`, `#`, `$`, `%`, `^` and `*` open their lists. The mention lists work inside a command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/read`, `/view`, `/print` and `/pdf`, which complete their own path.
 * Drag a picture from the ComfyUI picture strip or the transcript onto the input row to attach it, as if dropped from the desktop. The hint row reads **🖼️ drop on line** while you drag; letting go elsewhere attaches nothing.
 * Enter during a reply queues the message. A draft left on the row survives the reply. Under *Queue mode* `manual`, Enter at the idle line queues the message too, and `/queue`'s `➤ send` sends them one at a time.
-* ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does, and keeps it in this session's history: ↑ brings it back, but *Keep command history* never stores a draft you cleared unless you send it). While a reply runs the hint row ends with **esc to stop**, and a running tool shows its own time beside the reply's.
+* ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does, and keeps it in this session's history: ↑ brings it back, but *Keep message history* never stores a draft you cleared unless you send it). While a reply runs the hint row ends with **esc to stop**, and a running tool shows its own time beside the reply's.
 * A tool call reads as its values (`🛠️ read_file notes.md`), its result under it (`→ 4 lines`); a result of several lines shows them while the run goes and folds to its first line and `(+N lines)` after (Ctrl+O or `/expand` shows them again).
 * A tool result that failed is marked ✗ in the warning colour, and a folded tool run counts them (`· 1 failed`).
 * A reply keeps one left edge: the ● sits on its first text (never on a tool line) and every stretch after a tool keeps its indent; a notice or tool line that wraps continues under its text. Headings: level 1 in the accent, level 2 in the tertiary colour, level 3 and below bold in the body colour.
@@ -96,7 +96,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 
 | Behaviour | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/cmdclear`, `/tree`, `/vault`, `/browse`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/camera list`, `/docker logs`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia` |
 | Run at once | `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/toolbar`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/copy`, `/remember`, `/explore`, `/open`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply to end, queued behind earlier messages (*Queue cancel mode* applies) |
@@ -162,7 +162,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Memory mode | `read-write` offers `save_memory` / `recall_memory` and opens every conversation with what is remembered; `read-only` offers `recall_memory` alone, so the model reads but never saves (your `/remember` still does); `disabled` turns memory off and refuses `/remember`. | read-write |
 | Queue mode | How messages are queued. `automatic`: messages sent during a reply are listed (a count, and `/queue`) and sent when it ends. `manual`: every typed message is queued, at the idle line too, and nothing is sent until you press `➤ send` (or `s`) on `/queue`; each press sends one, and under a reply it goes when the reply ends. Commands and spoken requests are never queued. Without the bottom pane, `manual` acts as `automatic`. `disabled`: no queue; a line sent during a reply still goes when the reply ends, just not listed, and `/queue` leaves the `/` list. | `automatic` |
 | Queue cancel mode | What a cancelled reply does with the queue: `hold` keeps it until your next message (or `➤ send` on `/queue`), `drain` sends the next one at once, `empty` drops them all. Under *Queue mode* `manual` nothing is sent by itself either way; `empty` still drops them. | `empty` |
-| Keep command history | Saves the ↑/↓ history (newest 1,000 lines, no collapsed pastes or pictures) in `sessions.db`. Off deletes it at the next profile load; `/cmdclear` empties it either way. | on |
+| Keep message history | Saves the ↑/↓ history (newest 1,000 lines, no collapsed pastes or pictures) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it either way. *Keep command history* until 2026-10-10; its saved value was not carried over, so it is on again. | on |
 | Command typo intercept | A command name without its slash (`clear`) or with extra ones (`//profile work`) asks *Did you mean /clear?* first. A bare `//` is still `/settings`. | on |
 | Hide /exit autocomplete | Leaves `/exit` out of the `/` list; typing it in full still works. | on |
 | Transcript markdown | Renders replies as Markdown, with code fences highlighted (C#, JS/TS, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML, diff). | on |
@@ -729,7 +729,7 @@ The file tools and the places beyond the working directory they reach, four menu
 
 ### Integrations
 
-The apps and services the tools reach, five menus on one tab, each a tab of the second strip (ClaudeCode · Docker · Home · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Media from 2026-10-09).
+The apps and services the tools reach, five menus on one tab, each a tab of the second strip (ClaudeCode · Docker · HomeAssistant · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Media from 2026-10-09).
 
 #### ClaudeCode
 
@@ -756,7 +756,7 @@ The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (t
 | Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
 | Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
 
-#### Home (Home Assistant)
+#### HomeAssistant
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -802,7 +802,7 @@ The services that run unasked under `ask` can be changed in `profile.json` (`hom
 
 ### Database
 
-The five database families, five menus on one tab, as on Media: a second strip under the first (SQL · MySQL · SQLite · Postgres · Oracle), ←/→ walking them. Each was a tab of its own until 2026-10-09.
+The five database families, five menus on one tab, as on Media: a second strip under the first (SQL · MySQL · SQLite · PostgreSQL · Oracle), ←/→ walking them. Each was a tab of its own until 2026-10-09.
 
 #### SQL
 
@@ -821,7 +821,7 @@ The five database families, five menus on one tab, as on Media: a second strip u
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (created with commented examples). | (none) |
 | SQL connections (global) | The same for the home folder's `sql.json`, which every profile reads. The profile's wins a name clash. | (none) |
 
-The Oracle, MySQL and Postgres menus and the UNC tab work like this one, over `oracle.json`, `mysql.json`, `postgres.json` and `unc.json`.
+The Oracle, MySQL and PostgreSQL menus and the UNC tab work like this one, over `oracle.json`, `mysql.json`, `postgres.json` and `unc.json`.
 
 #### MySQL
 
@@ -855,7 +855,7 @@ The Oracle, MySQL and Postgres menus and the UNC tab work like this one, over `o
 | SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | (none) |
 | SQLite databases (global) | Opens the global `sqlite.json` in your editor. | (none) |
 
-#### Postgres
+#### PostgreSQL
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -959,7 +959,7 @@ Every connected server's tools, as `<server>__<tool>`, with the server's descrip
 
 ## System prompt (`/sys`)
 
-A read-only view of exactly what the next reply sends. `/sys persona`, `/sys operata` and `/sys vocalia` open its three files in your editor (`reset` takes one back to the default, `copy <profile>` sends it to another profile).
+A read-only view of exactly what the next reply sends. `/sys persona`, `/sys operata` and `/sys vocalia` open its three files in your editor (`reset` takes one back to the default); `/profile push|pull persona|operata|vocalia <name> [overwrite]` copies one to or from another profile.
 
 ### Prompt
 

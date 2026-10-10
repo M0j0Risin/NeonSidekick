@@ -55,7 +55,7 @@ public class SessionStoreTests : IDisposable
     [Fact]
     public void CommandHistory_AppendsInOrder_ClearsAndCounts()
     {
-        // Keep command history (2026-09-25): the table beside the sessions, the schema number untouched.
+        // Keep message history (2026-09-25): the table beside the sessions, the schema number untouched.
         // A read with no file yet never makes one (every profile is read at each load).
         Assert.Empty(_store.CommandHistory());
         Assert.Equal(0, _store.CommandHistoryCount);

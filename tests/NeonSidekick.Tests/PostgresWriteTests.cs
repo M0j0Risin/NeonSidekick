@@ -94,7 +94,7 @@ public sealed class ServerWriteTests
             "Error: connection 'shop' is read-only (\"access\": \"read\" in postgres.json); the user makes it readwrite to allow changes",
             ServerWriteText.ReadOnlyConnection(Family, "shop"));
         Assert.Equal(
-            "Error: PostgreSQL mode is read-only, so nothing may change a PostgreSQL database; the user switches it to read-write on /tools › Database › Postgres",
+            "Error: PostgreSQL mode is read-only, so nothing may change a PostgreSQL database; the user switches it to read-write on /tools › Database › PostgreSQL",
             ServerWriteText.ReadOnlyMode(Family));
 
         var run = new SqlRun(SqlOutcome.Ok, "", "shop", "sales", [], TimeSpan.FromMilliseconds(4)) { Changes = 3 };
@@ -205,7 +205,7 @@ public sealed class PostgresWriteGateTests
         IReadOnlyList<ServerStatementKind> data = [ServerStatementKind.Data];
         Assert.Null(PostgresWriteGate.Check("UPDATE t SET a = 1", data));
         Assert.Equal(
-            "Error: the SQL is dropping (DROP TABLE, INDEX, VIEW, SEQUENCE, TYPE, DOMAIN, SCHEMA, FUNCTION, PROCEDURE, TRIGGER), which the user has not allowed; postgres_execute may run changing data — the user ticks more in PostgreSQL statements allowed on /tools › Database › Postgres",
+            "Error: the SQL is dropping (DROP TABLE, INDEX, VIEW, SEQUENCE, TYPE, DOMAIN, SCHEMA, FUNCTION, PROCEDURE, TRIGGER), which the user has not allowed; postgres_execute may run changing data — the user ticks more in PostgreSQL statements allowed on /tools › Database › PostgreSQL",
             PostgresWriteGate.Check("DROP TABLE t", data));
         // A WITH that deletes needs deleting, whatever it ends in.
         Assert.StartsWith("Error: the SQL is deleting", PostgresWriteGate.Check("WITH d AS (DELETE FROM t RETURNING *) INSERT INTO log SELECT * FROM d", data));

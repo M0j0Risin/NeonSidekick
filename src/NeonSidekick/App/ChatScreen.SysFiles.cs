@@ -38,7 +38,7 @@ internal sealed partial class ChatScreen
     public static readonly string SysUsageError = "/sys takes " + string.Join(", ", SysFileWords.Select(f => f.Word)) + ", or nothing for the system prompt.";
 
     /// <summary>
-    /// <c>/sys persona|operata|vocalia [reset | copy &lt;profile&gt; [force]]</c> (2026-10-09): the file's word, then
+    /// <c>/sys persona|operata|vocalia [reset]</c> (2026-10-09; <c>copy &lt;profile&gt; [force]</c> too until 2026-10-10): the file's word, then
     /// <see cref="HandlePromptFileAsync"/> with the rest, as <c>/persona</c> and its siblings ran it from 2026-09-16; a first word
     /// that is no file is <see cref="SysUsageError"/>. The lines go through the flow sink, so the same call serves a pane under a reply.
     /// </summary>
@@ -66,26 +66,9 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A prompt file's argument list after its word (2026-09-21, <c>/persona</c>'s; <c>/sys persona</c>'s since 2026-10-09): reset or
-    /// copy; after <c>copy </c> every profile but the loaded one; after <c>copy &lt;name&gt; </c> the force word.
+    /// A prompt file's argument list after its word (2026-09-21, <c>/persona</c>'s; <c>/sys persona</c>'s since 2026-10-09): reset (copy, its
+    /// profiles and the force word too until 2026-10-10, when the copy became <c>/profile push|pull persona</c>).
     /// </summary>
-    private static IReadOnlyList<CompletionItem> PromptFileChoices(string fileName, string argText, ArgumentSources sources)
-    {
-        if (argText.StartsWith(CopyWord + " ", StringComparison.OrdinalIgnoreCase))
-        {
-            string rest = argText[(CopyWord.Length + 1)..].TrimStart();
-            var targets = sources.Profiles().Where(name => !Profiles.NameEquals(name, sources.LoadedProfile)).ToList();
-            foreach (var name in targets)
-            {
-                if (rest.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase))
-                {
-                    return MentionCompleter.Matches([new(CopyWord + " " + name + " " + ForceWord, PromptFileCopyForceNote(fileName))], argText);
-                }
-            }
-
-            return MentionCompleter.Matches(targets.Select(name => new CompletionItem(CopyWord + " " + name, PromptFileCopyTargetNote(fileName))).ToList(), argText);
-        }
-
-        return MentionCompleter.Matches([new(ResetWord, PromptFileResetNote(fileName)), new(CopyWord, PromptFileCopyNote(fileName))], argText);
-    }
+    private static IReadOnlyList<CompletionItem> PromptFileChoices(string fileName, string argText) =>
+        MentionCompleter.Matches([new(ResetWord, PromptFileResetNote(fileName))], argText);
 }

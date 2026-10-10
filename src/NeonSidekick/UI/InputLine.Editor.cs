@@ -614,7 +614,7 @@ public sealed partial class InputLine
                     }
 
                     // The cleared draft goes to the history first (2026-10-04, the UI review): Up brings back what ESC took. In
-                    // memory alone (2026-10-05): never stored by Keep command history.
+                    // memory alone (2026-10-05): never stored by Keep message history.
                     if (_o.Remember && !_o.Mask)
                     {
                         _line.RememberDraft(_text.ToString());
@@ -886,7 +886,7 @@ public sealed partial class InputLine
                     }
 
                     var history = _line._history;
-                    // ReplaceHistory under a live walk (a /cmdclear under a reply, 2026-09-25) can leave the index past the end.
+                    // ReplaceHistory under a live walk (a /msgclear under a reply, 2026-09-25) can leave the index past the end.
                     _historyIndex = Math.Min(_historyIndex, history.Count);
                     if (delta < 0)
                     {

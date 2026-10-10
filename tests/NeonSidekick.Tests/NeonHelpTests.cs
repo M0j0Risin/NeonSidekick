@@ -66,7 +66,7 @@ public class NeonHelpTests
     public void Location_IsWorkedOutFromTheMenus()
     {
         Assert.Equal("/tools › Media › Camera › Camera watch interval (s)", HelpLocation.Of(SettingsField.CameraWatchSeconds).Path);   // a menu on Media since 2026-10-09
-        Assert.Equal("/tools › Database › Postgres › PostgreSQL mode", HelpLocation.Of(SettingsField.PostgresMode).Path);
+        Assert.Equal("/tools › Database › PostgreSQL › PostgreSQL mode", HelpLocation.Of(SettingsField.PostgresMode).Path);
         Assert.Equal("/tools › Shell › Shell police", HelpLocation.Of(SettingsField.ShellPolice).Path);   // a plain tab names no menu
         Assert.Null(HelpLocation.Of(SettingsField.ShellPolice).Menu);
         Assert.Equal("/settings › General › Profile", HelpLocation.Of(SettingsField.Profile).Path);
@@ -191,7 +191,7 @@ public class NeonHelpTests
     public void ATabByItsStartOrItsLongName_IsFound()
     {
         Assert.StartsWith("Tab /tools › Files › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
-        Assert.StartsWith("Tab /tools › Integrations › Home:", Invoke("/tools home assistant"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Integrations › HomeAssistant:", Invoke("/tools home assistant"), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -216,7 +216,7 @@ public class NeonHelpTests
     {
         string text = Invoke("/tools database");
 
-        Assert.StartsWith("Tab /tools › Database: " + HelpText.MenusTab(["SQL", "MySQL", "SQLite", "Postgres", "Oracle"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Database: " + HelpText.MenusTab(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));

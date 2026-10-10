@@ -79,7 +79,7 @@ public sealed class SessionStore : IDisposable
     /// <c>reflections</c> table records every reflection. The 1 → 2 → 3 migrations went on
     /// 2026-09-24 (the user's call): every real file had long been at 3, and a schema that lived a
     /// day was not worth the code, the fixtures and a smoke leg. The <c>command_history</c> table (2026-09-25,
-    /// <c>Keep command history</c>) left it at 3: an added table is <c>IF NOT EXISTS</c> on every open, so a file
+    /// <c>Keep message history</c>) left it at 3: an added table is <c>IF NOT EXISTS</c> on every open, so a file
     /// from before gains it and an older build reads past it; no row it knew changed shape.
     /// </summary>
     public const int SchemaVersion = 3;
@@ -898,13 +898,13 @@ public sealed class SessionStore : IDisposable
         return sb.ToString();
     }
 
-    // ── The command history (2026-09-25) ────────────────────────────────────
+    // ── The message history (2026-09-25) ────────────────────────────────────
 
     /// <summary>The most lines <c>command_history</c> keeps; an append past it drops the oldest. Pinned.</summary>
     public const int CommandHistoryCap = 1000;
 
     /// <summary>
-    /// The input line's Up/Down history as stored (2026-09-25, the user's ask: <c>Keep command history</c>): the lines
+    /// The input line's Up/Down history as stored (2026-09-25, the user's ask: <c>Keep message history</c>): the lines
     /// oldest first, empty while the store is unavailable — or while there is no file yet, which a read never creates
     /// (every profile is read at each load; a profile that never stored a line keeps no <c>sessions.db</c> for it).
     /// </summary>
@@ -932,7 +932,7 @@ public sealed class SessionStore : IDisposable
             }
             catch (SqliteException ex)
             {
-                Fail("read the command history", ex);
+                Fail("read the message history", ex);
                 return [];
             }
         }
@@ -1021,13 +1021,13 @@ public sealed class SessionStore : IDisposable
             }
             catch (SqliteException ex)
             {
-                Fail("write the command history", ex);
+                Fail("write the message history", ex);
                 return 0;
             }
         }
     }
 
-    /// <summary>Every stored line removed (<c>/cmdclear</c>, and a load with <c>Keep command history</c> off); how many went.</summary>
+    /// <summary>Every stored line removed (<c>/msgclear</c>, and a load with <c>Keep message history</c> off); how many went.</summary>
     public int ClearCommandHistory()
     {
         lock (_gate)
@@ -1045,7 +1045,7 @@ public sealed class SessionStore : IDisposable
             }
             catch (SqliteException ex)
             {
-                Fail("clear the command history", ex);
+                Fail("clear the message history", ex);
                 return 0;
             }
         }

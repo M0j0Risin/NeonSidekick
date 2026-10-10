@@ -199,7 +199,7 @@ public enum SettingsField
     /// <summary>A toggle: whether the <c>/</c> completion list leaves <c>/exit</c> out (<see cref="Settings.AppSettingsData.HideExitAutocomplete"/>). The General tab's input-line run's last row, under Command typo intercept (2026-10-01; after Paste preview lines from 2026-09-18); no reconnect (read at each keystroke).</summary>
     HideExitAutocomplete,
 
-    /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The General tab's row under Keep command history (2026-10-01; before Welcome splash from 2026-09-18); no reconnect (read at each Enter).</summary>
+    /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The General tab's row under Keep message history (2026-10-01; before Welcome splash from 2026-09-18); no reconnect (read at each Enter).</summary>
     CommandTypoIntercept,
 
     /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The General tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
@@ -419,8 +419,8 @@ public enum SettingsField
     /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the LLM tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
     LlmMidTurnUsage,
 
-    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepCommandHistory"/>). The General tab's row under Queue cancel mode (2026-10-01; under Command typo intercept from 2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
-    KeepCommandHistory,
+    /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepMessageHistory"/>). The General tab's row under Queue cancel mode (2026-10-01; under Command typo intercept from 2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
+    KeepMessageHistory,
 
     /// <summary>Typed: the seconds <c>/botchat</c> rests after a reply when no voice plays, 0 (off) to 30 (<see cref="Settings.AppSettingsData.BotChatNonTtsDelaySeconds"/>). The Botchat tab's last row (2026-09-26, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatNonTtsDelaySeconds,
@@ -1329,7 +1329,7 @@ internal sealed partial class SettingsMenu
     /// General is spelled out in five runs (2026-10-01, the user's call: 24 rows grown by "under X" and "last" had scattered their
     /// kin — the working directory at the top and its header switch far below, the theme apart from the themed viewer): who and where
     /// (the profile, what a new one copies, where its files live, the memory it carries), the input line (the message queue's switch and
-    /// its cancel mode, the command history, the typo intercept, the hidden <c>/exit</c>), the transcript (its Markdown, the paste preview,
+    /// its cancel mode, the message history, the typo intercept, the hidden <c>/exit</c>), the transcript (its Markdown, the paste preview,
     /// the thumbnails' switch and size, what <c>/copy</c> takes), the screen (the theme, then top to bottom: the welcome splash, the header
     /// and the working directory in it, the toolbar, the performance bar, the menus' max height), and the outside apps last (the draft
     /// editor, the image viewer and the themed-viewer switch). Each dependent row stays right under the one it hangs on; LLM
@@ -1346,7 +1346,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.NewProfileMode, SettingsField.WorkingDirectory, SettingsField.MemoryMode,
-         SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepCommandHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
+         SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
@@ -1825,7 +1825,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepCommandHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground
+            or SettingsField.HideExitAutocomplete or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground
             or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPolice or SettingsField.ShellPreferNative
@@ -2138,7 +2138,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionInstalledSkills => "Reflection downloaded skills",
         SettingsField.HideExitAutocomplete => "Hide /exit autocomplete",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
-        SettingsField.KeepCommandHistory => "Keep command history",
+        SettingsField.KeepMessageHistory => "Keep message history",
         SettingsField.WelcomeSplash => "Welcome splash",
         SettingsField.ShowHeader => "Show header",   // the user's name (2026-10-01)
         SettingsField.MenuMaxHeight => "Menus max height",   // the user's name (2026-10-01)
@@ -2479,7 +2479,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionEditsSupportingFiles => OnOff(data.ReflectionEditsSupportingFiles),
             SettingsField.HideExitAutocomplete => OnOff(data.HideExitAutocomplete),
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
-            SettingsField.KeepCommandHistory => OnOff(data.KeepCommandHistory),
+            SettingsField.KeepMessageHistory => OnOff(data.KeepMessageHistory),
             SettingsField.WelcomeSplash => data.WelcomeSplashMode,
             SettingsField.MenuMaxHeight => data.MenuMaxHeight,
             SettingsField.SessionLogging => OnOff(data.SessionLogging),
@@ -6934,7 +6934,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionEditsSupportingFiles => data.ReflectionEditsSupportingFiles,
             SettingsField.HideExitAutocomplete => data.HideExitAutocomplete,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
-            SettingsField.KeepCommandHistory => data.KeepCommandHistory,
+            SettingsField.KeepMessageHistory => data.KeepMessageHistory,
             SettingsField.ShowHeader => data.ShowHeader,
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ThemedExternalWindows => data.ThemedExternalWindows,
@@ -7039,7 +7039,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ReflectionEditsSupportingFiles: data.ReflectionEditsSupportingFiles = on; break;
             case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
-            case SettingsField.KeepCommandHistory: data.KeepCommandHistory = on; break;
+            case SettingsField.KeepMessageHistory: data.KeepMessageHistory = on; break;
             case SettingsField.ShowHeader: data.ShowHeader = on; break;
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ThemedExternalWindows: data.ThemedExternalWindows = on; break;
@@ -7148,7 +7148,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionEditsSupportingFiles => on ? "a reflection may write a skill's supporting files" : "a reflection writes a skill's SKILL.md alone",
         SettingsField.HideExitAutocomplete => on ? "hide '/exit' from the autocomplete list" : "show '/exit' in the autocomplete list",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
-        SettingsField.KeepCommandHistory => on ? "command history enabled" : "command history disabled",
+        SettingsField.KeepMessageHistory => on ? "message history enabled" : "message history disabled",
         SettingsField.ShowHeader => on ? "show the header" : "hide the header",
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ThemedExternalWindows => on ? "theme the external windows" : "keep the external windows black",

@@ -269,7 +269,7 @@ public sealed partial class InputLine
 
     /// <summary>
     /// A draft ESC cleared, to the history in memory alone (2026-10-05, the code review and the user's call): Up brings it back this
-    /// session, but <see cref="Remembered"/> is not told, so <c>Keep command history</c> never writes a line the user threw away (a
+    /// session, but <see cref="Remembered"/> is not told, so <c>Keep message history</c> never writes a line the user threw away (a
     /// pasted token, a password in the wrong box). Sent after all (Up, Enter), it is told then.
     /// </summary>
     internal void RememberDraft(string text) => Add(text, keep: false);
@@ -304,13 +304,13 @@ public sealed partial class InputLine
 
     /// <summary>
     /// Told each line the history gained — typed, sent from under a reply or spoken — after the de-duplication, so never
-    /// a repeat of the line before (2026-09-25, <c>Keep command history</c>: the screen stores it). Null = nobody listens.
+    /// a repeat of the line before (2026-09-25, <c>Keep message history</c>: the screen stores it). Null = nobody listens.
     /// </summary>
     public Action<string>? Remembered { get; set; }
 
     /// <summary>
     /// The history replaced by <paramref name="lines"/>, oldest first, a line equal to the one before it skipped
-    /// (2026-09-25: the profile's stored history at startup and after a switch, empty after <c>/cmdclear</c>).
+    /// (2026-09-25: the profile's stored history at startup and after a switch, empty after <c>/msgclear</c>).
     /// <see cref="Remembered"/> is not told. A walk starts at the bottom again at the next read.
     /// </summary>
     public void ReplaceHistory(IEnumerable<string> lines)

@@ -351,7 +351,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/youtube list --clear</c> (2026-10-08, the user's ask): one yes/no (<see cref="ConfirmAsync"/>, <c>/cmdclear</c>'s), then every
+    /// <c>/youtube list --clear</c> (2026-10-08, the user's ask): one yes/no (<see cref="ConfirmAsync"/>, <c>/msgclear</c>'s), then every
     /// saved video taken off the list; nothing saved is <see cref="YouTubeText.NoneSaved"/>, asked nothing.
     /// </summary>
     private async Task ClearSavedVideosAsync(INoticeSink sink, CancellationToken cancellationToken)

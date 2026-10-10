@@ -24,10 +24,10 @@ public partial class ToolsMenuTests
     [Fact]
     public void TheSubStrips_ArePinned()
     {
-        Assert.Equal("         │ ↳ SQL · MySQL · SQLite · Postgres · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
+        Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
         Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.MediaTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10
-        Assert.Equal("         │ ↳ ClaudeCode · Docker · Home · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10
+        Assert.Equal("         │ ↳ ClaudeCode · Docker · HomeAssistant · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public partial class ToolsMenuTests
         subs[database] = 4;
         var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, database, subs: subs);
 
-        Assert.Equal(["SQL", "MySQL", "SQLite", "Postgres", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
+        Assert.Equal(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
         Assert.Equal(["Print", "Camera", "Screen"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal(4, page.Sub);
         Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count, page.Rows.Count);

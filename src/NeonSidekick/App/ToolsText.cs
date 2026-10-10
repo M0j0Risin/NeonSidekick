@@ -155,8 +155,8 @@ public static class ToolsText
     /// <summary>The SQLite tools' tab and group (2026-10-04), after MySQL, before Oracle.</summary>
     public const string SqliteTabTitle = "SQLite";
 
-    /// <summary>The PostgreSQL tools' tab and group (2026-10-04), after SQLite, before Oracle; "Postgres" on the strip (the group's full name is the setting's).</summary>
-    public const string PostgresTabTitle = "Postgres";
+    /// <summary>The PostgreSQL tools' tab and group (2026-10-04), after SQLite, before Oracle; "Postgres" on the strip from then until 2026-10-10, "PostgreSQL" since (the user's ask: the product's name, as its rows say it).</summary>
+    public const string PostgresTabTitle = "PostgreSQL";
 
     /// <summary>The UNC tools' tab and group (2026-09-30), after Files, before Print, since 2026-10-03 (the user's order; after MySQL, before Docker, until then).</summary>
     public const string UncTabTitle = "UNC";
@@ -180,8 +180,8 @@ public static class ToolsText
     /// rows, keys, variables, the tool and the <c>/server</c> word with it), its group heading <see cref="ClaudeCodeGroupTitle"/>.</summary>
     public const string ClaudeCodeTabTitle = "ClaudeCode";
 
-    /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>). "Home" since 2026-10-09 (the user's ask; the toolbar's item keeps "HA").</summary>
-    public const string HomeAssistantTabTitle = "Home";
+    /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>). "Home" since 2026-10-09 (the user's ask; the toolbar's item keeps "HA"); "HomeAssistant" since 2026-10-10 (the user's ask; the toolbar's item keeps "Home", the user's pick).</summary>
+    public const string HomeAssistantTabTitle = "HomeAssistant";
 
     /// <summary>The advisor's group on <c>/sys</c> and the Offered tab (2026-10-09): <c>Claude Code</c>, the strip's one word being <see cref="ClaudeCodeTabTitle"/> (the <see cref="HomeAssistantGroupTitle"/> shape).</summary>
     public const string ClaudeCodeGroupTitle = "Claude Code";

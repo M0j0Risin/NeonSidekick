@@ -1039,7 +1039,7 @@ public class InputLineTests : IDisposable
     [Fact]
     public async Task Remembered_IsToldEachLineTheHistoryGains_NeverARepeatOrAnUnrememberedRead()
     {
-        // Keep command history (2026-09-25): the screen stores what this hook hears.
+        // Keep message history (2026-09-25): the screen stores what this hook hears.
         var heard = new List<string>();
         _line.Remembered = heard.Add;
         _line.Remember("spoken");
@@ -4011,7 +4011,7 @@ public class InputLineTests : IDisposable
     }
 
     /// <summary>
-    /// The cleared draft is held in memory alone (2026-10-05, the code review): Keep command history is never told of it, so a
+    /// The cleared draft is held in memory alone (2026-10-05, the code review): Keep message history is never told of it, so a
     /// line thrown away is never stored; sent after all, it is told then, once.
     /// </summary>
     [Fact]

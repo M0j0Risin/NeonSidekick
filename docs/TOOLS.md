@@ -505,7 +505,7 @@ The same tools for PostgreSQL, through Npgsql (fully managed, PostgreSQL licence
 }
 ```
 
-**PostgreSQL add/edit connection** (`/tools` › Database › Postgres) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when the role is a superuser or holds write grants, and what else the role could reach (other databases, foreign servers, and other schemas under a schema lock), or that it reaches nothing more. It asks for the schema and the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
+**PostgreSQL add/edit connection** (`/tools` › Database › PostgreSQL) walks through a new one (or edits a saved one, as SQL's does) and can **test** it: who it signs in as, the version, a warning when the role is a superuser or holds write grants, and what else the role could reach (other databases, foreign servers, and other schemas under a schema lock), or that it reaches nothing more. It asks for the schema and the access too (`read` or `readwrite`). **PostgreSQL set password** updates a password.
 
 ### Safety
 
