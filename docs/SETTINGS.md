@@ -759,7 +759,7 @@ The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (t
 | Setting | What it does | Default |
 |---|---|---|
 | Claude Code executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
-| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), `edit` (its usual tools with file edits, no commands) or `full` (everything, `bypassPermissions`). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
+| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
 | Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
 | Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
 | Claude Code advisor tool | Offers `claude_code_advisor`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. The top of its on/off page has **model** (`m`) and **effort** (`e`) buttons that open *Claude Code advisor tool model* and *Claude Code advisor tool effort*; ESC there comes back. | off |

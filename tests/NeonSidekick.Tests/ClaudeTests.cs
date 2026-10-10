@@ -142,9 +142,9 @@ public class ClaudeTests
     }
 
     [Fact]
-    public void Arguments_AResumedEditThread_WithModelAndEffort()
+    public void Arguments_AResumedReadWriteThread_WithModelAndEffort()
     {
-        var request = new ClaudeRequest("hi", "id-1", Resume: true, @"C:\work", ClaudePermissionLevel.Edit, Model: " opus ", Effort: "high");
+        var request = new ClaudeRequest("hi", "id-1", Resume: true, @"C:\work", ClaudePermissionLevel.ReadWrite, Model: " opus ", Effort: "high");
 
         var arguments = ClaudeArguments.Build(request);
 
@@ -154,11 +154,11 @@ public class ClaudeTests
     }
 
     [Fact]
-    public void Arguments_Full_BypassesThePermissions()
+    public void Arguments_NoLevel_BypassesThePermissions()
     {
-        var arguments = ClaudeArguments.Build(new ClaudeRequest("hi", "id", false, "C:\\", ClaudePermissionLevel.Full));
-
-        Assert.Equal(["--permission-mode", "bypassPermissions"], arguments.Skip(9));
+        // full (bypassPermissions) retired on 2026-10-10, the user's call: /claude never runs a command
+        Assert.All(Enum.GetValues<ClaudePermissionLevel>(), level =>
+            Assert.DoesNotContain("bypassPermissions", ClaudeArguments.Build(new ClaudeRequest("hi", "id", false, "C:\\", level))));
     }
 
     // ── the lookup ──────────────────────────────────────────────────────────
@@ -264,13 +264,14 @@ public class ClaudeTests
     [Fact]
     public void Permission_TheWords_AndAnUnknownOneFallsBackToReadOnly()
     {
-        Assert.Equal(["read-only", "edit", "full"], ClaudePermission.Names);
+        Assert.Equal(["read-only", "read-write"], ClaudePermission.Names);
         Assert.Equal("read-only", ClaudePermission.Default);
         Assert.Equal("read-only", new AppSettingsData().ClaudeCodePermissions);
-        Assert.True(ClaudePermission.TryParse(" EDIT ", out var edit));
-        Assert.Equal(ClaudePermissionLevel.Edit, edit);
+        Assert.True(ClaudePermission.TryParse(" READ-WRITE ", out var readWrite));
+        Assert.Equal(ClaudePermissionLevel.ReadWrite, readWrite);
         Assert.Equal(ClaudePermissionLevel.ReadOnly, ClaudePermission.Resolve(new AppSettingsData { ClaudeCodePermissions = "yolo" }));
-        Assert.Equal(ClaudePermissionLevel.Full, ClaudePermission.Resolve(new AppSettingsData { ClaudeCodePermissions = "full" }));
+        Assert.Equal(ClaudePermissionLevel.ReadOnly, ClaudePermission.Resolve(new AppSettingsData { ClaudeCodePermissions = "full" }));   // retired 2026-10-10
+        Assert.Equal(ClaudePermissionLevel.ReadOnly, ClaudePermission.Resolve(new AppSettingsData { ClaudeCodePermissions = "edit" }));   // read-write since 2026-10-10, no migration
         Assert.All(ClaudePermission.Names, name => Assert.Equal(name, ClaudePermission.Name(ClaudePermission.TryParse(name, out var level) ? level : throw new InvalidOperationException())));
         Assert.All(ClaudePermission.Names, name => Assert.NotEmpty(ClaudePermission.Describe(name)));
         Assert.Equal("", ClaudePermission.Describe("x"));
@@ -324,13 +325,13 @@ public class ClaudeTests
         Assert.Equal("(Claude Code's default)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeModel, data, "C:\\p"));
         Assert.Equal("(Claude Code's default)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeEffort, data, "C:\\p"));
         Assert.Equal("opus", SettingsMenu.FieldValue(SettingsField.ClaudeCodeModel, new AppSettingsData { ClaudeCodeModel = "opus" }, "C:\\p"));
-        Assert.StartsWith("edit       ", SettingsMenu.ClaudePermissionLabel("edit"), StringComparison.Ordinal);   // padded to eleven
-        Assert.Contains("edit files without asking; commands denied", SettingsMenu.ClaudePermissionLabel("edit"), StringComparison.Ordinal);
+        Assert.StartsWith("read-write ", SettingsMenu.ClaudePermissionLabel("read-write"), StringComparison.Ordinal);   // padded to eleven
+        Assert.Contains("edit files without asking; commands denied", SettingsMenu.ClaudePermissionLabel("read-write"), StringComparison.Ordinal);
         Assert.Equal("(Claude Code's default)", SettingsMenu.ClaudeEffortLabel(""));
         Assert.Equal("max", SettingsMenu.ClaudeEffortLabel("max"));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ClaudeCodePermissions));   // read at each /claude: nothing to reconnect
-        var copy = AppSettings.Copy(new AppSettingsData { ClaudeCodeExecutable = "x", ClaudeCodePermissions = "full", ClaudeCodeModel = "m", ClaudeCodeEffort = "low" });
-        Assert.Equal(("x", "full", "m", "low"), (copy.ClaudeCodeExecutable, copy.ClaudeCodePermissions, copy.ClaudeCodeModel, copy.ClaudeCodeEffort));
+        var copy = AppSettings.Copy(new AppSettingsData { ClaudeCodeExecutable = "x", ClaudeCodePermissions = "read-write", ClaudeCodeModel = "m", ClaudeCodeEffort = "low" });
+        Assert.Equal(("x", "read-write", "m", "low"), (copy.ClaudeCodeExecutable, copy.ClaudeCodePermissions, copy.ClaudeCodeModel, copy.ClaudeCodeEffort));
     }
 
     [Fact]
@@ -339,15 +340,16 @@ public class ClaudeTests
         var env = new EnvironmentOverrides(name => name switch
         {
             EnvironmentOverrides.ClaudeCodeExeVariable => @"D:\claude.exe",
-            EnvironmentOverrides.ClaudeCodePermissionsVariable => "EDIT",
+            EnvironmentOverrides.ClaudeCodePermissionsVariable => "READ-WRITE",
             _ => null,
         });
 
         var effective = env.ApplyTo(new AppSettingsData());
 
         Assert.Equal(@"D:\claude.exe", effective.ClaudeCodeExecutable);
-        Assert.Equal("edit", effective.ClaudeCodePermissions);
+        Assert.Equal("read-write", effective.ClaudeCodePermissions);
         Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCodePermissionsVariable ? "yolo" : null).ClaudeCodePermissions);
+        Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCodePermissionsVariable ? "full" : null).ClaudeCodePermissions);   // retired 2026-10-10
         Assert.Contains(EnvironmentOverrides.ClaudeCodeExeVariable, EnvironmentOverrides.AllVariables);
         Assert.Contains(EnvironmentOverrides.ClaudeCodePermissionsVariable, EnvironmentOverrides.AllVariables);
         // The advisor's switch (2026-09-27): a switch word, as NEONSIDEKICK_SHELL_NATIVE's.

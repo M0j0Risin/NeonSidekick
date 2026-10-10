@@ -10,18 +10,18 @@ public enum ClaudePermissionLevel
     ReadOnly,
 
     /// <summary>Its default tools under <c>--permission-mode acceptEdits</c>: file edits go through, a command is denied.</summary>
-    Edit,
-
-    /// <summary>Everything, unasked: <c>--permission-mode bypassPermissions</c>.</summary>
-    Full,
+    ReadWrite,
 }
 
 /// <summary>
 /// The <c>Claude Code slash command permissions</c> setting (2026-09-27, the user's pick of the four offered: a level, denied
-/// automatically past it — <c>--permission-prompts none</c> — rather than asked on the approval pane): the three
+/// automatically past it — <c>--permission-prompts none</c> — rather than asked on the approval pane): the two
 /// words and their mapping to <see cref="ClaudePermissionLevel"/>, the way <see cref="Llm.CompactType"/> maps its
 /// words. <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that is none
 /// of them falls back to <see cref="Default"/> with a warning — the safe end, never the open one.
+/// 2026-10-10, the user's call: <c>full</c> (<c>bypassPermissions</c>, commands run unasked) is retired, so <c>/claude</c>
+/// never runs a command, and <c>edit</c> is renamed <c>read-write</c>, its behaviour unchanged. No migration: a saved
+/// <c>edit</c> or <c>full</c> is an unknown word now and reads as <c>read-only</c>.
 /// </summary>
 public static class ClaudePermission
 {
@@ -29,7 +29,7 @@ public static class ClaudePermission
     public const string Default = "read-only";
 
     /// <summary>The levels in menu order, the narrowest first.</summary>
-    public static readonly string[] Names = { "read-only", "edit", "full" };
+    public static readonly string[] Names = { "read-only", "read-write" };
 
     /// <summary>Trims and ignores case; false for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out ClaudePermissionLevel level)
@@ -37,8 +37,7 @@ public static class ClaudePermission
         switch (text?.Trim().ToLowerInvariant())
         {
             case "read-only": level = ClaudePermissionLevel.ReadOnly; return true;
-            case "edit": level = ClaudePermissionLevel.Edit; return true;
-            case "full": level = ClaudePermissionLevel.Full; return true;
+            case "read-write": level = ClaudePermissionLevel.ReadWrite; return true;
             default: level = ClaudePermissionLevel.ReadOnly; return false;
         }
     }
@@ -46,8 +45,7 @@ public static class ClaudePermission
     /// <summary>The saved word for <paramref name="level"/>.</summary>
     public static string Name(ClaudePermissionLevel level) => level switch
     {
-        ClaudePermissionLevel.Edit => "edit",
-        ClaudePermissionLevel.Full => "full",
+        ClaudePermissionLevel.ReadWrite => "read-write",
         _ => "read-only",
     };
 
@@ -55,8 +53,7 @@ public static class ClaudePermission
     public static string Describe(string name) => name switch
     {
         "read-only" => "read, search and fetch; nothing written, nothing run",
-        "edit" => "edit files without asking; commands denied",
-        "full" => "everything, unasked, commands included",
+        "read-write" => "edit files without asking; commands denied",
         _ => "",
     };
 

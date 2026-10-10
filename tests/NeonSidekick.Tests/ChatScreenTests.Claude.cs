@@ -111,7 +111,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Claude_ABareCommand_IsItsUsage_AndTheDeniedToolsAreSaid()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ClaudeCodePermissions = "edit"; });
+        _settings.Update(d => { d.TtsOutput = false; d.ClaudeCodePermissions = "read-write"; });
         _claudeCli.Enqueue(new ClaudeEvent.TextDelta("could not run it"), FakeClaudeCli.Ok("s-1", denied: ["Bash", "Bash"]));
         PushLine("/claude");
         PushLine("/claude run the tests");
@@ -120,8 +120,8 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("  ✗ " + ClaudeText.UsageError, output);
-        Assert.Contains("  · Claude was denied Bash (Claude Code slash command permissions: edit).", output);
-        Assert.Equal(ClaudePermissionLevel.Edit, Assert.Single(_claudeCli.Requests).Permission);
+        Assert.Contains("  · Claude was denied Bash (Claude Code slash command permissions: read-write).", output);
+        Assert.Equal(ClaudePermissionLevel.ReadWrite, Assert.Single(_claudeCli.Requests).Permission);
     }
 
     [Fact]

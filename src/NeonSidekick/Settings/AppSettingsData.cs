@@ -2457,9 +2457,10 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// What the Claude Code child may do on its own (2026-09-27): one of <see cref="Claude.ClaudePermission.Names"/> —
-    /// <c>read-only</c> (read, search, fetch), <c>edit</c> (file edits accepted, commands denied), <c>full</c> (everything,
-    /// unasked). Nothing past the level is asked about: it is denied (<c>--permission-prompts none</c>) and the reply says
-    /// so. Anything else reads as <see cref="Claude.ClaudePermission.Default"/>. Read at each <c>/claude</c>. Variable
+    /// <c>read-only</c> (read, search, fetch) or <c>read-write</c> (file edits accepted, commands denied; <c>edit</c> until
+    /// 2026-10-10, when <c>full</c> was retired too, the user's call). Nothing past the level is asked about: it is denied
+    /// (<c>--permission-prompts none</c>) and the reply says so. Anything else, the retired words included, reads as
+    /// <see cref="Claude.ClaudePermission.Default"/>. Read at each <c>/claude</c>. Variable
     /// <see cref="EnvironmentOverrides.ClaudeCodePermissionsVariable"/>.
     /// </summary>
     public string ClaudeCodePermissions { get; set; } = Claude.ClaudePermission.Default;

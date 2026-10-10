@@ -63,7 +63,7 @@ public class ClaudeAdvisorToolTests
     [Fact]
     public async Task ACall_IsReadOnly_WhateverTheCommandsLevel_FramedOnce_ThenResumed_TheCostHandedOn()
     {
-        _settings.ClaudeCodePermissions = "full";
+        _settings.ClaudeCodePermissions = "read-write";
         _settings.ClaudeCodeModel = "sonnet";
         _settings.ClaudeCodeEffort = "low";
         _cli.Enqueue(new ClaudeEvent.ToolActivity("Grep", "Parse"), new ClaudeEvent.TextDelta("Use the "), new ClaudeEvent.TextDelta("streaming one."), FakeClaudeCli.Ok("s-1"));

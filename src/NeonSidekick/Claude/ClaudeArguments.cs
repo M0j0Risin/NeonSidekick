@@ -34,13 +34,9 @@ public static class ClaudeArguments
                 arguments.Add("--tools");
                 arguments.Add(ReadOnlyTools);
                 break;
-            case ClaudePermissionLevel.Edit:
+            case ClaudePermissionLevel.ReadWrite:
                 arguments.Add("--permission-mode");
                 arguments.Add("acceptEdits");
-                break;
-            case ClaudePermissionLevel.Full:
-                arguments.Add("--permission-mode");
-                arguments.Add("bypassPermissions");
                 break;
         }
 
