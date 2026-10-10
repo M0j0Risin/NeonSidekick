@@ -31,7 +31,8 @@ public enum SettingsField
     LlmUrl,
     LlmModel,
 
-    /// <summary>Typed: the key an OpenAI-compatible server gets, saved DPAPI-encrypted and shown masked (<see cref="Settings.AppSettingsData.LlmApiKey"/>, 2026-09-28, like the Anthropic API key and the Home Assistant API key); the <c>empty</c> placeholder stays plain. Never put back on the edit line; empty is refused.</summary>
+    /// <summary>Typed: the key an OpenAI-compatible server gets, saved DPAPI-encrypted and shown masked (<see cref="Settings.AppSettingsData.LlmApiKey"/>, 2026-09-28, like the Anthropic API key and the Home Assistant API key); the <c>empty</c> placeholder stays plain. Never put back on the edit line; empty is refused. The Http tab, under the scan mode (2026-10-10, the user's call: the hosted APIs
+    /// have keys of their own and the Claude Code server none; the LLM tab's fourth row until then).</summary>
     LlmApiKey,
 
     /// <summary>A picker over <see cref="Llm.ReasoningLevel.Levels"/>.</summary>
@@ -84,21 +85,21 @@ public enum SettingsField
     /// <summary>Whether a sent picture is drawn under the user's line; a toggle that needs no reconnect (read at each turn).</summary>
     ShowImageThumbnails,
 
-    /// <summary>A picker over <see cref="Llm.CompactType.Names"/>: what <c>/compact</c> does. On the LLM tab under <see cref="LlmAutoCompactPercent"/> (2026-10-01, the user's call); no reconnect (read at each compact).</summary>
+    /// <summary>A picker over <see cref="Llm.CompactType.Names"/>: what <c>/compact</c> does. On the Common tab (the LLM tab until 2026-10-10) under <see cref="LlmAutoCompactPercent"/> (2026-10-01, the user's call); no reconnect (read at each compact).</summary>
     LlmCompactType,
-    /// <summary>How many recent user turns a compact keeps verbatim (0 to <see cref="Llm.ConversationHistory.DefaultMaxTurns"/>). On the LLM tab under <see cref="LlmCompactType"/>; no reconnect.</summary>
+    /// <summary>How many recent user turns a compact keeps verbatim (0 to <see cref="Llm.ConversationHistory.DefaultMaxTurns"/>). On the Common tab under <see cref="LlmCompactType"/>; no reconnect.</summary>
     LlmCompactKeepRecent,
 
-    /// <summary>The share of the window at which the next message compacts first; 0 = off. On the LLM tab under <see cref="LlmMaxTurns"/>, ahead of the compact rows (2026-10-01, the user's call: when, then how); no reconnect.</summary>
+    /// <summary>The share of the window at which the next message compacts first; 0 = off. On the Common tab under <see cref="LlmMaxTurns"/>, ahead of the compact rows (2026-10-01, the user's call: when, then how); no reconnect.</summary>
     LlmAutoCompactPercent,
-    /// <summary>How many user turns the model sees (<see cref="Settings.AppSettingsData.LlmMaxTurns"/>): 0 = auto. On the LLM tab under <see cref="LlmMidTurnUsage"/> (2026-10-01, the user's call; under <see cref="LlmAutoCompactPercent"/> from 2026-09-27); no reconnect (resolved before each message).</summary>
+    /// <summary>How many user turns the model sees (<see cref="Settings.AppSettingsData.LlmMaxTurns"/>): 0 = auto. On the Common tab under <see cref="LlmMidTurnUsage"/> (2026-10-01, the user's call; under <see cref="LlmAutoCompactPercent"/> from 2026-09-27); no reconnect (resolved before each message).</summary>
     LlmMaxTurns,
-    /// <summary>A picker over <see cref="Llm.ToolCompactType.Names"/>: what the tool loop does at the <see cref="CompactAt"/> share mid-turn. The LLM tab's context run's last row, under <see cref="LlmCompactShowSummary"/> (2026-10-01, the user's call; under <see cref="CompactAt"/> before); no reconnect (read at each turn).</summary>
+    /// <summary>A picker over <see cref="Llm.ToolCompactType.Names"/>: what the tool loop does at the <see cref="CompactAt"/> share mid-turn. The Common tab's context run's last row, under <see cref="LlmCompactShowSummary"/> (2026-10-01, the user's call; under <see cref="CompactAt"/> before); no reconnect (read at each turn).</summary>
     LlmToolCompactType,
-    /// <summary>Whether a turn offers the model its tools at all (<see cref="Settings.AppSettingsData.LlmOfferTools"/>). The first row of the LLM tab's tools-and-limits run, above <see cref="MaxToolIterations"/> (2026-10-01, the user's call; still above <see cref="LlmToolCompactType"/>, the user's order of 2026-09-15); no reconnect (read at each turn), but a change clears the conversation (<see cref="SettingsChanges.Conversation"/>).</summary>
+    /// <summary>Whether a turn offers the model its tools at all (<see cref="Settings.AppSettingsData.LlmOfferTools"/>). The first row of the Common tab's tools-and-limits run, above <see cref="MaxToolIterations"/> (2026-10-01, the user's call; still above <see cref="LlmToolCompactType"/>, the user's order of 2026-09-15); no reconnect (read at each turn), but a change clears the conversation (<see cref="SettingsChanges.Conversation"/>).</summary>
     LlmOfferTools,
 
-    /// <summary>Model round trips a message may spend on tools (<see cref="Settings.AppSettingsData.LlmMaxToolIterations"/>). On the LLM tab under <see cref="LlmOfferTools"/>, above the two timeouts (2026-10-01, the user's call); no reconnect (read at each turn).</summary>
+    /// <summary>Model round trips a message may spend on tools (<see cref="Settings.AppSettingsData.LlmMaxToolIterations"/>). On the Common tab under <see cref="LlmOfferTools"/>, above the two timeouts (2026-10-01, the user's call); no reconnect (read at each turn).</summary>
     LlmMaxToolIterations,
     /// <summary>A picker over <see cref="UI.ThumbnailSize.Names"/>: how big the thumbnail under a sent picture is. On the General tab beside <see cref="ShowImageThumbnails"/>; no reconnect (read at each turn).</summary>
     ImageThumbnailSize,
@@ -112,10 +113,10 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Settings.NewProfileMode.Names"/>: what <c>/profile add</c> copies. On the General tab under <see cref="Profile"/>; no reconnect (read at each <c>/profile add</c>).</summary>
     NewProfileMode,
 
-    /// <summary>Whether the thinking spinner reads a random <see cref="ThinkingVerbs"/> entry (<see cref="Settings.AppSettingsData.LlmUseFunVerbs"/>). Labelled <c>LLM use fun verbs</c> since 2026-09-15 (the member and the JSON key keep their name so a saved profile still loads); the LLM tab's last row, alone as the cosmetic one (2026-10-01, the user's call); no reconnect (read at each spinner start).</summary>
+    /// <summary>Whether the thinking spinner reads a random <see cref="ThinkingVerbs"/> entry (<see cref="Settings.AppSettingsData.LlmUseFunVerbs"/>). Labelled <c>LLM use fun verbs</c> since 2026-09-15 (the member and the JSON key keep their name so a saved profile still loads); the Common tab's last row (the LLM tab's until 2026-10-10), alone as the cosmetic one (2026-10-01, the user's call); no reconnect (read at each spinner start).</summary>
     LlmUseFunVerbs,
 
-    /// <summary>A picker over <see cref="Llm.LlmScanMode.Names"/>: where a blank URL's discovery looks, or <c>disabled</c> for no scan at all (2026-09-15). On the LLM tab FIRST, above <see cref="LlmUrl"/>; no reconnect (read at each scan).</summary>
+    /// <summary>A picker over <see cref="Llm.LlmScanMode.Names"/>: where a blank URL's discovery looks, or <c>disabled</c> for no scan at all (2026-09-15). The Http tab's first row (2026-10-10, the user's call: only an OpenAI-compatible server is found by a scan; the LLM tab's first, above <see cref="LlmUrl"/>, until then); no reconnect (read at each scan).</summary>
     LlmScanMode,
 
     /// <summary>Whether a turn offers <c>web_search</c> / <c>web_fetch</c> (<see cref="Settings.AppSettingsData.WebTools"/>). The Web tab's first row; a toggle, no reconnect (read at each turn).</summary>
@@ -295,7 +296,7 @@ public enum SettingsField
     /// <summary>Typed: the most tool calls one <c>execute_code</c> script may make, 1 to 500 (<see cref="Settings.AppSettingsData.ShellCodeMaxToolCalls"/>). The Shell tab's last row (2026-09-21); no reconnect (read at each call).</summary>
     ShellCodeMaxToolCalls,
 
-    /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The LLM tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21; above <see cref="LlmToolCompactType"/> since 2026-10-01); no reconnect (read at each compact).</summary>
+    /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The Common tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21; above <see cref="LlmToolCompactType"/> since 2026-10-01); no reconnect (read at each compact).</summary>
     LlmCompactShowSummary,
 
     /// <summary>Typed: the <c>user.email</c> <c>/gituser</c> writes into the working directory's repository (<see cref="Settings.AppSettingsData.GitLibEmail"/>); empty = not set. The GitLib tab's fourth row (2026-09-21); no reconnect (read at each <c>/gituser</c>).</summary>
@@ -416,7 +417,7 @@ public enum SettingsField
     /// <summary>A picker: whose LLM the <c>/botchat</c> bots talk through — <c>single</c> / <c>multi</c> (<see cref="Settings.AppSettingsData.BotChatLlmMode"/>). The Botchat tab's first row (later on 2026-09-25); no reconnect (read at a chat's start).</summary>
     BotChatLlmMode,
 
-    /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the LLM tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
+    /// <summary>A picker: what the busy row's token tally shows while a turn runs — <c>estimate</c> / <c>last-known</c> (<see cref="Settings.AppSettingsData.LlmMidTurnUsage"/>). On the Common tab under <see cref="LlmContextLength"/> (2026-09-25); no reconnect (read on every draw).</summary>
     LlmMidTurnUsage,
 
     /// <summary>A toggle: whether the input line's Up/Down history is stored in <c>sessions.db</c> and recalled after a restart (<see cref="Settings.AppSettingsData.KeepMessageHistory"/>). The General tab's row under Queue cancel mode (2026-10-01; under Command typo intercept from 2026-09-25, the user's ask); no reconnect (read at each remembered line and each load).</summary>
@@ -428,7 +429,7 @@ public enum SettingsField
     /// <summary>A toggle: whether <c>run_command</c> steps aside for a native tool (<see cref="Settings.AppSettingsData.ShellPreferNative"/>). The Shell tab's row under Shell police (2026-09-26, the user's ask); no reconnect (read at each call and each turn). Last in the enum, as every newcomer.</summary>
     ShellPreferNative,
 
-    /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's row under <see cref="LlmReasoning"/> (2026-10-01, the user's call: the thinking rows together; the last row from 2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The Common tab's row under <see cref="LlmReasoning"/> (2026-10-01, the user's call: the thinking rows together; the last row from 2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmShowThinking,
 
     /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeCodeExecutable"/>); empty = looked up. <c>/settings</c>' Anthropic tab's second row, under the Claude Code server's (2026-10-10, the user's call, when <c>/tools</c>' ClaudeCode tab went; its first row from 2026-09-27, on <c>/settings</c> that morning); read at each <c>/claude</c> and by the Claude Code server.</summary>
@@ -473,16 +474,16 @@ public enum SettingsField
     /// <summary>A checklist: the skills the <c>/botchat</c> bots may load while <see cref="BotChatSkills"/> is off (<see cref="Settings.AppSettingsData.BotChatLimitedSkills"/>). The Botchat tab, under the skills switch (2026-10-04, the user's ask; <c>BotChatPreloadedSkills</c> from 2026-09-27, whose <c>BotChatSkillMode</c> picker went the same day); no reconnect (read per reply).</summary>
     BotChatLimitedSkills,
 
-    /// <summary>A toggle: whether every turn's thinking goes back to a local server and the chat template is asked to keep it (<see cref="Settings.AppSettingsData.LlmPreserveThinking"/>). The LLM tab, under Show thinking (2026-09-28, the user's question); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether every turn's thinking goes back to a local server and the chat template is asked to keep it (<see cref="Settings.AppSettingsData.LlmPreserveThinking"/>). The Http tab's thinking run, first (2026-10-10, the user's call: only an OpenAI-compatible server reads it; the LLM tab, under Show thinking, from 2026-09-28, the user's question); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmPreserveThinking,
 
     /// <summary>A toggle: whether a reply's thinking is saved with the session (<see cref="Settings.AppSettingsData.SessionSaveThinking"/>). The Sessions tab's last row (2026-09-28, the user's ask); no reconnect (read at each save). Last in the enum, as every newcomer.</summary>
     SessionSaveThinking,
 
-    /// <summary>A door: the models with sampling overrides (<see cref="Settings.AppSettingsData.LlmSampling"/>); Enter opens the <c>/sampling</c> pane (<see cref="SettingsMenu.SamplingPane"/>). The LLM tab's row under <see cref="LlmReasoningEstimate"/>, with the thinking rows as how the model answers (2026-10-01, the user's call; the last row from 2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A door: the models with sampling overrides (<see cref="Settings.AppSettingsData.LlmSampling"/>); Enter opens the <c>/sampling</c> pane (<see cref="SettingsMenu.SamplingPane"/>). The Http tab's sampling run, first (2026-10-10, the user's call: no sampling goes to the Anthropic API, the OpenAI API or the Claude Code server; the LLM tab's row under <see cref="LlmReasoningEstimate"/> from 2026-10-01, the last row from 2026-09-28, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmSampling,
 
-    /// <summary>A toggle: whether the <c>/sampling</c> pane reads a model's defaults from its Hugging Face card when the server says nothing (<see cref="Settings.AppSettingsData.LlmSamplingFromHuggingFace"/>). The LLM tab, under LLM sampling (2026-09-28, the user's call); no reconnect (read when the pane opens). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the <c>/sampling</c> pane reads a model's defaults from its Hugging Face card when the server says nothing (<see cref="Settings.AppSettingsData.LlmSamplingFromHuggingFace"/>). The Http tab, under LLM sampling (2026-09-28, the user's call; the LLM tab until 2026-10-10); no reconnect (read when the pane opens). Last in the enum, as every newcomer.</summary>
     LlmSamplingFromHuggingFace,
 
     /// <summary>A toggle: whether a turn offers the Home Assistant tools (<see cref="Settings.AppSettingsData.HomeAssistantTools"/>). The Home Assistant tab of <c>/tools</c>' first row (2026-09-28); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
@@ -539,8 +540,8 @@ public enum SettingsField
 
     /// <summary>
     /// A picker: how a reasoning count the server did not report is estimated — <c>off</c>, <c>chars</c>, <c>tokenize</c>
-    /// (<see cref="Settings.AppSettingsData.LlmReasoningEstimate"/>, 2026-09-29). The LLM tab, under <c>LLM preserve
-    /// thinking</c>; no reconnect (read at each request).
+    /// (<see cref="Settings.AppSettingsData.LlmReasoningEstimate"/>, 2026-09-29). The Http tab, under <c>LLM preserve
+    /// thinking</c> (the LLM tab until 2026-10-10); no reconnect (read at each request).
     /// </summary>
     LlmReasoningEstimate,
 
@@ -804,10 +805,10 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Pdf.PdfEngine.Names"/>: what makes a PDF (<see cref="Settings.AppSettingsData.PdfEngine"/>). The Print tab of <c>/tools</c>, after <see cref="PrintFontSize"/> (2026-10-03, the user's ask); no reconnect (read at each PDF). Last in the enum, as every newcomer.</summary>
     PdfEngine,
 
-    /// <summary>Typed: the most pictures a request carries, 0 (no cap) to 500 (<see cref="Settings.AppSettingsData.LlmPictureKeep"/>). The LLM tab, after <see cref="LlmToolCompactType"/> (2026-10-03, the user's report); no reconnect (read at each request). Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the most pictures a request carries, 0 (no cap) to 500 (<see cref="Settings.AppSettingsData.LlmPictureKeep"/>). The Common tab, after <see cref="LlmToolCompactType"/> (2026-10-03, the user's report); no reconnect (read at each request). Last in the enum, as every newcomer.</summary>
     LlmPictureKeep,
 
-    /// <summary>Typed: the most megabytes of pictures a request carries, 0 (no cap) to 1000 (<see cref="Settings.AppSettingsData.LlmPictureMegabytes"/>). The LLM tab, under <see cref="LlmPictureKeep"/> (2026-10-03); no reconnect.</summary>
+    /// <summary>Typed: the most megabytes of pictures a request carries, 0 (no cap) to 1000 (<see cref="Settings.AppSettingsData.LlmPictureMegabytes"/>). The Common tab, under <see cref="LlmPictureKeep"/> (2026-10-03); no reconnect.</summary>
     LlmPictureMegabytes,
 
     /// <summary>A toggle: whether the OpenAI API is offered as a server (<see cref="Settings.AppSettingsData.OpenAIApi"/>). <c>/settings</c>' OpenAI tab's first row (2026-10-03); a reconnect.</summary>
@@ -1002,13 +1003,28 @@ public enum SettingsField
     AdvisorConfirm,
 }
 
-/// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
+/// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
 public enum SettingsTab
 {
     General,
 
-    /// <summary>Second since 2026-10-04 (the user's order: General, LLM, Embedded…); sixth from 2026-10-03 (the Claude and OpenAI tabs before it), fourth from 2026-10-02, third from 2026-09-19 (the skills' rows sat between, 2026-09-18 until then).</summary>
-    Llm,
+    /// <summary>
+    /// The LLM rows every server reads, whatever its kind: the URL and model, the reasoning, the tools and limits, the context, the
+    /// pictures and verbs. "LLM" until 2026-10-10, when its six rows only an OpenAI-compatible HTTP server reads went to
+    /// <see cref="Http"/> (the user's call: the Anthropic API, the OpenAI API and the Claude Code server never read them). Second
+    /// since 2026-10-04 (the user's order: General, LLM, Embedded…); sixth from 2026-10-03 (the Claude and OpenAI tabs before it),
+    /// fourth from 2026-10-02, third from 2026-09-19 (the skills' rows sat between, 2026-09-18 until then).
+    /// </summary>
+    Common,
+
+    /// <summary>
+    /// The LLM rows only an OpenAI-compatible HTTP server reads (2026-10-10, the user's call, out of the LLM tab): the scan mode and the
+    /// key, the thinking sent back and the reasoning estimate, the <c>/sampling</c> door and its Hugging Face switch. A local or LAN
+    /// server reads them, and the embedded LLM and Docker's containers, which are such servers too; the Anthropic API, the OpenAI API
+    /// and the Claude Code server have clients of their own that never do. "Http", not "Local" (the user's pick): Embedded, Docker
+    /// and the Claude Code server run here too. Right after <see cref="Common"/>.
+    /// </summary>
+    Http,
 
     /// <summary>
     /// The embedded model's rows (2026-09-29): the <c>Embedded servers enabled</c> switch, the catalog door, the backend, the
@@ -1327,14 +1343,21 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", "LLM", EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, "TTS", "STT", "Sessions", "Botchat", AdvisorsTabTitle];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, "TTS", "STT", "Sessions", "Botchat", AdvisorsTabTitle];
+
+    /// <summary>The title of the tab of LLM rows every server reads (2026-10-10, the user's call; "LLM" until then). Pinned.</summary>
+    public const string CommonTabTitle = "Common";
+
+    /// <summary>The title of the tab of LLM rows only an OpenAI-compatible HTTP server reads (2026-10-10, the user's pick and casing). Pinned.</summary>
+    public const string HttpTabTitle = "Http";
 
     /// <summary>The embedded model tab's strip title (2026-09-29). Pinned.</summary>
     public const string EmbeddedTabTitle = "Embedded";
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
-    /// (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04;
+    /// (General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, the
+    /// user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04;
     /// General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03;
     /// General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; General, Sessions, LLM, TTS, STT from 2026-09-18, Sessions right after General; the Ask,
     /// Files and Web tabs are <c>/tools</c>' since 2026-09-19, <see cref="ToolsTabFields"/>, and the Skills tab
@@ -1346,12 +1369,14 @@ internal sealed partial class SettingsMenu
     /// the thumbnails' switch and size, what <c>/copy</c> takes), the screen (the theme, then top to bottom: the welcome splash, the header
     /// and the working directory in it, the toolbar, the performance bar, the menus' max height), and the outside apps last (the draft
     /// editor, the image viewer and the themed-viewer switch). Each dependent row stays right under the one it hangs on; LLM
-    /// is spelled out too, in five runs (2026-10-01, the user's call, as General's that day): the connection (the scan mode, where a
-    /// blank URL looks, so above the URL; the model; the key), how it answers (the reasoning level, the thinking's show, preserve and
-    /// estimate rows, the sampling door and its Hugging Face switch), tools and limits (<see cref="SettingsField.LlmOfferTools"/>, the
-    /// round-trip cap, the two timeouts), the context (its length, the mid-turn usage, the max turns, the auto-compact share ahead of
-    /// the compact rows it times, then <see cref="SettingsField.LlmToolCompactType"/>, still under the offer-tools switch as the user
-    /// ordered on 2026-09-15), and the fun verbs last; TTS is spelled out (the user's order, 2026-09-16): the switch, the
+    /// was spelled out too, in five runs (2026-10-01, the user's call, as General's that day), and since 2026-10-10 is two tabs (the
+    /// user's call): Common keeps the runs every server reads — the connection (the URL, the model), how it answers (the reasoning
+    /// level, the thinking's show), tools and limits (<see cref="SettingsField.LlmOfferTools"/>, the round-trip cap, the two timeouts),
+    /// the context (its length, the mid-turn usage, the max turns, the auto-compact share ahead of the compact rows it times, then
+    /// <see cref="SettingsField.LlmToolCompactType"/>, still under the offer-tools switch as the user ordered on 2026-09-15), and the
+    /// pictures and fun verbs last; Http holds what only an OpenAI-compatible HTTP server reads, in the order they had there — the
+    /// connection (the scan mode, where a blank URL looks; the key), the thinking (the preserve and estimate rows), the sampling door
+    /// and its Hugging Face switch; TTS is spelled out (the user's order, 2026-09-16): the switch, the
     /// source, the server's URL, the preview toggle (no reconnect), then the voice preset (2026-09-27, just above the voice), the voices, the mix and the speed; STT is the <see cref="IsVoiceField"/>
     /// fields in enum order, <see cref="SettingsField.SttDestination"/> (2026-10-02, no reconnect, so not a voice field) under the first, the switch; Sessions (2026-09-18, last that morning, second since) is the
     /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18). With <see cref="SkillsTabFields"/> and <see cref="ToolsTabFields"/> they are every <see cref="SettingsField"/> once (pinned).
@@ -1363,11 +1388,14 @@ internal sealed partial class SettingsMenu
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
-        [SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmApiKey,
-         SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,
+        [SettingsField.LlmUrl, SettingsField.LlmModel,
+         SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
+        [SettingsField.LlmScanMode, SettingsField.LlmApiKey,
+         SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate,
+         SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
         [SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
@@ -3860,7 +3888,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The settings list as the pane shows it: the <see cref="TabFields"/> under the <see cref="TabTitles"/> strip, each tab padded to its own column, opened on
-    /// <paramref name="tab"/> (a <see cref="SettingsTab"/>). Since 2026-10-10 (the user's pick) the strip is <see cref="StripTitles"/>: the five server tabs
+    /// <paramref name="tab"/> (a <see cref="SettingsTab"/>). Since 2026-10-10 (the user's pick) the strip is <see cref="StripTitles"/>: the six server tabs
     /// are sub-tabs of Servers and TTS and STT of Voice on the second strip (<see cref="MenuTab.SubTabs"/>, <c>/tools</c>' groups' shape), each with its own
     /// band, the group's badge counting all of theirs; a group not opened on shows the sub-tab it was left on (<see cref="_stripSubs"/>).
     /// </summary>

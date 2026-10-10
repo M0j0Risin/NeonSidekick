@@ -14,7 +14,7 @@ public class ModelErrorTextTests
     public void AnUnreachableServer_NamesWhereAndWhy_AndTheWayOn()
     {
         Assert.Equal(
-            "Could not reach the LLM server at 127.0.0.1:9 (connection refused). /server picks another; /settings › Servers › LLM › URL changes it.",
+            "Could not reach the LLM server at 127.0.0.1:9 (connection refused). /server picks another; /settings › Servers › Common › LLM URL changes it.",
             ModelErrorText.Readable(Refused("No connection could be made because the target machine actively refused it. (127.0.0.1:9)", SocketError.ConnectionRefused)));
         Assert.Equal(
             ModelErrorText.Unreachable("nowhere.invalid:80", "the name did not resolve"),

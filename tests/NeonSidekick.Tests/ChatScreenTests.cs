@@ -1966,8 +1966,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => { d.LlmUrl = "http://127.0.0.1:1234"; d.LlmModel = "llama"; d.LlmScanMode = "disabled"; });
         _geometry = new ScreenGeometry(() => null);  // the pane, so the list is tabbed
         PushLine("/settings");
-        _console.Input.PushKey(Keys.Right);   // the LLM tab (second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then): LLM server scan mode, then LLM URL
-        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Right);   // the Common tab (the LLM tab until 2026-10-10; second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then): LLM URL, its first row (under the scan mode until 2026-10-10)
         _console.Input.PushKey(Keys.Enter);          // the slot, prefilled with the URL
         _console.Input.PushKey(Keys.Ctrl(ConsoleKey.A));
         _console.Input.PushKey(Keys.Backspace);      // emptied
@@ -6389,8 +6388,8 @@ public partial class ChatScreenTests : IDisposable
                 case 0: PushLine(input, "hi"); break;
                 case 1: PushLine(input, "/settings"); break;
                 case 2:
-                    input.Push(Keys.Right);   // the LLM tab (second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
-                    input.Push(Enumerable.Repeat(Keys.Down, 10).ToArray());   // LLM offer tools, the eleventh LLM row (first of the tools-and-limits run since 2026-10-01, the user's call; the fifteenth before: LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
+                    input.Push(Keys.Right);   // the Common tab (the LLM tab until 2026-10-10; second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
+                    input.Push(Enumerable.Repeat(Keys.Down, 4).ToArray());   // LLM offer tools, the Common tab's fifth row (2026-10-10; the eleventh LLM row before; first of the tools-and-limits run since 2026-10-01, the user's call; the fifteenth before: LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
                     input.Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off page, off picked, closed
                     break;
                 case 3: PushLine(input, "hi again"); break;
@@ -6401,7 +6400,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         const string strip = SettingsMenu.Title + " │ General · Servers · Voice · Sessions · Botchat · Advisors ";   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
-        Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["LLM", "Embedded", "Docker", "Anthropic", "OpenAI"], 0, 240)[0]) + "\n  · 🖥️ LLM offer tools: off\n", output);   // under the Servers group's second strip (2026-10-10)
+        Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI"], 0, 240)[0]) + "\n  · 🖥️ LLM offer tools: off\n", output);   // under the Servers group's second strip (2026-10-10)
         Assert.Contains("  · " + ChatScreen.ToolsChangedNotice(false) + "\n", output);
         Assert.Equal("(LLM offer tools off; conversation cleared)", ChatScreen.ToolsChangedNotice(false));
         Assert.Equal("(LLM offer tools on; conversation cleared)", ChatScreen.ToolsChangedNotice(true));
@@ -10315,9 +10314,8 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Enter);         // its on/off page (2026-09-17)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Enter);         // read-only (Memory mode's second, 2026-10-04)
-        _console.Input.PushKey(Keys.Right);   // the LLM tab (second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
-        _console.Input.PushKey(Keys.Down);
-        _console.Input.PushKey(Keys.Down);          // LLM model (the scan mode and the URL above it)
+        _console.Input.PushKey(Keys.Right);   // the Common tab (the LLM tab until 2026-10-10; second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
+        _console.Input.PushKey(Keys.Down);          // LLM model (the URL above it; the scan mode too until 2026-10-10)
         _console.Input.PushKey(Keys.Enter);         // the slot under the list
         _console.Input.PushText("qwen3");
         _console.Input.PushKey(Keys.Enter);         // saved
@@ -10332,7 +10330,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Titled(strip) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);
         AssertPaneEnds(output, rule + "\n" + Row(SettingsMenu.SettingsTabKeys));
         Assert.Contains("\n" + Titled(strip) + "\n  · Memory mode: read-only\n", output);
-        string servers = Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["LLM", "Embedded", "Docker", "Anthropic", "OpenAI"], 0, 240)[0]);   // the Servers group's second strip (2026-10-10)
+        string servers = Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI"], 0, 240)[0]);   // the Servers group's second strip (2026-10-10)
         Assert.Contains("\n" + Titled(strip) + "\n" + servers + "\n  · 🖥️ LLM model: qwen3\n", output);
         // The typed edit ran in the pane: the edit keys in the hint row, no › line in the transcript.
         Assert.Contains(rule + "\n" + Row(SettingsMenu.EditKeys), output);
@@ -20748,7 +20746,7 @@ public partial class ChatScreenTests : IDisposable
     {
         // /skill <name>'s until later on 2026-09-18; /learn's still.
         Assert.Equal("Agent skills is off (the Options tab of /skills).", ChatScreen.SkillsOffError);
-        Assert.Equal("LLM offer tools is off (/settings › Servers › LLM): a skill rides a tool result, so none can be loaded.", ChatScreen.SkillsNeedToolsError);
+        Assert.Equal("LLM offer tools is off (/settings › Servers › Common): a skill rides a tool result, so none can be loaded.", ChatScreen.SkillsNeedToolsError);
     }
 
     [Fact]

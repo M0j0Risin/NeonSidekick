@@ -10,8 +10,8 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheClaudeAndOpenAITabs_AreAfterDocker_BeforeTts()
     {
-        // LLM second since 2026-10-04 (the user's order); after OpenAI from 2026-10-03 until then.
-        Assert.Equal(["General", "LLM", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat", "Advisors"], SettingsMenu.TabTitles);
+        // Common and Http in its place since 2026-10-10 (the user's call: the LLM tab split); LLM second since 2026-10-04 (the user's order); after OpenAI from 2026-10-03 until then.
+        Assert.Equal(["General", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat", "Advisors"], SettingsMenu.TabTitles);
         Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
         Assert.Equal(SettingsMenu.OpenAITabTitle, SettingsMenu.TabTitles[(int)SettingsTab.OpenAI]);
         Assert.Equal(39, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.Anthropic]));   // "Claude Code slash command permissions" since 2026-10-10 (/claude's rows here); "Anthropic API prompt caching" (30) from 2026-10-04, "Claude API prompt caching" (27) before
@@ -20,6 +20,9 @@ public partial class SettingsMenuTests
         // The OpenAI tab keeps its rows' whole names (2026-10-10, the user's call: "API key" said nothing of whose); the others shorten.
         Assert.True(SettingsMenu.KeepsWholeNames(SettingsMenu.OpenAITabTitle));
         Assert.False(SettingsMenu.KeepsWholeNames("Botchat") || SettingsMenu.KeepsWholeNames(SettingsMenu.AnthropicTabTitle));
+        // Common's and Http's rows all start "LLM ", never their tab's title, so they show whole (2026-10-10).
+        Assert.Equal("LLM URL", SettingsMenu.RowName(SettingsField.LlmUrl, SettingsMenu.CommonTabTitle));
+        Assert.Equal("LLM server scan mode", SettingsMenu.RowName(SettingsField.LlmScanMode, SettingsMenu.HttpTabTitle));
     }
 
     [Fact]

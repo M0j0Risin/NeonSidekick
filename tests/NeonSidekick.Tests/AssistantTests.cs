@@ -548,7 +548,7 @@ public class AssistantTests
         Assert.True(Assistant.LooksLikeToolRoleRejection("ClientResultException: HTTP 400 (Bad Request): Only user, system and assistant roles are supported!"));
         Assert.True(Assistant.LooksLikeToolRoleRejection("Only user and assistant roles are supported!"));
         Assert.False(Assistant.LooksLikeToolRoleRejection("HttpRequestException: boom -> IOException: socket closed"));
-        Assert.Equal(" — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › LLM) to talk to it without tools", Assistant.ToolRoleHint);
+        Assert.Equal(" — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › Common) to talk to it without tools", Assistant.ToolRoleHint);
     }
 
     [Fact]
@@ -1818,7 +1818,7 @@ public class AssistantTests
     {
         Assert.Equal("The server dropped the request as it was sent (118 MB, 54 pictures); the 27 oldest pictures are now their file names. Trying again.", Assistant.DroppedRequestNotice(118_000_000, 54, 27));
         Assert.Equal("The server dropped the request as it was sent (3 MB, 2 pictures); the oldest picture is now its file name. Trying again.", Assistant.DroppedRequestNotice(3_000_000, 2, 1));
-        Assert.Equal(" — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › LLM) caps them", Assistant.OversizedRequestHint(118_000_000, 54));
+        Assert.Equal(" — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › Common) caps them", Assistant.OversizedRequestHint(118_000_000, 54));
     }
 
     [Fact]
@@ -2312,9 +2312,9 @@ public class AssistantTests
         Assert.False(Assistant.LooksLikeRequestTimeout(new HttpRequestException(SdkTimeoutMessage)));   // the marker on the wrong type is not the SDK's timeout
         Assert.Equal("exceeded the configured timeout", Assistant.NetworkTimeoutMarker);
 
-        Assert.Equal("The server sent nothing for 75s (LLM request timeout (s), LLM tab)", Assistant.RequestTimeoutExplanation(TimeSpan.FromSeconds(75), null));
+        Assert.Equal("The server sent nothing for 75s (LLM request timeout (s), /settings › Servers › Common)", Assistant.RequestTimeoutExplanation(TimeSpan.FromSeconds(75), null));
         Assert.Equal(
-            "The server sent nothing for 75s (LLM request timeout (s), LLM tab) — the context was at 85% of the window; a model near its limit can run away (/compact, /clear)",
+            "The server sent nothing for 75s (LLM request timeout (s), /settings › Servers › Common) — the context was at 85% of the window; a model near its limit can run away (/compact, /clear)",
             Assistant.RequestTimeoutExplanation(TimeSpan.FromSeconds(75), 85));
     }
 
@@ -2332,7 +2332,7 @@ public class AssistantTests
 
         var notice = Assert.IsType<TurnEvent.Notice>(events[^1]);
         Assert.True(notice.IsError);
-        Assert.Equal("Model error: The server sent nothing for 5s (LLM request timeout (s), LLM tab) — the context was at 65% of the window; a model near its limit can run away (/compact, /clear)", notice.Text);
+        Assert.Equal("Model error: The server sent nothing for 5s (LLM request timeout (s), /settings › Servers › Common) — the context was at 65% of the window; a model near its limit can run away (/compact, /clear)", notice.Text);
         // The round trip that succeeded stays: the work is there for the next message.
         Assert.Equal(new[] { ChatRole.User, ChatRole.Assistant, ChatRole.Tool }, history.Messages.Select(m => m.Role));
     }
@@ -2345,16 +2345,16 @@ public class AssistantTests
         client.EnqueueText("never");
         client.ThrowAt = 0;
         client.Failure = new TaskCanceledException(SdkTimeoutMessage);
-        Assert.Equal("Model error: The server sent nothing for 5s (LLM request timeout (s), LLM tab)", Assert.IsType<TurnEvent.Notice>((await Run(assistant, "a"))[^1]).Text);
+        Assert.Equal("Model error: The server sent nothing for 5s (LLM request timeout (s), /settings › Servers › Common)", Assert.IsType<TurnEvent.Notice>((await Run(assistant, "a"))[^1]).Text);
 
         client.EnqueueText("never");
         client.Failure = new HttpRequestException("refused");
         Assert.Equal("Model error: HttpRequestException: refused", Assert.IsType<TurnEvent.Notice>((await Run(assistant, "b"))[^1]).Text);
 
         Assert.Equal("HttpRequestException: refused", assistant.ExplainFailure(new HttpRequestException("refused")));
-        Assert.Equal("The server sent nothing for 5s (LLM request timeout (s), LLM tab)", assistant.ExplainFailure(new TaskCanceledException(SdkTimeoutMessage)));
+        Assert.Equal("The server sent nothing for 5s (LLM request timeout (s), /settings › Servers › Common)", assistant.ExplainFailure(new TaskCanceledException(SdkTimeoutMessage)));
         Assert.Equal(
-            "The server sent nothing for 5s (LLM request timeout (s), LLM tab) — the context was at 65% of the window; a model near its limit can run away (/compact, /clear)",
+            "The server sent nothing for 5s (LLM request timeout (s), /settings › Servers › Common) — the context was at 65% of the window; a model near its limit can run away (/compact, /clear)",
             assistant.ExplainFailure(new TaskCanceledException(SdkTimeoutMessage), new TokenUsage(600, 50, 650, 1, TimeSpan.Zero, TimeSpan.Zero)));
     }
 

@@ -18,7 +18,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 
 ## Navigation
 * **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row at once, ESC closes.
-* **What a row does:** under the list, the highlighted setting's description and its default. On the Offered tabs of `/tools` and `/skills`, and `/mcp`'s Tools tab, it is the highlighted tool's or skill's whole description, with why it isn't offered (a tool's) or its warning (a skill's) on the last line. A long tab is split into sections (General, LLM, Botchat), and a tab whose rows all start with its name drops the name (the Botchat tab's *Botchat LLM mode* reads *LLM mode*; notices and this file keep the full name).
+* **What a row does:** under the list, the highlighted setting's description and its default. On the Offered tabs of `/tools` and `/skills`, and `/mcp`'s Tools tab, it is the highlighted tool's or skill's whole description, with why it isn't offered (a tool's) or its warning (a skill's) on the last line. A long tab is split into sections (General, Common, Http, Botchat), and a tab whose rows all start with its name drops the name (the Botchat tab's *Botchat LLM mode* reads *LLM mode*; notices and this file keep the full name).
 * **Under a list:** the other list panes show the highlighted row whole under the list too, with what the row has no room for: `/sessions` (when it started and last ran, its turns and model), `/queue` and `/rewind` (the whole message), `/process` (the whole command, its state and run time), `/docker` (image, project, ports, networks, status), `/youtube list` and a YouTube search's results, the `/server` and `/model` pickers (the URL, the probe's detail, the whole model id), `/mcp`'s Servers tab (a failed server's whole error, a connected one's tools, the file an edit row opens), and the allowed commands and police strings.
 * **Typing to filter:** on `/sessions`, `/server`, `/docker`, `/youtube list` and the allowed commands, as on `/model` and the Offered tabs, typing narrows the list (the caption counts what is left); Backspace erases, the first ESC clears it. A pane's own key letters (`/docker`'s `r`, `/youtube list`'s `d` and `c`) still work until you start typing.
 * **Keys:** the hint row names each key in lowercase (`w = watch`), and ESC reads *close* on a pane's top level and *back* on a page opened from it. Removing anything from a list asks first, with No on the cursor, and an empty list opens its pane on one dim line. Every pane's keys are listed under [Pane keys](COMMANDS.md#pane-keys).
@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (LLM, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (Common, Http, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -141,7 +141,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
 
 ## Panes
-* `/settings`: the app (General), the LLM and its servers (Servers: LLM, Embedded, Docker, Anthropic with Claude Code and `/claude`, OpenAI), voice (Voice: TTS, STT), sessions and `/botchat`
+* `/settings`: the app (General), the LLM and its servers (Servers: Common, Http, Embedded, Docker, Anthropic with Claude Code and `/claude`, OpenAI), voice (Voice: TTS, STT), sessions and `/botchat`
 * `/skills`: agent skills and self-reflection
 * `/tools`: the model's tools
 * `/mcp`: external MCP servers
@@ -201,22 +201,18 @@ Settings that an environment variable or flag can override for one launch are li
 
 ### Servers
 
-The LLM connection and every kind of server it can be: five tabs on one, each a tab of the second strip under the first (LLM · Embedded · Docker · Anthropic · OpenAI): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
+The LLM connection and every kind of server it can be: six tabs on one, each a tab of the second strip under the first (Common · Http · Embedded · Docker · Anthropic · OpenAI): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10; Common and Http were one tab, LLM, until later that day.
 
-#### LLM
+#### Common
+
+The LLM settings every server reads, whatever its kind: a server on this machine or the LAN, the embedded LLM, a Docker container, the Anthropic API, the OpenAI API or the Claude Code server.
 
 | Setting | What it does | Default |
 |---|---|---|
-| LLM server scan mode | Where to look for a server while *LLM URL* is blank: `local` (the usual ports here), `remote` (the same ports across the LAN), `both`, or `disabled`. | `disabled` |
 | LLM URL | The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), `embedded`, or `docker:<container>`. `/server` fills it in. Empty: the app scans and, at startup, lets you pick a server, model and reasoning level and saves all three (ESC takes the first server without saving). | (none) |
 | LLM model | The model id. Empty takes the first the server lists; a Docker server serving one model saves its id here when it connects; `/model` picks one. | (first listed) |
-| LLM API key | The bearer token the server expects (`empty` for none). Saved encrypted (DPAPI on Windows, the Keychain on a Mac) and shown as `(set, encrypted)`. | `empty` |
 | LLM reasoning | How hard the model thinks: `none`, `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block (its last five lines), folded to `▸ 💭 thought for 4.2s — <its first sentence>` when the answer starts. Click it, Ctrl+O or `/expand` to see it again. Needs *Transcript markdown*. Thinking is never spoken or logged; only `/copy --thinking` copies it. | on |
-| LLM preserve thinking | Sends earlier turns' thinking back to a local server (`reasoning_content`) and asks the chat template to keep it (`preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking is always sent back between tool calls. Costs context; a prune drops old thinking first. | off |
-| LLM reasoning estimate | How `/usage` counts reasoning when the server streams thinking but doesn't count it (llama.cpp, the embedded LLM, Ollama): `chars` (characters ÷ 4), `tokenize` (llama.cpp's exact `/tokenize`, else `chars`) or `off` (`—`). Estimates show as `~1,234`; a server's own count always wins. | `chars` |
-| LLM sampling | Per-model sampling overrides; Enter opens the `/sampling` pane. See [Sampling per model](#sampling-per-model). | (server defaults) |
-| LLM sampling from Hugging Face | For servers that don't report their defaults (vLLM, SGLang, LM Studio) and a Hugging Face model id (`Qwen/Qwen3-8B`), shows the model card's `generation_config.json` values in `/sampling` as `(Hugging Face)`. One request per model and connect, never with your key; display only. | off |
 | LLM offer tools | Whether the model gets any tools. Turn it off for chat templates with no tool role. A change starts a new conversation. | on |
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
@@ -232,6 +228,19 @@ The LLM connection and every kind of server it can be: five tabs on one, each a 
 | LLM picture keep | The most pictures one request carries (0–500; 0 = no cap). Past it the oldest leave the conversation until half the cap is left, each a line naming its file (`view_image` shows it again); the newest message's pictures always stay. Every picture is sent again with every request, so a long picture session can outgrow what a server takes. | 20 |
 | LLM picture megabytes | The most megabytes of pictures one request carries, as sent (0–1000; 0 = no cap); past it the oldest leave until half is left. A request with pictures that the server drops as it is sent is tried once more with half of them. | 24 |
 | LLM use fun verbs | The thinking spinner shows a random verb instead of `thinking` / `writing`. | off |
+
+#### Http
+
+The LLM settings only an OpenAI-compatible HTTP server reads: a server on this machine or the LAN (LM Studio, llama.cpp, vLLM, SGLang, Ollama), the embedded LLM and a Docker container, which are such servers too. The Anthropic API, the OpenAI API and the Claude Code server never read them: they have keys of their own (or none), and no sampling or thinking goes back to them this way.
+
+| Setting | What it does | Default |
+|---|---|---|
+| LLM server scan mode | Where to look for a server while *LLM URL* is blank: `local` (the usual ports here), `remote` (the same ports across the LAN), `both`, or `disabled`. | `disabled` |
+| LLM API key | The bearer token the server expects (`empty` for none). Saved encrypted (DPAPI on Windows, the Keychain on a Mac) and shown as `(set, encrypted)`. The embedded LLM never gets it (it makes a key of its own at each start). | `empty` |
+| LLM preserve thinking | Sends earlier turns' thinking back to a local server (`reasoning_content`) and asks the chat template to keep it (`preserve_thinking` for Qwen3.6, `clear_thinking: false` for GLM). The current turn's thinking is always sent back between tool calls. Costs context; a prune drops old thinking first. | off |
+| LLM reasoning estimate | How `/usage` counts reasoning when the server streams thinking but doesn't count it (llama.cpp, the embedded LLM, Ollama): `chars` (characters ÷ 4), `tokenize` (llama.cpp's exact `/tokenize`, else `chars`) or `off` (`—`). Estimates show as `~1,234`; a server's own count always wins. | `chars` |
+| LLM sampling | Per-model sampling overrides; Enter opens the `/sampling` pane. See [Sampling per model](#sampling-per-model). | (server defaults) |
+| LLM sampling from Hugging Face | For servers that don't report their defaults (vLLM, SGLang, LM Studio) and a Hugging Face model id (`Qwen/Qwen3-8B`), shows the model card's `generation_config.json` values in `/sampling` as `(Hugging Face)`. One request per model and connect, never with your key; display only. | off |
 
 #### Sampling per model
 
@@ -257,7 +266,7 @@ Until you override them, sampling is left to the server and the model's defaults
 * **Unknown fields** are ignored by a server; Ollama's `/v1` takes only the four OpenAI ones.
 * **The extra body** may not set fields the app writes (`model`, `messages`, `tools`, `stream`, `reasoning_effort`…) or the named fields above. Its `chat_template_kwargs` merge with the app's, whose `enable_thinking` and `preserve_thinking` win.
 * **Without the pane:** `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values; `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run.
-* The Anthropic API and the OpenAI API are not affected.
+* The Anthropic API, the OpenAI API and the Claude Code server are not affected.
 
 #### Embedded
 

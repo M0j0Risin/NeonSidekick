@@ -200,7 +200,7 @@ The hint row under the input line shows the model, the context used and anything
 | Setting | Where | What it does | Default |
 |---|---|---|---|
 | Working directory | `/settings` › General | The folder the file and Git tools work in. | the profile's `files\` |
-| LLM URL, LLM model | `/settings` › Servers › LLM | The server and model; `/server` and `/model` fill them in. | (none) |
+| LLM URL, LLM model | `/settings` › Servers › Common | The server and model; `/server` and `/model` fill them in. | (none) |
 | Theme | `/settings` › General | One of sixty colour themes, or your own. | `collider` |
 | Memory mode | `/settings` › General | Whether the model remembers facts about you between sessions. | `read-write` |
 | TTS output, STT input | `/settings` › Voice › TTS, STT | Reads replies aloud; voice input on a push-to-talk key (F4). | off |

@@ -7,7 +7,7 @@ namespace NeonSidekick.App;
 
 internal sealed partial class SettingsMenu
 {
-    /// <summary>The group tab holding the five server tabs (2026-10-10, the user's pick: the LLM, Embedded, Docker, Anthropic and OpenAI tabs, <c>/profile push|pull servers</c>' five). Pinned.</summary>
+    /// <summary>The group tab holding the six server tabs (2026-10-10, the user's pick: the LLM, Embedded, Docker, Anthropic and OpenAI tabs, <c>/profile push|pull servers</c>' five; six later that day, the LLM tab split into Common and Http, the user's call). Pinned.</summary>
     public const string ServersTabTitle = "Servers";
 
     /// <summary>The group tab holding the TTS and STT tabs (2026-10-10, the user's pick). Pinned.</summary>
@@ -15,7 +15,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The strip <c>/settings</c> shows (2026-10-10, the user's pick, <c>/tools</c>' Database and Media shape: the strip had grown to ten):
-    /// General, Servers, Voice, Sessions, Botchat, and Advisors after it (later that day, the profile advisors). <see cref="TabTitles"/> and <see cref="TabFields"/> stay the ten tabs, in the order the
+    /// General, Servers, Voice, Sessions, Botchat, and Advisors after it (later that day, the profile advisors). <see cref="TabTitles"/> and <see cref="TabFields"/> stay the leaf tabs (twelve since the LLM tab's split, later that day), in the order the
     /// arrows walk them (<see cref="StripTabs"/>), each a sub-tab of its group on the second strip. Pinned.
     /// </summary>
     /// <remarks>Spelled out, never read off <see cref="TabTitles"/>: a static of another part of the class may not be set yet.</remarks>
@@ -25,7 +25,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsTab>> StripTabs =
     [
         [SettingsTab.General],
-        [SettingsTab.Llm, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
+        [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
         [SettingsTab.Tts, SettingsTab.Stt],
         [SettingsTab.Sessions],
         [SettingsTab.BotChat],
@@ -61,8 +61,8 @@ internal sealed partial class SettingsMenu
     private static int TabOf(MenuPage page) => (int)TabAt(page.Tab, page.Sub);
 
     /// <summary>
-    /// The picker's root under a group's tab (2026-10-10, <c>/tools</c>' <c>GroupCrumb</c>): <c>⚙️ Settings › Servers</c> for a row of LLM,
-    /// Embedded, Docker, Anthropic or OpenAI, <c>⚙️ Settings › Voice</c> for TTS and STT; the title alone elsewhere. Pinned.
+    /// The picker's root under a group's tab (2026-10-10, <c>/tools</c>' <c>GroupCrumb</c>): <c>⚙️ Settings › Servers</c> for a row of Common,
+    /// Http, Embedded, Docker, Anthropic or OpenAI, <c>⚙️ Settings › Voice</c> for TTS and STT; the title alone elsewhere. Pinned.
     /// </summary>
     public static string GroupCrumb(SettingsTab tab) => PlaceOf(tab) is var (strip, _) && IsGroup(strip) ? Title + " › " + StripTitles[strip] : Title;
 

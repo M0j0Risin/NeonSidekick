@@ -968,14 +968,14 @@ public sealed class Assistant
 
     /// <summary>
     /// The request timeout in the operator's words: <c>The server sent nothing for 75s (LLM request
-    /// timeout (s), LLM tab)</c>, and with the last request's share of the window known, <c> — the
+    /// timeout (s), /settings › Servers › Common)</c>, and with the last request's share of the window known, <c> — the
     /// context was at 85% of the window; a model near its limit can run away (/compact, /clear)</c>.
     /// The idle-read timeout is the right guard for a runaway the server keeps generating into a
     /// buffered tool call; raising it only lets the runaway run longer. Pinned.
     /// </summary>
     public static string RequestTimeoutExplanation(TimeSpan request, int? contextPercent)
     {
-        string text = "The server sent nothing for " + LlmTimeouts.Format(request) + " (LLM request timeout (s), LLM tab)";
+        string text = "The server sent nothing for " + LlmTimeouts.Format(request) + " (LLM request timeout (s), /settings › Servers › Common)";
         if (contextPercent is { } percent)
         {
             text += " — the context was at " + percent.ToString(CultureInfo.InvariantCulture) + "% of the window; a model near its limit can run away (/compact, /clear)";
@@ -1036,7 +1036,7 @@ public sealed class Assistant
     /// tools with the Mistral-family template's sentence (<see cref="LooksLikeToolRoleRejection"/>):
     /// the model has no tool role, and the setting that talks to it anyway is named. Pinned.
     /// </summary>
-    public const string ToolRoleHint = " — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › LLM) to talk to it without tools";
+    public const string ToolRoleHint = " — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › Common) to talk to it without tools";
 
     /// <summary>
     /// Whether a failed request reads as one the server would not take for its size (2026-10-03, the user's report: a
@@ -1076,12 +1076,12 @@ public sealed class Assistant
 
     /// <summary>
     /// Appended to the <c>Model error:</c> notice when a request with pictures was dropped and no retry could help:
-    /// <c> — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (the
-    /// LLM tab of /settings) caps them</c>. Pinned.
+    /// <c> — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep
+    /// (/settings › Servers › Common) caps them</c>. Pinned.
     /// </summary>
     public static string OversizedRequestHint(long bytes, int pictures) =>
         " — the request was " + PictureBudget.FormatMegabytes(bytes) + " with " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures")
-        + "; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › LLM) caps them";
+        + "; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › Common) caps them";
 
     /// <summary>
     /// Whether a failure's explanation is a chat template rejecting the <c>tool</c> role:

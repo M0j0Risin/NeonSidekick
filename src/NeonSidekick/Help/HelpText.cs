@@ -24,7 +24,7 @@ public static class HelpText
     public const int MaxMatches = 8;
 
     // The panes' one-liners: README's Available Panes, kept short.
-    public const string SettingsPaneSummary = "the app's settings: the profile and screen (General); the LLM connection, the embedded model, Docker servers, the Anthropic and OpenAI APIs, the Claude Code server and /claude (Servers, a tab each on a second strip); speech output and voice input (Voice: TTS and STT); sessions and /botchat";
+    public const string SettingsPaneSummary = "the app's settings: the profile and screen (General); the LLM settings every server reads (Common) and those only an OpenAI-compatible HTTP server reads (Http), the embedded model, Docker servers, the Anthropic and OpenAI APIs, the Claude Code server and /claude (Servers, a tab each on a second strip); speech output and voice input (Voice: TTS and STT); sessions and /botchat";
     public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); the other tabs hold each tool group's settings, Files, Integrations, Database and Media a menu per group on a second strip (←/→ walk every menu, Tab skips past a group)";
     public const string SkillsPaneSummary = "agent skills (SKILL.md folders) and the model's self-reflection";
     public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the switch and timeout";

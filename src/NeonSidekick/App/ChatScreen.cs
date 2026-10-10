@@ -2476,7 +2476,7 @@ internal sealed partial class ChatScreen
     public const string SkillsOffError = "Agent skills is off (the Options tab of /skills).";
 
     /// <summary>The refusal for <c>/learn</c> while the setting <c>LLM offer tools</c> is off: nothing could carry the skill. Pinned.</summary>
-    public const string SkillsNeedToolsError = "LLM offer tools is off (/settings › Servers › LLM): a skill rides a tool result, so none can be loaded.";
+    public const string SkillsNeedToolsError = "LLM offer tools is off (/settings › Servers › Common): a skill rides a tool result, so none can be loaded.";
 
     /// <summary>
     /// The line a withdrawn turn hands back (<see cref="TurnOutcome.Withdrawn"/>): put on the chat line's row at once,
@@ -6156,7 +6156,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The tool loop's guard for a turn (<see cref="Assistant.ContextGuard"/>): the window
-    /// (<see cref="LlmSession.ContextLength"/> — the LLM tab's figure else the server's), the share
+    /// (<see cref="LlmSession.ContextLength"/> — the Common tab's figure else the server's), the share
     /// <c>LLM auto compact (%)</c> and the mode <c>LLM tool compact type</c> (<c>compact</c>, the default since 2026-09-28,
     /// <c>prune</c>, <c>stop</c> or <c>nothing</c>); null while the window is unknown.
     /// </summary>
@@ -9031,7 +9031,7 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlyList<(string Word, ProfileSection Section, string Note)> ProfileSectionWords =
     [
         ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
-        ("servers", ProfileSection.Servers, "the server settings for LLM, Embedded, Docker, Anthropic and OpenAI"),
+        ("servers", ProfileSection.Servers, "the server settings: Common, Http, Embedded, Docker, Anthropic and OpenAI"),
         ("commands", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
         ("history", ProfileSection.History, "the message history, added (or replaced with overwrite)"),
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),

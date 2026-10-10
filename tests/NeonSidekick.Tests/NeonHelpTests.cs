@@ -230,7 +230,7 @@ public class NeonHelpTests
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
         Assert.Equal([(ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "Image"), (ToolsText.FilesTabTitle, "UNC")], HelpLocation.Menus("/tools").Take(3));   // the Files group first since 2026-10-10, Image after File later that day   // Database before Media since later on 2026-10-09
-        Assert.Equal([(SettingsMenu.ServersTabTitle, "LLM"), (SettingsMenu.ServersTabTitle, "Embedded")], HelpLocation.Menus("/settings").Take(2));   // the Servers and Voice groups since 2026-10-10
+        Assert.Equal([(SettingsMenu.ServersTabTitle, "Common"), (SettingsMenu.ServersTabTitle, "Http"), (SettingsMenu.ServersTabTitle, "Embedded")], HelpLocation.Menus("/settings").Take(3));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day
     }
 
     [Fact]

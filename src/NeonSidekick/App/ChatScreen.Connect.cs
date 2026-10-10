@@ -10,7 +10,7 @@ public enum ConnectChoice
     /// <summary>Scan for local servers again, as the start did (the wording the user's, 2026-10-05).</summary>
     Scan,
 
-    /// <summary>Type the server's URL (<c>Settings › LLM › URL</c>).</summary>
+    /// <summary>Type the server's URL (<c>Settings › Servers › Common › LLM URL</c>).</summary>
     Url,
 
     /// <summary>Download or pick an embedded model (<c>Settings › Embedded › Models</c>).</summary>

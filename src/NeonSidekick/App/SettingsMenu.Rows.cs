@@ -10,7 +10,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The section headings of the long tabs (2026-10-04, the UI review: General, LLM and Botchat were long flat lists whose runs the
     /// <see cref="TabFields"/> comment named but the pane never showed): each heading over the field it names, drawn as a
-    /// <see cref="SectionRule"/> the cursor never rests on. The other tabs have none. Pinned.
+    /// <see cref="SectionRule"/> the cursor never rests on. The LLM tab's split (2026-10-10) kept its runs on Common, Connection
+    /// over the URL now, and gave Http three of its own. The other tabs have none. Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
         new Dictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>>
@@ -23,13 +24,19 @@ internal sealed partial class SettingsMenu
                 (SettingsField.Theme, "Screen"),
                 (SettingsField.DraftEditor, "Outside apps"),
             ],
-            [SettingsTab.Llm] =
+            [SettingsTab.Common] =
             [
-                (SettingsField.LlmScanMode, "Connection"),
+                (SettingsField.LlmUrl, "Connection"),
                 (SettingsField.LlmReasoning, "How it answers"),
                 (SettingsField.LlmOfferTools, "Tools and limits"),
                 (SettingsField.LlmContextLength, "Context"),
                 (SettingsField.LlmPictureKeep, "Pictures and verbs"),
+            ],
+            [SettingsTab.Http] =
+            [
+                (SettingsField.LlmScanMode, "Connection"),
+                (SettingsField.LlmPreserveThinking, "Thinking"),
+                (SettingsField.LlmSampling, "Sampling"),
             ],
             [SettingsTab.BotChat] =
             [

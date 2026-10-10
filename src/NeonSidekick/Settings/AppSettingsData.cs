@@ -519,7 +519,7 @@ public sealed class AppSettingsData
     /// before): 0 is <c>auto</c> — no cap while <see cref="LlmAutoCompactPercent"/> can act (above 0, a known
     /// window), else <see cref="Llm.ConversationHistory.DefaultMaxTurns"/> — and 1 to
     /// <see cref="App.SettingsMenu.LlmMaxTurnsLimit"/> a fixed cap. Resolved before every message
-    /// (<see cref="App.ChatScreen.TurnCapFor"/>); the LLM tab, under <see cref="LlmAutoCompactPercent"/>. No variable.
+    /// (<see cref="App.ChatScreen.TurnCapFor"/>); the Common tab, under <see cref="LlmAutoCompactPercent"/>. No variable.
     /// </summary>
     public int LlmMaxTurns { get; set; }
 
@@ -530,14 +530,14 @@ public sealed class AppSettingsData
     /// The most pictures a request carries (2026-10-03, the user's report of a ComfyUI session whose ~50 pictures made a
     /// ~120 MB request the embedded llama-server dropped): over it, the oldest come out of the conversation until half
     /// are left, each a line naming its file (<see cref="Llm.PictureBudget"/>); the newest message's never. 0 = no cap.
-    /// <see cref="MinLlmPictureKeep"/> to <see cref="MaxLlmPictureKeep"/>. The LLM tab, after the compact rows; read at each request. No variable.
+    /// <see cref="MinLlmPictureKeep"/> to <see cref="MaxLlmPictureKeep"/>. The Common tab, after the compact rows; read at each request. No variable.
     /// </summary>
     public int LlmPictureKeep { get; set; } = Llm.PictureBudget.DefaultPictures;
 
     /// <summary>
     /// The most megabytes of pictures (as sent, base64) a request carries (2026-10-03, with <see cref="LlmPictureKeep"/>): over
     /// it, the oldest come out until half the figure is left. 0 = no cap. <see cref="MinLlmPictureMegabytes"/> to
-    /// <see cref="MaxLlmPictureMegabytes"/>. The LLM tab, under <c>LLM picture keep</c>. No variable.
+    /// <see cref="MaxLlmPictureMegabytes"/>. The Common tab, under <c>LLM picture keep</c>. No variable.
     /// </summary>
     public int LlmPictureMegabytes { get; set; } = Llm.PictureBudget.DefaultMegabytes;
 
@@ -553,7 +553,7 @@ public sealed class AppSettingsData
     /// After a compact the transcript shows what it did (2026-09-21, the user's call): in summary mode
     /// the summary's lines dim under the compact notice, in prune mode one line per pruned result
     /// (the tool's name and the size), and last (later that day) how many messages were protected at
-    /// the start (the opening call pairs) and at the end (the recent turns kept). Off = the one notice line, as before. The LLM tab's row right
+    /// the start (the opening call pairs) and at the end (the recent turns kept). Off = the one notice line, as before. The Common tab's row right
     /// under <c>LLM compact keep recent</c>; read at each compact, no reconnect. No variable.
     /// </summary>
     public bool LlmCompactShowSummary { get; set; }
@@ -578,7 +578,7 @@ public sealed class AppSettingsData
     /// the spinner): one of <see cref="App.MidTurnUsageMode.Names"/> — <c>estimate</c> (the context and tok/s
     /// tick with the stream, marked <c>~</c>, the streamed chunks counted as tokens until the server's report lands) or
     /// <c>last-known</c> (the default since later on 2026-09-25, the user's call: the server's figures as of the last
-    /// completed request). Read on every draw. The LLM tab of
+    /// completed request). Read on every draw. The Common tab of
     /// <c>/settings</c>, under <see cref="LlmContextLength"/>. No variable.
     /// </summary>
     public string LlmMidTurnUsage { get; set; } = App.MidTurnUsageMode.Default;
@@ -694,7 +694,7 @@ public sealed class AppSettingsData
     /// <see cref="Llm.ReasoningEstimates.Names"/> — <c>chars</c> (the default: the thinking's characters over four),
     /// <c>tokenize</c> (llama.cpp's <c>/tokenize</c> counts it exactly, one short request after each reply; the characters
     /// where it does not answer) or <c>off</c>. An estimate shows as <c>~</c>; a server's own count always wins. The Claude
-    /// API is not affected. Read at each request, no reconnect. The LLM tab, under <see cref="LlmPreserveThinking"/>. No variable.
+    /// API is not affected. Read at each request, no reconnect. The Http tab, under <see cref="LlmPreserveThinking"/>. No variable.
     /// </summary>
     public string LlmReasoningEstimate { get; set; } = Llm.ReasoningEstimates.Default;
 

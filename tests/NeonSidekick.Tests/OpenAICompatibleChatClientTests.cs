@@ -230,7 +230,7 @@ public class OpenAICompatibleChatClientTests
         var notice = Assert.IsType<TurnEvent.Notice>(Assert.Single(events));
         Assert.True(notice.IsError);
         Assert.Equal(
-            "Model error: ClientResultException: HTTP 400 (Bad Request): Only user, system and assistant roles are supported! — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › LLM) to talk to it without tools",
+            "Model error: ClientResultException: HTTP 400 (Bad Request): Only user, system and assistant roles are supported! — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › Common) to talk to it without tools",
             notice.Text);
     }
 
