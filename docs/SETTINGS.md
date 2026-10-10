@@ -756,7 +756,7 @@ The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (t
 | Claude Code advisor tool effort | The advisor's `--effort`; the first row follows *Claude Code slash command effort*. | (as Claude Code slash command effort) |
 | Claude Code advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
 
-### HA (Home Assistant)
+### Home (Home Assistant)
 
 | Setting | What it does | Default |
 |---|---|---|

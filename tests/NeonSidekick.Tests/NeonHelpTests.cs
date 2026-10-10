@@ -191,7 +191,7 @@ public class NeonHelpTests
     public void ATabByItsStartOrItsLongName_IsFound()
     {
         Assert.StartsWith("Tab /tools › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
-        Assert.StartsWith("Tab /tools › HA:", Invoke("/tools home assistant"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Home:", Invoke("/tools home assistant"), StringComparison.Ordinal);
     }
 
     /// <summary>A group tab (2026-10-09) lists its menus and their rows' names, and says how to ask for one. Pinned.</summary>

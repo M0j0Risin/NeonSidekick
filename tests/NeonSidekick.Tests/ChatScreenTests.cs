@@ -4614,7 +4614,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ", output);
         Assert.Contains("\n  ComfyUI  on\n", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24): its switch on the tab's row, its rows a strip of their own (ToolsMenuTests)
         Assert.Contains("\n▸ Claude Code executable                   (looked up)\n  Claude Code slash command permissions    read-only\n  Claude Code slash command model          (Claude Code's default)\n  Claude Code slash command effort         (Claude Code's default)\n  Claude Code advisor tool                 off\n  Claude Code advisor tool context         brief\n  Claude Code advisor tool calls per turn  2 calls\n  Claude Code advisor tool model           (as Claude Code slash command model)\n  Claude Code advisor tool effort          (as Claude Code slash command effort)\n  Claude Code advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -4669,7 +4669,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ", output);
         Assert.Contains("\n  ComfyUI  on\n", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24): its switch on the tab's row, its rows a strip of their own (ToolsMenuTests)
         Assert.Contains("\n▸ Claude Code executable                   (looked up)\n  Claude Code slash command permissions    read-only\n  Claude Code slash command model          (Claude Code's default)\n  Claude Code slash command effort         (Claude Code's default)\n  Claude Code advisor tool                 off\n  Claude Code advisor tool context         brief\n  Claude Code advisor tool calls per turn  2 calls\n  Claude Code advisor tool model           (as Claude Code slash command model)\n  Claude Code advisor tool effort          (as Claude Code slash command effort)\n  Claude Code advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
@@ -5130,7 +5130,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ", output);
+        Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ", output);
         Assert.Contains("  · " + CameraCaptureTool.ToolName + ": off", output);
         Assert.Equal([CameraCaptureTool.ToolName], _settings.Current.ToolsDisabled);
         Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/tools"), output);
@@ -9583,7 +9583,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(_settings.Current.ShellPolice);
         string memory = "\n" + Titled(MemoryPaneTitle(MemoryAccess.ReadWrite)) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ") + "\n";
         string allowed = "\n" + Titled(AllowedCommandsTitle) + "\n";
         Assert.Equal(1, output.Split(memory).Length - 1);
         Assert.Equal(1, output.Split(allowed).Length - 1);
@@ -10718,7 +10718,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -10793,7 +10793,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), cwd, 239), output);
         Assert.DoesNotContain("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);   // never the fixed glyphs alone: memory, the policy and the police are on
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n", StringComparison.Ordinal);
-        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ", StringComparison.Ordinal);
+        int tools = output.IndexOf(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ", StringComparison.Ordinal);
         int mcp = output.IndexOf(McpText.Label + " │ Servers · Tools · Options ", StringComparison.Ordinal);
         int skills = output.IndexOf(SkillsText.Label + " │ Offered · Reflection · Options ", StringComparison.Ordinal);
         int sys = output.IndexOf("\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n", StringComparison.Ordinal);
@@ -10893,7 +10893,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -10981,7 +10981,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ") + "\n";
         string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
@@ -13068,7 +13068,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";
@@ -13128,7 +13128,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · HA · Database · Media · Options ") + "\n";
+        string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · UNC · GitLib · Obsidian · ClaudeCode · Docker · Home · Database · Media · Options ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string settings = "\n" + Titled(SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ") + "\n";

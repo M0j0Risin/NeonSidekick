@@ -176,8 +176,8 @@ public static class ToolsText
     /// rows, keys, variables, the tool and the <c>/server</c> word with it), its group heading <see cref="ClaudeCodeGroupTitle"/>.</summary>
     public const string ClaudeCodeTabTitle = "ClaudeCode";
 
-    /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>).</summary>
-    public const string HomeAssistantTabTitle = "HA";
+    /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>). "Home" since 2026-10-09 (the user's ask; the toolbar's item keeps "HA").</summary>
+    public const string HomeAssistantTabTitle = "Home";
 
     /// <summary>The advisor's group on <c>/sys</c> and the Offered tab (2026-10-09): <c>Claude Code</c>, the strip's one word being <see cref="ClaudeCodeTabTitle"/> (the <see cref="HomeAssistantGroupTitle"/> shape).</summary>
     public const string ClaudeCodeGroupTitle = "Claude Code";
