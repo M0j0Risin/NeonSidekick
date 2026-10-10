@@ -197,7 +197,12 @@ public static class SkillsText
     /// whose name or description holds it, each with its warning, the shadowed ones likewise and the skipped folders whose line
     /// holds it, a heading left out with nothing under it; <see cref="MenuFilter.NoMatchRow"/> alone when none is left.
     /// </summary>
-    public static IReadOnlyList<(string Markup, Skill? Skill)> LoadedRows(SkillsFacts facts, string filter = "")
+    /// <remarks>
+    /// <paramref name="scope"/> (2026-10-10, the user's ask: the Offered tab's sub-tabs, <see cref="ScopeTabs"/>) keeps the skills and the
+    /// shadowed ones of that root alone, and the skipped folders under it (<see cref="ProblemScope"/>); a scope holding none says
+    /// <see cref="ScopeNoneLine"/>. Null is every root, as it was. The columns stay the whole catalog's either way.
+    /// </remarks>
+    public static IReadOnlyList<(string Markup, Skill? Skill)> LoadedRows(SkillsFacts facts, string filter = "", SkillScope? scope = null)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(filter);
@@ -214,7 +219,7 @@ public static class SkillsText
         var rows = new List<(string, Skill?)>();
         int width = NameWidth(facts);
         int versions = VersionWidth(facts);   // the version column (2026-10-07), sized on the whole list so a filter does not shift it
-        foreach (var skill in facts.Skills.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)))
+        foreach (var skill in facts.Skills.Where(s => InScope(s, scope) && MenuFilter.Matches(filter, s.Name, s.Description)))
         {
             // A disabled skill's row is dim whole, its name too (2026-10-09, the user's ask: the shadowed rows' look).
             string rest = "  " + SkillScopes.Name(skill.Scope).PadRight(9) + VersionCell(facts, skill, versions) + skill.Description;
@@ -225,7 +230,7 @@ public static class SkillsText
             }
         }
 
-        var shadowed = facts.Shadowed.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)).ToList();
+        var shadowed = facts.Shadowed.Where(s => InScope(s, scope) && MenuFilter.Matches(filter, s.Name, s.Description)).ToList();
         if (shadowed.Count > 0)
         {
             rows.Add((Styled(Theme.AccentSecondary, ShadowedHeading), null));
@@ -235,7 +240,7 @@ public static class SkillsText
             }
         }
 
-        var problems = facts.Problems.Select(ProblemLine).Where(line => MenuFilter.Matches(filter, line, null)).ToList();
+        var problems = facts.Problems.Where(p => scope is null || ProblemScope(facts.Roots, p) == scope).Select(ProblemLine).Where(line => MenuFilter.Matches(filter, line, null)).ToList();
         if (problems.Count > 0)
         {
             rows.Add((Styled(Theme.AccentSecondary, ProblemsHeading), null));
@@ -247,11 +252,72 @@ public static class SkillsText
 
         if (rows.Count == 0)
         {
-            rows.Add((MenuFilter.NoMatchRow(filter), null));
+            rows.Add(filter.Length == 0 && scope is { } empty ? (Theme.DimMarkup(ScopeNoneLine(empty)), null) : (MenuFilter.NoMatchRow(filter), null));
         }
 
         return rows;
     }
+
+    /// <summary>The Offered tab's first sub-tab (2026-10-10, the user's ask): every root's skills, the list as it was. Pinned.</summary>
+    public const string AllSubTitle = "all";
+
+    /// <summary>
+    /// The Offered tab's sub-tabs (2026-10-10, the user's ask: a filter for the profile's skills or the global ones), null standing for
+    /// <see cref="AllSubTitle"/>: all, profile and global always, external after them while a listed or shadowed skill is one; none while
+    /// the skills are off or none is installed, the tab then a plain one with no second strip.
+    /// </summary>
+    public static IReadOnlyList<SkillScope?> ScopeTabs(SkillsFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        if (!facts.Enabled || facts.Skills.Count == 0)
+        {
+            return [];
+        }
+
+        var tabs = new List<SkillScope?> { null, SkillScope.Profile, SkillScope.Global };
+        if (facts.Skills.Concat(facts.Shadowed).Any(s => s.Scope == SkillScope.External))
+        {
+            tabs.Add(SkillScope.External);
+        }
+
+        return tabs;
+    }
+
+    /// <summary>A scope sub-tab's title (2026-10-10): the scope's word (<see cref="SkillScopes.Name"/>), <see cref="AllSubTitle"/> for null. Pinned.</summary>
+    public static string ScopeTitle(SkillScope? scope) => scope is { } s ? SkillScopes.Name(s) : AllSubTitle;
+
+    /// <summary>A scope sub-tab's count in the strip (2026-10-10): the skills it lists, the shadowed ones among them, in superscript (<c>profile³</c>); null for none.</summary>
+    public static string? ScopeBadge(SkillsFacts facts, SkillScope? scope)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return SettingsMenu.ChangedBadge(facts.Skills.Concat(facts.Shadowed).Count(s => InScope(s, scope)));
+    }
+
+    /// <summary>What a scope sub-tab says with no skill of that root (2026-10-10). Pinned.</summary>
+    public static string ScopeNoneLine(SkillScope scope) => $"(no {SkillScopes.Name(scope)} skills)";
+
+    /// <summary>
+    /// The root a skipped folder lies under (2026-10-10, the scope sub-tabs): the profile's, the global or the external one by its path,
+    /// case aside; null for a folder under none. Pure.
+    /// </summary>
+    public static SkillScope? ProblemScope(SkillRoots roots, SkillProblem problem)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(problem);
+        foreach (var scope in new[] { SkillScope.Profile, SkillScope.Global, SkillScope.External })
+        {
+            string root = roots.Of(scope).TrimEnd('\\', '/');
+            string dir = problem.Directory;
+            if (root.Length > 0 && dir.Length > root.Length && dir.StartsWith(root, StringComparison.OrdinalIgnoreCase) && dir[root.Length] is '\\' or '/')
+            {
+                return scope;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool InScope(Skill skill, SkillScope? scope) => scope is null || skill.Scope == scope;
 
     private static string Styled(Style style, string text) => $"[{style.ToMarkup()}]{Markup.Escape(text)}[/]";
 

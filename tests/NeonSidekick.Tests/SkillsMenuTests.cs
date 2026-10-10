@@ -5,6 +5,7 @@ using NeonSidekick.Skills;
 using NeonSidekick.Speech;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using Spectre.Console;
 using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
@@ -134,6 +135,9 @@ public class SkillsMenuTests : IDisposable
 
     /// <summary>A title row as the pane prints it: the text, then the × close glyph in column width − 2.</summary>
     private static string Titled(string row, int width = 100) => row + new string(' ', width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
+
+    /// <summary>The Offered tab's scopes (2026-10-10, the user's ask) as the pane prints the second strip, badges cut as <see cref="Output"/> cuts them.</summary>
+    private static readonly string Scopes = Markup.Remove(InfoPane.SubStripRows(SkillsText.Label, ["all", "profile", "global"], 0, 100)[0]);
 
     private const string Strip = SkillsText.Label + " │ Offered · Reflection · Options ";   // Options last since 2026-09-22 (the user's ask); the Project tab before it went on 2026-10-01, its toggle an Options row; Loaded until 2026-09-19; Options (the settings rows, /settings' Skills tab until then) since later that day; Reflection (the reflection's rows out of Options) later still; the Roots tab after Project until later still that day
 
@@ -343,7 +347,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        AssertPadded("\n" + Titled(Strip) + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
+        AssertPadded("\n" + Titled(Strip) + "\n" + Scopes + "\n \n▸ haiku  profile  Writes haiku.\n  Shadowed (a higher root holds the name):\n    haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
         Assert.DoesNotContain("\n" + Titled(SkillsText.Label + " › Project file") + "\n", Output);   // no page: Space saved at once
         Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n  Agent skills                          on\n  " + SettingsMenu.ExternalSkillsName + "  off\n▸ Project file                          off\n", Output);   // the flip on the status line, the row re-read, the cursor kept
         Assert.False(_settings.Current.ProjectFile);
@@ -449,7 +453,7 @@ public class SkillsMenuTests : IDisposable
 
         Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n" + Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
         Assert.Contains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n" + Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n▸ haiku  global   Writes haiku.\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + Scopes + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.False(Exists(SkillScope.Profile, "haiku"));
         Assert.True(Exists(SkillScope.Global, "haiku"));
         Assert.Equal(flow, pane.FlowRow);
@@ -672,7 +676,7 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Contains("\n▸ rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.RenamedNotice("haiku", "my-haiku") + "\n▸ my-haiku  profile  Writes haiku.\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + Scopes + "\n  · " + SkillsMenu.RenamedNotice("haiku", "my-haiku") + "\n▸ my-haiku  profile  Writes haiku.\n", Output);
         Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "haiku")));
         Assert.True(Exists(SkillScope.Profile, "my-haiku"));
         Assert.Equal("---\nname: my-haiku\ndescription: Writes haiku.\nlicense: MIT\n---\n\nbody\n", File.ReadAllText(Path.Combine(_roots.Profile, "my-haiku", SkillCatalog.FileName)));
@@ -751,8 +755,8 @@ public class SkillsMenuTests : IDisposable
     {
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        input.PushClick(4, 102);                     // haiku: strip 100, spacer 101
-        input.PushClick(4, 102);
+        input.PushClick(4, 103);                     // haiku: strip 100, the scopes 101 (2026-10-10), spacer 102
+        input.PushClick(4, 103);
         input.PushClick(4, 50);                      // the transcript under the scope page
         input.PushClick(4, 50);
         input.Push(Keys.Escape);                     // never read

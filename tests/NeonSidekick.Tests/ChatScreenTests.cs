@@ -20597,8 +20597,8 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Height = 80;
         _geometry = new ScreenGeometry(() => null);
         PushLine("/skills");
-        _console.Input.PushKey(Keys.Right);   // Reflection (the reflection's rows, 2026-09-19)
-        _console.Input.PushKey(Keys.Right);   // Options (the settings rows, 2026-09-19; last since 2026-09-22)
+        _console.Input.PushKey(Keys.Tab);   // Reflection (the reflection's rows, 2026-09-19); Tab past the Offered scopes since 2026-10-10
+        _console.Input.PushKey(Keys.Tab);   // Options (the settings rows, 2026-09-19; last since 2026-09-22)
         _console.Input.PushKey(Keys.Down);
         _console.Input.PushKey(Keys.Down);    // Project file (its own Project tab until 2026-10-01)
         _console.Input.PushKey(Keys.Enter);   // its page
@@ -20621,6 +20621,35 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n  · Project file: off\n", output);
         Assert.Contains("\n▸ Project file                          off\n", output);
         Assert.DoesNotContain("Working directory", output);
+    }
+
+    /// <summary>
+    /// The Offered tab's scopes (2026-10-10, the user's ask): all, profile and global on a second strip, each with its count; → walks onto
+    /// them, and Enter on a scope's row is that scope's skill — the global one here, the first row of the global sub-tab.
+    /// </summary>
+    [Fact]
+    public async Task WithGeometry_BareSkills_TheOfferedScopes_AreSubTabs_AndEnterPicksFromTheShownOne()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PutSkill(ProfileSkills, "haiku");
+        PutSkill(GlobalSkills, "csv", "Tidies CSV files. Use when asked.");
+        _console.Profile.Height = 80;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/skills");
+        _console.Input.PushKey(Keys.Right);   // profile
+        _console.Input.PushKey(Keys.Right);   // global
+        _console.Input.PushKey(Keys.Enter);   // csv's page, not haiku's
+        _console.Input.PushKey(Keys.Escape);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("│ ↳ all · profile · global \n", output);   // the counts cut by the fixture's Output (TabStrips.Unbadged)
+        Assert.Contains("\n▸ csv    global   v1  Tidies CSV files. Use when asked.\n", output);
+        Assert.Contains(SkillsMenu.ScopeTitle("csv"), output);
+        Assert.DoesNotContain(SkillsMenu.ScopeTitle("haiku"), output);
+        Assert.DoesNotContain("external", output);   // no external skill listed, no external sub-tab
     }
 
     [Fact]

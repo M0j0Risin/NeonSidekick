@@ -496,6 +496,8 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 
 The loaded skills with their scope (`profile`, `global` or `external`), their version (`v1` as written, one more for each older text kept; blank for an external skill) and description, then any shadowed duplicates and skipped folders (with the reason). Enter on a skill can move it between the profile and global folders, rename it (lower-case-with-hyphens; a taken name is refused), edit its `SKILL.md` in your editor, revert it to a kept version you pick (see [Skill history](#skill-history)), lock or unlock it (see [Locking a skill](#locking-a-skill)), disable or enable it (see [Disabling a skill](#disabling-a-skill)), or delete it after a confirmation. A locked skill's version reads `🔒 v4`, and its footer says it is locked. A disabled skill's reads `⛔ v4` (also when it is locked), its whole row is dim, and its footer says it is disabled.
 
+The tab's second strip narrows the list to one scope: *all* (the whole list, where every visit starts), *profile*, *global*, and *external* while an external skill is listed, each with its count. A scope shows its own skills, the shadowed skills from its folder and the skipped folders under it. ←/→ walk the scopes on the way to the next tab, and Tab steps past them. The typed filter works on every scope.
+
 ### Reflection
 
 | Setting | What it does | Default |

@@ -39,7 +39,10 @@ namespace NeonSidekick.App;
 /// reply runs — the pick is refused (<see cref="SettingsMenu.NotWhileReplyRunsNotice"/>: a move under
 /// a running turn could race the model's <c>load_skill</c>). After a change the facts are read again
 /// (a rescan) and the list re-shown with the notice on the status line. Enter on any other row — a
-/// heading, a warning, a skipped folder — does nothing, and so does Space on the Offered tab. The
+/// heading, a warning, a skipped folder — does nothing, and so does Space on the Offered tab. Since 2026-10-10 (the user's ask: a
+/// filter for the profile's skills or the global ones) the Offered tab holds the scopes as sub-tabs on a second strip — all, profile,
+/// global, external while one is listed (<see cref="SkillsText.ScopeTabs"/>) — ←/→ walking them on the way to Reflection, Tab stepping
+/// past them, every visit starting on all; the typed filter runs on each. The
 /// <see cref="QueueMenu"/> shape: no prompt fallback, a console without the pane gets
 /// <see cref="Lines"/> in the transcript — the three tabs as headed sections.
 /// </summary>
@@ -326,34 +329,59 @@ internal sealed class SkillsMenu
     private static IReadOnlyList<SettingsField> SettingsFields(int tab) => SettingsMenu.SkillsTabFields[tab == OptionsTab ? 0 : 1];
 
     /// <summary>The tabbed page: the Offered rows first, the Reflection rows (<see cref="SettingsMenu.FieldsTab"/> under <see cref="SettingsMenu.TabKeys"/>) second, the Options rows last (2026-09-22); Space is nothing anywhere since the Project tab, its one flip, went (2026-10-01), as on <c>/settings</c>.</summary>
-    /// <remarks>The Offered tab filters (2026-10-03, the user's ask, <see cref="MenuFilter"/>): <paramref name="loaded"/> are the rows under <paramref name="filter"/>, and the caption counts the skills they keep.</remarks>
-    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<(string Markup, Skill? Skill)> loaded, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "")
+    /// <remarks>
+    /// The Offered tab filters (2026-10-03, the user's ask, <see cref="MenuFilter"/>): <paramref name="loaded"/> are the rows under <paramref name="filter"/>, and the caption counts the skills they keep.
+    /// Since 2026-10-10 (the user's ask: a filter for the profile's skills or the global ones) the tab holds a sub-tab per
+    /// <see cref="SkillsText.ScopeTabs"/> — all, profile, global, external while one is listed — on the second strip (<see cref="MenuTab.SubTabs"/>,
+    /// <c>/tools</c>' groups' shape): <paramref name="loaded"/> holds each one's rows in that order, <paramref name="sub"/> the one on show, and
+    /// the one typed filter runs on each; with no scope tabs (the skills off, none installed) it holds the tab's one list, a plain tab.
+    /// </remarks>
+    public static MenuPage Page(SkillsFacts facts, IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill)>> loaded, AppSettingsData saved, SettingsMenu menu, int tab, string filter = "", int sub = 0)
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(loaded);
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(menu);
         ArgumentNullException.ThrowIfNull(filter);
+        var scopes = SkillsText.ScopeTabs(facts);
+        var offered = scopes.Count == 0
+            ? Offered(SkillsText.OfferedTabTitle, loaded[0], null)
+            : new MenuTab(SkillsText.OfferedTabTitle, [])
+            {
+                SubTabs = scopes.Select((scope, i) => Offered(SkillsText.ScopeTitle(scope), loaded[i], scope) with { Badge = SkillsText.ScopeBadge(facts, scope) }).ToList(),
+                Sub = Math.Clamp(sub, 0, scopes.Count - 1),
+            };
         var tabs = new MenuTab[]
         {
-            new(SkillsText.OfferedTabTitle, loaded.Select(r => r.Markup).ToList())
-            {
-                Hint = MenuFilter.Hint(LoadedKeys, filter),
-                Filter = filter,
-                Caption = MenuFilter.CaptionOrNull(filter, loaded.Count(r => r.Skill is not null), facts.Skills.Count + facts.Shadowed.Count),
-            },
+            offered,
             menu.FieldsTab(SkillsText.ReflectionTabTitle, SettingsFields(ReflectionTab), saved) with { Hint = SettingsMenu.TabKeys },
             menu.FieldsTab(SkillsText.OptionsTabTitle, SettingsFields(OptionsTab), saved) with { Hint = SettingsMenu.TabKeys },
         };
         return MenuPage.Tabbed(SkillsText.Label, tabs, tab, OtherKeys) with
         {
             TabCursors = [0, 0, 0],
-            // The Offered tab's band says the cursor's skill whole, its warning on a last line (2026-10-05, the user's ask: it stood
-            // blank there while every row cuts its description at the pane's edge); the off, none and problem rows name none.
-            Footer = (t, row) => t is OptionsTab or ReflectionTab
-                ? row < SettingsFields(t).Count ? menu.FieldFooter(SettingsFields(t)[row], saved) : null
-                : row < loaded.Count && loaded[row].Skill is { } skill ? new MenuFooter(skill.Description, LockedLast(skill)) : null,
+            // The settings tabs' band; the Offered tab's (and each scope's) is its own, below. The page's is what turns the band on.
+            Footer = (t, row) => t is OptionsTab or ReflectionTab && row < SettingsFields(t).Count ? menu.FieldFooter(SettingsFields(t)[row], saved) : null,
         };
+
+        // The Offered rows (or one scope's): the hint and the filter, the caption counting the skills kept of those the scope holds, and
+        // the band saying the cursor's skill whole, its warning on a last line (2026-10-05, the user's ask: it stood blank there while every
+        // row cuts its description at the pane's edge); the off, none and problem rows name none.
+        MenuTab Offered(string title, IReadOnlyList<(string Markup, Skill? Skill)> rows, SkillScope? scope) => new(title, rows.Select(r => r.Markup).ToList())
+        {
+            Hint = MenuFilter.Hint(LoadedKeys, filter),
+            Filter = filter,
+            Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Skill is not null), facts.Skills.Concat(facts.Shadowed).Count(s => scope is null || s.Scope == scope)),
+            Footer = row => row >= 0 && row < rows.Count && rows[row].Skill is { } skill ? new MenuFooter(skill.Description, LockedLast(skill)) : null,
+        };
+    }
+
+    /// <summary>The Offered tab's rows for <paramref name="facts"/> under <paramref name="filter"/>: one list per <see cref="SkillsText.ScopeTabs"/> (2026-10-10), or the one list when there are none.</summary>
+    public static IReadOnlyList<IReadOnlyList<(string Markup, Skill? Skill)>> OfferedRows(SkillsFacts facts, string filter)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        var scopes = SkillsText.ScopeTabs(facts);
+        return scopes.Count == 0 ? [SkillsText.LoadedRows(facts, filter)] : scopes.Select(scope => SkillsText.LoadedRows(facts, filter, scope)).ToList();
     }
 
     /// <summary>The three tabs as plain lines, for a console without the pane, in the strip's order: <see cref="SkillsText.Lines"/>, then the Reflection rows and the Options rows (<see cref="SettingsMenu.PlainRow"/>), each headed and indented.</summary>
@@ -391,6 +419,7 @@ internal sealed class SkillsMenu
 
         int tab = 0;
         int cursor = 0;
+        int sub = 0;   // the Offered tab's scope on show (2026-10-10): all on every visit
         string filter = "";
         _menu.Root = SkillsText.Label;
         try
@@ -398,9 +427,9 @@ internal sealed class SkillsMenu
             while (true)
             {
                 // The facts are the scan's until an act changes them, so typing into the filter rescans nothing (2026-10-03).
-                var loaded = SkillsText.LoadedRows(facts, filter);
+                var lists = OfferedRows(facts, filter);
                 var saved = _settings.Current;
-                var page = Page(facts, loaded, saved, _menu, tab, filter);
+                var page = Page(facts, lists, saved, _menu, tab, filter, sub);
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
                 {
@@ -409,6 +438,9 @@ internal sealed class SkillsMenu
 
                 tab = pick.Tab;
                 cursor = pick.Row;
+                // ←/→ move the scope with no pick, so it is read off the pane (ToolsMenu's shape).
+                sub = _pane.ShownSubs is { Count: > 0 } shownSubs ? shownSubs[0] : 0;
+                var loaded = lists[Math.Clamp(sub, 0, lists.Count - 1)];
                 if (pick.Filter is { } typed)
                 {
                     // The Offered tab's filter (2026-10-03): the rows again under it, the cursor on the first.
@@ -463,7 +495,8 @@ internal sealed class SkillsMenu
                 if (await PickScopeAsync(skill, facts, cancellationToken).ConfigureAwait(false))
                 {
                     facts = _facts();
-                    cursor = Math.Max(0, Math.Min(cursor, SkillsText.LoadedRows(facts, filter).Count - 1));
+                    var rows = OfferedRows(facts, filter);
+                    cursor = Math.Max(0, Math.Min(cursor, rows[Math.Clamp(sub, 0, rows.Count - 1)].Count - 1));
                 }
             }
         }

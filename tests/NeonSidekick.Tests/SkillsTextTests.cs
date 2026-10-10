@@ -162,6 +162,67 @@ public class SkillsTextTests
         Assert.Equal(Cyan("odd ") + "  global   Uses [[bold]] tags.", SkillsText.LoadedRows(Facts(skills: [odd]))[0].Markup);
     }
 
+    /// <summary>
+    /// The Offered tab's scope sub-tabs (2026-10-10, the user's ask): each keeps its root's skills, the shadowed ones of that root and the
+    /// skipped folders under it, the columns the whole catalog's; a scope with none says so, or the no-match row under a filter.
+    /// </summary>
+    [Fact]
+    public void LoadedRows_ForAScope_KeepThatRootsSkills_ShadowedAndSkippedFolders()
+    {
+        Skill csv = new("csv", "Tidies CSV.", SkillScope.Global, @"D:\home\skills\csv");
+        var facts = Facts(skills: [Haiku, csv, Pdf], shadowed: [Hidden], problems: [Broken]);
+
+        Assert.Equal([(Cyan("haiku         ") + "  profile  Writes haiku.", Haiku)], SkillsText.LoadedRows(facts, "", SkillScope.Profile));
+        Assert.Equal(
+            [
+                (Cyan("csv           ") + "  global   Tidies CSV.", csv),
+                (Cyan("Shadowed (a higher root holds the name):"), null),
+                (Dim("  haiku           global   shadowed by the profile skills"), Hidden),
+                (Cyan("Skipped:"), null),
+                (Dim(@"  D:\home\skills\broken: the frontmatter has no description"), null),
+            ],
+            SkillsText.LoadedRows(facts, "", SkillScope.Global));
+        Assert.Equal(
+            [
+                (Cyan("pdf-processing") + "  external Extracts PDF text.", Pdf),
+                (Dim("                (name 'pdf-processing' does not match the folder 'pdf')"), null),
+            ],
+            SkillsText.LoadedRows(facts, "", SkillScope.External));
+        Assert.Equal(SkillsText.LoadedRows(facts), SkillsText.LoadedRows(facts, "", null));
+
+        // The filter on a scope; a scope with nothing of its own.
+        Assert.Equal([(Cyan("csv           ") + "  global   Tidies CSV.", csv)], SkillsText.LoadedRows(facts, "tidies", SkillScope.Global));
+        Assert.Equal([(Dim(MenuFilter.NoMatchLine("tidies")), (Skill?)null)], SkillsText.LoadedRows(facts, "tidies", SkillScope.Profile));
+        Assert.Equal([(Dim("(no global skills)"), (Skill?)null)], SkillsText.LoadedRows(Facts(skills: [Haiku]), "", SkillScope.Global));
+        Assert.Equal([(Dim(SkillsText.OffLine), (Skill?)null)], SkillsText.LoadedRows(Facts(enabled: false, skills: [Haiku]), "", SkillScope.Profile));
+    }
+
+    [Fact]
+    public void ScopeTabs_AreAllProfileGlobal_ExternalWhileOneIsListed_NoneWhileOffOrEmpty()
+    {
+        Assert.Equal([null, SkillScope.Profile, SkillScope.Global], SkillsText.ScopeTabs(Facts(skills: [Haiku])));
+        Assert.Equal([null, SkillScope.Profile, SkillScope.Global, SkillScope.External], SkillsText.ScopeTabs(Facts(skills: [Haiku, Pdf])));
+        Assert.Empty(SkillsText.ScopeTabs(Facts()));
+        Assert.Empty(SkillsText.ScopeTabs(Facts(enabled: false, skills: [Haiku])));
+
+        Assert.Equal(["all", "profile", "global", "external"], new SkillScope?[] { null, SkillScope.Profile, SkillScope.Global, SkillScope.External }.Select(SkillsText.ScopeTitle));
+        Assert.Equal("(no profile skills)", SkillsText.ScopeNoneLine(SkillScope.Profile));
+        var facts = Facts(skills: [Haiku, Pdf], shadowed: [Hidden]);
+        Assert.Equal("³", SkillsText.ScopeBadge(facts, null));
+        Assert.Equal("¹", SkillsText.ScopeBadge(facts, SkillScope.Global));   // the shadowed one counted under its own root
+        Assert.Null(SkillsText.ScopeBadge(Facts(skills: [Haiku]), SkillScope.Global));
+    }
+
+    [Fact]
+    public void ProblemScope_IsTheRootTheFolderLiesUnder_CaseAside()
+    {
+        Assert.Equal(SkillScope.Global, SkillsText.ProblemScope(Roots, Broken));
+        Assert.Equal(SkillScope.Profile, SkillsText.ProblemScope(Roots, new(@"d:\HOME\profiles\default\skills\x", "r")));
+        Assert.Equal(SkillScope.External, SkillsText.ProblemScope(Roots, new(@"C:\Users\x\.agents\skills\y", "r")));
+        Assert.Null(SkillsText.ProblemScope(Roots, new(@"D:\home\skillset\z", "r")));   // a folder beside the root, not under it
+        Assert.Null(SkillsText.ProblemScope(Roots, new(@"D:\home\skills", "r")));
+    }
+
     [Fact]
     public void NameWidth_IsTheLongestOfBothLists_AtLeastFour()
     {
