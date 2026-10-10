@@ -17,7 +17,8 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>files</c>, every level; or under <c>order</c> modified the most recently changed files, newest
 /// first. <c>limit</c> caps every shape, up to the <c>File search max results</c> setting (2026-10-01, the user's ask; a
 /// constant 200 until then), which the schema quotes (<see cref="LimitOf"/>). The one file tool that honours the turn's token:
-/// ESC ends a long search.
+/// ESC ends a long search. Since 2026-10-09 (the user's call) a full path in the profile's images folder lists and searches there,
+/// read-only, its results full paths for the picture tools; the description names the folder.
 /// </summary>
 public sealed class SearchFilesTool : FileTool
 {
@@ -48,14 +49,17 @@ public sealed class SearchFilesTool : FileTool
     private int _schemaLimit;
     private JsonElement _schema;
 
-    /// <summary>The schema under the given cap: <c>limit</c>'s description quotes it (<see cref="LimitDescription"/>). Pinned.</summary>
-    public static JsonElement SchemaFor(int max) => ToolSchema.Parse(
+    /// <summary>
+    /// The schema under the given cap: <c>limit</c>'s description quotes it (<see cref="LimitDescription"/>); <paramref name="images"/>
+    /// says <c>path</c> may be a full path in the profile's images folder too (2026-10-09). Pinned.
+    /// </summary>
+    public static JsonElement SchemaFor(int max, bool images = false) => ToolSchema.Parse(
         $$"""
         {
           "type": "object",
           "properties": {
             "text": { "type": "string", "description": "The word or phrase to look for inside files. Case does not matter. Leave it out to list files instead of searching inside them." },
-            "path": { "type": "string", "description": "A subfolder to search or list, or one file to search in, relative to the working directory. Leave it out for the working directory itself." },
+            "path": { "type": "string", "description": "A subfolder to search or list, or one file to search in, relative to the working directory{{(images ? ", or a full path in the user's images folder" : "")}}. Leave it out for the working directory itself." },
             "files": { "type": "string", "description": "Only files matching this pattern: a name pattern such as *.md or *.cs, or a path pattern such as src/**/*.cs (** spans folders); braces give alternatives, *.{png,jpg}. Without text, lists the matching files at every level." },
             "regex": { "type": "boolean", "description": "true to treat text as a regular expression instead of plain words. Default false." },
             "context": { "type": "integer", "description": "Lines to show before and after each hit, 0 to 5 (default 0). Context lines read file-11- text around the hit's file:12: text." },
@@ -87,7 +91,8 @@ public sealed class SearchFilesTool : FileTool
 
     /// <param name="files">The sandbox searched and listed.</param>
     /// <param name="effective">The settings the cap (<c>File search max results</c>) is read from at every use.</param>
-    public SearchFilesTool(WorkingDirectory files, Func<AppSettingsData> effective) : base(files)
+    /// <param name="images">The profile's images folder, listed and searched by its full path (2026-10-09); null = the sandbox alone.</param>
+    public SearchFilesTool(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null) : base(files, images)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
@@ -97,7 +102,13 @@ public sealed class SearchFilesTool : FileTool
 
     public override string Name => ToolName;
 
-    public override string Description =>
+    public override string Description => DescriptionFor(Images?.Root);
+
+    /// <summary>The description, with <see cref="FileText.ImagesFolderSearchSentence"/> after it while <paramref name="imagesRoot"/> is given. Pinned.</summary>
+    public static string DescriptionFor(string? imagesRoot) => imagesRoot is null ? DescriptionText : DescriptionText + " " + FileText.ImagesFolderSearchSentence(imagesRoot);
+
+    /// <summary>The description over the working directory alone. Pinned.</summary>
+    public const string DescriptionText =
         "Searches inside the text files under the working directory (the user's cwd / current directory), under a subfolder, or in one file named as path, for a word or phrase, case-insensitive; " +
         "each hit is file:line: text, with context lines around it when asked (file-11- text), or with output files one row per file with its count. files narrows by name (*.cs) or path (src/**/*.cs); set regex true for a regular expression. " +
         "Without text it lists instead: the folder's files and folders with sizes (depth 2 to 4 shows a tree), the files whose names match files at every level, or with order modified the most recently changed files newest first with their times. " +
@@ -110,7 +121,7 @@ public sealed class SearchFilesTool : FileTool
             int limit = Limit;
             if (_schema.ValueKind == JsonValueKind.Undefined || limit != _schemaLimit)
             {
-                _schema = SchemaFor(limit);
+                _schema = SchemaFor(limit, Images is not null);
                 _schemaLimit = limit;
             }
 
@@ -120,7 +131,7 @@ public sealed class SearchFilesTool : FileTool
 
     /// <summary>The dispatch: a content search with <paramref name="text"/>, else one of the three listing shapes.</summary>
     public string Describe(string text, string path, string? files, bool regex, CancellationToken cancellationToken, int context = 0, string output = ContentOutput, string order = NameOrder, int? limit = null, int? depth = null) =>
-        Run(Files, new SearchRequest(text, path, files ?? "", regex, context, output, order, limit, depth), Limit, cancellationToken).Text;
+        Run(FilesFor(path), new SearchRequest(text, path, files ?? "", regex, context, output, order, limit, depth), Limit, cancellationToken).Text;
 
     /// <summary>One <c>search_files</c> call's arguments, read and checked (<see cref="TryRead"/>).</summary>
     public sealed record SearchRequest(string Text, string Path, string Files, bool Regex, int Context, string Output, string Order, int? Limit, int? Depth);
@@ -228,6 +239,7 @@ public sealed class SearchFilesTool : FileTool
 
         // Off the caller's thread: the walk is synchronous and parallel, and the turn loop is the UI's.
         int limit = Limit;
-        return await Task.Run(() => Run(Files, request!, limit, cancellationToken).Text, cancellationToken).ConfigureAwait(false);
+        var sandbox = FilesFor(request!.Path);
+        return await Task.Run(() => Run(sandbox, request, limit, cancellationToken).Text, cancellationToken).ConfigureAwait(false);
     }
 }

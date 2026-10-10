@@ -47,6 +47,20 @@ public static class FileText
     // ---- errors ----
 
     public static string OutsideRoot(string path) => $"Error: '{path}' is outside the working directory; every path must stay inside it";
+
+    /// <summary>A path refused as outside that lies in the profile's images folder (<see cref="FileOutcome.InImagesFolder"/>, 2026-10-09): the tools that do reach it. Pinned.</summary>
+    public static string InImagesFolder(string path) => $"Error: '{path}' is in the user's images folder, outside the working directory: only search_files, file_info, view_image, image_info and image_edit reach it, by full path";
+
+    /// <summary>
+    /// What <c>search_files</c>' description adds while the images folder is offered (2026-10-09, the user's call: a model asked for
+    /// the newest pictures listed <c>images</c>, a guess, and then could not list the folder at all). Pinned.
+    /// </summary>
+    public static string ImagesFolderSearchSentence(string root) =>
+        $"The user's images folder, {root}, where camera, screen, generate_image and pasted pictures are saved, is outside the working directory: " +
+        "give its full path (or a subfolder's) as path to list or search it, with order modified for the newest; its results are full paths, which view_image, image_info and image_edit take.";
+
+    /// <summary><c>file_info</c>'s description's addition while the images folder is offered (2026-10-09). Pinned.</summary>
+    public static string ImagesFolderInfoSentence(string root) => $"A full path in the user's images folder ({root}) works too.";
     public static string Missing(string path) => $"Error: nothing is at '{path}'";
     public static string IsDirectory(string path) => $"Error: '{path}' is a folder, not a file";
     public static string IsAFile(string path) => $"Error: '{path}' is a file, not a folder";
@@ -201,6 +215,7 @@ public static class FileText
             FileOutcome.FolderInTheWay => FolderInTheWay(path),
             FileOutcome.GitProtected => GitProtected(path),
             FileOutcome.DatabaseProtected => DatabaseProtected(path),
+            FileOutcome.InImagesFolder => InImagesFolder(path),
             _ => CouldNot(verb, path, detail),
         };
 

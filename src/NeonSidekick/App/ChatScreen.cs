@@ -1078,6 +1078,8 @@ internal sealed partial class ChatScreen
         _files.Databases = () => _effective().SqliteTools ? SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
         _files.ServerDatabases = () => Shell.ServerDatabasePolice.For(_effective(), _settings.ProfileDirectory, _settings.StorageDirectory);
         _images = new WorkingDirectory(() => _settings.ProfileImagesDirectory, time, WorkingDirectoryOptions.Images);
+        // A refused path in the images folder names the tools that reach it (2026-10-09).
+        _files.ImagesFolder = () => _images.Root;
         // The UNC shares' door (2026-09-30) before the file tools: open reaches the offered shares too (2026-10-01).
         // The profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
         _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
@@ -5109,14 +5111,14 @@ internal sealed partial class ChatScreen
     /// 2026-10-04: <c>image_info</c> and <c>image_edit</c> after <c>open</c>, so the PDF tool stays last; they read
     /// <c>Image edit quality</c>, <c>metadata</c> and <c>output folder</c> from <paramref name="effective"/> at every call.
     /// </summary>
-    /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there; null = the working directory alone.</param>
+    /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there, and <c>search_files</c> and <c>file_info</c> read one (later that day, the user's call: the model could not list it to find the newest pictures); null = the working directory alone.</param>
     public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null)
     {
         var tools = new List<AIFunction>(17)
         {
             new GetWorkingDirectoryTool(files, isDefault),
-            new SearchFilesTool(files, effective),
-            new FileInfoTool(files),
+            new SearchFilesTool(files, effective, images),
+            new FileInfoTool(files, images),
             new ReadFileTool(files),
             new WriteFileTool(files),
             new PatchFileTool(files),

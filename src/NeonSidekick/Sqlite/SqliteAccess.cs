@@ -107,7 +107,7 @@ public sealed class SqliteAccess
                 return new SqliteTarget(wanted.Replace('\\', '/'), full);
             }
 
-            if (outcome is FileOutcome.OutsideRoot)
+            if (outcome is FileOutcome.OutsideRoot or FileOutcome.InImagesFolder)
             {
                 refused = SqlRun.Refused(SqlOutcome.ConnectFailed, SqliteText.OutsideSandbox(wanted), wanted);
                 return null;

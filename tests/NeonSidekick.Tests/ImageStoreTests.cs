@@ -134,6 +134,105 @@ public sealed class ImageStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task SearchFiles_ListsTheImagesFolder_ByItsFullPath_NewestFirst_InFullPaths()
+    {
+        // The model's own call (2026-10-09): the newest pictures by order modified, the folder named in full.
+        var time = new ManualTimeProvider();
+        string older = Picture(_imagesRoot, Path.Combine("comfy_images", "old.bmp"));
+        string newer = Picture(_imagesRoot, Path.Combine("camera_images", "new.bmp"));
+        File.SetLastWriteTimeUtc(older, new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(newer, new DateTime(2026, 10, 9, 0, 0, 0, DateTimeKind.Utc));
+        Picture(_root, "local.bmp");
+        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+        var search = tools.Single(t => t.Name == SearchFilesTool.ToolName);
+
+        string recent = ToolAnswers.Text(await search.InvokeAsync(Args(("path", _imagesRoot), ("order", "modified"), ("limit", 5))));
+        int at = recent.IndexOf(newer, StringComparison.Ordinal);
+        Assert.True(at >= 0, recent);
+        Assert.True(at < recent.IndexOf(older, StringComparison.Ordinal), recent);
+        Assert.DoesNotContain("local.bmp", recent, StringComparison.Ordinal);
+
+        string found = ToolAnswers.Text(await search.InvokeAsync(Args(("path", Path.Combine(_imagesRoot, "camera_images")), ("files", "*.bmp"))));
+        Assert.Contains(newer, found, StringComparison.Ordinal);
+        Assert.DoesNotContain(older, found, StringComparison.Ordinal);
+
+        // A relative path is still the working directory's, and a full path elsewhere is still refused.
+        Assert.Contains("local.bmp", ToolAnswers.Text(await search.InvokeAsync(Args(("files", "*.bmp")))), StringComparison.Ordinal);
+        Assert.Equal(FileText.Missing("images\\"), ToolAnswers.Text(await search.InvokeAsync(Args(("path", "images")))).Replace('/', '\\'));
+        string elsewhere = Path.Combine(_dir, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        Assert.StartsWith("Error: ", ToolAnswers.Text(await search.InvokeAsync(Args(("path", elsewhere)))), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FileInfo_ReadsAFullPathInTheImagesFolder()
+    {
+        string saved = Picture(_imagesRoot, Path.Combine("pasted_images", "p.bmp"));
+        var info = new FileInfoTool(_files, _images);
+
+        string answer = ToolAnswers.Text(await info.InvokeAsync(Args(("path", saved))));
+
+        Assert.DoesNotContain("Error", answer, StringComparison.Ordinal);
+        Assert.Contains(saved, answer, StringComparison.Ordinal);
+        Assert.StartsWith("Error: ", new FileInfoTool(_files).Describe(saved), StringComparison.Ordinal);   // without the folder, as before
+    }
+
+    [Fact]
+    public void TheDescriptions_NameTheImagesFolder_OnlyWhileItIsOffered()
+    {
+        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+        string root = _images.Root;
+
+        Assert.Equal(SearchFilesTool.DescriptionText + " " + FileText.ImagesFolderSearchSentence(root), tools.Single(t => t.Name == SearchFilesTool.ToolName).Description);
+        Assert.Equal(FileInfoTool.DescriptionText + " " + FileText.ImagesFolderInfoSentence(root), tools.Single(t => t.Name == FileInfoTool.ToolName).Description);
+        Assert.Contains("full path in the user's images folder", tools.Single(t => t.Name == SearchFilesTool.ToolName).JsonSchema.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("full path in the user's images folder", tools.Single(t => t.Name == FileInfoTool.ToolName).JsonSchema.GetRawText(), StringComparison.Ordinal);
+        if (ImageCodecs.Available)
+        {
+            var view = tools.Single(t => t.Name == ViewImageTool.ToolName);
+            Assert.Equal(ViewImageTool.Describe(_settings.FileViewImageMaxPerCall, root), view.Description);
+            Assert.Contains("(in the user's images folder, " + root + "; search_files lists it by that full path)", view.Description, StringComparison.Ordinal);
+        }
+
+        // Without the folder: the old words, no path in them.
+        Assert.Equal(SearchFilesTool.DescriptionText, new SearchFilesTool(_files, () => _settings).Description);
+        Assert.Equal(FileInfoTool.DescriptionText, new FileInfoTool(_files).Description);
+        Assert.DoesNotContain("images folder", new FileInfoTool(_files).JsonSchema.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("images folder", ViewImageTool.Describe(4), StringComparison.Ordinal);
+        Assert.Equal(
+            "The user's images folder, C:\\p\\images, where camera, screen, generate_image and pasted pictures are saved, is outside the working directory: " +
+            "give its full path (or a subfolder's) as path to list or search it, with order modified for the newest; its results are full paths, which view_image, image_info and image_edit take.",
+            FileText.ImagesFolderSearchSentence("C:\\p\\images"));
+        Assert.Equal("A full path in the user's images folder (C:\\p\\images) works too.", FileText.ImagesFolderInfoSentence("C:\\p\\images"));
+    }
+
+    [Fact]
+    public async Task TheOtherFileTools_RefuseTheImagesFolder_NamingTheToolsThatReachIt()
+    {
+        string saved = Picture(_imagesRoot, Path.Combine("comfy_images", "a.bmp"));
+        string elsewhere = Path.Combine(_dir, "elsewhere", "x.txt");
+        _files.ImagesFolder = () => _imagesRoot;
+        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+
+        Assert.Equal(FileOutcome.InImagesFolder, _files.Resolve(saved, forWrite: false, out _));
+        Assert.Equal(FileOutcome.InImagesFolder, _files.Resolve(_imagesRoot, forWrite: false, out _));
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(elsewhere, forWrite: false, out _));
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(_imagesRoot + "2", forWrite: false, out _));   // a sibling that starts the same
+
+        Assert.Equal(FileText.InImagesFolder(saved), ToolAnswers.Text(await tools.Single(t => t.Name == ReadFileTool.ToolName).InvokeAsync(Args(("path", saved)))));
+        Assert.Equal(FileText.InImagesFolder(saved), ToolAnswers.Text(await tools.Single(t => t.Name == DeleteTool.ToolName).InvokeAsync(Args(("path", saved)))));
+        Assert.True(File.Exists(saved));   // the listing is read-only: nothing else reaches the folder
+        Assert.Equal(FileText.OutsideRoot(elsewhere), ToolAnswers.Text(await tools.Single(t => t.Name == ReadFileTool.ToolName).InvokeAsync(Args(("path", elsewhere)))));
+
+        // Without the hook, every refusal is the old one.
+        _files.ImagesFolder = null;
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(saved, forWrite: false, out _));
+        Assert.Equal(
+            "Error: 'C:\\p\\images\\a.png' is in the user's images folder, outside the working directory: only search_files, file_info, view_image, image_info and image_edit reach it, by full path",
+            FileText.InImagesFolder("C:\\p\\images\\a.png"));
+    }
+
+    [Fact]
     public void SavedLabel_AndBackAgain_ArePinned()
     {
         string path = Path.Combine(_imagesRoot, "pasted_images", "pasted-20261009-142233.png");

@@ -76,8 +76,8 @@ Every path is relative to the working directory; nothing outside it can be reach
 | Tool | Arguments | What it does |
 |---|---|---|
 | `get_working_directory` | — | The working directory's path. Seeded at the start of every conversation. |
-| `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches text files for a word, phrase or regex (`file:line: text`, with context lines when asked). Without `text`, lists a folder, a tree (`depth` 2–4), files matching a name pattern, or the most recently changed files. `limit` goes up to *File search max results*. |
-| `file_info` | `path` | A file's size, modified time, lines, words, line ending and BOM; a folder's counts and total size. Also checks that something exists. |
+| `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches text files for a word, phrase or regex (`file:line: text`, with context lines when asked). Without `text`, lists a folder, a tree (`depth` 2–4), files matching a name pattern, or the most recently changed files. `limit` goes up to *File search max results*. A full path in the profile's `images` folder lists or searches there too (read-only; the results are full paths), so "show me the last 5 pictures" is one listing and one `view_image`. |
+| `file_info` | `path` | A file's size, modified time, lines, words, line ending and BOM; a folder's counts and total size. Also checks that something exists. Takes a full path in the profile's `images` folder too. |
 | `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end). A partial read names the line to continue from. |
 | `write_file` | `path, content, mode?` | Writes a text file: `create` (default; leaves an existing file alone), `overwrite` or `append`. Reports size, lines and words. |
 | `patch_file` | `path, old_text, new_text, replace_all?` | Replaces one occurrence of `old_text` (or all with `replace_all`), exactly or tolerating differences in spacing, indentation, escapes and typographic quotes. Shows the edited lines. |
@@ -811,7 +811,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 ### Images
 
-These are file tools: *File tools* offers them. They reach the working directory and, by the full path a result gave, the pictures saved in the profile's `images` folder (photos, screenshots, ComfyUI's pictures, pastes); nothing else outside the working directory.
+These are file tools: *File tools* offers them. They reach the working directory and, by full path, the pictures saved in the profile's `images` folder (photos, screenshots, ComfyUI's pictures, pastes); nothing else outside the working directory. The model finds those pictures with `search_files` on the folder's full path, which its description gives (`order: modified` for the newest). No other file tool reaches the folder: `read_file`, `delete`, `move` and the rest refuse a path there, naming the tools that do.
 
 | Tool | Arguments | What it does |
 |---|---|---|

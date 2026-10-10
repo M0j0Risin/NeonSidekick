@@ -58,11 +58,15 @@ public sealed class ViewImageTool : FileTool
         return Math.Clamp(effective.FileViewImageMaxPerCall, AppSettingsData.MinViewImageMaxPerCall, AppSettingsData.MaxViewImageMaxPerCall);
     }
 
-    public override string Description => Describe(Limit);
+    public override string Description => Describe(Limit, Images?.Root);
 
-    /// <summary>The description under the given cap. Pinned.</summary>
-    public static string Describe(int limit) =>
-        "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory), or by the full path a camera, screen, generate_image or pasted picture was saved under: one as path, or up to " + N(limit) + " per call as paths " +
+    /// <summary>
+    /// The description under the given cap; <paramref name="imagesRoot"/> (2026-10-09, the user's call) names the profile's images
+    /// folder, where the saved pictures are, and that <c>search_files</c> lists it. Pinned.
+    /// </summary>
+    public static string Describe(int limit, string? imagesRoot = null) =>
+        "Shows you image files (png, jpg, gif, webp, bmp) under the working directory (the user's cwd / current directory), or by the full path a camera, screen, generate_image or pasted picture was saved under" +
+        (imagesRoot is null ? "" : " (in the user's images folder, " + imagesRoot + "; search_files lists it by that full path)") + ": one as path, or up to " + N(limit) + " per call as paths " +
         "(more than " + N(limit) + " shows the first " + N(limit) + " and names the rest for the next call; a batch per call, not a call per picture). They are attached to the message after the result, so you can describe or analyse them; read_file cannot read images.";
 
     public override JsonElement JsonSchema

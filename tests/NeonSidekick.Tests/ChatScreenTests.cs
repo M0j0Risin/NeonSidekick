@@ -10299,7 +10299,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 120;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more
+        _console.Profile.Height = 130;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);
@@ -10340,7 +10340,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt_Unix()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full-screen"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 120;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more
+        _console.Profile.Height = 130;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);

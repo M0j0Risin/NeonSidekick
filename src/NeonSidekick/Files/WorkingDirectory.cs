@@ -76,6 +76,13 @@ public enum FileOutcome
     /// (2026-10-05, the user's call; <see cref="WorkingDirectory.Databases"/>): a database changes only through <c>sqlite_execute</c>.
     /// </summary>
     DatabaseProtected,
+
+    /// <summary>
+    /// A path outside the working directory but inside the profile's images folder (2026-10-09, the user's call;
+    /// <see cref="WorkingDirectory.ImagesFolder"/>): refused as <see cref="OutsideRoot"/> is, with a sentence naming the tools that
+    /// do reach the folder by full path (<c>search_files</c>, <c>file_info</c> and the picture tools).
+    /// </summary>
+    InImagesFolder,
 }
 
 public readonly record struct DirectoryEntry(string Name, bool IsDirectory, long Length);
@@ -471,6 +478,15 @@ public sealed class WorkingDirectory
     /// </summary>
     public Func<Shell.ServerDatabaseGuard?>? ServerDatabases { get; set; }
 
+    /// <summary>
+    /// The profile's images folder, a full path (2026-10-09, the user's call, after a model listed <c>images</c> and then the folder's
+    /// full path with <c>search_files</c> and was told only "outside the working directory"): read when a path is refused as outside,
+    /// so one inside that folder is <see cref="FileOutcome.InImagesFolder"/>, whose sentence names the tools that reach it. Set on the
+    /// working directory alone (never a share's, nor the images folder's own); null, or a null answer, keeps every refusal
+    /// <see cref="FileOutcome.OutsideRoot"/>. It reaches nothing itself: those tools route a full path there (<see cref="Llm.Tools.FileTool.For"/>).
+    /// </summary>
+    public Func<string?>? ImagesFolder { get; set; }
+
     /// <summary>The setting's meaning: blank is the profile's <see cref="DefaultFolderName"/> folder, anything else a full path.</summary>
     public static string Resolve(string configured, string profileDirectory)
     {
@@ -514,6 +530,19 @@ public sealed class WorkingDirectory
     /// working directory and the profile's images folder a picture tool's path belongs to, <see cref="Llm.Tools.FileTool"/>). A
     /// relative path is never contained; <see cref="Resolve(string, bool, out string)"/> still judges the links.
     /// </summary>
+    // Whether a refused candidate lies in the profile's images folder (ImagesFolder); a bad hook answer is no folder.
+    private bool InImagesFolderOf(string candidate)
+    {
+        try
+        {
+            return ImagesFolder?.Invoke() is { Length: > 0 } images && IsInside(Path.TrimEndingDirectorySeparator(Path.GetFullPath(images)), candidate);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     public bool Contains(string path)
     {
         string text = (path ?? "").Trim();
@@ -575,7 +604,12 @@ public sealed class WorkingDirectory
         // The root's real spelling (/private/tmp/x for /tmp/x on a Mac) is the root too.
         candidate = InRootSpelling(root, candidate, RealPath.Of);
         string walked = linkItself ? Path.GetDirectoryName(candidate) ?? candidate : candidate;
-        if (!IsInside(root, candidate) || LinkEscape(root, walked, RealLinkTarget) is not null)
+        if (!IsInside(root, candidate))
+        {
+            return InImagesFolderOf(candidate) ? FileOutcome.InImagesFolder : FileOutcome.OutsideRoot;
+        }
+
+        if (LinkEscape(root, walked, RealLinkTarget) is not null)
         {
             return FileOutcome.OutsideRoot;
         }
