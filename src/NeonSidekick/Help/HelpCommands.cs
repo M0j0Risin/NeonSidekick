@@ -27,6 +27,11 @@ public static class HelpCommands
         [
             new("/about", "Show the app's version, runtime, folders, components, the embedded models' Hugging Face pages and the licence."),
         ]),
+        new("/advisor",
+        [
+            new("/advisor", "List the advisors: the profiles of *Advisor list* and their roles, a missing one marked."),
+            new("/advisor <name> <question>", "Ask one advisor (named by its profile, or a word of its role) on its own profile's server and model; it may use this chat's read-only tools. The answer joins the conversation, so the model can build on it. Works whether or not *Advisors enabled* is on. See Advisors."),
+        ]),
         new("/botchat",
         [
             new("/botchat [<profile> ...] [--] [<topic>]", "Let profiles talk to each other, each in its own persona, until you stop them. Leading words that name profiles are the cast (every profile when none is named; the loaded one always speaks first); the first other word starts the topic, and `--` makes everything after it the topic. See Bot conversations."),

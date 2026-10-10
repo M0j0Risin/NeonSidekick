@@ -86,6 +86,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Printing & PDFs:** `/print` to any installed printer (Windows or Mac), and `/pdf` from Markdown, text, pictures or a web page.
 * **Claude Code:** `/claude` messages your installed Claude Code; the model can ask it for read-only advice.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
+* **Advisors:** other profiles as advisors, each in a role you give it (a database architect, a UX designer); the model or `/advisor` asks one, and it answers on its own profile's server and model, using the chat's read-only tools.
 
 ### Extras
 * `/loop` repeats a message, `/test` benchmarks the connected model, and the performance bar shows CPU, RAM, GPU and network.
@@ -158,7 +159,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 
 | Pane | Opens with | What's in it |
 |---|---|---|
-| `/settings` | Ctrl+/ or `//` | The app; the LLM server, the embedded model, Docker, Anthropic and OpenAI (Servers); voice (Voice); sessions and `/botchat`. |
+| `/settings` | Ctrl+/ or `//` | The app; the LLM server, the embedded model, Docker, Anthropic and OpenAI (Servers); voice (Voice); sessions, `/botchat` and the advisors (Advisors). |
 | `/tools` | Ctrl+Alt+T | Which tools the model may use, and each group's options. |
 | `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
 | `/mcp` | Ctrl+Alt+D | External MCP servers. |

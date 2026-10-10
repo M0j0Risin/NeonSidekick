@@ -11,6 +11,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
   - [Plan mode](#plan-mode)
   - [Bot conversations](#bot-conversations)
   - [Claude Code from the chat](#claude-code-from-the-chat)
+  - [Advisor](#advisor)
   - [Your own shell line](#your-own-shell-line)
   - [Loops](#loops)
   - [Benchmark tests](#benchmark-tests)
@@ -34,6 +35,8 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | Command | What it does |
 |---|---|
 | `/about` | Shows the version, the GitHub repository, runtime, folders, components, the embedded models (each Hugging Face repository with its link, the Models tab) and licence. |
+| `/advisor` | Lists the advisors: the *Advisor list*'s profiles and their roles. See [Advisor](#advisor). |
+| `/advisor <name> <question>` | Asks one advisor, named by its profile or a word of its role, on its own profile's server; the answer joins the conversation. |
 | `/claude <message>` | Sends the message to Claude Code and streams its reply into the transcript. See Claude Code from the chat. |
 | `/claude new` | Starts a new Claude conversation; the next `/claude` begins it. |
 | `/clear` | Starts a new conversation and clears the screen. |
@@ -165,7 +168,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/timer stop <name>\|all` | Stops one timer, or every one. |
 | `/toolbar [on\|off]` | Hides the toolbar, or brings it back with its last items (the default eleven the first time). |
 | `/tools` | Switches the model's tools on or off, and edits each tool group's settings on its own tab (Files, Integrations, Database and Media hold several, on a second strip). On the Offered tab, typing narrows the list to the tools whose name or description holds the text (`haiku`); Backspace erases, ESC clears it, the next ESC closes. |
-| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker, whose **allowed** and **police** buttons (`c`, `p`) open those pages, ESC coming back), `ask` (*Ask user*), `files`, `image`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (`d`, `h`, `c`) for *Web browser mode*; `camera`'s has a **watch** button (`w`) that turns `/camera watch` on or off. `files`' page has a **browser** button (`b`) for *File browser/tree mode*, `image`'s an **edit mode** button (`e`) for *Image edit mode*, `obsidian`'s **vault** (`v`) for *Obsidian vault*, `claude`'s **model** and **effort** (`m`, `e`) for the advisor's model and effort, and `print`'s **printer** (`p`) for *Print default printer*; each opens that setting and ESC comes back. |
+| `/tools <group>` | Opens one group's switch: `shell` (the *Shell command policy* picker, whose **allowed** and **police** buttons (`c`, `p`) open those pages, ESC coming back), `ask` (*Ask user*), `files`, `image`, `web`, `claude`, `advisors` (*Advisors enabled*), `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera` or `print`. The toolbar's tool items run it. `web`'s page has default, httpclient and chromium buttons (`d`, `h`, `c`) for *Web browser mode*; `camera`'s has a **watch** button (`w`) that turns `/camera watch` on or off. `files`' page has a **browser** button (`b`) for *File browser/tree mode*, `image`'s an **edit mode** button (`e`) for *Image edit mode*, `obsidian`'s **vault** (`v`) for *Obsidian vault*, `claude`'s **model** and **effort** (`m`, `e`) for the advisor's model and effort, and `print`'s **printer** (`p`) for *Print default printer*; each opens that setting and ESC comes back. |
 | `/tools shell allowed` | Opens *Shell allowed commands*: Enter removes a prefix after a yes; the ask and yolo buttons (`a`, `y`) switch *Shell command policy*; typing filters the list. The toolbar's lock and Ctrl+Alt+L run it. |
 | `/tools shell police` | Opens the on/off page for *Shell police*; its strings button (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it. |
 | `/tree [<path>]` | Shows a tree of the working directory in a pane (hidden entries only under *File browser/tree mode* `show-hidden`; `.git` only when named). |
@@ -246,6 +249,16 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * *Claude Code slash command permissions* sets what Claude may do; anything more is denied, never asked.
 * ESC or Ctrl+C stops it, keeping the reply so far. Works with no LLM server; refused during a reply.
 * Your own Claude Code setup applies (sign-in, `CLAUDE.md`, skills, MCP servers, hooks). `/usage` shows the cost.
+
+### Advisor
+
+`/advisor <name> <question>` asks one of the profiles set up under `/settings › Advisors` ([SETTINGS.md](SETTINGS.md#advisors)), the way the model's `neon_advisor` does.
+
+* It answers on its own profile's server and model, under its own `persona.md` and the role you gave it, and may use this chat's read-only tools (the ones plan mode keeps) for up to *Advisor tool iterations* round trips.
+* The transcript shows the question, each tool it calls, its answer and a footer with its model and tokens (and, under *Advisor embedded mode* `parent-server`, which model it wanted).
+* The pair joins the conversation tagged `[to dba]` and `[dba]`, so the model can build on it, and the advisor's thread remembers it for its next question (the model's calls and yours share one thread per advisor).
+* Works whether *Advisors enabled* is on or off, never capped or confirmed. ESC stops it. Headless, the answer prints as `dba: …`.
+* A bare `/advisor` lists the advisors; one whose profile is gone is marked `(missing)`.
 
 ### Your own shell line
 

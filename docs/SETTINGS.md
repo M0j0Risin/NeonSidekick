@@ -129,7 +129,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
-| 📁 🌄 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 🌄 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Claude Code advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
+| 📁 🌄 🌐 ✴️ 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `claude`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 🌄 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Claude Code advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -177,7 +177,7 @@ Settings that an environment variable or flag can override for one launch are li
 | Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `disabled`. See [Welcome splash](#welcome-splash) below. | `fullsize` |
 | Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it, shown at the next clear. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
-| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). `a` / `n` / `d` pick all, none or the default eleven; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (11 of 37) |
+| Show toolbar | A checklist of the toolbar's items: every glyph and the working-directory path (📂). `a` / `n` / `d` pick all, none or the default eleven; none hides the row. | Settings, Tools, Skills, Memory, Shell allowed commands, Shell police, Shell, Files, Image, Web, path (11 of 38) |
 | Show performance bar | A checklist of the bar's meters, updated each second: **CPU**, **RAM**, **GPU**, **VRAM**, **NET** (share of link speed), **NET↓** and **NET↑** (rates), **PROC** (background processes running); VRAM is **GMEM** on a Mac. `a` / `n` / `d` pick all, none or the default four; none hides the bar. The title row picks the look: **text** (`t`), **gauge** (`g`), **spark** (`s`, the last ten seconds) or **led** (`l`). See [Performance bar](#performance-bar) below. | CPU, RAM, GPU, VRAM, `led` |
 | Menus max height | How much of the window a menu or info pane may take: `half-screen`, `three-quarters` or `full-screen` (all but one row). Longer lists scroll; every tab keeps the tallest tab's height. | `full-screen` |
 | Draft editor | The program `/draft` opens with (`code --wait`, `notepad`…); it must wait for the file to close. Empty uses the app the system opens `.txt` files with (TextEdit on a Mac unless you chose another). | (default .txt editor) |
@@ -497,6 +497,24 @@ Voice input sets up in the background (🎙️ on the hint row); until it's read
 * **Async on:** 🖼️ (🎨 for a rework) shows on the hint row while a picture renders, with a count when several are pending. Each picture is labelled with whose reply it shows. Without speech, pictures go to ComfyUI one at a time.
 * **Async off:** ESC on a held reply cuts that bot short; ESC under the picture's spinner skips just that picture.
 * **Skills:** with *Botchat skills enabled*, the `automatic` prompt writer may load a skill first, so "use the pony-prompts skill for pictures" holds from the first picture. With it off, *Botchat limited skills* offers the writer the ticked skills alone.
+
+### Advisors
+
+Other profiles this one consults, each in a role you give it: `neon_advisor` for the model, `/advisor` for you (see [TOOLS.md](TOOLS.md#advisors) and [COMMANDS.md](COMMANDS.md#advisor)). An advisor answers on **its own profile's** server, model, key, reasoning and sampling, under its own `persona.md` and its role. It may call this chat's read-only tools (never `ask_user`, the camera, the screen or another advisor), and it remembers its earlier questions and answers for the session.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Advisors enabled | Offers the model `neon_advisor` while the list holds an advisor. `/advisor` works either way. | off |
+| Advisor list | The advisors: a profile and its role (free text). *+ Add an advisor…* picks a profile (not this one, not one already listed) and asks its role; Enter on an advisor changes its role or removes it. One whose profile is gone shows `(missing)` and is refused. | (none) |
+| Advisor context | `brief`: the model's question and context. `recent`: also the last 10 messages (tool results cut to 500 characters). | `brief` |
+| Advisor calls per turn | The most advisor calls one reply may make, all advisors together (1–10). | 2 |
+| Advisor tool iterations | Tool round trips an advisor may make before answering (0–10; 0 = text only). Its last round is always asked for words. | 4 |
+| Advisor thread length | Earlier questions and answers each advisor remembers (1–50); the oldest go first. Saved with the session; `/new` starts them over. | 10 |
+| Advisor embedded mode | For an advisor on the embedded server naming another model than the one running. `parent-server`: it answers on the running model, and the footer names both. `multi-server`: an extra `llama-server` for its model, kept for its later calls until *Embedded servers enabled* goes off, a botchat stops its extras, or you quit. | `parent-server` |
+| Advisor confirm | Each call waits for your yes on the pane. Headless runs refuse the calls. | off |
+
+* **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server (with its own *LLM model* if set). A Docker advisor only shares the container already running. An embedded advisor needs this profile's *Embedded servers enabled*. With no embedded server running, the advisor's model starts as the main one, and the next connect to another server stops it.
+* **Output caps and headers** (Anthropic and OpenAI max tokens, prompt caching, organization, project) are the advisor profile's own when it has its own URL; a borrowed server keeps this profile's.
 
 ## Skills settings (`/skills`)
 

@@ -992,8 +992,32 @@ public enum SettingsField
     /// <summary>Typed: the folder under the profile's images folder a clipboard picture is saved in when its message is sent (<see cref="Settings.AppSettingsData.PastedImagesFolder"/>). The Files tab's last row (2026-10-09), the Image menu's since 2026-10-10; the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
     PastedImagesFolder,
 
-    /// <summary>Whether a turn offers the picture tools, view_image, image_info and image_edit (<see cref="Settings.AppSettingsData.ImageTools"/>): their own group since 2026-10-10 (the user's ask; on File tools until then), the Image menu's first row on <c>/tools</c> › Files; a toggle, no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>Whether a turn offers the picture tools, view_image, image_info and image_edit (<see cref="Settings.AppSettingsData.ImageTools"/>): their own group since 2026-10-10 (the user's ask; on File tools until then), the Image menu's first row on <c>/tools</c> › Files; a toggle, no reconnect (read at each turn). Last in the enum until <see cref="Advisors"/>.</summary>
     ImageTools,
+
+    /// <summary>A toggle: whether a turn offers <c>neon_advisor</c> (<see cref="Settings.AppSettingsData.Advisors"/>). The Advisors tab of <c>/settings</c>' first row (2026-10-10, the user's ask); no reconnect (read at each turn).</summary>
+    Advisors,
+
+    /// <summary>A list: the advisors, each a profile and its role (<see cref="Settings.AppSettingsData.AdvisorList"/>). The Advisors tab (2026-10-10); Enter opens its editor.</summary>
+    AdvisorList,
+
+    /// <summary>A picker over <see cref="Claude.ClaudeAdvisorContext.Names"/>: what an advisor call sends besides the question (<see cref="Settings.AppSettingsData.AdvisorContext"/>). The Advisors tab (2026-10-10).</summary>
+    AdvisorContext,
+
+    /// <summary>Typed: the most advisor calls a turn, 1 to 10 (<see cref="Settings.AppSettingsData.AdvisorCallsPerTurn"/>). The Advisors tab (2026-10-10).</summary>
+    AdvisorCallsPerTurn,
+
+    /// <summary>Typed: an advisor's tool round trips, 0 to 10 (<see cref="Settings.AppSettingsData.AdvisorMaxToolIterations"/>). The Advisors tab (2026-10-10).</summary>
+    AdvisorMaxToolIterations,
+
+    /// <summary>Typed: the questions and answers each advisor's thread keeps, 1 to 50 (<see cref="Settings.AppSettingsData.AdvisorThreadPairs"/>). The Advisors tab (2026-10-10).</summary>
+    AdvisorThreadPairs,
+
+    /// <summary>A picker over <see cref="App.BotChatMultiEmbedded.Names"/>: an embedded advisor naming another model (<see cref="Settings.AppSettingsData.AdvisorEmbedded"/>). The Advisors tab (2026-10-10).</summary>
+    AdvisorEmbedded,
+
+    /// <summary>A toggle: whether each advisor call asks first (<see cref="Settings.AppSettingsData.AdvisorConfirm"/>). The Advisors tab's last row (2026-10-10). Last in the enum, as every newcomer.</summary>
+    AdvisorConfirm,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1036,6 +1060,9 @@ public enum SettingsTab
 
     /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' ClaudeCode tab, the user's call).</summary>
     BotChat,
+
+    /// <summary>The profile advisors' rows (2026-10-10, the user's ask: a tab of its own under <c>/settings</c>, after Botchat): the switch, the list, then how a call goes.</summary>
+    Advisors,
 }
 
 /// <summary>What <see cref="SettingsMenu.ShowAsync"/> changed, so the screen rebuilds only what depends on it.</summary>
@@ -1317,7 +1344,7 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The strip titles, one per <see cref="SettingsTab"/> (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = ["General", "LLM", EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, "TTS", "STT", "Sessions", "Botchat"];
+    public static readonly IReadOnlyList<string> TabTitles = ["General", "LLM", EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, "TTS", "STT", "Sessions", "Botchat", AdvisorsTabTitle];
 
     /// <summary>The embedded model tab's strip title (2026-09-29). Pinned.</summary>
     public const string EmbeddedTabTitle = "Embedded";
@@ -1366,6 +1393,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SttInput, SettingsField.SttDestination, .. Fields.Where(f => IsVoiceField(f) && f != SettingsField.SttInput)],
         [SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults, SettingsField.SessionSaveThinking],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera],
+        [SettingsField.Advisors, SettingsField.AdvisorList, SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn, SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded, SettingsField.AdvisorConfirm],
     ];
 
     /// <summary>
@@ -1844,7 +1872,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions or SettingsField.ImageTools
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
-            or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay;
+            or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
+            or SettingsField.Advisors or SettingsField.AdvisorConfirm;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -1938,6 +1967,14 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeCodeAdvisorModel => "Claude Code advisor tool model",
         SettingsField.ClaudeCodeAdvisorEffort => "Claude Code advisor tool effort",
         SettingsField.ClaudeCodeAdvisorConfirm => "Claude Code advisor tool confirm",
+        SettingsField.Advisors => "Advisors enabled",
+        SettingsField.AdvisorList => "Advisor list",
+        SettingsField.AdvisorContext => "Advisor context",
+        SettingsField.AdvisorCallsPerTurn => "Advisor calls per turn",
+        SettingsField.AdvisorMaxToolIterations => "Advisor tool iterations",
+        SettingsField.AdvisorThreadPairs => "Advisor thread length",
+        SettingsField.AdvisorEmbedded => "Advisor embedded mode",
+        SettingsField.AdvisorConfirm => "Advisor confirm",
         SettingsField.LlmScanMode => "LLM server scan mode",
         SettingsField.WebTools => "Web tools",
         SettingsField.GitLibTools => "GitLib tools",
@@ -2268,6 +2305,14 @@ internal sealed partial class SettingsMenu
             SettingsField.ClaudeCodeAdvisorModel => string.IsNullOrWhiteSpace(data.ClaudeCodeAdvisorModel) ? ClaudeAdvisorModelLabel : data.ClaudeCodeAdvisorModel,
             SettingsField.ClaudeCodeAdvisorEffort => string.IsNullOrWhiteSpace(data.ClaudeCodeAdvisorEffort) ? ClaudeAdvisorEffortLabel : data.ClaudeCodeAdvisorEffort,
             SettingsField.ClaudeCodeAdvisorConfirm => OnOff(data.ClaudeCodeAdvisorConfirm),
+            SettingsField.Advisors => OnOff(data.Advisors),
+            SettingsField.AdvisorList => NeonSidekick.Advisors.AdvisorRoster.Value(data.AdvisorList),
+            SettingsField.AdvisorContext => data.AdvisorContext,
+            SettingsField.AdvisorCallsPerTurn => ClaudeAdvisorCalls(data.AdvisorCallsPerTurn),
+            SettingsField.AdvisorMaxToolIterations => AdvisorIterations(data.AdvisorMaxToolIterations),
+            SettingsField.AdvisorThreadPairs => AdvisorPairs(data.AdvisorThreadPairs),
+            SettingsField.AdvisorEmbedded => data.AdvisorEmbedded,
+            SettingsField.AdvisorConfirm => OnOff(data.AdvisorConfirm),
             SettingsField.AnthropicApi => OnOff(data.AnthropicApi),
             SettingsField.AnthropicApiKey => ApiKeyLabel(data.AnthropicApiKey),
             SettingsField.AnthropicApiMaxTokens => Tokens(data.AnthropicApiMaxTokens),
@@ -3468,6 +3513,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ClaudeCodeModel => data.ClaudeCodeModel,
         SettingsField.ClaudeCodeAdvisorModel => data.ClaudeCodeAdvisorModel,
         SettingsField.ClaudeCodeAdvisorCallsPerTurn => data.ClaudeCodeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
+        SettingsField.AdvisorCallsPerTurn => data.AdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
+        SettingsField.AdvisorMaxToolIterations => data.AdvisorMaxToolIterations.ToString(CultureInfo.InvariantCulture),
+        SettingsField.AdvisorThreadPairs => data.AdvisorThreadPairs.ToString(CultureInfo.InvariantCulture),
         SettingsField.AnthropicApiMaxTokens => data.AnthropicApiMaxTokens.ToString(CultureInfo.InvariantCulture),
         SettingsField.OpenAIApiMaxTokens => data.OpenAIApiMaxTokens.ToString(CultureInfo.InvariantCulture),
         SettingsField.OpenAIApiOrganization => data.OpenAIApiOrganization,
@@ -4457,6 +4505,21 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.ClaudeCodeAdvisorContext)
         {
             return await PickClaudeAdvisorContextAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.AdvisorList)
+        {
+            return await EditAdvisorListAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.AdvisorContext)
+        {
+            return await PickAdvisorContextAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.AdvisorEmbedded)
+        {
+            return await PickAdvisorEmbeddedAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.HomeAssistantActionPolicy)
@@ -5529,6 +5592,36 @@ internal sealed partial class SettingsMenu
             case SettingsField.ClaudeCodeAdvisorModel:
                 // The same, for the advisor; empty follows the Claude Code slash command model.
                 Apply(field, d => d.ClaudeCodeAdvisorModel = text);
+                return true;
+
+            case SettingsField.AdvisorCallsPerTurn:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int advisorCallsCap) || advisorCallsCap < AppSettingsData.MinAdvisorCallsPerTurn || advisorCallsCap > AppSettingsData.MaxAdvisorCallsPerTurn)
+                {
+                    Sink.Error($"{FieldName(field)} {AdvisorCallsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.AdvisorCallsPerTurn = advisorCallsCap);
+                return true;
+
+            case SettingsField.AdvisorMaxToolIterations:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int advisorRounds) || advisorRounds < 0 || advisorRounds > AppSettingsData.MaxAdvisorToolIterations)
+                {
+                    Sink.Error($"{FieldName(field)} {AdvisorIterationsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.AdvisorMaxToolIterations = advisorRounds);
+                return true;
+
+            case SettingsField.AdvisorThreadPairs:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int advisorPairs) || advisorPairs < AppSettingsData.MinAdvisorThreadPairs || advisorPairs > AppSettingsData.MaxAdvisorThreadPairs)
+                {
+                    Sink.Error($"{FieldName(field)} {AdvisorPairsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.AdvisorThreadPairs = advisorPairs);
                 return true;
 
             case SettingsField.ClaudeCodeAdvisorCallsPerTurn:
@@ -6907,6 +7000,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyPictureStrip => data.ComfyPictureStrip,
             SettingsField.ClaudeCodeAdvisor => data.ClaudeCodeAdvisor,
             SettingsField.ClaudeCodeAdvisorConfirm => data.ClaudeCodeAdvisorConfirm,
+            SettingsField.Advisors => data.Advisors,
+            SettingsField.AdvisorConfirm => data.AdvisorConfirm,
             SettingsField.AnthropicApi => data.AnthropicApi,
             SettingsField.AnthropicApiPromptCaching => data.AnthropicApiPromptCaching,
             SettingsField.ClaudeCodeServer => data.ClaudeCodeServer,
@@ -7013,6 +7108,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.ComfyPictureStrip: data.ComfyPictureStrip = on; break;
             case SettingsField.ClaudeCodeAdvisor: data.ClaudeCodeAdvisor = on; break;
             case SettingsField.ClaudeCodeAdvisorConfirm: data.ClaudeCodeAdvisorConfirm = on; break;
+            case SettingsField.Advisors: data.Advisors = on; break;
+            case SettingsField.AdvisorConfirm: data.AdvisorConfirm = on; break;
             case SettingsField.AnthropicApi: data.AnthropicApi = on; break;
             case SettingsField.AnthropicApiPromptCaching: data.AnthropicApiPromptCaching = on; break;
             case SettingsField.ClaudeCodeServer: data.ClaudeCodeServer = on; break;
@@ -7128,6 +7225,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyPictureStrip => on ? "the session's pictures in a strip above the line" : "no strip",
         SettingsField.ClaudeCodeAdvisor => on ? "claude advisor tool enabled" : "claude advisor tool disabled",   // the user's wording, 2026-10-03
         SettingsField.ClaudeCodeAdvisorConfirm => on ? "each claude_code_advisor call waits for your yes" : "claude_code_advisor runs without asking",
+        SettingsField.Advisors => on ? "the model may consult the advisors; /advisor works either way" : "no advisor tool; /advisor still asks",
+        SettingsField.AdvisorConfirm => on ? "each neon_advisor call waits for your yes" : "neon_advisor runs without asking",
         SettingsField.AnthropicApi => on ? "/server offers the Anthropic API while a key is set (billed per message)" : "the Anthropic API is not offered",
         SettingsField.AnthropicApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
         SettingsField.ClaudeCodeServer => on ? "/server offers Claude Code, run with the app's tools, not its own" : "Claude Code is not offered as a server; a running one stops",

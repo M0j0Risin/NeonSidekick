@@ -135,8 +135,13 @@ public sealed record SystemPromptFacts(
     bool SqliteWrite = false,
     ServerWrites ServerWrites = ServerWrites.None,
     bool ImagesEnabled = false,
-    int ImageTools = 0)
+    int ImageTools = 0,
+    bool AdvisorsEnabled = false,
+    int AdvisorTools = 0)
 {
+    /// <summary>Whether the rules carry <see cref="Assistant.NeonAdvisorRule"/>: tools on, <c>Advisors enabled</c> with an advisor listed, and the tool offered (2026-10-10).</summary>
+    public bool Advisors => ToolsEnabled && AdvisorsEnabled && AdvisorTools > 0;
+
     /// <summary>Whether the rules carry <see cref="Assistant.ImageRule"/>: tools on, the switch on and a picture tool offered (2026-10-10).</summary>
     public bool Images => ToolsEnabled && ImagesEnabled && ImageTools > 0;
 
@@ -360,6 +365,9 @@ public static class SystemPromptSummary
     /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
     public const string ClaudeAdvisorOffSuffix = "Claude Code advisor tool is off";
 
+    /// <summary>Why the profile advisors' group is not offered (2026-10-10). Pinned.</summary>
+    public const string AdvisorsOffSuffix = "Advisors enabled is off";
+
     public const string ComfyOffSuffix = "ComfyUI tools is off, no ComfyUI URL is set or no workflow is offered";
 
     /// <summary>The tail of the Home Assistant group while its tools cannot be offered (2026-09-28). Pinned.</summary>
@@ -418,7 +426,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -544,7 +552,8 @@ public static class SystemPromptSummary
             postgres: facts.Postgres,
             sqliteWrite: facts.SqliteWriting,
             serverWrites: facts.ServerWrites,
-            images: facts.Images);
+            images: facts.Images,
+            advisors: facts.Advisors);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -672,7 +681,9 @@ public static class SystemPromptSummary
         bool youTubeEnabled = true,
         bool youTubeKey = true,
         IReadOnlyList<AIFunction>? images = null,
-        bool imagesEnabled = true)
+        bool imagesEnabled = true,
+        IReadOnlyList<AIFunction>? advisors = null,
+        bool advisorsEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -822,6 +833,13 @@ public static class SystemPromptSummary
             // The advisor (2026-09-27): after the image tools; offered while the setting Claude Code advisor tool is on.
             string advisorNote = !advisorEnabled ? NotOffered(ClaudeAdvisorOffSuffix) : standing;
             groups.Add(Group(ToolsText.ClaudeCodeGroupTitle, advisor, advisorNote, advisorEnabled && toolsEnabled, SettingsField.ClaudeCodeAdvisor, disabled));
+        }
+
+        if (advisors is not null)
+        {
+            // The profile advisors (2026-10-10): after the Claude advisor; listed by the callers only while an advisor is, offered while Advisors enabled is on.
+            string advisorsNote = !advisorsEnabled ? NotOffered(AdvisorsOffSuffix) : standing;
+            groups.Add(Group(ToolsText.AdvisorsGroupTitle, advisors, advisorsNote, advisorsEnabled && toolsEnabled, SettingsField.Advisors, disabled));
         }
 
         if (web is not null)

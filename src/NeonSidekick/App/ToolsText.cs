@@ -37,7 +37,7 @@ public static class ToolsText
     /// </summary>
     public static readonly string[] SwitchWords =
     [
-        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Docker, ToolbarItems.Obsidian,
+        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print,
     ];
@@ -51,6 +51,7 @@ public static class ToolsText
         ToolbarItems.Image => SettingsField.ImageTools,   // 2026-10-10, the picture tools' own switch
         ToolbarItems.Web => SettingsField.WebTools,
         ToolbarItems.Claude => SettingsField.ClaudeCodeAdvisor,
+        ToolbarItems.Advisors => SettingsField.Advisors,   // 2026-10-10, the profile advisors' switch (/settings › Advisors)
         ToolbarItems.Docker => SettingsField.DockerTools,
         ToolbarItems.Obsidian => SettingsField.ObsidianTools,
         ToolbarItems.Sql => SettingsField.SqlTools,
@@ -192,6 +193,9 @@ public static class ToolsText
 
     /// <summary>The advisor's group on <c>/sys</c> and the Offered tab (2026-10-09): <c>Claude Code</c>, the strip's one word being <see cref="ClaudeCodeTabTitle"/> (the <see cref="HomeAssistantGroupTitle"/> shape).</summary>
     public const string ClaudeCodeGroupTitle = "Claude Code";
+
+    /// <summary>The profile advisors' group heading on <c>/tools</c>' Offered tab and <c>/sys</c> (2026-10-10). Pinned.</summary>
+    public const string AdvisorsGroupTitle = "Advisors";
 
     /// <summary>The Home Assistant tools' group on <c>/sys</c> and the Offered tab (2026-09-28): the full name, the tab's short one being for the strip alone (2026-10-01).</summary>
     public const string HomeAssistantGroupTitle = "Home Assistant";

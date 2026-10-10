@@ -15,7 +15,7 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheStrip_AndItsGroups_ArePinned()
     {
-        Assert.Equal(["General", "Servers", "Voice", "Sessions", "Botchat"], SettingsMenu.StripTitles);
+        Assert.Equal(["General", "Servers", "Voice", "Sessions", "Botchat", "Advisors"], SettingsMenu.StripTitles);
         Assert.Equal(
             [
                 [SettingsTab.General],
@@ -23,6 +23,7 @@ public partial class SettingsMenuTests
                 [SettingsTab.Tts, SettingsTab.Stt],
                 [SettingsTab.Sessions],
                 [SettingsTab.BotChat],
+                [SettingsTab.Advisors],
             ],
             SettingsMenu.StripTabs);
         Assert.Equal(Enum.GetValues<SettingsTab>(), SettingsMenu.StripTabs.SelectMany(t => t));   // every tab once, in the arrows' order

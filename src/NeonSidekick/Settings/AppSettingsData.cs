@@ -2514,6 +2514,68 @@ public sealed class AppSettingsData
 
     /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-09-27, the user's call: opt-in, off by default); headless has no one to ask, so a call there is refused. No variable.</summary>
     public bool ClaudeCodeAdvisorConfirm { get; set; }
+
+    // ─── Profile advisors (2026-10-10) ──────────────────────────────────────────────
+    // neon_advisor and /advisor (2026-10-10, the user's ask: this profile consults the others, each in a role of its own, on
+    // its own profile's server and under its own persona; the master's read-only tools, a thread per advisor). The Advisors
+    // tab of /settings.
+
+    /// <summary>
+    /// Whether the model is offered <c>neon_advisor</c> (2026-10-10): the Advisors group's switch, the Advisors tab's first row.
+    /// Off by default, as every group. <c>/advisor</c> works either way. Variable <see cref="EnvironmentOverrides.AdvisorsVariable"/>.
+    /// </summary>
+    public bool Advisors { get; set; }
+
+    /// <summary>
+    /// The advisors (2026-10-10): another profile and the role it advises in, one entry per profile, in the order added. Null or
+    /// empty: none, and <c>neon_advisor</c> is not offered. An entry whose profile is gone shows <c>(missing)</c> and is refused. No variable.
+    /// </summary>
+    public List<AdvisorEntry>? AdvisorList { get; set; }
+
+    /// <summary>
+    /// What an advisor call sends besides the model's question (2026-10-10, the Claude Code advisor's choice): one of
+    /// <see cref="Claude.ClaudeAdvisorContext.Names"/> — <c>brief</c>, the question and the model's own context argument;
+    /// <c>recent</c>, those and the last messages of the conversation. Anything else reads as <c>brief</c>. No variable.
+    /// </summary>
+    public string AdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
+
+    /// <summary>The most <c>neon_advisor</c> calls one turn may make, all advisors together (2026-10-10), <see cref="MinAdvisorCallsPerTurn"/> to <see cref="MaxAdvisorCallsPerTurn"/>. No variable.</summary>
+    public int AdvisorCallsPerTurn { get; set; } = DefaultAdvisorCallsPerTurn;
+
+    public const int MinAdvisorCallsPerTurn = 1;
+    public const int MaxAdvisorCallsPerTurn = 10;
+    public const int DefaultAdvisorCallsPerTurn = 2;
+
+    /// <summary>
+    /// The tool round trips an advisor may make before it answers (2026-10-10), 0 to <see cref="MaxAdvisorToolIterations"/>: 0 offers
+    /// it no tools; its last round is always asked for words. No variable.
+    /// </summary>
+    public int AdvisorMaxToolIterations { get; set; } = DefaultAdvisorMaxToolIterations;
+
+    public const int MaxAdvisorToolIterations = 10;
+    public const int DefaultAdvisorMaxToolIterations = 4;
+
+    /// <summary>
+    /// How many earlier questions and answers each advisor keeps in its thread (2026-10-10), <see cref="MinAdvisorThreadPairs"/> to
+    /// <see cref="MaxAdvisorThreadPairs"/>: the oldest pair goes first. The thread is the session's: <c>/new</c> starts it over. No variable.
+    /// </summary>
+    public int AdvisorThreadPairs { get; set; } = DefaultAdvisorThreadPairs;
+
+    public const int MinAdvisorThreadPairs = 1;
+    public const int MaxAdvisorThreadPairs = 50;
+    public const int DefaultAdvisorThreadPairs = 10;
+
+    /// <summary>
+    /// What an advisor whose profile names another embedded model than the running one gets (2026-10-10, the user's call; Botchat
+    /// multi-embedded's values, <see cref="App.BotChatMultiEmbedded.Names"/>): <c>parent-server</c> (the default) the running model,
+    /// with a warning; <c>multi-server</c> an extra <c>llama-server</c> of its own, kept for later calls (until the embedded switch goes off, a botchat stops
+    /// its extras, or the exit). Anything else reads as
+    /// <c>parent-server</c>. No variable.
+    /// </summary>
+    public string AdvisorEmbedded { get; set; } = App.BotChatMultiEmbedded.Default;
+
+    /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-10-10, as the Claude Code advisor's); headless has no one to ask, so a call there is refused. No variable.</summary>
+    public bool AdvisorConfirm { get; set; }
     // ─── Anthropic API (2026-09-27) ────────────────────────────────────────────────
 
     /// <summary>

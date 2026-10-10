@@ -58,6 +58,7 @@ public sealed class EnvironmentOverrides
     public const string EmbeddedContextVariable = Prefix + "EMBEDDED_CONTEXT";
     public const string DockerPipeVariable = Prefix + "DOCKER_PIPE";
     public const string YouTubeApiKeyVariable = Prefix + "YOUTUBE_API_KEY";
+    public const string AdvisorsVariable = Prefix + "ADVISORS";
 
     /// <summary>The terminal's own variable, read by <see cref="TerminalProgram"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
     public const string TerminalProgramVariable = "TERM_PROGRAM";
@@ -73,7 +74,7 @@ public sealed class EnvironmentOverrides
         ShellNativeVariable, ClaudeCodeExeVariable, ClaudeCodePermissionsVariable, ClaudeCodeAdvisorVariable,
         AnthropicApiVariable, AnthropicApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
         HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCodeServerVariable,
-        DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable,
+        DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable, AdvisorsVariable,
     };
 
     /// <summary>The log category of every environment line.</summary>
@@ -172,6 +173,9 @@ public sealed class EnvironmentOverrides
 
     /// <summary><c>Claude Code advisor tool</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_code_advisor</c> without saving it.</summary>
     public bool? ClaudeCodeAdvisor => ReadSwitch(ClaudeCodeAdvisorVariable);
+
+    /// <summary><c>Advisors</c> for this launch, or null when unset or not a switch word (2026-10-10, the Claude Code advisor's shape): a scripted headless run offers <c>neon_advisor</c> without saving it.</summary>
+    public bool? Advisors => ReadSwitch(AdvisorsVariable);
 
     /// <summary><c>Anthropic API</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted run offers the Anthropic API without saving it.</summary>
     public bool? AnthropicApi => ReadSwitch(AnthropicApiVariable);
@@ -292,6 +296,7 @@ public sealed class EnvironmentOverrides
                 ShellPoliceVariable => ShellPolice is not null,
                 ShellNativeVariable => ShellNative is not null,
                 ClaudeCodeAdvisorVariable => ClaudeCodeAdvisor is not null,
+                AdvisorsVariable => Advisors is not null,
                 AnthropicApiVariable => AnthropicApi is not null,
                 ClaudeCodeServerVariable => ClaudeCodeServer is not null,
                 OpenAIApiVariable => OpenAIApi is not null,
@@ -368,6 +373,7 @@ public sealed class EnvironmentOverrides
         if (ClaudeCodeExecutable is { } claude) effective.ClaudeCodeExecutable = claude;
         if (ClaudeCodePermissions is { } claudePermissions) effective.ClaudeCodePermissions = claudePermissions;
         if (ClaudeCodeAdvisor is { } advisor) effective.ClaudeCodeAdvisor = advisor;
+        if (Advisors is { } advisors) effective.Advisors = advisors;
         if (AnthropicApi is { } claudeApi) effective.AnthropicApi = claudeApi;
         if (AnthropicApiKey is { } claudeApiKey) effective.AnthropicApiKey = claudeApiKey;
         if (ClaudeCodeServer is { } claudeCliServer) effective.ClaudeCodeServer = claudeCliServer;

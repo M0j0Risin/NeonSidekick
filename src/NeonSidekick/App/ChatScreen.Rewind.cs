@@ -144,6 +144,12 @@ internal sealed partial class ChatScreen
             _advisorThread.SessionId = null;
         }
 
+        if (cut.HadAdvisors)
+        {
+            // A cut neon_advisor call takes the advisors' threads with it (2026-10-10): they would remember a question the chat no longer holds.
+            _advisorThreads.Clear();
+        }
+
         _session.Usage.ForgetContext();
         _lastTrace = null;
         _learnTrace = null;

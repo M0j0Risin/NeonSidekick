@@ -37,6 +37,7 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
   - [Skills](#skills)
   - [Sessions](#sessions)
   - [Claude advisor](#claude-advisor)
+  - [Advisors](#advisors)
   - [Questions](#questions)
   - [Plan](#plan)
 - [MCP servers](#mcp-servers)
@@ -942,6 +943,14 @@ cat job.txt | ./NeonSidekick --headless --profile work   # macOS
 | Tool | Arguments | What it does |
 |---|---|---|
 | `claude_code_advisor` | `question, context?` | Asks Claude Code for read-only advice; it can read the working directory and the web. The transcript shows the question, Claude's tools, the answer and a cost footer. One advisor conversation per session, separate from `/claude`'s. ESC stops it with the reply; `/usage` counts it. |
+
+### Advisors
+
+Other profiles of this home, each in a role you give it, set up under `/settings › Advisors` ([SETTINGS.md](SETTINGS.md#advisors)); `/advisor` asks one yourself ([COMMANDS.md](COMMANDS.md#advisor)).
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `neon_advisor` | `advisor, question, context?` | Asks one advisor, named by its profile or role, for its view. It answers on its own profile's server and model, under its own `persona.md` and its role, and may call this chat's read-only tools (those plan mode keeps, never `ask_user`, the camera, the screen or an advisor) for up to *Advisor tool iterations* round trips. The transcript shows the question, its tools, the answer and a footer with its model and tokens. Each advisor keeps a thread of its questions and answers for the session. Offered while *Advisors enabled* is on and an advisor is listed; plan mode keeps it. |
 
 ### Questions
 

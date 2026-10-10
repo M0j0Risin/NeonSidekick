@@ -15,11 +15,11 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The strip <c>/settings</c> shows (2026-10-10, the user's pick, <c>/tools</c>' Database and Media shape: the strip had grown to ten):
-    /// General, Servers, Voice, Sessions, Botchat. <see cref="TabTitles"/> and <see cref="TabFields"/> stay the ten tabs, in the order the
+    /// General, Servers, Voice, Sessions, Botchat, and Advisors after it (later that day, the profile advisors). <see cref="TabTitles"/> and <see cref="TabFields"/> stay the ten tabs, in the order the
     /// arrows walk them (<see cref="StripTabs"/>), each a sub-tab of its group on the second strip. Pinned.
     /// </summary>
     /// <remarks>Spelled out, never read off <see cref="TabTitles"/>: a static of another part of the class may not be set yet.</remarks>
-    public static readonly IReadOnlyList<string> StripTitles = ["General", ServersTabTitle, VoiceTabTitle, "Sessions", "Botchat"];
+    public static readonly IReadOnlyList<string> StripTitles = ["General", ServersTabTitle, VoiceTabTitle, "Sessions", "Botchat", AdvisorsTabTitle];
 
     /// <summary>The tabs each of <see cref="StripTitles"/> holds, in <see cref="SettingsTab"/> order: one for a plain tab, more for a group. Pinned.</summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsTab>> StripTabs =
@@ -29,6 +29,7 @@ internal sealed partial class SettingsMenu
         [SettingsTab.Tts, SettingsTab.Stt],
         [SettingsTab.Sessions],
         [SettingsTab.BotChat],
+        [SettingsTab.Advisors],
     ];
 
     /// <summary>Whether strip tab <paramref name="strip"/> (a <see cref="StripTitles"/> index) is a group: Servers and Voice. Pure.</summary>

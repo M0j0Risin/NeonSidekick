@@ -11,7 +11,7 @@ public partial class SettingsMenuTests
     public void TheClaudeAndOpenAITabs_AreAfterDocker_BeforeTts()
     {
         // LLM second since 2026-10-04 (the user's order); after OpenAI from 2026-10-03 until then.
-        Assert.Equal(["General", "LLM", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat"], SettingsMenu.TabTitles);
+        Assert.Equal(["General", "LLM", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat", "Advisors"], SettingsMenu.TabTitles);
         Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
         Assert.Equal(SettingsMenu.OpenAITabTitle, SettingsMenu.TabTitles[(int)SettingsTab.OpenAI]);
         Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.Anthropic]));   // "Anthropic API prompt caching" (2026-10-04; "Claude API prompt caching", 27, before)

@@ -57,6 +57,8 @@ public static class PlanTools
         "postgres_relationships", "postgres_indexes", "postgres_query",
         // the advisor: Claude reads and answers, read-only whatever Claude Code slash command permissions says (2026-09-27)
         "claude_code_advisor",
+        // the profile advisors (2026-10-10): another profile reads and answers over this chat's read-only tools alone
+        "neon_advisor",
         // YouTube (2026-10-05): a search and a playlist's listing (2026-10-08) read the Data API; the status reads the window's last report; the saved list (2026-10-07) reads the profile's file
         "youtube_search", "youtube_playlist", "youtube_status", "youtube_saved",
     };

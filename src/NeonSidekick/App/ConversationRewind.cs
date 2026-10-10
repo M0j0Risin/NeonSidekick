@@ -29,7 +29,7 @@ public sealed record RewindTurn(int Number, int Start, string Text, int ToolCall
 /// <item><paramref name="KeptStamped"/>: whether any turn that stays carries a stamp.</item>
 /// </list>
 /// </summary>
-public sealed record RewindCut(int Turns, IReadOnlyList<string> ChangingTools, bool HadClaude, bool HadAdvisor, int? FirstOrdinal, bool KeptStamped);
+public sealed record RewindCut(int Turns, IReadOnlyList<string> ChangingTools, bool HadClaude, bool HadAdvisor, int? FirstOrdinal, bool KeptStamped, bool HadAdvisors = false);
 
 /// <summary>One turn of the history as the screen replays it after a rewind when no session row holds the turns.</summary>
 public sealed record RewindReplay(string UserText, string ReplyText, int ToolCalls, bool Summary);
@@ -155,13 +155,14 @@ public static class ConversationRewind
         var calls = Calls(messages, start, messages.Count).ToList();
         var changing = calls.Select(c => c.Name).Where(name => !PlanTools.Allowed(name)).Distinct(StringComparer.Ordinal).ToList();
         bool advisor = calls.Any(c => string.Equals(c.Name, ClaudeAdvisorTool.ToolName, StringComparison.Ordinal));
+        bool advisors = calls.Any(c => string.Equals(c.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal));
         bool keptStamped = false;
         for (int i = 0; i < start && !keptStamped; i++)
         {
             keptStamped = ConversationHistory.IsTurnStart(messages[i]) && ConversationHistory.TurnOrdinal(messages[i]) is not null;
         }
 
-        return new RewindCut(turns, changing, claude, advisor, first, keptStamped);
+        return new RewindCut(turns, changing, claude, advisor, first, keptStamped, advisors);
     }
 
     /// <summary>

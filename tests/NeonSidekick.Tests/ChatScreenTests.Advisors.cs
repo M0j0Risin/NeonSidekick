@@ -1,0 +1,146 @@
+using Microsoft.Extensions.AI;
+using NeonSidekick.Advisors;
+using NeonSidekick.App;
+using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
+using NeonSidekick.Sessions;
+using NeonSidekick.Settings;
+using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>
+/// <c>neon_advisor</c> on the screen (2026-10-10, the profile advisors): a profile with a blank URL borrows this chat's server, so the
+/// screen's <see cref="FakeChatClient"/> answers for the advisor too — the advisor's request sits between the model's two.
+/// </summary>
+public partial class ChatScreenTests
+{
+    private static Dictionary<string, object?> NeonAdvisorArgs(string advisor, string question) =>
+        new() { [NeonAdvisorTool.AdvisorArgument] = advisor, [NeonAdvisorTool.QuestionArgument] = question };
+
+    private void AdvisorProfiles(bool on = true, bool confirm = false)
+    {
+        Profiles.Create(_settings.StorageDirectory, "dba", new AppSettingsData());
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.Advisors = on;
+            d.AdvisorConfirm = confirm;
+            d.AdvisorList = [new AdvisorEntry("dba", "database architect")];
+        });
+    }
+
+    [Fact]
+    public async Task Advisors_AreOfferedOnlyWithTheSwitchAndAList_WithTheirRule()
+    {
+        AdvisorProfiles(on: false);
+        _chat.EnqueueText("one");
+        PushLine("hello");
+        PushLine("/exit");
+        await RunAsync();
+
+        Assert.DoesNotContain(_chat.Options[0]!.Tools!.Cast<AIFunction>(), t => t.Name == NeonAdvisorTool.ToolName);
+        Assert.DoesNotContain(Assistant.NeonAdvisorRule, _chat.Requests[0][0].Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Advisors_ACall_ShowsTheQuestion_TheAnswerAndTheFooter_TheModelReadsIt_AndTheThreadIsStored()
+    {
+        AdvisorProfiles();
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonAdvisorTool.ToolName, NeonAdvisorArgs("dba", "Which index?")));
+        _chat.EnqueueText("Index the foreign key.");   // the advisor, on the borrowed server
+        _chat.EnqueueText("I'll add it.");
+        PushLine("speed up the joins");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(NeonAdvisorTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
+        Assert.Contains(" " + Assistant.NeonAdvisorRule, _chat.Requests[0][0].Text, StringComparison.Ordinal);
+        Assert.Contains(AdvisorText.Framing(_settings.ProfileName, "database architect", tools: true), _chat.Requests[1][0].Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(_chat.Options[1]!.Tools!.Cast<AIFunction>(), t => t.Name is NeonAdvisorTool.ToolName or AskUserTool.ToolName or "write_file");
+        Assert.Contains("🛠️ " + AdvisorText.QuestionNote(new AdvisorEntry("dba", "database architect"), "Which index?") + "\n", output);
+        Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", output);
+        Assert.Contains("🛠️ dba · ", output);
+        Assert.DoesNotContain("🛠️ " + NeonAdvisorTool.ToolName, output);   // the view's lines stand for the call's and the result's
+        Assert.Equal("Index the foreign key.", ToolResult(_chat.Requests[2], "c1"));
+        Assert.Contains("I'll add it.", output);
+
+        using var store = new SessionStore(_settings.ProfileDirectory, _time);
+        var record = store.Load(Assert.Single(store.List(10)).Id)!;
+        var threads = SessionHistory.AdvisorThreadsOf(record.HistoryJson);
+        Assert.Equal([new AdvisorPair("Which index?", "Index the foreign key.")], threads!["dba"]);
+    }
+
+    [Fact]
+    public async Task Advisors_NewForgetsTheThreads()
+    {
+        AdvisorProfiles();
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonAdvisorTool.ToolName, NeonAdvisorArgs("dba", "first?")));
+        _chat.EnqueueText("advice one");
+        _chat.EnqueueText("ok");
+        _chat.Enqueue(FakeChatClient.Call("c2", NeonAdvisorTool.ToolName, NeonAdvisorArgs("dba", "second?")));
+        _chat.EnqueueText("advice two");
+        _chat.EnqueueText("ok again");
+        PushLine("ask it");
+        PushLine("/new");
+        PushLine("ask again");
+        PushLine("/exit");
+        await RunAsync();
+
+        Assert.DoesNotContain(_chat.Requests[4], m => m.Text.Contains("first?", StringComparison.Ordinal));   // the advisor's second request: no first pair
+    }
+
+    [Fact]
+    public async Task Advisors_WithConfirmOn_NoPane_AreRefused()
+    {
+        AdvisorProfiles(confirm: true);
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonAdvisorTool.ToolName, NeonAdvisorArgs("dba", "q?")));
+        _chat.EnqueueText("fine, alone then");
+        PushLine("ask it");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(AdvisorText.NotAskedError, ToolResult(_chat.Requests[1], "c1"));
+        Assert.Contains("✗  Error: neon_advisor needs the user's yes", output);
+    }
+
+    [Fact]
+    public async Task AdvisorCommand_Lists_Asks_AndThePairJoinsTheHistory_SwitchOffOrNot()
+    {
+        AdvisorProfiles(on: false);
+        _chat.EnqueueText("Index the foreign key.");   // the advisor, on the borrowed server
+        _chat.EnqueueText("ok");
+        PushLine("/advisor");
+        PushLine("/advisor dba Which index?");
+        PushLine("/advisor nobody What now?");
+        PushLine("/advisor dba");
+        PushLine("what did dba say?");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(AdvisorText.ListHeading, output);
+        Assert.Contains(AdvisorText.ListLine(new AdvisorEntry("dba", "database architect"), exists: true), output);
+        Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", output);
+        Assert.Contains("\"nobody\" names no single advisor", output);
+        Assert.Contains(AdvisorText.UsageError, output);
+        var last = _chat.Requests[^1];
+        Assert.Contains(last, m => m.Role == ChatRole.User && m.Text == AdvisorText.HistoryUser("dba", "Which index?"));
+        Assert.Contains(last, m => m.Role == ChatRole.Assistant && m.Text == AdvisorText.HistoryReply("dba", "Index the foreign key."));
+    }
+
+    [Fact]
+    public void AdvisorCommand_IsRegistered_WithItsHelp()
+    {
+        Assert.Equal((SlashCommand.Advisor, "dba why?"), SlashCommands.Parse("/advisor dba why?"));
+        Assert.True(SlashCommands.TakesArgument(SlashCommand.Advisor));
+        Assert.Contains(SlashCommands.HelpEntries, e => e.Command == AdvisorText.Word);
+        Assert.Equal(("dba", "why not?"), AdvisorText.Split("  dba   why not? "));
+        Assert.Equal(("dba", ""), AdvisorText.Split("dba"));
+        Assert.Equal("x", AdvisorText.ForUser("Error: x"));
+        Assert.Equal("[to dba] q", AdvisorText.HistoryUser("dba", " q "));
+    }
+}
