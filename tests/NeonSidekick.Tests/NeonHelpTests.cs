@@ -136,7 +136,7 @@ public class NeonHelpTests
     public void ASettingByName_IsWhereItIs_ItsDefault_AndWhatItDoes(string query)
     {
         Assert.Equal(
-            "Setting Camera watch interval (s)\n  Where: /tools › Media › Camera › Camera watch interval (s) (open /tools, go to the Media tab, Enter on Camera, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
+            "Setting Camera watch interval (s)\n  Where: /tools › Media › Camera › Camera watch interval (s) (open /tools, go to the Media tab, then Camera on the second strip, Enter on the row edits it)\n  Default: 10\n  What it does: " + HelpSettings.Describe(SettingsField.CameraWatchSeconds),
             Invoke(query));
     }
 
@@ -205,7 +205,7 @@ public class NeonHelpTests
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
         Assert.Equal([(ToolsText.DatabaseTabTitle, "SQL"), (ToolsText.DatabaseTabTitle, "MySQL"), (ToolsText.DatabaseTabTitle, "SQLite")], HelpLocation.Menus("/tools").Take(3));   // Database before Media since later on 2026-10-09
-        Assert.Empty(HelpLocation.Menus("/settings"));
+        Assert.Equal([(SettingsMenu.ServersTabTitle, "LLM"), (SettingsMenu.ServersTabTitle, "Embedded")], HelpLocation.Menus("/settings").Take(2));   // the Servers and Voice groups since 2026-10-10
     }
 
     [Fact]

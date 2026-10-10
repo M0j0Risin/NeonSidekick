@@ -544,7 +544,7 @@ public class AssistantTests
         Assert.True(Assistant.LooksLikeToolRoleRejection("ClientResultException: HTTP 400 (Bad Request): Only user, system and assistant roles are supported!"));
         Assert.True(Assistant.LooksLikeToolRoleRejection("Only user and assistant roles are supported!"));
         Assert.False(Assistant.LooksLikeToolRoleRejection("HttpRequestException: boom -> IOException: socket closed"));
-        Assert.Equal(" — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (the LLM tab of /settings) to talk to it without tools", Assistant.ToolRoleHint);
+        Assert.Equal(" — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › LLM) to talk to it without tools", Assistant.ToolRoleHint);
     }
 
     [Fact]
@@ -1814,7 +1814,7 @@ public class AssistantTests
     {
         Assert.Equal("The server dropped the request as it was sent (118 MB, 54 pictures); the 27 oldest pictures are now their file names. Trying again.", Assistant.DroppedRequestNotice(118_000_000, 54, 27));
         Assert.Equal("The server dropped the request as it was sent (3 MB, 2 pictures); the oldest picture is now its file name. Trying again.", Assistant.DroppedRequestNotice(3_000_000, 2, 1));
-        Assert.Equal(" — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (the LLM tab of /settings) caps them", Assistant.OversizedRequestHint(118_000_000, 54));
+        Assert.Equal(" — the request was 118 MB with 54 pictures; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › LLM) caps them", Assistant.OversizedRequestHint(118_000_000, 54));
     }
 
     [Fact]

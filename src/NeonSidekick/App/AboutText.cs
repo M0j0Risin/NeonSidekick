@@ -79,7 +79,7 @@ public static class AboutText
     public const string LicenseTabTitle = "Licence";
 
     /// <summary>The Models tab's first line (2026-10-09). Pinned.</summary>
-    public const string ModelsCaption = "The embedded LLM's catalog (/settings › Embedded), each from its Hugging Face repository, pinned to a commit:";
+    public const string ModelsCaption = "The embedded LLM's catalog (/settings › Servers › Embedded), each from its Hugging Face repository, pinned to a commit:";
 
     /// <summary>
     /// The Models tab's entries (2026-10-09, the user's ask): one per repository of <see cref="EmbeddedLlm.EmbeddedModelCatalog.ForThisMachine"/>

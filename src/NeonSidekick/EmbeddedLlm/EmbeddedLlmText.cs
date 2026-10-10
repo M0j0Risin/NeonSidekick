@@ -20,19 +20,19 @@ public static class EmbeddedLlmText
     /// list (2026-09-29: <c>/server</c> lists the installed models alone since then, the user's ask; "pick one in /server to
     /// download it" until then).
     /// </summary>
-    public const string NoneInstalled = "no embedded model is installed; install one in /settings › Embedded › Embedded models";
+    public const string NoneInstalled = "no embedded model is installed; install one in /settings › Servers › Embedded › Embedded models";
 
     /// <summary>The note after a cancelled download: what is on disk stays.</summary>
     public const string PausedNotice = "download paused; pick the model again to resume where it stopped";
 
     /// <summary>The refusal when the embedded model is asked for while <c>Embedded servers enabled</c> is off (2026-09-29).</summary>
-    public const string SwitchedOffError = "the embedded LLM is off; set Embedded servers enabled to on in /settings › Embedded to use it";
+    public const string SwitchedOffError = "the embedded LLM is off; set Embedded servers enabled to on in /settings › Servers › Embedded to use it";
 
     /// <summary>The log line when the saved LLM URL names the embedded model but its switch is off: the URL is read as blank.</summary>
     public const string SwitchedOffWarning = "The LLM URL names the embedded model, which is switched off (Embedded servers enabled); looking for a server instead.";
 
     /// <summary>The refusal when an image is sent to an embedded model running without its vision projector.</summary>
-    public const string NoVisionError = "the embedded model is running without its vision projector; turn Embedded vision on in /settings › Embedded to send images";
+    public const string NoVisionError = "the embedded model is running without its vision projector; turn Embedded vision on in /settings › Servers › Embedded to send images";
 
     /// <summary>
     /// A model's row detail in <c>/server</c> and the catalog: <see cref="RowDetail"/> over its size when installed, else over
@@ -159,7 +159,7 @@ public static class EmbeddedLlmText
     public static string LeftBehind(int serverPid, int ownerPid) =>
         string.Create(CultureInfo.InvariantCulture, $"Killing llama-server {serverPid}, left running by NeonSidekick {ownerPid}, which is gone.");
 
-    public static string NotInstalled(EmbeddedModel model) => $"{model.Display} is not installed; install it in /settings › Embedded › Embedded models";
+    public static string NotInstalled(EmbeddedModel model) => $"{model.Display} is not installed; install it in /settings › Servers › Embedded › Embedded models";
 
     public static string UnknownModel(string id) => $"'{id}' is not an embedded model; /model lists the installed ones";
 

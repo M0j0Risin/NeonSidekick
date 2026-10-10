@@ -3594,9 +3594,10 @@ internal sealed partial class SettingsMenu
         // The theme is put in force as its row is saved (the pane re-colours); what the screen
         // hears is the net change, so a pick and a pick back is no restart (2026-09-23).
         var themeBefore = Theme.Current;
-        int tab = 0;
+        int tab = 0;   // a SettingsTab: SettingsTabs places it on the strip (2026-10-10)
         int cursor = 0;
         _midTurn = midTurn;
+        _stripSubs = new int[StripTabs.Count];   // every visit finds each group on its first tab
         try
         {
             if (!string.IsNullOrWhiteSpace(words))
@@ -3623,7 +3624,7 @@ internal sealed partial class SettingsMenu
                 if (search is not null)
                 {
                     // A letter typed on a tab (2026-10-04): the search, then the tab again — unless the profile changed under it.
-                    tab = page.Tab;
+                    tab = TabOf(page);
                     cursor = row;
                     changes |= await SearchAsync(search, cancellationToken).ConfigureAwait(false);
                     if (changes.HasFlag(SettingsChanges.Profile))
@@ -3634,7 +3635,7 @@ internal sealed partial class SettingsMenu
                     continue;
                 }
 
-                tab = page.Tab;
+                tab = TabOf(page);
                 cursor = row;
                 if (midTurn && RefusedMidTurn(field))
                 {
@@ -3657,9 +3658,20 @@ internal sealed partial class SettingsMenu
                     continue;   // Space on a row that is no switch: nothing (2026-10-04); Enter opens its page
                 }
 
-                bool edited = flip
-                    ? await FlipAsync(field, cancellationToken).ConfigureAwait(false)
-                    : await EditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false);
+                // A group's row picks under its crumb (2026-10-10, /tools' groups' shape): Settings › Servers › LLM reasoning.
+                string root = Root;
+                Root = GroupCrumb((SettingsTab)tab) is var crumb && crumb != Title ? crumb : root;
+                bool edited;
+                try
+                {
+                    edited = flip
+                        ? await FlipAsync(field, cancellationToken).ConfigureAwait(false)
+                        : await EditAsync(field, saved, page, row, cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    Root = root;
+                }
                 if (_embeddedLlmCleared)
                 {
                     // The model in use removed from the catalog (2026-09-29): its URL and model cleared, so the LLM reconnects — to none.
@@ -3759,19 +3771,27 @@ internal sealed partial class SettingsMenu
                     return null;
                 }
 
-                if (pick.Filter is { Length: > 0 } typed)
+                // Each group's sub-tab as the pane left it (2026-10-10): ←/→ move them with no pick.
+                var subs = _pane.ShownSubs;
+                for (int s = 0; s < _stripSubs.Length && s < subs.Count; s++)
                 {
-                    return (SettingsField.Profile, tabbed, pick.Row, false, typed);   // a letter typed: the search (2026-10-04), the tab kept to come back to
+                    _stripSubs[s] = subs[s];
                 }
 
-                // The page on the tab the pane ended on, so a typed edit under it keeps that tab's rows.
-                var shown = pick.Tab == tabbed.Tab ? tabbed : MenuPage.Tabbed(Title, tabbed.Tabs!, pick.Tab, TabKeys) with { Footer = tabbed.Footer };
-                if (TabRows(pick.Tab)[pick.Row] is { } field)
+                // The page on the tab (and the group's sub-tab) the pane ended on, so a typed edit under it keeps that tab's rows.
+                var shown = pick.Tab == tabbed.Tab && pick.Sub == tabbed.Sub ? tabbed : MenuPage.Tabbed(Title, WithSub(tabbed.Tabs!, pick.Tab, pick.Sub), pick.Tab, TabKeys) with { Footer = tabbed.Footer };
+                if (pick.Filter is { Length: > 0 } typed)
+                {
+                    return (SettingsField.Profile, shown, pick.Row, false, typed);   // a letter typed: the search (2026-10-04), the tab kept to come back to
+                }
+
+                int leaf = (int)TabAt(pick.Tab, pick.Sub);
+                if (TabRows(leaf)[pick.Row] is { } field)
                 {
                     return (field, shown, pick.Row, pick.Toggle, null);
                 }
 
-                (tab, cursor) = (pick.Tab, pick.Row);   // a heading is never a stop; nothing to do there
+                (tab, cursor) = (leaf, pick.Row);   // a heading is never a stop; nothing to do there
             }
         }
 
@@ -3822,17 +3842,37 @@ internal sealed partial class SettingsMenu
         return new MenuPage(Title, rows, TitleKeys);
     }
 
-    /// <summary>The settings list as the pane shows it: the <see cref="TabFields"/> under the <see cref="TabTitles"/> strip, each tab padded to its own column, opened on <paramref name="tab"/>.</summary>
+    /// <summary>
+    /// The settings list as the pane shows it: the <see cref="TabFields"/> under the <see cref="TabTitles"/> strip, each tab padded to its own column, opened on
+    /// <paramref name="tab"/> (a <see cref="SettingsTab"/>). Since 2026-10-10 (the user's pick) the strip is <see cref="StripTitles"/>: the five server tabs
+    /// are sub-tabs of Servers and TTS and STT of Voice on the second strip (<see cref="MenuTab.SubTabs"/>, <c>/tools</c>' groups' shape), each with its own
+    /// band, the group's badge counting all of theirs; a group not opened on shows the sub-tab it was left on (<see cref="_stripSubs"/>).
+    /// </summary>
     private MenuPage SettingsTabs(AppSettingsData saved, string profile, int tab)
     {
-        var tabs = new MenuTab[TabTitles.Count];
-        for (int t = 0; t < tabs.Length; t++)
+        var (at, shown) = PlaceOf((SettingsTab)tab);
+        var tabs = new MenuTab[StripTitles.Count];
+        for (int s = 0; s < tabs.Length; s++)
         {
-            // A letter typed on a tab starts the settings search (2026-10-04): the tab's filter, never shown, hands it over.
-            tabs[t] = FieldsTab(TabTitles[t], TabFields[t], saved, profile, TabSections.GetValueOrDefault((SettingsTab)t), shortNames: true) with { Filter = "" };
+            var held = StripTabs[s];
+            tabs[s] = held.Count == 1
+                ? Leaf(held[0])
+                : new MenuTab(StripTitles[s], [])
+                {
+                    SubTabs = held.Select(Leaf).ToList(),
+                    Sub = s == at ? shown : Math.Clamp(_stripSubs[s], 0, held.Count - 1),
+                    Badge = ChangedBadge(held.Sum(t => TabFields[(int)t].Count(f => IsChanged(f, saved, _settings.ProfileDirectory)))),
+                };
         }
 
-        return MenuPage.Tabbed(Title, tabs, tab, SettingsTabKeys) with { Footer = (t, row) => TabRows(t)[row] is { } field ? FieldFooter(field, _settings.Current) : null };
+        return MenuPage.Tabbed(Title, tabs, at, SettingsTabKeys) with { Footer = (s, row) => TabRows((int)TabAt(s, 0))[row] is { } field ? FieldFooter(field, _settings.Current) : null };
+
+        // A letter typed on a tab starts the settings search (2026-10-04): the tab's filter, never shown, hands it over. Each tab says its own rows under the list.
+        MenuTab Leaf(SettingsTab t) => FieldsTab(TabTitles[(int)t], TabFields[(int)t], saved, profile, TabSections.GetValueOrDefault(t), shortNames: true) with
+        {
+            Filter = "",
+            Footer = row => row >= 0 && row < TabRows((int)t).Count && TabRows((int)t)[row] is { } field ? FieldFooter(field, _settings.Current) : null,
+        };
     }
 
     /// <summary>

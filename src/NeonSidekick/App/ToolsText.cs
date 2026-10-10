@@ -241,7 +241,7 @@ public static class ToolsText
     public const string OfferedKeys = "Enter / Space = on or off · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
 
     /// <summary>The first row of the Offered tab while the setting <c>LLM offer tools</c> is off; every row under it dim. Pinned.</summary>
-    public const string OffLine = "LLM offer tools is off (the LLM tab of /settings): nothing is offered; switches here are saved and apply once it is on again.";
+    public const string OffLine = "LLM offer tools is off (/settings › Servers › LLM): nothing is offered; switches here are saved and apply once it is on again.";
 
     /// <summary>After the Questions heading while the bottom pane is off (<c>ask_user</c> has nowhere to draw). Pinned.</summary>
     public const string NoPaneSuffix = "(off: no pane)";

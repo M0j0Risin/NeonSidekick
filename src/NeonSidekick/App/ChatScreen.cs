@@ -2451,7 +2451,7 @@ internal sealed partial class ChatScreen
     public const string SkillsOffError = "Agent skills is off (the Options tab of /skills).";
 
     /// <summary>The refusal for <c>/learn</c> while the setting <c>LLM offer tools</c> is off: nothing could carry the skill. Pinned.</summary>
-    public const string SkillsNeedToolsError = "LLM offer tools is off (the LLM tab of /settings): a skill rides a tool result, so none can be loaded.";
+    public const string SkillsNeedToolsError = "LLM offer tools is off (/settings › Servers › LLM): a skill rides a tool result, so none can be loaded.";
 
     /// <summary>
     /// The line a withdrawn turn hands back (<see cref="TurnOutcome.Withdrawn"/>): put on the chat line's row at once,

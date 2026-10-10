@@ -109,7 +109,7 @@ internal sealed class SpeechSession : IDisposable
     /// in <see cref="NoServerLine"/>'s place, which would read "no server at  (…)". Pinned.
     /// </summary>
     public static readonly string NoUrlLine =
-        $"{ChatScreen.TtsGlyph} TTS: http has no HTTP URL (/settings › TTS › HTTP URL); speech off until /tts";
+        $"{ChatScreen.TtsGlyph} TTS: http has no HTTP URL (/settings › Voice › TTS › HTTP URL); speech off until /tts";
 
     /// <summary>The detail an <c>http</c> connect without a URL leaves (<see cref="NoUrlLine"/>).</summary>
     public const string NoUrlDetail = "no HTTP URL is set";

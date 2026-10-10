@@ -543,7 +543,7 @@ Some styles copy another unless changed themselves: `user`, `spinner` and `markd
 
 ### Voice presets
 
-*TTS voice preset* (the TTS tab of `/settings`) picks from the seven built-ins and your own: JSON files in the home's `voices` folder, one per preset, named for it. A file named like a built-in replaces it; the rest follow, sorted by name. Changes are picked up without a restart.
+*TTS voice preset* (`/settings` › Voice › TTS) picks from the seven built-ins and your own: JSON files in the home's `voices` folder, one per preset, named for it. A file named like a built-in replaces it; the rest follow, sorted by name. Changes are picked up without a restart.
 
 ```jsonc
 {

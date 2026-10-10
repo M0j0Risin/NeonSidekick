@@ -263,7 +263,7 @@ public class AboutTextTests
         Assert.Equal(catalog.Count, AboutText.ModelRepositories.Sum(r => r.Quants.Count));   // every build once, by its quant
         Assert.All(AboutText.ModelRepositories, r => Assert.Equal(catalog.First(m => r.Url.EndsWith("/" + m.Repository, StringComparison.Ordinal)).Display, r.Name));
         Assert.Equal("Models", AboutText.ModelsTabTitle);
-        Assert.Equal("The embedded LLM's catalog (/settings › Embedded), each from its Hugging Face repository, pinned to a commit:", AboutText.ModelsCaption);
+        Assert.Equal("The embedded LLM's catalog (/settings › Servers › Embedded), each from its Hugging Face repository, pinned to a commit:", AboutText.ModelsCaption);
     }
 
     [Fact]

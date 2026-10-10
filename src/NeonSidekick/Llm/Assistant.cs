@@ -1031,7 +1031,7 @@ public sealed class Assistant
     /// tools with the Mistral-family template's sentence (<see cref="LooksLikeToolRoleRejection"/>):
     /// the model has no tool role, and the setting that talks to it anyway is named. Pinned.
     /// </summary>
-    public const string ToolRoleHint = " — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (the LLM tab of /settings) to talk to it without tools";
+    public const string ToolRoleHint = " — this model's chat template accepts no tool messages; turn the setting LLM offer tools off (/settings › Servers › LLM) to talk to it without tools";
 
     /// <summary>
     /// Whether a failed request reads as one the server would not take for its size (2026-10-03, the user's report: a
@@ -1076,7 +1076,7 @@ public sealed class Assistant
     /// </summary>
     public static string OversizedRequestHint(long bytes, int pictures) =>
         " — the request was " + PictureBudget.FormatMegabytes(bytes) + " with " + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures")
-        + "; /compact prune takes older pictures out, and LLM picture keep (the LLM tab of /settings) caps them";
+        + "; /compact prune takes older pictures out, and LLM picture keep (/settings › Servers › LLM) caps them";
 
     /// <summary>
     /// Whether a failure's explanation is a chat template rejecting the <c>tool</c> role:

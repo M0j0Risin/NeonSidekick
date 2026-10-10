@@ -51,7 +51,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network (LM Studio, Ollama, llama.cpp, vLLM…), or takes a URL.
-* **Embedded LLM:** No server needed — install Gemma, Qwen or Muse models from `/settings` › Embedded and the app runs them on a built-in llama.cpp, backed by CUDA, Vulkan or CPU (Metal on a Mac). Every model supports vision and tool-calling. Quants run Q4 and up, chosen to fit GPUs with 8–32 GB of VRAM. Several NVFP4 quants are included for Nvidia GPUs.
+* **Embedded LLM:** No server needed — install Gemma, Qwen or Muse models from `/settings` › Servers › Embedded and the app runs them on a built-in llama.cpp, backed by CUDA, Vulkan or CPU (Metal on a Mac). Every model supports vision and tool-calling. Quants run Q4 and up, chosen to fit GPUs with 8–32 GB of VRAM. Several NVFP4 quants are included for Nvidia GPUs.
 * **Docker servers (Windows):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/VLLM_EXAMPLES_WINDOWS.md) and [SGLang](docs/SGLANG_EXAMPLES_WINDOWS.md) examples).
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or your Claude Code install. All off until you turn them on.
 * **Context control:** automatic compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
@@ -158,7 +158,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 
 | Pane | Opens with | What's in it |
 |---|---|---|
-| `/settings` | Ctrl+/ or `//` | The app, the LLM server, the embedded model, Docker, Anthropic and OpenAI, voice, sessions and `/botchat`. |
+| `/settings` | Ctrl+/ or `//` | The app; the LLM server, the embedded model, Docker, Anthropic and OpenAI (Servers); voice (Voice); sessions and `/botchat`. |
 | `/tools` | Ctrl+Alt+T | Which tools the model may use, and each group's options. |
 | `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
 | `/mcp` | Ctrl+Alt+D | External MCP servers. |
@@ -166,7 +166,7 @@ Everything is set from panes inside the app, and each explains itself: the highl
 | `/usage` | Ctrl+U | Speed and token statistics. |
 
 ### Getting around
-* **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes.
+* **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, ESC closes. A tab with tabs of its own (`/settings`' Servers and Voice) shows them on a second row; ←/→ walk them too, Tab skips past.
 * **Mouse:** a double-click picks a row or tab; the × at the top right closes the pane.
 * **Lost?** Ask the model where a setting is. Its `neon_help` tool knows every command and setting.
 
@@ -199,10 +199,10 @@ The hint row under the input line shows the model, the context used and anything
 | Setting | Where | What it does | Default |
 |---|---|---|---|
 | Working directory | `/settings` › General | The folder the file and Git tools work in. | the profile's `files\` |
-| LLM URL, LLM model | `/settings` › LLM | The server and model; `/server` and `/model` fill them in. | (none) |
+| LLM URL, LLM model | `/settings` › Servers › LLM | The server and model; `/server` and `/model` fill them in. | (none) |
 | Theme | `/settings` › General | One of sixty colour themes, or your own. | `collider` |
 | Memory mode | `/settings` › General | Whether the model remembers facts about you between sessions. | `read-write` |
-| TTS output, STT input | `/settings` › TTS, STT | Reads replies aloud; voice input on a push-to-talk key (F4). | off |
+| TTS output, STT input | `/settings` › Voice › TTS, STT | Reads replies aloud; voice input on a push-to-talk key (F4). | off |
 | File tools | `/tools` › Files | Lets the model read and write files in the working directory. | off |
 | Web tools | `/tools` › Web | Lets the model search the web and read pages. | off |
 | Shell command policy | `/tools` › Shell | Whether the model may run commands: `off`, `ask` (you approve each one) or `yolo` (no asking). | `off` |

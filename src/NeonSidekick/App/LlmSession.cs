@@ -62,7 +62,7 @@ internal sealed class LlmSession : IDisposable
     /// (later that day, the user's call). Pinned.
     /// </summary>
     public const string NoEmbeddedLine =
-        "LLM: no server set and no embedded model downloaded. Download one in /settings › Embedded, set LLM URL, or turn on LLM server scan mode.";
+        "LLM: no server set and no embedded model downloaded. Download one in /settings › Servers › Embedded, set LLM URL, or turn on LLM server scan mode.";
 
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;

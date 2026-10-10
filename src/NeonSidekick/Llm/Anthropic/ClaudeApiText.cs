@@ -8,9 +8,9 @@ public static class ClaudeApiText
     /// looks for a server as a blank URL would. Pinned.
     /// </summary>
     public const string NotOfferedWarning =
-        "The LLM URL is the Anthropic API, but Anthropic API is off or has no key (/settings › Anthropic); looking for a server instead.";
+        "The LLM URL is the Anthropic API, but Anthropic API is off or has no key (/settings › Servers › Anthropic); looking for a server instead.";
 
     /// <summary><c>/server https://api.anthropic.com</c> while the Anthropic API is not offered. Pinned.</summary>
     public const string NotOfferedError =
-        "The Anthropic API is not offered: turn on Anthropic API and set Anthropic API key in /settings › Anthropic.";
+        "The Anthropic API is not offered: turn on Anthropic API and set Anthropic API key in /settings › Servers › Anthropic.";
 }

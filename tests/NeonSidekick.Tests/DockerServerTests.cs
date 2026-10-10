@@ -121,7 +121,7 @@ public sealed class DockerServerTests : IDisposable
 
         _settings.DockerServerContainers = ["sglang_a", "ghost"];
         var missing = await Switch("ghost");
-        Assert.Equal("There is no Docker container named ghost; untick it on the Docker tab of /settings, or create it again.", missing.Error);
+        Assert.Equal("There is no Docker container named ghost; untick it on /settings › Servers › Docker, or create it again.", missing.Error);
         Assert.Empty(Acts());
     }
 

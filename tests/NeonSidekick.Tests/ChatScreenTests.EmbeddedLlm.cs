@@ -42,7 +42,7 @@ public partial class ChatScreenTests
         Assert.Contains(SettingsMenu.ServerTitle, output);
         // Every row's detail in one column: the names padded as the catalog pads them, the quantisations after, and the
         // detail's · under one another (2026-09-29). The installed models alone (later that day, the user's ask): a
-        // download starts from /settings › Embedded, never from /server.
+        // download starts from /settings › Servers › Embedded, never from /server.
         Assert.Contains("Embedded       " + "Gemma 4 E2B".PadRight(32) + "UD-Q4_K_XL  installed · 4.3 GB", output);
         Assert.Contains("Embedded       " + "Gemma 4 12B QAT Uncensored".PadRight(32) + "Q4_K_M      installed · 7.8 GB", output);
         Assert.DoesNotContain("download  · ", output);

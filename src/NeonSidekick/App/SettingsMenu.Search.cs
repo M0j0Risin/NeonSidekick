@@ -140,7 +140,7 @@ internal sealed partial class SettingsMenu
                 string? located = _locateBrowser("");
                 int width = found.Count == 0 ? 0 : found.Max(r => r.Label.Length) + LabelGap;
                 IReadOnlyList<string> rows = found.Count > 0
-                    ? found.Select(r => FoundRow(r, saved, width, located, r.Pane + HelpText.PathSeparator + r.Tab)).ToList()
+                    ? found.Select(r => FoundRow(r, saved, width, located, r.Pane + HelpText.PathSeparator + r.Place)).ToList()
                     : [query.Length == 0 ? Theme.DimMarkup(SearchEmptyLine) : MenuFilter.NoMatchRow(query)];
                 var page = new MenuPage(Crumb(SearchCrumbLabel(query)), rows, SearchKeys)
                 {
@@ -224,7 +224,7 @@ internal sealed partial class SettingsMenu
                 string? located = _locateBrowser("");
                 int width = changed.Count == 0 ? 0 : changed.Max(r => r.Label.Length) + LabelGap;
                 IReadOnlyList<string> rows = changed.Count > 0
-                    ? changed.Select(r => FoundRow(r, saved, width, located, DefaultLabel + HelpLocation.Default(r.Field) + "  " + r.Pane + HelpText.PathSeparator + r.Tab)).ToList()
+                    ? changed.Select(r => FoundRow(r, saved, width, located, DefaultLabel + HelpLocation.Default(r.Field) + "  " + r.Pane + HelpText.PathSeparator + r.Place)).ToList()
                     : [Theme.DimMarkup(NothingChangedLine)];
                 var page = new MenuPage(Crumb(ChangedLabel), rows, ChangedKeys)
                 {

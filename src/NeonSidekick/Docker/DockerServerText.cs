@@ -56,9 +56,9 @@ public static class DockerServerText
 
     // ─── refusals and failures ──────────────────────────────────────────────────
 
-    public static string NotChosen(string name) => $"{name} is not one of the Docker server containers; tick it on the Docker tab of /settings.";
+    public static string NotChosen(string name) => $"{name} is not one of the Docker server containers; tick it on /settings › Servers › Docker.";
 
-    public static string NotFound(string name) => $"There is no Docker container named {name}; untick it on the Docker tab of /settings, or create it again.";
+    public static string NotFound(string name) => $"There is no Docker container named {name}; untick it on /settings › Servers › Docker, or create it again.";
 
     public static string StopFailed(string name, string target, string detail) =>
         $"Could not stop {name}, so {target} was not started (two models may not fit the GPU): {DockerText.Single(detail)}";
@@ -83,12 +83,12 @@ public static class DockerServerText
     public const string SwitchedOffWarning =
         "The LLM URL names a Docker container that is not a Docker server (Docker servers is off, or the container is unticked); looking for a server instead.";
 
-    public const string SwitchedOffError = "Docker servers is off; switch it on from the Docker tab of /settings.";
+    public const string SwitchedOffError = "Docker servers is off; switch it on from /settings › Servers › Docker.";
 
     /// <summary>What the Connect a model page's Docker row says once containers are chosen (2026-10-05). Pinned.</summary>
     public const string ConnectHint = "Docker servers is on: /server lists the chosen containers, and /server docker:<name> starts one.";
 
-    public const string NoneChosenError = "No Docker server containers are chosen; tick some on the Docker tab of /settings.";
+    public const string NoneChosenError = "No Docker server containers are chosen; tick some on /settings › Servers › Docker.";
 
     public const string Unavailable = "Docker servers need Windows (Docker Desktop's engine pipe).";
 

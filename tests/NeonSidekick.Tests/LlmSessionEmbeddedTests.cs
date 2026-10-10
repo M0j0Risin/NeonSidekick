@@ -204,7 +204,7 @@ public class LlmSessionEmbeddedTests
     public async Task TheServerRows_ListTheInstalledCatalogModels_AfterTheScan_BeforeTheClaudeApi()
     {
         // The installed models alone (2026-09-29, the user's ask: every catalog model until then, a download or a paused one
-        // too): a download starts from the catalog on /settings › Embedded, whose rows carry the same details.
+        // too): a download starts from the catalog on /settings › Servers › Embedded, whose rows carry the same details.
         _embedded.Installed("gemma-4-e2b", "gemma-4-12b").Partial("gemma-4-e4b-qat", 42);
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
         using var session = Session();

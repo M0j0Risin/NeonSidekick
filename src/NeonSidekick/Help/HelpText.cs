@@ -24,7 +24,7 @@ public static class HelpText
     public const int MaxMatches = 8;
 
     // The panes' one-liners: README's Available Panes, kept short.
-    public const string SettingsPaneSummary = "the app's settings: the profile and screen, the embedded model, Docker servers, the Anthropic and OpenAI APIs and the Claude Code server, the LLM connection, speech output (TTS), voice input (STT), sessions and /botchat";
+    public const string SettingsPaneSummary = "the app's settings: the profile and screen (General); the LLM connection, the embedded model, Docker servers, the Anthropic and OpenAI APIs and the Claude Code server (Servers, a tab each on a second strip); speech output and voice input (Voice: TTS and STT); sessions and /botchat";
     public const string ToolsPaneSummary = "the model's tools: Offered lists every tool, on or off (Enter flips one); the other tabs hold each tool group's settings, Media and Database a menu per group on a second strip (←/→ walk every menu, Tab skips past a group)";
     public const string SkillsPaneSummary = "agent skills (SKILL.md folders) and the model's self-reflection";
     public const string McpPaneSummary = "external MCP servers: Servers lists and edits them, Tools shows what each offers, Options holds the switch and timeout";
@@ -115,7 +115,7 @@ public static class HelpText
     public static string Setting(HelpRow row, string defaultValue, string description)
     {
         ArgumentNullException.ThrowIfNull(row);
-        string menu = row.Menu is null ? "" : $", Enter on {row.Menu}";
+        string menu = row.Menu is null ? "" : $", then {row.Menu} on the second strip";   // "Enter on" the menu until 2026-10-10, when the menus became sub-tabs
         return $"Setting {row.Label}\n  Where: {row.Path} (open {row.Pane}, go to the {row.Tab} tab{menu}, Enter on the row edits it)\n  Default: {defaultValue}\n  What it does: {description}";
     }
 

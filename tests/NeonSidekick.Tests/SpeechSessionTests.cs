@@ -402,7 +402,7 @@ public class SpeechSessionTests : IDisposable
         Assert.Equal(SpeechSession.NoUrlDetail, _speech.Detail);
         Assert.Equal(SpeechSession.NoUrlLine, _speech.StatusLine());
         Assert.True(_speech.StatusIsWarning);
-        Assert.Equal("🔊 TTS: http has no HTTP URL (/settings › TTS › HTTP URL); speech off until /tts", SpeechSession.NoUrlLine);
+        Assert.Equal("🔊 TTS: http has no HTTP URL (/settings › Voice › TTS › HTTP URL); speech off until /tts", SpeechSession.NoUrlLine);
         Assert.Null(Http(""));   // the voice picker falls back to typing
     }
 

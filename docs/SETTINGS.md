@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **`/tools` Media and Database:** each holds five menus, shown as a second row of tabs under the first while you are on it; the rows below are the menu's own. ←/→ step through every menu in turn (from Home into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past a group, and coming back finds the menu you left. A click on a menu's name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (LLM, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Media and Database (five menus each), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Home into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -141,7 +141,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
 
 ## Panes
-* `/settings`: the app, LLM, the embedded model, Docker, Anthropic and OpenAI servers, voice, sessions and `/botchat`
+* `/settings`: the app (General), the LLM and its servers (Servers: LLM, Embedded, Docker, Anthropic, OpenAI), voice (Voice: TTS, STT), sessions and `/botchat`
 * `/skills`: agent skills and self-reflection
 * `/tools`: the model's tools, and Claude (`/claude` and the advisor)
 * `/mcp`: external MCP servers
@@ -199,7 +199,11 @@ Settings that an environment variable or flag can override for one launch are li
 * PROC counts the model's background processes still running (`/process` lists them). It is a number in every look, with no gauge, sparkline or LEDs, dim at none.
 * `/perfbar` or the toolbar's 📈 hides the bar, or brings it back with the meters it last had.
 
-### LLM
+### Servers
+
+The LLM connection and every kind of server it can be: five tabs on one, each a tab of the second strip under the first (LLM · Embedded · Docker · Anthropic · OpenAI): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
+
+#### LLM
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -229,7 +233,7 @@ Settings that an environment variable or flag can override for one launch are li
 | LLM picture megabytes | The most megabytes of pictures one request carries, as sent (0–1000; 0 = no cap); past it the oldest leave until half is left. A request with pictures that the server drops as it is sent is tried once more with half of them. | 24 |
 | LLM use fun verbs | The thinking spinner shows a random verb instead of `thinking` / `writing`. | off |
 
-### Sampling per model
+#### Sampling per model
 
 Until you override them, sampling is left to the server and the model's defaults.
 
@@ -255,7 +259,7 @@ Until you override them, sampling is left to the server and the model's defaults
 * **Without the pane:** `/sampling temperature 0.6`, `/sampling top_k clear`, `/sampling extra {"seed":42}` and `/sampling clear` change the connected model's values; `NEONSIDEKICK_LLM_SAMPLING` overrides every model for one run.
 * The Anthropic API and the OpenAI API are not affected.
 
-### Embedded
+#### Embedded
 
 A model the app downloads and runs itself on llama.cpp's `llama-server`, for when no other server is around: Gemma 4 from E2B to 31B, Meta's Muse Glimmer 30B, Qwen3.6 35B A3B and Qwen3.8 27B (also in NVFP4 for NVIDIA Blackwell GPUs).
 
@@ -351,7 +355,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 * **Never in system RAM:** besides *Embedded VRAM only*, you can tell the NVIDIA driver never to fall back for llama.cpp: NVIDIA Control Panel › *Manage 3D settings* › *Program Settings*, add `llama-server.exe` (under `llama\` in the home folder) and set *CUDA - Sysmem Fallback Policy* to *Prefer No Sysmem Fallback*.
 * Windows x64 and Apple Silicon Macs (M1 and later, Metal). The small models (E2B, E4B) call tools less reliably.
 
-### Docker
+#### Docker
 
 Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/server` choices, one running at a time, over Docker Desktop's engine pipe. Windows only: on a Mac `/server` lists none. See [Docker servers](TOOLS.md#docker-servers).
 
@@ -364,7 +368,7 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 | Docker server ready timeout (s) | How long a started container may take to answer on `/v1/models` (30–3600). Past it, the switch fails and the container keeps running. | 900 |
 | Docker server stop on exit | Stops the container in use when the app exits (the window's close button too). | off |
 
-### Anthropic
+#### Anthropic
 
 Claude Code and the Anthropic API as `/server` choices. `/claude` and `claude_code_advisor` are on `/tools` › ClaudeCode.
 
@@ -392,7 +396,7 @@ Claude Code and the Anthropic API as `/server` choices. `/claude` and `claude_co
 * Claude Code compacts its own conversation, so *LLM auto compact* does nothing here; the window is 200,000 tokens.
 * Messages count against your Claude Code plan; the log records each turn's cost. Switching servers stops the CLI; the session stays for a switch back.
 
-### OpenAI
+#### OpenAI
 
 The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing is stored on OpenAI's side).
 
@@ -413,7 +417,11 @@ The OpenAI API as a `/server` choice, over the Responses API (stateless: nothing
 * *LLM sampling* is not sent (the reasoning models refuse a temperature), nor is another server's thinking.
 * The context window comes from the app's model table (the model list names none); *LLM context length* overrides it. `/usage` adds *Cache* and *Cost* rows: an estimate at OpenAI's list prices of 2026-10-03, long-context prices past 272K prompt tokens, cache writes from GPT-5.6 on.
 
-### TTS
+### Voice
+
+Speech out and voice in, two tabs on one, each a tab of the second strip (TTS · STT): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
+
+#### TTS
 
 Speech output sets up in the background (🔈 on the hint row); replies are text-only until it's ready.
 
@@ -429,7 +437,7 @@ Speech output sets up in the background (🔈 on the hint row); replies are text
 | TTS voice mix | The first voice's share of the blend, 0–100 %. | 80 |
 | TTS speed | Speaking speed, 0.5–2.0. | 1.2 |
 
-### STT
+#### STT
 
 Voice input sets up in the background (🎙️ on the hint row); until it's ready, push-to-talk says so.
 
@@ -756,7 +764,7 @@ The picture, print and video tools, five menus on one tab, each a tab of the sec
 
 ### ClaudeCode
 
-The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (the model asks it). The Anthropic API and Claude Code as servers are on `/settings` › Anthropic.
+The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (the model asks it). The Anthropic API and Claude Code as servers are on `/settings` › Servers › Anthropic.
 
 | Setting | What it does | Default |
 |---|---|---|

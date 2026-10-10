@@ -2482,7 +2482,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal("remote", _settings.Current.LlmScanMode);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM server scan mode: remote\n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            remote\n  URL                         (scan the local network)\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Llm) + "\n  · 🖥️ LLM server scan mode: remote\n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            remote\n  URL                         (scan the local network)\n", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3264,7 +3264,19 @@ public partial class SettingsMenuTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The strip as the pane prints it: the label, then every tab title with a space either side, two spaces between. Pinned.</summary>
-    private const string Strip = SettingsMenu.Title + " │ General · LLM · Embedded · Docker · Anthropic · OpenAI · TTS · STT · Sessions · Botchat ";   // LLM second since 2026-10-04   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
+    private const string Strip = SettingsMenu.Title + " │ General · Servers · Voice · Sessions · Botchat ";   // the Servers and Voice groups since 2026-10-10
+
+    /// <summary>The strip over settings tab <paramref name="tab"/> as the pane prints it (2026-10-10): a group's second strip under it, its tabs' titles (the badges cut by <see cref="Output"/>).</summary>
+    private string Head(SettingsTab tab)
+    {
+        var (strip, _) = SettingsMenu.PlaceOf(tab);
+        return !SettingsMenu.IsGroup(strip)
+            ? Titled(Strip)
+            : Titled(Strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, SettingsMenu.StripTabs[strip].Select(t => SettingsMenu.TabTitles[(int)t]).ToList(), 0, _console.Profile.Width)[0]);
+    }
+
+    /// <summary>A group tab's picker crumb (2026-10-10, <see cref="SettingsMenu.GroupCrumb"/>): <c>Settings › Voice › TTS output</c>.</summary>
+    internal static string GroupBreadcrumb(SettingsTab tab, string label) => SettingsMenu.GroupCrumb(tab) + " › " + label;   // LLM second since 2026-10-04   // six since 2026-09-25 (Botchat); five tabs since 2026-09-19: Ask, Files and Web are /tools' (ToolsMenuTests), Skills is /skills' Options tab (SkillsMenuTests)
 
     [WindowsFact]
     public async Task OnThePane_TheListOpensOnTheGeneralTab_AndEscClosesIt()
@@ -3317,7 +3329,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_EveryTab_ShowsItsRowsInOrder()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Right, Keys.Tab, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Right, Keys.Escape);   // LLM, Embedded (Tab; LLM second since 2026-10-04), then Docker, Anthropic, OpenAI (2026-10-03), TTS, STT, Sessions; until 2026-10-04 Embedded, Docker (Tab), then Claude, OpenAI, LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
+        Push(Enumerable.Repeat(Keys.Right, 9).Append(Keys.Escape).ToArray());   // every tab, the arrows walking the Servers and Voice groups' tabs in turn since 2026-10-10; until then LLM, Embedded (Tab; LLM second since 2026-10-04), then Docker, Anthropic, OpenAI (2026-10-03), TTS, STT, Sessions; until 2026-10-04 Embedded, Docker (Tab), then Claude, OpenAI, LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
@@ -3348,9 +3360,9 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(_settings.Current.TtsOutput);
         // The on/off page under the breadcrumb: the saved value on the cursor, each row with its sentence.
-        Assert.Contains("\n" + Titled(Breadcrumb("TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", Output);
+        Assert.Contains("\n" + Titled(GroupBreadcrumb(SettingsTab.Tts, "TTS output")) + "\n \n▸ on  " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, true) + "\n  off " + SettingsMenu.ToggleDescribe(SettingsField.TtsOutput, false) + "\n", Output);
         // The status under the strip: the saved notice and the override warning, the tab's list under them with the cursor kept.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ Output         off  (overridden by X)\n  Source", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  · TTS output: off\n  ! " + SettingsMenu.OverrideNotice("X") + "\n▸ Output         off  (overridden by X)\n  Source", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
     }
@@ -3559,12 +3571,12 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("qwen3", _settings.Current.LlmModel);
         // The edit: the tab's list under its strip with the row marked, the slot under it, the edit keys in the hint row.
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n  Server scan mode            local\n  URL                         (probe local ports)\n▸ Model                       (first listed)\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Llm) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n  Server scan mode            local\n  URL                         (probe local ports)\n▸ Model                       (first listed)\n", Output);
         Assert.Contains("\n› \n" + Rule(120) + "\n" + SettingsMenu.EditKeys, Output);
         Assert.Contains("qwen3-typo", Output);
         // The results on the status line, never as a › line or a notice in the flow.
-        Assert.Contains("\n" + Titled(Strip) + "\n  · 🖥️ LLM model: qwen3\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Llm) + "\n  · 🖥️ LLM model: qwen3\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Llm) + "\n  · " + SettingsMenu.UnchangedNotice + "\n", Output);
         Assert.DoesNotContain("› qwen3", Output);
         Assert.Equal(0, pane.FlowRow);
         pane.Dispose();
@@ -3656,7 +3668,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(1.2, _settings.Current.TtsSpeed);
-        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", Output);
         string afterError = Output[Output.IndexOf("✗ TTS speed", StringComparison.Ordinal)..];
         Assert.Contains("\n  Voice mix      80 % / 20 %\n▸ Speed          1.2\n", afterError.Split(Rule(120))[0]);
         Assert.Equal(0, pane.FlowRow);
@@ -3959,7 +3971,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.False(_settings.Current.TtsVoicePreview);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice preview: off\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  · TTS voice preview: off\n", Output);
         Assert.Contains("\n  HTTP URL       http://localhost:8880/v1\n▸ Voice preview  off\n  Voice preset   neon\n  Voice          af_heart\n", Output);
         pane.Dispose();
     }
@@ -4014,7 +4026,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(70, _settings.Current.TtsVoiceMix);
         Assert.Equal(Preview("af_heart(70)+af_sky(30)", 1.5), _synth.Spoken);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS voice mix: 70 % / 30 %\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  · TTS voice mix: 70 % / 30 %\n", Output);
 
         // No second voice: the blend is the primary alone, and that is what plays.
         _settings.Update(d => d.TtsVoice2 = "");
@@ -4044,7 +4056,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(80, _settings.Current.TtsVoiceMix);
-        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS voice mix " + SettingsMenu.TtsVoiceMixRangeError + "; keeping 80.\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  ✗ TTS voice mix " + SettingsMenu.TtsVoiceMixRangeError + "; keeping 80.\n", Output);
         Assert.Empty(_synth.Spoken);
         Assert.Null(_speech.Playing);
 
@@ -4076,7 +4088,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(1.4, _settings.Current.TtsSpeed);
         Assert.Equal(Preview("af_heart(70)+af_sky(30)", 1.4), _synth.Spoken);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · TTS speed: 1.4\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  · TTS speed: 1.4\n", Output);
         Assert.Equal(1, _synth.ListCalls);
         pane.Dispose();
     }
@@ -4094,7 +4106,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(1.2, _settings.Current.TtsSpeed);
-        Assert.Contains("\n" + Titled(Strip) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n  ✗ TTS speed " + SettingsMenu.TtsSpeedRangeError + "; keeping 1.2.\n", Output);
         Assert.Empty(_synth.Spoken);
         Assert.Null(_speech.Playing);
 
@@ -4455,7 +4467,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Llm) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ Server scan mode            local\n", Output);
         Assert.Contains("\n▸ Servers enabled", Output);   // the Embedded tab's rows wear no "Embedded" since 2026-10-04
         Assert.DoesNotContain("Agent skills", Output);
         pane.Dispose();
@@ -5173,8 +5185,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.Voice, await menu.ShowAsync(CancellationToken.None));
 
         Assert.True(_settings.Current.SttInput);
-        Assert.Contains("\n" + Titled(Breadcrumb("STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · STT input: on\n▸ Input                 on\n", Output);
+        Assert.Contains("\n" + Titled(GroupBreadcrumb(SettingsTab.Stt, "STT input")) + "\n \n  on  " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, true) + "\n▸ off " + SettingsMenu.ToggleDescribe(SettingsField.SttInput, false) + "\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Stt) + "\n  · STT input: on\n▸ Input                 on\n", Output);
         pane.Dispose();
     }
 
@@ -5297,7 +5309,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel(""))), Output);   // the first ESC: the words gone (the four letters arrived as one run)
         Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("wake"))), Output);
-        Assert.Matches(@"▸ STT wake +off  /settings › STT", Output);
+        Assert.Matches(@"▸ STT wake +off  /settings › Voice › STT", Output);
         Assert.True(Output.LastIndexOf(SettingsMenu.SettingsTabKeys, StringComparison.Ordinal) > Output.LastIndexOf(SettingsMenu.SearchKeys, StringComparison.Ordinal));   // the tab came back after the search
         pane.Dispose();
     }

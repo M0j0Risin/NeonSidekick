@@ -16,10 +16,10 @@ namespace NeonSidekick.Llm;
 public static class ModelErrorText
 {
     /// <summary>What to do about a server that cannot be reached. Pinned.</summary>
-    public const string UnreachableNextStep = "/server picks another; /settings › LLM › URL changes it.";
+    public const string UnreachableNextStep = "/server picks another; /settings › Servers › LLM › URL changes it.";
 
     /// <summary>What to do about a refused key. Pinned.</summary>
-    public const string KeyNextStep = "/settings › LLM › API key sets it (/settings › Anthropic or OpenAI for theirs).";
+    public const string KeyNextStep = "/settings › Servers › LLM › API key sets it (/settings › Servers › Anthropic or OpenAI for theirs).";
 
     /// <summary>What to do about a model the server does not have. Pinned.</summary>
     public const string ModelNextStep = "/model picks one the server lists.";
