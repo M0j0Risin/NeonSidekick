@@ -6,18 +6,15 @@ namespace NeonSidekick.Tests.Fakes;
 public static class FileToolNames
 {
     /// <summary>
-    /// Every file tool, the PDF converter last. Where there are no picture codecs (2026-10-06, the macOS build: <see cref="Files.ImageCodecs"/>)
-    /// <c>view_image</c>, <c>image_info</c> and <c>image_edit</c> are not built, so they are not here either; on Windows all seventeen.
+    /// Every file tool, the PDF converter last: fourteen since 2026-10-10, when <c>view_image</c>, <c>image_info</c> and <c>image_edit</c>
+    /// became a group of their own (<see cref="ImageToolNames"/>, the user's ask).
     /// </summary>
-    public static readonly string[] All = [.. Everything.Where(name => Files.ImageCodecs.Available || name is not (ViewImageTool.ToolName or ImageInfoTool.ToolName or ImageEditTool.ToolName))];
-
-    private static string[] Everything =>
+    public static readonly string[] All =
     [
         GetWorkingDirectoryTool.ToolName,
         SearchFilesTool.ToolName,
         FileInfoTool.ToolName,
         ReadFileTool.ToolName,
-        ViewImageTool.ToolName,
         WriteFileTool.ToolName,
         PatchFileTool.ToolName,
         CreateDirectoryTool.ToolName,
@@ -27,14 +24,21 @@ public static class FileToolNames
         ZipTool.ToolName,
         UnzipTool.ToolName,
         OpenTool.ToolName,
-        ImageInfoTool.ToolName,
-        ImageEditTool.ToolName,
         ConvertToPdfTool.ToolName,
     ];
 
-    /// <summary>
-    /// The sixteen <c>ChatScreen.FileTools</c> builds without a PDF converter (the tests that build the list alone; 2026-10-03; the image
-    /// tools since 2026-10-04), thirteen where there are no picture codecs (<see cref="All"/>).
-    /// </summary>
+    /// <summary>The thirteen <c>ChatScreen.FileTools</c> builds without a PDF converter (the tests that build the list alone; 2026-10-03).</summary>
     public static readonly string[] WithoutPdf = All[..^1];
+
+    /// <summary>The file tools and then the picture tools, as a turn offers both groups (2026-10-10): what the file tools' list was until then, in the new order.</summary>
+    public static readonly string[] WithImages = [.. All, .. ImageToolNames.All];
+}
+
+/// <summary>
+/// The picture tools in the order <c>ChatScreen.ImageTools</c> builds them (2026-10-10, their own group under <c>Image tools</c>). Where there
+/// are no picture codecs (2026-10-06, the macOS build: <see cref="Files.ImageCodecs"/>) none is built, so none is here either.
+/// </summary>
+public static class ImageToolNames
+{
+    public static readonly string[] All = Files.ImageCodecs.Available ? [ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName] : [];
 }

@@ -26,7 +26,8 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static IReadOnlyList<SettingButton>? SettingButtonsFor(SettingsField toolSwitch) => toolSwitch switch
     {
-        SettingsField.FileTools => [new(SettingsField.FileBrowserMode, "browser", 'b'), new(SettingsField.ImageEditMode, "edit mode", 'e')],
+        SettingsField.FileTools => [new(SettingsField.FileBrowserMode, "browser", 'b')],
+        SettingsField.ImageTools => [new(SettingsField.ImageEditMode, "edit mode", 'e')],   // File tools' until 2026-10-10, with the picture tools
         SettingsField.PrintTools => [new(SettingsField.PrintDefaultPrinter, "printer", 'p')],
         SettingsField.ScreenTools => [new(SettingsField.ScreenAsk, "ask", 'a'), new(SettingsField.ScreenPreview, "preview", 'p')],
         SettingsField.ObsidianTools => [new(SettingsField.ObsidianVault, "vault", 'v')],

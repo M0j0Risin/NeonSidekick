@@ -1100,6 +1100,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_ViewImage_PrintsTheGenericLines_AndTheCarrierFollowsTheResult()
     {
         ServerOn1234("llama");
+        _settings.Update(d => d.ImageTools = true);   // the picture tools' own switch since 2026-10-10
         string folder = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "square.bmp"), SmokeChecks.SolidBmp(4, 4));

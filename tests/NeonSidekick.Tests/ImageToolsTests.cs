@@ -21,7 +21,7 @@ public sealed class ImageToolsTests : IDisposable
     {
         _root = Path.Combine(_dir, "files");
         _files = new WorkingDirectory(() => _root, new ManualTimeProvider());
-        _tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings);
+        _tools = ChatScreen.ImageTools(_files, () => _settings);   // their own group since 2026-10-10 (FileTools' until then)
     }
 
     public void Dispose()

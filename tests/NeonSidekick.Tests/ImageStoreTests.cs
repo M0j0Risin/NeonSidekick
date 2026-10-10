@@ -98,7 +98,7 @@ public sealed class ImageStoreTests : IDisposable
         string saved = Picture(_imagesRoot, Path.Combine("camera_images", "shot.bmp"));
         Picture(_root, "local.bmp");
         string outside = Picture(Path.Combine(_dir, "elsewhere"), "x.bmp");
-        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+        var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
         var view = tools.Single(t => t.Name == ViewImageTool.ToolName);
 
         var shown = Assert.IsType<ToolImageResult>(await view.InvokeAsync(Args(("paths", new[] { saved, "local.bmp", outside }))));
@@ -109,7 +109,7 @@ public sealed class ImageStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task ImageEdit_OnASavedPicture_WritesBesideIt_OrIntoTheOutputFolder_InTheSandbox()
+    public async Task ImageEdit_OnASavedPicture_WritesBesideIt_OrIntoTheOutputFolder_UnderTheImagesFolder()
     {
         if (!ImageCodecs.Available)
         {
@@ -117,7 +117,7 @@ public sealed class ImageStoreTests : IDisposable
         }
 
         string saved = Picture(_imagesRoot, Path.Combine("comfy_images", "pony-5.bmp"));
-        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+        var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
         var edit = tools.Single(t => t.Name == ImageEditTool.ToolName);
         var info = tools.Single(t => t.Name == ImageInfoTool.ToolName);
 
@@ -128,9 +128,17 @@ public sealed class ImageStoreTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_imagesRoot, "comfy_images", "pony-5-edited.bmp")), beside);
         Assert.Contains(Path.Combine(_imagesRoot, "comfy_images", "pony-5-edited.bmp"), beside, StringComparison.Ordinal);
 
+        // The setting names a folder under the images folder since 2026-10-10 (the user's ask; a working-directory one until then),
+        // the answer its full path; a picture in the working directory goes there too.
         _settings.ImageEditOutputFolder = "edited";
         string into = ToolAnswers.Text(await edit.InvokeAsync(Args(("path", saved), ("rotate", 180))));
-        Assert.True(File.Exists(Path.Combine(_root, "edited", "pony-5-edited.bmp")), into);   // the setting names a working-directory folder
+        Assert.True(File.Exists(Path.Combine(_imagesRoot, "edited", "pony-5-edited.bmp")), into);
+        Assert.Contains(Path.Combine(_imagesRoot, "edited", "pony-5-edited.bmp"), into, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(_root, "edited")), into);
+        Picture(_root, "cat.bmp");
+        string fromSandbox = ToolAnswers.Text(await edit.InvokeAsync(Args(("path", "cat.bmp"), ("rotate", 90))));
+        Assert.True(File.Exists(Path.Combine(_imagesRoot, "edited", "cat-edited.bmp")), fromSandbox);
+        Assert.Contains("output into " + Path.Combine(_imagesRoot, "edited"), ToolAnswers.Text(await info.InvokeAsync(Args(("path", saved)))), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -143,7 +151,7 @@ public sealed class ImageStoreTests : IDisposable
         File.SetLastWriteTimeUtc(older, new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
         File.SetLastWriteTimeUtc(newer, new DateTime(2026, 10, 9, 0, 0, 0, DateTimeKind.Utc));
         Picture(_root, "local.bmp");
-        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+        var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
         var search = tools.Single(t => t.Name == SearchFilesTool.ToolName);
 
         string recent = ToolAnswers.Text(await search.InvokeAsync(Args(("path", _imagesRoot), ("order", "modified"), ("limit", 5))));
@@ -180,7 +188,7 @@ public sealed class ImageStoreTests : IDisposable
     [Fact]
     public void TheDescriptions_NameTheImagesFolder_OnlyWhileItIsOffered()
     {
-        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+        var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
         string root = _images.Root;
 
         Assert.Equal(SearchFilesTool.DescriptionText + " " + FileText.ImagesFolderSearchSentence(root), tools.Single(t => t.Name == SearchFilesTool.ToolName).Description);
@@ -212,7 +220,7 @@ public sealed class ImageStoreTests : IDisposable
         string saved = Picture(_imagesRoot, Path.Combine("comfy_images", "a.bmp"));
         string elsewhere = Path.Combine(_dir, "elsewhere", "x.txt");
         _files.ImagesFolder = () => _imagesRoot;
-        var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images);
+        var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
 
         Assert.Equal(FileOutcome.InImagesFolder, _files.Resolve(saved, forWrite: false, out _));
         Assert.Equal(FileOutcome.InImagesFolder, _files.Resolve(_imagesRoot, forWrite: false, out _));

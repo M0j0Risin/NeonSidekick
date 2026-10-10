@@ -70,6 +70,8 @@ namespace NeonSidekick.App;
 /// <param name="SessionTools">How many session tools the next turn offers; the rules carry <see cref="Assistant.SessionRule"/> while any is.</param>
 /// <param name="SqliteWrite">Whether <c>sqlite_execute</c> is among the SQLite tools offered (2026-10-05, <see cref="ChatScreen.SqliteToolsFor"/>): the rules add <see cref="Assistant.SqliteWriteRule"/>.</param>
 /// <param name="ServerWrites">The server families whose <c>_execute</c> tool is offered (2026-10-05, <see cref="ChatScreen.ServerWritesOf"/>): each family's rule is followed by its write sentence.</param>
+/// <param name="ImagesEnabled">The setting <c>Image tools</c> (2026-10-10, the picture tools' own group).</param>
+/// <param name="ImageTools">How many picture tools the next turn offers (none without codecs, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ImageRule"/> while any is.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
 public sealed record SystemPromptFacts(
     string? Persona,
@@ -131,8 +133,13 @@ public sealed record SystemPromptFacts(
     int SessionTools = 0,
     bool MemorySave = true,
     bool SqliteWrite = false,
-    ServerWrites ServerWrites = ServerWrites.None)
+    ServerWrites ServerWrites = ServerWrites.None,
+    bool ImagesEnabled = false,
+    int ImageTools = 0)
 {
+    /// <summary>Whether the rules carry <see cref="Assistant.ImageRule"/>: tools on, the switch on and a picture tool offered (2026-10-10).</summary>
+    public bool Images => ToolsEnabled && ImagesEnabled && ImageTools > 0;
+
     /// <summary>Whether the rules carry <see cref="Assistant.WebRule"/>: tools on, the switch on and at least one web tool offered (2026-10-04).</summary>
     public bool Web => ToolsEnabled && WebEnabled && WebTools > 0;
 
@@ -346,6 +353,9 @@ public static class SystemPromptSummary
     /// <summary>The tail of the Docker group while its tools cannot be offered: the switch off (2026-10-02). Pinned.</summary>
     public const string DockerOffSuffix = "Docker tools is off";
 
+    /// <summary>The tail of the Image group while its tools cannot be offered: the switch off (2026-10-10, the picture tools' own group). Pinned.</summary>
+    public const string ImagesOffSuffix = "Image tools is off";
+
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the advisor group is not offered (2026-09-27). Pinned.</summary>
     public const string ClaudeAdvisorOffSuffix = "Claude Code advisor tool is off";
@@ -408,7 +418,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, advisor: facts.Advisor, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -533,7 +543,8 @@ public static class SystemPromptSummary
             sqlite: facts.Sqlite,
             postgres: facts.Postgres,
             sqliteWrite: facts.SqliteWriting,
-            serverWrites: facts.ServerWrites);
+            serverWrites: facts.ServerWrites,
+            images: facts.Images);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -659,7 +670,9 @@ public static class SystemPromptSummary
         bool memorySave = true,
         IReadOnlyList<AIFunction>? youTube = null,
         bool youTubeEnabled = true,
-        bool youTubeKey = true)
+        bool youTubeKey = true,
+        IReadOnlyList<AIFunction>? images = null,
+        bool imagesEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -687,6 +700,13 @@ public static class SystemPromptSummary
             // The git tools (2026-09-20): right after the file tools, the sandbox's two groups together; offered while the setting GitLib tools says so.
             string gitNote = !gitEnabled ? NotOffered(GitOffSuffix) : standing;
             groups.Add(Group(ToolsText.GitTabTitle, git, gitNote, gitEnabled && toolsEnabled, SettingsField.GitLibTools, disabled));   // "Git", the tab's word ("Git (native)" 2026-09-21 to 2026-09-29)
+        }
+
+        if (images is { Count: > 0 })
+        {
+            // The picture tools (2026-10-10, the user's ask: view_image, image_info and image_edit off the Files group): offered while Image tools is on; none without codecs.
+            string imagesNote = !imagesEnabled ? NotOffered(ImagesOffSuffix) : standing;
+            groups.Add(Group(ToolsText.ImageMenuTitle, images, imagesNote, imagesEnabled && toolsEnabled, SettingsField.ImageTools, disabled));
         }
 
         if (shell is not null)

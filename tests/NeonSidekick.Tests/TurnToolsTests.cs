@@ -85,4 +85,42 @@ public sealed class TurnToolsTests
 
         Assert.Equal(["b", "c", "x"], widened.Order(StringComparer.Ordinal));
     }
+
+    private static readonly IReadOnlyList<AIFunction> Pictures = [new NamedTool("view_image"), new NamedTool("image_info"), new NamedTool("image_edit")];
+
+    /// <summary>
+    /// The picture tools (2026-10-10, the user's ask): their own group under Image tools, right after the file tools, the picture
+    /// sentence riding with them; File tools neither brings nor holds them back (the user's call).
+    /// </summary>
+    [Fact]
+    public void TheImageTools_RideTheirOwnSwitch_AfterTheFileTools_WhateverFileToolsSays()
+    {
+        var off = ChatScreen.ComposeTurnTools(Inputs() with { Images = Pictures });
+        Assert.DoesNotContain("view_image", Names(off));
+        Assert.False(off.Rules.Images);
+        Assert.DoesNotContain(Assistant.ImageRule, off.Rules.DefaultRules(false), StringComparison.Ordinal);
+
+        var on = ChatScreen.ComposeTurnTools(Inputs() with { Images = Pictures, ImagesEnabled = true });
+        Assert.Equal(["get_current_time", "read_file", "write_file", "view_image", "image_info", "image_edit", "web_search", "web_fetch", "chrome__open", "chrome__click"], Names(on));
+        Assert.True(on.Rules.Images);
+        Assert.Contains(Assistant.FileRuleWithoutDelete + " " + Assistant.ImageRule, on.Rules.DefaultRules(false), StringComparison.Ordinal);   // no delete tool here
+        Assert.Equal(["get_current_time", "read_file", "write_file"], on.Offered.Select(t => t.Name));   // the opening calls are found among the standing and file tools alone
+
+        var alone = ChatScreen.ComposeTurnTools(Inputs() with { FilesEnabled = false, Images = Pictures, ImagesEnabled = true });
+        Assert.Equal(["get_current_time", "view_image", "image_info", "image_edit"], Names(alone).Take(4));
+        Assert.False(alone.Rules.Files);
+        Assert.Contains(Assistant.ImageRule, alone.Rules.DefaultRules(false), StringComparison.Ordinal);
+        Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, alone.Rules.DefaultRules(false), StringComparison.Ordinal);
+
+        // Every picture tool switched off on /tools reads as the switch off, the sentence with them.
+        var emptied = ChatScreen.ComposeTurnTools(Inputs() with { Images = Pictures, ImagesEnabled = true, Disabled = new HashSet<string>(["view_image", "image_info", "image_edit"], StringComparer.Ordinal) });
+        Assert.False(emptied.Rules.Images);
+        Assert.DoesNotContain("image_edit", Names(emptied));
+
+        // Plan mode keeps the two that read and drops image_edit, which writes.
+        var planning = ChatScreen.ComposeTurnTools(Inputs() with { Images = Pictures, ImagesEnabled = true, PlanReadOnly = true });
+        Assert.Contains("view_image", Names(planning));
+        Assert.Contains("image_info", Names(planning));
+        Assert.DoesNotContain("image_edit", Names(planning));
+    }
 }

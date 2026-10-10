@@ -118,7 +118,8 @@ public sealed class ImageEditTool : FileTool
 
     /// <param name="images">
     /// The profile's images folder (2026-10-09): a picture there is read by its full path, and its edit written beside it (or wherever
-    /// <c>to</c> or <c>Image edit output folder</c> says, in the working directory); null = the working directory alone.
+    /// <c>to</c> says, or into <c>Image edit output folder</c>, a folder under this one since 2026-10-10); null = the working directory alone,
+    /// the output folder then under it as before.
     /// </param>
     public ImageEditTool(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null) : base(files, images)
     {
@@ -147,6 +148,22 @@ public sealed class ImageEditTool : FileTool
         "This is the way to resize, convert or touch up pictures: never write a script for it.";
 
     public override JsonElement JsonSchema => Schema;
+
+    /// <summary>
+    /// Where an edit with no <c>to</c> goes when <c>Image edit output folder</c> names a folder (2026-10-10, the user's ask): under the profile's
+    /// images folder, <paramref name="imagesRoot"/>, as a full path the tools reach there (the camera's, the screen's and the pasted pictures'
+    /// shape); under the working directory, relative, without one (the folder until then). Null for an empty setting: beside the source. Pure.
+    /// </summary>
+    public static string? OutputFolderFor(string? setting, string? imagesRoot)
+    {
+        if (string.IsNullOrWhiteSpace(setting))
+        {
+            return null;
+        }
+
+        string folder = setting.Trim();
+        return imagesRoot is null ? folder : Path.Combine(imagesRoot, folder.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
+    }
 
     /// <summary>The quality <paramref name="effective"/> holds (<c>Image edit quality</c>), clamped. Pure.</summary>
     public static int QualityOf(AppSettingsData effective)
@@ -445,7 +462,7 @@ public sealed class ImageEditTool : FileTool
         bool replace = to.Length == 0 && ImageWords.EditModeOf(effective.ImageEditMode) == ImageEditMode.OverwriteOriginal;
         var (target, nameError) = replace && sameFormat
             ? (read.Relative, null)
-            : ImageOutput.OutputFor(to, toIsFolder, read.Relative, format, onlyFormatChanged: replace || (!request.ChangesPixels && !sameFormat), replace ? null : effective.ImageEditOutputFolder);
+            : ImageOutput.OutputFor(to, toIsFolder, read.Relative, format, onlyFormatChanged: replace || (!request.ChangesPixels && !sameFormat), replace ? null : OutputFolderFor(effective.ImageEditOutputFolder, Images?.Root));
         if (target is null)
         {
             return nameError;
@@ -509,7 +526,7 @@ public sealed class ImageEditTool : FileTool
         bool inPlace = to.Length == 0 && ImageWords.EditModeOf(effective.ImageEditMode) == ImageEditMode.OverwriteOriginal;
         string target = inPlace
             ? relative
-            : ImageOutput.LosslessOutputFor(to, toIsFolder, relative, MetadataStripper.ExtensionFor(container, relative), effective.ImageEditOutputFolder);
+            : ImageOutput.LosslessOutputFor(to, toIsFolder, relative, MetadataStripper.ExtensionFor(container, relative), OutputFolderFor(effective.ImageEditOutputFolder, Images?.Root));
         if (!overwrite && !inPlace && ImageOutput.SamePath(target, relative))
         {
             return ImageText.OverwriteSource;

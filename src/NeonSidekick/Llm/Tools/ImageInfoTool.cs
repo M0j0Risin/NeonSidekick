@@ -93,7 +93,7 @@ public sealed class ImageInfoTool : FileTool
             lines.Add(ImageEditor.Info(read.Bytes) is { } info ? ImageText.Info(read.Relative, info, MetadataStripper.Survey(read.Bytes)) : FileText.NotAnImage(read.Relative));
         }
 
-        lines.Add(ImageText.Formats(ImageFormats.WritableFormats(), ImageEditTool.QualityOf(effective), ImageWords.MetadataName(effective.ImageEditMetadata), effective.ImageEditOutputFolder));
+        lines.Add(ImageText.Formats(ImageFormats.WritableFormats(), ImageEditTool.QualityOf(effective), ImageWords.MetadataName(effective.ImageEditMetadata), ImageEditTool.OutputFolderFor(effective.ImageEditOutputFolder, images?.Root) ?? ""));
         return string.Join("\n", lines);
     }
 }

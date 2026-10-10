@@ -46,6 +46,7 @@ public static class ToolbarItems
     // the group's /tools word (ToolsText.SwitchWords).
     public const string Shell = "shell";
     public const string Files = "files";
+    public const string Image = "image";     // 2026-10-10, the user's ask: 🌄, the Image tools switch (/tools image), after the folder
     public const string Web = "web";
     public const string Claude = "claude";
     public const string Docker = "docker";
@@ -74,12 +75,12 @@ public static class ToolbarItems
     /// the disk, the lock and the officer, the tool switches, the log, the two viewers, the chart (the last glyph, later on
     /// 2026-10-03, the user's ask); Themes after Profile and the Comfy thumb viewer after the Comfy viewer (2026-10-04); Process
     /// after the log (2026-10-05); YouTube where the Camera live viewer was (2026-10-08), after the Comfy thumb viewer later that day
-    /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask). Pinned.
+    /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Ask, CmdList, Police,
-        Shell, Files, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
+        Shell, Files, Image, Web, Claude, Docker, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, Perf, Path,
     ];
 
@@ -115,6 +116,7 @@ public static class ToolbarItems
         Police => ChatScreen.PoliceToolGlyph,
         Shell => ChatScreen.ShellToolGlyph,
         Files => ChatScreen.FilesToolGlyph,
+        Image => ChatScreen.ImageToolGlyph,
         Web => ChatScreen.WebToolGlyph,
         Claude => ChatScreen.ClaudeToolGlyph,
         Docker => ChatScreen.DockerToolGlyph,
@@ -157,6 +159,7 @@ public static class ToolbarItems
         Police => "Shell police",
         Shell => "Shell",
         Files => "Files",
+        Image => "Image",
         Web => "Web",
         Claude => "Claude Code advisor",   // "Claude" until 2026-10-04, "Claude CLI advisor" until 2026-10-09 (the user's asks)
         Docker => "Docker",

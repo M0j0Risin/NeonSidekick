@@ -37,7 +37,7 @@ public static class ToolsText
     /// </summary>
     public static readonly string[] SwitchWords =
     [
-        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Docker, ToolbarItems.Obsidian,
+        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Docker, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print,
     ];
@@ -48,6 +48,7 @@ public static class ToolsText
         ToolbarItems.Ask => SettingsField.AskUser,
         ToolbarItems.Shell => SettingsField.ShellCommandPolicy,
         ToolbarItems.Files => SettingsField.FileTools,
+        ToolbarItems.Image => SettingsField.ImageTools,   // 2026-10-10, the picture tools' own switch
         ToolbarItems.Web => SettingsField.WebTools,
         ToolbarItems.Claude => SettingsField.ClaudeCodeAdvisor,
         ToolbarItems.Docker => SettingsField.DockerTools,

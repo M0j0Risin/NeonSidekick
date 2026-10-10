@@ -129,7 +129,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
-| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Claude Code advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
+| 📁 🌄 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 🌄 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Claude Code advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -683,7 +683,7 @@ The file tools and the places beyond the working directory they reach, five menu
 
 | Setting | What it does | Default |
 |---|---|---|
-| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image, image_edit…), which reach only the working directory (a junction or symlink in it that leads outside is refused; deleting or moving the link itself is allowed, its target untouched). The top of its on/off page has **browser** (`b`) and **edit mode** (`e`) buttons that open *File browser/tree mode* and *Image edit mode*; ESC there comes back. | off |
+| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, convert_to_pdf…), which reach only the working directory (a junction or symlink in it that leads outside is refused; deleting or moving the link itself is allowed, its target untouched). The picture tools are *Image tools*. The top of its on/off page has a **browser** (`b`) button that opens *File browser/tree mode*; ESC there comes back. | off |
 | File /tree max length | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `folder-remain` opens it in the list; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
@@ -693,14 +693,15 @@ The file tools and the places beyond the working directory they reach, five menu
 
 #### Image
 
-The picture rows: `image_edit`'s defaults, where an edit goes (the picture menu's too) and where a pasted picture is saved. On File until 2026-10-10.
+The picture tools' switch and their rows: `image_edit`'s defaults, where an edit goes (the picture menu's too) and where a pasted picture is saved. On File until 2026-10-10.
 
 | Setting | What it does | Default |
 |---|---|---|
+| Image tools | Offers the picture tools: `view_image` (the model looks at pictures), `image_info` and `image_edit`. They reach pictures in the working directory and, by full path, the profile's `images` folder, whether *File tools* is on or not (they rode *File tools* until 2026-10-10). The top of its on/off page (`/tools image`, the toolbar's 🌄) has an **edit mode** (`e`) button that opens *Image edit mode*; ESC there comes back. | off |
 | Image edit quality | The quality `image_edit` writes a JPEG (or JPEG XL, HEIF) at when the model gives none (1–100), and where `max_kb` starts lowering it from. A Mac writes JPEG and HEIF with it (its ImageIO has no JPEG XL encoder). | 90 |
 | Image edit metadata | What metadata `image_edit` keeps unless the model asks otherwise: `none` (no camera, date or place), `basic` (author, copyright, title, comment, date taken, camera, exposure) or `all` (basic and the GPS position). | `none` |
 | Image edit mode | Where an edited picture goes, for the picture windows' right-click menu and `image_edit` (when the model names no `to`): `beside-original` writes a new file beside the source (`image_edit` uses *Image edit output folder* when set), `overwrite-original` replaces the source (a format change writes the new file and deletes the old). No confirmation. | `beside-original` |
-| Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the working directory, made on first use. Empty writes beside the source. | (beside the source) |
+| Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the profile's `images` folder (the working directory's until 2026-10-10), made on first use. Empty writes beside the source. | (beside the source) |
 | Pasted images folder | Where a picture pasted from the clipboard is saved when its message is sent, under the profile's `images` folder (empty = the `images` folder). The message names the file (`[Image #1, saved as …]`) so the model's picture tools can use it. A dropped file isn't copied. | `pasted_images` |
 
 #### UNC

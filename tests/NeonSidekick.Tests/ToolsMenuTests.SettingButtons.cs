@@ -19,8 +19,10 @@ public partial class ToolsMenuTests
         string Titles(SettingsField toolSwitch) => string.Join(" · ", SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(toolSwitch)!, data, dir).Select(b => b.Title));
         string KeysOf(SettingsField toolSwitch) => string.Concat(SettingsMenu.SettingButtonsFor(toolSwitch)!.Select(b => b.Key));
 
-        Assert.Equal("≡ browser (default) · ≡ edit mode (beside-original)", Titles(SettingsField.FileTools));
-        Assert.Equal("be", KeysOf(SettingsField.FileTools));
+        Assert.Equal("≡ browser (default)", Titles(SettingsField.FileTools));
+        Assert.Equal("b", KeysOf(SettingsField.FileTools));
+        Assert.Equal("≡ edit mode (beside-original)", Titles(SettingsField.ImageTools));   // File tools' until 2026-10-10, with the picture tools
+        Assert.Equal("e", KeysOf(SettingsField.ImageTools));
         Assert.Equal("≡ printer (" + SettingsMenu.WindowsDefaultPrinterLabel.Trim('(', ')') + ")", Titles(SettingsField.PrintTools));
         Assert.Equal("p", KeysOf(SettingsField.PrintTools));
         Assert.Equal("≡ ask (ask) · ≡ preview (on)", Titles(SettingsField.ScreenTools));
@@ -37,17 +39,20 @@ public partial class ToolsMenuTests
         // Lit while the setting is not its default, as the tab's row wears the accent; the vault by its folder's name alone.
         Assert.All(SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.YouTubeTools)!, data, dir), b => Assert.False(b.On));
         var changed = new AppSettingsData { FileBrowserMode = "show-hidden", ObsidianVault = Path.Combine(dir, "notes", "Vault") + Path.DirectorySeparatorChar, ClaudeCodeAdvisorEffort = "high" };
-        Assert.Equal([true, false], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!, changed, dir).Select(b => b.On));
+        Assert.Equal([true], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!, changed, dir).Select(b => b.On));
+        Assert.Equal([false], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ImageTools)!, changed, dir).Select(b => b.On));
         Assert.Equal([new MenuButton("≡ vault (Vault)", 'v', true)], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ObsidianTools)!, changed, dir));
         Assert.Equal("≡ effort (high)", SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ClaudeCodeAdvisor)!, changed, dir)[1].Title);
 
-        Assert.Equal("Enter = choose · b = browser · e = edit mode · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!));
+        Assert.Equal("Enter = choose · b = browser · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!));
+        Assert.Equal("Enter = choose · e = edit mode · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.ImageTools)!));
         Assert.Equal("Enter = choose · m = max · v = voice · o = order · s = safe · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.YouTubeTools)!));
     }
 
     /// <summary>Every page with setting buttons carries them on its title row and its keys in the hint; ESC leaves the switch as it was.</summary>
     [Theory]
     [InlineData(SettingsField.FileTools)]
+    [InlineData(SettingsField.ImageTools)]
     [InlineData(SettingsField.PrintTools)]
     [InlineData(SettingsField.ScreenTools)]
     [InlineData(SettingsField.ObsidianTools)]
@@ -80,9 +85,9 @@ public partial class ToolsMenuTests
         await menu.ShowSwitchAsync(SettingsField.FileTools, CancellationToken.None);
 
         Assert.Equal("show-hidden", _settings.Current.FileBrowserMode);
-        string before = "\n" + Titled(ToolsText.Label + " › File tools │ ≡ browser (default) · ≡ edit mode (beside-original) ") + "\n";
+        string before = "\n" + Titled(ToolsText.Label + " › File tools │ ≡ browser (default) ") + "\n";
         string picker = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.FileBrowserMode);
-        string after = "\n" + Titled(ToolsText.Label + " › File tools │ ≡ browser (show-hidden) · ≡ edit mode (beside-original) ") + "\n";
+        string after = "\n" + Titled(ToolsText.Label + " › File tools │ ≡ browser (show-hidden) ") + "\n";
         Assert.True(Output.IndexOf(before, StringComparison.Ordinal) < Output.IndexOf(picker, StringComparison.Ordinal), Output);
         Assert.True(Output.IndexOf(picker, StringComparison.Ordinal) < Output.LastIndexOf(after, StringComparison.Ordinal), Output);
         Assert.Contains("  · File browser/tree mode: show-hidden\n", Output);

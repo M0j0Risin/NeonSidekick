@@ -7,7 +7,7 @@ at `/exit` or at the end of input: code 0, or 3 if a shell command was refused a
 `PATH` (`publish\output\NeonSidekick.exe` on Windows, `publish/output/NeonSidekick` on a Mac); from a checkout, swap in
 `dotnet run --project src/NeonSidekick -- --headless …`.
 
-A fresh profile offers the model no tools and looks for no server: *File tools*, *Web tools* and the other tool groups
+A fresh profile offers the model no tools and looks for no server: *File tools*, *Image tools* (`view_image`, `image_info`, `image_edit`; their own switch since 2026-10-10), *Web tools* and the other tool groups
 are off, *Shell command policy* is `off` and *LLM server scan mode* is `disabled`. The examples below assume a profile set up in
 the TUI beforehand (`/tools`, `/settings`) or its `profile.json` edited: a server saved or given with `--url`, and the
 tool groups a job needs switched on. `NEONSIDEKICK_COMMAND_POLICY` or `--yolo` sets the shell policy for one run.

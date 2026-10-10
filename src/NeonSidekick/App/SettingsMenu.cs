@@ -953,7 +953,7 @@ public enum SettingsField
     /// <summary>A picker over none, basic and all: the metadata <c>image_edit</c> keeps when the call does not say (<see cref="Settings.AppSettingsData.ImageEditMetadata"/>). The Files tab, under Image edit quality (2026-10-04); the Image menu since 2026-10-10; no reconnect.</summary>
     ImageEditMetadata,
 
-    /// <summary>Typed: the folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c>, empty = beside the source (<see cref="Settings.AppSettingsData.ImageEditOutputFolder"/>). The Files tab's last row (2026-10-04), the Image menu's under Image edit mode since 2026-10-10; the Camera output folder's rule; no reconnect.</summary>
+    /// <summary>Typed: the folder under the profile's images folder (the working directory's until 2026-10-10) <c>image_edit</c> writes into when the call gives no <c>to</c>, empty = beside the source (<see cref="Settings.AppSettingsData.ImageEditOutputFolder"/>). The Files tab's last row (2026-10-04), the Image menu's under Image edit mode since 2026-10-10; the Camera output folder's rule; no reconnect.</summary>
     ImageEditOutputFolder,
 
     /// <summary>A picker over beside-original and overwrite-original: where an edited picture goes, for the picture windows' right-click menu and <c>image_edit</c> (<see cref="Settings.AppSettingsData.ImageEditMode"/>). The Files tab, under Image edit metadata (later on 2026-10-04, the user's ask); the Image menu since 2026-10-10; no reconnect. Last in the enum, as every newcomer.</summary>
@@ -991,6 +991,9 @@ public enum SettingsField
 
     /// <summary>Typed: the folder under the profile's images folder a clipboard picture is saved in when its message is sent (<see cref="Settings.AppSettingsData.PastedImagesFolder"/>). The Files tab's last row (2026-10-09), the Image menu's since 2026-10-10; the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
     PastedImagesFolder,
+
+    /// <summary>Whether a turn offers the picture tools, view_image, image_info and image_edit (<see cref="Settings.AppSettingsData.ImageTools"/>): their own group since 2026-10-10 (the user's ask; on File tools until then), the Image menu's first row on <c>/tools</c> › Files; a toggle, no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    ImageTools,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1411,7 +1414,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
         [SettingsField.FileTools, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
-        [SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
+        [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
@@ -1838,7 +1841,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
             or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera
-            or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions
+            or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions or SettingsField.ImageTools
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay;
@@ -2088,6 +2091,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebDownloadMaxMegabytes => "Web download max (MB)",
         SettingsField.TtsVoicePreview => "TTS voice preview",
         SettingsField.FileTools => "File tools",
+        SettingsField.ImageTools => "Image tools",
         SettingsField.WebSearchMethod => "Web search method",
         SettingsField.AnthropicApi => "Anthropic API",
         SettingsField.AnthropicApiKey => "Anthropic API key",
@@ -2449,6 +2453,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebDownloadMaxMegabytes => Megabytes(data.WebDownloadMaxMegabytes),
             SettingsField.TtsVoicePreview => OnOff(data.TtsVoicePreview),
             SettingsField.FileTools => OnOff(data.FileTools),
+            SettingsField.ImageTools => OnOff(data.ImageTools),
             SettingsField.WebSearchMethod => data.WebSearchMethod,
             SettingsField.AskUser => OnOff(data.AskUser),
             SettingsField.AskMaxQuestions => Questions(data.AskMaxQuestions),
@@ -2864,8 +2869,8 @@ internal sealed partial class SettingsMenu
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.ImageEditOutputFolder"/> (2026-10-04): the result lands beside its source. Pinned.</summary>
     public const string ImageEditBesideLabel = "(beside the source)";
 
-    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ImageEditOutputFolder"/>: still a working-directory folder (the Camera output folder's words until it moved, 2026-10-09). Pinned.</summary>
-    public const string ImageEditOutputFolderError = "must be a folder under the working directory (a relative path), or empty";
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ImageEditOutputFolder"/>: a folder under the profile's images folder since 2026-10-10 (the user's ask; the working directory's from 2026-10-04, the Camera output folder's words until it moved, 2026-10-09). Pinned.</summary>
+    public const string ImageEditOutputFolderError = "must be a folder under the profile's images folder (a relative path), or empty";
 
     /// <summary>A row of the image-edit metadata picker: the name padded, what it keeps dim (2026-10-04).</summary>
     public static string ImageEditMetadataLabel(string name) =>
@@ -5730,7 +5735,7 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.ImageEditOutputFolder:
-                // The Camera output folder's rule (2026-10-04): under the sandbox only; empty is beside the source.
+                // The Camera output folder's rule (2026-10-04): under the images folder only since 2026-10-10 (the sandbox until then); empty is beside the source.
                 if (Path.IsPathRooted(text) || text.Replace('\\', '/').Split('/').Contains(".."))
                 {
                     Sink.Error($"{FieldName(field)} {ImageEditOutputFolderError}; keeping {FieldValue(field, saved, _settings.ProfileDirectory)}.");
@@ -6921,6 +6926,7 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmCompactShowSummary => data.LlmCompactShowSummary,
             SettingsField.TtsVoicePreview => data.TtsVoicePreview,
             SettingsField.FileTools => data.FileTools,
+            SettingsField.ImageTools => data.ImageTools,
             SettingsField.AskUser => data.AskUser,
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.ExternalSkills => data.ExternalSkills,
@@ -7026,6 +7032,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.LlmCompactShowSummary: data.LlmCompactShowSummary = on; break;
             case SettingsField.TtsVoicePreview: data.TtsVoicePreview = on; break;
             case SettingsField.FileTools: data.FileTools = on; break;
+            case SettingsField.ImageTools: data.ImageTools = on; break;
             case SettingsField.AskUser: data.AskUser = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
@@ -7080,6 +7087,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SttInterrupt => on ? "the wake phrase during a spoken reply stops it" : "a spoken reply plays to its end",
         SettingsField.AskUser => on ? "ask user enabled" : "ask user disabled",
         SettingsField.FileTools => on ? "file tools enabled" : "file tools disabled",
+        SettingsField.ImageTools => on ? "image tools enabled" : "image tools disabled",
         SettingsField.FileTreeShowSizes => on ? "/tree carries each file's size" : "/tree lists names only",
         SettingsField.WebTools => on ? "web tools enabled" : "web tools disabled",
         SettingsField.GitLibTools => on ? "gitlib tools enabled" : "gitlib tools disabled",

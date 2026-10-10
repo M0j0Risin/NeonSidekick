@@ -204,6 +204,7 @@ The hint row under the input line shows the model, the context used and anything
 | Memory mode | `/settings` › General | Whether the model remembers facts about you between sessions. | `read-write` |
 | TTS output, STT input | `/settings` › Voice › TTS, STT | Reads replies aloud; voice input on a push-to-talk key (F4). | off |
 | File tools | `/tools` › Files › File | Lets the model read and write files in the working directory. | off |
+| Image tools | `/tools` › Files › Image | Lets the model look at, inspect and edit pictures. | off |
 | Web tools | `/tools` › Web | Lets the model search the web and read pages. | off |
 | Shell command policy | `/tools` › Shell | Whether the model may run commands: `off`, `ask` (you approve each one) or `yolo` (no asking). | `off` |
 

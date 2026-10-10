@@ -1573,6 +1573,16 @@ public sealed class AppSettingsData
     public const int DefaultFileSearchMaxResults = 200;
 
     /// <summary>
+    /// Whether a turn offers the model the picture tools, <c>view_image</c>, <c>image_info</c> and <c>image_edit</c> (2026-10-10, the
+    /// user's ask: a group of their own, the first row of <c>/tools</c> › Files › Image; they rode <see cref="FileTools"/> until then).
+    /// Independent of <see cref="FileTools"/> (the user's call): the tools still reach only the working directory (and the profile's
+    /// images folder by full path). Without picture codecs (the macOS build's MagicScaler) there are none to offer. Read at each turn,
+    /// no reconnect. Off by default, as every tool group (the user's call); no migration, so a profile that had the file tools on
+    /// switches this on once. No variable.
+    /// </summary>
+    public bool ImageTools { get; set; }
+
+    /// <summary>
     /// The quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none (2026-10-04, the user's pick, with the
     /// image tools): <see cref="MinImageEditQuality"/> to <see cref="MaxImageEditQuality"/>; also where <c>max_kb</c> starts its search
     /// down. The tool clamps a hand-edited value. Read at each call, no reconnect. No variable.
@@ -1605,8 +1615,9 @@ public sealed class AppSettingsData
     public const string DefaultImageEditMode = "beside-original";
 
     /// <summary>
-    /// The folder under the working directory <c>image_edit</c> writes into when the call gives no <c>to</c> (2026-10-04, the Camera
-    /// and Screen output folders' shape): empty (the default) = beside the source picture. Made on first write. Read at each call. No variable.
+    /// The folder <c>image_edit</c> writes into when the call gives no <c>to</c> (2026-10-04, the Camera and Screen output folders' shape):
+    /// under the profile's images folder since 2026-10-10 (the user's ask; the working directory's until then, and still where a tool
+    /// has no images folder); empty (the default) = beside the source picture. Made on first write. Read at each call. No variable.
     /// </summary>
     public string ImageEditOutputFolder { get; set; } = "";
 

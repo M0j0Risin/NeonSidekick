@@ -2,7 +2,7 @@
 
 Back to the [README](../README.md). In the app, `/tools` switches these and shows what each one does.
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *YouTube tools*, *Claude Code advisor tool*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *Image tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *YouTube tools*, *Claude Code advisor tool*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 ## Contents
 
@@ -811,7 +811,7 @@ Then "put my face from [Image #2] on the person in [Image #1]" works in chat, or
 
 ### Images
 
-These are file tools: *File tools* offers them. They reach the working directory and, by full path, the pictures saved in the profile's `images` folder (photos, screenshots, ComfyUI's pictures, pastes); nothing else outside the working directory. The model finds those pictures with `search_files` on the folder's full path, which its description gives (`order: modified` for the newest). No other file tool reaches the folder: `read_file`, `delete`, `move` and the rest refuse a path there, naming the tools that do.
+*Image tools* offers them (on `/tools` › Files › Image, `/tools image` or the toolbar's 🌄; off in a fresh profile), whether *File tools* is on or not; they were file tools until 2026-10-10. They reach the working directory and, by full path, the pictures saved in the profile's `images` folder (photos, screenshots, ComfyUI's pictures, pastes); nothing else outside the working directory. The model finds those pictures with `search_files` on the folder's full path, which its description gives (`order: modified` for the newest). No other file tool reaches the folder: `read_file`, `delete`, `move` and the rest refuse a path there, naming the tools that do.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -831,7 +831,7 @@ These are file tools: *File tools* offers them. They reach the working directory
 * **On a Mac:** it reads PNG, JPEG, GIF, BMP, TIFF, WebP, HEIC/HEIF (iPhone photos), AVIF and JPEG XL, and writes PNG, JPEG, GIF, BMP, TIFF and HEIF (no JPEG XL, WebP or AVIF). `quality`, `dpi` and `interlace` work; `chroma`, `colors` and `dither` are refused, since ImageIO's encoders have no such setting. A HEIC photo's orientation is read as a JPEG's is.
 * **`max_kb`:** lowers the quality (lossy formats, down to 30), then shrinks the picture, until the file fits; nothing is written when it cannot.
 * **Metadata** is dropped unless asked for (*Image edit metadata*, or `metadata` per call); the EXIF orientation is always baked into the pixels. `metadata: none` with nothing else is a **lossless strip** of a JPEG, PNG, WebP or GIF: the file's metadata segments are left out and every other byte copied, so the picture is not re-encoded and a WebP stays a WebP. EXIF (with its GPS position and thumbnail), XMP, IPTC, comments, timestamps, vendor data and anything after the picture's end (a motion photo's video, an Ultra HDR gain map) go; the colour profile stays, and a turned photo keeps its orientation as a bare tag. The result says what went and the sizes before and after; a picture with nothing to strip writes nothing. An animated picture gives its first frame, and the result says so.
-* **The output** goes beside the source (or into *Image edit output folder*) as `photo-edited.png`, or `photo.png` for a format change alone, with `-2`, `-3` on a clash; or where `to` says. An existing file, the source included, is replaced only with `overwrite`. With *Image edit mode* `overwrite-original` and no `to`, the result replaces the source instead, and a format change writes `photo.jpg` and deletes `photo.png`.
+* **The output** goes beside the source (or into *Image edit output folder*, a folder under the profile's `images` folder) as `photo-edited.png`, or `photo.png` for a format change alone, with `-2`, `-3` on a clash; or where `to` says. An existing file, the source included, is replaced only with `overwrite`. With *Image edit mode* `overwrite-original` and no `to`, the result replaces the source instead, and a format change writes `photo.jpg` and deletes `photo.png`.
 * **Limits:** a source up to 200 MB and 100 megapixels; a result up to 32768 pixels a side and 100 megapixels.
 
 ### Camera

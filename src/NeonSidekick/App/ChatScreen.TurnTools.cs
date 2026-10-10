@@ -26,6 +26,10 @@ internal sealed record TurnToolInputs
     public bool WebEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Files { get; init; }
     public bool FilesEnabled { get; init; }
+
+    /// <summary>The picture tools (2026-10-10, their own group): offered while <see cref="ImagesEnabled"/> (<c>Image tools</c>), whatever <see cref="FilesEnabled"/> says.</summary>
+    public IReadOnlyList<AIFunction>? Images { get; init; }
+    public bool ImagesEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Ask { get; init; }
     public IReadOnlyList<AIFunction>? Sessions { get; init; }
     public bool SessionsEnabled { get; init; }
@@ -103,6 +107,7 @@ internal sealed partial class ChatScreen
 
         var standingTools = inputs.Standing;
         var fileTools = inputs.Files;
+        var imageTools = inputs.Images;
         var webTools = inputs.Web;
         var gitTools = inputs.Git;
         var shellTools = inputs.Shell;
@@ -134,13 +139,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -148,6 +153,7 @@ internal sealed partial class ChatScreen
             // The /tools list (2026-09-19): every group loses its switched-off names first, so what follows reads an emptied group as its switch off.
             standingTools = Without(standingTools, disabledTools);
             fileTools = fileTools is null ? null : Without(fileTools, disabledTools);
+            imageTools = imageTools is null ? null : Without(imageTools, disabledTools);
             webTools = webTools is null ? null : Without(webTools, disabledTools);
             gitTools = gitTools is null ? null : Without(gitTools, disabledTools);
             shellTools = shellTools is null ? null : Without(shellTools, disabledTools);
@@ -188,9 +194,12 @@ internal sealed partial class ChatScreen
         // The rule quotes the caps the offered tool itself reads, so the two never disagree.
         AskLimits? ask = askTools is { Count: > 0 } ? askTools.OfType<AskUserTool>().FirstOrDefault()?.Limits ?? AskLimits.Default : null;
         IReadOnlyList<AIFunction> offered = files ? [.. standingTools, .. fileTools!] : standingTools;
+        // The picture tools right after the file tools (2026-10-10, their own group): Image tools is the switch, File tools or not; the picture sentence rides with them.
+        bool images = inputs.ImagesEnabled && imageTools is { Count: > 0 };
+        IReadOnlyList<AIFunction> tools = images ? [.. offered, .. imageTools!] : offered;
         // The git tools right after the file tools (2026-09-20): the sandbox's tools together, the setting GitLib tools a per-group offer.
         bool git = inputs.GitEnabled && gitTools is { Count: > 0 };
-        IReadOnlyList<AIFunction> tools = git ? [.. offered, .. gitTools!] : offered;
+        tools = git ? [.. tools, .. gitTools!] : tools;
         // The shell tools right after the git tools (2026-09-21): the setting Shell command policy is the group's switch; execute_code rides only with an interpreter to run.
         shellTools = shellTools is null ? null : ShellToolsFor(shellTools);
         bool shell = inputs.ShellEnabled && shellTools is { Count: > 0 };
@@ -273,7 +282,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools));
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images);
         return new TurnToolSet(
             tools,
             offered,
