@@ -25,7 +25,9 @@ public partial class ToolsMenuTests
     public void TheSubStrips_ArePinned()
     {
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · Postgres · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
-        Assert.Equal("         │ ↳ Print · Camera · Screen · ComfyUI · YouTube ", SubStrip(ToolsText.MediaTabTitle));
+        Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.MediaTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
+        Assert.Equal("         │ ↳ File · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10
+        Assert.Equal("         │ ↳ ClaudeCode · Docker · Home · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10
     }
 
     [Fact]
@@ -40,6 +42,24 @@ public partial class ToolsMenuTests
         Assert.Equal(LeafIndex(ToolsText.SqlTabTitle), LeafIndex(ToolsText.DatabaseTabTitle));
         Assert.Contains(Strips(ToolsText.DatabaseTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.SqlTools) + "  ", Output);
         Assert.DoesNotContain("\n" + Titled(Strip) + "\n \n▸ SQL  ", Output);   // no row per menu any more
+        pane.Dispose();
+    }
+
+    /// <summary>The Files and Integrations groups (2026-10-10, the user's pick): each a second strip, its first menu's rows under it.</summary>
+    [Fact]
+    public async Task OnThePane_TheFilesAndIntegrationsTabs_ShowTheSecondStrip_AndTheFirstMenusRows()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.FilesTabTitle));
+        Push(Keys.Tab);                              // Integrations, on ClaudeCode
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(LeafIndex(ToolsText.FileMenuTitle), LeafIndex(ToolsText.FilesTabTitle));
+        Assert.Contains(Strips(ToolsText.FilesTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.FileTools) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.IntegrationsTabTitle) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.ClaudeCodeTabTitle)[0]) + "  ", Output);
+        Assert.Equal(LeafIndex(ToolsText.HomeAssistantTabTitle) + 1, LeafIndex(ToolsText.ComfyTabTitle));   // ComfyUI and YouTube after Home, off Media
         pane.Dispose();
     }
 
@@ -176,7 +196,7 @@ public partial class ToolsMenuTests
         var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, database, subs: subs);
 
         Assert.Equal(["SQL", "MySQL", "SQLite", "Postgres", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
-        Assert.Equal(["Print", "Camera", "Screen", "ComfyUI", "YouTube"], page.Tabs[media].SubTabs!.Select(t => t.Title));
+        Assert.Equal(["Print", "Camera", "Screen"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal(4, page.Sub);
         Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count, page.Rows.Count);
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.OracleTools).Text, page.Tabs[database].Shown.Footer!(0)!.Text);

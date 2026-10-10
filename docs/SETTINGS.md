@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (LLM, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Media and Database (five menus each), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Home into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (LLM, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into ClaudeCode, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -370,11 +370,11 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 
 #### Anthropic
 
-Claude Code and the Anthropic API as `/server` choices. `/claude` and `claude_code_advisor` are on `/tools` › ClaudeCode.
+Claude Code and the Anthropic API as `/server` choices. `/claude` and `claude_code_advisor` are on `/tools` › Integrations › ClaudeCode.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable* on `/tools` › ClaudeCode, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
+| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable* on `/tools` › Integrations › ClaudeCode, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
 | Anthropic API | Offers the Anthropic API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
 | Anthropic API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac). An empty entry clears it. | (none) |
 | Anthropic API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
@@ -600,6 +600,14 @@ On `/skills`, Enter on a skill, then `disable`, switches it off without removing
 
 Every tool, grouped, the groups in alphabetical order, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune` and `ha_todo` start off.
 
+### Ask
+
+| Setting | What it does | Default |
+|---|---|---|
+| Ask user | Offers `ask_user`: multiple-choice questions on the pane. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
+| Ask max questions | Questions per call (1–10). | 10 |
+| Ask max choices per question | Options per question (2–15). | 10 |
+
 ### Web
 
 | Setting | What it does | Default |
@@ -612,23 +620,6 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | (not set) |
 | Web search max results | Hits per search (1–20). | 20 |
 | Web download max (MB) | The largest file `download_file` saves (1–102400), streamed to disk. A download silent for 60 s is dropped, and no partial file stays. | 50 |
-
-### Files
-
-| Setting | What it does | Default |
-|---|---|---|
-| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image, image_edit…), which reach only the working directory (a junction or symlink in it that leads outside is refused; deleting or moving the link itself is allowed, its target untouched). The top of its on/off page has **browser** (`b`) and **edit mode** (`e`) buttons that open *File browser/tree mode* and *Image edit mode*; ESC there comes back. | off |
-| File /tree max length | Entries `/tree` prints before it stops (1–10000). | 500 |
-| File /tree show sizes | `/tree` shows file sizes. | on |
-| File @-mention folder mode | Picking a folder from the `@` list: `folder-remain` opens it in the list; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
-| File browser/tree mode | `default` hides hidden, system and dot entries in the folder browsers, `/tree` and `/browse`; `show-hidden` lists them (`/tree` and `/browse` still leave out `.git`). | `default` |
-| File view image max (per call) | Pictures one `view_image` call may load (1–100). | 10 |
-| File search max results | The most rows one `search_files` or `unc_search` call returns, whatever its `limit` (1–5000). Without `limit`: 50 hits, 200 entries, 100 names or 10 recent files. | 200 |
-| Image edit quality | The quality `image_edit` writes a JPEG (or JPEG XL, HEIF) at when the model gives none (1–100), and where `max_kb` starts lowering it from. A Mac writes JPEG and HEIF with it (its ImageIO has no JPEG XL encoder). | 90 |
-| Image edit metadata | What metadata `image_edit` keeps unless the model asks otherwise: `none` (no camera, date or place), `basic` (author, copyright, title, comment, date taken, camera, exposure) or `all` (basic and the GPS position). | `none` |
-| Image edit mode | Where an edited picture goes, for the picture windows' right-click menu and `image_edit` (when the model names no `to`): `beside-original` writes a new file beside the source (`image_edit` uses *Image edit output folder* when set), `overwrite-original` replaces the source (a format change writes the new file and deletes the old). No confirmation. | `beside-original` |
-| Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the working directory, made on first use. Empty writes beside the source. | (beside the source) |
-| Pasted images folder | Where a picture pasted from the clipboard is saved when its message is sent, under the profile's `images` folder (empty = the `images` folder). The message names the file (`[Image #1, saved as …]`) so the model's picture tools can use it. A dropped file isn't copied. | `pasted_images` |
 
 ### Shell
 
@@ -684,53 +675,100 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
   A lone command such a tool covers comes back as `Not run: 'cat' has a tool of its own — call read_file instead…`, once a turn (sent again, it goes to the pane). Pipes and compound lines, commands with no tool (`git push`) and tools switched off are never sent back.
 
-### Ask
+### Files
+
+The file tools and the places beyond the working directory they reach, four menus on one tab, each a tab of the second strip (File · UNC · GitLib · Obsidian): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10.
+
+#### File
 
 | Setting | What it does | Default |
 |---|---|---|
-| Ask user | Offers `ask_user`: multiple-choice questions on the pane. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
-| Ask max questions | Questions per call (1–10). | 10 |
-| Ask max choices per question | Options per question (2–15). | 10 |
+| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, view_image, image_edit…), which reach only the working directory (a junction or symlink in it that leads outside is refused; deleting or moving the link itself is allowed, its target untouched). The top of its on/off page has **browser** (`b`) and **edit mode** (`e`) buttons that open *File browser/tree mode* and *Image edit mode*; ESC there comes back. | off |
+| File /tree max length | Entries `/tree` prints before it stops (1–10000). | 500 |
+| File /tree show sizes | `/tree` shows file sizes. | on |
+| File @-mention folder mode | Picking a folder from the `@` list: `folder-remain` opens it in the list; `folder-apply` writes `@folder/` and closes. | `folder-remain` |
+| File browser/tree mode | `default` hides hidden, system and dot entries in the folder browsers, `/tree` and `/browse`; `show-hidden` lists them (`/tree` and `/browse` still leave out `.git`). | `default` |
+| File view image max (per call) | Pictures one `view_image` call may load (1–100). | 10 |
+| File search max results | The most rows one `search_files` or `unc_search` call returns, whatever its `limit` (1–5000). Without `limit`: 50 hits, 200 entries, 100 names or 10 recent files. | 200 |
+| Image edit quality | The quality `image_edit` writes a JPEG (or JPEG XL, HEIF) at when the model gives none (1–100), and where `max_kb` starts lowering it from. A Mac writes JPEG and HEIF with it (its ImageIO has no JPEG XL encoder). | 90 |
+| Image edit metadata | What metadata `image_edit` keeps unless the model asks otherwise: `none` (no camera, date or place), `basic` (author, copyright, title, comment, date taken, camera, exposure) or `all` (basic and the GPS position). | `none` |
+| Image edit mode | Where an edited picture goes, for the picture windows' right-click menu and `image_edit` (when the model names no `to`): `beside-original` writes a new file beside the source (`image_edit` uses *Image edit output folder* when set), `overwrite-original` replaces the source (a format change writes the new file and deletes the old). No confirmation. | `beside-original` |
+| Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the working directory, made on first use. Empty writes beside the source. | (beside the source) |
+| Pasted images folder | Where a picture pasted from the clipboard is saved when its message is sent, under the profile's `images` folder (empty = the `images` folder). The message names the file (`[Image #1, saved as …]`) so the model's picture tools can use it. A dropped file isn't copied. | `pasted_images` |
 
-### Media
-
-The picture, print and video tools, five menus on one tab, each a tab of the second strip under the first (Print · Camera · Screen · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-09.
-
-#### Print
-
-| Setting | What it does | Default |
-|---|---|---|
-| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. The top of its on/off page has a **printer** button (`p`) that opens *Print default printer*; ESC there comes back. | off |
-| Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
-| Print default printer | Where a print goes when none is named. On a Mac the picker shows each printer's queue name with the name System Settings shows, and the empty row reads *(system default)*. | (Windows default) |
-| Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
-| PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). On a Mac only the browser makes PDFs (Edge, Chrome, Brave or Chromium); `printer` needs Windows. | `auto` |
-
-#### Camera
+#### UNC
 
 | Setting | What it does | Default |
 |---|---|---|
-| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. Its on/off page (the toolbar's 📸) has a **watch** button (`w`) that starts or stops `/camera watch`, **live** (`l`) that opens or closes the camera's window, and **snap** (`s`) and **screen** (`c`), which close the pane and run `/camera snap` or `/screen`. | off |
-| Camera shutter | `user`: the camera pane shows the request; Space takes the photo, `r` retakes, Enter sends, ESC declines. `model`: a pane asks Deny / Allow once / Allow for this session, and on a yes the app takes it. | `user` |
-| Camera preview | `live`: a camera window of its own shows the camera mirrored while you frame, then the photo. `post`: the picture viewer opens on the photo. `disabled`: no window. Neither takes the keyboard. | `live` |
-| Camera device | The camera, by its Windows name (on a Mac, macOS's: the built-in camera, a USB webcam, an iPhone as Continuity Camera; a MacBook's own lists last while its lid is closed). `(first camera)`, or a camera that isn't connected, uses the first. | (first camera) |
-| Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
-| Camera output folder | Where photos are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. Watch mode's saved pictures go in its `.watch` subfolder. | `camera_images` |
-| Camera keep in sessions | Off, a stored session keeps a line naming the photo instead of the picture. | off |
-| Camera watch interval (s) | How often `/camera watch` looks (2–3600). | 10 |
-| Camera watch change (%) | How much of the picture must change to count (1–100); brightness shifts don't. `--camera-check` prints your camera's noise. | 8% |
-| Camera watch speaks up | Off, a changed picture rides your next message. On, the model is shown it unasked, at most once per gap below, when nothing else is going on. | off |
-| Camera watch min gap (s) | The least time between unprompted watch turns (30–3600). | 120 |
+| UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See [UNC shares](TOOLS.md#unc-shares-and-outside-folders). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
+| UNC writes | The master key for changes. On, a share with `access: readwrite` also gets `unc_write`, `unc_patch`, `unc_create_directory`, `unc_move`, `unc_copy`, `unc_delete` (off by default in Offered) and `unc_put`. Changes are permanent. | off |
+| UNC shares offered | As *SQL connections offered*. | none |
+| UNC set password | As *SQL set password*, for runas shares. | — |
+| UNC add/edit share | The wizard (new or edit); its test lists the share's root under its account. | — |
+| UNC *-mention enabled | `*` and part of a name lists the offered shares; a pick writes `*name`. | on |
+| UNC shares (profile) | As *SQL connections (profile)*. | (none) |
+| UNC shares (global) | As *SQL connections (global)*. | (none) |
 
-#### Screen
+#### GitLib
 
 | Setting | What it does | Default |
 |---|---|---|
-| Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. On a Mac the terminal app needs the Screen Recording permission (see [Screen capture](COMMANDS.md#screen-capture)). The top of its on/off page has **ask** (`a`) and **preview** (`p`) buttons that open *Screen capture ask* and *Screen capture preview*; ESC there comes back. | off |
-| Screen capture ask | `ask`: a pane names what would be captured and why; Deny, Allow once, or Allow for this session. `allow`: taken without asking. | `ask` |
-| Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
-| Screen capture output folder | Where screenshots are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. | `screen_images` |
-| Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
+| GitLib tools | Offers the in-process git tools (status, log, show, diff, blame, branch, stage, commit, stash, discard, delete) over the working directory's repository. Off, git goes through the shell and `/gituser` does nothing. | off |
+| GitLib diff max lines | Where a `gitlib_diff` patch is cut (20–5000). | 500 |
+| GitLib log max commits | Commits `gitlib_log` returns by default (1–200). | 20 |
+| GitLib email | The `user.email` `/gituser` writes into the repository's config. | (not set) |
+| GitLib name | The `user.name` `/gituser` writes beside it. | (not set) |
+
+#### Obsidian
+
+| Setting | What it does | Default |
+|---|---|---|
+| Obsidian tools | Offers the vault tools (search, list, read, links, daily, write, properties, move) once a vault is set. The top of its on/off page has a **vault** button (`v`) that opens *Obsidian vault*'s folder picker; ESC there comes back. | off |
+| Obsidian vault | The vault's folder (holding `.obsidian`), separate from the working directory. The row opens the folder picker. | (not set) |
+| Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
+
+### Integrations
+
+The apps and services the tools reach, five menus on one tab, each a tab of the second strip (ClaudeCode · Docker · Home · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Media from 2026-10-09).
+
+#### ClaudeCode
+
+The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (the model asks it). The Anthropic API and Claude Code as servers are on `/settings` › Servers › Anthropic.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Claude Code executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
+| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
+| Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
+| Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
+| Claude Code advisor tool | Offers `claude_code_advisor`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. The top of its on/off page has **model** (`m`) and **effort** (`e`) buttons that open *Claude Code advisor tool model* and *Claude Code advisor tool effort*; ESC there comes back. | off |
+| Claude Code advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
+| Claude Code advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
+| Claude Code advisor tool model | The advisor's `--model`; the first row follows *Claude Code slash command model*. | (as Claude Code slash command model) |
+| Claude Code advisor tool effort | The advisor's `--effort`; the first row follows *Claude Code slash command effort*. | (as Claude Code slash command effort) |
+| Claude Code advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
+
+#### Docker
+
+| Setting | What it does | Default |
+|---|---|---|
+| Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See [Docker](TOOLS.md#docker). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
+| Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
+| Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
+
+#### Home (Home Assistant)
+
+| Setting | What it does | Default |
+|---|---|---|
+| Home Assistant tools | Offers the Home Assistant tools (`ha_overview`, `ha_states`, `ha_history`, `ha_lights`, `ha_scene`, `ha_media`, `ha_todo`, `ha_call_service`, `ha_assist`) once a URL and token are set. | off |
+| Home Assistant URL | Your server (`http://localhost:8123`, or on your LAN). The web tools' network mode never blocks it. | (not set) |
+| Home Assistant API key | A long-lived access token (your HA profile → Security). Typed masked, saved encrypted (DPAPI on Windows, the Keychain on a Mac), never logged; empty clears it. | (none) |
+| Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
+| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, the TV's power, volume, source and playback, and to-do lists run; anything else (a remote key, a button, a switch, a script, an automation, a restart) asks first (refused headless). `allow`: everything runs. `/ha` never asks. | `ask` |
+| Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use (e.g. `conversation.google_generative_ai`); empty for the default. | (Home Assistant's default) |
+| Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
+
+The services that run unasked under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`: `light.*`, `remote.send_command`…).
 
 #### ComfyUI
 
@@ -761,45 +799,6 @@ The picture, print and video tools, five menus on one tab, each a tab of the sec
 | YouTube safe search | How much restricted content a search leaves out unless it names a level (a picker): `none`, `moderate` (YouTube's own default) or `strict`. The model's `safe_search` and `/youtube search --safe` override it. | `moderate` |
 | YouTube region | A two-letter country code (`US`, `GB`, `DE`) a search asks for: what can be watched and is popular there. Empty for any region. The model's `region` and `/youtube search --region` override it. | (any region) |
 | YouTube language | A language code (`en`, `es`, `zh-Hans`) a search favours: results in it rank higher, the rest are still listed. Empty for any language. The model's `language` and `/youtube search --lang` override it. | (any language) |
-
-### ClaudeCode
-
-The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (the model asks it). The Anthropic API and Claude Code as servers are on `/settings` › Servers › Anthropic.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Claude Code executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
-| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
-| Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
-| Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
-| Claude Code advisor tool | Offers `claude_code_advisor`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. The top of its on/off page has **model** (`m`) and **effort** (`e`) buttons that open *Claude Code advisor tool model* and *Claude Code advisor tool effort*; ESC there comes back. | off |
-| Claude Code advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
-| Claude Code advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
-| Claude Code advisor tool model | The advisor's `--model`; the first row follows *Claude Code slash command model*. | (as Claude Code slash command model) |
-| Claude Code advisor tool effort | The advisor's `--effort`; the first row follows *Claude Code slash command effort*. | (as Claude Code slash command effort) |
-| Claude Code advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
-
-### Home (Home Assistant)
-
-| Setting | What it does | Default |
-|---|---|---|
-| Home Assistant tools | Offers the Home Assistant tools (`ha_overview`, `ha_states`, `ha_history`, `ha_lights`, `ha_scene`, `ha_media`, `ha_todo`, `ha_call_service`, `ha_assist`) once a URL and token are set. | off |
-| Home Assistant URL | Your server (`http://localhost:8123`, or on your LAN). The web tools' network mode never blocks it. | (not set) |
-| Home Assistant API key | A long-lived access token (your HA profile → Security). Typed masked, saved encrypted (DPAPI on Windows, the Keychain on a Mac), never logged; empty clears it. | (none) |
-| Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
-| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, the TV's power, volume, source and playback, and to-do lists run; anything else (a remote key, a button, a switch, a script, an automation, a restart) asks first (refused headless). `allow`: everything runs. `/ha` never asks. | `ask` |
-| Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use (e.g. `conversation.google_generative_ai`); empty for the default. | (Home Assistant's default) |
-| Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
-
-The services that run unasked under `ask` can be changed in `profile.json` (`homeAssistantSafeServices`: `light.*`, `remote.send_command`…).
-
-### Obsidian
-
-| Setting | What it does | Default |
-|---|---|---|
-| Obsidian tools | Offers the vault tools (search, list, read, links, daily, write, properties, move) once a vault is set. The top of its on/off page has a **vault** button (`v`) that opens *Obsidian vault*'s folder picker; ESC there comes back. | off |
-| Obsidian vault | The vault's folder (holding `.obsidian`), separate from the working directory. The row opens the folder picker. | (not set) |
-| Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
 
 ### Database
 
@@ -888,36 +887,45 @@ The Oracle, MySQL and Postgres menus and the UNC tab work like this one, over `o
 | Oracle connections (profile) | As *SQL connections (profile)*. | (none) |
 | Oracle connections (global) | As *SQL connections (global)*. | (none) |
 
-### UNC
+### Media
+
+The picture and print tools, three menus on one tab, each a tab of the second strip under the first (Print · Camera · Screen): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-09; ComfyUI and YouTube are on Integrations since 2026-10-10.
+
+#### Print
 
 | Setting | What it does | Default |
 |---|---|---|
-| UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, and `unc_fetch` while the File tools are on. See [UNC shares](TOOLS.md#unc-shares-and-outside-folders). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
-| UNC writes | The master key for changes. On, a share with `access: readwrite` also gets `unc_write`, `unc_patch`, `unc_create_directory`, `unc_move`, `unc_copy`, `unc_delete` (off by default in Offered) and `unc_put`. Changes are permanent. | off |
-| UNC shares offered | As *SQL connections offered*. | none |
-| UNC set password | As *SQL set password*, for runas shares. | — |
-| UNC add/edit share | The wizard (new or edit); its test lists the share's root under its account. | — |
-| UNC *-mention enabled | `*` and part of a name lists the offered shares; a pick writes `*name`. | on |
-| UNC shares (profile) | As *SQL connections (profile)*. | (none) |
-| UNC shares (global) | As *SQL connections (global)*. | (none) |
+| Print tools | Offers `list_printers` and `print_file`. `/print` works either way. On a Mac they print through CUPS, to the printers set up in System Settings. The top of its on/off page has a **printer** button (`p`) that opens *Print default printer*; ESC there comes back. | off |
+| Print action policy | `off`: list printers only. `ask`: each print shows the file, printer, pages and copies and waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
+| Print default printer | Where a print goes when none is named. On a Mac the picker shows each printer's queue name with the name System Settings shows, and the empty row reads *(system default)*. | (Windows default) |
+| Print font size (pt) | Body text size for printed listings and Markdown (6–24); headings scale from it. | 10 |
+| PDF engine | What makes a PDF for `convert_to_pdf` and `/pdf`. `auto`: Edge, Chrome or Brave, else Microsoft Print to PDF, which also takes over when the browser fails. `browser`: the browser only. `printer`: Microsoft Print to PDF only (Markdown, text and pictures). See [Making PDFs](TOOLS.md#making-pdfs). On a Mac only the browser makes PDFs (Edge, Chrome, Brave or Chromium); `printer` needs Windows. | `auto` |
 
-### Docker
+#### Camera
 
 | Setting | What it does | Default |
 |---|---|---|
-| Docker tools | Offers `docker_containers`, `docker_logs`, `docker_inspect`, `docker_stats`, `docker_resources` and `docker_compose`, whether Docker Desktop runs or not. `/docker` works either way. See [Docker](TOOLS.md#docker). Never on a Mac (`/tools`: *off: it needs Windows*). | off |
-| Docker writes | The master key for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune` (the last two off by default in Offered). Every call asks first; headless refuses them. | off |
-| Docker engine pipe | The engine's named pipe: a name (`docker_engine` is Docker Desktop's), `\\.\pipe\name` or `npipe:////./pipe/name`. Blank is the default. | `\\.\pipe\docker_engine` |
+| Camera tool | Offers `camera_capture`, so the model can ask you for a photo. Never offered headless or to an embedded model without vision. `/camera` works either way. Its on/off page (the toolbar's 📸) has a **watch** button (`w`) that starts or stops `/camera watch`, **live** (`l`) that opens or closes the camera's window, and **snap** (`s`) and **screen** (`c`), which close the pane and run `/camera snap` or `/screen`. | off |
+| Camera shutter | `user`: the camera pane shows the request; Space takes the photo, `r` retakes, Enter sends, ESC declines. `model`: a pane asks Deny / Allow once / Allow for this session, and on a yes the app takes it. | `user` |
+| Camera preview | `live`: a camera window of its own shows the camera mirrored while you frame, then the photo. `post`: the picture viewer opens on the photo. `disabled`: no window. Neither takes the keyboard. | `live` |
+| Camera device | The camera, by its Windows name (on a Mac, macOS's: the built-in camera, a USB webcam, an iPhone as Continuity Camera; a MacBook's own lists last while its lid is closed). `(first camera)`, or a camera that isn't connected, uses the first. | (first camera) |
+| Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
+| Camera output folder | Where photos are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. Watch mode's saved pictures go in its `.watch` subfolder. | `camera_images` |
+| Camera keep in sessions | Off, a stored session keeps a line naming the photo instead of the picture. | off |
+| Camera watch interval (s) | How often `/camera watch` looks (2–3600). | 10 |
+| Camera watch change (%) | How much of the picture must change to count (1–100); brightness shifts don't. `--camera-check` prints your camera's noise. | 8% |
+| Camera watch speaks up | Off, a changed picture rides your next message. On, the model is shown it unasked, at most once per gap below, when nothing else is going on. | off |
+| Camera watch min gap (s) | The least time between unprompted watch turns (30–3600). | 120 |
 
-### GitLib
+#### Screen
 
 | Setting | What it does | Default |
 |---|---|---|
-| GitLib tools | Offers the in-process git tools (status, log, show, diff, blame, branch, stage, commit, stash, discard, delete) over the working directory's repository. Off, git goes through the shell and `/gituser` does nothing. | off |
-| GitLib diff max lines | Where a `gitlib_diff` patch is cut (20–5000). | 500 |
-| GitLib log max commits | Commits `gitlib_log` returns by default (1–200). | 20 |
-| GitLib email | The `user.email` `/gituser` writes into the repository's config. | (not set) |
-| GitLib name | The `user.name` `/gituser` writes beside it. | (not set) |
+| Screen capture tool | Offers `screen_capture` and `screen_list`, so the model can see a monitor, every monitor or one window. Never offered headless or to an embedded model without vision. `/screen` works either way. On a Mac the terminal app needs the Screen Recording permission (see [Screen capture](COMMANDS.md#screen-capture)). The top of its on/off page has **ask** (`a`) and **preview** (`p`) buttons that open *Screen capture ask* and *Screen capture preview*; ESC there comes back. | off |
+| Screen capture ask | `ask`: a pane names what would be captured and why; Deny, Allow once, or Allow for this session. `allow`: taken without asking. | `ask` |
+| Screen capture preview | The picture viewer opens on each screenshot (without the keyboard), so you see what was sent. | on |
+| Screen capture output folder | Where screenshots are saved, under the profile's `images` folder (empty = the `images` folder), out of the working directory. | `screen_images` |
+| Screen capture keep in sessions | Off, a stored session keeps a line naming the screenshot instead of the picture. | off |
 
 ### Options
 

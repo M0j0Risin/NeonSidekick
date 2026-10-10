@@ -30,7 +30,8 @@ namespace NeonSidekick.App;
 /// <see cref="ShowAllowedCommandsAsync"/> (the toolbar's lock glyph); its <c>Shell police</c> row since 2026-09-22:
 /// <see cref="ShowPoliceAsync"/> (the toolbar's officer). Their typed words were <c>/cmdlist</c> and <c>/police</c> until
 /// 2026-10-09, <c>/tools shell allowed</c> and <c>/tools shell police</c> since (<see cref="ShowShellSubAsync"/>, the user's call).
-/// The Media and Database tabs (later on 2026-10-09, the user's call: the strip had grown to 22 tabs) hold five menus each, every one a
+/// The Files and Integrations tabs (2026-10-10, the user's pick: the strip still ran to fourteen; ComfyUI and YouTube came off Media to
+/// Integrations, the user's ask) and the Media and Database tabs (later on 2026-10-09, the user's call: the strip had grown to 22 tabs) hold the menus, every one a
 /// tab of its own until then (<see cref="ToolsText.TabMenus"/>). Until 2026-10-10 each was a row per menu with its switch, Enter opening
 /// the five as a page of their own under the crumb <c>Tools › Database</c>; the user found reaching a menu through its switch unintuitive,
 /// so since then they are sub-tabs (<see cref="MenuTab.SubTabs"/>): a second strip under the first while the group is on show, the

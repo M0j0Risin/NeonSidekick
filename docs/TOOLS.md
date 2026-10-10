@@ -63,7 +63,7 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_help` | `query?, kind?` | NeonSidekick's own manual: every form of a command; a setting's effect, default and place (pane › tab › row, with the menu on `/tools`' Media and Database tabs); a pane's or tab's rows; the keys. `query` is a command (`/camera`), a setting, a pane or tab (`/tools camera`), a key (`Ctrl+H`) or plain words; none gives an overview. `kind` (`command`, `setting`, `pane`, `keys`) narrows it; `kind: command` alone lists every command. |
+| `neon_help` | `query?, kind?` | NeonSidekick's own manual: every form of a command; a setting's effect, default and place (pane › tab › row, with the menu on a group tab: `/tools`' Files, Integrations, Database and Media, `/settings`' Servers and Voice); a pane's or tab's rows; the keys. `query` is a command (`/camera`), a setting, a pane or tab (`/tools camera`), a key (`Ctrl+H`) or plain words; none gives an overview. `kind` (`command`, `setting`, `pane`, `keys`) narrows it; `kind: command` alone lists every command. |
 
 It is offered on every turn, headless and in plan mode too, and the rules tell the model to use it instead of guessing. It reads only the built-in reference, never your current settings. To withhold it, switch it off on the Offered tab.
 
@@ -714,7 +714,7 @@ The image tools run **your own ComfyUI workflows** on your server (*ComfyUI URL*
 
 ### Adding a workflow
 
-**With the wizard** (*ComfyUI add workflow* on `/tools` › Media › ComfyUI):
+**With the wizard** (*ComfyUI add workflow* on `/tools` › Integrations › ComfyUI):
 
 * **Build** makes a standard text → image or image → image workflow from your server's lists: checkpoint, family, folder (this profile's or every profile's), name, CLIP skip, sampler, scheduler, size, steps, CFG, denoise, negative and description.
 * **Import** takes a ComfyUI API export (*Workflow → Export (API)*). It finds the prompt, negative, seed, steps, CFG, size and input-image nodes, puts the placeholders in, and keeps the export's values as defaults. It reads both a plain `KSampler` graph and FLUX.2's custom-sampler graph. A value fed by a primitive node gets its placeholder there; one set by another node (a switch, a resolution picker) is left alone, and the wizard says so.

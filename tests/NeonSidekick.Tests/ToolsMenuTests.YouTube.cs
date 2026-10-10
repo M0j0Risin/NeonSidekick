@@ -18,7 +18,7 @@ public partial class ToolsMenuTests
         int tab = ToolsText.MenuIndex(ToolsText.YouTubeTabTitle) + 1;   // a menu on Media since 2026-10-09, its rows ToolsTabFields' as before
 
         Assert.Equal(ToolsText.MenuIndex(ToolsText.ComfyTabTitle) + 2, tab);   // the user's place, later on 2026-10-05 (after Screen until then); last on Media since 2026-10-09
-        Assert.Equal(ToolsText.MediaTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.YouTubeTabTitle)]);
+        Assert.Equal(ToolsText.IntegrationsTabTitle, ToolsText.TabTitles[TabIndex(ToolsText.YouTubeTabTitle)]);   // on Integrations since 2026-10-10 (Media from 2026-10-09)
         Assert.Equal(["YouTube tools", "YouTube API key", "YouTube search max results", "YouTube autoplay", "YouTube while speaking", "YouTube search order", "YouTube safe search", "YouTube region", "YouTube language"], SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
         Assert.Equal([SettingsField.YouTubeTools, SettingsField.YouTubeAutoplay], SettingsMenu.ToolsTabFields[tab - 1].Where(SettingsMenu.IsToggle));
         Assert.DoesNotContain(SettingsMenu.ToolsTabFields[tab - 1], SettingsMenu.RefusedMidTurn);

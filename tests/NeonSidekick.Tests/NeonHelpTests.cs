@@ -190,8 +190,24 @@ public class NeonHelpTests
     [Fact]
     public void ATabByItsStartOrItsLongName_IsFound()
     {
-        Assert.StartsWith("Tab /tools › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
-        Assert.StartsWith("Tab /tools › Home:", Invoke("/tools home assistant"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Files › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Integrations › Home:", Invoke("/tools home assistant"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A title said whole wins over one it starts (2026-10-10, the user's pick: the Files tab over the File menu): /tools file is the menu,
+    /// /tools files the group, whose hint names the menu's word; "file tab" is the menu alone.
+    /// </summary>
+    [Fact]
+    public void AWholeTitle_WinsOverOneItStarts()
+    {
+        Assert.StartsWith("Tab /tools › Files › File:", Invoke("/tools file"), StringComparison.Ordinal);
+        string group = Invoke("/tools files");
+        Assert.StartsWith("Tab /tools › Files: " + HelpText.MenusTab(["File", "UNC", "GitLib", "Obsidian"]), group, StringComparison.Ordinal);
+        Assert.EndsWith("\nAsk for one menu (/tools file) for its rows' defaults and what each does.", group, StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Files › File:", Invoke("file tab"), StringComparison.Ordinal);
+        Assert.DoesNotContain("Tab /tools › Files:", Invoke("file tab"));
+        Assert.StartsWith("Tab /tools › Integrations: ", Invoke("/tools integ"), StringComparison.Ordinal);   // a start still finds one
     }
 
     /// <summary>A group tab (2026-10-09) lists its menus and their rows' names, and says how to ask for one. Pinned.</summary>
@@ -204,7 +220,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second strip under the tab; ←/→ walk them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.DatabaseTabTitle, "SQL"), (ToolsText.DatabaseTabTitle, "MySQL"), (ToolsText.DatabaseTabTitle, "SQLite")], HelpLocation.Menus("/tools").Take(3));   // Database before Media since later on 2026-10-09
+        Assert.Equal([(ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, "UNC"), (ToolsText.FilesTabTitle, "GitLib")], HelpLocation.Menus("/tools").Take(3));   // the Files group first since 2026-10-10   // Database before Media since later on 2026-10-09
         Assert.Equal([(SettingsMenu.ServersTabTitle, "LLM"), (SettingsMenu.ServersTabTitle, "Embedded")], HelpLocation.Menus("/settings").Take(2));   // the Servers and Voice groups since 2026-10-10
     }
 

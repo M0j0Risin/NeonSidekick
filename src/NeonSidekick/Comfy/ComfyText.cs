@@ -21,7 +21,7 @@ public static class ComfyText
         $"← → picture {index.ToString(CultureInfo.InvariantCulture)}/{count.ToString(CultureInfo.InvariantCulture)} · Enter opens";
 
     /// <summary>The sentence when <c>ComfyUI URL</c> is empty or no http(s) URL. Pinned.</summary>
-    public const string NoServer = "Error: no ComfyUI server is set; set ComfyUI URL on /tools › Media › ComfyUI (or NEONSIDEKICK_COMFY_URL)";
+    public const string NoServer = "Error: no ComfyUI server is set; set ComfyUI URL on /tools › Integrations › ComfyUI (or NEONSIDEKICK_COMFY_URL)";
 
     /// <summary>The sentence when no workflow is in either <c>comfy</c> folder. Pinned.</summary>
     public static string NoWorkflows(IReadOnlyList<string> roots) =>
@@ -31,7 +31,7 @@ public static class ComfyText
     public static string NameTaken(string name, string folder) => $"a workflow named '{name}' is already in {folder}";
 
     /// <summary>Workflows are installed but <c>ComfyUI workflows offered</c> ticks none (later on 2026-09-24). Pinned.</summary>
-    public const string NoneOffered = "Error: no ComfyUI workflow is offered; tick one in ComfyUI workflows offered on /tools › Media › ComfyUI";
+    public const string NoneOffered = "Error: no ComfyUI workflow is offered; tick one in ComfyUI workflows offered on /tools › Integrations › ComfyUI";
 
     /// <summary>A workflow name that is not in the catalog. Pinned.</summary>
     public static string UnknownWorkflow(string name, IReadOnlyList<ComfyWorkflow> workflows) =>
@@ -522,13 +522,13 @@ public static class ComfyText
     }
 
     /// <summary>The line <c>/comfy</c> and <c>/comfy offered</c> open with while <c>ComfyUI tools</c> is off. Pinned.</summary>
-    public const string ToolsOffLine = "ComfyUI tools is off on /tools › Media › ComfyUI: the model is offered no image tool (/imagine still works)";
+    public const string ToolsOffLine = "ComfyUI tools is off on /tools › Integrations › ComfyUI: the model is offered no image tool (/imagine still works)";
 
     /// <summary><c>/comfy offered</c> with no workflow installed at all (2026-10-04). Pinned.</summary>
     public const string NoWorkflowInstalled = "no ComfyUI workflow is installed yet: /comfy says where they go";
 
     /// <summary><c>/comfy offered</c> with workflows installed and none ticked (2026-10-04). Pinned.</summary>
-    public const string NoneOfferedLine = "no ComfyUI workflow is offered to the model: tick them in ComfyUI workflows offered on /tools › Media › ComfyUI";
+    public const string NoneOfferedLine = "no ComfyUI workflow is offered to the model: tick them in ComfyUI workflows offered on /tools › Integrations › ComfyUI";
 
     /// <summary>
     /// <c>/comfy offered</c>'s lines (2026-10-04, the user's ask: the offered workflows as a bulleted list, without the server's

@@ -134,23 +134,40 @@ internal static class NeonHelp
             }
 
             string tabWords = string.Join(' ', rest);
-            string? tab = pane.Tabs.FirstOrDefault(t => TabMatches(t, tabWords));
-            if (tab is not null)
+            // A title said whole wins over one it starts (2026-10-10: /tools file is the File menu, not the Files tab it begins), tabs before menus each time.
+            foreach (var matches in new Func<string, string, bool>[] { TabIs, TabMatches })
             {
-                return TabAnswer(pane, tab);
+                string? tab = pane.Tabs.FirstOrDefault(t => matches(t, tabWords));
+                if (tab is not null)
+                {
+                    return TabAnswer(pane, tab);
+                }
+
+                // A menu on a group tab (2026-10-09): /tools sql is the SQL menu of the Database tab, as it was the SQL tab.
+                var menu = HelpLocation.Menus(pane.Command).FirstOrDefault(m => matches(m.Menu, tabWords));
+                if (menu.Menu is not null)
+                {
+                    return MenuAnswer(pane, menu.Tab, menu.Menu);
+                }
             }
 
-            // A menu on a group tab (2026-10-09): /tools sql is the SQL menu of the Database tab, as it was the SQL tab.
-            var menu = HelpLocation.Menus(pane.Command).FirstOrDefault(m => TabMatches(m.Menu, tabWords));
-            return menu.Menu is null ? null : MenuAnswer(pane, menu.Tab, menu.Menu);
+            return null;
         }
 
         if (words.Length >= 2 && words[^1] is "tab" or "tabs" or "menu")
         {
             string tabWords = string.Join(' ', words[..^1]);
-            var found = HelpLocation.Panes.SelectMany(p => p.Tabs.Where(t => TabMatches(t, tabWords)).Select(t => TabAnswer(p, t))
-                .Concat(HelpLocation.Menus(p.Command).Where(m => TabMatches(m.Menu, tabWords)).Select(m => MenuAnswer(p, m.Tab, m.Menu)))).ToList();
-            return found.Count > 0 ? string.Join("\n\n", found) : null;
+            foreach (var matches in new Func<string, string, bool>[] { TabIs, TabMatches })
+            {
+                var found = HelpLocation.Panes.SelectMany(p => p.Tabs.Where(t => matches(t, tabWords)).Select(t => TabAnswer(p, t))
+                    .Concat(HelpLocation.Menus(p.Command).Where(m => matches(m.Menu, tabWords)).Select(m => MenuAnswer(p, m.Tab, m.Menu)))).ToList();
+                if (found.Count > 0)
+                {
+                    return string.Join("\n\n", found);
+                }
+            }
+
+            return null;
         }
 
         return null;
@@ -169,6 +186,8 @@ internal static class NeonHelp
         HelpText.Tab(pane, tab + HelpText.PathSeparator + menu, HelpLocation.InMenu(pane.Command, menu), HelpLocation.Default, HelpSettings.Describe);
 
     /// <summary>A tab title against the words asked: the title itself, its start (<c>git</c> is GitLib), or the README's longer name (<c>HA</c> is Home Assistant).</summary>
+    private static bool TabIs(string tab, string words) => string.Equals(tab, words, StringComparison.OrdinalIgnoreCase);
+
     private static bool TabMatches(string tab, string words) =>
         string.Equals(tab, words, StringComparison.OrdinalIgnoreCase)
         || (words.Length >= 3 && tab.StartsWith(words, StringComparison.OrdinalIgnoreCase))

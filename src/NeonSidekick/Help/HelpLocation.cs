@@ -9,7 +9,7 @@ public sealed record HelpPane(string Command, string Summary, IReadOnlyList<stri
 
 /// <summary>
 /// Where a settings row lives: the pane's command, the tab's title and the row's label (<see cref="SettingsMenu.FieldName"/>);
-/// on a group tab — <c>/tools</c>' Media and Database (2026-10-09), <c>/settings</c>' Servers and Voice (2026-10-10) — the menu on the tab that holds it too, null elsewhere.
+/// on a group tab — <c>/tools</c>' Media and Database (2026-10-09), Files and Integrations, <c>/settings</c>' Servers and Voice (2026-10-10) — the menu on the tab that holds it too, null elsewhere.
 /// </summary>
 public sealed record HelpRow(SettingsField Field, string Pane, string Tab, string Label, string? Menu = null)
 {
@@ -58,7 +58,7 @@ internal static class HelpLocation
     public static IReadOnlyList<HelpRow> OnTab(string pane, string tab) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && string.Equals(r.Tab, tab, StringComparison.Ordinal)).ToList();
 
-    /// <summary>The menus on a pane's group tabs, each with its tab (2026-10-09): <c>/tools</c>' Media and Database, five each.</summary>
+    /// <summary>The menus on a pane's group tabs, each with its tab (2026-10-09): <c>/tools</c>' Files, Integrations, Database and Media, <c>/settings</c>' Servers and Voice (2026-10-10).</summary>
     public static IReadOnlyList<(string Tab, string Menu)> Menus(string pane) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && r.Menu is not null).Select(r => (r.Tab, r.Menu!)).Distinct().ToList();
 
