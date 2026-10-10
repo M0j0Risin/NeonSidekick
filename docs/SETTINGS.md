@@ -514,6 +514,7 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 | Advisor confirm | Each call waits for your yes on the pane. Headless runs refuse the calls. | off |
 
 * **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server (with its own *LLM model* if set). A Docker advisor only shares the container already running. An embedded advisor needs this profile's *Embedded servers enabled*. With no embedded server running, the advisor's model starts as the main one, and the next connect to another server stops it.
+* **On the Claude Code server:** the server is one `claude` process, so one advisor at a time may run its turns there, with the read-only tools offered over the same MCP relay the chat's own turns use: the first listed advisor whose profile is on it, while this chat is on another server. Any other advisor on Claude Code answers text-only, a one-shot `claude -p` with no tools, its footer saying why (`no tools: this chat is on the Claude Code server`, or `no tools: dba is the Claude Code advisor with tools`). The *Advisor list* marks each one `Claude Code, tools` or `Claude Code, text only`. The one with tools keeps its own Claude conversation, saved with the session; its first call starts the `claude` process, and this chat reconnecting stops it (the next call resumes).
 * **Output caps and headers** (Anthropic and OpenAI max tokens, prompt caching, organization, project) are the advisor profile's own when it has its own URL; a borrowed server keeps this profile's.
 
 ## Skills settings (`/skills`)

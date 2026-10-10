@@ -60,12 +60,38 @@ internal sealed partial class SettingsMenu
     public static readonly string AdvisorPairsRangeError =
         "must be " + AppSettingsData.MinAdvisorThreadPairs.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxAdvisorThreadPairs.ToString(CultureInfo.InvariantCulture) + " questions";
 
-    /// <summary>One row of the list editor: the profile padded, then its role dim; a profile no longer in the home says so. Pinned.</summary>
-    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width)
+    /// <summary>
+    /// One row of the list editor: the profile padded, then its role dim; a profile no longer in the home says so, and one on the Claude
+    /// Code server says whether it gets the tools (<paramref name="mark"/>, <see cref="AdvisorText.ClaudeCodeMark"/>, 2026-10-10). Pinned.
+    /// </summary>
+    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width, string? mark = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         string role = entry.Role.Length == 0 ? "(no role)" : entry.Role;
-        return Markup.Escape(entry.Profile.PadRight(width)) + Theme.DimMarkup(Markup.Escape(exists ? role : role + "  " + MissingAdvisorMark));
+        string tail = !exists ? "  " + MissingAdvisorMark : mark is null ? "" : "  · " + mark;
+        return Markup.Escape(entry.Profile.PadRight(width)) + Theme.DimMarkup(Markup.Escape(role + tail));
+    }
+
+    /// <summary>The Claude Code mark of each listed advisor (2026-10-10, <see cref="AdvisorClaudeGate"/>): null for one on any other server.</summary>
+    private Func<AdvisorEntry, string?> ClaudeCodeMarks(IReadOnlyList<AdvisorEntry> entries)
+    {
+        var onClaudeCode = entries.Where(e => SavedOnClaudeCode(e.Profile)).Select(e => e.Profile).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool master = Claude.ClaudeCliEndpoint.IsClaudeCli(_settings.Current.LlmUrl);
+        string? holder = AdvisorClaudeGate.Holder(entries, onClaudeCode.Contains, master);
+        return entry => onClaudeCode.Contains(entry.Profile) ? AdvisorText.ClaudeCodeMark(AdvisorRoster.SameProfile(entry.Profile, holder)) : null;
+    }
+
+    private bool SavedOnClaudeCode(string profile)
+    {
+        try
+        {
+            return Profiles.Resolve(_settings.StorageDirectory, profile) is { } onDisk
+                && Claude.ClaudeCliEndpoint.IsClaudeCli(Profiles.ReadProfileFile(Profiles.ProfileFile(_settings.StorageDirectory, onDisk)).LlmUrl);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The advisor-context picker (2026-10-10): the Claude Code advisor's rows, this setting's value under the cursor.</summary>
@@ -114,7 +140,8 @@ internal sealed partial class SettingsMenu
         {
             var entries = AdvisorRoster.Entries(_settings.Current.AdvisorList);
             int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => e.Profile.Length) + 2);
-            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), .. entries.Select(e => AdvisorRow(e, Profiles.Exists(_settings.StorageDirectory, e.Profile), width))];
+            var marks = ClaudeCodeMarks(entries);
+            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), .. entries.Select(e => AdvisorRow(e, Profiles.Exists(_settings.StorageDirectory, e.Profile), width, marks(e)))];
             var page = new MenuPage(Crumb(title), rows, AdvisorListKeys);
             if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)
             {

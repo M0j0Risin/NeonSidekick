@@ -15,7 +15,7 @@ namespace NeonSidekick.Tests;
 /// per-turn cap, the opt-in confirm, the persona and role framing, the read-only tools and the round-trip cap, the thread replayed
 /// and trimmed, the failures as <c>Error:</c> sentences and a cancel that goes on up.
 /// </summary>
-public class NeonAdvisorToolTests
+public partial class NeonAdvisorToolTests
 {
     private readonly FakeAdvisorHost _host = new();
     private readonly AdvisorThreads _threads = new();

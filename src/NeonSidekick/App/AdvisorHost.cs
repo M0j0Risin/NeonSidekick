@@ -56,7 +56,7 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
             {
                 if (ReferenceEquals(kept.Main, main) && kept.Written == written && kept.Mode == mode)
                 {
-                    return (Wrap(kept.Link), null);
+                    return (Wrap(kept.Link, profile.Name), null);
                 }
 
                 _links.Remove(profile.Name);
@@ -80,7 +80,7 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
             _links[profile.Name] = new Kept(link, main, written, mode);
         }
 
-        return (Wrap(link), null);
+        return (Wrap(link, profile.Name), null);
     }
 
     public void Forget(string profile)
@@ -111,10 +111,33 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
         }
     }
 
-    private AdvisorLink Wrap(BotLink link)
+    private AdvisorLink Wrap(BotLink link, string profile)
     {
         string? warning = link.SharedEmbedded is var (wanted, running) ? AdvisorText.SharedEmbeddedWarning(wanted, running) : null;
-        return new AdvisorLink(history => _session.CreateAssistant(history, link), ModelOf(link.Endpoint), warning);
+        if (!Claude.ClaudeCliEndpoint.IsClaudeCli(link.Endpoint.BaseUrl))
+        {
+            return new AdvisorLink(history => _session.CreateAssistant(history, link), ModelOf(link.Endpoint), warning);
+        }
+
+        // On the Claude Code server (2026-10-10, the user's rules, AdvisorClaudeGate): the one advisor that may hold the server — the
+        // chat elsewhere, the first listed on it — runs its turns there with the tools; any other answers text-only, one-shot.
+        bool masterOnClaudeCode = Claude.ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl);
+        string? holder = AdvisorClaudeGate.Holder(AdvisorRoster.Entries(_effective().AdvisorList), OnClaudeCode, masterOnClaudeCode);
+        string? textOnly = AdvisorClaudeGate.TextOnlyReason(profile, holder, masterOnClaudeCode);
+        return new AdvisorLink(history => _session.CreateAssistant(history, link), ModelOf(link.Endpoint), textOnly ?? warning, Tools: textOnly is null, Session: textOnly is null);
+    }
+
+    /// <summary>Whether listed advisor <paramref name="profile"/>'s saved server is the Claude Code server; a profile that cannot be read is not.</summary>
+    private bool OnClaudeCode(string profile)
+    {
+        try
+        {
+            return Read(profile) is { } advisor && Claude.ClaudeCliEndpoint.IsClaudeCli(advisor.Settings.LlmUrl);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The model a link answers on as the footer names it: the embedded catalog's name, else the id.</summary>

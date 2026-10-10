@@ -921,7 +921,7 @@ public sealed class SidekickApp
 
                     if (sessionId is { } claudeSaved)
                     {
-                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot()));
+                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                     }
 
                     continue;
@@ -936,7 +936,7 @@ public sealed class SidekickApp
                         if (sessionId is { } advisorRow)
                         {
                             ChatScreen.StampTurn(session.History, sessions.AppendTurn(advisorRow, text, advisorReply, 0, [], [], 0, 0, 0, false));
-                            sessions.SaveHistory(advisorRow, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot()));
+                            sessions.SaveHistory(advisorRow, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                         }
                     }
 
@@ -982,7 +982,7 @@ public sealed class SidekickApp
                     DiagnosticLog.Info(ChatScreen.AppCategory, RewindText.RewoundLogLine(cut.Turns, picked.Number));
                     if (sessionId is { } rewound)
                     {
-                        sessions.SaveHistory(rewound, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot()));
+                        sessions.SaveHistory(rewound, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                     }
 
                     await HeadlessLineAsync(HeadlessReplyPrefix + RewindText.RewoundNotice(cut.Turns, picked.Text)).ConfigureAwait(false);
@@ -1167,7 +1167,7 @@ public sealed class SidekickApp
                     {
                         if (sessionId is { } planSession)
                         {
-                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot()));
+                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                         }
 
                         continue;
@@ -1226,7 +1226,7 @@ public sealed class SidekickApp
                     {
                         var usage = session.Usage.LastRequest;
                         ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled));
-                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot()));
+                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, advisorThread.SessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                     }
                 }
             }

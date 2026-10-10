@@ -6774,6 +6774,7 @@ internal sealed partial class ChatScreen
             _claudeSessionId = claudeSessionId;
             _advisorThread.SessionId = advisorSessionId;
             _advisorThreads.Restore(SessionHistory.AdvisorThreadsOf(record.HistoryJson));
+            _advisorThreads.RestoreSessions(SessionHistory.AdvisorSessionsOf(record.HistoryJson));
             _claudeServerSessionId = claudeServerSessionId;
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
             RestorePlan(plan, executing);
@@ -15013,7 +15014,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot()));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _advisorThread.SessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions()));
         }
     }
 

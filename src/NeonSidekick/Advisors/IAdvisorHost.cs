@@ -9,8 +9,11 @@ public sealed record AdvisorProfile(string Name, AppSettingsData Settings, strin
 /// <summary>
 /// An advisor's way to its model (2026-10-10): <see cref="Create"/> makes an assistant over it for a history, <see cref="Model"/> names
 /// the model it answers on, and <see cref="Warning"/> says when that is not the one its profile named (<c>parent-server</c>).
+/// <see cref="Tools"/> false: the server takes no tools (a Claude Code advisor without the server's tools, <see cref="AdvisorClaudeGate"/>),
+/// and <see cref="Warning"/> says why. <see cref="Session"/>: the server keeps the conversation (the Claude Code server), so the
+/// assistant names the advisor's thread in <see cref="Assistant.ConversationId"/>.
 /// </summary>
-public sealed record AdvisorLink(Func<ConversationHistory, Assistant> Create, string Model, string? Warning = null);
+public sealed record AdvisorLink(Func<ConversationHistory, Assistant> Create, string Model, string? Warning = null, bool Tools = true, bool Session = false);
 
 /// <summary>
 /// What <c>neon_advisor</c> needs of the app (2026-10-10): an advisor's profile read without loading it, and a link to its own

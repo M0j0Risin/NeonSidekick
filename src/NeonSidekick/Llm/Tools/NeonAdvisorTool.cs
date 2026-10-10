@@ -179,7 +179,8 @@ public sealed class NeonAdvisorTool : AIFunction
         }
 
         int rounds = Math.Clamp(effective.AdvisorMaxToolIterations, 0, AppSettingsData.MaxAdvisorToolIterations);
-        var (offered, rules) = rounds > 0 ? _offered() : ([], "");
+        // A server that takes no tools (a Claude Code advisor without its tools, 2026-10-10) is offered none, and told so.
+        var (offered, rules) = rounds > 0 && link.Tools ? _offered() : ([], "");
         var tools = ReadOnlyOf(offered);
         string system = (string.IsNullOrWhiteSpace(profile.Persona) ? Assistant.DefaultPersona : profile.Persona.Trim())
             + "\n\n" + AdvisorText.Framing(_master(), advisor.Role, tools.Count > 0)
@@ -189,7 +190,17 @@ public sealed class NeonAdvisorTool : AIFunction
         var assistant = link.Create(history);
         assistant.Tools = tools;
         assistant.MaxToolIterations = tools.Count > 0 ? rounds + 1 : 1;
-        assistant.LastRoundAnswers = tools.Count > 0;
+        if (link.Session)
+        {
+            // The Claude Code server keeps the conversation (2026-10-10): the advisor's thread names it, so its turns go to the one
+            // process with the tools offered over MCP. Its last round is not asked without tools: the server's turn carries on
+            // as one, so the cap stops the loop instead.
+            assistant.ConversationId = _threads.SessionOf(advisor.Profile);
+        }
+        else
+        {
+            assistant.LastRoundAnswers = tools.Count > 0;
+        }
 
         var answer = new StringBuilder();
         var usage = TokenUsage.Zero;

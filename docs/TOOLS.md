@@ -950,7 +950,7 @@ Other profiles of this home, each in a role you give it, set up under `/settings
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_advisor` | `advisor, question, context?` | Asks one advisor, named by its profile or role, for its view. It answers on its own profile's server and model, under its own `persona.md` and its role, and may call this chat's read-only tools (those plan mode keeps, never `ask_user`, the camera, the screen or an advisor) for up to *Advisor tool iterations* round trips. The transcript shows the question, its tools, the answer and a footer with its model and tokens. Each advisor keeps a thread of its questions and answers for the session. Offered while *Advisors enabled* is on and an advisor is listed; plan mode keeps it. |
+| `neon_advisor` | `advisor, question, context?` | Asks one advisor, named by its profile or role, for its view. It answers on its own profile's server and model, under its own `persona.md` and its role, and may call this chat's read-only tools (those plan mode keeps, never `ask_user`, the camera, the screen or an advisor) for up to *Advisor tool iterations* round trips. The transcript shows the question, its tools, the answer and a footer with its model and tokens. Each advisor keeps a thread of its questions and answers for the session. Offered while *Advisors enabled* is on and an advisor is listed; plan mode keeps it. An advisor on the Claude Code server gets the tools only when it is the first listed there and this chat is on another server; otherwise it answers text-only (see [SETTINGS.md](SETTINGS.md#advisors)). |
 
 ### Questions
 

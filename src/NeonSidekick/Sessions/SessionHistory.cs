@@ -91,6 +91,10 @@ public sealed class StoredHistory
     /// <summary>The profile advisors' threads (2026-10-10, <see cref="Advisors.AdvisorThreads"/>): absent until the first <c>neon_advisor</c> answer.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, List<Advisors.AdvisorPair>>? AdvisorThreads { get; set; }
+
+    /// <summary>The Claude Code server's conversation of each Claude Code advisor's thread (2026-10-10): absent until the first such call.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? AdvisorSessions { get; set; }
 }
 
 /// <summary>A session's plan mode (2026-09-26): the requirement, and the plan's file, title, revision and first save once presented.</summary>
@@ -127,10 +131,10 @@ public static class SessionHistory
     /// screenshot (<see cref="ConversationHistory.ScreenKey"/>) likewise unless <paramref name="keepScreen"/> (<c>Screen capture keep
     /// in sessions</c>, 2026-10-04).
     /// </summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeAdvisorSessionId = claudeAdvisorSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads };
+        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeAdvisorSessionId = claudeAdvisorSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads, AdvisorSessions = advisorSessions };
         foreach (var message in messages)
         {
             document.Messages.Add(Store(message, withThinking, keepCamera, keepScreen));
@@ -146,6 +150,20 @@ public static class SessionHistory
         try
         {
             return JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory)?.AdvisorThreads;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The Claude Code advisors' conversations <paramref name="json"/> stored (2026-10-10); null when it holds none or is not a document.</summary>
+    public static Dictionary<string, string>? AdvisorSessionsOf(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        try
+        {
+            return JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory)?.AdvisorSessions;
         }
         catch (JsonException)
         {

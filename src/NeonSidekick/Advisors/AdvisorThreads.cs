@@ -14,6 +14,49 @@ public sealed class AdvisorThreads
 {
     private readonly object _gate = new();
     private Dictionary<string, List<AdvisorPair>> _threads = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, string> _sessions = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The Claude Code server's conversation for <paramref name="profile"/>'s thread (2026-10-10, a Claude Code advisor with tools):
+    /// minted at its first call, kept with the thread, gone with it.
+    /// </summary>
+    public string SessionOf(string profile)
+    {
+        lock (_gate)
+        {
+            if (!_sessions.TryGetValue(profile, out var id))
+            {
+                _sessions[profile] = id = Guid.NewGuid().ToString("D");
+            }
+
+            return id;
+        }
+    }
+
+    /// <summary>A copy of the Claude Code conversations for the session store; null when there is none.</summary>
+    public Dictionary<string, string>? Sessions()
+    {
+        lock (_gate)
+        {
+            return _sessions.Count == 0 ? null : new Dictionary<string, string>(_sessions, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>The Claude Code conversations a restored session stored, in place of these; null clears.</summary>
+    public void RestoreSessions(IReadOnlyDictionary<string, string>? stored)
+    {
+        lock (_gate)
+        {
+            _sessions = new(StringComparer.OrdinalIgnoreCase);
+            foreach (var (profile, id) in stored ?? new Dictionary<string, string>())
+            {
+                if (!string.IsNullOrWhiteSpace(id))
+                {
+                    _sessions[profile] = id;
+                }
+            }
+        }
+    }
 
     /// <summary>The thread of <paramref name="profile"/>, oldest first; empty when it has none.</summary>
     public IReadOnlyList<AdvisorPair> Of(string profile)
@@ -65,6 +108,7 @@ public sealed class AdvisorThreads
         lock (_gate)
         {
             _threads = new(StringComparer.OrdinalIgnoreCase);
+            _sessions = new(StringComparer.OrdinalIgnoreCase);
         }
     }
 
