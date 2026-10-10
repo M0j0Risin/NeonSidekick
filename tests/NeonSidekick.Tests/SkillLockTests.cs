@@ -112,7 +112,25 @@ public class SkillLockTests : IDisposable
         Assert.Equal("Error: skill 'haiku' is locked by the user; it cannot be changed until they unlock it on /skills. To keep what these turns taught, create a companion skill (a new name) instead", SkillText.Locked("haiku"));
     }
 
-    /// <summary>The Offered tab's version cell (the user's pick): 🔒v4 on a locked skill, the others padded by the lock's cells while any is locked.</summary>
+    /// <summary>A reflection's guard says the lock first (later on 2026-10-09): no "load it first" for a skill the editor would refuse anyway.</summary>
+    [Fact]
+    public void TheReflectionGuard_RefusesALockedSkill_BeforeTheLoadCheck()
+    {
+        Put(SkillScope.Profile, "haiku");
+        Put(SkillScope.Profile, "verse");
+        SkillLock.Set(Folder(SkillScope.Profile, "haiku"), true, At);
+        var guard = new ReflectionWriteGuard(() => _roots, false, ReflectionInstalledPolicy.AllowAndMark);
+
+        Assert.Equal(SkillText.Locked("haiku"), guard.Refusal("haiku", rewrite: true));    // never loaded: the lock, not the load
+        Assert.Equal(SkillText.Locked("haiku"), guard.Refusal("haiku", rewrite: false));   // a description alone too
+        Assert.Equal(SkillText.LoadBeforeRewrite("verse"), guard.Refusal("verse", rewrite: true));
+        Assert.Null(guard.Refusal("verse", rewrite: false));
+
+        SkillLock.Set(Folder(SkillScope.Profile, "haiku"), false, At);
+        Assert.Equal(SkillText.LoadBeforeRewrite("haiku"), guard.Refusal("haiku", rewrite: true));
+    }
+
+    /// <summary>The Offered tab's version cell (the user's pick): 🔒 v4 on a locked skill (the space since 2026-10-09), the others padded by the lock's cells and the space while any is locked.</summary>
     [Fact]
     public void TheVersionCell_LeadsALockedSkillWithTheLock_AndPadsTheOthers()
     {
@@ -124,12 +142,12 @@ public class SkillLockTests : IDisposable
         SkillsFacts Facts(params Skill[] skills) => new(true, skills, [], [], _roots, s => versions.TryGetValue(s.Name, out int v) ? v : null);
 
         var some = Facts(locked, open, external);
-        Assert.Equal("🔒v4", SkillsText.VersionText(some, locked));
-        Assert.Equal("  v1", SkillsText.VersionText(some, open));
-        Assert.Equal("  ", SkillsText.VersionText(some, external));
-        Assert.Equal(4, SkillsText.VersionWidth(some));
-        Assert.Equal("🔒v4  ", SkillsText.VersionCell(some, locked, 4));
-        Assert.Equal("  v1  ", SkillsText.VersionCell(some, open, 4));
+        Assert.Equal("🔒 v4", SkillsText.VersionText(some, locked));
+        Assert.Equal("   v1", SkillsText.VersionText(some, open));
+        Assert.Equal("   ", SkillsText.VersionText(some, external));
+        Assert.Equal(5, SkillsText.VersionWidth(some));
+        Assert.Equal("🔒 v4  ", SkillsText.VersionCell(some, locked, 5));
+        Assert.Equal("   v1  ", SkillsText.VersionCell(some, open, 5));
 
         var none = Facts(open);   // nothing locked: the column as it was
         Assert.Equal("v1", SkillsText.VersionText(none, open));

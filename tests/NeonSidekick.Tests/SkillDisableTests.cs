@@ -173,16 +173,16 @@ public class SkillDisableTests : IDisposable
         SkillsFacts Facts(params Skill[] skills) => new(true, skills, [], [], _roots, s => versions.TryGetValue(s.Name, out int v) ? v : null);
 
         var all = Facts(disabled, both, locked, open);
-        Assert.Equal("⛔v4", SkillsText.VersionText(all, disabled));
-        Assert.Equal("⛔v2", SkillsText.VersionText(all, both));
-        Assert.Equal("🔒v3", SkillsText.VersionText(all, locked));
-        Assert.Equal("  v1", SkillsText.VersionText(all, open));
-        Assert.Equal(4, SkillsText.VersionWidth(all));
-        Assert.Equal("  v1", SkillsText.VersionText(Facts(disabled, open), open));   // a disabled one alone opens the lead too
+        Assert.Equal("⛔ v4", SkillsText.VersionText(all, disabled));
+        Assert.Equal("⛔ v2", SkillsText.VersionText(all, both));
+        Assert.Equal("🔒 v3", SkillsText.VersionText(all, locked));
+        Assert.Equal("   v1", SkillsText.VersionText(all, open));
+        Assert.Equal(5, SkillsText.VersionWidth(all));
+        Assert.Equal("   v1", SkillsText.VersionText(Facts(disabled, open), open));   // a disabled one alone opens the lead too
         Assert.Equal("v1", SkillsText.VersionText(Facts(open), open));
 
         var rows = SkillsText.LoadedRows(Facts(disabled, open));
-        Assert.Equal(Theme.DimMarkup("pdf-tools  profile  ⛔v4  d"), rows[0].Markup);
+        Assert.Equal(Theme.DimMarkup("pdf-tools  profile  ⛔ v4  d"), rows[0].Markup);
         Assert.StartsWith("[", rows[1].Markup, StringComparison.Ordinal);
         Assert.DoesNotContain(Theme.DimMarkup("haiku"), rows[1].Markup);
 

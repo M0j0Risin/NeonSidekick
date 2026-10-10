@@ -70,10 +70,11 @@ public static class SkillsText
 
     /// <summary>
     /// What the version cell says for <paramref name="skill"/> (2026-10-07, the user's pick): its <see cref="VersionLabel"/>, led by the
-    /// lock (<c>🔒v4</c>) when it is locked, and by the lock's two blank cells (<c>  v1</c>) when another listed skill is, so the numbers
+    /// lock (<c>🔒 v4</c>) when it is locked, and by the lock's blank cells (<c>   v1</c>) when another listed skill is, so the numbers
     /// stay in one column; with none locked, the label alone. Empty without a version source. Pinned.
     /// <para>A disabled skill (2026-10-09, the user's pick) leads with <see cref="SkillRecordText.DisabledGlyph"/> in the same place, over
-    /// the lock when it is both (the footer says both); the column's lead is there while any listed skill is either.</para>
+    /// the lock when it is both (the footer says both); the column's lead is there while any listed skill is either. A space between the
+    /// glyph and the number since later that day (the user's ask: <c>⛔ v1</c>, not <c>⛔v1</c>).</para>
     /// </summary>
     public static string VersionText(SkillsFacts facts, Skill skill)
     {
@@ -85,9 +86,9 @@ public static class SkillsText
         }
 
         string lead = !facts.Skills.Any(s => s.Locked || s.Disabled) ? ""
-            : skill.Disabled ? SkillRecordText.DisabledGlyph
-            : skill.Locked ? SkillRecordText.LockGlyph
-            : new string(' ', TextCells.Width(SkillRecordText.LockGlyph));
+            : skill.Disabled ? SkillRecordText.DisabledGlyph + " "
+            : skill.Locked ? SkillRecordText.LockGlyph + " "
+            : new string(' ', TextCells.Width(SkillRecordText.LockGlyph) + 1);
         return lead + VersionLabel(version(skill));
     }
 

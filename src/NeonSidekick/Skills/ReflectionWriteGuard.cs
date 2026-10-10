@@ -10,7 +10,9 @@ namespace NeonSidekick.Skills;
 /// loses what the model never read;</item>
 /// <item>and only while the SKILL.md is what that load served: a turn (or the user) that changed the skill while the reflection ran
 /// would otherwise lose its change to the reflection's stale copy;</item>
-/// <item>nothing at all in a skill installed with <c>/skills add</c> under <see cref="ReflectionInstalledPolicy.ReadOnly"/>.</item>
+/// <item>nothing at all in a skill installed with <c>/skills add</c> under <see cref="ReflectionInstalledPolicy.ReadOnly"/>;</item>
+/// <item>nothing at all in a disabled or locked skill (2026-10-09, <see cref="SkillDisable"/>, <see cref="SkillLock"/>), refused before
+/// the load check with the editor's own sentence, the disable's first when both.</item>
 /// </list>
 /// A description-only update passes the first two (the catalog shows the description). Each refusal is an <c>Error:</c> sentence the
 /// model reads and may act on within <c>Reflection max requests</c>; the load counts by the SKILL.md's SHA-256.
@@ -64,6 +66,13 @@ public sealed class ReflectionWriteGuard
         {
             // Disabled (2026-10-09): said first, not "load it first" — load_skill never serves a disabled skill.
             return SkillText.Disabled(name);
+        }
+
+        if (SkillLock.IsLocked(directory))
+        {
+            // Locked (later on 2026-10-09, the user's call): said first too, so a reflection spends no call on a load the editor would
+            // refuse anyway; the sentence is the editor's own, pointing to a companion skill.
+            return SkillText.Locked(name);
         }
 
         if (_installed == ReflectionInstalledPolicy.ReadOnly && SkillProvenance.Read(directory) is { } origin)
