@@ -16,16 +16,16 @@ public class ProfilesTests : IDisposable
     }
 
     [Theory]
-    [InlineData("default", true)]
+    [InlineData("default", true)]       // an ordinary name since the default became neon (2026-10-09)
     [InlineData("travel", true)]
     [InlineData("Work-2", true)]
     [InlineData("a_b", true)]
-    [InlineData("neon2", true)]        // the sidekick's name with more is fine (2026-09-21)
+    [InlineData("neon2", true)]
     [InlineData("neon_debug", true)]
     [InlineData("neon-test", true)]
-    [InlineData("neon", false)]        // the word alone is the sidekick's (2026-09-21)
-    [InlineData("Neon", false)]
-    [InlineData("NEON", false)]
+    [InlineData("neon", true)]         // the default's own name since 2026-10-09 (refused from 2026-09-21 until then)
+    [InlineData("Neon", true)]
+    [InlineData("NEON", true)]
     [InlineData("", false)]
     [InlineData(null, false)]
     [InlineData("add", false)]
@@ -63,9 +63,8 @@ public class ProfilesTests : IDisposable
     public void Strings_ArePinned()
     {
         Assert.Equal("profiles", Profiles.DirectoryName);
-        Assert.Equal("default", Profiles.DefaultName);
+        Assert.Equal("neon", Profiles.DefaultName);
         Assert.Equal("profile.json", Profiles.FileName);
-        Assert.Equal("neon", Profiles.SidekickName);
         Assert.False(Profiles.IsValidName("edit"));
         Assert.False(Profiles.IsValidName("Reload"));
         Assert.False(Profiles.IsValidName("push"));   // 2026-09-28
@@ -86,23 +85,24 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void List_WithNoProfilesDirectory_IsTheDefaultAlone()
     {
-        Assert.Equal(new[] { "default" }, Profiles.List(_dir));
-        Assert.Equal("default", Profiles.Resolve(_dir, "DEFAULT"));
-        Assert.True(Profiles.Exists(_dir, "default"));
+        Assert.Equal(new[] { "neon" }, Profiles.List(_dir));
+        Assert.Equal("neon", Profiles.Resolve(_dir, "NEON"));
+        Assert.True(Profiles.Exists(_dir, "neon"));
+        Assert.Null(Profiles.Resolve(_dir, "default"));   // the old name is no alias (2026-10-09)
         Assert.Null(Profiles.Resolve(_dir, "work"));
     }
 
     [Fact]
     public void List_DefaultFirst_ThenSortedIgnoringCase_SkippingBadNames()
     {
-        foreach (var name in new[] { "zeta", "Alpha", "default", "bad name", "mid" })
+        foreach (var name in new[] { "zeta", "Alpha", "neon", "default", "bad name", "mid" })
         {
             Directory.CreateDirectory(Path.Combine(_dir, "profiles", name));
         }
 
         File.WriteAllText(Path.Combine(_dir, "profiles", "not-a-dir"), "");   // a file, not a profile
 
-        Assert.Equal(new[] { "default", "Alpha", "mid", "zeta" }, Profiles.List(_dir));
+        Assert.Equal(new[] { "neon", "Alpha", "default", "mid", "zeta" }, Profiles.List(_dir));   // default is an ordinary name now
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public class ProfilesTests : IDisposable
         string json = File.ReadAllText(Path.Combine(dir, Profiles.FileName));
         Assert.Contains("\"LlmModel\": \"seeded\"", json);
         Assert.Contains("\"TtsVoice\": \"bm_george\"", json);
-        Assert.Equal(new[] { "default", "work" }, Profiles.List(_dir));
+        Assert.Equal(new[] { "neon", "work" }, Profiles.List(_dir));
     }
 
     [Fact]
@@ -183,8 +183,8 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void CopySidekickFiles_CopiesThePresentOnes_InOrder_AndNothingElse()
     {
-        Profiles.Create(_dir, "default", new AppSettingsData { LlmModel = "old" });
-        string source = Profiles.Directory(_dir, "default");
+        Profiles.Create(_dir, "neon", new AppSettingsData { LlmModel = "old" });
+        string source = Profiles.Directory(_dir, "neon");
         new MemoryStore(source).Add("They like tea.");
         File.WriteAllText(Path.Combine(source, VocaliaFile.FileName), "Speak like a pirate.");
         File.WriteAllText(Path.Combine(source, PersonaFile.FileName), "You are Rex.");
@@ -210,8 +210,8 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void CopySidekickFiles_WithOnly_TakesJustTheNamedOnes()
     {
-        Profiles.Create(_dir, "default", new AppSettingsData());
-        string source = Profiles.Directory(_dir, "default");
+        Profiles.Create(_dir, "neon", new AppSettingsData());
+        string source = Profiles.Directory(_dir, "neon");
         new MemoryStore(source).Add("They like tea.");
         File.WriteAllText(Path.Combine(source, PersonaFile.FileName), "You are Rex.");
         Profiles.Create(_dir, "work", new AppSettingsData());
@@ -231,7 +231,7 @@ public class ProfilesTests : IDisposable
     {
         Profiles.Create(_dir, "work", new AppSettingsData());
 
-        Assert.Empty(Profiles.CopySidekickFiles(Profiles.Directory(_dir, "default"), _dir, "work"));   // the default's directory does not even exist
+        Assert.Empty(Profiles.CopySidekickFiles(Profiles.Directory(_dir, "neon"), _dir, "work"));   // the default's directory does not even exist
         Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(Profiles.Directory(_dir, "work")).Select(Path.GetFileName));
     }
 
@@ -245,7 +245,7 @@ public class ProfilesTests : IDisposable
         Profiles.Delete(_dir, "work");
 
         Assert.False(Directory.Exists(Profiles.Directory(_dir, "work")));
-        Assert.Equal(new[] { "default" }, Profiles.List(_dir));
+        Assert.Equal(new[] { "neon" }, Profiles.List(_dir));
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public class ProfilesTests : IDisposable
         File.WriteAllText(Path.Combine(dir, "files", MemoryStore.FileName), "not the sidekick's");
 
         Assert.Equal(new[] { PersonaFile.FileName, VocaliaFile.FileName }, Profiles.PresentSidekickFiles(dir));
-        Assert.Empty(Profiles.PresentSidekickFiles(Profiles.Directory(_dir, "default")));
+        Assert.Empty(Profiles.PresentSidekickFiles(Profiles.Directory(_dir, "neon")));
     }
 
     [Fact]
@@ -354,12 +354,12 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void Reset_WithNoDirectory_CreatesItWithTheDefaults()
     {
-        Profiles.Reset(_dir, "default");
+        Profiles.Reset(_dir, "neon");
 
-        string dir = Profiles.Directory(_dir, "default");
+        string dir = Profiles.Directory(_dir, "neon");
         Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(dir).Select(Path.GetFileName));
         Assert.Empty(Directory.GetDirectories(dir));
-        Assert.Equal(new[] { "default" }, Profiles.List(_dir));
+        Assert.Equal(new[] { "neon" }, Profiles.List(_dir));
     }
 
     [Fact]
@@ -394,7 +394,7 @@ public class ProfilesTests : IDisposable
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", WorkingDirectory = @"C:\work-sandbox" });
 
-        Profiles.CopySettings(_dir, "default", "work");
+        Profiles.CopySettings(_dir, "neon", "work");
 
         var work = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(new AppSettingsData().LlmModel, work.LlmModel);
@@ -433,9 +433,9 @@ public class ProfilesTests : IDisposable
     {
         Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model" });
 
-        Profiles.CopySettings(_dir, "work", "default");
+        Profiles.CopySettings(_dir, "work", "neon");
 
-        Assert.Equal("work-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "default")).LlmModel);
+        Assert.Equal("work-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "neon")).LlmModel);
     }
 
     [Fact]
@@ -449,9 +449,10 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void DeleteRefusal_GuardsTheDefaultAndTheCurrent()
     {
-        Assert.Equal(Profiles.DefaultUndeletable, Profiles.DeleteRefusal("Default", "work"));
+        Assert.Equal(Profiles.DefaultUndeletable, Profiles.DeleteRefusal("Neon", "work"));
         Assert.Equal(Profiles.CurrentUndeletable("Work"), Profiles.DeleteRefusal("Work", "work"));
         Assert.Null(Profiles.DeleteRefusal("other", "work"));
+        Assert.Null(Profiles.DeleteRefusal("default", "work"));   // an ordinary name since 2026-10-09
     }
 
     [Fact]
@@ -474,7 +475,7 @@ public class ProfilesTests : IDisposable
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(moved, "persona.md")));
         Assert.Equal("kept", File.ReadAllText(Path.Combine(moved, "files", "doc.txt")));
         Assert.Equal("binned", File.ReadAllText(Path.Combine(moved, "files", ".trash", "old.txt")));
-        Assert.Equal(new[] { "default", "office" }, Profiles.List(_dir));
+        Assert.Equal(new[] { "neon", "office" }, Profiles.List(_dir));
     }
 
     [Fact]
@@ -495,13 +496,13 @@ public class ProfilesTests : IDisposable
         Profiles.Create(_dir, "office", new AppSettingsData());
 
         Assert.Throws<IOException>(() => Profiles.Rename(_dir, "work", "office"));
-        Assert.Equal(new[] { "default", "office", "work" }, Profiles.List(_dir));
+        Assert.Equal(new[] { "neon", "office", "work" }, Profiles.List(_dir));
     }
 
     [Fact]
     public void RenameRefusal_GuardsTheDefaultAndTheCurrent()
     {
-        Assert.Equal(Profiles.DefaultUnrenamable, Profiles.RenameRefusal("Default", "work"));
+        Assert.Equal(Profiles.DefaultUnrenamable, Profiles.RenameRefusal("Neon", "work"));
         Assert.Equal(Profiles.CurrentUnrenamable("Work"), Profiles.RenameRefusal("Work", "work"));
         Assert.Null(Profiles.RenameRefusal("other", "work"));
     }
@@ -509,10 +510,10 @@ public class ProfilesTests : IDisposable
     [Fact]
     public void ResetRefusal_GuardsTheDefaultFromAnotherProfile_Only()
     {
-        Assert.Equal(Profiles.DefaultUnresettable, Profiles.ResetRefusal("Default", "work"));
-        Assert.Null(Profiles.ResetRefusal("DEFAULT", "default"));   // the default resets itself
+        Assert.Equal(Profiles.DefaultUnresettable, Profiles.ResetRefusal("Neon", "work"));
+        Assert.Null(Profiles.ResetRefusal("NEON", "neon"));   // the default resets itself
         Assert.Null(Profiles.ResetRefusal("Work", "work"));         // the loaded one may reset
-        Assert.Null(Profiles.ResetRefusal("work", "default"));      // and any other from anywhere
+        Assert.Null(Profiles.ResetRefusal("work", "neon"));      // and any other from anywhere
     }
     [Fact]
     public void CreateDeleteRename_EachLogOneLine()

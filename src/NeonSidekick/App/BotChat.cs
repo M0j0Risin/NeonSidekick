@@ -131,7 +131,8 @@ public static partial class BotChat
     /// The indices of the <paramref name="names"/> that <paramref name="text"/> names (2026-09-25): whole words,
     /// ignoring case — no letter, digit, <c>_</c> or <c>-</c> either side — so <c>Ada,</c>, <c>Ada's</c> and
     /// <c>@ada</c> name ada and <c>Adam</c> does not. The names are the profiles', what the bots are told to call
-    /// each other; a profile named with a common word (<c>default</c>) can be named by chance. Pure.
+    /// each other; a profile named with a common word can be named by chance — the default profile, <c>neon</c> since 2026-10-09
+    /// (<c>default</c> until then), whenever a line says Neon. Pure.
     /// </summary>
     public static IReadOnlyList<int> Mentioned(string text, IReadOnlyList<string> names)
     {

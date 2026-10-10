@@ -75,31 +75,31 @@ public partial class ChatScreenTests
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
         Assert.DoesNotContain(NeonMarker, SystemText(_chat.Requests[1]));
         Assert.Contains(NeonMarker, SystemText(_chat.Requests[2]));
-        Assert.Contains(BotChat.Rules("ada", ["default"], "the best pizza", BotChat.PronounsLine([("default", BotGender.Female)])), SystemText(_chat.Requests[1]));
+        Assert.Contains(BotChat.Rules("ada", ["neon"], "the best pizza", BotChat.PronounsLine([("neon", BotGender.Female)])), SystemText(_chat.Requests[1]));
 
-        // Each speaker is told the others' pronouns from their first voices (2026-09-25): ada's bm_ is male, default's af_heart female.
+        // Each speaker is told the others' pronouns from their first voices (2026-09-25): ada's bm_ is male, neon's af_heart female.
         Assert.Contains("ada is a man (he/him)", SystemText(_chat.Requests[0]));
-        Assert.DoesNotContain("default is a", SystemText(_chat.Requests[0]));
-        Assert.Contains("default is a woman (she/her)", SystemText(_chat.Requests[1]));
+        Assert.DoesNotContain("neon is a", SystemText(_chat.Requests[0]));
+        Assert.Contains("neon is a woman (she/her)", SystemText(_chat.Requests[1]));
         Assert.DoesNotContain("ada is a", SystemText(_chat.Requests[1]));
 
         // No tools, and each speaker sees the other's line signed and its own as the assistant's.
         Assert.Equal(BotChat.OpeningText(["ada"], "the best pizza"), _chat.Requests[0][^1].Text);
-        Assert.Equal("default: Hello from Neon.", _chat.Requests[1][^1].Text);
+        Assert.Equal("neon: Hello from Neon.", _chat.Requests[1][^1].Text);
         Assert.Equal(ChatRole.Assistant, _chat.Requests[2][^2].Role);
         Assert.Equal("Hello from Neon.", _chat.Requests[2][^2].Text);
         Assert.Equal("ada: Hello from Ada.", _chat.Requests[2][^1].Text);
 
-        Assert.Contains("  · " + BotChat.StartNotice(["default", "ada"], "the best pizza") + "\n", output);
+        Assert.Contains("  · " + BotChat.StartNotice(["neon", "ada"], "the best pizza") + "\n", output);
         // Each reply under its speaker's name (the spinner's frames may sit between the two in the raw output).
-        int neon = output.IndexOf(TranscriptRenderer.SpeakerGlyph + "default\n", StringComparison.Ordinal);
+        int neon = output.IndexOf(TranscriptRenderer.SpeakerGlyph + "neon\n", StringComparison.Ordinal);
         int ada = output.IndexOf(TranscriptRenderer.SpeakerGlyph + "ada\n", StringComparison.Ordinal);
         Assert.True(neon >= 0 && ada > neon);
         Assert.InRange(output.IndexOf("● Hello from Neon.", StringComparison.Ordinal), neon, ada);
         Assert.True(output.IndexOf("● Hello from Ada.", StringComparison.Ordinal) > ada);
         // The first ESC cut neon short, the second ended the chat at ada's turn (the ESC ladder, 2026-09-25).
-        Assert.Contains("  · " + BotChat.CutShortNotice("default") + "\n", output);
-        Assert.True(output.IndexOf(ChatScreen.CancelledNotice, StringComparison.Ordinal) > output.IndexOf(BotChat.CutShortNotice("default"), StringComparison.Ordinal));
+        Assert.Contains("  · " + BotChat.CutShortNotice("neon") + "\n", output);
+        Assert.True(output.IndexOf(ChatScreen.CancelledNotice, StringComparison.Ordinal) > output.IndexOf(BotChat.CutShortNotice("neon"), StringComparison.Ordinal));
         Assert.Contains("  · " + BotChat.StoppedNotice(3) + "\n", output);
 
         // The main conversation is untouched: the bots' lines never reach its history.
@@ -122,9 +122,9 @@ public partial class ChatScreenTests
 
         using var store = OpenSessions();
         var summary = Assert.Single(store.List(10));
-        Assert.Equal(BotChat.SessionTitle(["default", "ada"]), summary.Title);
+        Assert.Equal(BotChat.SessionTitle(["neon", "ada"]), summary.Title);
         var record = store.Load(summary.Id)!;
-        Assert.Equal(new[] { "default: One.", "ada: Two." }, record.Turns.Take(2).Select(t => t.ReplyText));
+        Assert.Equal(new[] { "neon: One.", "ada: Two." }, record.Turns.Take(2).Select(t => t.ReplyText));
         Assert.Contains("ada: Two.", record.HistoryJson, StringComparison.Ordinal);
     }
 
@@ -144,7 +144,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("  · (botchat: zed sits this one out: ", output);
-        Assert.Contains(BotChat.StartNotice(["default", "ada"], "hello there"), output);
+        Assert.Contains(BotChat.StartNotice(["neon", "ada"], "hello there"), output);
         Assert.DoesNotContain("max", SystemText(_chat.Requests[0]));
     }
 
@@ -190,7 +190,7 @@ public partial class ChatScreenTests
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(BotChat.OpeningText(["ada"], "the best pizza"), _chat.Requests[1][^1].Text);
         Assert.DoesNotContain(_chat.Requests.Skip(1), request => request.Any(m => m.Text.Contains("/profile", StringComparison.Ordinal)));
-        Assert.True(output.IndexOf(BotChat.StartNotice(["default", "ada"], "the best pizza"), StringComparison.Ordinal)
+        Assert.True(output.IndexOf(BotChat.StartNotice(["neon", "ada"], "the best pizza"), StringComparison.Ordinal)
             < output.IndexOf(SettingsMenu.SwitchedNotice("work"), StringComparison.Ordinal));
         Assert.Equal("work", _settings.ProfileName);
     }
@@ -240,7 +240,7 @@ public partial class ChatScreenTests
 
         Assert.True(_chat.Requests.Count >= 2);
         Assert.Equal("User: hi bots", _chat.Requests[1][^1].Text.Split("\n\n")[^1]);
-        Assert.Contains("default: Hello from Neon.", _chat.Requests[1][^1].Text);
+        Assert.Contains("neon: Hello from Neon.", _chat.Requests[1][^1].Text);
         Assert.True(output.IndexOf("› hi bots", StringComparison.Ordinal) < output.IndexOf(TranscriptRenderer.SpeakerGlyph + "ada", StringComparison.Ordinal));
         Assert.Empty(_session.History.Messages);   // never the main chat's
     }
@@ -497,7 +497,7 @@ public partial class ChatScreenTests
     [Fact]
     public void BotChatChoices_OfferTheOtherProfiles_AfterTheNamesTyped()
     {
-        var sources = new ChatScreen.ArgumentSources(() => ["default", "ada", "max"], "default", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false));
+        var sources = new ChatScreen.ArgumentSources(() => ["neon", "ada", "max"], "neon", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false));
 
         Assert.Equal(new[] { "ada", "max", BotChat.ResumeSwitch, BotChat.KillSwitch }, ChatScreen.BotChatChoices("", sources).Select(i => i.Text));   // --kill later on 2026-09-29
         Assert.Equal(new[] { "ada max" }, ChatScreen.BotChatChoices("ada ", sources).Select(i => i.Text));   // --resume only first
@@ -539,15 +539,15 @@ public partial class ChatScreenTests
         // The resumed chat's first speaker is ada (default spoke last), shown every line so far, on the saved topic.
         Assert.Equal(5, _chat.Requests.Count);
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[3]));
-        Assert.Contains(BotChat.Rules("ada", ["default"], "pizza", BotChat.PronounsLine([("default", BotGender.Female)])), SystemText(_chat.Requests[3]));
+        Assert.Contains(BotChat.Rules("ada", ["neon"], "pizza", BotChat.PronounsLine([("neon", BotGender.Female)])), SystemText(_chat.Requests[3]));
         Assert.Equal(ChatRole.Assistant, _chat.Requests[3][^2].Role);
         Assert.Equal("Two.", _chat.Requests[3][^2].Text);
-        Assert.Equal("default: Neon", _chat.Requests[3][^1].Text);
+        Assert.Equal("neon: Neon", _chat.Requests[3][^1].Text);
         Assert.Contains(NeonMarker, SystemText(_chat.Requests[4]));
 
         // Stopped, resumed with the replies so far, and the stop counts them all.
         int stopped = output.IndexOf(BotChat.StoppedNotice(3), StringComparison.Ordinal);
-        int resumed = output.IndexOf(BotChat.ResumeNotice(["default", "ada"], "pizza", 3), StringComparison.Ordinal);
+        int resumed = output.IndexOf(BotChat.ResumeNotice(["neon", "ada"], "pizza", 3), StringComparison.Ordinal);
         Assert.True(stopped >= 0 && resumed > stopped, $"stopped {stopped}, resumed {resumed}");
         Assert.True(output.IndexOf(BotChat.StoppedNotice(5), resumed, StringComparison.Ordinal) > resumed);
     }
@@ -576,7 +576,7 @@ public partial class ChatScreenTests
         // One session row holds the turns of both runs.
         using var store = OpenSessions();
         var summary = Assert.Single(store.List(10));
-        Assert.Equal(new[] { "default: One.", "ada: Two", "default: Three" }, store.Load(summary.Id)!.Turns.Select(t => t.ReplyText));
+        Assert.Equal(new[] { "neon: One.", "ada: Two", "neon: Three" }, store.Load(summary.Id)!.Turns.Select(t => t.ReplyText));
     }
 
     [Fact]

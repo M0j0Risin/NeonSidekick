@@ -143,7 +143,7 @@ using var logSinkScope = logSink;
 
 string home = AppSettings.ResolveStorageDirectory(environment.Home);
 
-// The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over, headless, "default", over the
+// The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over, headless, "neon", over the
 // pointer (SidekickOptions.LaunchProfile). A name that is not a profile ends the launch like a bad argument does,
 // before anything is created under the home.
 string? profile = options.LaunchProfile(environment.Profile);

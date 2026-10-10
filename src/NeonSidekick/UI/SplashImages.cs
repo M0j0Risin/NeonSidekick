@@ -219,7 +219,7 @@ public static class SplashImages
         }, directory);
     }
 
-    /// <summary><c>Splash: 3 pictures from D:\…\profiles\default\splash</c> — the Debug line when the profile's folder stands in for the embedded set. Pinned.</summary>
+    /// <summary><c>Splash: 3 pictures from D:\…\profiles\neon\splash</c> — the Debug line when the profile's folder stands in for the embedded set. Pinned.</summary>
     public static string FolderLogLine(int count, string directory)
     {
         ArgumentNullException.ThrowIfNull(directory);

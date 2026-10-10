@@ -99,7 +99,7 @@ What to use instead:
 | `/reasoning [level]` | `NEONSIDEKICK_LLM_REASONING` |
 | `/sampling [field value]` | `NEONSIDEKICK_LLM_SAMPLING`; the profile's saved sampling for the model applies too. |
 | `/cwd [path]` | `--cwd <path>` |
-| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `default`. `add`/`delete`/`rename`/`reset`/`push`/`pull` (and push and pull's sections) need the TUI, or the files under `<home>/profiles`. |
+| `/profile [name]` | `--profile <name>` or `NEONSIDEKICK_PROFILE`; with neither, `neon`. `add`/`delete`/`rename`/`reset`/`push`/`pull` (and push and pull's sections) need the TUI, or the files under `<home>/profiles`. |
 | `/settings`, `//`, `/tools`, `/skills` (the pane, its revert and `/skills purge`; `/skills add` works headless), `/mcp` | Set things up in the TUI beforehand, or edit the profile's `profile.json` / `mcp.json`. A key typed into `profile.json` in plain text (the LLM, Anthropic, OpenAI, Home Assistant or YouTube key) is encrypted the next time the profile loads (DPAPI on Windows, the Keychain on a Mac). Environment variables override some values for one run. |
 | `/remember <text>` | Ask in a message ("Remember that …"); the model has the `save_memory` tool. |
 | `/memory` | Ask the model to recall; to prune or edit, use the TUI or edit `memory.json`. `/memory read-write` / `read-only` / `disabled` need the TUI, or `MemoryMode` in `profile.json`. |
@@ -324,7 +324,7 @@ A folder of documents rather than code:
 
 ## `--profile <name>`: which profile (settings, memory, sessions, allow list)
 
-Without `--profile` or `NEONSIDEKICK_PROFILE`, a headless run loads `default` — never whichever
+Without `--profile` or `NEONSIDEKICK_PROFILE`, a headless run loads `neon` — never whichever
 profile the TUI last switched to.
 
 Loads the named profile for this launch only; `settings.json` is left as it is, so the next
@@ -363,7 +363,7 @@ Failing fast on a typo:
 ```powershell
 "hello" | NeonSidekick.exe --headless --profile wrok
 if ($LASTEXITCODE -eq 2) { Write-Error "No such profile" }
-# Profile "wrok" does not exist. Profiles: default, automation, work.
+# Profile "wrok" does not exist. Profiles: neon, automation, work.
 ```
 
 ---
@@ -727,7 +727,7 @@ Flags beat variables; variables beat the profile's saved values. [ENVIRONMENT.md
 
 | Variable | Use in a headless run |
 |---|---|
-| `NEONSIDEKICK_PROFILE` | The profile, when there is no `--profile`; with neither, `default`. |
+| `NEONSIDEKICK_PROFILE` | The profile, when there is no `--profile`; with neither, `neon`. |
 | `NEONSIDEKICK_HOME` | A whole separate home (its own `settings.json`, profiles, models, llama.cpp runtimes, `mcp.json`, `sql.json`, `oracle.json`, `mysql.json`, `sqlite.json`, `postgres.json`, `unc.json`). |
 | `NEONSIDEKICK_LLM_URL` / `NEONSIDEKICK_LLM_MODEL` | Server and model, when there is no `--url` / `--model`. `embedded` and an embedded model's id run the embedded LLM; `docker:<container>` a chosen Docker container. |
 | `NEONSIDEKICK_EMBEDDED_BACKEND` / `NEONSIDEKICK_EMBEDDED_CONTEXT` | The embedded LLM's llama.cpp build (`auto`, `cuda`, `vulkan`, `cpu`; on a Mac `auto`, `metal`) and context window in tokens (0 to fit the GPU, or 512–262144) for the run. |

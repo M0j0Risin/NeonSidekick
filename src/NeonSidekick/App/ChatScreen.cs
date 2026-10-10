@@ -526,21 +526,18 @@ internal sealed partial class ChatScreen
     public static readonly string ProfileNameError = "Profile name " + Profiles.NameError + ".";
     private const string MaxMemoriesText = "200";
 
-    /// <summary>The window title while the <see cref="Profiles.DefaultName"/> profile is loaded. Pinned.</summary>
-    public const string DefaultWindowTitle = "Neon";
-
     /// <summary>The most cells a window title takes, the ellipsis included.</summary>
     public const int WindowTitleCells = 25;
 
     /// <summary>
-    /// The terminal window's title for the loaded profile: <see cref="DefaultWindowTitle"/> for the
-    /// default profile, else the name itself, cut to <see cref="WindowTitleCells"/> with an
-    /// ellipsis (<see cref="ScreenPane.Fit"/>) when longer. Pinned.
+    /// The terminal window's title for the loaded profile: the name itself, cut to <see cref="WindowTitleCells"/> with an
+    /// ellipsis (<see cref="ScreenPane.Fit"/>) when longer. Pinned. The default profile had its own title, <c>Neon</c>, until
+    /// 2026-10-09, when it became <see cref="Profiles.DefaultName"/> (<c>neon</c>) and took the same path as the rest.
     /// </summary>
     public static string WindowTitle(string profileName)
     {
         ArgumentNullException.ThrowIfNull(profileName);
-        return Profiles.IsDefault(profileName) ? DefaultWindowTitle : ScreenPane.Fit(profileName, WindowTitleCells);
+        return ScreenPane.Fit(profileName, WindowTitleCells);
     }
 
     /// <summary>The pause between silencing the speaker and opening the microphone: its last buffer and the room's reverb.</summary>
@@ -4216,7 +4213,7 @@ internal sealed partial class ChatScreen
                     if (argText.StartsWith(verb.Text + " ", StringComparison.OrdinalIgnoreCase))
                     {
                         // The second level: the verb with each name; rename's new name is free text.
-                        // reset leaves default out unless it is the loaded one (2026-09-22, Profiles.ResetRefusal);
+                        // reset leaves the default profile (neon) out unless it is the loaded one (2026-09-22, Profiles.ResetRefusal);
                         // delete leaves it out always (later that day, the user's call: it can never be deleted),
                         // and so does rename (later still, the user's call: Profiles.RenameRefusal refuses it from any profile).
                         var names = sources.Profiles().Where(name => verb.Text switch

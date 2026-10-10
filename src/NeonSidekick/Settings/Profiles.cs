@@ -15,11 +15,15 @@ namespace NeonSidekick.Settings;
 /// and the status panel always show the name the way the disk does. <see cref="DefaultName"/>
 /// exists logically even when its directory does not: it is always listed, always resolves and
 /// can never be deleted or renamed.</para>
+///
+/// <para>The default is called <c>neon</c> since 2026-10-09 (the user's call): it was <c>default</c> until then, with the
+/// window title (<c>Neon</c>) special-cased over it; now the title and <c>/botchat</c> show it as they show any profile.
+/// No migration and no alias: <c>default</c> is an ordinary name now, and a home from before moves its folder by hand.</para>
 /// </summary>
 public static class Profiles
 {
     public const string DirectoryName = "profiles";
-    public const string DefaultName = "default";
+    public const string DefaultName = "neon";
     public const string FileName = "profile.json";
     public const int MaxNameLength = 32;
 
@@ -47,29 +51,20 @@ public static class Profiles
     /// </summary>
     public static readonly string[] ReservedNames = { "add", "commands", "delete", "edit", "history", "keys", "policestrings", "pull", "push", "reload", "rename", "reset", "servers" };
 
-    /// <summary>
-    /// The sidekick's own name, never a profile's (2026-09-21, the user's call): it is the default
-    /// profile's window title (<c>ChatScreen.DefaultWindowTitle</c>) and the persona's name, so a
-    /// profile called <c>neon</c> would read as the default one. The word alone, whatever the case;
-    /// <c>neon2</c> or <c>neon_debug</c> are fine. Not a <see cref="ReservedNames"/> word: those are
-    /// verbs, and <c>/profile neon</c> must stay a switch to a profile that is not there.
-    /// </summary>
-    public const string SidekickName = "neon";
-
     /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
-    public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not neon, add, delete, edit, pull, push, reload, rename or reset)";
+    public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not add, delete, edit, pull, push, reload, rename or reset)";
 
-    /// <summary>Why <c>default</c> cannot be deleted. Pinned.</summary>
+    /// <summary>Why <c>neon</c> cannot be deleted. Pinned.</summary>
     public const string DefaultUndeletable = "The default profile cannot be deleted.";
 
-    /// <summary>Why <c>default</c> cannot be reset from another profile (2026-09-22). Pinned.</summary>
+    /// <summary>Why <c>neon</c> cannot be reset from another profile (2026-09-22). Pinned.</summary>
     public const string DefaultUnresettable = "The default profile can only be reset while it is loaded.";
 
     /// <summary>Why the loaded profile cannot be deleted. Pinned.</summary>
     public static string CurrentUndeletable(string name) =>
         $"\"{name}\" is the current profile; switch to another (/profile <name>) before deleting it.";
 
-    /// <summary>Why <c>default</c> cannot be renamed. Pinned.</summary>
+    /// <summary>Why <c>neon</c> cannot be renamed. Pinned.</summary>
     public const string DefaultUnrenamable = "The default profile cannot be renamed.";
 
     /// <summary>Why the loaded profile cannot be renamed. Pinned.</summary>
@@ -79,7 +74,7 @@ public static class Profiles
     /// <summary>
     /// Whether <paramref name="name"/> can name a profile: one to <see cref="MaxNameLength"/>
     /// ASCII letters, digits, hyphens or underscores, and not a <see cref="ReservedNames"/> word
-    /// nor <see cref="SidekickName"/> (2026-09-21).
+    /// (<c>neon</c> was refused too from 2026-09-21 until it became <see cref="DefaultName"/> on 2026-10-09).
     /// Nothing that could be a path segment trick, a shell surprise or a non-ASCII directory
     /// (the Vosk path rule is a reminder of what those cost).
     /// </summary>
@@ -98,7 +93,7 @@ public static class Profiles
             }
         }
 
-        return !ReservedNames.Contains(name, StringComparer.OrdinalIgnoreCase) && !NameEquals(name, SidekickName);
+        return !ReservedNames.Contains(name, StringComparer.OrdinalIgnoreCase);
     }
 
     public static bool NameEquals(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
@@ -277,7 +272,7 @@ public static class Profiles
     /// <summary>
     /// Reads a <c>profile.json</c> that is not the loaded one, to edit and <see cref="WriteProfileFile"/>
     /// back (<c>/cmdcopy</c>, 2026-09-21; <c>/profile push|pull</c>'s sections since 2026-10-09, a pull reading its source). A missing file is the compiled defaults: the profile is
-    /// logical, as <c>default</c>'s can be, or was never saved, and that is what loading it would give.
+    /// logical, as <c>neon</c>'s can be, or was never saved, and that is what loading it would give.
     /// A corrupt file, or one that parses to null, <b>throws</b> <see cref="JsonException"/> — the
     /// opposite of <c>AppSettings.Load</c>'s fall-back, because a copy that quietly fell back would
     /// then overwrite the user's file with the defaults plus the copied field. The caller reports.
@@ -337,10 +332,10 @@ public static class Profiles
 
     /// <summary>
     /// Takes the profile's settings back to the compiled defaults: <c>profile.json</c> rewritten (the
-    /// directory created when it was only logical, as <c>default</c>'s can be) and nothing else touched
+    /// directory created when it was only logical, as <c>neon</c>'s can be) and nothing else touched
     /// — since 2026-09-20 (the user's call) the memories, the persona, the operating rules and the
     /// voice directive stay, like the <c>files</c> sandbox always did (every one
-    /// of <see cref="SidekickFiles"/> went until then). No guard: <c>default</c> may be reset, and the
+    /// of <see cref="SidekickFiles"/> went until then). No guard: <c>neon</c> may be reset, and the
     /// caller asks the user first. The loaded profile is reset through
     /// <c>AppSettings.ResetProfileAsync</c>, which flushes its pending save first and reloads.
     /// Since 2026-09-27 (the user's call) the settings that name the user's own setup —
@@ -384,8 +379,8 @@ public static class Profiles
     /// move those. The keys go as stored, protected or not (<see cref="KeepOnReset"/>'s reasoning). A missing source is the
     /// compiled defaults, as loading it would give; a corrupt one <b>throws</b> <see cref="JsonException"/> before anything
     /// is written (<see cref="ReadProfileFile"/>). A corrupt target is what the copy cures: nothing kept from it, logged.
-    /// The target's folder is created when it is only logical, as <c>default</c>'s can be. No guard, like <see cref="Reset"/>:
-    /// any profile may overwrite any other, <c>default</c> included (the user's call); the caller asks first. The loaded
+    /// The target's folder is created when it is only logical, as <c>neon</c>'s can be. No guard, like <see cref="Reset"/>:
+    /// any profile may overwrite any other, <c>neon</c> included (the user's call); the caller asks first. The loaded
     /// profile goes through <c>AppSettings.CopyProfileSettingsAsync</c>, which flushes its pending save first.
     /// Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>; the caller reports.
     /// </summary>

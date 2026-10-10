@@ -28,7 +28,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 | Variable | What it does | Accepts |
 |---|---|---|
 | `NEONSIDEKICK_HOME` | The home folder: settings, profiles, models, llama.cpp, skills and the connection files. | A folder path. Default `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac). |
-| `NEONSIDEKICK_PROFILE` | The profile for this launch (`settings.json` is left alone). An unknown name exits with code 2; `--profile` wins; a headless run with neither loads `default`. | A profile name. |
+| `NEONSIDEKICK_PROFILE` | The profile for this launch (`settings.json` is left alone). An unknown name exits with code 2; `--profile` wins; a headless run with neither loads `neon`. | A profile name. |
 
 ## LLM
 

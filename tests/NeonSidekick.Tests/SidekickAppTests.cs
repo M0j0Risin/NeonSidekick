@@ -1552,7 +1552,7 @@ public partial class SidekickAppTests : IDisposable
     {
         PushLine("/exit");
         await InteractiveAsync();
-        Assert.Equal(new[] { ChatScreen.DefaultWindowTitle }, _titles);
+        Assert.Equal(new[] { ChatScreen.WindowTitle(Profiles.DefaultName) }, _titles);
     }
 
     [Fact]
@@ -2126,7 +2126,7 @@ public partial class SidekickAppTests : IDisposable
         string expected = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
         Assert.StartsWith("  N E O N   S I D E K I C K  v" + SidekickApp.Version + "  ", title);   // the version still shares the line, then the gap
         Assert.EndsWith(SidekickApp.BannerPath(expected, 100 - TextCells.Width("  N E O N   S I D E K I C K  v" + SidekickApp.Version) - SidekickApp.BannerPathGap), title);
-        Assert.EndsWith(@"\profiles\default\files", title);   // the resolved path's tail (the fixture's temp home is long: the head may be cut)
+        Assert.EndsWith(@"\profiles\neon\files", title);   // the resolved path's tail (the fixture's temp home is long: the head may be cut)
         Assert.Equal(100, TextCells.Width(title));            // flush with the right edge
     }
 

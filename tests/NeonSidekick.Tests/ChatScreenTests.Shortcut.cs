@@ -45,15 +45,15 @@ public partial class ChatScreenTests
 
         string exeFolder = Path.GetDirectoryName(ShortcutExe)!;
         string Log(string profile) => " --log " + DesktopShortcut.Quote(Path.Combine(exeFolder, "logs", "neon-" + profile + "-{ts}.log"));
-        string log = Log("default");
+        string log = Log("neon");
         Assert.Equal(
-            ["--profile default", "--profile default" + log, "--profile Jason", "--profile Jason" + Log("Jason")],
+            ["--profile neon", "--profile neon" + log, "--profile Jason", "--profile Jason" + Log("Jason")],
             writer.Written.Select(s => s.Arguments));
         Assert.All(writer.Written, s => Assert.Equal(ShortcutExe, s.Target));
         Assert.All(writer.Written, s => Assert.Equal(exeFolder, s.WorkingDirectory));
         Assert.Equal(Path.Combine(writer.DesktopFolder, "NeonSidekick (Jason).lnk"), writer.Written[2].LinkPath);   // as the profile list spells it
-        Assert.Contains("  · " + ShortcutText.Made(writer.Written[0].LinkPath, "--profile default", replaced: false), output);
-        Assert.Contains("  · " + ShortcutText.Made(writer.Written[1].LinkPath, "--profile default" + log, replaced: true), output);   // the same name: replaced
+        Assert.Contains("  · " + ShortcutText.Made(writer.Written[0].LinkPath, "--profile neon", replaced: false), output);
+        Assert.Contains("  · " + ShortcutText.Made(writer.Written[1].LinkPath, "--profile neon" + log, replaced: true), output);   // the same name: replaced
         Assert.Contains("  · " + ShortcutText.Made(writer.Written[2].LinkPath, "--profile Jason", replaced: false), output);
         Assert.Equal(2, Directory.GetFiles(writer.DesktopFolder).Length);
         Assert.Empty(_chat.Requests);
@@ -71,8 +71,8 @@ public partial class ChatScreenTests
 
         string exeFolder = Path.GetDirectoryName(ShortcutExe)!;
         var spec = Assert.Single(writer.Written);
-        Assert.Equal(Path.Combine(writer.DesktopFolder, "NeonSidekick (default).command"), spec.LinkPath);
-        Assert.Equal("--profile default --log " + DesktopShortcut.ShellQuote(Path.Combine(exeFolder, "logs", "neon-default-{ts}.log")), spec.Arguments);
+        Assert.Equal(Path.Combine(writer.DesktopFolder, "NeonSidekick (neon).command"), spec.LinkPath);
+        Assert.Equal("--profile neon --log " + DesktopShortcut.ShellQuote(Path.Combine(exeFolder, "logs", "neon-neon-{ts}.log")), spec.Arguments);
         Assert.Contains("  · " + ShortcutText.Made(spec.LinkPath, spec.Arguments, replaced: false), output.Replace("\n", "", StringComparison.Ordinal));
     }
 
@@ -148,7 +148,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(OfferWords, output);
         var spec = Assert.Single(writer.Written);
-        Assert.Equal("--profile default", spec.Arguments);
+        Assert.Equal("--profile neon", spec.Arguments);
         Assert.Contains(ShortcutText.Made(spec.LinkPath, spec.Arguments, replaced: false), output.Replace("\n", "", StringComparison.Ordinal));
         Assert.True(_settings.ShortcutOffered);
         using var relaunched = new AppSettings(_dir);
@@ -169,8 +169,8 @@ public partial class ChatScreenTests
         await RunAsync();
 
         var spec = Assert.Single(writer.Written);
-        string log = Path.Combine(Path.GetDirectoryName(ShortcutExe)!, "logs", "neon-default-{ts}.log");
-        Assert.Equal("--profile default --log " + DesktopShortcut.Quote(log), spec.Arguments);
+        string log = Path.Combine(Path.GetDirectoryName(ShortcutExe)!, "logs", "neon-neon-{ts}.log");
+        Assert.Equal("--profile neon --log " + DesktopShortcut.Quote(log), spec.Arguments);
         Assert.True(_settings.ShortcutOffered);
     }
 

@@ -35,7 +35,7 @@ internal static class HelpLocation
     /// What an empty working directory stands for in a default (<see cref="Default"/>): the profile's own folder is not
     /// known to the manual, and a made-up path would read as a real one.
     /// </summary>
-    private const string ProfilePlaceholder = @"C:\neon-help\profiles\default";
+    private const string ProfilePlaceholder = @"C:\neon-help\profiles\neon";
 
     private static readonly Lazy<IReadOnlyList<HelpRow>> s_rows = new(BuildRows);
 

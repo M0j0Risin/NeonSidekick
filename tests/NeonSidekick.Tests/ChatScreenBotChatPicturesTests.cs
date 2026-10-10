@@ -110,7 +110,7 @@ public partial class ChatScreenTests
         var ada = _chat.Requests[2];
         Assert.Contains(AdaMarker, SystemText(ada));
         Assert.Equal(1, ImagesIn(ada[^1]));
-        Assert.EndsWith("the picture of default's reply.)", ada[^1].Text, StringComparison.Ordinal);
+        Assert.EndsWith("the picture of neon's reply.)", ada[^1].Text, StringComparison.Ordinal);
         var neon = _chat.Requests[4];
         Assert.Equal(2, ImagesIn(neon[^1]));
         Assert.EndsWith("the picture of your reply, the picture of ada's reply.)", neon[^1].Text, StringComparison.Ordinal);
@@ -155,7 +155,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(1, ImagesIn(_chat.Requests[2][^1]));
-        Assert.EndsWith("default's picture.)", _chat.Requests[2][^1].Text, StringComparison.Ordinal);
+        Assert.EndsWith("neon's picture.)", _chat.Requests[2][^1].Text, StringComparison.Ordinal);
         Assert.Equal(0, ImagesIn(_chat.Requests[3][^1]));
     }
 
@@ -194,18 +194,18 @@ public partial class ChatScreenTests
         // The second request is the image prompt's: the family's style and the reply, no tools; the bots get none either.
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal(BotChat.ImagePromptInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));
-        Assert.Equal(BotChat.ImagePromptRequest("default", DogReply, ""), _chat.Requests[1][^1].Text);
+        Assert.Equal(BotChat.ImagePromptRequest("neon", DogReply, ""), _chat.Requests[1][^1].Text);
         Assert.All(_chat.Options, options => Assert.Empty(ToolsOf(options)));
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
 
         // The cleaned prompt reaches ComfyUI; the reply was held (later on 2026-09-25): the name, then the picture, then the words.
         Assert.Contains("\"text\":\"a dog surfing a wave, sunny", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
-        int name = output.IndexOf(TranscriptRenderer.SpeakerGlyph + "default\n", StringComparison.Ordinal);
+        int name = output.IndexOf(TranscriptRenderer.SpeakerGlyph + "neon\n", StringComparison.Ordinal);
         int picture = output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", StringComparison.Ordinal);
         int words = output.IndexOf("● " + DogReply, StringComparison.Ordinal);
         Assert.True(name >= 0 && picture > name && words > picture, $"name {name}, picture {picture}, words {words}");
-        Assert.Contains(BotChat.ThinkingSpinner("default"), output);
-        Assert.DoesNotContain(BotChat.PictureNotice("default"), output);
+        Assert.Contains(BotChat.ThinkingSpinner("neon"), output);
+        Assert.DoesNotContain(BotChat.PictureNotice("neon"), output);
         // ESC over ada's unseen reply stops the chat.
         Assert.Contains("  · " + ChatScreen.CancelledNotice + "\n", output);
         Assert.Contains(BotChat.StoppedNotice(1), output);
@@ -251,7 +251,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(5, _chat.Requests.Count);
         Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
-        int label = output.IndexOf(BotChat.PictureNotice("default"), StringComparison.Ordinal);
+        int label = output.IndexOf(BotChat.PictureNotice("neon"), StringComparison.Ordinal);
         Assert.True(label >= 0);
         Assert.True(output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
         Assert.Contains(BotChat.NoPromptNotice, output);
@@ -438,7 +438,7 @@ public partial class ChatScreenTests
 
         // The first ESC cuts neon short over its unseen reply, the second ends the chat as ada's turn opens (2026-09-25).
         Assert.Single(_chat.Requests);
-        Assert.Contains("  · " + BotChat.CutShortNotice("default") + "\n", output);
+        Assert.Contains("  · " + BotChat.CutShortNotice("neon") + "\n", output);
         Assert.Contains("  · " + ChatScreen.CancelledNotice + "\n", output);
         Assert.Contains(BotChat.StoppedNotice(0), output);
         Assert.DoesNotContain("● I once saw", output);
@@ -476,7 +476,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(5, _chat.Requests.Count);
         Assert.Equal(BotChat.ImagePromptInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));   // nothing to rework yet
-        Assert.Contains("You may instead rework the chat's latest picture (the picture of default's reply)", SystemText(_chat.Requests[3]));
+        Assert.Contains("You may instead rework the chat's latest picture (the picture of neon's reply)", SystemText(_chat.Requests[3]));
         var prompts = stub.Requests.Where(r => r.Uri.AbsolutePath == "/prompt").ToList();
         Assert.Equal(2, prompts.Count);
         Assert.Contains("\"text\":\"a dog surfing a wave", prompts[0].Body!);
@@ -636,7 +636,7 @@ public partial class ChatScreenTests
             NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
         }
 
-        string warning = BotChat.UnnamedWorkflowLogLine("default", "other-t2i");
+        string warning = BotChat.UnnamedWorkflowLogLine("neon", "other-t2i");
         Assert.Equal(drawn, warnings.Contains(warning));
         Assert.Equal(drawn ? 1 : 0, stub.Requests.Count(r => r.Uri.AbsolutePath == "/prompt"));
         Assert.Equal(!drawn, output.Contains(BotChat.NoPromptNotice, StringComparison.Ordinal));
@@ -670,7 +670,7 @@ public partial class ChatScreenTests
         string next = Assert.Single(ToolsOf(_chat.Options[2])).Description!;
         Assert.Contains("hatter", next);
         Assert.DoesNotContain("other-t2i", next);
-        Assert.EndsWith(BotChat.ReworkCaption(["hatter"], [new ReworkPicture(1, "default", true, Path.Combine(ComfyImages, "pony-7.png"))]), _chat.Requests[2][^1].Text, StringComparison.Ordinal);
+        Assert.EndsWith(BotChat.ReworkCaption(["hatter"], [new ReworkPicture(1, "neon", true, Path.Combine(ComfyImages, "pony-7.png"))]), _chat.Requests[2][^1].Text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1122,14 +1122,14 @@ public partial class ChatScreenTests
         // Neon's words, then the promised-picture request (no tools), then ada; one picture, under the words.
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal(BotChat.PromisedPictureInstruction(PonyWorkflow), SystemText(_chat.Requests[1]));
-        Assert.Equal(BotChat.ImagePromptRequest("default", SketchReply, ""), _chat.Requests[1][^1].Text);
+        Assert.Equal(BotChat.ImagePromptRequest("neon", SketchReply, ""), _chat.Requests[1][^1].Text);
         Assert.Empty(ToolsOf(_chat.Options[1]));
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[2]));
         Assert.Contains("\"text\":\"a dog surfing a big wave", stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!);
         int words = output.IndexOf(SketchReply, StringComparison.Ordinal);
         int picture = output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", StringComparison.Ordinal);
         Assert.True(words >= 0 && picture > words, $"words {words}, picture {picture}");
-        Assert.DoesNotContain(BotChat.PictureNotice("default"), output);
+        Assert.DoesNotContain(BotChat.PictureNotice("neon"), output);
     }
 
     /// <summary>A NONE, or an empty answer (pinned at the second 2026-10-04 review), is no picture and no notice.</summary>
@@ -1254,7 +1254,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Single(stub.Requests, r => r.Uri.AbsolutePath == "/prompt");
-        int label = output.IndexOf(BotChat.PictureNotice("default"), StringComparison.Ordinal);
+        int label = output.IndexOf(BotChat.PictureNotice("neon"), StringComparison.Ordinal);
         Assert.True(label >= 0);
         Assert.True(output.IndexOf(ComfyText.TextToImageGlyph + "generated 1 picture with pony", label, StringComparison.Ordinal) > label);
     }

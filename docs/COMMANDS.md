@@ -435,10 +435,10 @@ When the message is sent, the picture is saved at its full size in *Pasted image
 
 ### Profiles
 
-* A name is 1 to 32 letters, digits, `-` or `_`, and can't be `neon` or one of the verbs.
-* A name starting with `_` is temporary: left off the picker and the name list (unless loaded), and the next launch opens `default` (the profile is kept). `/profile _name` still switches to one.
-* `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch without changing the next launch's. An unknown name exits with code 2; a headless run with neither opens `default`.
-* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude Code executable, Obsidian vault, ComfyUI URL, Home Assistant URL, Home Assistant API key and YouTube API key; `--all` resets those too. `default` can only be reset while loaded.
+* A name is 1 to 32 letters, digits, `-` or `_`, and can't be one of the verbs. The default profile is `neon` (it was `default` until 2026-10-09).
+* A name starting with `_` is temporary: left off the picker and the name list (unless loaded), and the next launch opens `neon` (the profile is kept). `/profile _name` still switches to one.
+* `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch without changing the next launch's. An unknown name exits with code 2; a headless run with neither opens `neon`.
+* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude Code executable, Obsidian vault, ComfyUI URL, Home Assistant URL, Home Assistant API key and YouTube API key; `--all` resets those too. `neon` can only be reset while loaded.
 * `push <name>` copies the loaded profile's settings over another's; `pull <name>` the other way. Both ask first. Only `profile.json` is copied (the target keeps its working directory); a pull clears the conversation.
 * The API keys in `profile.json` are encrypted (DPAPI on Windows, the Keychain on a Mac); a key typed into the file by hand is encrypted at the next load. Only the same user on the same machine can read them.
 

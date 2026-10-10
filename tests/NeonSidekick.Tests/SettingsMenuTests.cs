@@ -2987,9 +2987,9 @@ public partial class SettingsMenuTests : IDisposable
     {
         Assert.Equal(@"Profile                                  [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work"));
         Assert.Equal(@"Profile                                  [#EFE6FF]p[/][#9A8BB8] (D:\h[[x]]\profiles\p)[/]", SettingsMenu.ProfileLabel("p", @"D:\h[x]\profiles\p"));   // the path escaped
-        Assert.Equal("profiles: default (current), work", SettingsMenu.ProfileListLine(new[] { "default", "work" }, "default"));
-        Assert.Equal("profiles: default, work (current)", SettingsMenu.ProfileListLine(new[] { "default", "work" }, "Work"));
-        Assert.Equal("(🪪 already on profile \"default\")", SettingsMenu.AlreadyCurrentNotice("default"));
+        Assert.Equal("profiles: neon (current), work", SettingsMenu.ProfileListLine(new[] { "neon", "work" }, "neon"));
+        Assert.Equal("profiles: neon, work (current)", SettingsMenu.ProfileListLine(new[] { "neon", "work" }, "Work"));
+        Assert.Equal("(🪪 already on profile \"neon\")", SettingsMenu.AlreadyCurrentNotice("neon"));
         Assert.Equal("(🪪 switched to profile \"work\"; conversation cleared)", SettingsMenu.SwitchedNotice("work"));
         Assert.Equal("Profile", SettingsMenu.FieldName(SettingsField.Profile));
         Assert.Equal("", SettingsMenu.FieldValue(SettingsField.Profile, new AppSettingsData(), _settings.ProfileDirectory));
@@ -3080,7 +3080,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(await menu.PickProfileAsync(CancellationToken.None));
 
-        Assert.Contains("  · profiles: default (current), work", plain.Output);
+        Assert.Contains("  · profiles: neon (current), work", plain.Output);
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
     }
     // ── Working directory ───────────────────────────────────────────────────
@@ -3276,8 +3276,8 @@ public partial class SettingsMenuTests : IDisposable
         // General: its rows in their own order (five runs since 2026-10-01, the user's call: who and where, the input line, the transcript, the screen, the outside apps; Keep command history under Command typo intercept, 2026-09-25; Mouse in menus gone, 2026-09-21; Draft editor last, 2026-09-19; Show toolbar after Show working directory, 2026-09-21) (the six web rows moved to the Web tab and the two /tree rows to Files, 2026-09-15; Transcript markdown and Paste preview lines, 2026-09-16; the @-mention folder mode to Files, 2026-09-17; the two line switches, Welcome splash, then Show working directory last, and the queue's two rows under Working directory, 2026-09-18), padded to the tab's own column (25), nothing of the other tabs.
         string cwd = SettingsMenu.DefaultWorkingDirectoryLabel(_settings.ProfileDirectory);
         Assert.StartsWith("(", cwd);
-        Assert.EndsWith(@"\profiles\default\files)", cwd);
-        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 36\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
+        Assert.EndsWith(@"\profiles\neon\files)", cwd);
+        Assert.Contains(Rule(240) + "\n" + Titled(Strip) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  New profile mode             basic\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue messages               on\n  Queue cancel mode            empty\n  Keep command history         on\n  Command typo intercept       on\n  Hide /exit autocomplete      on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        collider\n  Themed background            on\n  Themed external windows      on\n  Welcome splash               fullsize\n  Show header                  on\n  Working directory in header  off\n  Show toolbar                 10 of 36\n  Show performance bar         CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Menus max height             full-screen\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240) + Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n", Output);
         Assert.DoesNotContain("File /tree max length", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3391,7 +3391,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("read-only", _settings.Current.MemoryMode);
         Assert.Contains("\n" + Titled(Breadcrumb("Memory mode")) + "\n \n▸ read-write  " + MemoryMode.Describe("read-write") + "\n  read-only   " + MemoryMode.Describe("read-only") + "\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory mode: read-only\n" + MenuLayout.Heading("Who and where", 240) + "\n  Profile                      default (", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Memory mode: read-only\n" + MenuLayout.Heading("Who and where", 240) + "\n  Profile                      neon (", Output);
         Assert.Contains("\n▸ Memory mode                  read-only\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -3673,8 +3673,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        Assert.Contains(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n▸ default\n  work\n" + Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      default (", Output);
+        Assert.Contains(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n▸ neon\n  work\n" + Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n  · " + SettingsMenu.UnchangedNotice + "\n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

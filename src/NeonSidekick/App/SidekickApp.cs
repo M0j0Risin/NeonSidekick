@@ -2219,7 +2219,7 @@ public sealed class SidekickApp
 
     /// <summary>
     /// <c>NeonSidekick 0.2.0 (native, .NET 10.0.0, x64, Microsoft Windows 10.0.26200), mode interactive,
-    /// flags --cwd D:\x, home C:\…\.neonsidekick, profile default, console 240×60</c>; without a value
+    /// flags --cwd D:\x, home C:\…\.neonsidekick, profile neon, console 240×60</c>; without a value
     /// flag the <c>flags</c> part reads <c>no flags</c>.
     /// </summary>
     public static string StartupLogLine(AboutFacts facts, SidekickOptions options, string profile, int width, int height)

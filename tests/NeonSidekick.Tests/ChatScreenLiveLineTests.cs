@@ -160,9 +160,9 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal(3, _chat.Requests.Count);
-        Assert.Equal("default: Neon", _chat.Requests[1][^1].Text);   // the cut reply's words stay in the chat
+        Assert.Equal("neon: Neon", _chat.Requests[1][^1].Text);   // the cut reply's words stay in the chat
         Assert.Equal("ada: Ada", _chat.Requests[2][^1].Text);
-        Assert.Contains("  · " + BotChat.CutShortNotice("default") + "\n", output);
+        Assert.Contains("  · " + BotChat.CutShortNotice("neon") + "\n", output);
         Assert.Contains("  · " + BotChat.CutShortNotice("ada") + "\n", output);
         Assert.Contains("  · " + BotChat.StoppedNotice(3) + "\n", output);
     }

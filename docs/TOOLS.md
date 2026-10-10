@@ -889,7 +889,7 @@ Runs commands on your machine, starting in the working directory (`workdir` pick
 * `--headless` has no approval pane, so under `ask` only allow-listed commands run; the model is told to say what couldn't run.
 * If any command was refused, the run ends with `[notice] N commands were not run: …` and **exit code 3**. 0 means nothing was refused; 2 means a bad argument or unknown profile.
 * `--yolo` (or `NEONSIDEKICK_COMMAND_POLICY=yolo`; the flag wins) allows every command for one launch, never saved. The path police still applies unless `--no-police` (or `NEONSIDEKICK_SHELL_POLICE=off`) lifts it; together they leave no guard at all.
-* A headless run loads `default`, not the TUI's last profile; `--profile <name>` (or `NEONSIDEKICK_PROFILE`) names another for this launch only.
+* A headless run loads `neon`, not the TUI's last profile; `--profile <name>` (or `NEONSIDEKICK_PROFILE`) names another for this launch only.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --yolo --cwd D:\Repo\MyApp

@@ -931,7 +931,7 @@ public class AppSettingsTests : IDisposable
         }
 
         Assert.Contains(AppSettings.MissingProfileWarning("ghost"), warnings);
-        Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(Path.Combine(_dir, AppSettings.FileName)));
+        Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(Path.Combine(_dir, AppSettings.FileName)));
     }
 
     [Fact]
@@ -986,7 +986,7 @@ public class AppSettingsTests : IDisposable
     public async Task ShortcutOffered_FalseUntilMarked_ThenKept_AcrossALaunchAndASwitch()
     {
         Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName), "{ \"SchemaVersion\": 2, \"Profile\": \"default\" }");
+        File.WriteAllText(Path.Combine(_dir, AppSettings.FileName), "{ \"SchemaVersion\": 2, \"Profile\": \"neon\" }");
         Profiles.Create(_dir, "work", new AppSettingsData());
         using (var settings = new AppSettings(_dir))
         {
@@ -994,7 +994,7 @@ public class AppSettingsTests : IDisposable
             settings.MarkShortcutOffered();
             Assert.True(settings.ShortcutOffered);
             Assert.Contains("\"ShortcutOffered\": true", File.ReadAllText(settings.PointerPath));
-            Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+            Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
 
             await settings.SwitchProfileAsync("work");
             Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(settings.PointerPath));
@@ -1030,7 +1030,7 @@ public class AppSettingsTests : IDisposable
         {
             Assert.False(settings.ShortcutOffered);
             settings.MarkShortcutOffered();
-            Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+            Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
         }
 
         using var overridden = new AppSettings(_dir, profileOverride: "work");
@@ -1057,7 +1057,7 @@ public class AppSettingsTests : IDisposable
         {
             using var relaunched = new AppSettings(_dir);
             Assert.Equal(Profiles.DefaultName, relaunched.ProfileName);
-            Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(relaunched.PointerPath));
+            Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(relaunched.PointerPath));
 
             // Kept, and a switch still lands in it with its settings.
             Assert.True(Profiles.Exists(_dir, "_test"));
@@ -1070,7 +1070,7 @@ public class AppSettingsTests : IDisposable
         }
 
         Assert.Contains(AppSettings.TemporaryProfileNotice("_test"), notes);
-        Assert.Equal("Profile \"_test\" is temporary (starts with _); loading default.", AppSettings.TemporaryProfileNotice("_test"));
+        Assert.Equal("Profile \"_test\" is temporary (starts with _); loading neon.", AppSettings.TemporaryProfileNotice("_test"));
     }
 
     /// <summary>
@@ -1121,7 +1121,7 @@ public class AppSettingsTests : IDisposable
         using var settings = new AppSettings(_dir, "work");
 
         Assert.Equal("work", settings.ProfileName);
-        Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+        Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
     }
 
     /// <summary>What a headless run with no profile named hands over (2026-09-26): "default" loads, the pointer stays put.</summary>
@@ -1148,7 +1148,7 @@ public class AppSettingsTests : IDisposable
         using var settings = new AppSettings(_dir, Profiles.DefaultName);
 
         Assert.Equal(Profiles.DefaultName, settings.ProfileName);
-        Assert.Contains("\"Profile\": \"default\"", File.ReadAllText(settings.PointerPath));
+        Assert.Contains("\"Profile\": \"neon\"", File.ReadAllText(settings.PointerPath));
     }
 
     /// <summary>A temporary profile named on purpose loads; the redirect is for the pointer, not for asking.</summary>
@@ -1173,7 +1173,7 @@ public class AppSettingsTests : IDisposable
         var ex = Assert.Throws<ArgumentException>(() => new AppSettings(_dir, name));
 
         Assert.StartsWith(AppSettings.UnknownProfileMessage(name, Profiles.List(_dir)), ex.Message);
-        Assert.Contains("default, work", ex.Message);
+        Assert.Contains("neon, work", ex.Message);
         Assert.False(File.Exists(Path.Combine(_dir, AppSettings.FileName)));   // nothing written for a bad name
     }
 
