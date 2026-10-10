@@ -9,7 +9,7 @@ public sealed record CompletionItem(string Text, string Note);
 /// <summary>
 /// What the argument source answers for a command's argument (2026-09-17): a word list
 /// (<paramref name="Words"/>, drawn with their notes, narrowed by the source) — or, for a command
-/// whose argument is a sandbox path (<c>/speak</c>), the <c>@</c>-mention shape:
+/// whose argument is a sandbox path (<c>/read</c>), the <c>@</c>-mention shape:
 /// <paramref name="Paths"/> as <c>WorkingDirectory.Complete</c> lists them (folders first, a
 /// trailing <c>/</c>, the folder-mode rules on a pick) and <paramref name="Truncated"/> when a
 /// cap cut them. <see cref="IsPathList"/> tells the two apart; <see cref="None"/> opens nothing.

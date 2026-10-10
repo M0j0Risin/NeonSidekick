@@ -2854,7 +2854,7 @@ public class InputLineTests : IDisposable
     /// <summary>
     /// A stand-in for the app's argument table: the skills after /skill, on | off after /tts, the profile
     /// names and verbs (with a delete level) after /profile, the timers after /timer; narrowed as the app does.
-    /// After /speak the path shape (2026-09-17): the mention <see cref="Tree"/>, as <c>ChatScreen.ArgumentPaths</c>
+    /// After /read the path shape (2026-09-17): the mention <see cref="Tree"/>, as <c>ChatScreen.ArgumentPaths</c>
     /// answers it — nothing after a trailing space, <c>Truncated</c> for the <c>trunc</c> query.
     /// </summary>
     private static ArgumentList Arguments(string command, string argText)
@@ -2870,7 +2870,7 @@ public class InputLineTests : IDisposable
             };
         }
 
-        if (command.Equals("/speak", StringComparison.OrdinalIgnoreCase))
+        if (command.Equals("/read", StringComparison.OrdinalIgnoreCase))
         {
             if (argText.Length > 0 && char.IsWhiteSpace(argText[^1]))
             {
@@ -3018,23 +3018,23 @@ public class InputLineTests : IDisposable
         Assert.Contains("b", asked);
     }
 
-    /// <summary>A command whose argument is a path of its own (/speak, /view, /print) keeps its file list: an @ there is no mention (2026-09-30).</summary>
+    /// <summary>A command whose argument is a path of its own (/read, /view, /print) keeps its file list: an @ there is no mention (2026-09-30).</summary>
     [Fact]
     public async Task Mentions_InAPathCommand_StayTheArgumentList()
     {
         var (line, keys, pane, asked) = WordLine();
-        line.PathArgument = command => command.Equals("/speak", StringComparison.OrdinalIgnoreCase);
-        keys.Push(Chars("/speak @b"));
+        line.PathArgument = command => command.Equals("/read", StringComparison.OrdinalIgnoreCase);
+        keys.Push(Chars("/read @b"));
         keys.OnWait = () =>
         {
             keys.OnWait = null;
-            Assert.False(pane.OverlayOpen);   // /speak's own list has no "@b"
+            Assert.False(pane.OverlayOpen);   // /read's own list has no "@b"
             keys.Push(Keys.Enter);
         };
 
         var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
 
-        Assert.Equal("/speak @b", submitted.Text);
+        Assert.Equal("/read @b", submitted.Text);
         Assert.Empty(asked);   // the @ tree never asked
     }
 
@@ -3723,14 +3723,14 @@ public class InputLineTests : IDisposable
         Assert.Equal("/timer stop the big pot", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply)).Text);
     }
 
-    // ── The path argument list (/speak, 2026-09-17) ─────────────────────────
+    // ── The path argument list (/read, 2026-09-17) ─────────────────────────
 
     [Fact]
     public async Task Arguments_APathList_IsTheMentionShape_AFolderRemains_AndAFileApplies()
     {
         var (line, keys, pane, _) = WordLine();
         int waits = 0;
-        keys.Push(Chars("/speak "));
+        keys.Push(Chars("/read "));
         keys.OnWait = () =>
         {
             switch (waits++)
@@ -3762,7 +3762,7 @@ public class InputLineTests : IDisposable
 
         var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Remain));
 
-        Assert.Equal("/speak test/thing.txt", submitted.Text);
+        Assert.Equal("/read test/thing.txt", submitted.Text);
     }
 
     /// <summary>/cwd's folders (2026-10-05) end in '\': under Remain a pick is a folder the list stays on, under Apply it takes a space.</summary>
@@ -3824,15 +3824,15 @@ public class InputLineTests : IDisposable
     {
         var (line, keys, pane, _) = WordLine();
         int waits = 0;
-        keys.Push(Chars("/speak t")).Push(Keys.Enter);   // test/ is the first row; under Apply it is written with a space
+        keys.Push(Chars("/read t")).Push(Keys.Enter);   // test/ is the first row; under Apply it is written with a space
         keys.OnWait = () =>
         {
             switch (waits++)
             {
                 case 0:
-                    // "/speak test/ " on the line: the trailing space ends the argument, no list.
+                    // "/read test/ " on the line: the trailing space ends the argument, no list.
                     Assert.False(pane.OverlayOpen);
-                    keys.Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace);   // back to "/speak "
+                    keys.Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace);   // back to "/read "
                     keys.Push(Chars("trunc"));
                     break;
                 case 1:
@@ -3850,7 +3850,7 @@ public class InputLineTests : IDisposable
 
         var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
 
-        Assert.Equal("/speak trunc", submitted.Text);
+        Assert.Equal("/read trunc", submitted.Text);
     }
 
     /// <summary>Home and End go to the cursor's line of a multi-line draft, and pressed again to the whole draft's ends (2026-10-04).</summary>

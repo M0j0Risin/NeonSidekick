@@ -4,10 +4,10 @@ using NeonSidekick.Speech;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// The last <c>/speak</c> reading (2026-09-17): the file, its text split into the sentences the
+/// The last <c>/read</c> reading (2026-09-17): the file, its text split into the sentences the
 /// speech chunks it into, the sentence the current playback started at and its speaker — so the
-/// hint row can say where the reading is (<see cref="StatusLine"/>), a bare <c>/speak</c> can
-/// resume (<see cref="Resume"/>) and <c>/speak &lt;n&gt;</c> can seek.
+/// hint row can say where the reading is (<see cref="StatusLine"/>), a bare <c>/read</c> can
+/// resume (<see cref="Resume"/>) and <c>/read &lt;n&gt;</c> can seek.
 ///
 /// <para>The unit is the sentence because that is what the audio path can know: the speaker
 /// records each sentence's byte range and the device reports what it still owes, so the play
@@ -17,7 +17,7 @@ namespace NeonSidekick.App;
 /// device buffer was cleared).</para>
 ///
 /// <para>The screen keeps one instance across turns (the file is remembered until another
-/// <c>/speak &lt;file&gt;</c>, <c>/clear</c>, <c>/new</c>, a profile switch or a <c>/cwd</c> change)
+/// <c>/read &lt;file&gt;</c>, <c>/clear</c>, <c>/new</c>, a profile switch or a <c>/cwd</c> change)
 /// and decides itself whether the status is on the hint row. <see cref="StatusLine"/> reads the
 /// speaker's counters alone, so the pane's tick may call it from the timer thread.</para>
 /// </summary>
@@ -46,7 +46,7 @@ internal sealed class SpeakReading
     /// <summary>The read was cut at the read cap (<c>ReadResult.Truncated</c>): the block gets the cut notice on every start.</summary>
     public bool Cut { get; init; }
 
-    /// <summary>What the text is: a file (<c>/speak</c>, resumable) or a typed line (<c>/echo</c>, 2026-09-17: the same block and voice, its own wording on the hint row, never resumed).</summary>
+    /// <summary>What the text is: a file (<c>/read</c>, resumable) or a typed line (<c>/echo</c>, 2026-09-17: the same block and voice, its own wording on the hint row, never resumed).</summary>
     public enum Kind
     {
         File,
@@ -64,7 +64,7 @@ internal sealed class SpeakReading
     /// <summary>Audio is still owed: the reading is playing under the input line.</summary>
     public bool Playing => Speaker is { Completion.IsCompleted: false };
 
-    /// <summary>The playback ran to its end unstopped — or never played (speech off): a bare <c>/speak</c> starts at the top again.</summary>
+    /// <summary>The playback ran to its end unstopped — or never played (speech off): a bare <c>/read</c> starts at the top again.</summary>
     public bool Done => Speaker is null || (Speaker.Completion.IsCompleted && !Speaker.StoppedEarly);
 
     /// <summary>
@@ -91,7 +91,7 @@ internal sealed class SpeakReading
         }
     }
 
-    /// <summary>Where a bare <c>/speak</c> starts: the stopped sentence again from its start, the top after a full read.</summary>
+    /// <summary>Where a bare <c>/read</c> starts: the stopped sentence again from its start, the top after a full read.</summary>
     public int Resume => Done ? 1 : Position;
 
     /// <summary>A playback began at <paramref name="from"/> with <paramref name="speaker"/> (null with speech off).</summary>

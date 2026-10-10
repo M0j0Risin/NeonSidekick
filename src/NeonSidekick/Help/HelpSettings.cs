@@ -27,7 +27,7 @@ public static class HelpSettings
         SettingsField.LlmReasoning => "How hard the model thinks, sent with every request: `none` (thinking off), `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list.",
         SettingsField.LlmRequestTimeoutSeconds => "The longest one HTTP request may take (up to 3600).",
         SettingsField.LlmTurnTimeoutSeconds => "The longest one whole turn may take, every tool round trip included (up to 21600).",
-        SettingsField.TtsOutput => "Reads replies aloud (`/tts`). Fenced code blocks and tables are shown but never read aloud, not even by `/speak`.",
+        SettingsField.TtsOutput => "Reads replies aloud (`/tts`). Fenced code blocks and tables are shown but never read aloud, not even by `/read`.",
         SettingsField.TtsHttpUrl => "The Kokoro-FastAPI base URL (`http://localhost:8880/v1` for a server on this machine), used while *TTS source* is `http`; empty until you set one.",
         SettingsField.TtsVoicePreset => "Sets *TTS voice*, *TTS voice 2*, *TTS voice mix* and *TTS speed* in one go. The preset itself is not saved: the row shows the preset those four match, or `(custom)`. Built in: `amanda`, `neon`, `richard`, `hunter`, `larry`, `jack`, `willow`. Your own presets go in the `voices` folder of the home, one JSON file each, and a file named like a built-in replaces it. Forty-one more come with the repo, with samples to listen to. See Voice presets.",
         SettingsField.TtsVoice => "The Kokoro voice.",

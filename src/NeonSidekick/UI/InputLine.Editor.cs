@@ -1290,7 +1290,7 @@ public sealed partial class InputLine
                 var answer = argument();
                 if (answer.IsPathList)
                 {
-                    // The @ shape for a path argument (/speak): no notes, no prefix, the folder mode on a pick.
+                    // The @ shape for a path argument (/read): no notes, no prefix, the folder mode on a pick.
                     if (answer.Paths!.Count == 0)
                     {
                         CloseList();
@@ -1333,7 +1333,7 @@ public sealed partial class InputLine
         /// <summary>
         /// Whether the word under the cursor in a slash command's text is a mention to complete as one (2026-09-30, the user's
         /// ask: <c>/loop infinite 1s append the time to @file.txt</c> completes the <c>@</c> as a message would): its character's
-        /// list is on, and the command's argument is no path of its own (<see cref="InputLine.PathArgument"/>: <c>/speak</c>,
+        /// list is on, and the command's argument is no path of its own (<see cref="InputLine.PathArgument"/>: <c>/read</c>,
         /// <c>/view</c>, <c>/print</c> keep their file list and <c>/tree</c>, <c>/explore</c>, <c>/vault</c> their folder list,
         /// and none of them takes an <c>@</c>).
         /// </summary>

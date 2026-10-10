@@ -603,7 +603,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         File.WriteAllBytes(Full("pic.png"), [0x89, (byte)'P', (byte)'N', (byte)'G', 0, 0, 0, 13]);
         File.WriteAllBytes(Full(@"docs\deep.bin"), [1, 2, 0, 3]);
 
-        // The /speak list (2026-09-17): the NUL probe ReadText judges by; folders pass, an empty file is text.
+        // The /read list (2026-09-17): the NUL probe ReadText judges by; folders pass, an empty file is text.
         Assert.Equal(new[] { "docs/", "empty.txt", "LICENSE", "notes.md" }, _files.Complete("", WorkingDirectory.IsTextFile).Paths);
         Assert.Equal(new[] { "docs/a.md" }, _files.Complete("docs/", WorkingDirectory.IsTextFile).Paths);
         Assert.Equal(new[] { "docs/", "docs/deep.bin" }, _files.Complete("d").Paths);   // the default keeps everything

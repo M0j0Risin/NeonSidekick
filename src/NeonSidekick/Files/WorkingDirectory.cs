@@ -935,7 +935,7 @@ public sealed class WorkingDirectory
     /// reparse-point entries are skipped. A folder outside the root
     /// (<c>..</c>), missing or a file yields nothing with the outcome; the
     /// root is never created here. With <paramref name="files"/> (2026-09-17) a file is listed
-    /// only when the predicate keeps its full path — <see cref="IsTextFile"/> for the <c>/speak</c>
+    /// only when the predicate keeps its full path — <see cref="IsTextFile"/> for the <c>/read</c>
     /// list, the probe <see cref="ReadText"/> judges by, so what is offered will read;
     /// <see cref="ImageFile.IsImagePath"/> for <c>/view</c>'s; folders always pass, and the match cap
     /// counts what is shown.

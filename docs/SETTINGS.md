@@ -31,7 +31,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 
 ## The input line
 * It is always a full editor, even while a reply streams or `/botchat` runs: ←/→, Home/End (the line's ends, pressed again the message's), Delete; Ctrl+←/→ move a word, Ctrl+Backspace / Ctrl+Delete delete one (Option+Delete before the cursor on a Mac); Shift+arrows (Ctrl+Shift+←/→ by words), Ctrl+A or a drag to select; a double-click selects a word (letters, digits and `_`; all of a password field); Ctrl+C / Ctrl+X copy / cut (the hint row says how much was copied); right-click or Alt+V pastes, Nerd Font glyphs included, a copied picture first (on a Mac Ctrl+V or Option+V too, since Cmd+V is the terminal's and pastes only text); ↑/↓ walk the history.
-* `/`, `@`, `#`, `$`, `%`, `^` and `*` open their lists. The mention lists work inside a command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/speak`, `/view`, `/print` and `/pdf`, which complete their own path.
+* `/`, `@`, `#`, `$`, `%`, `^` and `*` open their lists. The mention lists work inside a command's text too (`/loop infinite 1s append the time to @notes.txt`), except for `/read`, `/view`, `/print` and `/pdf`, which complete their own path.
 * Drag a picture from the ComfyUI picture strip or the transcript onto the input row to attach it, as if dropped from the desktop. The hint row reads **🖼️ drop on line** while you drag; letting go elsewhere attaches nothing.
 * Enter during a reply queues the message. A draft left on the row survives the reply.
 * ESC during a reply stops the speech, then closes an open list, then cancels the reply; it never clears your draft there (ESC at the idle line does, and keeps it in this session's history: ↑ brings it back, but *Keep command history* never stores a draft you cleared unless you send it). While a reply runs the hint row ends with **esc to stop**, and a running tool shows its own time beside the reply's.
@@ -418,7 +418,7 @@ Speech output sets up in the background (🔈 on the hint row); replies are text
 
 | Setting | What it does | Default |
 |---|---|---|
-| TTS output | Reads replies aloud (`/tts`). Code blocks and tables are never read, not even by `/speak`. | off |
+| TTS output | Reads replies aloud (`/tts`). Code blocks and tables are never read, not even by `/read`. | off |
 | TTS source | `in-process` runs Kokoro inside the app (downloaded on first use); `http` uses a Kokoro-FastAPI server. | `in-process` |
 | TTS HTTP URL | The Kokoro-FastAPI base URL (`http://localhost:8880/v1`), needed for `http`. | (not set) |
 | TTS voice preview | The voice and preset pickers speak the highlighted voice. | on |

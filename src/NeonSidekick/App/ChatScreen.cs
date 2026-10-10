@@ -404,14 +404,14 @@ internal sealed partial class ChatScreen
 
     // A looped command (2026-09-25, the user's ask: /loop infinite 1s /imagine …, no model in between). Pinned.
     /// <summary>The commands <c>/loop</c> runs itself rather than send to the model — the user's pick, the two that make sense again and again.</summary>
-    public static readonly IReadOnlyList<SlashCommand> LoopableCommands = [SlashCommand.Imagine, SlashCommand.Speak];
+    public static readonly IReadOnlyList<SlashCommand> LoopableCommands = [SlashCommand.Imagine, SlashCommand.Read];
     /// <summary>The notice after the last pass of a counted command loop.</summary>
     public static string LoopCommandDoneNotice(int total) => $"(loop done: {UsageText.Plural(total, "run", "runs")})";
     /// <summary>The notice when a pass ended a command loop early: cancelled or failed; <paramref name="ran"/> counts that pass.</summary>
     public static string LoopCommandStoppedNotice(int ran) => $"(loop stopped after {UsageText.Plural(ran, "run", "runs")})";
     /// <summary>A <c>/loop</c> over a command it does not run.</summary>
-    public static string LoopCommandNotLoopableError(string token) => $"Only /imagine and /speak can be looped; {token} cannot.";
-    /// <summary>The watched gap between command passes when the loop names no delay: a pass that returns at once (<c>/speak</c> with speech off) still leaves ESC a moment to stop an infinite loop.</summary>
+    public static string LoopCommandNotLoopableError(string token) => $"Only /imagine and /read can be looped; {token} cannot.";
+    /// <summary>The watched gap between command passes when the loop names no delay: a pass that returns at once (<c>/read</c> with speech off) still leaves ESC a moment to stop an infinite loop.</summary>
     public static readonly TimeSpan LoopCommandMinGap = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
@@ -920,21 +920,21 @@ internal sealed partial class ChatScreen
     private bool _tailInterrupt;
 
     /// <summary>
-    /// The last <c>/speak</c> reading (2026-09-17): the file, its sentences, where it is. Kept
-    /// across turns — a bare <c>/speak</c> resumes it, <c>/speak &lt;n&gt;</c> seeks in it — until
+    /// The last <c>/read</c> reading (2026-09-17): the file, its sentences, where it is. Kept
+    /// across turns — a bare <c>/read</c> resumes it, <c>/read &lt;n&gt;</c> seeks in it — until
     /// another file, <c>/clear</c>, <c>/new</c>, a profile switch or a <c>/cwd</c> change.
     /// </summary>
     private SpeakReading? _reading;
 
     /// <summary>
     /// The last <c>/echo</c> (2026-09-17): a reading of a typed line, kept only so its status can
-    /// be read; a bare <c>/speak</c> never resumes it.
+    /// be read; a bare <c>/read</c> never resumes it.
     /// </summary>
     private SpeakReading? _echo;
 
     /// <summary>
     /// The reading whose status is on the hint row (<see cref="HintLine"/>'s reading part) — the
-    /// reading or the echo started last — from its <c>/speak</c> or <c>/echo</c> until the next
+    /// reading or the echo started last — from its <c>/read</c> or <c>/echo</c> until the next
     /// turn, when the row is the turn's again (the user's rule); the reading itself is
     /// remembered on. Null = nothing there.
     /// </summary>
@@ -1343,7 +1343,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The standing hint under the input line: the timers while any run, then the <c>/speak</c>
+    /// The standing hint under the input line: the timers while any run, then the <c>/read</c>
     /// reading's status (<see cref="SpeakReading.StatusLine"/>, 2026-09-17) while it is on the
     /// row, else the token tally (<see cref="UsageText.HintPart"/>) once something was counted —
     /// empty at a silent idle line. The timers take the usage part's place, as they always did;
@@ -3921,7 +3921,7 @@ internal sealed partial class ChatScreen
     /// the running timers' names, the skill catalog (<see cref="SkillChoices"/>, for <c>/skills edit</c>, 2026-09-21), the sandbox's
     /// folders for a prefix (<c>WorkingDirectory.Complete</c>, folders only, for <c>/tree</c> and
     /// <c>/explore</c>) and its <c>@</c>-mention walk over the text files alone
-    /// (<c>Complete(query, WorkingDirectory.IsTextFile)</c>, for <c>/speak</c>) or the image files alone
+    /// (<c>Complete(query, WorkingDirectory.IsTextFile)</c>, for <c>/read</c>) or the image files alone
     /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog. <see cref="MachineFolders"/> (2026-10-05) is
     /// <c>/cwd</c>'s: any local drive's folders (<see cref="FolderCompleter.Complete"/>), not the sandbox's.
@@ -4083,7 +4083,7 @@ internal sealed partial class ChatScreen
     /// sandbox's), the sandbox's folders for <c>/tree</c> and <c>/explore</c>, the vault's for <c>/vault</c> (2026-09-23), <c>all</c> for <c>/copy</c>,
     /// <c>reset</c> for the three prompt files. Free text (a URL, a
     /// memory, a focus, a new name, a duration, a message; <c>/loop</c> lists <c>infinite</c> alone and <c>/skills</c> <c>edit</c> then <c>edit &lt;name&gt;</c> over the catalog, 2026-09-21) and <c>/model</c>'s ids (a network probe,
-    /// nothing cached; the picker lists them) get nothing — and so do <c>/speak</c> and <c>/view</c>
+    /// nothing cached; the picker lists them) get nothing — and so do <c>/read</c> and <c>/view</c>
     /// here: their argument is a path list, <see cref="ArgumentPaths"/>. Since 2026-10-04 (the user's report and audit) also
     /// <c>/screen</c>'s words, monitors and windows, <c>/server</c>'s words (<see cref="ServerItems"/>), <c>/model</c>'s installed
     /// embedded models while the embedded server is in use (read from disk, no probe), <c>/log --file</c> under <c>--log</c> and
@@ -4500,17 +4500,17 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether <paramref name="command"/>'s argument is a path its own list completes: there a mention character stays the
     /// argument list's (2026-09-30), since the command takes a bare path. The file lists of <see cref="ArgumentPaths"/>
-    /// (<c>/speak</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c>, <c>/terminal</c> and <c>/vault</c>
+    /// (<c>/read</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c>, <c>/terminal</c> and <c>/vault</c>
     /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>), and
     /// <c>/cwd</c>'s list of any drive's folders (2026-10-05), and <c>/open</c>'s files and <c>/browse</c>'s folders (2026-10-09). Pinned.
     /// </summary>
     public static bool TakesPathArgument(string command) =>
-        SlashCommands.Parse(command).Command is SlashCommand.Speak or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
+        SlashCommands.Parse(command).Command is SlashCommand.Read or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
             or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault or SlashCommand.Cwd
             or SlashCommand.Open or SlashCommand.Browse;
 
     /// <summary>
-    /// The path list for a command whose argument is a sandbox path — <c>/speak</c> (2026-09-17),
+    /// The path list for a command whose argument is a sandbox path — <c>/read</c> (2026-09-17),
     /// the user's ask for the <c>@</c>-mention's shape over <c>/tree</c>'s flat word list, and
     /// <c>/view</c> (later that day): the text before the last <c>/</c> is the folder to look in,
     /// the rest a name prefix, folders first and the files the command can take alone — the text
@@ -4550,7 +4550,7 @@ internal sealed partial class ChatScreen
             return OpenPaths(argText, sources);
         }
 
-        if (kind is not (SlashCommand.Speak or SlashCommand.View))
+        if (kind is not (SlashCommand.Read or SlashCommand.View))
         {
             return null;
         }
@@ -4569,7 +4569,7 @@ internal sealed partial class ChatScreen
             return new MentionResult(FileOutcome.Ok, [], false);
         }
 
-        var found = kind == SlashCommand.Speak ? sources.TextFiles(argText) : sources.ImageFiles(argText);
+        var found = kind == SlashCommand.Read ? sources.TextFiles(argText) : sources.ImageFiles(argText);
         if (found.Paths.Count == 1 && string.Equals(found.Paths[0], argText, StringComparison.OrdinalIgnoreCase))
         {
             return new MentionResult(FileOutcome.Ok, [], false);
@@ -6544,7 +6544,7 @@ internal sealed partial class ChatScreen
     /// (<see cref="ConversationHistory.Restore"/>; the opening pairs are in the list, so the next turn
     /// keeps them current rather than seeding them again), then each turn replayed under the
     /// notice — the user's row, one <c>🛠️ N tool calls</c> line when the model called any, the reply
-    /// through the live slot as <c>/speak</c> prints a file (styled as a live reply would be). The
+    /// through the live slot as <c>/read</c> prints a file (styled as a live reply would be). The
     /// pictures of a turn are not redrawn. New turns append to the restored row. The one on screen
     /// already is <see cref="SessionsMenu.CurrentNotice"/>.
     /// </summary>
@@ -7915,27 +7915,27 @@ internal sealed partial class ChatScreen
         _transcript.Notice(TerminalOpenedNotice(result.Relative));
     }
 
-    // ── /speak (2026-09-17) ─────────────────────────────────────────────────
+    // ── /read (2026-09-17) ─────────────────────────────────────────────────
 
-    /// <summary>A bare <c>/speak</c> with nothing to resume. Pinned.</summary>
-    public const string SpeakUsageError = "Usage: /speak <file> [n]; then /speak alone resumes it and /speak <n> starts at sentence n";
+    /// <summary>A bare <c>/read</c> with nothing to resume. Pinned.</summary>
+    public const string ReadUsageError = "Usage: /read <file> [n]; then /read alone resumes it and /read <n> starts at sentence n";
 
-    /// <summary><c>/speak &lt;n&gt;</c> with no file read yet. Pinned.</summary>
-    public const string SpeakNothingToSeekError = "Nothing to jump to: /speak <file> first";
+    /// <summary><c>/read &lt;n&gt;</c> with no file read yet. Pinned.</summary>
+    public const string ReadNothingToSeekError = "Nothing to jump to: /read <file> first";
 
-    /// <summary><c>/speak &lt;n&gt;</c> past the file's sentences (or 0). Pinned.</summary>
-    public static string SpeakBeyondEndError(string file, int total, int at) =>
+    /// <summary><c>/read &lt;n&gt;</c> past the file's sentences (or 0). Pinned.</summary>
+    public static string ReadBeyondEndError(string file, int total, int at) =>
         $"{file} has {FileText.Count(total, "sentence", "sentences")}; nothing at {at.ToString(CultureInfo.InvariantCulture)}";
 
     /// <summary>The notice for a file with nothing to say: blank, whitespace, or punctuation alone. Pinned.</summary>
     /// <remarks>An error since 2026-09-22 (the user's call; a notice before): nothing is read.</remarks>
-    public static string SpeakEmptyError(string relative) => $"{relative} is empty";
+    public static string ReadEmptyError(string relative) => $"{relative} is empty";
 
-    /// <summary>The dim line under a block <c>/speak</c> cut at <see cref="WorkingDirectory.MaxReadChars"/>. Pinned.</summary>
-    public static string SpeakCutNotice(int chars) => $"(cut at {chars.ToString("N0", CultureInfo.InvariantCulture)} characters)";
+    /// <summary>The dim line under a block <c>/read</c> cut at <see cref="WorkingDirectory.MaxReadChars"/>. Pinned.</summary>
+    public static string ReadCutNotice(int chars) => $"(cut at {chars.ToString("N0", CultureInfo.InvariantCulture)} characters)";
 
     /// <summary>
-    /// <c>/speak &lt;file&gt;</c>: a text file under the working directory printed as a reply — the
+    /// <c>/read &lt;file&gt;</c>: a text file under the working directory printed as a reply — the
     /// glyph and the text, styled like one (<see cref="StyledReply"/>) — and, with speech on and
     /// ready, read aloud as the tail under the input line: the timer alert's shape
     /// (<see cref="AnnounceAlertsAsync"/>), a speaker begun outside a turn, with the difference
@@ -7944,7 +7944,7 @@ internal sealed partial class ChatScreen
     /// never sees the file: nothing enters the history, the <c>/copy</c> log or the reflection
     /// trace (<c>read_file</c> is the model's way). The file goes through
     /// <see cref="WorkingDirectory.ReadText"/> — the sandbox rule, the binary probe, the whole
-    /// file up to <see cref="WorkingDirectory.MaxReadChars"/> with <see cref="SpeakCutNotice"/>
+    /// file up to <see cref="WorkingDirectory.MaxReadChars"/> with <see cref="ReadCutNotice"/>
     /// under a cut one — and a bad path is the same <c>Error:</c> line <c>/tree</c> prints. The line
     /// that sent the command has silenced any tail (the <c>Submitted</c> arm), so the speaker
     /// begun here never finds one.
@@ -7952,13 +7952,13 @@ internal sealed partial class ChatScreen
     /// <para>The reading is kept (<see cref="_reading"/>, <see cref="SpeakReading"/>): its sentences
     /// are the speech's own chunks, fed one by one (<see cref="SpeechOutput.Speak"/>) so the play
     /// head names one; the hint row shows <c>reading notes.md 3/40</c> while it plays and keeps
-    /// <c>stopped notes.md 3/40</c> after a stop until the next turn. A bare <c>/speak</c> resumes
-    /// at the stopped sentence (the top again after a full read); <c>/speak &lt;n&gt;</c> — digits
+    /// <c>stopped notes.md 3/40</c> after a stop until the next turn. A bare <c>/read</c> resumes
+    /// at the stopped sentence (the top again after a full read); <c>/read &lt;n&gt;</c> — digits
     /// alone; a file named so is <c>./5</c> — starts at sentence <em>n</em>, the block printed from
     /// there.</para>
     ///
     /// <para>True when the reading started, false when an error line was printed instead — a looped
-    /// <c>/speak</c> (2026-09-25) stops on false.</para>
+    /// <c>/read</c> (2026-09-25) stops on false.</para>
     /// </summary>
     private bool HandleSpeak(string args, CancellationToken cancellationToken)
     {
@@ -7966,7 +7966,7 @@ internal sealed partial class ChatScreen
         {
             if (_reading is not { } resume)
             {
-                _transcript.Error(SpeakUsageError);
+                _transcript.Error(ReadUsageError);
                 return false;
             }
 
@@ -7978,13 +7978,13 @@ internal sealed partial class ChatScreen
         {
             if (_reading is not { } seek)
             {
-                _transcript.Error(SpeakNothingToSeekError);
+                _transcript.Error(ReadNothingToSeekError);
                 return false;
             }
 
             if (at < 1 || at > seek.Count)
             {
-                _transcript.Error(SpeakBeyondEndError(seek.File, seek.Count, at));
+                _transcript.Error(ReadBeyondEndError(seek.File, seek.Count, at));
                 return false;
             }
 
@@ -8011,15 +8011,15 @@ internal sealed partial class ChatScreen
         var reading = new SpeakReading(read.Relative, read.Text) { Cut = read.Truncated };
         if (reading.Count == 0)
         {
-            _transcript.Error(SpeakEmptyError(read.Relative));
+            _transcript.Error(ReadEmptyError(read.Relative));
             return false;
         }
 
-        // Remembered even when the number is bad, so /speak <n> works on it next.
+        // Remembered even when the number is bad, so /read <n> works on it next.
         _reading = reading;
         if (from < 1 || from > reading.Count)
         {
-            _transcript.Error(SpeakBeyondEndError(reading.File, reading.Count, from));
+            _transcript.Error(ReadBeyondEndError(reading.File, reading.Count, from));
             return false;
         }
 
@@ -8037,7 +8037,7 @@ internal sealed partial class ChatScreen
         _transcript.EndAssistant();
         if (reading.Cut)
         {
-            _transcript.Notice(SpeakCutNotice(WorkingDirectory.MaxReadChars));
+            _transcript.Notice(ReadCutNotice(WorkingDirectory.MaxReadChars));
         }
 
         if (speaker is not null)
@@ -8067,10 +8067,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/echo &lt;text&gt;</c>: the line printed as a reply and, with speech on, read aloud as the
-    /// tail — <c>/speak</c>'s block and voice over typed text (<see cref="StartReading"/>, a
+    /// tail — <c>/read</c>'s block and voice over typed text (<see cref="StartReading"/>, a
     /// <see cref="SpeakReading.Kind.Echo"/> reading): the same styling, sentences, probe and stop
     /// rules, the hint row reading <c>💬 1/2 speaking</c>. Kept apart from the file reading
-    /// (<see cref="_echo"/>), so a bare <c>/speak</c> resumes the last file, never the echo; an echo
+    /// (<see cref="_echo"/>), so a bare <c>/read</c> resumes the last file, never the echo; an echo
     /// is only said again by another <c>/echo</c>. A line with nothing speakable (punctuation
     /// alone) is printed and nothing more. The model never sees it; Refused mid-turn; not headless.
     /// </summary>
@@ -10085,7 +10085,7 @@ internal sealed partial class ChatScreen
         LeavePlanOnReset();
     }
 
-    /// <summary>The <c>/speak</c> reading and its hint part dropped: the conversation, the profile or the working directory changed under it.</summary>
+    /// <summary>The <c>/read</c> reading and its hint part dropped: the conversation, the profile or the working directory changed under it.</summary>
     private void ForgetReading()
     {
         _reading = null;
@@ -11384,7 +11384,7 @@ internal sealed partial class ChatScreen
                 HandleGit(args);
                 return false;
 
-            case SlashCommand.Speak:
+            case SlashCommand.Read:
                 _ = HandleSpeak(args, cancellationToken);
                 return false;
 
@@ -12394,7 +12394,7 @@ internal sealed partial class ChatScreen
     /// went to the model as a message): the command run straight, pass after pass, no model in between and no user row
     /// echoed — the command's own lines are the pass. <c>/imagine</c> in the foreground under ESC (<see cref="ImaginePassAsync"/>,
     /// not behind the line as a plain one is), its queue for the next message kept to the last pass's pictures (the base taken
-    /// here, before the first); <c>/speak</c> waits for the reading's audio to end, under ESC, so the next pass does not cut it
+    /// here, before the first); <c>/read</c> waits for the reading's audio to end, under ESC, so the next pass does not cut it
     /// short. A cancelled or failed pass ends the loop, as a failed reply ends a message loop. Between passes the delay as ever,
     /// or — none named — <see cref="LoopCommandMinGap"/>, watched and unannounced, so an instant pass cannot spin past ESC; the
     /// reply's own watch since 2026-10-04 (<see cref="LoopWaitAsync"/>), so a pane or a queued message need not wait for the loop's end.
@@ -12433,7 +12433,7 @@ internal sealed partial class ChatScreen
         _transcript.Notice(LoopCommandDoneNotice(count!.Value));
     }
 
-    /// <summary>One looped <c>/speak</c> (2026-09-25): the reading started, then its audio waited out under ESC, which stops it and the loop.</summary>
+    /// <summary>One looped <c>/read</c> (2026-09-25): the reading started, then its audio waited out under ESC, which stops it and the loop.</summary>
     private async Task<LoopPass> SpeakPassAsync(string args, CancellationToken cancellationToken)
     {
         if (!HandleSpeak(args, cancellationToken))
@@ -14159,7 +14159,7 @@ internal sealed partial class ChatScreen
         // a reply): a pane it opens reads the keys under the app token and the close signal the
         // turn's end may send (EndTurnAsync). The previous turn's pane was awaited before this one.
         _turnRunning = true;
-        // The hint row is the turn's again (the usage part); the reading stays remembered for /speak.
+        // The hint row is the turn's again (the usage part); the reading stays remembered for /read.
         _hintReading = null;
         // A first Ctrl+C before the turn is forgotten: mid-turn the key cancels, and the next one at the line is a first again.
         // A first ESC's rewind arm the same (2026-09-30).

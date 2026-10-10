@@ -26,7 +26,7 @@ public class SpeechOutputTests
         Assert.True(condition(), "condition not met in time");
     }
 
-    // ── The play head's sentence (the /speak position, 2026-09-17) ──────────
+    // ── The play head's sentence (the /read position, 2026-09-17) ──────────
 
     [Fact]
     public async Task Speak_QueuesTheSentenceWhole_AndPlayingChunk_FollowsThePlayHead()

@@ -64,8 +64,8 @@ public class SlashCommandsTests
     [InlineData("/TERMINAL", SlashCommand.Terminal)]
     [InlineData("/shortcut", SlashCommand.Shortcut)]   // 2026-10-07
     [InlineData("/SHORTCUT", SlashCommand.Shortcut)]
-    [InlineData("/speak", SlashCommand.Speak)]
-    [InlineData("/SPEAK", SlashCommand.Speak)]
+    [InlineData("/read", SlashCommand.Read)]
+    [InlineData("/READ", SlashCommand.Read)]
     [InlineData("/view", SlashCommand.View)]
     [InlineData("/VIEW", SlashCommand.View)]
     [InlineData("/echo", SlashCommand.Echo)]
@@ -267,13 +267,13 @@ public class SlashCommandsTests
     }
 
     [Theory]
-    [InlineData("/speak", "")]
-    [InlineData("/speak notes.md", "notes.md")]
-    [InlineData("/SPEAK  docs/a b.md ", "docs/a b.md")]
-    public void Parse_SpeakTakesTheRestOfTheLine(string line, string expectedArgs)
+    [InlineData("/read", "")]
+    [InlineData("/read notes.md", "notes.md")]
+    [InlineData("/READ  docs/a b.md ", "docs/a b.md")]
+    public void Parse_ReadTakesTheRestOfTheLine(string line, string expectedArgs)
     {
         var (command, args) = SlashCommands.Parse(line);
-        Assert.Equal(SlashCommand.Speak, command);
+        Assert.Equal(SlashCommand.Read, command);
         Assert.Equal(expectedArgs, args);
     }
 
@@ -355,7 +355,7 @@ public class SlashCommandsTests
         SlashCommand[] withArgument =
         [
             SlashCommand.Compact, SlashCommand.Server, SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Sampling, SlashCommand.Theme,   // /theme [name] 2026-09-23; /sampling [field value] 2026-09-28
-            SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Speak, SlashCommand.View, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.Echo,   // /imagine 2026-09-24
+            SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Read, SlashCommand.View, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.Echo,   // /imagine 2026-09-24
             SlashCommand.Learn,
             SlashCommand.Sys,   // /sys persona|operata|vocalia 2026-10-09: /persona, /operata and /vocalia (here since 2026-09-16) folded in
             SlashCommand.Remember, SlashCommand.Memory, SlashCommand.Profile, SlashCommand.Timer,   // /srvcopy, /cmdcopy and /keycopy here until 2026-10-09 (folded into /profile push|pull); /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
@@ -395,7 +395,7 @@ public class SlashCommandsTests
         Assert.DoesNotContain(items, i => i.Text is "//" or "///" or "////");   // the alias is never a row (nor the two that came and went on 2026-09-21)
         Assert.Contains(items, i => i.Text == "/loop");   // 2026-09-21
         Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(new NeonSidekick.UI.CompletionItem(e.Command, e.Summary), items));
-        Assert.Equal(["/sampling", "/screen", "/server", "/sessions", "/settings", "/shortcut", "/skills", "/speak", "/splash", "/stt", "/sys"], items.Where(i => i.Text.StartsWith("/s", StringComparison.Ordinal)).Select(i => i.Text));
+        Assert.Equal(["/sampling", "/screen", "/server", "/sessions", "/settings", "/shortcut", "/skills", "/splash", "/stt", "/sys"], items.Where(i => i.Text.StartsWith("/s", StringComparison.Ordinal)).Select(i => i.Text));
         Assert.Equal(["/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools", "/tree", "/tts"], items.Where(i => i.Text.StartsWith("/t", StringComparison.Ordinal)).Select(i => i.Text));   // /tools among them since 2026-09-19
     }
 
@@ -509,6 +509,7 @@ public class SlashCommandsTests
             "/cmdlist", "/cmdlist all", "/police", "/police off",   // /tools shell allowed|police since 2026-10-09
             "/persona", "/persona reset", "/operata", "/operata copy work", "/vocalia", "/vocalia reset",   // /sys persona|operata|vocalia since 2026-10-09
             "/wake", "/wake on", "/interrupt", "/interrupt off",   // /stt wake|interrupt since 2026-10-09
+            "/speak", "/speak notes.md", "/speak 3",   // /read since later on 2026-10-09
         ];
 
         Assert.All(retired, line => Assert.Equal(SlashCommand.Unknown, SlashCommands.Parse(line).Command));
@@ -601,8 +602,8 @@ public class SlashCommandsTests
         [
             "/about", "/botchat", "/browse", "/camera", "/claude", "/clear", "/cmd", "/cmdclear", "/collapse", "/comfy", "/compact", "/copy", "/cwd",
             "/docker", "/draft", "/echo", "/exit", "/expand", "/explore", "/find", "/gituser", "/ha", "/header", "/help", "/imagine", "/keycheck", "/learn", "/log",
-            "/loop", "/mcp", "/memory", "/model", "/new", "/open", "/pdf", "/perfbar", "/plan", "/print", "/process", "/profile", "/queue", "/reasoning",
-            "/remember", "/rename", "/rewind", "/sampling", "/screen", "/server", "/sessions", "/settings", "/shortcut", "/skills", "/speak", "/splash", "/stt", "/sys", "/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools",
+            "/loop", "/mcp", "/memory", "/model", "/new", "/open", "/pdf", "/perfbar", "/plan", "/print", "/process", "/profile", "/queue", "/read", "/reasoning",
+            "/remember", "/rename", "/rewind", "/sampling", "/screen", "/server", "/sessions", "/settings", "/shortcut", "/skills", "/splash", "/stt", "/sys", "/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools",
             "/tree", "/tts", "/usage", "/vault", "/view", "/window", "/youtube",
         ], SlashCommands.HelpEntries.Select(e => e.Command));
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));

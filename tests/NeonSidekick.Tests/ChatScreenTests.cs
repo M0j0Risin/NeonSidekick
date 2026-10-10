@@ -7681,7 +7681,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void LoopCommandStrings_ArePinned()
     {
-        Assert.Equal([SlashCommand.Imagine, SlashCommand.Speak], ChatScreen.LoopableCommands);
+        Assert.Equal([SlashCommand.Imagine, SlashCommand.Read], ChatScreen.LoopableCommands);
         Assert.Equal("(loop done: 3 runs)", ChatScreen.LoopCommandDoneNotice(3));
         Assert.Equal("(loop done: 1 run)", ChatScreen.LoopCommandDoneNotice(1));
         Assert.Equal("(loop stopped after 2 runs)", ChatScreen.LoopCommandStoppedNotice(2));
@@ -7850,7 +7850,7 @@ public partial class ChatScreenTests : IDisposable
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
-        LoopScript("/loop 2 /speak notes.txt", "/exit");
+        LoopScript("/loop 2 /read notes.txt", "/exit");
 
         string output = await RunLoopAsync();
 
@@ -7869,7 +7869,7 @@ public partial class ChatScreenTests : IDisposable
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
-        var input = LoopScript("/loop 5 /speak notes.txt", "/exit");
+        var input = LoopScript("/loop 5 /read notes.txt", "/exit");
         using var done = new CancellationTokenSource();
         var esc = EscWhen(input, () => _synth.Spoken.Count >= 2 && _playback.Writes.Count >= 2, done.Token);
 
@@ -7887,7 +7887,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Loop_Speak_ABadPath_StopsAfterTheFirstPass()
     {
         _settings.Update(d => d.TtsOutput = false);
-        LoopScript("/loop 3 /speak nope.txt", "/exit");
+        LoopScript("/loop 3 /read nope.txt", "/exit");
 
         string output = await RunLoopAsync();
 
@@ -7903,7 +7903,7 @@ public partial class ChatScreenTests : IDisposable
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "notes.txt"), "One.");
-        var input = LoopScript("/loop infinite /speak notes.txt", "/exit");
+        var input = LoopScript("/loop infinite /read notes.txt", "/exit");
         using var done = new CancellationTokenSource();
         var esc = EscWhen(input, () => Output.Contains(ChatScreen.LoopTurnNotice(3, null), StringComparison.Ordinal), done.Token);
 
@@ -15166,15 +15166,15 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith(HelpRow("/loop", Entry("/loop").Summary), lines[log + 2]);
     }
 
-    // ── /speak (2026-09-17) ─────────────────────────────────────────────────
+    // ── /read (2026-09-17) ─────────────────────────────────────────────────
 
     [Fact]
-    public async Task Speak_PrintsTheFileAsAReply_SpeaksIt_AndTheModelNeverSeesIt()
+    public async Task Read_PrintsTheFileAsAReply_SpeaksIt_AndTheModelNeverSeesIt()
     {
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
-        LinesWhenIdle("/speak notes.txt", "/copy", "/exit");   // typed at idle: the tail is heard whole before the next line
+        LinesWhenIdle("/read notes.txt", "/copy", "/exit");   // typed at idle: the tail is heard whole before the next line
 
         string output = await RunAsync();
 
@@ -15189,13 +15189,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Speak_WithSpeechOff_PrintsTheBlockAlone()
+    public async Task Read_WithSpeechOff_PrintsTheBlockAlone()
     {
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two.");
-        PushLine("/speak notes.txt");
+        PushLine("/read notes.txt");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -15207,7 +15207,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [WindowsFact]
-    public async Task Speak_TheErrors_TheEmptyFile_AndTheCut()
+    public async Task Read_TheErrors_TheEmptyFile_AndTheCut()
     {
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -15215,33 +15215,33 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllBytes(Path.Combine(files, "pic.bin"), [1, 2, 0, 3]);
         File.WriteAllText(Path.Combine(files, "blank.txt"), " \n\t\n");
         File.WriteAllText(Path.Combine(files, "big.txt"), string.Join("\n", Enumerable.Range(0, 700).Select(i => new string('x', 50))));   // 35,700 characters: cut at 32,000
-        PushLine("/speak");
-        PushLine("/speak nope");
-        PushLine("/speak docs");
-        PushLine(@"/speak ..\x");
-        PushLine("/speak pic.bin");
-        PushLine("/speak blank.txt");
-        PushLine("/speak big.txt");
+        PushLine("/read");
+        PushLine("/read nope");
+        PushLine("/read docs");
+        PushLine(@"/read ..\x");
+        PushLine("/read pic.bin");
+        PushLine("/read blank.txt");
+        PushLine("/read big.txt");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.SpeakUsageError, output);
+        Assert.Contains("  ✗ " + ChatScreen.ReadUsageError, output);
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
         Assert.Contains("  ✗ " + FileText.IsDirectory(@"docs\"), output);
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"..\x"), output);
         Assert.Contains("  ✗ " + FileText.NotText("pic.bin"), output);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakEmptyError("blank.txt"), output);   // an error since 2026-09-22
+        Assert.Contains("  ✗ " + ChatScreen.ReadEmptyError("blank.txt"), output);   // an error since 2026-09-22
         Assert.Contains("● " + new string('x', 50) + "\n", output);
-        Assert.Contains("  · " + ChatScreen.SpeakCutNotice(WorkingDirectory.MaxReadChars), output);
-        Assert.Equal("(cut at 32,000 characters)", ChatScreen.SpeakCutNotice(WorkingDirectory.MaxReadChars));
-        Assert.Equal("Usage: /speak <file> [n]; then /speak alone resumes it and /speak <n> starts at sentence n", ChatScreen.SpeakUsageError);
+        Assert.Contains("  · " + ChatScreen.ReadCutNotice(WorkingDirectory.MaxReadChars), output);
+        Assert.Equal("(cut at 32,000 characters)", ChatScreen.ReadCutNotice(WorkingDirectory.MaxReadChars));
+        Assert.Equal("Usage: /read <file> [n]; then /read alone resumes it and /read <n> starts at sentence n", ChatScreen.ReadUsageError);
         Assert.Empty(_chat.Requests);
     }
 
     /// <summary>The Unix twin of <see cref="Speak_TheErrors_TheEmptyFile_AndTheCut"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
     [UnixFact]
-    public async Task Speak_TheErrors_TheEmptyFile_AndTheCut_Unix()
+    public async Task Read_TheErrors_TheEmptyFile_AndTheCut_Unix()
     {
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -15249,27 +15249,27 @@ public partial class ChatScreenTests : IDisposable
         File.WriteAllBytes(Path.Combine(files, "pic.bin"), [1, 2, 0, 3]);
         File.WriteAllText(Path.Combine(files, "blank.txt"), " \n\t\n");
         File.WriteAllText(Path.Combine(files, "big.txt"), string.Join("\n", Enumerable.Range(0, 700).Select(i => new string('x', 50))));   // 35,700 characters: cut at 32,000
-        PushLine("/speak");
-        PushLine("/speak nope");
-        PushLine("/speak docs");
-        PushLine(@"/speak ../x");
-        PushLine("/speak pic.bin");
-        PushLine("/speak blank.txt");
-        PushLine("/speak big.txt");
+        PushLine("/read");
+        PushLine("/read nope");
+        PushLine("/read docs");
+        PushLine(@"/read ../x");
+        PushLine("/read pic.bin");
+        PushLine("/read blank.txt");
+        PushLine("/read big.txt");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.SpeakUsageError, output);
+        Assert.Contains("  ✗ " + ChatScreen.ReadUsageError, output);
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
         Assert.Contains("  ✗ " + FileText.IsDirectory(@"docs/"), output);
         Assert.Contains("  ✗ " + FileText.OutsideRoot(@"../x"), output);
         Assert.Contains("  ✗ " + FileText.NotText("pic.bin"), output);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakEmptyError("blank.txt"), output);   // an error since 2026-09-22
+        Assert.Contains("  ✗ " + ChatScreen.ReadEmptyError("blank.txt"), output);   // an error since 2026-09-22
         Assert.Contains("● " + new string('x', 50) + "\n", output);
-        Assert.Contains("  · " + ChatScreen.SpeakCutNotice(WorkingDirectory.MaxReadChars), output);
-        Assert.Equal("(cut at 32,000 characters)", ChatScreen.SpeakCutNotice(WorkingDirectory.MaxReadChars));
-        Assert.Equal("Usage: /speak <file> [n]; then /speak alone resumes it and /speak <n> starts at sentence n", ChatScreen.SpeakUsageError);
+        Assert.Contains("  · " + ChatScreen.ReadCutNotice(WorkingDirectory.MaxReadChars), output);
+        Assert.Equal("(cut at 32,000 characters)", ChatScreen.ReadCutNotice(WorkingDirectory.MaxReadChars));
+        Assert.Equal("Usage: /read <file> [n]; then /read alone resumes it and /read <n> starts at sentence n", ChatScreen.ReadUsageError);
         Assert.Empty(_chat.Requests);
     }
 
@@ -15282,7 +15282,7 @@ public partial class ChatScreenTests : IDisposable
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "notes.md"), "**Bold** and:\n- one\n- two");
-        LinesWhenIdle("/speak notes.md", "/exit");
+        LinesWhenIdle("/read notes.md", "/exit");
 
         string output = await RunAsync();
 
@@ -15293,54 +15293,54 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Speak_ANumber_StartsThere_ABareSpeakResumes_AndTheErrors()
+    public async Task Read_ANumber_StartsThere_ABareReadResumes_AndTheErrors()
     {
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "notes.txt"), "One. Two. Three.");
-        PushLine("/speak");          // nothing read yet
-        PushLine("/speak 2");        // nothing to jump to
-        PushLine("/speak notes.txt");
-        PushLine("/speak 2");        // from the second sentence
-        PushLine("/speak 99");
-        PushLine("/speak 0");
-        PushLine("/speak");          // speech off: the reading is "done", the top again
+        PushLine("/read");          // nothing read yet
+        PushLine("/read 2");        // nothing to jump to
+        PushLine("/read notes.txt");
+        PushLine("/read 2");        // from the second sentence
+        PushLine("/read 99");
+        PushLine("/read 0");
+        PushLine("/read");          // speech off: the reading is "done", the top again
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.SpeakUsageError, output);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakNothingToSeekError, output);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakBeyondEndError("notes.txt", 3, 99), output);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakBeyondEndError("notes.txt", 3, 0), output);
-        Assert.Equal("notes.txt has 3 sentences; nothing at 99", ChatScreen.SpeakBeyondEndError("notes.txt", 3, 99));
-        Assert.Equal("Nothing to jump to: /speak <file> first", ChatScreen.SpeakNothingToSeekError);
-        Assert.Equal(2, Count(output, "● One. Two. Three.\n"));   // the file, then the bare /speak from the top
+        Assert.Contains("  ✗ " + ChatScreen.ReadUsageError, output);
+        Assert.Contains("  ✗ " + ChatScreen.ReadNothingToSeekError, output);
+        Assert.Contains("  ✗ " + ChatScreen.ReadBeyondEndError("notes.txt", 3, 99), output);
+        Assert.Contains("  ✗ " + ChatScreen.ReadBeyondEndError("notes.txt", 3, 0), output);
+        Assert.Equal("notes.txt has 3 sentences; nothing at 99", ChatScreen.ReadBeyondEndError("notes.txt", 3, 99));
+        Assert.Equal("Nothing to jump to: /read <file> first", ChatScreen.ReadNothingToSeekError);
+        Assert.Equal(2, Count(output, "● One. Two. Three.\n"));   // the file, then the bare /read from the top
         Assert.Contains("● Two. Three.\n", output);
         Assert.Empty(_synth.Spoken);
         Assert.Empty(_chat.Requests);
     }
 
     [WindowsFact]
-    public async Task Speak_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole()
+    public async Task Read_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole()
     {
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(Path.Combine(files, "docs"));
         File.WriteAllText(Path.Combine(files, "docs", "notes.txt"), "One. Two. Three.");
         File.WriteAllText(Path.Combine(files, "notes 5"), "Whole. File.");
-        PushLine("/speak docs/notes.txt 3");   // from the third sentence
-        PushLine("/speak docs/notes.txt 9");   // past the end — the file is remembered all the same
-        PushLine("/speak 2");                  // so a seek works on it
-        PushLine("/speak notes 5");            // a file named so: read whole, not `notes` from 5
-        PushLine("/speak nope 5");             // neither is there: the head's error
+        PushLine("/read docs/notes.txt 3");   // from the third sentence
+        PushLine("/read docs/notes.txt 9");   // past the end — the file is remembered all the same
+        PushLine("/read 2");                  // so a seek works on it
+        PushLine("/read notes 5");            // a file named so: read whole, not `notes` from 5
+        PushLine("/read nope 5");             // neither is there: the head's error
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Contains("● Three.\n", output);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakBeyondEndError(@"docs\notes.txt", 3, 9), output);
+        Assert.Contains("  ✗ " + ChatScreen.ReadBeyondEndError(@"docs\notes.txt", 3, 9), output);
         Assert.Contains("● Two. Three.\n", output);
         Assert.Contains("● Whole. File.\n", output);
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
@@ -15350,24 +15350,24 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>The Unix twin of <see cref="Speak_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole"/> (2026-10-06, the macOS build): its paths with <c>/</c>, a Unix sandbox's.</summary>
     [UnixFact]
-    public async Task Speak_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole_Unix()
+    public async Task Read_AFileAndANumber_StartsThere_AndAFileNamedWithANumberIsReadWhole_Unix()
     {
         _settings.Update(d => d.TtsOutput = false);
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(Path.Combine(files, "docs"));
         File.WriteAllText(Path.Combine(files, "docs", "notes.txt"), "One. Two. Three.");
         File.WriteAllText(Path.Combine(files, "notes 5"), "Whole. File.");
-        PushLine("/speak docs/notes.txt 3");   // from the third sentence
-        PushLine("/speak docs/notes.txt 9");   // past the end — the file is remembered all the same
-        PushLine("/speak 2");                  // so a seek works on it
-        PushLine("/speak notes 5");            // a file named so: read whole, not `notes` from 5
-        PushLine("/speak nope 5");             // neither is there: the head's error
+        PushLine("/read docs/notes.txt 3");   // from the third sentence
+        PushLine("/read docs/notes.txt 9");   // past the end — the file is remembered all the same
+        PushLine("/read 2");                  // so a seek works on it
+        PushLine("/read notes 5");            // a file named so: read whole, not `notes` from 5
+        PushLine("/read nope 5");             // neither is there: the head's error
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Contains("● Three.\n", output);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakBeyondEndError(@"docs/notes.txt", 3, 9), output);
+        Assert.Contains("  ✗ " + ChatScreen.ReadBeyondEndError(@"docs/notes.txt", 3, 9), output);
         Assert.Contains("● Two. Three.\n", output);
         Assert.Contains("● Whole. File.\n", output);
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
@@ -15376,7 +15376,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Speak_EscOverTheTail_ThenABareSpeak_ResumesAtTheStoppedSentence()
+    public async Task Read_EscOverTheTail_ThenABareRead_ResumesAtTheStoppedSentence()
     {
         _playback.HoldBytes = true;   // the device plays nothing until released: the play head is the test's
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
@@ -15402,7 +15402,7 @@ public partial class ChatScreenTests : IDisposable
                     });
                     break;
                 case 2:
-                    PushLine(input, "/speak");   // resumes at sentence 2
+                    PushLine(input, "/read");   // resumes at sentence 2
                     break;
                 case 3:
                     _ = Task.Run(async () =>
@@ -15420,7 +15420,7 @@ public partial class ChatScreenTests : IDisposable
                     break;
             }
         };
-        PushLine(input, "/speak notes.txt");
+        PushLine(input, "/read notes.txt");
 
         string output = await RunAsync(input);
 
@@ -15480,7 +15480,7 @@ public partial class ChatScreenTests : IDisposable
                     break;
             }
         };
-        PushLine(input, "/speak notes.txt");
+        PushLine(input, "/read notes.txt");
 
         string output = await RunAsync(input);
 
@@ -15508,8 +15508,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MidTurn_SpeakIsRefused()
     {
-        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Speak, hasArgs: true));
-        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Speak, hasArgs: false));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Read, hasArgs: true));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Read, hasArgs: false));
     }
 
     // ── /view (2026-09-17) ──────────────────────────────────────────────────
@@ -18617,16 +18617,16 @@ public partial class ChatScreenTests : IDisposable
     // ── /echo (2026-09-17) ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task Echo_PrintsTheLineAsAReply_SpeaksIt_AndABareSpeakNeverResumesIt()
+    public async Task Echo_PrintsTheLineAsAReply_SpeaksIt_AndABareReadNeverResumesIt()
     {
-        LinesWhenIdle("/echo One. Two.", "/copy", "/speak", "/echo", "/exit");   // typed at idle: the tail heard whole before the next line
+        LinesWhenIdle("/echo One. Two.", "/copy", "/read", "/echo", "/exit");   // typed at idle: the tail heard whole before the next line
 
         string output = await RunAsync();
 
         Assert.Contains("● One. Two.\n", output);
         Assert.Equal(new[] { "One.", "Two." }, _synth.SpokenText);
         Assert.Equal(1, _playback.Started);
-        Assert.Contains("  ✗ " + ChatScreen.SpeakUsageError, output);   // no file was read: the echo is not a reading to resume
+        Assert.Contains("  ✗ " + ChatScreen.ReadUsageError, output);   // no file was read: the echo is not a reading to resume
         Assert.Contains("  ✗ " + ChatScreen.EchoUsageError, output);
         Assert.Equal("Usage: /echo <text>", ChatScreen.EchoUsageError);
         Assert.Contains("  · " + ChatScreen.NothingToCopyNotice, output);   // no /copy entry either
@@ -23026,7 +23026,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "net", sources));
         Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perfbar", "", sources)));
         // The commands whose argument is a path of their own keep their list over a mention (2026-09-30).
-        Assert.True(ChatScreen.TakesPathArgument("/speak") && ChatScreen.TakesPathArgument("/view") && ChatScreen.TakesPathArgument("/PRINT"));
+        Assert.True(ChatScreen.TakesPathArgument("/read") && ChatScreen.TakesPathArgument("/view") && ChatScreen.TakesPathArgument("/PRINT"));
         Assert.True(ChatScreen.TakesPathArgument("/tree") && ChatScreen.TakesPathArgument("/explore") && ChatScreen.TakesPathArgument("/vault") && ChatScreen.TakesPathArgument("/terminal"));   // their folder lists
         Assert.False(ChatScreen.TakesPathArgument("/loop") || ChatScreen.TakesPathArgument("/plan") || ChatScreen.TakesPathArgument("/claude"));   // off and the looks (later on 2026-09-29)
         Assert.True(ChatScreen.TakesPathArgument("/cwd"));   // any drive's folders (2026-10-05)
@@ -23097,7 +23097,7 @@ public partial class ChatScreenTests : IDisposable
         var vaultSources = sources with { VaultFolders = prefix => new[] { "Daily/", "Projects/", "Projects/Neon/" }.Where(f => f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList() };
         Assert.Equal(["Projects/", "Projects/Neon/"], Texts(ChatScreen.ArgumentItems("/vault", "P", vaultSources)));   // the vault's folders, as /tree's
         Assert.Equal(["Daily/", "Projects/", "Projects/Neon/"], Texts(ChatScreen.ArgumentItems("/vault", "", vaultSources)));
-        Assert.Empty(ChatScreen.ArgumentItems("/speak", "", sources));   // a path list, ArgumentPaths (2026-09-17)
+        Assert.Empty(ChatScreen.ArgumentItems("/read", "", sources));   // a path list, ArgumentPaths (2026-09-17)
         Assert.Equal([new CompletionItem("all", ChatScreen.CopyAllNote), new CompletionItem("--thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "", sources));
         Assert.Equal([new CompletionItem("--thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "--t", sources));   // 2026-09-26
         Assert.Equal([new CompletionItem("all --thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "all ", sources));
@@ -23141,20 +23141,20 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public void ArgumentPaths_Speak_IsTheMentionShape_OverTheTextFiles_AndClosesOnASpaceOrAFullPath()
+    public void ArgumentPaths_Read_IsTheMentionShape_OverTheTextFiles_AndClosesOnASpaceOrAFullPath()
     {
         var sources = Sources();
 
         // The root's one level, folders first; a name prefix walks the tree; a folder segment narrows it.
-        Assert.Equal(["docs/", "notes.txt", "README.md"], ChatScreen.ArgumentPaths("/speak", "", sources)!.Paths);
-        Assert.Equal(["docs/notes.md", "notes.txt"], ChatScreen.ArgumentPaths("/speak", "n", sources)!.Paths);
-        Assert.Equal(["docs/deep/", "docs/notes.md"], ChatScreen.ArgumentPaths("/SPEAK", "docs/", sources)!.Paths);
-        Assert.Equal(["docs/deep/tail.md"], ChatScreen.ArgumentPaths("/speak", "docs/deep/t", sources)!.Paths);
+        Assert.Equal(["docs/", "notes.txt", "README.md"], ChatScreen.ArgumentPaths("/read", "", sources)!.Paths);
+        Assert.Equal(["docs/notes.md", "notes.txt"], ChatScreen.ArgumentPaths("/read", "n", sources)!.Paths);
+        Assert.Equal(["docs/deep/", "docs/notes.md"], ChatScreen.ArgumentPaths("/READ", "docs/", sources)!.Paths);
+        Assert.Equal(["docs/deep/tail.md"], ChatScreen.ArgumentPaths("/read", "docs/deep/t", sources)!.Paths);
         // A trailing space ends the argument (a folder applied under Apply, a name done); a path typed in full closes the list so Enter sends.
-        Assert.Empty(ChatScreen.ArgumentPaths("/speak", "docs/ ", sources)!.Paths);
-        Assert.Empty(ChatScreen.ArgumentPaths("/speak", "notes.txt", sources)!.Paths);
-        Assert.Empty(ChatScreen.ArgumentPaths("/speak", "NOTES.TXT", sources)!.Paths);
-        Assert.Empty(ChatScreen.ArgumentPaths("/speak", "zzz", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/read", "docs/ ", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/read", "notes.txt", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/read", "NOTES.TXT", sources)!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/read", "zzz", sources)!.Paths);
         // Every other command: no path list.
         // /view (2026-09-17): the image files, the same rules.
         Assert.Equal(["docs/", "pic.png", "shot.jpg"], ChatScreen.ArgumentPaths("/view", "", sources)!.Paths);

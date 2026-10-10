@@ -174,7 +174,7 @@ internal sealed class SpeechOutput
     /// holds <see cref="PlayedBytes"/> (an unfinished one counts from its first byte); the last
     /// sentence with bytes once the play head has passed every one; 0 before any sound. A
     /// sentence with nothing speakable keeps its number and never counts. Safe from any thread
-    /// (the <c>/speak</c> position on the hint row is read on the pane's tick).
+    /// (the <c>/read</c> position on the hint row is read on the pane's tick).
     /// </summary>
     public int PlayingChunk
     {
@@ -208,12 +208,12 @@ internal sealed class SpeechOutput
     /// <summary>
     /// <see cref="PlayingChunk"/> as it was when the device was first silenced (<see cref="StopAll"/>,
     /// taken before the buffer is cleared — after that the play head reads as the end of what was
-    /// written); 0 while never stopped. What a stopped <c>/speak</c> resumes at.
+    /// written); 0 while never stopped. What a stopped <c>/read</c> resumes at.
     /// </summary>
     public int StoppedAtChunk => Volatile.Read(ref _stoppedAt);
 
     /// <summary>
-    /// One sentence, already split, straight into the queue (2026-09-17): the <c>/speak</c>
+    /// One sentence, already split, straight into the queue (2026-09-17): the <c>/read</c>
     /// reading feeds its own list this way so sentence <em>k</em> of the list is chunk <em>k</em>
     /// here, whatever the chunker would have made of the joined text. <see cref="Feed"/> is the
     /// streamed reply's way.

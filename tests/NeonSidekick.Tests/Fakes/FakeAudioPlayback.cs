@@ -98,7 +98,7 @@ public sealed class FakeAudioPlayback : IAudioPlayback
         }
     }
 
-    /// <summary>Lets the next <paramref name="bytes"/> held bytes "finish playing": the play head moves that far (2026-09-17, the /speak position).</summary>
+    /// <summary>Lets the next <paramref name="bytes"/> held bytes "finish playing": the play head moves that far (2026-09-17, the /read position).</summary>
     public void Release(long bytes)
     {
         lock (_gate)

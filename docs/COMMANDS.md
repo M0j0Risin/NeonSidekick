@@ -88,7 +88,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/log` | Opens the [log window](#log-window). Works without `--log`. |
 | `/log --file` | Opens the `--log` file in your editor (only when started with `--log <path>`; the argument list offers `--file` only then). |
 | `/loop <count>\|infinite [<delay>] <message>` | Sends the message that many times, or until ESC or Ctrl+C, waiting for each reply. See Loops. |
-| `/loop <count>\|infinite [<delay>] /imagine\|/speak <arguments>` | Runs `/imagine` or `/speak` itself each pass. |
+| `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Runs `/imagine` or `/read` itself each pass. |
 | `/plan <requirement>` | Researches with read-only tools and presents a plan before anything changes. See Plan mode. |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them; `--` makes the rest the topic. See Bot conversations. |
 | `/botchat --resume [<line>]` | Carries on the last bot conversation. |
@@ -125,6 +125,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* to or from another profile (added, or replacing with `overwrite`). |
 | `/profile edit\|reload` | `edit` opens `profile.json`; `reload` reads it back and reconnects what changed. |
 | `/queue [clear]` | Lists and prunes the queued messages (Enter removes one after a yes; `⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now, and its reply's end releases the hold. `/queue clear` drops them without the pane. |
+| `/read [<file> [<n>]\|<n>]` | Reads a text file from the working directory aloud. Alone it resumes; a number starts at that sentence. |
 | `/reasoning [none\|low\|medium\|high\|xhigh]` | Picks the reasoning effort (`none`, `low`, `medium`, `high`, `xhigh`). |
 | `/rewind [<n>]` | Goes back to an earlier message: pick one (n back), confirm, and it and everything after leave the conversation (and the stored session), its text returning to the input row, pictures and pastes included. Only the conversation rewinds; the confirmation names the tools whose changes stay. Compacted messages can't be picked. |
 | `/remember <text>` | Adds a memory. |
@@ -145,7 +146,6 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/skills` | Lists the skills and edits the skill, reflection and project-file settings. On the Offered tab each skill shows its version after the scope (`v1` as written, one more for each older text kept in `skills.db`; blank for an external skill; `🔒v1` for a [locked](SETTINGS.md#locking-a-skill) one), and typing narrows the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) from the web after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. Refused during a reply. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | `list` lists the skills unused for that long; `commit` deletes them, folder and record, after a yes/no. See [Skill records and purging unused skills](SETTINGS.md#skill-records-and-purging-unused-skills). |
-| `/speak [<file> [<n>]\|<n>]` | Reads a text file from the working directory aloud. Alone it resumes; a number starts at that sentence. |
 | `/splash` | Starts a new conversation and shows the splash screen. |
 | `/stt [on\|off]` | Toggles voice input. |
 | `/stt wake [on\|off]` | Toggles the wake word (turning it off turns the interrupt off too). |
@@ -259,7 +259,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 
 * A delay after the count waits after each reply: `/loop infinite 1m check the build` (one word, up to 24 hours). ESC or Ctrl+C stops the loop.
 * A cancelled, withdrawn or failed turn ends it.
-* The message may be `/imagine …` or `/speak …`, run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). `/speak` waits for each reading; only the last pass's pictures go with your next message. No other command can be looped. Between the passes the input line works as during a reply.
+* The message may be `/imagine …` or `/read …`, run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`). `/read` waits for each reading; only the last pass's pictures go with your next message. No other command can be looped. Between the passes the input line works as during a reply.
 
 ### Benchmark tests
 

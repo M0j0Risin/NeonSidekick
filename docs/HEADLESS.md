@@ -108,7 +108,7 @@ What to use instead:
 | `/loop …` | Repeat the line in the input, or loop in the calling script. |
 | `/learn` | Not available; the TUI's reflection runs it. |
 | `/timer` | Not available; there are no timers headless (nothing could deliver the alert). |
-| `/tts`, `/stt` (and its `wake` and `interrupt`), `/speak`, `/echo` | Not available; headless never speaks or listens. |
+| `/tts`, `/stt` (and its `wake` and `interrupt`), `/read`, `/echo` | Not available; headless never speaks or listens. |
 | `/cmd`, `/cmdclear`, `/tools shell allowed`, `/tools shell police` | Not available; a `/cmd` line goes to the model as text. Manage the allow list in the TUI; `NEONSIDEKICK_COMMAND_POLICY` sets the policy for a run. |
 | `/profile push\|pull servers` | Not available; copy the server settings in the TUI. `--url`, `--model` and `NEONSIDEKICK_LLM_URL` set the server for a run. |
 | `/profile push\|pull keys` | Not available; copy the keys in the TUI. `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_HA_TOKEN` and `NEONSIDEKICK_YOUTUBE_API_KEY` set them for a run. |

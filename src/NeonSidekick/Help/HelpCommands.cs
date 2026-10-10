@@ -171,7 +171,7 @@ public static class HelpCommands
         new("/loop",
         [
             new("/loop <count>|infinite [<delay>] <message>", "Send the message that many times, or until ESC or Ctrl+C, waiting for each reply. A delay is one word such as `30s`, `5m` or `1h30m` (never a bare number), up to 24 hours. See Loops."),
-            new("/loop <count>|infinite [<delay>] /imagine|/speak <arguments>", "Run `/imagine` or `/speak` itself each pass, with no model in between. No other command can be looped."),
+            new("/loop <count>|infinite [<delay>] /imagine|/read <arguments>", "Run `/imagine` or `/read` itself each pass, with no model in between. No other command can be looped."),
         ]),
         new("/mcp",
         [
@@ -246,6 +246,10 @@ public static class HelpCommands
         [
             new("/queue [clear]", "List and prune the messages queued during a reply (`⊠ clear all` or `c` drops them all). While the queue is held (*Queue cancel mode* `hold`, after a cancelled reply), `➤ send` or `s` sends the next one now; its reply's end releases the hold. `/queue clear` drops them without opening the pane. Ctrl+Q runs `/queue`, Ctrl+Alt+Q `/queue clear`."),
         ]),
+        new("/read",
+        [
+            new("/read [<file> [<n>]|<n>]", "Read a text file from the working directory aloud as a reply. On its own it resumes; a number starts from that sentence (a file named only with digits is typed `./5`)."),
+        ]),
         new("/reasoning",
         [
             new("/reasoning [none|low|medium|high|xhigh]", "Pick the reasoning effort, or set it. Ctrl+R runs it too."),
@@ -306,10 +310,6 @@ public static class HelpCommands
             new("/skills", "List the skills (Enter moves, renames, edits, reverts, locks or deletes one; a locked skill can't be changed by the model, a reflection, an update or a rename, move, revert or delete until it is unlocked on the same page; revert lists the kept versions to pick one to put back after a yes, d removing the highlighted one and c all of them, each after a yes) and edit the skill, reflection and project-file settings. On the Offered tab, type to narrow the list to the skills whose name or description holds the text; Backspace erases, ESC clears it, the next ESC closes."),
             new("/skills add <source> [--global|--profile]", "Install an Agent Skill from the web, with a preview first: search words, `owner/repo[/skill]`, a GitHub URL (the repository, a `/tree/…` folder or a `SKILL.md`) or a `.zip` URL. A pane asks where it goes (the cursor starts on Cancel). Refused while a reply runs. See Installing skills."),
             new("/skills purge list|commit <age>", "`list` lists the skills not used for that long (`30` days, `12h`, `90m`) and deletes nothing; `commit` deletes them, folder and record, after a yes/no that lists them. See Skill records."),
-        ]),
-        new("/speak",
-        [
-            new("/speak [<file> [<n>]|<n>]", "Read a text file from the working directory aloud as a reply. On its own it resumes; a number starts from that sentence (a file named only with digits is typed `./5`)."),
         ]),
         new("/splash",
         [
