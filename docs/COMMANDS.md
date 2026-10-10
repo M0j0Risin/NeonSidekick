@@ -208,6 +208,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 `/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools* and is refused during a reply.
 
 * **Tools:** only read-only ones (files, git status/log/diff, web, SQL, Oracle, MySQL, UNC reads, the vault, recall, skills, sessions, `ask_user`) plus `present_plan`. Everything that writes, runs or starts something, and every MCP tool, waits for approval.
+* **Advisors:** while `neon_advisor` is offered (*Advisors enabled* with an advisor listed, not off on `/tools`), the model is asked to consult the advisors whose role covers part of the plan before presenting it, and to say in the plan's Context which advice it followed or set aside. See [Advisor](#advisor).
 * **Presenting:** the model asks what it needs, then presents the plan, printed and saved as `.neon/plans/<kebab-name>.md` in the working directory (a new plan never overwrites another; revisions overwrite their own). 📝 shows while planning.
 * **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`) or **Cancel plan** (`c`); the cursor and ESC are on Keep refining. Approval marks the file `approved` and runs a turn with every tool, ticking its checkboxes as it goes; the fresh-context choice starts a new conversation with the plan.
 * **Tracking:** all ticked marks the file `done`; otherwise it is `incomplete` with a `progress: 3/7` line.

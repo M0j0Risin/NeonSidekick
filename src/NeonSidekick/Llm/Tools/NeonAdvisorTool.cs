@@ -89,6 +89,9 @@ public sealed class NeonAdvisorTool : AIFunction
 
     public override JsonElement JsonSchema => Schema;
 
+    /// <summary>The advisors as they are now (2026-10-10): plan mode's directive names them.</summary>
+    public IReadOnlyList<AdvisorEntry> Advisors => AdvisorRoster.Entries(_effective().AdvisorList);
+
     /// <summary>A turn starts (<c>PrepareTurn</c>): the per-turn count starts over.</summary>
     public void BeginTurn() => Interlocked.Exchange(ref _calls, 0);
 

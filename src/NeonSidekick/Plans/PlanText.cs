@@ -130,7 +130,14 @@ public static class PlanText
     /// directive, under a custom <c>operata.md</c> too: the requirement itself (so a compaction cannot
     /// lose it), what planning allows, the shape of the plan and how it is presented. Pinned.
     /// </summary>
-    public static string Directive(string requirement, string? path, int revision)
+    public static string Directive(string requirement, string? path, int revision) => Directive(requirement, path, revision, null);
+
+    /// <summary>
+    /// <see cref="Directive(string, string?, int)"/> with <paramref name="advisors"/> (2026-10-10, the user's ask): while the turn offers
+    /// <c>neon_advisor</c>, <see cref="AdvisorsLine"/> follows the <c>present_plan</c> bullets, before the state line; null or none, the
+    /// directive as ever. Pinned.
+    /// </summary>
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors)
     {
         ArgumentNullException.ThrowIfNull(requirement);
         string state = path is null
@@ -144,7 +151,21 @@ public static class PlanText
             "- When no open question is left, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.\n" +
             "- Never write the plan only in your reply: call present_plan with it.\n" +
             "- present_plan shows the plan to the user for approval; follow its result.\n" +
+            (advisors is { Count: > 0 } ? AdvisorsLine(advisors) + "\n" : "") +
             state;
+    }
+
+    /// <summary>
+    /// Plan mode's advisors bullet (2026-10-10, the user's ask: consult the advisors whose role matches the subject; their call, the
+    /// plan's Context says whose advice it took): the advisors by name and role, consulted before the plan is presented, only where
+    /// a role fits. Pinned.
+    /// </summary>
+    public static string AdvisorsLine(IReadOnlyList<Settings.AdvisorEntry> advisors)
+    {
+        ArgumentNullException.ThrowIfNull(advisors);
+        return "- You have advisors with " + NeonSidekick.Llm.Tools.NeonAdvisorTool.ToolName + ": " + string.Join("; ", advisors.Select(Advisors.AdvisorRoster.Label)) + ". " +
+            "Before presenting the plan, consult each one whose role covers part of it, with one self-contained question about that part, and weigh the answer. " +
+            "Consult only those whose role fits; skip the rest. In ## Context, say which advisors you consulted and what advice you followed or set aside.";
     }
 
     public const string ToolDescription =

@@ -29,7 +29,15 @@ public sealed record PlanVerdict(PlanChoice Choice, string? Feedback = null);
 public sealed record PlanPresentation(string Title, string Path, int Revision, string Markdown);
 
 /// <summary>What <see cref="NeonSidekick.App.ChatScreen.PrepareTurn"/> needs of plan mode for one turn: the directive and the tool that presents the plan.</summary>
-public sealed record PlanTurn(string Directive, AIFunction Tool);
+public sealed record PlanTurn(string Directive, AIFunction Tool)
+{
+    /// <summary>The directive again with the advisors' bullet (2026-10-10, <see cref="PlanText.AdvisorsLine"/>); null composes none.</summary>
+    public Func<IReadOnlyList<Settings.AdvisorEntry>, string>? WithAdvisors { get; init; }
+
+    /// <summary>The directive a turn sends: with <paramref name="advisors"/> when the turn offers <c>neon_advisor</c> and any is listed, else <see cref="Directive"/>.</summary>
+    public string DirectiveFor(IReadOnlyList<Settings.AdvisorEntry>? advisors) =>
+        advisors is { Count: > 0 } && WithAdvisors is { } compose ? compose(advisors) : Directive;
+}
 
 /// <summary>
 /// Plan mode's state (2026-09-26), one per screen (and one per headless run): whether it is on,
@@ -139,6 +147,14 @@ public sealed class PlanSession
     public PlanTurn? Turn(AIFunction tool)
     {
         ArgumentNullException.ThrowIfNull(tool);
-        return Active ? new PlanTurn(PlanText.Directive(Requirement, Path, Revision), tool) : null;
+        if (!Active)
+        {
+            return null;
+        }
+
+        string requirement = Requirement;
+        string? path = Path;
+        int revision = Revision;
+        return new PlanTurn(PlanText.Directive(requirement, path, revision), tool) { WithAdvisors = advisors => PlanText.Directive(requirement, path, revision, advisors) };
     }
 }
