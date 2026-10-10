@@ -57,8 +57,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// An asked Home Assistant call's question, on the turn task: the yes/no pane through the watcher — the advisor's confirm
-    /// (<see cref="ConfirmAdvisorAsync"/>), the cursor on No, ESC a no. Null (never asked) without the pane or a watcher to run it.
+    /// An asked Home Assistant call's question, on the turn task: the yes/no pane through the watcher — an advisor's confirm
+    /// (<see cref="ConfirmNeonAdvisorAsync"/>), the cursor on No, ESC a no. Null (never asked) without the pane or a watcher to run it.
     /// </summary>
     private async Task<bool?> ConfirmHomeAsync(string question, CancellationToken turnToken)
     {

@@ -34,7 +34,7 @@ public class ConsistencyPassTests
         SettingsMenu.WebToggleKeys, SettingsMenu.CameraToggleKeys, SettingsMenu.ChangedKeys, SettingsMenu.ProfileKeys,
         SettingsMenu.ThemeKeepKeys, SettingsMenu.ThemePickKeys, EmbeddedModelFilter.Keys, EmbeddedModelFilter.CatalogKeys,
         CameraText.AllowHint, CameraMenu.AllowHintWithView, YouTubeText.SavedKeys, MenuPane.EmptyKeys,
-        .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools, SettingsField.ClaudeCodeAdvisor }
+        .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }
             .Select(field => SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(field)!)),   // the setting buttons' pages (2026-10-09)
     ];
 

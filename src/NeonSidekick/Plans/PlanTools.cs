@@ -55,8 +55,6 @@ public static class PlanTools
         // PostgreSQL (2026-10-04): every call reads, in a read-only transaction rolled back
         "postgres_connections", "postgres_schemas", "postgres_tables", "postgres_columns", "postgres_describe",
         "postgres_relationships", "postgres_indexes", "postgres_query",
-        // the advisor: Claude reads and answers, read-only whatever Claude Code slash command permissions says (2026-09-27)
-        "claude_code_advisor",
         // the profile advisors (2026-10-10): another profile reads and answers over this chat's read-only tools alone
         "neon_advisor",
         // YouTube (2026-10-05): a search and a playlist's listing (2026-10-08) read the Data API; the status reads the window's last report; the saved list (2026-10-07) reads the profile's file

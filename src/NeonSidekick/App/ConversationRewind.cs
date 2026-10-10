@@ -23,13 +23,12 @@ public sealed record RewindTurn(int Number, int Start, string Text, int ToolCall
 /// "Changes something" means every tool plan mode drops (<see cref="PlanTools.Allowed"/>), so an MCP tool counts too.
 /// Rewinding does not undo what they did.</item>
 /// <item><paramref name="HadClaude"/>: a <c>/claude</c> exchange was among them.</item>
-/// <item><paramref name="HadAdvisor"/>: a <c>claude_code_advisor</c> call was among them.</item>
 /// <item><paramref name="FirstOrdinal"/>: the store ordinal of the first stamped turn
 /// (<see cref="ConversationHistory.TurnOrdinalKey"/>).</item>
 /// <item><paramref name="KeptStamped"/>: whether any turn that stays carries a stamp.</item>
 /// </list>
 /// </summary>
-public sealed record RewindCut(int Turns, IReadOnlyList<string> ChangingTools, bool HadClaude, bool HadAdvisor, int? FirstOrdinal, bool KeptStamped, bool HadAdvisors = false);
+public sealed record RewindCut(int Turns, IReadOnlyList<string> ChangingTools, bool HadClaude, int? FirstOrdinal, bool KeptStamped, bool HadAdvisors = false);
 
 /// <summary>One turn of the history as the screen replays it after a rewind when no session row holds the turns.</summary>
 public sealed record RewindReplay(string UserText, string ReplyText, int ToolCalls, bool Summary);
@@ -154,7 +153,6 @@ public static class ConversationRewind
 
         var calls = Calls(messages, start, messages.Count).ToList();
         var changing = calls.Select(c => c.Name).Where(name => !PlanTools.Allowed(name)).Distinct(StringComparer.Ordinal).ToList();
-        bool advisor = calls.Any(c => string.Equals(c.Name, ClaudeAdvisorTool.ToolName, StringComparison.Ordinal));
         bool advisors = calls.Any(c => string.Equals(c.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal));
         bool keptStamped = false;
         for (int i = 0; i < start && !keptStamped; i++)
@@ -162,7 +160,7 @@ public static class ConversationRewind
             keptStamped = ConversationHistory.IsTurnStart(messages[i]) && ConversationHistory.TurnOrdinal(messages[i]) is not null;
         }
 
-        return new RewindCut(turns, changing, claude, advisor, first, keptStamped, advisors);
+        return new RewindCut(turns, changing, claude, first, keptStamped, advisors);
     }
 
     /// <summary>

@@ -93,7 +93,7 @@ public class ConversationRewindTests : IDisposable
         Assert.Equal(2, cut.Turns);
         Assert.Equal(["write_file", "run_command"], cut.ChangingTools);   // read_file only reads; each name once, in call order
         Assert.False(cut.HadClaude);
-        Assert.False(cut.HadAdvisor);
+        Assert.False(cut.HadAdvisors);
         Assert.Equal(5, cut.FirstOrdinal);
         Assert.False(cut.KeptStamped);
         Assert.Equal(3, history.TurnCount);   // nothing changed
@@ -104,10 +104,10 @@ public class ConversationRewindTests : IDisposable
         claude.AddUser(ClaudeText.HistoryUser("why?"));
         claude.AddAssistant(ClaudeText.HistoryReply("because"));
         claude.AddUser("ask the advisor");
-        Call(claude, "a1", Llm.Tools.ClaudeAdvisorTool.ToolName);
+        Call(claude, "a1", Llm.Tools.NeonAdvisorTool.ToolName);   // claude_code_advisor until that tool was retired (2026-10-10)
         var both = ConversationRewind.Preview(claude.Messages, 1);
         Assert.True(both.HadClaude);
-        Assert.True(both.HadAdvisor);
+        Assert.True(both.HadAdvisors);
         Assert.Empty(both.ChangingTools);   // the advisor only reads
         Assert.Null(both.FirstOrdinal);
         Assert.True(both.KeptStamped);
@@ -121,7 +121,7 @@ public class ConversationRewindTests : IDisposable
     [InlineData(12, false, 1, 10, 10)]    // never past what is stored
     public void KeepThrough_GoesByTheStamp_ElseByWhatWasLogged(int? first, bool keptStamped, int turns, int stored, int expected)
     {
-        Assert.Equal(expected, ConversationRewind.KeepThrough(new RewindCut(turns, [], false, false, first, keptStamped), stored));
+        Assert.Equal(expected, ConversationRewind.KeepThrough(new RewindCut(turns, [], false, first, keptStamped), stored));
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class ConversationRewindTests : IDisposable
     public void Words_ArePinned()
     {
         var turn = new RewindTurn(3, 9, "fix the build\nand the tests", 2);
-        var cut = new RewindCut(2, ["write_file", "run_command"], false, false, null, false);
+        var cut = new RewindCut(2, ["write_file", "run_command"], false, null, false);
 
         Assert.Equal("↩️ Rewind", RewindText.Title);
         Assert.Equal("↩️ Rewind to before #3? 2 messages will be removed.", RewindText.ConfirmPrompt(turn, cut));

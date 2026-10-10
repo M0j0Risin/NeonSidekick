@@ -60,7 +60,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(Titled(RewindText.ConfirmPrompt(new RewindTurn(1, 0, "one", 0), new RewindCut(1, [], false, false, null, false))), output);
+        Assert.Contains(Titled(RewindText.ConfirmPrompt(new RewindTurn(1, 0, "one", 0), new RewindCut(1, [], false, null, false))), output);
         Assert.DoesNotContain("rewound", output);
         Assert.Equal(["one", "two"], UserLines(_chat.Requests[1]));
     }
@@ -158,7 +158,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(RewindText.ConfirmPrompt(new RewindTurn(2, 0, "two", 0), new RewindCut(1, [], false, false, null, false)), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains(SettingsMenu.PromptTitle(RewindText.ConfirmPrompt(new RewindTurn(2, 0, "two", 0), new RewindCut(1, [], false, null, false)), SettingsMenu.ConfirmKeys), output);
         Assert.Contains("· " + ChatScreen.KeptNotice, output);
         Assert.Contains("· " + RewindText.RewoundNotice(2, "one"), output);
         Assert.Equal(3, _chat.Requests.Count);

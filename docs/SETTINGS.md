@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (LLM, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into ClaudeCode, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
+* **Second strip:** some tabs hold tabs of their own, shown as a second row of tabs under the first while you are on it: `/settings`' Servers (LLM, Embedded, Docker, Anthropic, OpenAI) and Voice (TTS, STT), `/tools`' Files, Integrations, Database and Media (their menus), `/skills`' Offered (all, profile, global) and `/mcp`'s Tools with two servers or more connected (all, then each server). ←/→ step through every one in turn and on into the next tab (on `/tools` from Obsidian into Docker, from YouTube into SQL, from Oracle into Print), Tab and Shift+Tab jump a whole tab and skip past them, and coming back finds the one you left. A click on a name shows it.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -129,7 +129,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
-| 📁 🌄 🌐 ✴️ 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `claude`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 🌄 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Claude Code advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
+| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 🌄 💎 🖨️'s have setting buttons at the top (see *File tools*, *Image tools*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -141,9 +141,9 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | performance bar (anywhere on it) | *Show performance bar* has a meter checked | `/settings` |
 
 ## Panes
-* `/settings`: the app (General), the LLM and its servers (Servers: LLM, Embedded, Docker, Anthropic, OpenAI), voice (Voice: TTS, STT), sessions and `/botchat`
+* `/settings`: the app (General), the LLM and its servers (Servers: LLM, Embedded, Docker, Anthropic with Claude Code and `/claude`, OpenAI), voice (Voice: TTS, STT), sessions and `/botchat`
 * `/skills`: agent skills and self-reflection
-* `/tools`: the model's tools, and Claude (`/claude` and the advisor)
+* `/tools`: the model's tools
 * `/mcp`: external MCP servers
 * `/sys`: a read-only view of what the model is sent; `/sys persona`, `/sys operata` and `/sys vocalia` edit the files it is made from
 * `/usage`: LLM usage statistics (tok/s, time to first token…)
@@ -370,11 +370,15 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 
 #### Anthropic
 
-Claude Code and the Anthropic API as `/server` choices. `/claude` and `claude_code_advisor` are on `/tools` › Integrations › ClaudeCode.
+Claude Code as a `/server` choice and for `/claude` (you message it), then the Anthropic API as a `/server` choice.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable* on `/tools` › Integrations › ClaudeCode, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
+| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable*, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
+| Claude Code executable | The Claude Code CLI, for `/claude` and the Claude Code server. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
+| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
+| Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
+| Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
 | Anthropic API | Offers the Anthropic API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
 | Anthropic API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac). An empty entry clears it. | (none) |
 | Anthropic API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
@@ -757,24 +761,7 @@ The picture tools' switch and their rows: `image_edit`'s defaults, where an edit
 
 ### Integrations
 
-The apps and services the tools reach, five menus on one tab, each a tab of the second strip (ClaudeCode · Docker · HomeAssistant · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Media from 2026-10-09).
-
-#### ClaudeCode
-
-The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (the model asks it). The Anthropic API and Claude Code as servers are on `/settings` › Servers › Anthropic.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Claude Code executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
-| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), or `read-write` (its usual tools with file edits, no commands). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
-| Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
-| Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
-| Claude Code advisor tool | Offers `claude_code_advisor`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. The top of its on/off page has **model** (`m`) and **effort** (`e`) buttons that open *Claude Code advisor tool model* and *Claude Code advisor tool effort*; ESC there comes back. | off |
-| Claude Code advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
-| Claude Code advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
-| Claude Code advisor tool model | The advisor's `--model`; the first row follows *Claude Code slash command model*. | (as Claude Code slash command model) |
-| Claude Code advisor tool effort | The advisor's `--effort`; the first row follows *Claude Code slash command effort*. | (as Claude Code slash command effort) |
-| Claude Code advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
+The apps and services the tools reach, four menus on one tab, each a tab of the second strip (Docker · HomeAssistant · ComfyUI · YouTube): ←/→ walk them, Tab skips past them. Each was a tab of its own until 2026-10-10 (ComfyUI and YouTube on Media from 2026-10-09). `/claude`'s settings are on `/settings` › Servers › Anthropic.
 
 #### Docker
 

@@ -37,7 +37,7 @@ public static class ToolsText
     /// </summary>
     public static readonly string[] SwitchWords =
     [
-        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Claude, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.Obsidian,
+        ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print,
     ];
@@ -50,7 +50,6 @@ public static class ToolsText
         ToolbarItems.Files => SettingsField.FileTools,
         ToolbarItems.Image => SettingsField.ImageTools,   // 2026-10-10, the picture tools' own switch
         ToolbarItems.Web => SettingsField.WebTools,
-        ToolbarItems.Claude => SettingsField.ClaudeCodeAdvisor,
         ToolbarItems.Advisors => SettingsField.Advisors,   // 2026-10-10, the profile advisors' switch (/settings › Advisors)
         ToolbarItems.Docker => SettingsField.DockerTools,
         ToolbarItems.Obsidian => SettingsField.ObsidianTools,
@@ -178,21 +177,14 @@ public static class ToolsText
     /// <summary>The YouTube tab (2026-10-05, the YouTube plan): the search key and the video window's tools; after ComfyUI, before GitLib (the user's place, later that day; after Screen until then).</summary>
     public const string YouTubeTabTitle = "YouTube";
 
-    /// <summary>The Docker tools' tab and group (2026-10-02), after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
+    /// <summary>The Docker tools' tab and group (2026-10-02), Integrations' first menu since 2026-10-10 (the ClaudeCode tab before it went); after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>
     public const string DockerTabTitle = "Docker";
 
     /// <summary>The image tools' tab and group (2026-09-24), after HA, before GitLib, since 2026-10-03 (the user's order; after Obsidian, before SQL, from 2026-09-27); "Images" until later on 2026-09-24 (the user's call: it is ComfyUI's tab).</summary>
     public const string ComfyTabTitle = "ComfyUI";
 
-    /// <summary>The Claude tab and the advisor's group (2026-09-27): <c>/claude</c>'s rows (off <c>/settings</c>, the user's call) and <c>claude_code_advisor</c>'s (<c>claude_advisor_cli</c> until 2026-10-09), after Oracle, before Docker, since 2026-10-03 (the user's order; after Ask, before Obsidian, from later on 2026-09-27; after ComfyUI before). Titled "Claude (CLI)" from later on 2026-09-27 (the user's call: the pair of /settings' Claude (API) tab) and "Claude" again since 2026-09-29, when that tab's four rows came here under the advisor's (the user's call: one Claude tab); "ClaudeCLI" since 2026-10-04, when <c>/settings</c>' Anthropic tab became Anthropic (the user's call: the names say which is which); "ClaudeCode" since 2026-10-09 (the user's ask: Claude Code by its name, the
-    /// rows, keys, variables, the tool and the <c>/server</c> word with it), its group heading <see cref="ClaudeCodeGroupTitle"/>.</summary>
-    public const string ClaudeCodeTabTitle = "ClaudeCode";
-
     /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>). "Home" since 2026-10-09 (the user's ask; the toolbar's item keeps "HA"); "HomeAssistant" since 2026-10-10 (the user's ask; the toolbar's item keeps "Home", the user's pick).</summary>
     public const string HomeAssistantTabTitle = "HomeAssistant";
-
-    /// <summary>The advisor's group on <c>/sys</c> and the Offered tab (2026-10-09): <c>Claude Code</c>, the strip's one word being <see cref="ClaudeCodeTabTitle"/> (the <see cref="HomeAssistantGroupTitle"/> shape).</summary>
-    public const string ClaudeCodeGroupTitle = "Claude Code";
 
     /// <summary>The profile advisors' group heading on <c>/tools</c>' Offered tab and <c>/sys</c> (2026-10-10). Pinned.</summary>
     public const string AdvisorsGroupTitle = "Advisors";
@@ -209,14 +201,15 @@ public static class ToolsText
     /// <summary>The tab that holds the media menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09.</summary>
     public const string MediaTabTitle = "Media";
 
-    /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): ClaudeCode, Docker, Home, ComfyUI and YouTube. Pinned.</summary>
+    /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): Docker, HomeAssistant, ComfyUI and YouTube — ClaudeCode first too until later that day, when the Claude Code
+    /// advisor tool was retired and <c>/claude</c>'s rows went to <c>/settings</c>' Anthropic tab (the user's call). Pinned.</summary>
     public const string IntegrationsTabTitle = "Integrations";
 
     /// <summary>
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/sys</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, ClaudeCodeTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -226,7 +219,8 @@ public static class ToolsText
     /// to fourteen) Files holds File, UNC, GitLib and Obsidian and Integrations ClaudeCode, Docker, Home, ComfyUI and YouTube (the last two off
     /// Media, the user's ask): Offered, Ask, Web, Shell, Files, Integrations, Database, Media, Options — the arrows walking the menus as before
     /// up to Home, then ComfyUI and YouTube, the five databases, Print, Camera, Screen. Later on 2026-10-10 (the user's ask) the Image menu
-    /// after File on Files (<see cref="ImageMenuTitle"/>).</summary>
+    /// after File on Files (<see cref="ImageMenuTitle"/>), and later still the ClaudeCode menu went (the Claude Code advisor tool retired, <c>/claude</c>'s
+    /// rows to <c>/settings</c>' Anthropic tab), Integrations opening on Docker.</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, AskTabTitle, WebTabTitle, ShellTabTitle, FilesTabTitle, IntegrationsTabTitle, DatabaseTabTitle, MediaTabTitle, OptionsTabTitle];
 
     /// <summary>
@@ -234,7 +228,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="FilesTabTitle"/>, <see cref="IntegrationsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/> and <see cref="MediaTabTitle"/> — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0], [1], [2], [3, 4, 5, 20, 9], [15, 16, 17, 18, 19], [10, 11, 12, 13, 14], [6, 7, 8], [21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[0], [1], [2], [3, 4, 5, 19, 9], [15, 16, 17, 18], [10, 11, 12, 13, 14], [6, 7, 8], [20]];
 
     /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Files, Integrations, Database and Media.</summary>
     public static bool IsGroupTab(int tab) => tab > 0 && tab < TabTitles.Count && TabMenus[tab - 1].Count > 1;

@@ -5,7 +5,7 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The setting buttons of the File, Print, Screen capture, Obsidian, YouTube and Claude Code advisor tool pages (2026-10-09, the
+/// The setting buttons of the File, Image, Print, Screen capture, Obsidian and YouTube pages (2026-10-09, the
 /// user's ask: actions at the top to the group's own settings): each opens its setting as the tab's row does, and ESC there comes
 /// back to the page with the values read again. 🙋 Ask's switch page (<c>/tools ask</c>) the same day.
 /// </summary>
@@ -31,18 +31,15 @@ public partial class ToolsMenuTests
         Assert.Equal("v", KeysOf(SettingsField.ObsidianTools));
         Assert.Equal("≡ max (8) · ≡ voice (pause) · ≡ order (relevance) · ≡ safe (moderate)", Titles(SettingsField.YouTubeTools));
         Assert.Equal("mvos", KeysOf(SettingsField.YouTubeTools));
-        Assert.Equal("≡ model (as /claude) · ≡ effort (as /claude)", Titles(SettingsField.ClaudeCodeAdvisor));
-        Assert.Equal("me", KeysOf(SettingsField.ClaudeCodeAdvisor));
         Assert.Null(SettingsMenu.SettingButtonsFor(SettingsField.DockerTools));
         Assert.Null(SettingsMenu.SettingButtonsFor(SettingsField.AskUser));
 
         // Lit while the setting is not its default, as the tab's row wears the accent; the vault by its folder's name alone.
         Assert.All(SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.YouTubeTools)!, data, dir), b => Assert.False(b.On));
-        var changed = new AppSettingsData { FileBrowserMode = "show-hidden", ObsidianVault = Path.Combine(dir, "notes", "Vault") + Path.DirectorySeparatorChar, ClaudeCodeAdvisorEffort = "high" };
+        var changed = new AppSettingsData { FileBrowserMode = "show-hidden", ObsidianVault = Path.Combine(dir, "notes", "Vault") + Path.DirectorySeparatorChar };
         Assert.Equal([true], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!, changed, dir).Select(b => b.On));
         Assert.Equal([false], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ImageTools)!, changed, dir).Select(b => b.On));
         Assert.Equal([new MenuButton("≡ vault (Vault)", 'v', true)], SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ObsidianTools)!, changed, dir));
-        Assert.Equal("≡ effort (high)", SettingsMenu.SettingButtons(SettingsMenu.SettingButtonsFor(SettingsField.ClaudeCodeAdvisor)!, changed, dir)[1].Title);
 
         Assert.Equal("Enter = choose · b = browser · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.FileTools)!));
         Assert.Equal("Enter = choose · e = edit mode · ESC = back", SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(SettingsField.ImageTools)!));
@@ -57,7 +54,6 @@ public partial class ToolsMenuTests
     [InlineData(SettingsField.ScreenTools)]
     [InlineData(SettingsField.ObsidianTools)]
     [InlineData(SettingsField.YouTubeTools)]
-    [InlineData(SettingsField.ClaudeCodeAdvisor)]
     public async Task ShowSwitch_AGroupWithSettings_HasItsSettingButtons(SettingsField toolSwitch)
     {
         var (menu, pane, _) = PaneMenu();

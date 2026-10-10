@@ -3,14 +3,15 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.App;
 
-// ── The Anthropic tab of /settings: the Anthropic API and the Claude Code server (2026-10-03; "Claude" until 2026-10-04) ──
+// ── The Anthropic tab of /settings: the Claude Code server, /claude and the Anthropic API (2026-10-03; "Claude" until 2026-10-04) ──
 
 internal sealed partial class SettingsMenu
 {
     /// <summary>
     /// The Anthropic tab's strip title (2026-10-03, the user's ask: the Anthropic API's four rows and the Claude Code server's switch
-    /// off <c>/tools</c>' ClaudeCode tab, which keeps <c>/claude</c>'s and the advisor's; after Docker, the user's place). "Claude" until
-    /// 2026-10-04, when both tabs were renamed so the names say which is which (the user's call: Anthropic here, ClaudeCLI there; ClaudeCode since 2026-10-09). Pinned.
+    /// off <c>/tools</c>' ClaudeCode tab, which kept <c>/claude</c>'s and the advisor's; after Docker, the user's place). "Claude" until
+    /// 2026-10-04, when both tabs were renamed so the names say which is which (the user's call: Anthropic here, ClaudeCLI there; ClaudeCode since 2026-10-09).
+    /// Since 2026-10-10 (the user's call, the advisor tool retired and that tab gone) <c>/claude</c>'s four rows sit here under the Claude Code server's. Pinned.
     /// </summary>
     public const string AnthropicTabTitle = "Anthropic";
 

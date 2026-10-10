@@ -31,7 +31,7 @@ public interface IAdvisorHost
     void Forget(string profile);
 }
 
-/// <summary>An advisor call on the transcript as it runs (2026-10-10, the Claude advisor's view's shape).</summary>
+/// <summary>An advisor call on the transcript as it runs (2026-10-10, the shape of the Claude Code advisor tool's view, retired later that day).</summary>
 public interface IAdvisorView
 {
     void Began(AdvisorEntry advisor, string question);

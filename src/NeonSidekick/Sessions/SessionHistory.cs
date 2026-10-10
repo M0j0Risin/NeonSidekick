@@ -80,11 +80,10 @@ public sealed class StoredHistory
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeSessionId { get; set; }
 
-    /// <summary>The Claude Code conversation <c>claude_code_advisor</c> resumes (2026-09-27, its own thread): absent until the first call.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? ClaudeAdvisorSessionId { get; set; }
-
-    /// <summary>The Claude Code session the Claude Code server runs this chat in (2026-09-30): absent until its first turn.</summary>
+    /// <summary>
+    /// The Claude Code session the Claude Code server runs this chat in (2026-09-30): absent until its first turn. A row written before
+    /// 2026-10-10 may still hold <c>ClaudeAdvisorSessionId</c>, the retired Claude Code advisor tool's thread: an unknown member, skipped on read.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeServerSessionId { get; set; }
 
@@ -131,10 +130,10 @@ public static class SessionHistory
     /// screenshot (<see cref="ConversationHistory.ScreenKey"/>) likewise unless <paramref name="keepScreen"/> (<c>Screen capture keep
     /// in sessions</c>, 2026-10-04).
     /// </summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, string? claudeAdvisorSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeAdvisorSessionId = claudeAdvisorSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads, AdvisorSessions = advisorSessions };
+        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads, AdvisorSessions = advisorSessions };
         foreach (var message in messages)
         {
             document.Messages.Add(Store(message, withThinking, keepCamera, keepScreen));
@@ -183,19 +182,17 @@ public static class SessionHistory
     /// <summary><see cref="FromJson(string, out StoredPlan, out StoredPlan)"/>, with the Claude conversation <c>/claude</c> resumes (null before the first, 2026-09-27).</summary>
     public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId) => FromJson(json, out plan, out executing, out claudeSessionId, out _);
 
-    /// <summary><see cref="FromJson(string, out StoredPlan, out StoredPlan, out string)"/>, with the advisor's own Claude conversation (null before its first call, 2026-09-27).</summary>
-    public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId, out string? claudeAdvisorSessionId) =>
-        FromJson(json, out plan, out executing, out claudeSessionId, out claudeAdvisorSessionId, out _);
-
-    /// <summary><see cref="FromJson(string, out StoredPlan, out StoredPlan, out string, out string)"/>, with the Claude Code server's session (null before its first turn, 2026-09-30).</summary>
-    public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId, out string? claudeAdvisorSessionId, out string? claudeServerSessionId)
+    /// <summary>
+    /// <see cref="FromJson(string, out StoredPlan, out StoredPlan, out string)"/>, with the Claude Code server's session (null before its first turn,
+    /// 2026-09-30). The overload between them, the Claude Code advisor tool's own conversation, went with the tool (2026-10-10).
+    /// </summary>
+    public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId, out string? claudeServerSessionId)
     {
         ArgumentNullException.ThrowIfNull(json);
         var document = JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory) ?? throw new JsonException("The stored history is empty.");
         plan = document.Plan;
         executing = document.Executing;
         claudeSessionId = document.ClaudeSessionId;
-        claudeAdvisorSessionId = document.ClaudeAdvisorSessionId;
         claudeServerSessionId = document.ClaudeServerSessionId;
         var messages = new List<ChatMessage>(document.Messages.Count);
         foreach (var stored in document.Messages)

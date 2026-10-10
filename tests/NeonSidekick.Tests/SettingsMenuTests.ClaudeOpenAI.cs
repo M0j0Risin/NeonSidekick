@@ -14,7 +14,7 @@ public partial class SettingsMenuTests
         Assert.Equal(["General", "LLM", "Embedded", "Docker", "Anthropic", "OpenAI", "TTS", "STT", "Sessions", "Botchat", "Advisors"], SettingsMenu.TabTitles);
         Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
         Assert.Equal(SettingsMenu.OpenAITabTitle, SettingsMenu.TabTitles[(int)SettingsTab.OpenAI]);
-        Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.Anthropic]));   // "Anthropic API prompt caching" (2026-10-04; "Claude API prompt caching", 27, before)
+        Assert.Equal(39, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.Anthropic]));   // "Claude Code slash command permissions" since 2026-10-10 (/claude's rows here); "Anthropic API prompt caching" (30) from 2026-10-04, "Claude API prompt caching" (27) before
         Assert.Equal(25, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.OpenAI]));   // "OpenAI API organization"
         Assert.Equal("must be 0 (the model's own) or 1024 to 128000 tokens", SettingsMenu.OpenAIApiMaxTokensRangeError);
         // The OpenAI tab keeps its rows' whole names (2026-10-10, the user's call: "API key" said nothing of whose); the others shorten.
@@ -44,7 +44,7 @@ public partial class SettingsMenuTests
         // a save of one is a reconnect, which the screen makes once the pane closes.
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.Anthropic);
-        Down(1);                                   // the Claude Code server first since 2026-10-10 (the user's call)
+        Down(5);                                   // the Claude Code server first since 2026-10-10 (the user's call), /claude's four under it later that day
         Push(Keys.Enter, Keys.Up, Keys.Enter);     // Anthropic API: the page opens on off, on picked
         Push(Keys.Escape);
 

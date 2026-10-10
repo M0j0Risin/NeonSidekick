@@ -250,10 +250,10 @@ public partial class NeonAdvisorToolTests
     [Fact]
     public void ReadOnlyOf_KeepsPlanModesReads_LessTheExcluded()
     {
-        IReadOnlyList<AIFunction> tools = [new NamedTool("read_file"), new NamedTool("run_command"), new NamedTool(ClaudeAdvisorTool.ToolName), new NamedTool(CameraCaptureTool.ToolName), new NamedTool("srv__thing"), new NamedTool("sql_query")];
+        IReadOnlyList<AIFunction> tools = [new NamedTool("read_file"), new NamedTool("run_command"), new NamedTool(NeonAdvisorTool.ToolName), new NamedTool(CameraCaptureTool.ToolName), new NamedTool("srv__thing"), new NamedTool("sql_query")];
 
         Assert.Equal(["read_file", "sql_query"], NeonAdvisorTool.ReadOnlyOf(tools).Select(t => t.Name));
-        Assert.Equal(["neon_advisor", "claude_code_advisor", "ask_user", "camera_capture", "screen_capture", "screen_list"], NeonAdvisorTool.Excluded);
+        Assert.Equal(["neon_advisor", "ask_user", "camera_capture", "screen_capture", "screen_list"], NeonAdvisorTool.Excluded);   // claude_code_advisor too until it was retired (2026-10-10)
     }
 
     [Fact]
@@ -290,7 +290,7 @@ public partial class NeonAdvisorToolTests
     }
 
     [Fact]
-    public void TheTurn_OffersTheAdvisorsAfterTheClaudeAdvisor_WithItsRule()
+    public void TheTurn_OffersTheAdvisors_WithItsRule()
     {
         var tool = Tool();
         var inputs = new TurnToolInputs { Standing = [], NeonAdvisor = [tool], NeonAdvisorEnabled = true };

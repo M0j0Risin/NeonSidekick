@@ -84,7 +84,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Picture viewer & editing:** a built-in picture viewer and thumbnail browser, and image editing (resize, crop, rotate, recolour, convert, strip metadata) by the model or a right-click.
 * **YouTube:** search for videos, playlists or channels (with your API key), then play a video or a whole public playlist in the app's own video window, controlled by the model or `/youtube`; saved videos resume where you left off.
 * **Printing & PDFs:** `/print` to any installed printer (Windows or Mac), and `/pdf` from Markdown, text, pictures or a web page.
-* **Claude Code:** `/claude` messages your installed Claude Code; the model can ask it for read-only advice.
+* **Claude Code:** `/claude` messages your installed Claude Code, or run it as the chat's server (an advisor profile can be on it too).
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own personas and voices, optionally illustrated by ComfyUI.
 * **Advisors:** other profiles as advisors, each in a role you give it (a database architect, a UX designer); the model or `/advisor` asks one, and it answers on its own profile's server and model, using the chat's read-only tools.
 
@@ -103,7 +103,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 Only for some features:
 * **Running a model inside the app:** an NVIDIA graphics card (driver 580 or newer) or any card that supports Vulkan. Without one it still works, but slowly. On a Mac it runs on the Apple Silicon GPU; a 16 GB Mac suits the smaller Gemma models.
 * **Reading web pages that need a real browser, and saving them as PDFs:** Edge, Chrome or Brave.
-* **`/claude` and the Claude advisor:** Claude Code installed.
+* **`/claude` and the Claude Code server:** Claude Code installed.
 * **Scripts in Python or Node:** Python or Node installed.
 * **Better web search:** a SearXNG server ([setup with Docker](docs/SEARXNG_DOCKER_WINDOWS.md)), or an MCP web-search server.
 

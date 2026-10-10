@@ -10,10 +10,11 @@ namespace NeonSidekick.App;
 internal readonly record struct SettingButton(SettingsField Target, string Word, char Key);
 
 /// <summary>
-/// The setting buttons on the File, Print, Screen capture, Obsidian, YouTube and Claude Code advisor tool pages (2026-10-09, the
+/// The setting buttons on the File, Image, Print, Screen capture, Obsidian and YouTube pages (2026-10-09, the
 /// user's ask: actions at the top of each page to reach the group's own settings, the offered button's shape). Each opens its setting
 /// as the tab's row does (its picker, its on/off page, the vault's folder picker or a typed value under a one-row page of its own),
-/// and ESC there comes back to the on/off page, the buttons read again.
+/// and ESC there comes back to the on/off page, the buttons read again. The Claude Code advisor tool page's model and effort went with the
+/// tool (2026-10-10).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -36,7 +37,6 @@ internal sealed partial class SettingsMenu
             new(SettingsField.YouTubeSearchMaxResults, "max", 'm'), new(SettingsField.YouTubeVoice, "voice", 'v'),
             new(SettingsField.YouTubeSearchOrder, "order", 'o'), new(SettingsField.YouTubeSafeSearch, "safe", 's'),
         ],
-        SettingsField.ClaudeCodeAdvisor => [new(SettingsField.ClaudeCodeAdvisorModel, "model", 'm'), new(SettingsField.ClaudeCodeAdvisorEffort, "effort", 'e')],
         _ => null,
     };
 
@@ -45,7 +45,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The value a setting button shows, short: the row's own value, except the vault's folder name alone (<c>none</c> while none
-    /// is set), the result count's number, the advisor's blank model and effort as <c>as /claude</c>, and a printer left to the
+    /// is set), the result count's number, and a printer left to the
     /// system's default without the row's parentheses. Pinned.
     /// </summary>
     public static string SettingButtonValue(SettingsField field, AppSettingsData data, string profileDirectory)
@@ -58,9 +58,6 @@ internal sealed partial class SettingsMenu
                 return vault.Length == 0 ? "none" : Path.GetFileName(vault) is { Length: > 0 } name ? name : vault;
             case SettingsField.YouTubeSearchMaxResults:
                 return data.YouTubeSearchMaxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            case SettingsField.ClaudeCodeAdvisorModel when string.IsNullOrWhiteSpace(data.ClaudeCodeAdvisorModel):
-            case SettingsField.ClaudeCodeAdvisorEffort when string.IsNullOrWhiteSpace(data.ClaudeCodeAdvisorEffort):
-                return "as /claude";
             case SettingsField.PrintDefaultPrinter when string.IsNullOrWhiteSpace(data.PrintDefaultPrinter):
                 return WindowsDefaultPrinterLabel.Trim('(', ')');
             default:

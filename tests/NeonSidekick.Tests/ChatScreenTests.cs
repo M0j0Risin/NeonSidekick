@@ -4638,7 +4638,6 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // UNC (later still on 2026-09-30)
         _console.Input.PushKey(Keys.Right);     // Docker (2026-10-02)
         _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
-        _console.Input.PushKey(Keys.Right);     // Claude (2026-09-27)
         _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
         _console.Input.PushKey(Keys.Right);     // Print (later on 2026-09-28)
         _console.Input.PushKey(Keys.Right);     // YouTube (2026-10-05)
@@ -4651,7 +4650,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
-        Assert.Contains("\n▸ Claude Code executable                   (looked up)\n  Claude Code slash command permissions    read-only\n  Claude Code slash command model          (Claude Code's default)\n  Claude Code slash command effort         (Claude Code's default)\n  Claude Code advisor tool                 off\n  Claude Code advisor tool context         brief\n  Claude Code advisor tool calls per turn  2 calls\n  Claude Code advisor tool model           (as Claude Code slash command model)\n  Claude Code advisor tool effort          (as Claude Code slash command effort)\n  Claude Code advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
+        Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
         Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        off  ", output);
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n  get_current_time      on   ", output);
@@ -4695,7 +4694,6 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);     // UNC (later still on 2026-09-30)
         _console.Input.PushKey(Keys.Right);     // Docker (2026-10-02)
         _console.Input.PushKey(Keys.Right);     // ComfyUI (2026-09-24; Images until later that day)
-        _console.Input.PushKey(Keys.Right);     // Claude (2026-09-27)
         _console.Input.PushKey(Keys.Right);     // Home Assistant (2026-09-28)
         _console.Input.PushKey(Keys.Right);     // Print (later on 2026-09-28)
         _console.Input.PushKey(Keys.Right);     // YouTube (2026-10-05)
@@ -4708,7 +4706,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(ToolsText.Label + " │ Offered · Ask · Web · Shell · Files · Integrations · Database · Media · Options ", output);
         Assert.Contains("\n▸ " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " ", output);   // a menu on Media since 2026-10-09 (its own tab from 2026-09-24), a sub-tab the arrows walk since 2026-10-10 (ToolsMenuTests)
-        Assert.Contains("\n▸ Claude Code executable                   (looked up)\n  Claude Code slash command permissions    read-only\n  Claude Code slash command model          (Claude Code's default)\n  Claude Code slash command effort         (Claude Code's default)\n  Claude Code advisor tool                 off\n  Claude Code advisor tool context         brief\n  Claude Code advisor tool calls per turn  2 calls\n  Claude Code advisor tool model           (as Claude Code slash command model)\n  Claude Code advisor tool effort          (as Claude Code slash command effort)\n  Claude Code advisor tool confirm         off\n", output);   // 2026-09-27: /claude's rows off /settings, then the advisor's
+        Assert.DoesNotContain("Claude Code executable", output);   // /claude's rows here from 2026-09-27 (off /settings), the advisor's under them; both gone from /tools on 2026-10-10 (the four to /settings › Servers › Anthropic)
         Assert.Contains("\n" + HeadingRow("── Camera · 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        (on) ", output);   // the one reason that holds, and the tool waiting on its group (2026-10-04)
         Assert.Contains("\n  · camera_capture: off\n" + HeadingRow("── Camera · 0 of 1 ── off: " + ToolsText.SwitchOffReason(SettingsField.CameraTools)) + "\n▸ camera_capture        off  ", output);
         Assert.Contains("\n" + HeadingRow("── Clock · 3") + "\n  get_current_time      on   ", output);
@@ -8954,7 +8952,9 @@ public partial class ChatScreenTests : IDisposable
                 SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter,
                 SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds,
                 SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit,
-                SettingsField.ClaudeCodeServer, SettingsField.AnthropicApi, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
+                SettingsField.ClaudeCodeServer,
+                SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,   // later on 2026-10-10, on the Anthropic tab
+                SettingsField.AnthropicApi, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,
             ],
             ChatScreen.ProfileServerFields.Select(f => f.Field));
@@ -8969,6 +8969,7 @@ public partial class ChatScreenTests : IDisposable
             DockerServers = true, DockerServerContainers = ["vllm_qwen", "sglang"], DockerServerStopTimeoutSeconds = 45,
             DockerServerPostStopDelaySeconds = 5, DockerServerReadyTimeoutSeconds = 600, DockerServerStopOnExit = true,
             AnthropicApi = true, AnthropicApiMaxTokens = 8_000, AnthropicApiPromptCaching = false, ClaudeCodeServer = true,
+            ClaudeCodeExecutable = @"D:\bin\claude.exe", ClaudeCodePermissions = "read-write", ClaudeCodeModel = "opus", ClaudeCodeEffort = "high",
             OpenAIApi = true, OpenAIApiMaxTokens = 4_096, OpenAIApiOrganization = "org-neon", OpenAIApiProject = "proj-neon",
         };
         var to = new AppSettingsData();
@@ -8989,8 +8990,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.NotSame(from.LlmSampling["qwen3"], to.LlmSampling!["qwen3"]);
         Assert.Equal(0.6, to.LlmSampling["*"].Temperature);
         Assert.Equal(20, to.LlmSampling["qwen3"].TopK);
-        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.", ChatScreen.ProfileServersPrompt("work"));
-        Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
+        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.", ChatScreen.ProfileServersPrompt("work"));
+        Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
         Assert.Equal("(copied the server settings into \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3"));
         Assert.Equal("(copied the server settings from \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3", pull: true));
     }
@@ -9515,11 +9516,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, claude, advisors, docker, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
-        Assert.Equal("Claude Code advisor tool", ToolsText.DescribeSwitch("claude"));
+        Assert.Null(ToolsText.SwitchField("claude"));   // the Claude Code advisor tool's word until it was retired (2026-10-10)
+        Assert.Equal("", ToolsText.DescribeSwitch("claude"));
         Assert.Empty(_chat.Requests);
     }
 
@@ -9540,8 +9542,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔒 👮 🐚 🌐 🛢️ 📄", strip);
         Assert.Equal([5], off);
         Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPolice));   // the same text either way
-        Assert.True(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCodeAdvisor = false }));
-        Assert.False(ChatScreen.ToolbarItemOff("claude", new AppSettingsData { ClaudeCodeAdvisor = true }));
+        Assert.True(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = false }));
+        Assert.False(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = true }));
         Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "comfyview", "comfythumbs", "youtube", "perf", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "disabled", ShellCommandPolicy = "off" })));
         // The disk on the slab while Memory is off (later on 2026-10-03, the user's ask: always drawn, telling which).
         Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "disabled" }));
@@ -11212,7 +11214,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 🙋 🔒 👮 🐚 📁 🌄 🌐 ✴️ 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
+        Assert.Equal("⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 📈", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📈", ChatScreen.ToolbarStripFor(Items("perf", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29)
     }
@@ -11284,7 +11286,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🧮 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04
-        const string Rest = "🐚 📁 🌄 🌐 ✴️ 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04
+        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 📈";   // 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04
         Assert.Equal(Panes + " 💾 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09
         Assert.Equal(Panes + " 💾 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
@@ -11328,7 +11330,7 @@ public partial class ChatScreenTests : IDisposable
         // The tool switches and the windows (2026-10-03, the user's ask): each switch its /tools <group> page, each window its command.
         Assert.Equal("/tools shell", ChatScreen.ToolbarWord(ChatScreen.ShellToolGlyph));
         Assert.Equal("/tools files", ChatScreen.ToolbarWord(ChatScreen.FilesToolGlyph));
-        Assert.Equal("/tools claude", ChatScreen.ToolbarWord(ChatScreen.ClaudeToolGlyph));
+        Assert.Equal("/tools advisors", ChatScreen.ToolbarWord(ChatScreen.AdvisorsToolGlyph));   // ✴️ /tools claude until the Claude Code advisor tool was retired (2026-10-10)
         Assert.Equal("/tools ha", ChatScreen.ToolbarWord(ChatScreen.HaToolGlyph));
         Assert.Equal("/tools print", ChatScreen.ToolbarWord(ChatScreen.PrintToolGlyph));
         Assert.Equal("/log", ChatScreen.ToolbarWord(ChatScreen.LogToolGlyph));
@@ -11356,7 +11358,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(35, glyphs.Length);   // 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
+        Assert.Equal(34, glyphs.Length);   // ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));

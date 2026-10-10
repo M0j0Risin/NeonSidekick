@@ -288,38 +288,22 @@ public class ClaudeTests
     }
 
     [Fact]
-    public void ToolsMenu_TheClaudeTab_ItsTenRowsAndHowTheyRead()
+    public void Settings_TheAnthropicTab_HoldsClaudesFourRows_AndHowTheyRead()
     {
         var data = new AppSettingsData();
-        int tab = (ToolsText.MenuIndex(ToolsText.ClaudeCodeTabTitle) + 1);
+        var anthropic = SettingsMenu.TabFields[(int)SettingsTab.Anthropic];
 
-        // On /tools since later on 2026-09-27 (the user's call), after Ask, before Obsidian since later still that day (the user's order; after ComfyUI, before Options, before); gone from /settings.
-        Assert.Equal((ToolsText.MenuIndex(ToolsText.OracleTabTitle) + 1) + 1, tab);   // after Oracle since 2026-10-03, the user's order (after Camera from 2026-10-02)
-        Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);   // gone since 2026-09-29; /settings' own Claude tab (2026-10-03) holds the server rows
-        Assert.Equal("ClaudeCode", ToolsText.ClaudeCodeTabTitle);   // "Claude (CLI)" until 2026-09-29, "Claude" until 2026-10-04 (the user's call: /settings' tab became Anthropic), "ClaudeCLI" until 2026-10-09
-        Assert.Equal("Claude Code", ToolsText.ClaudeCodeGroupTitle);   // the Offered and /sys heading (2026-10-09)
+        // /tools' ClaudeCode tab from 2026-09-27 (on /settings that morning) until 2026-10-10 (the user's call: the advisor tool retired,
+        // the four /claude rows under the Claude Code server's on /settings' Anthropic tab, the tab gone).
+        Assert.DoesNotContain("ClaudeCode", ToolsText.MenuTitles);
+        Assert.DoesNotContain("Claude (API)", SettingsMenu.TabTitles);   // gone since 2026-09-29
         Assert.Equal(
-            [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
-             SettingsField.ClaudeCodeAdvisor, SettingsField.ClaudeCodeAdvisorContext, SettingsField.ClaudeCodeAdvisorCallsPerTurn, SettingsField.ClaudeCodeAdvisorModel, SettingsField.ClaudeCodeAdvisorEffort, SettingsField.ClaudeCodeAdvisorConfirm],
-            SettingsMenu.ToolsTabFields[tab - 1]);   // the Anthropic API's four and the Claude Code server's went to /settings' Claude tab on 2026-10-03
+            [SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort],
+            anthropic.Take(5));
         Assert.Equal(
-            ["Claude Code executable", "Claude Code slash command permissions", "Claude Code slash command model", "Claude Code slash command effort",
-             "Claude Code advisor tool", "Claude Code advisor tool context", "Claude Code advisor tool calls per turn", "Claude Code advisor tool model", "Claude Code advisor tool effort", "Claude Code advisor tool confirm"],
-            SettingsMenu.ToolsTabFields[tab - 1].Select(SettingsMenu.FieldName));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCodeAdvisor, data, "C:\\p"));
-        Assert.Equal("brief", SettingsMenu.FieldValue(SettingsField.ClaudeCodeAdvisorContext, data, "C:\\p"));
-        Assert.Equal("2 calls", SettingsMenu.FieldValue(SettingsField.ClaudeCodeAdvisorCallsPerTurn, data, "C:\\p"));
-        Assert.Equal("1 call", SettingsMenu.ClaudeAdvisorCalls(1));
-        Assert.Equal("(as Claude Code slash command model)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeAdvisorModel, data, "C:\\p"));
-        Assert.Equal("(as Claude Code slash command effort)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeAdvisorEffort, data, "C:\\p"));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCodeAdvisorConfirm, data, "C:\\p"));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCodeAdvisor));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCodeAdvisorConfirm));
-        Assert.Equal("(as Claude Code slash command effort)", SettingsMenu.ClaudeEffortLabel("", SettingsMenu.ClaudeAdvisorEffortLabel));
-        Assert.StartsWith("recent  ", SettingsMenu.ClaudeAdvisorContextLabel("recent"), StringComparison.Ordinal);   // padded to eight
-        Assert.Contains("the last 10 messages", SettingsMenu.ClaudeAdvisorContextLabel("recent"), StringComparison.Ordinal);
-        var advisorCopy = AppSettings.Copy(new AppSettingsData { ClaudeCodeAdvisor = true, ClaudeCodeAdvisorContext = "recent", ClaudeCodeAdvisorCallsPerTurn = 5, ClaudeCodeAdvisorModel = "opus", ClaudeCodeAdvisorEffort = "high", ClaudeCodeAdvisorConfirm = true });
-        Assert.Equal((true, "recent", 5, "opus", "high", true), (advisorCopy.ClaudeCodeAdvisor, advisorCopy.ClaudeCodeAdvisorContext, advisorCopy.ClaudeCodeAdvisorCallsPerTurn, advisorCopy.ClaudeCodeAdvisorModel, advisorCopy.ClaudeCodeAdvisorEffort, advisorCopy.ClaudeCodeAdvisorConfirm));
+            ["Claude Code server", "Claude Code executable", "Claude Code slash command permissions", "Claude Code slash command model", "Claude Code slash command effort"],
+            anthropic.Take(5).Select(SettingsMenu.FieldName));
+        Assert.DoesNotContain(SettingsMenu.ToolsTabFields, menu => menu.Contains(SettingsField.ClaudeCodeExecutable));
         Assert.Equal("(looked up)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeExecutable, data, "C:\\p"));
         Assert.Equal("read-only", SettingsMenu.FieldValue(SettingsField.ClaudeCodePermissions, data, "C:\\p"));
         Assert.Equal("(Claude Code's default)", SettingsMenu.FieldValue(SettingsField.ClaudeCodeModel, data, "C:\\p"));
@@ -352,12 +336,8 @@ public class ClaudeTests
         Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCodePermissionsVariable ? "full" : null).ClaudeCodePermissions);   // retired 2026-10-10
         Assert.Contains(EnvironmentOverrides.ClaudeCodeExeVariable, EnvironmentOverrides.AllVariables);
         Assert.Contains(EnvironmentOverrides.ClaudeCodePermissionsVariable, EnvironmentOverrides.AllVariables);
-        // The advisor's switch (2026-09-27): a switch word, as NEONSIDEKICK_SHELL_NATIVE's.
-        var advisor = new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCodeAdvisorVariable ? "on" : null);
-        Assert.True(advisor.ApplyTo(new AppSettingsData()).ClaudeCodeAdvisor);
-        Assert.Contains(EnvironmentOverrides.ClaudeCodeAdvisorVariable, advisor.ActiveVariables());
-        Assert.Null(new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCodeAdvisorVariable ? "maybe" : null).ClaudeCodeAdvisor);
-        Assert.Contains(EnvironmentOverrides.ClaudeCodeAdvisorVariable, EnvironmentOverrides.AllVariables);
+        // The advisor's switch (2026-09-27) went with the tool (2026-10-10).
+        Assert.DoesNotContain("NEONSIDEKICK_CLAUDE_CODE_ADVISOR", EnvironmentOverrides.AllVariables);
     }
 
     // ── the words ───────────────────────────────────────────────────────────
@@ -405,6 +385,11 @@ public class ClaudeTests
         SessionHistory.FromJson(older, out _, out _, out string? none);
         Assert.Null(none);
         Assert.DoesNotContain("ClaudeSessionId", older, StringComparison.Ordinal);
+        // A row written while claude_code_advisor lived (until 2026-10-10) may hold its thread's id: an unknown member, skipped.
+        string withAdvisor = json.Replace("\"ClaudeSessionId\"", "\"ClaudeAdvisorSessionId\":\"adv-1\",\"ClaudeSessionId\"", StringComparison.Ordinal);
+        Assert.Contains("adv-1", withAdvisor, StringComparison.Ordinal);
+        Assert.Equal(2, SessionHistory.FromJson(withAdvisor, out _, out _, out string? kept).Count);
+        Assert.Equal("s-1", kept);
     }
 
     [Fact]

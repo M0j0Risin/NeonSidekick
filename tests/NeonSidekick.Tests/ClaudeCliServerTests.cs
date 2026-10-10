@@ -661,7 +661,7 @@ public class ClaudeCliServerTests
     {
         string json = SessionHistory.ToJson([new ChatMessage(ChatRole.User, "hi")], claudeServerSessionId: SessionId);
 
-        SessionHistory.FromJson(json, out _, out _, out _, out _, out string? server);
+        SessionHistory.FromJson(json, out _, out _, out _, out string? server);
 
         Assert.Equal(SessionId, server);
         Assert.DoesNotContain("ClaudeServerSessionId", SessionHistory.ToJson([new ChatMessage(ChatRole.User, "hi")]), StringComparison.Ordinal);   // absent until used

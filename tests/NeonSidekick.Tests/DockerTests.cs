@@ -779,9 +779,9 @@ public sealed class DockerTests : IDisposable
         Assert.Contains("never repeat one", Assistant.DockerRule);
         Assert.Contains(DockerLifecycleTool.ToolName, Assistant.DockerWriteRule);
         Assert.DoesNotContain(Assistant.DockerRule, Assistant.DefaultRules(markdown: false, tools: true, homeAssistant: true));
-        string reads = Assistant.DefaultRules(markdown: false, tools: true, homeAssistant: true, docker: true, advisor: true);
+        string reads = Assistant.DefaultRules(markdown: false, tools: true, homeAssistant: true, docker: true, advisors: true);
         Assert.True(reads.IndexOf(Assistant.HomeAssistantRule, StringComparison.Ordinal) < reads.IndexOf(Assistant.DockerRule, StringComparison.Ordinal));
-        Assert.True(reads.IndexOf(Assistant.DockerRule, StringComparison.Ordinal) < reads.IndexOf(Assistant.ClaudeAdvisorRule, StringComparison.Ordinal));
+        Assert.True(reads.IndexOf(Assistant.DockerRule, StringComparison.Ordinal) < reads.IndexOf(Assistant.NeonAdvisorRule, StringComparison.Ordinal));   // the Claude Code advisor's sentence until it was retired (2026-10-10)
         Assert.DoesNotContain(Assistant.DockerWriteRule, reads);
         Assert.Contains(Assistant.DockerRule + " " + Assistant.DockerWriteRule, Assistant.DefaultRules(markdown: false, tools: true, docker: true, dockerWrite: true));
         Assert.DoesNotContain(Assistant.DockerWriteRule, Assistant.DefaultRules(markdown: false, tools: true, dockerWrite: true));   // no group, no sentence
@@ -830,7 +830,7 @@ public sealed class DockerTests : IDisposable
         Assert.Equal("docker_engine", fresh.DockerEnginePipe);
         int tab = (ToolsText.MenuIndex(ToolsText.DockerTabTitle) + 1) - 1;
         Assert.Equal([SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe], SettingsMenu.ToolsTabFields[tab]);
-        Assert.Equal((ToolsText.MenuIndex(ToolsText.ClaudeCodeTabTitle) + 1) + 1, tab + 1);   // after Claude since 2026-10-03, the user's order (after UNC before)
+        Assert.Equal((ToolsText.MenuIndex(ToolsText.OracleTabTitle) + 1) + 1, tab + 1);   // Integrations' first since 2026-10-10 (after ClaudeCode from 2026-10-03, the user's order; after UNC before)
         Assert.Equal(["Docker tools", "Docker writes", "Docker engine pipe"], SettingsMenu.ToolsTabFields[tab].Select(SettingsMenu.FieldName));
         Assert.Equal(@"\\.\pipe\docker_engine", SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, fresh, _dir));
         Assert.True(SettingsMenu.IsToggle(SettingsField.DockerWrites));

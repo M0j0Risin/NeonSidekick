@@ -107,7 +107,7 @@ public static class ClaudeCliText
     public const string NoOwnExecutable = "the app's own executable path is unknown, so the Claude Code server has no way to reach its tools";
 
     /// <summary><c>/server claude-code</c> while the Claude Code server is off or the CLI is missing. Pinned.</summary>
-    public const string NotOfferedError = "The Claude Code server is not offered: turn on Claude Code server on /settings › Servers › Anthropic, and install Claude Code (or set Claude Code executable on the ClaudeCode tab of /tools).";
+    public const string NotOfferedError = "The Claude Code server is not offered: turn on Claude Code server on /settings › Servers › Anthropic, and install Claude Code (or set Claude Code executable on the same tab).";
 
     /// <summary>A saved Claude CLI URL the switch or a missing CLI turns off: logged at connect, a blank URL's discovery follows. Pinned.</summary>
     public const string NotOfferedWarning = "The LLM URL names the Claude Code server, which is not offered (Claude Code server off, or Claude Code not found); looking for a server instead.";

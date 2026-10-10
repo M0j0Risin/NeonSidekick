@@ -119,7 +119,7 @@ internal sealed partial class ChatScreen
     /// <list type="number">
     /// <item>The history is cut before <paramref name="turn"/> and the session row is cut to match (<see cref="ConversationRewind.Apply"/>).</item>
     /// <item>The Claude Code server's session is dropped. The CLI holds its own copy of the conversation, so the next turn starts
-    /// a new session, given the shorter history as its preamble. <c>/claude</c>'s and the advisor's threads are dropped only
+    /// a new session, given the shorter history as its preamble. <c>/claude</c>'s thread and the profile advisors' are dropped only
     /// when a turn of theirs was cut.</item>
     /// <item>The context figure is zeroed (<see cref="Llm.TokenTally.ForgetContext"/>) and the reflection's traces are forgotten.</item>
     /// <item>The history is saved.</item>
@@ -137,11 +137,6 @@ internal sealed partial class ChatScreen
         if (cut.HadClaude)
         {
             _claudeSessionId = null;
-        }
-
-        if (cut.HadAdvisor)
-        {
-            _advisorThread.SessionId = null;
         }
 
         if (cut.HadAdvisors)

@@ -812,9 +812,10 @@ public class AppSettingsTests : IDisposable
         // BotChatLimitedComfyWorkflows (the user's call, no migration): retired, skipped the same way.
         // On 2026-09-30 the five GitNative* keys became GitLib* (the rows' new labels): old spellings, skipped the same way.
         // On 2026-10-05 SqliteProtectionMode became SqliteMode and ShellPoliceOutsidePaths became ShellPolice (the user's calls, no migration).
+        // On 2026-10-10 claude_code_advisor was retired with its six ClaudeCodeAdvisor* keys (the user's call): skipped the same way.
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName),
-            "{ \"SchemaVersion\": 1, \"BotChatImages\": true, \"BotChatTxt2ImgWorkflow\": \"flux\", \"BotChatImg2ImgWorkflow\": \"edit\", \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\", \"SqliteProtectionMode\": \"read-write\", \"ShellPoliceOutsidePaths\": false }");
+            "{ \"SchemaVersion\": 1, \"BotChatImages\": true, \"BotChatTxt2ImgWorkflow\": \"flux\", \"BotChatImg2ImgWorkflow\": \"edit\", \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\", \"SqliteProtectionMode\": \"read-write\", \"ShellPoliceOutsidePaths\": false, \"ClaudeCodeAdvisor\": true, \"ClaudeCodeAdvisorContext\": \"recent\", \"ClaudeCodeAdvisorCallsPerTurn\": 5, \"ClaudeCodeAdvisorModel\": \"opus\", \"ClaudeCodeAdvisorEffort\": \"high\", \"ClaudeCodeAdvisorConfirm\": true }");
 
         using var settings = new AppSettings(_dir);
         Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
@@ -838,6 +839,9 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(AppSettingsData.DefaultGitLibLogMaxCommits, settings.Current.GitLibLogMaxCommits);
         Assert.Equal("read-only", settings.Current.SqliteMode);   // the old SqliteProtectionMode key, skipped (2026-10-05)
         Assert.True(settings.Current.ShellPolice);   // the old ShellPoliceOutsidePaths key, skipped: the police reads on (2026-10-05)
+        Assert.Equal("brief", settings.Current.AdvisorContext);   // the retired ClaudeCodeAdvisorContext is not the profile advisors' (2026-10-10)
+        Assert.False(settings.Current.AdvisorConfirm);   // nor ClaudeCodeAdvisorConfirm
+        Assert.Equal("", settings.Current.ClaudeCodeModel);   // nor is ClaudeCodeAdvisorModel read as /claude's model
         Assert.Equal(1, settings.Current.SchemaVersion);   // read as written; the compiled default is 2
         Assert.Equal(2, new AppSettingsData().SchemaVersion);
     }

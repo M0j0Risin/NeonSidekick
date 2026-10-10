@@ -2,7 +2,7 @@
 
 Back to the [README](../README.md). In the app, `/tools` switches these and shows what each one does.
 
-The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *Image tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *YouTube tools*, *Claude Code advisor tool*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
+The tools the model can call, grouped as `/tools` and `/sys` show them. Each group has a switch that offers or withholds all of it: *File tools*, *Image tools*, *GitLib tools*, *Shell command policy*, *Obsidian tools*, *SQL tools*, *Oracle tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *UNC tools*, *Docker tools*, *ComfyUI tools*, *Home Assistant tools*, *Print tools*, *Camera tool*, *Screen capture tool*, *YouTube tools*, *Advisors enabled*, *Web tools*, *Memory mode*, *Agent skills*, *Session tool*, *Ask user* and *MCP servers*. Single tools switch on the Offered tab of `/tools`.
 
 ## Contents
 
@@ -36,7 +36,6 @@ The tools the model can call, grouped as `/tools` and `/sys` show them. Each gro
   - [Memory](#memory)
   - [Skills](#skills)
   - [Sessions](#sessions)
-  - [Claude advisor](#claude-advisor)
   - [Advisors](#advisors)
   - [Questions](#questions)
   - [Plan](#plan)
@@ -937,12 +936,6 @@ cat job.txt | ./NeonSidekick --headless --profile work   # macOS
 | Tool | Arguments | What it does |
 |---|---|---|
 | `session_manager` | `action, query?, id?, max_results?, from_turn?, to_turn?` | `search`, `list` or `read` this profile's earlier conversations (not the current one). Never restores or purges. |
-
-### Claude advisor
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `claude_code_advisor` | `question, context?` | Asks Claude Code for read-only advice; it can read the working directory and the web. The transcript shows the question, Claude's tools, the answer and a cost footer. One advisor conversation per session, separate from `/claude`'s. ESC stops it with the reply; `/usage` counts it. |
 
 ### Advisors
 

@@ -57,7 +57,6 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "),
             (EnvironmentOverrides.ClaudeCodeExeVariable, @" D:\bin\claude.exe "),
             (EnvironmentOverrides.ClaudeCodePermissionsVariable, " Read-Write "),
-            (EnvironmentOverrides.ClaudeCodeAdvisorVariable, " Yes "),
             (EnvironmentOverrides.AnthropicApiVariable, " on "),
             (EnvironmentOverrides.AnthropicApiKeyVariable, " sk-ant-env "),
             (EnvironmentOverrides.LlmSamplingVariable, " {\"temperature\":0.3} "),
@@ -97,7 +96,6 @@ public class EnvironmentOverridesTests
         Assert.False(e.ShellPreferNative);   // the police's switch words (later on 2026-09-26)
         Assert.Equal(@"D:\bin\claude.exe", e.ClaudeCodeExecutable);   // trimmed (2026-09-27)
         Assert.Equal("read-write", e.ClaudeCodePermissions);   // normalised to the saved word (2026-09-27)
-        Assert.True(e.ClaudeCodeAdvisor);   // a switch word, any case, trimmed (2026-09-27)
         Assert.True(e.AnthropicApi);   // a switch word (2026-09-27)
         Assert.Equal("sk-ant-env", e.AnthropicApiKey);   // trimmed (2026-09-27)
         Assert.Equal(0.3, e.LlmSampling!["*"].Temperature);   // laid over every model (2026-09-28)

@@ -16,6 +16,15 @@ public static class AdvisorText
     /// <summary>The spinner's label while an advisor answers. Pinned.</summary>
     public const string AskingLabel = "advisor";
 
+    /// <summary>How many of the conversation's last messages <c>Advisor context: recent</c> sends (the Claude Code advisor tool's until 2026-10-10). Pinned.</summary>
+    public const int RecentMessages = 10;
+
+    /// <summary>A tool result among those messages is cut to this many characters: the gist, not a whole file again.</summary>
+    public const int ToolResultChars = 500;
+
+    /// <summary>One of the recent messages as the advisor reads it: <c>user: …</c>, <c>tool: …</c>. Pinned.</summary>
+    public static string RecentLine(string role, string text) => role + ": " + text.Trim();
+
     /// <summary>
     /// What the advisor is told it is, after its own persona (2026-10-10, the user's call: persona and role): whom it advises, in what
     /// role, and what it can and cannot do, so it answers as an advisor and never offers to act. Pinned.

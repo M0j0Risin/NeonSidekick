@@ -94,7 +94,7 @@ public sealed class ClaudeProcess : IClaudeCli
     }
 
     /// <summary>
-    /// One <c>claude -p</c> child over <paramref name="launch"/> (2026-09-30: <c>/claude</c>'s and <c>claude_code_advisor</c>'s,
+    /// One <c>claude -p</c> child over <paramref name="launch"/> (2026-09-30: <c>/claude</c>'s and <c>claude_code_advisor</c>'s until that tool was retired on 2026-10-10,
     /// and the Claude Code server's one-shot requests, <see cref="ClaudeArguments.BuildOneShot"/>): <paramref name="prompt"/>
     /// on stdin, stdin closed, the reply read off stdout. The same shape and the same guarantees as
     /// <see cref="RunAsync"/>: a <see cref="ClaudeEvent.Result"/> last, the child's tree killed on a cancel.

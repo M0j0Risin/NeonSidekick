@@ -74,7 +74,6 @@ internal sealed class TurnStages
             case TurnEvent.ToolCall call:
                 _stage = Stage.Tool;
                 return string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal) ? ComfyText.GeneratingLabelFor(InputImages(call.ArgumentsJson))
-                    : string.Equals(call.Name, ClaudeAdvisorTool.ToolName, StringComparison.Ordinal) ? Claude.ClaudeText.AskingLabel
                     : string.Equals(call.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal) ? Advisors.AdvisorText.AskingLabel
                     : call.Name;
             case TurnEvent.ToolResult:

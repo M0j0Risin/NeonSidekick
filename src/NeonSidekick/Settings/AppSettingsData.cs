@@ -1651,6 +1651,10 @@ public sealed class AppSettingsData
     // again: the old keys take their defaults, a saved claude-cli LLM URL is an unknown one (discovery), and a saved
     // claude_advisor_cli in ToolsDisabled matches nothing. The <home>/claude-cli folder and the claude-cli:relay probe keep
     // their names (the folder holds Claude Code's own sessions).
+    // Later on 2026-10-10 (the user's call, once an advisor profile could run on the Claude Code server) claude_code_advisor itself
+    // was retired with its six ClaudeCodeAdvisor* keys and NEONSIDEKICK_CLAUDE_CODE_ADVISOR: the keys are skipped on load, a saved
+    // claude_code_advisor in ToolsDisabled or "claude" in ToolbarItems matches nothing, and /tools' ClaudeCode tab went, its four
+    // /claude rows joining the Claude Code server's on /settings' Anthropic tab.
     // The clock's days_between became date_difference on 2026-10-05 (the user's pick, as it began answering in years and
     // months too): no migration either, so a profile that had switched days_between off is offered date_difference again.
 
@@ -2463,7 +2467,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Claude Code CLI <c>/claude</c> starts (2026-09-27): a full path, or empty to look for <c>claude.exe</c> on the
     /// PATH, then npm's <c>claude.cmd</c>, then <c>%USERPROFILE%\.local\bin</c> (<see cref="Claude.ClaudeExecutable"/>).
-    /// <c>/tools</c>' ClaudeCode tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeCodeExeVariable"/>.
+    /// <c>/settings</c>' Anthropic tab's second row, under the Claude Code server's (2026-10-10; <c>/tools</c>' ClaudeCode tab's first row until then); read at each <c>/claude</c>
+    /// and by the Claude Code server. Variable <see cref="EnvironmentOverrides.ClaudeCodeExeVariable"/>.
     /// </summary>
     public string ClaudeCodeExecutable { get; set; } = "";
 
@@ -2483,38 +2488,6 @@ public sealed class AppSettingsData
     /// <summary>The <c>--effort</c> of a <c>/claude</c> run (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = the CLI's own. No variable.</summary>
     public string ClaudeCodeEffort { get; set; } = Claude.ClaudeEffort.Default;
 
-    /// <summary>
-    /// Whether the model is offered <c>claude_code_advisor</c> (2026-09-27, the user's ask: the local model asks Claude Code
-    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> ClaudeCode tab's
-    /// first advisor row. Off by default — every call costs money on the user's Claude account. Variable
-    /// <see cref="EnvironmentOverrides.ClaudeCodeAdvisorVariable"/>.
-    /// </summary>
-    public bool ClaudeCodeAdvisor { get; set; }
-
-    /// <summary>
-    /// What an advisor call sends Claude besides the model's question (2026-09-27, the user's call: a setting): one of
-    /// <see cref="Claude.ClaudeAdvisorContext.Names"/> — <c>brief</c>, the question and the model's own context argument
-    /// alone; <c>recent</c>, those and the last <see cref="Claude.ClaudeText.AdvisorRecentMessages"/> messages of the
-    /// conversation. Anything else reads as <c>brief</c>. No variable.
-    /// </summary>
-    public string ClaudeCodeAdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
-
-    /// <summary>The most <c>claude_code_advisor</c> calls one turn may make (2026-09-27), <see cref="MinClaudeCodeAdvisorCallsPerTurn"/> to <see cref="MaxClaudeCodeAdvisorCallsPerTurn"/>; a call past it is refused, and the model carries on alone. No variable.</summary>
-    public int ClaudeCodeAdvisorCallsPerTurn { get; set; } = DefaultClaudeCodeAdvisorCallsPerTurn;
-
-    public const int MinClaudeCodeAdvisorCallsPerTurn = 1;
-    public const int MaxClaudeCodeAdvisorCallsPerTurn = 10;
-    public const int DefaultClaudeCodeAdvisorCallsPerTurn = 2;
-
-    /// <summary>The <c>--model</c> of an advisor call (2026-09-27); empty = <see cref="ClaudeCodeModel"/> (and, that empty too, the CLI's own). No variable.</summary>
-    public string ClaudeCodeAdvisorModel { get; set; } = "";
-
-    /// <summary>The <c>--effort</c> of an advisor call (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = <see cref="ClaudeCodeEffort"/>. No variable.</summary>
-    public string ClaudeCodeAdvisorEffort { get; set; } = "";
-
-    /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-09-27, the user's call: opt-in, off by default); headless has no one to ask, so a call there is refused. No variable.</summary>
-    public bool ClaudeCodeAdvisorConfirm { get; set; }
-
     // ─── Profile advisors (2026-10-10) ──────────────────────────────────────────────
     // neon_advisor and /advisor (2026-10-10, the user's ask: this profile consults the others, each in a role of its own, on
     // its own profile's server and under its own persona; the master's read-only tools, a thread per advisor). The Advisors
@@ -2533,11 +2506,11 @@ public sealed class AppSettingsData
     public List<AdvisorEntry>? AdvisorList { get; set; }
 
     /// <summary>
-    /// What an advisor call sends besides the model's question (2026-10-10, the Claude Code advisor's choice): one of
-    /// <see cref="Claude.ClaudeAdvisorContext.Names"/> — <c>brief</c>, the question and the model's own context argument;
+    /// What an advisor call sends besides the model's question (2026-10-10, the retired Claude Code advisor tool's choice): one of
+    /// <see cref="NeonSidekick.Advisors.AdvisorContextMode.Names"/> — <c>brief</c>, the question and the model's own context argument;
     /// <c>recent</c>, those and the last messages of the conversation. Anything else reads as <c>brief</c>. No variable.
     /// </summary>
-    public string AdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
+    public string AdvisorContext { get; set; } = NeonSidekick.Advisors.AdvisorContextMode.Default;
 
     /// <summary>The most <c>neon_advisor</c> calls one turn may make, all advisors together (2026-10-10), <see cref="MinAdvisorCallsPerTurn"/> to <see cref="MaxAdvisorCallsPerTurn"/>. No variable.</summary>
     public int AdvisorCallsPerTurn { get; set; } = DefaultAdvisorCallsPerTurn;
@@ -2574,7 +2547,7 @@ public sealed class AppSettingsData
     /// </summary>
     public string AdvisorEmbedded { get; set; } = App.BotChatMultiEmbedded.Default;
 
-    /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-10-10, as the Claude Code advisor's); headless has no one to ask, so a call there is refused. No variable.</summary>
+    /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-10-10, as the retired Claude Code advisor tool's); headless has no one to ask, so a call there is refused. No variable.</summary>
     public bool AdvisorConfirm { get; set; }
     // ─── Anthropic API (2026-09-27) ────────────────────────────────────────────────
 
@@ -2583,7 +2556,7 @@ public sealed class AppSettingsData
     /// <c>/server</c> choice, off by default — every message costs money on the key's account). Offered only while a key
     /// is set too (<see cref="Llm.Anthropic.ClaudeApi.Offered"/>): then <c>/server</c> and the startup picker list a
     /// <c>Anthropic API</c> row, and picking it saves <see cref="Llm.Anthropic.ClaudeApi.BaseUrl"/> as the LLM URL. The
-    /// <c>/settings</c>' Anthropic tab's first row (2026-10-03; <c>/tools</c>' ClaudeCode tab's first API row, under the advisor's, from 2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.AnthropicApiVariable"/>.
+    /// <c>/settings</c>' Anthropic tab's first API row (2026-10-03; under <c>/claude</c>'s since 2026-10-10; <c>/tools</c>' ClaudeCode tab's first API row, under the advisor's, from 2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.AnthropicApiVariable"/>.
     /// </summary>
     public bool AnthropicApi { get; set; }
 
@@ -2659,7 +2632,7 @@ public sealed class AppSettingsData
     /// (<see cref="Claude.ClaudeCliEndpoint.Offered"/>: <see cref="ClaudeCodeExecutable"/>, else the PATH): then <c>/server</c>
     /// and the startup picker list a <c>Claude Code</c> row, and picking it saves <see cref="Claude.ClaudeCliEndpoint.BaseUrl"/>
     /// as the LLM URL and the <c>--model</c> word as the LLM model. Claude Code's own tools are all off there: the model gets
-    /// the app's tools, over an MCP server the app hosts. <c>/settings</c>' Anthropic tab's last row (2026-10-03; <c>/tools</c>' ClaudeCode tab's until then); a reconnect. Variable
+    /// the app's tools, over an MCP server the app hosts. <c>/settings</c>' Anthropic tab's first row (2026-10-10; its last from 2026-10-03; <c>/tools</c>' ClaudeCode tab's until then); a reconnect. Variable
     /// <see cref="EnvironmentOverrides.ClaudeCodeServerVariable"/>.
     /// </summary>
     public bool ClaudeCodeServer { get; set; }

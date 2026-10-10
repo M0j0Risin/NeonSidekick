@@ -57,7 +57,7 @@ internal sealed partial class ChatScreen
     public static (IReadOnlyList<AIFunction> Tools, string Rules) AdvisorTurnTools(TurnToolInputs inputs, bool markdown)
     {
         ArgumentNullException.ThrowIfNull(inputs);
-        var set = ComposeTurnTools(inputs with { PlanReadOnly = true, Plan = null, Ask = null, Camera = null, Screen = null, Advisor = null, NeonAdvisor = null });
+        var set = ComposeTurnTools(inputs with { PlanReadOnly = true, Plan = null, Ask = null, Camera = null, Screen = null, NeonAdvisor = null });
         return set.Tools.Count == 0 ? ([], "") : (set.Tools, set.Rules.DefaultRules(markdown));
     }
 
@@ -68,7 +68,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>Advisor confirm</c>'s question, on the turn task: the yes/no pane through the watcher (<see cref="ConfirmAdvisorAsync"/>'s shape).
+    /// <c>Advisor confirm</c>'s question, on the turn task: the yes/no pane through the watcher (<see cref="ApproveCommandAsync"/>'s shape; the Claude Code advisor tool's confirm, retired later that day, had it too).
     /// Null (never asked) without the pane or a watcher to run it.
     /// </summary>
     private async Task<bool?> ConfirmNeonAdvisorAsync(AdvisorEntry advisor, string question, CancellationToken turnToken)
@@ -152,7 +152,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var recent = Claude.ClaudeAdvisorContext.IsRecent(effective.AdvisorContext) ? ClaudeAdvisorTool.RecentLines(_session.History.Messages) : null;
+        var recent = AdvisorContextMode.IsRecent(effective.AdvisorContext) ? AdvisorRecent.Lines(_session.History.Messages) : null;
         using var askCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         _queuedClicks.Reset();
@@ -196,7 +196,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// An advisor on the transcript as it answers (2026-10-10, <see cref="AdvisorView"/>'s shape): the question as a tool note, each tool
+    /// An advisor on the transcript as it answers (2026-10-10, the shape of the Claude Code advisor tool's view, retired later that day): the question as a tool note, each tool
     /// it calls as a dim line, then its answer in <see cref="AdvisorColor"/> and the footer naming its model and tokens. The result's own
     /// line is left to <see cref="Render"/>, which prints only a refusal or a failure.
     /// </summary>

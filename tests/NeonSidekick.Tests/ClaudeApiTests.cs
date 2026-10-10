@@ -572,13 +572,15 @@ public class ClaudeApiTests
     public void Settings_TheClaudeTab_HoldsTheClaudeApisFourRows_AndTheCliServer()
     {
         // On /tools' Claude tab from 2026-09-29 under the advisor's confirm, the Claude Code server's switch below them from
-        // 2026-09-30; /settings' own Claude tab since 2026-10-03 (the user's call), after Docker. The Claude Code server first since 2026-10-10.
+        // 2026-09-30; /settings' own Claude tab since 2026-10-03 (the user's call), after Docker. The Claude Code server first since 2026-10-10,
+        // /claude's four rows under it later that day (the user's call).
         Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
         Assert.Equal((int)SettingsTab.Docker + 1, (int)SettingsTab.Anthropic);
         var claude = SettingsMenu.TabFields[(int)SettingsTab.Anthropic];
-        Assert.Equal([SettingsField.ClaudeCodeServer, SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching], claude);
+        Assert.Equal([SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
+                      SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching], claude);
         Assert.All(SettingsMenu.ToolsTabFields, t => Assert.DoesNotContain(SettingsField.AnthropicApi, t));
-        var apiRows = claude.Skip(1).ToList();
+        var apiRows = claude.Skip(5).ToList();
 
         var data = new AppSettingsData();
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.AnthropicApi, data, "C:\\p"));

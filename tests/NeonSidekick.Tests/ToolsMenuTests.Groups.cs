@@ -27,7 +27,7 @@ public partial class ToolsMenuTests
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
         Assert.Equal("         │ ↳ Print · Camera · Screen ", SubStrip(ToolsText.MediaTabTitle));   // ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib · Obsidian ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day
-        Assert.Equal("         │ ↳ ClaudeCode · Docker · HomeAssistant · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10
+        Assert.Equal("         │ ↳ Docker · HomeAssistant · ComfyUI · YouTube ", SubStrip(ToolsText.IntegrationsTabTitle));   // 2026-10-10; ClaudeCode first until later that day
     }
 
     [Fact]
@@ -51,14 +51,14 @@ public partial class ToolsMenuTests
     {
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.FilesTabTitle));
-        Push(Keys.Tab);                              // Integrations, on ClaudeCode
+        Push(Keys.Tab);                              // Integrations, on Docker (ClaudeCode until later on 2026-10-10)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(LeafIndex(ToolsText.FileMenuTitle), LeafIndex(ToolsText.FilesTabTitle));
         Assert.Contains(Strips(ToolsText.FilesTabTitle) + "▸ " + SettingsMenu.FieldName(SettingsField.FileTools) + "  ", Output);
-        Assert.Contains(Strips(ToolsText.IntegrationsTabTitle) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.ClaudeCodeTabTitle)[0]) + "  ", Output);
+        Assert.Contains(Strips(ToolsText.IntegrationsTabTitle) + "▸ " + SettingsMenu.FieldName(TabFields(ToolsText.DockerTabTitle)[0]) + "  ", Output);
         Assert.Equal(LeafIndex(ToolsText.HomeAssistantTabTitle) + 1, LeafIndex(ToolsText.ComfyTabTitle));   // ComfyUI and YouTube after Home, off Media
         pane.Dispose();
     }

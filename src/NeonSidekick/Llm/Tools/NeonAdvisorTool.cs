@@ -19,7 +19,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <see cref="Excluded"/> — up to <c>Advisor tool iterations</c> round trips, its last round asked for words;</item>
 /// <item>a thread per advisor (<see cref="AdvisorThreads"/>): its questions and answers replayed, the newest <c>Advisor thread
 /// length</c> kept, dropped with the session;</item>
-/// <item><c>Advisor context</c>, <c>Advisor calls per turn</c> and <c>Advisor confirm</c> as the Claude Code advisor's rows.</item>
+/// <item><c>Advisor context</c>, <c>Advisor calls per turn</c> and <c>Advisor confirm</c> as the Claude Code advisor tool's rows (retired later on 2026-10-10).</item>
 /// </list>
 /// A failure is an <c>Error:</c> sentence, never a throw; a cancelled turn's token goes on up.
 /// </summary>
@@ -31,13 +31,13 @@ public sealed class NeonAdvisorTool : AIFunction
     public const string ContextArgument = "context";
 
     /// <summary>
-    /// The read-only tools an advisor is never offered (2026-10-10): itself and the Claude Code advisor (no advice chains), and the
+    /// The read-only tools an advisor is never offered (2026-10-10): itself (no advice chains; the Claude Code advisor tool too until it was retired), and the
     /// ones that put something to the user — the question pane, the camera's shutter, the screen's (the advisor answers the model,
     /// not the user). Pinned.
     /// </summary>
     public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.Ordinal)
     {
-        ToolName, ClaudeAdvisorTool.ToolName, AskUserTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ScreenListTool.ToolName,
+        ToolName, AskUserTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ScreenListTool.ToolName,
     };
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
@@ -145,7 +145,7 @@ public sealed class NeonAdvisorTool : AIFunction
         }
 
         string context = ToolArguments.ReadString(arguments, ContextArgument);
-        var recent = ClaudeAdvisorContext.IsRecent(effective.AdvisorContext) ? ClaudeAdvisorTool.RecentLines(_history()) : null;
+        var recent = AdvisorContextMode.IsRecent(effective.AdvisorContext) ? AdvisorRecent.Lines(_history()) : null;
         return await AskAsync(advisor, question, context, recent, effective, cancellationToken).ConfigureAwait(false);
     }
 

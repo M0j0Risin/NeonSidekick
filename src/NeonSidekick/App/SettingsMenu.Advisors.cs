@@ -97,8 +97,8 @@ internal sealed partial class SettingsMenu
     /// <summary>The advisor-context picker (2026-10-10): the Claude Code advisor's rows, this setting's value under the cursor.</summary>
     private async Task<bool> PickAdvisorContextAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var names = Claude.ClaudeAdvisorContext.Names;
-        var page = new MenuPage(Crumb(FieldName(SettingsField.AdvisorContext)), names.Select(ClaudeAdvisorContextLabel).ToList(), PickKeys);
+        var names = AdvisorContextMode.Names;
+        var page = new MenuPage(Crumb(FieldName(SettingsField.AdvisorContext)), names.Select(AdvisorContextLabel).ToList(), PickKeys);
         int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.AdvisorContext.Trim().ToLowerInvariant())), cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {

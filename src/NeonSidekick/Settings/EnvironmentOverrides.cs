@@ -45,7 +45,6 @@ public sealed class EnvironmentOverrides
     public const string ShellNativeVariable = Prefix + "SHELL_NATIVE";
     public const string ClaudeCodeExeVariable = Prefix + "CLAUDE_CODE_EXE";
     public const string ClaudeCodePermissionsVariable = Prefix + "CLAUDE_CODE_PERMISSIONS";
-    public const string ClaudeCodeAdvisorVariable = Prefix + "CLAUDE_CODE_ADVISOR";
     public const string AnthropicApiVariable = Prefix + "ANTHROPIC_API";
     public const string AnthropicApiKeyVariable = Prefix + "ANTHROPIC_API_KEY";
     public const string ClaudeCodeServerVariable = Prefix + "CLAUDE_CODE_SERVER";
@@ -71,7 +70,7 @@ public sealed class EnvironmentOverrides
         WhisperModelVariable, LlmReasoningVariable, TtsVoice2Variable, TtsMixVariable,
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
-        ShellNativeVariable, ClaudeCodeExeVariable, ClaudeCodePermissionsVariable, ClaudeCodeAdvisorVariable,
+        ShellNativeVariable, ClaudeCodeExeVariable, ClaudeCodePermissionsVariable,
         AnthropicApiVariable, AnthropicApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
         HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCodeServerVariable,
         DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable, AdvisorsVariable,
@@ -171,10 +170,7 @@ public sealed class EnvironmentOverrides
     /// </summary>
     public bool? ShellNative => ReadSwitch(ShellNativeVariable);
 
-    /// <summary><c>Claude Code advisor tool</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_code_advisor</c> without saving it.</summary>
-    public bool? ClaudeCodeAdvisor => ReadSwitch(ClaudeCodeAdvisorVariable);
-
-    /// <summary><c>Advisors</c> for this launch, or null when unset or not a switch word (2026-10-10, the Claude Code advisor's shape): a scripted headless run offers <c>neon_advisor</c> without saving it.</summary>
+    /// <summary><c>Advisors</c> for this launch, or null when unset or not a switch word (2026-10-10, the shape of the Claude Code advisor tool's <c>NEONSIDEKICK_CLAUDE_CODE_ADVISOR</c>, retired with the tool later that day): a scripted headless run offers <c>neon_advisor</c> without saving it.</summary>
     public bool? Advisors => ReadSwitch(AdvisorsVariable);
 
     /// <summary><c>Anthropic API</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted run offers the Anthropic API without saving it.</summary>
@@ -295,7 +291,6 @@ public sealed class EnvironmentOverrides
                 CommandPolicyVariable => ShellCommandPolicy is not null,
                 ShellPoliceVariable => ShellPolice is not null,
                 ShellNativeVariable => ShellNative is not null,
-                ClaudeCodeAdvisorVariable => ClaudeCodeAdvisor is not null,
                 AdvisorsVariable => Advisors is not null,
                 AnthropicApiVariable => AnthropicApi is not null,
                 ClaudeCodeServerVariable => ClaudeCodeServer is not null,
@@ -372,7 +367,6 @@ public sealed class EnvironmentOverrides
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;
         if (ClaudeCodeExecutable is { } claude) effective.ClaudeCodeExecutable = claude;
         if (ClaudeCodePermissions is { } claudePermissions) effective.ClaudeCodePermissions = claudePermissions;
-        if (ClaudeCodeAdvisor is { } advisor) effective.ClaudeCodeAdvisor = advisor;
         if (Advisors is { } advisors) effective.Advisors = advisors;
         if (AnthropicApi is { } claudeApi) effective.AnthropicApi = claudeApi;
         if (AnthropicApiKey is { } claudeApiKey) effective.AnthropicApiKey = claudeApiKey;

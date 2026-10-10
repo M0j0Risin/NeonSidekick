@@ -48,9 +48,6 @@ internal sealed record TurnToolInputs
     public bool SqlEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Comfy { get; init; }
     public bool ComfyEnabled { get; init; }
-    public IReadOnlyList<AIFunction>? Advisor { get; init; }
-    public bool AdvisorEnabled { get; init; }
-
     /// <summary>The profile advisors' tool (2026-10-10, <c>neon_advisor</c>): offered while <see cref="NeonAdvisorEnabled"/> (<c>Advisors enabled</c> and an advisor listed).</summary>
     public IReadOnlyList<AIFunction>? NeonAdvisor { get; init; }
     public bool NeonAdvisorEnabled { get; init; }
@@ -87,9 +84,9 @@ internal sealed record TurnToolInputs
 /// and file tools the opening calls are found among (<see cref="Offered"/>), the rules they call for, and the three tools whose
 /// per-turn state the caller starts over or seeds (<see cref="Recall"/> only while memory is on). <see cref="Empty"/> with tools off.
 /// </summary>
-internal sealed record TurnToolSet(IReadOnlyList<AIFunction> Tools, IReadOnlyList<AIFunction> Offered, TurnRules Rules, RecallMemoryTool? Recall, RunCommandTool? Shell, ClaudeAdvisorTool? Advisor, NeonAdvisorTool? Advisors = null)
+internal sealed record TurnToolSet(IReadOnlyList<AIFunction> Tools, IReadOnlyList<AIFunction> Offered, TurnRules Rules, RecallMemoryTool? Recall, RunCommandTool? Shell, NeonAdvisorTool? Advisors = null)
 {
-    public static readonly TurnToolSet Empty = new([], [], new TurnRules(), null, null, null);
+    public static readonly TurnToolSet Empty = new([], [], new TurnRules(), null, null);
 }
 
 internal sealed partial class ChatScreen
@@ -135,7 +132,6 @@ internal sealed partial class ChatScreen
         var screenTools = inputs.Screen;
         var youTubeTools = inputs.YouTube;
         var mcpTools = inputs.Mcp;
-        var advisorTools = inputs.Advisor;
         var neonAdvisorTools = inputs.NeonAdvisor;
         var plan = inputs.Plan;
         var disabledTools = inputs.Disabled;
@@ -144,13 +140,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools, neonAdvisorTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, neonAdvisorTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, advisorTools, homeTools, printTools, youTubeTools, neonAdvisorTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, neonAdvisorTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -181,7 +177,6 @@ internal sealed partial class ChatScreen
             screenTools = screenTools is null ? null : Without(screenTools, disabledTools);
             youTubeTools = youTubeTools is null ? null : Without(youTubeTools, disabledTools);
             mcpTools = mcpTools is null ? null : Without(mcpTools, disabledTools);
-            advisorTools = advisorTools is null ? null : Without(advisorTools, disabledTools);
             neonAdvisorTools = neonAdvisorTools is null ? null : Without(neonAdvisorTools, disabledTools);
         }
 
@@ -253,10 +248,8 @@ internal sealed partial class ChatScreen
         // The print tools after the Home Assistant tools (2026-09-28): Print tools is the group's switch; no rule — the descriptions say to print only when asked.
         bool print = inputs.PrintEnabled && printTools is { Count: > 0 };
         tools = print ? [.. tools, .. printTools!] : tools;
-        // The advisor after the image tools (2026-09-27): the setting Claude Code advisor tool is the group's switch; its sentence after the SQL one.
-        bool advisor = inputs.AdvisorEnabled && advisorTools is { Count: > 0 };
-        tools = advisor ? [.. tools, .. advisorTools!] : tools;
-        // The profile advisors right after the Claude advisor (2026-10-10): Advisors enabled with an advisor listed is the group's switch; its sentence after the Claude advisor's.
+        // The profile advisors after the print tools (2026-10-10; the Claude Code advisor tool stood between until it was retired the same day): Advisors enabled with an
+        // advisor listed is the group's switch; its sentence after the Docker ones.
         bool advisors = inputs.NeonAdvisorEnabled && neonAdvisorTools is { Count: > 0 };
         tools = advisors ? [.. tools, .. neonAdvisorTools!] : tools;
         // The shell rule's execute_code sentence promises neon_tools only while the setting Shell tool bridge is on (later on 2026-09-21).
@@ -291,14 +284,13 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, advisor, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors);
         return new TurnToolSet(
             tools,
             offered,
             rules,
             memoryEnabled ? memoryTools.OfType<RecallMemoryTool>().FirstOrDefault() : null,
             shell ? shellTools!.OfType<RunCommandTool>().FirstOrDefault() : null,
-            advisor ? advisorTools!.OfType<ClaudeAdvisorTool>().FirstOrDefault() : null,
             advisors ? neonAdvisorTools!.OfType<NeonAdvisorTool>().FirstOrDefault() : null);
     }
 
