@@ -17,6 +17,24 @@ public partial class SettingsMenuTests
         Assert.Equal(30, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.Anthropic]));   // "Anthropic API prompt caching" (2026-10-04; "Claude API prompt caching", 27, before)
         Assert.Equal(25, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.OpenAI]));   // "OpenAI API organization"
         Assert.Equal("must be 0 (the model's own) or 1024 to 128000 tokens", SettingsMenu.OpenAIApiMaxTokensRangeError);
+        // The OpenAI tab keeps its rows' whole names (2026-10-10, the user's call: "API key" said nothing of whose); the others shorten.
+        Assert.True(SettingsMenu.KeepsWholeNames(SettingsMenu.OpenAITabTitle));
+        Assert.False(SettingsMenu.KeepsWholeNames("Botchat") || SettingsMenu.KeepsWholeNames(SettingsMenu.AnthropicTabTitle));
+    }
+
+    [Fact]
+    public async Task OnThePane_TheOpenAITab_ShowsTheWholeNames()
+    {
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.OpenAI);
+        Push(Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Contains("▸ " + SettingsMenu.FieldName(SettingsField.OpenAIApi) + " ", Output);
+        Assert.Contains(SettingsMenu.FieldName(SettingsField.OpenAIApiOrganization), Output);
+        Assert.DoesNotContain("▸ API ", Output);
+        pane.Dispose();
     }
 
     [Fact]
@@ -26,6 +44,7 @@ public partial class SettingsMenuTests
         // a save of one is a reconnect, which the screen makes once the pane closes.
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.Anthropic);
+        Down(1);                                   // the Claude Code server first since 2026-10-10 (the user's call)
         Push(Keys.Enter, Keys.Up, Keys.Enter);     // Anthropic API: the page opens on off, on picked
         Push(Keys.Escape);
 

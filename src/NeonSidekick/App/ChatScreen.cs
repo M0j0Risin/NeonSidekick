@@ -7091,13 +7091,20 @@ internal sealed partial class ChatScreen
     /// What <c>servers</c> carries (2026-10-07, the user's list, and the three groups they added: the Claude Code server, the embedded
     /// tuning, the Docker server timings), in the settings pane's order: each field and the copy of its stored value. <c>Embedded
     /// models</c> stores nothing per profile (the models are shared under the home, the one in use is in <c>LLM URL</c> and
-    /// <c>LLM model</c>), and the keys are <c>keys</c>'. A server setting added later is one line here.
+    /// <c>LLM model</c>), and the keys are <c>keys</c>'. A server setting added later is one line here. 2026-10-10 (the user's
+    /// list): how the model answers came along — LLM reasoning, its estimate, the sampling overrides (every model's, a deep copy)
+    /// and the Hugging Face switch — and the Anthropic and OpenAI APIs' own rows beyond their switches (output caps, prompt
+    /// caching, organization and project).
     /// </summary>
     public static readonly IReadOnlyList<(SettingsField Field, Action<AppSettingsData, AppSettingsData> Copy)> ProfileServerFields =
     [
         (SettingsField.LlmScanMode, (from, to) => to.LlmScanMode = from.LlmScanMode),
         (SettingsField.LlmUrl, (from, to) => to.LlmUrl = from.LlmUrl),
         (SettingsField.LlmModel, (from, to) => to.LlmModel = from.LlmModel),
+        (SettingsField.LlmReasoning, (from, to) => to.LlmReasoning = from.LlmReasoning),
+        (SettingsField.LlmReasoningEstimate, (from, to) => to.LlmReasoningEstimate = from.LlmReasoningEstimate),
+        (SettingsField.LlmSampling, (from, to) => to.LlmSampling = LlmSamplingEntry.CopyAll(from.LlmSampling)),
+        (SettingsField.LlmSamplingFromHuggingFace, (from, to) => to.LlmSamplingFromHuggingFace = from.LlmSamplingFromHuggingFace),
         (SettingsField.EmbeddedLlmServer, (from, to) => to.EmbeddedLlmServer = from.EmbeddedLlmServer),
         (SettingsField.EmbeddedBackend, (from, to) => to.EmbeddedBackend = from.EmbeddedBackend),
         (SettingsField.EmbeddedContextSize, (from, to) => to.EmbeddedContextSize = from.EmbeddedContextSize),
@@ -7112,15 +7119,20 @@ internal sealed partial class ChatScreen
         (SettingsField.DockerServerPostStopDelaySeconds, (from, to) => to.DockerServerPostStopDelaySeconds = from.DockerServerPostStopDelaySeconds),
         (SettingsField.DockerServerReadyTimeoutSeconds, (from, to) => to.DockerServerReadyTimeoutSeconds = from.DockerServerReadyTimeoutSeconds),
         (SettingsField.DockerServerStopOnExit, (from, to) => to.DockerServerStopOnExit = from.DockerServerStopOnExit),
-        (SettingsField.AnthropicApi, (from, to) => to.AnthropicApi = from.AnthropicApi),
-        (SettingsField.OpenAIApi, (from, to) => to.OpenAIApi = from.OpenAIApi),
         (SettingsField.ClaudeCodeServer, (from, to) => to.ClaudeCodeServer = from.ClaudeCodeServer),
+        (SettingsField.AnthropicApi, (from, to) => to.AnthropicApi = from.AnthropicApi),
+        (SettingsField.AnthropicApiMaxTokens, (from, to) => to.AnthropicApiMaxTokens = from.AnthropicApiMaxTokens),
+        (SettingsField.AnthropicApiPromptCaching, (from, to) => to.AnthropicApiPromptCaching = from.AnthropicApiPromptCaching),
+        (SettingsField.OpenAIApi, (from, to) => to.OpenAIApi = from.OpenAIApi),
+        (SettingsField.OpenAIApiMaxTokens, (from, to) => to.OpenAIApiMaxTokens = from.OpenAIApiMaxTokens),
+        (SettingsField.OpenAIApiOrganization, (from, to) => to.OpenAIApiOrganization = from.OpenAIApiOrganization),
+        (SettingsField.OpenAIApiProject, (from, to) => to.OpenAIApiProject = from.OpenAIApiProject),
     ];
 
     /// <summary>The question before a <c>servers</c> copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open).</summary>
     public static string ProfileServersPrompt(string profile, bool pull = false) => pull
-        ? $"Copy \"{profile}\"'s server settings into this profile? This profile's LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced."
-        : $"Copy this profile's server settings into \"{profile}\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.";
+        ? $"Copy \"{profile}\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced."
+        : $"Copy this profile's server settings into \"{profile}\"? Its LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.";
 
     /// <summary>
     /// A <c>servers</c> copy done: <c>(copied the server settings into "work": LLM URL http://…, LLM model qwen3)</c> — what the target now
@@ -8905,7 +8917,7 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlyList<(string Word, ProfileSection Section, string Note)> ProfileSectionWords =
     [
         ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
-        ("servers", ProfileSection.Servers, "the server settings: LLM URL, model, scan mode, Embedded, Docker, Anthropic API, OpenAI API, Claude Code server"),
+        ("servers", ProfileSection.Servers, "the server settings: LLM URL, model, scan mode, reasoning, sampling, Embedded, Docker, Anthropic API, OpenAI API, Claude Code server"),
         ("commands", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
         ("history", ProfileSection.History, "the command history, added (or replaced with overwrite)"),
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),

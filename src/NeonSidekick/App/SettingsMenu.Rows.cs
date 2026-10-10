@@ -107,6 +107,12 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
+    /// The <c>/settings</c> tabs whose rows keep their whole names though every one carries the tab's title (2026-10-10, the user's
+    /// call: the OpenAI tab read "API", "API key", "API max tokens"…, a bare "API" saying nothing of whose). Pure.
+    /// </summary>
+    public static bool KeepsWholeNames(string tabTitle) => string.Equals(tabTitle, OpenAITabTitle, StringComparison.Ordinal);
+
+    /// <summary>
     /// What the pane says under the list about <paramref name="field"/> (2026-10-04, the UI review: no row said what it does, while
     /// <c>neon_help</c> had every one's description): <see cref="HelpSettings.Describe"/> as plain text (its Markdown's backticks
     /// and asterisks dropped), then its compiled default on a last line of its own (<see cref="HelpLocation.Default"/>). Pinned.

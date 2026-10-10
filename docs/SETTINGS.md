@@ -366,15 +366,15 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 
 ### Anthropic
 
-The Anthropic API and Claude Code as `/server` choices. `/claude` and `claude_code_advisor` are on `/tools` › ClaudeCode.
+Claude Code and the Anthropic API as `/server` choices. `/claude` and `claude_code_advisor` are on `/tools` › ClaudeCode.
 
 | Setting | What it does | Default |
 |---|---|---|
+| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable* on `/tools` › ClaudeCode, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
 | Anthropic API | Offers the Anthropic API on `/server` while a key is set. Off (or keyless) while it is the saved URL, the app scans as if the URL were blank. | off |
 | Anthropic API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac). An empty entry clears it. | (none) |
 | Anthropic API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
 | Anthropic API prompt caching | Marks the tools, system prompt and conversation for Anthropic's prompt cache, so each request re-reads the last one's content cheaply. | on |
-| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable* on `/tools` › ClaudeCode, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
 
 **The Anthropic API** appears in `/server` as an **Anthropic API** row. Picking it sets *LLM URL* to `https://api.anthropic.com/v1`, then offers the account's models and the reasoning level.
 

@@ -647,7 +647,7 @@ public class ClaudeCliServerTests
         Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCodeServer));
         Assert.True(SettingsMenu.IsLlmField(SettingsField.ClaudeCodeServer));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCodeServer, new AppSettingsData(), @"C:\p"));
-        Assert.Equal(SettingsField.ClaudeCodeServer, SettingsMenu.TabFields[(int)SettingsTab.Anthropic][^1]);   // /settings' Claude tab's last row since 2026-10-03 (/tools' until then)
+        Assert.Equal(SettingsField.ClaudeCodeServer, SettingsMenu.TabFields[(int)SettingsTab.Anthropic][0]);   // /settings' Anthropic tab's first row since 2026-10-10 (its last from 2026-10-03, /tools' until then)
         Assert.True(AppSettings.Copy(new AppSettingsData { ClaudeCodeServer = true }).ClaudeCodeServer);
 
         var environment = new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCodeServerVariable ? "on" : null);

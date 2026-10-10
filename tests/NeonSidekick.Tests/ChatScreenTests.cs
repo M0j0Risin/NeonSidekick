@@ -8894,22 +8894,27 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(
             [
                 SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel,
+                SettingsField.LlmReasoning, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,   // 2026-10-10
                 SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers,
                 SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter,
                 SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds,
                 SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit,
-                SettingsField.AnthropicApi, SettingsField.OpenAIApi, SettingsField.ClaudeCodeServer,
+                SettingsField.ClaudeCodeServer, SettingsField.AnthropicApi, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
+                SettingsField.OpenAIApi, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,
             ],
             ChatScreen.ProfileServerFields.Select(f => f.Field));
 
         var from = new AppSettingsData
         {
             LlmScanMode = "remote", LlmUrl = "http://10.0.0.5:8000/v1", LlmModel = "qwen3",
+            LlmReasoning = "high", LlmReasoningEstimate = "tokenize", LlmSamplingFromHuggingFace = true,
+            LlmSampling = new() { ["*"] = new() { Temperature = 0.6 }, ["qwen3"] = new() { TopK = 20 } },
             EmbeddedLlmServer = false, EmbeddedBackend = "vulkan", EmbeddedContextSize = 16384, EmbeddedGpuLayers = "20",
             EmbeddedVramBudget = 80, EmbeddedVramOnly = false, EmbeddedVision = false, EmbeddedDrafter = false,
             DockerServers = true, DockerServerContainers = ["vllm_qwen", "sglang"], DockerServerStopTimeoutSeconds = 45,
             DockerServerPostStopDelaySeconds = 5, DockerServerReadyTimeoutSeconds = 600, DockerServerStopOnExit = true,
-            AnthropicApi = true, OpenAIApi = true, ClaudeCodeServer = true,
+            AnthropicApi = true, AnthropicApiMaxTokens = 8_000, AnthropicApiPromptCaching = false, ClaudeCodeServer = true,
+            OpenAIApi = true, OpenAIApiMaxTokens = 4_096, OpenAIApiOrganization = "org-neon", OpenAIApiProject = "proj-neon",
         };
         var to = new AppSettingsData();
         foreach (var (_, copy) in ChatScreen.ProfileServerFields)
@@ -8925,8 +8930,12 @@ public partial class ChatScreenTests : IDisposable
         }
 
         Assert.NotSame(from.DockerServerContainers, to.DockerServerContainers);   // a list of its own
-        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.", ChatScreen.ProfileServersPrompt("work"));
-        Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model and scan mode, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
+        Assert.NotSame(from.LlmSampling, to.LlmSampling);   // the sampling a map of its own, every entry too
+        Assert.NotSame(from.LlmSampling["qwen3"], to.LlmSampling!["qwen3"]);
+        Assert.Equal(0.6, to.LlmSampling["*"].Temperature);
+        Assert.Equal(20, to.LlmSampling["qwen3"].TopK);
+        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.", ChatScreen.ProfileServersPrompt("work"));
+        Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
         Assert.Equal("(copied the server settings into \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3"));
         Assert.Equal("(copied the server settings from \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3", pull: true));
     }

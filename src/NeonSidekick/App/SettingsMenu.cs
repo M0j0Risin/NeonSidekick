@@ -1014,8 +1014,9 @@ public enum SettingsTab
 
     /// <summary>
     /// The Claude servers' rows (2026-10-03, the user's ask: off <c>/tools</c>' ClaudeCode tab, which keeps <c>/claude</c>'s and the
-    /// advisor's): the Anthropic API's switch, key, output cap and prompt caching, then the Claude Code server's switch. "Claude"
-    /// until 2026-10-04 (the user's call: Anthropic, so it no longer shares a name with <c>/tools</c>' tab).
+    /// advisor's): the Claude Code server's switch, then the Anthropic API's switch, key, output cap and prompt caching (the Claude Code
+    /// server last until 2026-10-10, the user's call). "Claude" until 2026-10-04 (the user's call: Anthropic, so it no longer shares a
+    /// name with <c>/tools</c>' tab).
     /// </summary>
     Anthropic,
 
@@ -1356,7 +1357,7 @@ internal sealed partial class SettingsMenu
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
-        [SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching, SettingsField.ClaudeCodeServer],
+        [SettingsField.ClaudeCodeServer, SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching],
         [SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         [SettingsField.SttInput, SettingsField.SttDestination, .. Fields.Where(f => IsVoiceField(f) && f != SettingsField.SttInput)],
@@ -3844,7 +3845,7 @@ internal sealed partial class SettingsMenu
         string? located = _locateBrowser("");
         // Short names (2026-10-04) only where every row carries the tab's title: a tab of /settings' own, never a /tools one,
         // whose "Web tools" or "Ask user" would be left a bare "Tools" or "User".
-        string? shortTab = shortNames && fields.All(f => RowName(f, title) != FieldName(f)) ? title : null;
+        string? shortTab = shortNames && !KeepsWholeNames(title) && fields.All(f => RowName(f, title) != FieldName(f)) ? title : null;
         int width = LabelWidthOf(fields, shortTab);
         var rows = new List<string>(fields.Count + (sections?.Count ?? 0));
         HashSet<int>? headings = null;
