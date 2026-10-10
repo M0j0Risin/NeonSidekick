@@ -94,7 +94,7 @@ public sealed class ToolbarItemsTests
         // Themes and the Comfy thumb viewer (2026-10-04, the user's ask).
         Assert.Equal("[[ ]] 🧮  Themes                  " + Theme.DimMarkup("/theme"), ToolbarItems.Label("themes", false));
         Assert.Equal("[[ ]] 🪟  Comfy thumb viewer      " + Theme.DimMarkup("/comfy thumbs"), ToolbarItems.Label("comfythumbs", false));
-        Assert.Equal("[[ ]] 🏠  HA                      " + Theme.DimMarkup("/tools ha"), ToolbarItems.Label("ha", false));
+        Assert.Equal("[[ ]] 🏠  Home                    " + Theme.DimMarkup("/tools ha"), ToolbarItems.Label("ha", false));   // "HA" until 2026-10-09 (the user's ask)
         Assert.Equal("[[ ]] 🎨  ComfyUI                 " + Theme.DimMarkup("/tools comfy"), ToolbarItems.Label("comfy", false));
         Assert.Equal("[[ ]] 📄  Log                     " + Theme.DimMarkup("/log"), ToolbarItems.Label("log", false));
         Assert.Equal("[[ ]] ⚡  Process                 " + Theme.DimMarkup("/process"), ToolbarItems.Label("process", false));   // 2026-10-05, the user's ask

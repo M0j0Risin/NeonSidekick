@@ -167,7 +167,7 @@ public static class ToolbarItems
         Sqlite => "SQLite",
         Postgres => "PostgreSQL",
         Unc => "UNC",
-        Ha => "HA",
+        Ha => "Home",   // "HA" until 2026-10-09 (the user's ask, after /tools' tab became Home)
         Comfy => "ComfyUI",
         Camera => "Camera",
         Print => "Print",
