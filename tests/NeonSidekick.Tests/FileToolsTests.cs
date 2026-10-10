@@ -345,6 +345,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.PathRequired("path"), await Invoke(write, ("path", " "), ("content", "no path")));
         Assert.Equal("Error: path is required: the file or folder, relative to the working directory", FileText.PathRequired("path"));
         // mode (2026-09-19, append_file folded in): create refuses a file that is there and names the other two modes.
+        _files.ForgetSeen();   // the model wrote it: without a mode it would be replaced (2026-10-10, FileSeenTests); forgotten, it is refused
         Assert.Equal(FileText.WriteExists("notes.txt"), await Invoke(write, ("path", "notes.txt"), ("content", "x")));
         Assert.Equal(FileText.WriteExists("notes.txt"), await Invoke(write, ("path", "notes.txt"), ("content", "x"), ("mode", "create")));
         Assert.Equal("Error: 'notes.txt' already exists; call again with mode overwrite to replace it, or mode append to add to its end", FileText.WriteExists("notes.txt"));
@@ -524,7 +525,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.EndsWith(DeleteTool.GitNote, DeleteTool.DescriptionText, StringComparison.Ordinal);
         Assert.Equal(
             "Writes a text file under the working directory (the user's cwd / current directory), creating any missing folders. " +
-            "mode create (the default) leaves a file that already exists alone; mode overwrite replaces it; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
+            "mode create (the default) leaves a file that already exists alone — unless you read, wrote or patched it in this conversation and it is unchanged since, which it replaces; mode overwrite replaces any; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
             "The result reports the file's size, line count and word count, so nothing else is needed to check them. To change part of a file use patch_file.",
             write.Description);
         Assert.Equal(

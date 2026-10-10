@@ -45,8 +45,16 @@ public sealed class ReadFileTool : FileTool
 
     public override JsonElement JsonSchema => Schema;
 
-    public string Describe(string path, int? startLine, int? maxLines) =>
-        FileText.Read(Files.ReadText(path, startLine, maxLines));
+    public string Describe(string path, int? startLine, int? maxLines)
+    {
+        var read = Files.ReadText(path, startLine, maxLines);
+        if (read.Outcome == FileOutcome.Ok)
+        {
+            Files.MarkSeen(path);   // write_file may replace it without a mode while it stays as read (2026-10-10)
+        }
+
+        return FileText.Read(read);
+    }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {

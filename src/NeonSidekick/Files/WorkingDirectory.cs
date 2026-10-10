@@ -450,6 +450,11 @@ public sealed class WorkingDirectory
     private readonly TimeProvider _time;
     private readonly WorkingDirectoryOptions _options;
 
+    // The files the model's own file tools read or wrote this session, each with the size and write time it had then (2026-10-10,
+    // MarkSeen): write_file without a mode replaces one still as it was. Keyed by full path, case-blind where the file system is.
+    private readonly Dictionary<string, (long Length, DateTime Written)> _seen = new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly object _seenGate = new();
+
     /// <param name="root">The resolved root, read on every call (<see cref="Resolve(string, string)"/> over the effective settings).</param>
     /// <param name="time">The clock behind the dates shown.</param>
     /// <param name="options">How the root is treated: <see cref="WorkingDirectoryOptions.Sandbox"/> (the default) for the working directory, <see cref="WorkingDirectoryOptions.Share"/> for a UNC share (2026-09-30).</param>
@@ -1389,6 +1394,66 @@ public sealed class WorkingDirectory
     /// counts from the end (<c>-20</c> = the last 20 lines); <paramref name="maxLines"/> null = all
     /// that fit in <see cref="MaxReadChars"/>.
     /// </summary>
+    /// <summary>
+    /// <paramref name="relative"/> as the model has now seen it (2026-10-10, the user's call after a run's <c>write_file</c> was refused
+    /// twice for files the model had just read or written, each retry a whole request): <c>read_file</c>, <c>write_file</c> and
+    /// <c>patch_file</c> mark the file after they succeed, with its size and write time. Nothing for a file that is not there.
+    /// </summary>
+    public void MarkSeen(string relative)
+    {
+        if (Stamp(relative) is { } stamp)
+        {
+            lock (_seenGate)
+            {
+                _seen[stamp.Full] = (stamp.Length, stamp.Written);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the model saw <paramref name="relative"/> this session (<see cref="MarkSeen"/>) and it is unchanged since: the same size and
+    /// write time. A file changed since — by the user, a build, another tool — is not, so <c>write_file</c> still refuses it.
+    /// </summary>
+    public bool WasSeen(string relative)
+    {
+        if (Stamp(relative) is not { } stamp)
+        {
+            return false;
+        }
+
+        lock (_seenGate)
+        {
+            return _seen.TryGetValue(stamp.Full, out var seen) && seen == (stamp.Length, stamp.Written);
+        }
+    }
+
+    /// <summary>Every file forgotten as seen: the session is (<c>/new</c>, <c>/clear</c>, a profile switch).</summary>
+    public void ForgetSeen()
+    {
+        lock (_seenGate)
+        {
+            _seen.Clear();
+        }
+    }
+
+    private (string Full, long Length, DateTime Written)? Stamp(string relative)
+    {
+        if (Resolve(relative, forWrite: false, out string full) != FileOutcome.Ok)
+        {
+            return null;
+        }
+
+        try
+        {
+            var info = new FileInfo(full);
+            return info.Exists ? (info.FullName, info.Length, info.LastWriteTimeUtc) : null;
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return null;
+        }
+    }
+
     public ReadResult ReadText(string relative, int? startLine, int? maxLines)
     {
         var outcome = Resolve(relative, forWrite: false, out string full);

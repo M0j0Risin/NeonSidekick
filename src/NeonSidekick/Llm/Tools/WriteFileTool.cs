@@ -50,7 +50,7 @@ public sealed class WriteFileTool : FileTool
     /// <summary>The description; its <c>.trash</c> sentence went with File safe edits (2026-10-01, the user's call). Pinned.</summary>
     public const string DescriptionText =
         "Writes a text file under the working directory (the user's cwd / current directory), creating any missing folders. " +
-        "mode create (the default) leaves a file that already exists alone; mode overwrite replaces it; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
+        "mode create (the default) leaves a file that already exists alone — unless you read, wrote or patched it in this conversation and it is unchanged since, which it replaces; mode overwrite replaces any; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
         "The result reports the file's size, line count and word count, so nothing else is needed to check them. To change part of a file use patch_file.";
 
     public override JsonElement JsonSchema => Schema;
@@ -114,7 +114,20 @@ public sealed class WriteFileTool : FileTool
             return new ValueTask<object?>(error);
         }
 
-        var (text, _, diff) = Write(Files, path, ToolArguments.ReadString(arguments, ContentArgument), mode);
+        // No mode on a file the model read, wrote or patched this session and that is unchanged since (2026-10-10, the user's call: a run
+        // retried twice, each a whole request, for files it had just read or made): it is replaced, as mode overwrite would. A file it
+        // never saw, or one changed since, is still refused; an explicit create still never replaces.
+        if (raw.Trim().Length == 0 && Files.WasSeen(path))
+        {
+            mode = WriteMode.Overwrite;
+        }
+
+        var (text, done, diff) = Write(Files, path, ToolArguments.ReadString(arguments, ContentArgument), mode);
+        if (done)
+        {
+            Files.MarkSeen(path);
+        }
+
         return new ValueTask<object?>(ToolDiffResult.Of(text, diff));
     }
 }

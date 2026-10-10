@@ -71,6 +71,11 @@ public sealed class PatchFileTool : FileTool
             ToolArguments.ReadString(arguments, OldTextArgument),
             ToolArguments.ReadString(arguments, NewTextArgument),
             replaceAll);
+        if (edited.Outcome == FileOutcome.Ok)
+        {
+            Files.MarkSeen(path);   // as edited: write_file may replace it without a mode (2026-10-10)
+        }
+
         return new ValueTask<object?>(ToolDiffResult.Of(FileText.Edited(edited), edited.Diff));
     }
 }

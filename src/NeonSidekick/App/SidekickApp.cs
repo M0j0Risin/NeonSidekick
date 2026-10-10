@@ -840,6 +840,7 @@ public sealed class SidekickApp
                 advisorThread.SessionId = null;
                 advisorThreads.Clear();
                 advisorHost.Reset();
+                files.ForgetSeen();
                 planState.Executing = null;
                 planState.Draft = null;
                 if (plan.Active)

@@ -747,6 +747,8 @@ internal sealed partial class ChatScreen
         // The advisors' threads go with the session, and their links with them (2026-10-10): a profile switch must not keep the old ones.
         _advisorThreads.Clear();
         _advisorHost.Reset();
+        // The files the model saw go with the session too (2026-10-10): a new conversation's write_file asks for a mode again.
+        _files.ForgetSeen();
         _claudeServerSessionId = null;
         _cameraAllowed = false;
         _screenAllowed = false;
