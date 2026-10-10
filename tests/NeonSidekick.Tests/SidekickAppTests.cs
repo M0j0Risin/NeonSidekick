@@ -401,7 +401,7 @@ public partial class SidekickAppTests : IDisposable
 
         await Headless("hello\n");
 
-        Assert.False(File.Exists(Path.Combine(_settings.ProfileDirectory, NeonSidekick.Sessions.SessionStore.FileName)));
+        Assert.False(File.Exists(Path.Combine(_settings.ProfileDirectory, NeonSidekick.Sessions.SessionStore.FolderName, NeonSidekick.Sessions.SessionStore.FileName)));
     }
 
     [Fact]

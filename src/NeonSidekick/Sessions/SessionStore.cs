@@ -54,7 +54,7 @@ public sealed record ReflectionRow(long? SessionId, int TurnOrdinal, bool Forced
 }
 
 /// <summary>
-/// The per-profile session store: <c>sessions.db</c> beside <c>memory.json</c>, one SQLite file
+/// The per-profile session store: <c>sessions.db</c> under the profile's <c>db\sessions</c> (<see cref="FolderName"/>), one SQLite file
 /// through <c>Microsoft.Data.Sqlite</c> with raw SQL (no ORM: reflection is off under NativeAOT).
 /// A <c>sessions</c> row per conversation carrying its whole history as JSON — rewritten after
 /// every turn and every compact, since a compact rewrites older turns and no per-turn slice could
@@ -71,6 +71,12 @@ public sealed record ReflectionRow(long? SessionId, int TurnOrdinal, bool Forced
 public sealed class SessionStore : IDisposable
 {
     public const string FileName = "sessions.db";
+
+    /// <summary>
+    /// The folder under the profile that holds <see cref="FileName"/> and its WAL siblings: <c>db\sessions</c> since 2026-10-10 (the
+    /// user's call), the profile's root until then. No migration in the app: the user's existing files were moved by hand once. Pinned.
+    /// </summary>
+    public static readonly string FolderName = Path.Combine("db", "sessions");
 
     /// <summary>
     /// The store's own schema number, kept in the <c>meta</c> table. A file at any other number
@@ -106,12 +112,12 @@ public sealed class SessionStore : IDisposable
     private bool _failed;
     private bool _disposed;
 
-    /// <param name="directory">The profile directory; the file is <see cref="FileName"/> under it.</param>
+    /// <param name="directory">The profile directory; the file is <see cref="FileName"/> in its <see cref="FolderName"/>, made at the first open.</param>
     /// <param name="time">The clock behind every timestamp; tests pass a fake.</param>
     public SessionStore(string directory, TimeProvider? time = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
-        _filePath = Path.Combine(Path.GetFullPath(directory), FileName);
+        _filePath = Path.Combine(Path.GetFullPath(directory), FolderName, FileName);
         _time = time ?? TimeProvider.System;
     }
 

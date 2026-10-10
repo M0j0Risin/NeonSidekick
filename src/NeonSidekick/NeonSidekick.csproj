@@ -90,7 +90,7 @@
     -->
     <PackageReference Include="Markdig" Version="1.3.2" />
     <!--
-      The session store (Sessions/SessionStore.cs, `<profile>\sessions.db`, 2026-09-18): raw SQL
+      The session store (Sessions/SessionStore.cs, `<profile>\db\sessions\sessions.db` since 2026-10-10, 2026-09-18): raw SQL
       over Microsoft.Data.Sqlite (trim- and AOT-clean since 8.0; no EF, no Dapper) with the
       SQLitePCLRaw e_sqlite3 bundle it pulls in — one native e_sqlite3.dll beside the exe, built
       with FTS5, which the full-text search over the turns needs. The smoke probe sessions:open

@@ -34,7 +34,7 @@ public class SessionStoreTests : IDisposable
     {
         long id = Begin();
 
-        Assert.True(File.Exists(Path.Combine(_dir, SessionStore.FileName)));
+        Assert.True(File.Exists(Path.Combine(_dir, SessionStore.FolderName, SessionStore.FileName)));
         Assert.True(_store.Available);
         Assert.Equal(1, _store.Count);
         var summary = Assert.Single(_store.List(0));
@@ -60,7 +60,7 @@ public class SessionStoreTests : IDisposable
         Assert.Empty(_store.CommandHistory());
         Assert.Equal(0, _store.CommandHistoryCount);
         Assert.Equal(0, _store.ClearCommandHistory());
-        Assert.False(File.Exists(Path.Combine(_dir, SessionStore.FileName)));
+        Assert.False(File.Exists(Path.Combine(_dir, SessionStore.FolderName, SessionStore.FileName)));
         _store.AppendCommand("first");
         _store.AppendCommand("second");
         _store.AppendCommand("second");   // the input line de-duplicates; the store does too at the seam
@@ -278,8 +278,8 @@ public class SessionStoreTests : IDisposable
     [Fact]
     public void AFileThatIsNotADatabase_IsOneWarning_AndAnEmptyStoreThatIgnoresWrites()
     {
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, SessionStore.FileName), "not a database at all, and long enough to have a header the library reads");
+        Directory.CreateDirectory(Path.Combine(_dir, SessionStore.FolderName));
+        File.WriteAllText(Path.Combine(_dir, SessionStore.FolderName, SessionStore.FileName), "not a database at all, and long enough to have a header the library reads");
         var warnings = new List<DiagnosticEvent>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions") { warnings.Add(e); } };
         DiagnosticLog.Emitted += capture;
@@ -314,7 +314,7 @@ public class SessionStoreTests : IDisposable
     {
         long id = Begin();
         _store.Dispose();
-        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = Path.Combine(_dir, SessionStore.FileName), Pooling = false }.ToString()))
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = Path.Combine(_dir, SessionStore.FolderName, SessionStore.FileName), Pooling = false }.ToString()))
         {
             connection.Open();
             using var bump = connection.CreateCommand();
@@ -490,7 +490,8 @@ public class SessionStoreTests : IDisposable
         Assert.Equal("2026-09-11T21:05:30.0000000Z", SessionStore.Stamp(_time.GetUtcNow()));
         Assert.Equal("sessions.db", SessionStore.FileName);
         Assert.Equal(3, SessionStore.SchemaVersion);   // 1 until later on 2026-09-18, 2 until 2026-09-19
-        Assert.Equal(Path.Combine(Path.GetFullPath(_dir), "sessions.db"), _store.FilePath);
+        Assert.Equal(Path.Combine("db", "sessions"), SessionStore.FolderName);   // the profile's root until 2026-10-10
+        Assert.Equal(Path.Combine(Path.GetFullPath(_dir), "db", "sessions", "sessions.db"), _store.FilePath);
     }
     [Fact]
     public void SessionLogLines_ArePinned()

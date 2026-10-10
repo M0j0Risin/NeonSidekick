@@ -7178,7 +7178,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("computer", _settings.Current.SttWakePhrase);
         Assert.Contains("\"LlmModel\": \"llama\"", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
         Assert.Contains("\"Profile\": \"work\"", File.ReadAllText(_settings.PointerPath));
-        Assert.Equal(new[] { Profiles.FileName, SessionStore.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // the default profile here has no memories, persona, operating rules or voice directive to copy; sessions.db holds the /exit typed there (Keep message history, 2026-09-25), never copied
+        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // the default profile here has no memories, persona, operating rules or voice directive to copy
+        Assert.True(File.Exists(Path.Combine(ProfileDir("work"), SessionStore.FolderName, SessionStore.FileName)));   // the /exit typed there (Keep message history, 2026-09-25), under db\sessions since 2026-10-10, never copied
         // Startup discovery, then the reconnect after the switch (LLM, TTS and voice).
         Assert.Equal(2, ModelProbes);   // the fixture's URL, copied into the new profile: one probe each
         Assert.Equal(2, _synth.ListCalls);
@@ -7240,8 +7241,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + SettingsMenu.SwitchedNotice("work"), output);
         Assert.Equal("work", _settings.ProfileName);
         Assert.Equal(
-            new[] { MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, SessionStore.FileName, VocaliaFile.FileName, McpConfigFile.FileName }.Order(),
-            Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());
+            new[] { MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName, McpConfigFile.FileName }.Order(),
+            Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn sits under db\sessions (2026-10-10)
         Assert.Equal("Speak like a pirate.", File.ReadAllText(Path.Combine(ProfileDir("work"), VocaliaFile.FileName)));
         Assert.Equal(McpConfigFile.EmptyText, File.ReadAllText(Path.Combine(ProfileDir("work"), McpConfigFile.FileName)));
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
@@ -7270,7 +7271,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work", Profiles.BasicSidekickFiles), output);
         Assert.Contains("(🪪 created profile \"work\" from the current settings, memories)", output);
         Assert.Equal("work", _settings.ProfileName);
-        Assert.Equal(new[] { MemoryStore.FileName, Profiles.FileName, SessionStore.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn, never copied
+        Assert.Equal(new[] { MemoryStore.FileName, Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db from the turn sits under db\sessions (2026-10-10), never copied
         Assert.Equal("basic", _settings.Current.NewProfileMode);   // the setting itself came along, like every saved value
         var request = Assert.Single(_chat.Requests);
         string prompt = request[0].Text!;
@@ -7289,7 +7290,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work"), output);
-        Assert.Equal(new[] { Profiles.FileName, SessionStore.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // sessions.db: the /exit typed there (Keep message history, 2026-09-25)
+        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // sessions.db (the /exit typed there) sits under db\sessions (2026-10-10)
     }
 
     [Fact]
@@ -7304,7 +7305,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.ProfileCreatedNotice("work", new[] { PersonaFile.FileName }), output);
-        Assert.Equal(new[] { PersonaFile.FileName, Profiles.FileName, SessionStore.FileName }.Order(), Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db: the /exit typed there (Keep message history, 2026-09-25)
+        Assert.Equal(new[] { PersonaFile.FileName, Profiles.FileName }.Order(), Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order());   // sessions.db (the /exit typed there) sits under db\sessions (2026-10-10)
     }
 
     [Fact]
@@ -8062,8 +8063,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.ProfileRenamedNotice("work", "office"), output);
         Assert.False(Directory.Exists(ProfileDir("work")));
         Assert.Equal(
-            new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, SessionStore.FileName, VocaliaFile.FileName },   // sessions.db: the /exit typed there (Keep message history, 2026-09-25)
+            new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName },
             Directory.GetFiles(ProfileDir("office")).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal));
+        Assert.True(File.Exists(Path.Combine(ProfileDir("office"), SessionStore.FolderName, SessionStore.FileName)));   // the /exit typed there (Keep message history, 2026-09-25) moved with the folder
         // The rename alone changed nothing about the running app: the pointer, the title and the
         // connections stayed until the switch that followed.
         int renamedAt = output.IndexOf(ChatScreen.ProfileRenamedNotice("work", "office"), StringComparison.Ordinal);
@@ -8218,7 +8220,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("work-model", _settings.Current.LlmModel);
         Assert.Equal("work-model", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).LlmModel);
         Assert.True(_settings.Current.TtsOutput == new AppSettingsData().TtsOutput);
-        Assert.Equal(new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, SessionStore.FileName, VocaliaFile.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // the session store stays through a reset (2026-09-18), every sidekick file too (2026-09-20)
+        Assert.Equal(new[] { McpConfigFile.FileName, MemoryStore.FileName, OperataFile.FileName, PersonaFile.FileName, Profiles.FileName, VocaliaFile.FileName }, Directory.GetFiles(ProfileDir("work")).Select(Path.GetFileName).Order(StringComparer.Ordinal));   // every sidekick file stays through a reset (2026-09-20)
+        Assert.True(File.Exists(Path.Combine(ProfileDir("work"), SessionStore.FolderName, SessionStore.FileName)));   // the session store too (2026-09-18; under db\sessions since 2026-10-10)
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir("work")).Snapshot());
         // Yes was the answer, not a message; the third turn starts a fresh conversation on the default prompt, and the reset profile
         // (model-written titles, the default since 2026-09-18) asks the model for that session's title afterwards: the fourth request.
@@ -23079,7 +23082,7 @@ public partial class ChatScreenTests : IDisposable
 
         await RunAsync();
 
-        Assert.False(File.Exists(Path.Combine(_settings.ProfileDirectory, SessionStore.FileName)));
+        Assert.False(File.Exists(Path.Combine(_settings.ProfileDirectory, SessionStore.FolderName, SessionStore.FileName)));
         Assert.Contains(SessionManagerTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
     }
 
