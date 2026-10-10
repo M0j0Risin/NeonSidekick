@@ -117,7 +117,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile add\|delete <name>` | Creates or deletes a profile. |
 | `/profile rename <name> <new-name>` | Renames a profile. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths and keys unless `--all`. |
-| `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another.Every setting but the working directory; a pull clears the conversation. |
+| `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another. Every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* to or from another profile after a confirmation, mirrored: a key unset in the source clears the target's. Keys set only by environment variable aren't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings to or from another profile after a confirmation, replacing the target's: scan mode, LLM URL and model, and the embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings. Saved values only, not a `--url` or variable. |
 | `/profile push\|pull commands <name> [overwrite]` | Copies *Shell allowed commands* to or from another profile (added, or replacing with `overwrite`). |

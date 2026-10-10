@@ -4068,16 +4068,44 @@ internal sealed partial class ChatScreen
                 }
             }
 
-            return names.Select(name => new CompletionItem(sectionHead + name, ProfileNote(name, loaded))).ToList();
+            return names.Select(name => new CompletionItem(sectionHead + name, CopyNote(ProfileSectionSubject(section), name))).ToList();
         }
 
         return ProfileSectionWords.Select(item => new CompletionItem(head + item.Word, item.Note))
-            .Concat(names.Select(name => new CompletionItem(head + name, ProfileNote(name, loaded))))
+            .Concat(names.Select(name => new CompletionItem(head + name, CopyNote(ProfileSettingsSubject, name))))
             .ToList();
+
+        string CopyNote(string subject, string name) =>
+            verb == PullWord ? ProfileCopyNote(subject, name, loaded) : ProfileCopyNote(subject, loaded, name);
     }
 
     /// <summary>The notes on a profile name on the <c>/profile</c> list. Pinned.</summary>
     public const string SwitchToProfileNote = "switch to it";
+
+    /// <summary>
+    /// The note on a profile name after <c>push</c> or <c>pull</c> (2026-10-10, the user's call: "switch to it" sat there, and nothing
+    /// switches): what is copied and which way, both profiles named — <c>settings: neon → gonzo</c>, <c>API keys: gonzo → neon</c>. Pinned.
+    /// </summary>
+    public static string ProfileCopyNote(string subject, string from, string to) => $"{subject}: {from} → {to}";
+
+    /// <summary>The subject of a whole push or pull in <see cref="ProfileCopyNote"/>. Pinned.</summary>
+    public const string ProfileSettingsSubject = "settings";
+
+    /// <summary>The subject of a section's push or pull in <see cref="ProfileCopyNote"/>. Pinned.</summary>
+    public static string ProfileSectionSubject(ProfileSection section) => section switch
+    {
+        ProfileSection.Keys => "API keys",
+        ProfileSection.Servers => "server settings",
+        ProfileSection.Commands => "allowed commands",
+        ProfileSection.History => "command history",
+        ProfileSection.PoliceStrings => "forbidden strings",
+        _ => ProfileSettingsSubject,
+    };
+
+    // The notes on a profile name after delete, rename and reset (2026-10-10, "switch to it" until then). Pinned.
+    public const string ProfileDeleteNote = "delete it";
+    public const string ProfileRenameNote = "rename it";
+    public const string ProfileResetNote = "reset it to the defaults";
 
     // The /sessions grammar's words (2026-09-18). Pinned.
     public const string SessionPurgeWord = "purge";
@@ -4282,7 +4310,13 @@ internal sealed partial class ChatScreen
                             "delete" or "rename" => !Profiles.IsDefault(name),
                             _ => true,
                         }).ToList();
-                        var choices = names.Select(name => new CompletionItem(verb.Text + " " + name, ProfileNote(name, sources.LoadedProfile))).ToList();
+                        string note = verb.Text switch
+                        {
+                            ResetWord => ProfileResetNote,
+                            "rename" => ProfileRenameNote,
+                            _ => ProfileDeleteNote,
+                        };
+                        var choices = names.Select(name => new CompletionItem(verb.Text + " " + name, note)).ToList();
                         if (verb.Text == ResetWord)
                         {
                             // --all (2026-09-27): first, on its own, for the loaded profile; after a name once

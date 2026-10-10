@@ -23452,6 +23452,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([new CompletionItem("push commands work overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push commands work ", sources));
         Assert.Equal(["pull policestrings work overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "PULL POLICESTRINGS WORK ov", sources)));
         Assert.Equal(["push history chef overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "push history chef ", sources)));
+        // The notes after push and pull say what goes which way, after delete, rename and reset the verb (2026-10-10; "switch to it" until then).
+        Assert.Equal([new CompletionItem("push work", "settings: neon → work")], ChatScreen.ArgumentItems("/profile", "push w", sources));
+        Assert.Equal([new CompletionItem("pull neon", "settings: neon → work")], ChatScreen.ArgumentItems("/profile", "pull n", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("push keys chef", "API keys: neon → chef")], ChatScreen.ArgumentItems("/profile", "push keys c", sources));
+        Assert.Equal([new CompletionItem("pull commands chef", "allowed commands: chef → work")], ChatScreen.ArgumentItems("/profile", "pull commands c", Sources(loaded: "work")));
+        Assert.Equal([new CompletionItem("delete chef", ChatScreen.ProfileDeleteNote)], ChatScreen.ArgumentItems("/profile", "delete c", sources));
+        Assert.Equal([new CompletionItem("rename chef", ChatScreen.ProfileRenameNote)], ChatScreen.ArgumentItems("/profile", "rename c", sources));
+        Assert.Equal([new CompletionItem("reset chef", ChatScreen.ProfileResetNote)], ChatScreen.ArgumentItems("/profile", "reset c", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "work", sources));
 
         // /memory copy: every profile but the loaded one (the source), then copy <name> overwrite (2026-09-17 as /memcopy, the word folded in 2026-09-22).
@@ -23617,6 +23625,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("the profile's files folder", ChatScreen.CwdDefaultNote);
         Assert.Equal("every reply", ChatScreen.CopyAllNote);
         Assert.Equal("switch to it", ChatScreen.SwitchToProfileNote);
+        Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
+        Assert.Equal(
+            ["API keys", "server settings", "allowed commands", "command history", "forbidden strings"],
+            ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
+        Assert.Equal("delete it", ChatScreen.ProfileDeleteNote);
+        Assert.Equal("rename it", ChatScreen.ProfileRenameNote);
+        Assert.Equal("reset it to the defaults", ChatScreen.ProfileResetNote);
         Assert.Equal("the loaded profile", ChatScreen.LoadedProfileNote);
         Assert.Equal("copy every memory into another profile", ChatScreen.MemoryCopyNote);   // 2026-09-22
         Assert.Equal("copy this profile's memory into it", ChatScreen.MemoryCopyTargetNote);
