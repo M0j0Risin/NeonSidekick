@@ -15468,16 +15468,26 @@ public partial class ChatScreenTests : IDisposable
         }
     }
 
+    /// <summary>The arrows' restart waits for a pause in the presses (<see cref="ChatScreen.ReadSeekSettle"/>): the clock moved past it until <paramref name="spoken"/> sentences were synthesised.</summary>
+    private async Task SettledAsync(int spoken)
+    {
+        while (_synth.Spoken.Count < spoken)
+        {
+            _time.Advance(ChatScreen.ReadSeekSettle);
+            await Task.Delay(5);
+        }
+    }
+
     [Fact]
     public async Task Read_RightAndLeft_WhilePlaying_StepASentence_AndNothingIsReprinted()
     {
         var input = ReadingKeysScript("notes.txt", "One. Two. Three. Four.", async input =>
         {
             await SpokenAsync(4, 4);
-            input.Push(Keys.Right);   // on One: the reading restarts at Two
-            await SpokenAsync(7);
+            input.Push(Keys.Right);   // on One: the reading restarts at Two, once the presses pause
+            await SettledAsync(7);
             input.Push(Keys.Left);    // on Two: back to One
-            await SpokenAsync(11);
+            await SettledAsync(11);
             _playback.Release();      // the rest heard whole
         });
 
@@ -15498,21 +15508,107 @@ public partial class ChatScreenTests : IDisposable
             await SpokenAsync(3, 3);
             input.Push(Keys.Left);                // already on One: nothing restarts
             input.Push(Keys.Right, Keys.Right, Keys.Right);   // past the end clamps to Three
-            while (_synth.SpokenText.Count < 4 || _synth.SpokenText[^1] != "Three.")
-            {
-                await Task.Delay(5);
-            }
+            await SettledAsync(4);
 
             _playback.Release();
         });
 
         string output = await RunAsync(input);
 
-        var spoken = _synth.SpokenText;
-        Assert.Equal(new[] { "One.", "Two.", "Three." }, spoken.Take(3));
-        Assert.Equal("Three.", spoken[^1]);
-        Assert.Equal(1, spoken.Count(s => s == "One."));   // the Left at the top restarted nothing
+        // The Left at the top restarted nothing, and the Rights settled into one restart at the last sentence (later on
+        // 2026-10-09, the user's report: each press restarted the voice).
+        Assert.Equal(new[] { "One.", "Two.", "Three.", "Three." }, _synth.SpokenText);
         Assert.Equal(1, Count(output, "● One. Two. Three.\n"));
+    }
+
+    [Fact]
+    public async Task Read_EscWhileASeekSettles_Stops_AndNothingRestarts()
+    {
+        var input = ReadingKeysScript("notes.txt", "One. Two. Three.", async input =>
+        {
+            await SpokenAsync(3, 3);
+            input.Push(Keys.Right, Keys.Escape);   // ESC before the pause: a stop, not a restart at Two
+            while (!Output.Contains(ChatScreen.SpeechStoppedNotice, StringComparison.Ordinal))
+            {
+                await Task.Delay(5);
+            }
+
+            _time.Advance(ChatScreen.ReadSeekSettle);
+            await Task.Delay(50);
+        });
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(new[] { "One.", "Two.", "Three." }, _synth.SpokenText);
+        Assert.Equal(1, Count(output, ChatScreen.SpeechStoppedNotice));
+    }
+
+    [Fact]
+    public async Task Read_TheArrowsOverAPausedReading_MoveTheCueAlone_AndSpacePlaysFromIt()
+    {
+        var input = ReadingKeysScript("notes.txt", "One. Two. Three. Four.", async input =>
+        {
+            await SpokenAsync(4, 4);
+            _playback.Release(4800 + 10);   // into Two
+            input.Push(Keys.Char(' '));     // pause at Two
+            while (!Output.Contains(ChatScreen.SpeechStoppedNotice, StringComparison.Ordinal))
+            {
+                await Task.Delay(5);
+            }
+
+            input.Push(Keys.Right, Keys.Right, Keys.Left);   // the cue: Three, Four, back to Three; no audio
+            await Task.Delay(50);
+            _time.Advance(ChatScreen.ReadSeekSettle);
+            await Task.Delay(50);
+            Assert.Equal(4, _synth.Spoken.Count);   // nothing restarted
+            input.Push(Keys.Char(' '));     // play from the cue
+            await SpokenAsync(6);
+            _playback.Release();
+        });
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(new[] { "One.", "Two.", "Three.", "Four.", "Three.", "Four." }, _synth.SpokenText);
+        Assert.Equal(1, Count(output, ChatScreen.SpeechStoppedNotice));
+        Assert.Equal(1, Count(output, "● One. Two. Three. Four.\n"));
+    }
+
+    [Fact]
+    public async Task Read_ABareRead_AfterTheArrowsMovedAPausedReading_StartsAtTheCue()
+    {
+        var input = ReadingKeysScript("notes.txt", "One. Two. Three. Four.", async input =>
+        {
+            await SpokenAsync(4, 4);
+            input.Push(Keys.Escape);        // pause at One
+            while (!Output.Contains(ChatScreen.SpeechStoppedNotice, StringComparison.Ordinal))
+            {
+                await Task.Delay(5);
+            }
+
+            input.Push(Keys.Right, Keys.Right);   // the cue: Three
+            PushLine(input, "/read");
+            await SpokenAsync(6);
+            _playback.Release();
+        });
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(new[] { "One.", "Two.", "Three.", "Four.", "Three.", "Four." }, _synth.SpokenText);
+        Assert.Contains("● Three. Four.\n", output);   // a bare /read prints from where it starts, as ever
+    }
+
+    [Fact]
+    public void SpeakReading_ACue_IsWhereItResumes_AndTheHintSaysSo_UntilTheNextStart()
+    {
+        var reading = new SpeakReading("docs/notes.txt", "One. Two. Three.");
+        reading.CueAt(2);
+
+        Assert.Equal(2, reading.Resume);
+        Assert.Equal(SpeakReading.StoppedLine("docs/notes.txt", 2, 3), reading.StatusLine());
+        Assert.Throws<ArgumentOutOfRangeException>(() => reading.CueAt(4));
+        reading.Started(1, null);
+        Assert.Equal(0, reading.Cue);
+        Assert.Equal(1, reading.Resume);   // run through (speech off): the top again
     }
 
     [Fact]

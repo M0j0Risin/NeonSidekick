@@ -947,6 +947,15 @@ internal sealed partial class ChatScreen
     /// </summary>
     private int _readSeek;
 
+    /// <summary>
+    /// How long the arrows wait for a pause before the reading restarts (2026-10-09, the user's report: every press restarted the
+    /// voice, so a held key or quick presses felt jumpy): the count follows each press at once, the voice once, at the last one.
+    /// </summary>
+    public static readonly TimeSpan ReadSeekSettle = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>The settle timer (<see cref="ReadSeekSettle"/>): its tick nudges the read out for <see cref="TakeReadSeekAsync"/>. Made on the first arrow; disposed with the screen.</summary>
+    private ITimer? _readSeekTimer;
+
     /// <param name="effective">The settings in force (flags over variables over the file), read fresh on every connect and turn.</param>
     /// <param name="overriddenBy">For the menus: the variable or flag that outranks a saved field, or null.</param>
     /// <param name="openFile">Opens a file in an external editor without waiting for it; <c>/sys persona</c>, <c>/sys operata</c> and <c>/sys vocalia</c> call it with the file's path. The app passes <see cref="PersonaFile.OpenInEditor"/>; tests record the call. A throw is reported as an error line.</param>
@@ -8095,14 +8104,16 @@ internal sealed partial class ChatScreen
     /// the arrows), the input line's <c>emptyArrow</c> hook ahead of the splash and the strip: the previous or next sentence, from a
     /// seek still pending so quick presses add up, clamped to the file. The restart is the loop top's (<see cref="TakeReadSeekAsync"/>):
     /// the read is nudged out, since the wake listener may be armed over the speaker's probe. A press at either end moves nothing
-    /// but is still spent, so the strip never jumps under a reading. False — the key is the splash's or the strip's — when no
-    /// reading plays (the user's call: a stopped one restarts by Space or <c>/read</c>).
+    /// but is still spent, so the strip never jumps under a reading. Over a paused reading (later on 2026-10-09, the user's ask) —
+    /// or one <paramref name="stopping"/>, its pause still under way — the arrows move its cue alone (<see cref="SpeakReading.CueAt"/>,
+    /// the hint row's count), and Space or a bare <c>/read</c> plays from there. False — the key is the splash's or the strip's — with
+    /// no file reading on the row, one run through, or speech off.
     /// </summary>
-    private bool StepReading(int step)
+    private bool StepReading(int step, bool stopping = false)
     {
-        if (PlayingFileReading() is not { } reading)
+        if (stopping || PlayingFileReading() is not { } reading)
         {
-            return false;
+            return CueReading(step, stopping);
         }
 
         int pending = Volatile.Read(ref _readSeek);
@@ -8112,10 +8123,45 @@ internal sealed partial class ChatScreen
         {
             Volatile.Write(ref _readSeek, target);
             _pane.RefreshHint();
-            SignalAlert();
+            // Not at once (later on 2026-10-09, the user's report): the voice restarts once the presses pause.
+            _readSeekTimer ??= _time.CreateTimer(static state => ((ChatScreen)state!).SettleReadSeek(), this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _readSeekTimer.Change(ReadSeekSettle, Timeout.InfiniteTimeSpan);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The arrows over a paused <c>/read</c> reading (later on 2026-10-09, the user's ask: move the position, never restart the audio
+    /// until Space or <c>/read</c>): the cue a sentence back or forward from where it stands, clamped, the hint row redrawn. Paused, or
+    /// <paramref name="stopping"/> (Space or ESC's stop not yet finished, so the speaker still counts as playing), with speech on.
+    /// </summary>
+    private bool CueReading(int step, bool stopping)
+    {
+        if (_hintReading is not { Source: SpeakReading.Kind.File } reading || !ReferenceEquals(reading, _reading)
+            || !(reading.Paused || stopping && reading.Playing) || !_effective().TtsOutput || !_speech.IsReady)
+        {
+            return false;
+        }
+
+        int at = reading.Cue > 0 ? reading.Cue : reading.Position;
+        int target = Math.Clamp(at + step, 1, reading.Count);
+        if (target != at)
+        {
+            reading.CueAt(target);
+            _pane.RefreshHint();
+        }
+
+        return true;
+    }
+
+    /// <summary>The settle timer's tick, on the clock's thread: a seek still pending ends the read (one already taken nudges nothing).</summary>
+    private void SettleReadSeek()
+    {
+        if (ReadSeekReady)
+        {
+            SignalAlert();
+        }
     }
 
     /// <summary>
@@ -8155,21 +8201,27 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task TakeReadSeekAsync(CancellationToken cancellationToken)
     {
-        int target = Interlocked.Exchange(ref _readSeek, 0);
+        int target = Volatile.Read(ref _readSeek);
         if (target == 0)
         {
             return;
         }
 
+        _readSeekTimer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         if (_hintReading is not { Source: SpeakReading.Kind.File } reading || !ReferenceEquals(reading, _reading) || target > reading.Count
             || !_effective().TtsOutput || !_speech.IsReady)
         {
+            Volatile.Write(ref _readSeek, 0);
             _pane.RefreshHint();
             return;
         }
 
+        // Taken only once the new speaker is in (later on 2026-10-09, the user's report): cleared first, the hint row showed the
+        // old speaker's "stopped" count while the stop ran, and the number skipped back before it went on.
         await _speech.StopAsync().ConfigureAwait(false);
         StartReading(reading, target, cancellationToken, print: false);
+        Volatile.Write(ref _readSeek, 0);
+        _pane.RefreshHint();
     }
 
     // ── /echo (2026-09-17) ──────────────────────────────────────────────────
@@ -9438,6 +9490,7 @@ internal sealed partial class ChatScreen
             // Docker server stop on exit (2026-10-02): off by default; on, the container in use stops while the screen is still up.
             await StopDockerAtExitAsync().ConfigureAwait(false);
             _timers.Dispose();
+            _readSeekTimer?.Dispose();
             _perf.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
             _processes.Dispose();
@@ -9541,6 +9594,8 @@ internal sealed partial class ChatScreen
             }
 
             tailStopped = true;
+            // A reading's seek still settling goes with it (2026-10-09): ESC or Space meant stop, not a restart elsewhere.
+            Volatile.Write(ref _readSeek, 0);
             _speech.Stop();
             DiagnosticLog.Debug(SpeechSession.Category, TailStoppedLogLine);
             return true;
@@ -9587,7 +9642,7 @@ internal sealed partial class ChatScreen
                 beforeCommit: DismissSplash,
                 replay: replay,
                 // A /read reading takes the arrows first while it plays, and Space plays and pauses it (2026-10-09, the user's ask).
-                emptyArrow: step => StepReading(step) || CycleSplash(step) || StepPictureStrip(step),
+                emptyArrow: step => StepReading(step, tailStopped) || CycleSplash(step) || StepPictureStrip(step),
                 emptyDelete: DeleteSplash,
                 emptyEnter: OpenStripPicture,
                 // The chat line's own editor (2026-09-25): its draft lives on under the replies. A /draft replay reads on

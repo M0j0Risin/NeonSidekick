@@ -22,8 +22,9 @@ namespace NeonSidekick.App;
 /// speaker's counters alone, so the pane's tick may call it from the timer thread.</para>
 ///
 /// <para>Since 2026-10-09 (the user's ask) the empty input line drives a file reading too: Left and Right while it plays
-/// restart it a sentence back or forward from <see cref="Position"/>, and Space pauses it or resumes it at <see cref="Resume"/>
-/// — the screen's <c>StepReading</c>, <c>ToggleReading</c> and <c>TakeReadSeekAsync</c>, through <see cref="Started"/> again.</para>
+/// restart it a sentence back or forward from <see cref="Position"/> (once the presses pause), while it is paused move its
+/// <see cref="Cue"/> alone, and Space pauses it or resumes it at <see cref="Resume"/> — the screen's <c>StepReading</c>,
+/// <c>CueReading</c>, <c>ToggleReading</c> and <c>TakeReadSeekAsync</c>, through <see cref="Started"/> again.</para>
 /// </summary>
 internal sealed class SpeakReading
 {
@@ -95,10 +96,32 @@ internal sealed class SpeakReading
         }
     }
 
-    /// <summary>Where a bare <c>/read</c> starts: the stopped sentence again from its start, the top after a full read.</summary>
-    public int Resume => Done ? 1 : Position;
+    /// <summary>Where a bare <c>/read</c> starts: the sentence the arrows cued while it was paused, else the stopped sentence again from its start, the top after a full read.</summary>
+    public int Resume => Cue > 0 ? Cue : Done ? 1 : Position;
 
-    /// <summary>A playback began at <paramref name="from"/> with <paramref name="speaker"/> (null with speech off).</summary>
+    /// <summary>Stopped early: neither playing nor run through — what the empty line's arrows move a cue over.</summary>
+    public bool Paused => !Playing && !Done;
+
+    private int _cue;
+
+    /// <summary>
+    /// The sentence (1-based) the empty line's arrows moved a paused reading to (2026-10-09, the user's ask: while paused they move the
+    /// position alone, and Space or <c>/read</c> plays from it). 0 = none; a start clears it. The pane's tick reads it.
+    /// </summary>
+    public int Cue => Volatile.Read(ref _cue);
+
+    /// <summary>Cues the paused reading at <paramref name="sentence"/>.</summary>
+    public void CueAt(int sentence)
+    {
+        if (sentence < 1 || sentence > Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sentence));
+        }
+
+        Volatile.Write(ref _cue, sentence);
+    }
+
+    /// <summary>A playback began at <paramref name="from"/> with <paramref name="speaker"/> (null with speech off). Any cue is spent.</summary>
     public void Started(int from, SpeechOutput? speaker)
     {
         if (from < 1 || from > Math.Max(1, Count))
@@ -108,6 +131,7 @@ internal sealed class SpeakReading
 
         From = from;
         Speaker = speaker;
+        Volatile.Write(ref _cue, 0);
     }
 
     // ── The hint row's part (pinned) ────────────────────────────────────────
@@ -137,7 +161,7 @@ internal sealed class SpeakReading
     /// </summary>
     public string StatusLine() => Source == Kind.Echo
         ? Playing ? SpeakingLine(Position, Count) : Done ? SpokenLine(Count) : EchoStoppedLine(Position, Count)
-        : Playing ? ReadingLine(File, Position, Count) : Done ? ReadLine(File, Count) : StoppedLine(File, Position, Count);
+        : Playing ? ReadingLine(File, Position, Count) : Cue > 0 ? StoppedLine(File, Cue, Count) : Done ? ReadLine(File, Count) : StoppedLine(File, Position, Count);
 
     /// <summary>The last segment of a relative path, either separator.</summary>
     public static string Name(string file)
