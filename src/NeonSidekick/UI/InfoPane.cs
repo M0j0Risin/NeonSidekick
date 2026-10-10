@@ -291,6 +291,17 @@ public sealed class InfoPane
     }
 
     /// <summary>
+    /// Whether a click at column <paramref name="x"/> of the strip's <paramref name="row"/> lands on its label (2026-10-09, the
+    /// user's ask: <c>Tools › Database</c>'s crumb takes them back): the first row's label cells as <see cref="TabStripRows(string, IReadOnlyList{string}, int, int, IReadOnlyList{string?}?)"/>
+    /// draws them; not the gap and bar after it, nor a later row's indent. Pure.
+    /// </summary>
+    public static bool OnLabel(string label, int x, int row)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        return row == 0 && x >= 0 && x < TextCells.Width(TextCells.Spaced(label));
+    }
+
+    /// <summary>
     /// The tab keys, shared with the <see cref="MenuPane"/>: +1 for → or Tab, -1 for ← or
     /// Shift+Tab, null for any other key. Pure.
     /// </summary>

@@ -26,7 +26,7 @@ The full reference for the panes, keys and settings. The [README](../README.md#s
 * **Tabs:** the tab you are on is underlined. A small number after a tab's name (`General³`) counts its settings that differ from the default; those settings' values show in the same colour.
 * **Scrolling:** a list cut by the window ends in a row like `▲▼ 13–25 of 58`, an arrow for each way there is more.
 * **`/tools` Offered:** a group that is off says why on its heading (the one reason that holds), and a tool switched on under it reads `(on)`.
-* **`/tools` Media and Database:** each lists five menus, one row each with its switch (Space flips it); Enter opens the five as a strip of their own (*Tools › Database*) on the menu picked, and ESC comes back to the tab on the menu last shown.
+* **`/tools` Media and Database:** each lists five menus, one row each with its switch (Space flips it); Enter opens the five as a strip of their own (*Tools › Database*) on the menu picked, and ESC (or a click on the *Tools › Database* crumb) comes back to the tab on the menu last shown.
 * **Mouse:** a click moves the cursor; a double-click picks a row or tab (on the input line, selects a word). The × at the top right works like ESC, and a double-click outside an open pane closes it. A double-click on a picture in the transcript opens it in the [picture viewer](COMMANDS.md#picture-viewer).
 
 ## The input line
@@ -671,7 +671,7 @@ Every tool, grouped, the groups in alphabetical order, with the description the 
 
 ### Media
 
-The picture, print and video tools, five menus on one tab: each row is a menu with its switch (Space flips it). Enter opens the five as a strip of their own, *Tools › Media*, on the menu picked; ←/→ moves between them and ESC comes back to the tab. Each was a tab of its own until 2026-10-09.
+The picture, print and video tools, five menus on one tab: each row is a menu with its switch (Space flips it). Enter opens the five as a strip of their own, *Tools › Media*, on the menu picked; ←/→ moves between them and ESC, or a click on the crumb, comes back to the tab. Each was a tab of its own until 2026-10-09.
 
 #### Print
 

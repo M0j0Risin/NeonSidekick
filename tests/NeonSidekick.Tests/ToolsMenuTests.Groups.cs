@@ -79,6 +79,47 @@ public partial class ToolsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>A click on the group's crumb is ESC (later on 2026-10-09, the user's ask): back on the Database tab, the cursor on the menu shown.</summary>
+    [Fact]
+    public async Task OnThePane_AClickOnTheGroupsCrumb_ComesBackToTheTab_OnTheMenuLastShown()
+    {
+        var (menu, pane, input) = ClickablePaneMenu(100);
+        input.Push(Enumerable.Repeat(Keys.Right, TabIndex(ToolsText.DatabaseTabTitle)).ToArray());
+        input.Push(Keys.Down, Keys.Down, Keys.Enter);   // SQLite: its rows under the group's strip
+        input.PushClick(2, 100);                        // the crumb, the strip's first row at 100
+        input.Push(Keys.Escape);                        // the Tools pane closes
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string group = Titled(ToolsMenu.GroupCrumb(TabIndex(ToolsText.DatabaseTabTitle)) + " │ SQL · MySQL · SQLite · Postgres · Oracle ");
+        Assert.Contains("\n" + group + "\n \n▸ SQLite tools  ", Output);
+        string after = Output[Output.LastIndexOf(group, StringComparison.Ordinal)..];
+        Assert.Contains("\n" + Titled(Strip) + "\n \n  SQL       ", after);
+        Assert.Contains("\n▸ SQLite  ", after);
+        pane.Dispose();
+    }
+
+    /// <summary>A click on one of the group's own titles still switches the menu: only the crumb goes back.</summary>
+    [Fact]
+    public async Task OnThePane_AClickOnAGroupsTitle_SwitchesTheMenu_AndStaysInTheGroup()
+    {
+        var (menu, pane, input) = ClickablePaneMenu(100);
+        int database = TabIndex(ToolsText.DatabaseTabTitle);
+        string crumb = ToolsMenu.GroupCrumb(database);
+        var (_, places) = InfoPane.TabStripLayout(crumb, ["SQL", "MySQL", "SQLite", "Postgres", "Oracle"], 100);
+        input.Push(Enumerable.Repeat(Keys.Right, database).ToArray());
+        input.Push(Keys.Enter);                         // SQL's rows
+        input.PushClick(places[3].Column + 1, 100);     // Postgres
+        input.Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string group = Titled(crumb + " │ SQL · MySQL · SQLite · Postgres · Oracle ");
+        Assert.Contains("\n" + group + "\n \n▸ PostgreSQL tools  ", Output);
+        Assert.Contains("\n▸ Postgres  ", Output);      // ESC back on the menu the click showed
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_AMenusPicker_IsTitledUnderTheGroupsCrumb_AndItSaves()
     {

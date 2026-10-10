@@ -170,6 +170,13 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public MenuPage? HeightOf { get; init; }
 
     /// <summary>
+    /// A left click on the strip's label (<see cref="InfoPane.OnLabel"/>) is ESC: nothing picked, one level back (later on 2026-10-09,
+    /// the user's ask: a click on <c>🛠️ Tools › Database</c> or <c>› Media</c> goes back to the Tools pane). False (every other page):
+    /// the label is no target, as it always was.
+    /// </summary>
+    public bool LabelBacks { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without).
@@ -298,7 +305,7 @@ public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, in
 /// switching once; one on a one-list page's button (<see cref="MenuPage.Buttons"/>, 2026-09-21) is
 /// the button's pick, as its key is (the status cleared as Enter clears it: the press's result
 /// fills it); one on the <see cref="ScreenPane.CloseGlyph"/> at the first row's right edge is
-/// ESC (null); two left clicks off the pane — the transcript, a rule, the hint row — within the
+/// ESC (null), as is one on the label of a page that <see cref="MenuPage.LabelBacks"/> (later on 2026-10-09); two left clicks off the pane — the transcript, a rule, the hint row — within the
 /// interval close every level at once (<see cref="ScreenPane.Dismiss"/>, later on 2026-09-18: the
 /// hosts above find <see cref="ScreenPane.Dismissed"/> and back out without a draw), where the × is
 /// one level back; a single click there, a right click and a drag do nothing. The pane takes the mouse for the
@@ -643,6 +650,11 @@ public sealed class MenuPane : INoticeSink
                     {
                         // Any row of the strip (2026-09-27): a strip wider than the window takes more than one.
                         _clicks.Reset();
+                        if (page.LabelBacks && InfoPane.OnLabel(page.Title, click.X, at))
+                        {
+                            return null;   // the crumb is the way back (later on 2026-10-09), as the × is
+                        }
+
                         if (page.Tabs is { Count: > 1 } strip && InfoPane.TabAt(page.Title, Titles(strip), Width, click.X, at, Badges(strip)) is int hit && hit != page.Tab)
                         {
                             count = SwitchTab(page, strip, hit);

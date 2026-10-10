@@ -507,6 +507,20 @@ public class InfoPaneTests : IDisposable
     }
 
     [Fact]
+    public void OnLabel_IsTheFirstRowsLabel_NotTheBarNorALaterRow()
+    {
+        // "Help │ One · Two ": the label at 0–3, the gap at 4, the bar at 5, One from 6.
+        Assert.True(InfoPane.OnLabel("Help", 0, 0));
+        Assert.True(InfoPane.OnLabel("Help", 3, 0));
+        Assert.False(InfoPane.OnLabel("Help", 4, 0));
+        Assert.False(InfoPane.OnLabel("Help", 5, 0));       // the bar
+        Assert.False(InfoPane.OnLabel("Help", 6, 0));       // One
+        Assert.False(InfoPane.OnLabel("Help", -1, 0));
+        Assert.False(InfoPane.OnLabel("Help", 1, 1));       // a later row's indent
+        Assert.True(InfoPane.OnLabel("🛠️ Tools › Database", 0, 0));
+    }
+
+    [Fact]
     public void TabAt_OnALaterRow_HitsTheTitleThere_AndMissesTheIndent()
     {
         string[] titles = ["One", "Two", "Three", "Four"];

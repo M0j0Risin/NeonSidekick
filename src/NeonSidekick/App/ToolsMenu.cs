@@ -33,7 +33,8 @@ namespace NeonSidekick.App;
 /// The Media and Database tabs (later on 2026-10-09, the user's call: the strip had grown to 22 tabs) hold five menus each, every one a
 /// tab of its own until then (<see cref="ToolsText.TabMenus"/>): a row per menu with its switch's value (<see cref="SettingsMenu.MenusTab"/>),
 /// Space flipping that switch, Enter opening <see cref="ShowGroupAsync"/> — a strip of the five under the crumb <c>Tools › Database</c>,
-/// on the menu picked, its rows edited as a plain tab's are; ESC there comes back to the group tab with the cursor on the menu last shown.
+/// on the menu picked, its rows edited as a plain tab's are; ESC there, or a click on the crumb (later on 2026-10-09, the user's ask),
+/// comes back to the group tab with the cursor on the menu last shown.
 /// </summary>
 internal sealed class ToolsMenu
 {
@@ -129,6 +130,7 @@ internal sealed class ToolsMenu
     /// <see cref="GroupCrumb"/>, each menu's rows as its tab was (<see cref="SettingsMenu.FieldsTab"/>), <paramref name="shown"/> the
     /// menu on show (an index into the tab's menus), the band under the list the cursor's row's. <paramref name="heightOf"/> is the
     /// Tools page it opened from, whose height it keeps (later on 2026-10-09, the user's ask: it shrank to its tallest menu; <see cref="MenuPage.HeightOf"/>).
+    /// A click on the crumb is ESC (later still that day, the user's ask; <see cref="MenuPage.LabelBacks"/>).
     /// </summary>
     public static MenuPage GroupPage(int tab, AppSettingsData saved, SettingsMenu menu, int shown, MenuPage? heightOf = null)
     {
@@ -140,6 +142,7 @@ internal sealed class ToolsMenu
         {
             Footer = (t, row) => row < SettingsMenu.ToolsTabFields[menus[t]].Count ? menu.FieldFooter(SettingsMenu.ToolsTabFields[menus[t]][row], saved) : null,
             HeightOf = heightOf,
+            LabelBacks = true,
         };
     }
 
@@ -287,7 +290,7 @@ internal sealed class ToolsMenu
     /// <summary>
     /// Group tab <paramref name="tab"/>'s menus on a strip of their own (2026-10-09, the user's call), opened on <paramref name="menu"/>
     /// (an index into the tab's menus): each menu's rows as its tab had them, edited the same way, the pickers titled under the crumb
-    /// (<c>Tools › Database › MySQL mode</c>). ESC returns the menu last shown, for the group tab's cursor. The strip keeps
+    /// (<c>Tools › Database › MySQL mode</c>). ESC, the × or a click on the crumb returns the menu last shown, for the group tab's cursor. The strip keeps
     /// <paramref name="parent"/>'s height, the Tools page it opened from (later on 2026-10-09, the user's ask).
     /// </summary>
     private async Task<(SettingsChanges Changes, int Menu)> ShowGroupAsync(int tab, int menu, MenuPage parent, bool midTurn, CancellationToken cancellationToken)
