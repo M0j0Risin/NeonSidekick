@@ -1852,7 +1852,7 @@ public class MenuPaneTests : IDisposable
     [Fact]
     public async Task AFooter_DescribesTheCursorsRow_UnderTheList_AndKeepsItsRows()
     {
-        _console.Profile.Height = 14;   // the fixture's 12 leave the two rows no room under four footer rows (2026-10-07)
+        _console.Profile.Height = 15;   // the fixture's 12 leave the two rows no room under five footer rows (four 2026-10-07, five 2026-10-10)
         using var pane = Pane();
         pane.Show();
         var menu = new MenuPane(pane, _keys);
@@ -1862,11 +1862,11 @@ public class MenuPaneTests : IDisposable
         Assert.Null(await menu.PickAsync(page, 0, CancellationToken.None));
 
         string Slab(string text) => (MenuPane.NoPointer + text).PadRight(40);
-        Assert.Contains("\n▸ a\n  b\n" + Rule(40) + "\n" + Slab("All about a.") + "\n" + Slab("Default: x") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
-        Assert.Contains("\n  a\n▸ b\n" + Rule(40) + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
+        Assert.Contains("\n▸ a\n  b\n" + Rule(40) + "\n" + Slab("All about a.") + "\n" + Slab("Default: x") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
+        Assert.Contains("\n  a\n▸ b\n" + Rule(40) + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Slab("") + "\n" + Rule(40), Output);
         // A long text wraps to the rows its last line leaves; the last line keeps its own row.
-        Assert.Equal(4, MenuPane.FooterRows);
-        Assert.Equal(["one two", "three", "four f…", "Defaul…"], MenuPane.FooterLines(new MenuFooter("one two three four five six", "Default: x"), 7));
+        Assert.Equal(5, MenuPane.FooterRows);
+        Assert.Equal(["one two", "three", "four", "five s…", "Defaul…"], MenuPane.FooterLines(new MenuFooter("one two three four five six seven", "Default: x"), 7));
         Assert.Equal(MenuPane.FooterRows, MenuPane.FooterLines(new MenuFooter("one two three four five six"), 7).Count);
     }
 

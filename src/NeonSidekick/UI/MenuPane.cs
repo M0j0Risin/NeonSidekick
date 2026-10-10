@@ -365,9 +365,11 @@ public sealed class MenuPane : INoticeSink
     /// <summary>
     /// The rows a page's <see cref="MenuPage.Footer"/> text takes, kept whether or not the row under the cursor has a text (2026-10-04).
     /// Four since 2026-10-07 (the user's ask, with <c>/memory</c>'s footer: four rows of the list's width hold a whole 300-character
-    /// memory down to about 80 columns, and the longer tool and setting descriptions stopped being cut); three until then. Pinned.
+    /// memory down to about 80 columns, and the longer tool and setting descriptions stopped being cut); three until then. Five
+    /// since 2026-10-10 (the user's ask: a footer with a last line, <c>Default: …</c>, left its text three rows, and the longer
+    /// setting descriptions, Botchat's <c>Multi-embedded</c>, were cut again). Pinned.
     /// </summary>
-    public const int FooterRows = 4;
+    public const int FooterRows = 5;
 
     /// <summary>
     /// The rule over a page's <see cref="MenuPage.Footer"/> (2026-10-05, the user's ask: with a short list the description read as
