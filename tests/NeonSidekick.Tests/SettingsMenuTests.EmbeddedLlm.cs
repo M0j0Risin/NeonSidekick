@@ -84,7 +84,7 @@ public partial class SettingsMenuTests
         // The list pads every detail to the widest, so the drafter column is one column down the list.
         var labels = SettingsMenu.EmbeddedModelLabels([e2b, EmbeddedModelCatalog.Find("gemma-4-e4b-qat")!], m => m == e2b ? EmbeddedModelState.Installed : new EmbeddedModelState(EmbeddedModelStateKind.Partial, 42));
         Assert.EndsWith("installed · 4.3 GB[/]      " + Marks, labels[0], StringComparison.Ordinal);
-        Assert.EndsWith("paused    · 5.3 GB · 42%[/]" + Marks, labels[1], StringComparison.Ordinal);
+        Assert.EndsWith("partial   · 5.3 GB · 42%[/]" + Marks, labels[1], StringComparison.Ordinal);
         Assert.Equal(2, TextCells.Width(EmbeddedLlmText.DrafterGlyph));
         Assert.Equal(2, TextCells.Width(EmbeddedLlmText.VisionGlyph));   // 2026-09-29: the vision and tools columns
         Assert.Equal(2, TextCells.Width(EmbeddedLlmText.ToolsGlyph));

@@ -110,6 +110,22 @@ public class EmbeddedModelsTests : IDisposable
     }
 
     [Fact]
+    public void State_IsAbsent_WithOnlyTheWholeSharedProjector_ThenPartial_OnceTheWeightsStart()
+    {
+        // 2026-10-09, the user's report: another build's projector alone read "paused · 6%".
+        Directory.CreateDirectory(SharedDir);
+        File.WriteAllBytes(_files.MmprojPath(_model), _mmproj);
+
+        Assert.Equal(EmbeddedModelState.Absent, _files.State(_model));
+        Assert.Equal(_model.Model.Bytes, _files.BytesToDownload(_model));
+
+        string partial = ModelStore.PartialPath(_files.WeightsPath(_model));
+        Directory.CreateDirectory(Path.GetDirectoryName(partial)!);
+        File.WriteAllBytes(partial, _weights[..10_500]);
+        Assert.Equal(new EmbeddedModelState(EmbeddedModelStateKind.Partial, 50), _files.State(_model));   // 10500 + 9000 of 39000
+    }
+
+    [Fact]
     public async Task Install_FetchesTheWeightsThenTheProjector_Checked()
     {
         var labels = new List<string>();

@@ -109,6 +109,11 @@ public sealed class EmbeddedModels
     /// disk is partial (with how far); nothing is absent. The MTP drafter does not count (2026-09-29): the models
     /// installed before drafters joined the catalog stay installed, and the start fetches a missing one
     /// (<see cref="EnsureDrafterAsync"/>).
+    ///
+    /// <para>A whole projector with no weights is absent, not partial (2026-10-09, the user's report): it is the shared copy
+    /// another build of the repository brought, so a sibling build read <c>paused · 6%</c> with nothing of its own on disk and
+    /// offered to remove a partial download that held nothing to remove. Its row says <c>download</c> over the smaller size
+    /// (<see cref="BytesToDownload"/>). A part-way projector still counts: that is a download of this model's that stopped.</para>
     /// </summary>
     public EmbeddedModelState State(EmbeddedModel model)
     {
@@ -122,7 +127,7 @@ public sealed class EmbeddedModels
         }
 
         long held = weights + mmproj;
-        return held == 0
+        return weights == 0 && (mmproj == 0 || mmproj == model.Mmproj.Bytes)
             ? EmbeddedModelState.Absent
             : new EmbeddedModelState(EmbeddedModelStateKind.Partial, (int)Math.Min(99, held * 100 / (model.Model.Bytes + model.Mmproj.Bytes)));
     }

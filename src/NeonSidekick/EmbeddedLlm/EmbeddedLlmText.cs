@@ -125,13 +125,14 @@ public static class EmbeddedLlmText
     /// <summary>
     /// A <c>/server</c> row's detail (dim, after the model's name): installed, not yet, or part-way, the word padded to
     /// <see cref="StateWidth"/> so the <c>·</c> and the size line up down the list (2026-09-29, the user's ask:
-    /// <c>download  · 6.9 GB</c> over <c>installed · 7.6 GB</c>); a paused download's share goes last, where its width
-    /// moves nothing.
+    /// <c>download  · 6.9 GB</c> over <c>installed · 7.6 GB</c>); a partial download's share goes last, where its width
+    /// moves nothing. The word was <c>paused</c> until 2026-10-09 (the user's call: a download that failed or was stopped
+    /// was never paused).
     /// </summary>
     public static string RowDetail(EmbeddedModelState state, long bytes) => state.Kind switch
     {
         EmbeddedModelStateKind.Installed => Detail("installed", bytes),
-        EmbeddedModelStateKind.Partial => Detail("paused", bytes) + string.Create(CultureInfo.InvariantCulture, $" · {state.Percent}%"),
+        EmbeddedModelStateKind.Partial => Detail("partial", bytes) + string.Create(CultureInfo.InvariantCulture, $" · {state.Percent}%"),
         _ => Detail("download", bytes),
     };
 

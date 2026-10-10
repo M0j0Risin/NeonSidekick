@@ -263,7 +263,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 * **Use:** `/server` and the startup picker list one **Embedded** row per installed model; `/server embedded` lists only those, and `/model` on the embedded server picks between them.
 * **First start:** with no URL, scan mode `disabled` and nothing installed, the app opens straight to **Embedded models** (ESC twice returns to the chat).
 * **Loading:** the hint row shows `🦙 starting <model>`, then `🦙 loading <model>`. Ctrl+C or a double-click on the spinner cancels; ESC does nothing. Meanwhile the input line works as during a reply: panes open over the load, `/clear`, `/new`, `/splash`, `/rewind` and `/exit` cancel it first, and commands like `/server`, `/model`, `/profile`, `/theme` and `/sampling` wait. A `/reasoning` level picked meanwhile applies once it has loaded; a cancelled load treats the queue as a cancelled reply does.
-* **Reading a row:** each row shows its size and state (`installed · 4.2 GB`, `download · 4.2 GB`, or a paused download's progress) and its quantisation (lower numbers are smaller and a little less accurate). Then ⚡ a drafter, 👁️ images and 🛠️ tool calls, and ⛓️‍💥 for an uncensored build (⛓️‍💥⚔️ aggressive). Every model reads images and calls tools.
+* **Reading a row:** each row shows its size and state (`installed · 4.2 GB`, `download · 4.2 GB`, or `partial · 4.2 GB · 42%` for a download that stopped part-way) and its quantisation (lower numbers are smaller and a little less accurate). Then ⚡ a drafter, 👁️ images and 🛠️ tool calls, and ⛓️‍💥 for an uncensored build (⛓️‍💥⚔️ aggressive). Every model reads images and calls tools.
 
 | Model | Quantisation | Download | Drafter |
 |---|---|---|---|
@@ -334,7 +334,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 
 **Catalog buttons** (on the title row of *Embedded models*; each group combines with the others and starts cleared at each visit):
 * **8GB**, **16GB** (`1`, `2`): models up to that size (weights, projector and drafter). One at a time; press the lit one to clear it.
-* **installed** (`i`) / **uninstalled** (`u`): one at a time; a paused download counts as uninstalled.
+* **installed** (`i`) / **uninstalled** (`u`): one at a time; a partial download counts as uninstalled.
 * **drafter** (`d`): models with a drafter.
 * **sort** (`s`): name order or size order (smallest first).
 * **uncensored** (`x`): shows only the uncensored builds, which are hidden otherwise. It starts lit when the model in use is one.
@@ -342,7 +342,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 
 **Notes**
 * **NVFP4 builds** need the CUDA backend on an NVIDIA Blackwell GPU (RTX 50 series or newer); elsewhere they are slow or don't load. A Mac's catalog leaves them out.
-* **Downloads** are checked against Hugging Face's SHA-256 for each file. A paused or interrupted download resumes when you pick the model again; the drive needs room for the rest plus 1 GB.
+* **Downloads** are checked against Hugging Face's SHA-256 for each file. A partial download (stopped or interrupted) resumes when you pick the model again; the drive needs room for the rest plus 1 GB.
 * **llama.cpp** itself downloads on first start (build `b11258`: 577 MB for CUDA, 33 MB for Vulkan, 19 MB for CPU, 12 MB for a Mac's Metal). If `auto` picked CUDA and it won't start, the app tries Vulkan.
 * **The server** listens on `127.0.0.1` only, on a random port with a fresh key. It restarts only when a setting it depends on changes, and stops when you pick another server, turn *Embedded servers enabled* off, or quit, even after a crash (on a Mac a small guard process sees to it, and the next start stops any server a crash left running). Only one runs at a time, apart from a `multi-server` botchat's extras (see [Botchat](#botchat)).
 * **Files:** each model's weights in `models\llm\<id>\`, the vision projectors and drafters in `models\llm\_shared\` (one copy shared by every build that uses it), and llama.cpp in `llama\`, all under the home folder; `/about` shows them, and its Models tab links each model's Hugging Face repository.

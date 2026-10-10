@@ -674,7 +674,7 @@ public class EmbeddedLlmCoreTests
         // The · and the size in one column down the list (2026-09-29, the user's ask); a paused share last.
         Assert.Equal("installed · 4.2 GB", EmbeddedLlmText.RowDetail(EmbeddedModelState.Installed, 4_170_150_816));
         Assert.Equal("download  · 4.2 GB", EmbeddedLlmText.RowDetail(EmbeddedModelState.Absent, 4_170_150_816));
-        Assert.Equal("paused    · 4.2 GB · 42%", EmbeddedLlmText.RowDetail(new EmbeddedModelState(EmbeddedModelStateKind.Partial, 42), 4_170_150_816));
+        Assert.Equal("partial   · 4.2 GB · 42%", EmbeddedLlmText.RowDetail(new EmbeddedModelState(EmbeddedModelStateKind.Partial, 42), 4_170_150_816));
         Assert.Equal(9, EmbeddedLlmText.StateWidth);   // "installed", the longest word
         Assert.Equal("embedded llama.cpp b11258 cuda on 127.0.0.1:53121", EmbeddedLlmText.Source(new EmbeddedServerInfo(new Uri("http://127.0.0.1:53121/v1"), 53121, "k", LlamaBackend.Cuda, "m", true)));
         Assert.Equal("Gemma 4 E2B is not installed. Install it now (download 4.3 GB + llama.cpp runtime 577 MB)?", EmbeddedLlmText.InstallQuestion(e2b, LlamaRelease.Bytes(LlamaBackend.Cuda)));   // its MTP drafter counts since 2026-09-29
