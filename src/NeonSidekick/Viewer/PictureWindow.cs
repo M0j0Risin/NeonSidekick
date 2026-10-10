@@ -377,7 +377,7 @@ internal sealed unsafe class PictureWindowThread : ILiveWindow
     private string? _unreadable;
     private int _loadVersion;
     private CancellationTokenSource? _load;
-    private (int Version, string Path, ViewerBitmap? Bitmap)? _loaded;
+    private readonly ViewerLoadSlot _loaded = new();
     private ViewerStyle? _style;
     private IntPtr _background;
     private bool _ole;
@@ -1759,12 +1759,8 @@ internal sealed unsafe class PictureWindowThread : ILiveWindow
         var token = load.Token;
         _ = Task.Run(() => ViewerImage.LoadThenAsync(path, token, bitmap =>
         {
-            lock (_gate)
-            {
-                _loaded = (version, path, bitmap);
-            }
-
-            if (_alive)
+            // A cancelled older read done after this one is refused (2026-10-09: it overwrote the picked picture, ViewerLoadSlot).
+            if (_loaded.Offer(version, path, bitmap) && _alive)
             {
                 PostMessageW(_hwnd, LoadedMessage, IntPtr.Zero, IntPtr.Zero);
             }
@@ -1773,14 +1769,7 @@ internal sealed unsafe class PictureWindowThread : ILiveWindow
 
     private void TakeLoaded()
     {
-        (int Version, string Path, ViewerBitmap? Bitmap)? loaded;
-        lock (_gate)
-        {
-            loaded = _loaded;
-            _loaded = null;
-        }
-
-        if (loaded is not { } result || result.Version != _loadVersion)
+        if (_loaded.Take(_loadVersion) is not { } result)
         {
             return;
         }
