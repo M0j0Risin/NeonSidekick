@@ -307,7 +307,7 @@ public class ProfilesTests : IDisposable
             WebBrowserPath = @"C:\Chrome\chrome.exe",
             WebSearchMethod = "searxng",
             WebSearxngUrl = "http://searx:8080",
-            ClaudeCliExecutable = @"C:\bin\claude.exe",
+            ClaudeCodeExecutable = @"C:\bin\claude.exe",
             ObsidianVault = @"D:\Vault",
             ComfyUrl = "http://comfy:8188",
             HomeAssistantUrl = "http://localhost:8123",

@@ -10,7 +10,7 @@ namespace NeonSidekick.Tests;
 public partial class ToolsMenuTests
 {
     /// <summary>The Claude tab (<see cref="ToTab"/>; after Oracle since 2026-10-03), then the row (2 the command's model, 7 the advisor's) and Enter: its picker.</summary>
-    private void OpenClaudeRow(int row) => Push([.. ToTab(ToolsText.ClaudeCliTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
+    private void OpenClaudeRow(int row) => Push([.. ToTab(ToolsText.ClaudeCodeTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
     public async Task OnThePane_ClaudeCommandModel_IsAPicker_TheAliasSaves()
@@ -22,7 +22,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("opus", _settings.Current.ClaudeCliModel);
+        Assert.Equal("opus", _settings.Current.ClaudeCodeModel);
         Assert.Contains("fable   " + "the latest Fable", Output);
         Assert.Contains(SettingsMenu.ClaudeModelOtherWord + "  type a full model name", Output);
         pane.Dispose();
@@ -31,7 +31,7 @@ public partial class ToolsMenuTests
     [Fact]
     public async Task OnThePane_ClaudeAdvisorModel_OpensOnTheSavedAlias_TheBlankRowFollowsTheCommand()
     {
-        _settings.Update(d => d.ClaudeCliAdvisorModel = "Sonnet");
+        _settings.Update(d => d.ClaudeCodeAdvisorModel = "Sonnet");
         var (menu, pane, _) = PaneMenu();
         OpenClaudeRow(7);
         Push(Keys.Up, Keys.Up, Keys.Up, Keys.Enter);   // sonnet → opus → fable → the blank row
@@ -39,7 +39,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("", _settings.Current.ClaudeCliAdvisorModel);
+        Assert.Equal("", _settings.Current.ClaudeCodeAdvisorModel);
         Assert.Contains("▸ sonnet  ", Output);   // opened on the saved alias, any case
         Assert.Contains(SettingsMenu.ClaudeAdvisorModelLabel, Output);
         pane.Dispose();
@@ -57,7 +57,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("claude-opus-5-5", _settings.Current.ClaudeCliModel);
+        Assert.Equal("claude-opus-5-5", _settings.Current.ClaudeCodeModel);
         Assert.Contains("▸ " + SettingsMenu.ClaudeModelOtherWord + "  (claude-opus-5-5)", Output);
         pane.Dispose();
     }
@@ -65,7 +65,7 @@ public partial class ToolsMenuTests
     [Fact]
     public async Task OnThePane_ClaudeModel_EscKeepsTheSavedValue()
     {
-        _settings.Update(d => d.ClaudeCliModel = "haiku");
+        _settings.Update(d => d.ClaudeCodeModel = "haiku");
         var (menu, pane, _) = PaneMenu();
         OpenClaudeRow(2);
         Push(Keys.Down, Keys.Escape);
@@ -73,7 +73,7 @@ public partial class ToolsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("haiku", _settings.Current.ClaudeCliModel);
+        Assert.Equal("haiku", _settings.Current.ClaudeCodeModel);
         pane.Dispose();
     }
 

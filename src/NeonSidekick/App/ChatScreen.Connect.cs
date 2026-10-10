@@ -28,7 +28,7 @@ public enum ConnectChoice
     /// <summary>The OpenAI API: its key, then the API switched on.</summary>
     OpenAI,
 
-    /// <summary>Claude Code as the server: the Claude CLI server switched on.</summary>
+    /// <summary>Claude Code as the server: the Claude Code server switched on.</summary>
     ClaudeCli,
 
     /// <summary>Leave it: the app runs without a model until <c>/server</c>.</summary>
@@ -159,7 +159,7 @@ internal sealed partial class ChatScreen
                     break;
 
                 case ConnectChoice.ClaudeCli:
-                    _settings.Update(d => d.ClaudeCliServer = true);
+                    _settings.Update(d => d.ClaudeCodeServer = true);
                     await ConnectLlmAsync(cancellationToken, quiet: false, startup: false).ConfigureAwait(false);
                     break;
             }

@@ -10,7 +10,7 @@ using NeonSidekick.Shell;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// What the Claude CLI server's client needs from the app (2026-09-30): where the CLI is, the folder it runs in, and how a
+/// What the Claude Code server's client needs from the app (2026-09-30): where the CLI is, the folder it runs in, and how a
 /// one-shot request runs (<see cref="ClaudeProcess.RunLaunchAsync"/> in the app, a script in the tests).
 /// </summary>
 /// <param name="Executable">The CLI's full path as <see cref="ClaudeExecutable.Locate"/> finds it now, or null.</param>
@@ -22,7 +22,7 @@ public sealed record ClaudeCliContext(
     Func<ProcessLaunch, string, CancellationToken, IAsyncEnumerable<ClaudeEvent>>? OneShot = null);
 
 /// <summary>
-/// The chat client over the Claude CLI server (2026-09-30, the user's ask): one long-lived <c>claude</c> process the chat
+/// The chat client over the Claude Code server (2026-09-30, the user's ask): one long-lived <c>claude</c> process the chat
 /// writes its messages to (<see cref="IClaudeServerHost"/>), its own tools all off and the app's offered instead over MCP
 /// (<see cref="ClaudeMcpServer"/>).
 ///
@@ -515,7 +515,7 @@ public sealed class ClaudeCliChatClient : IChatClient
 
         if (serviceType == typeof(ChatClientMetadata))
         {
-            return new ChatClientMetadata("claude-cli", Endpoint.BaseUrl, Endpoint.ModelId);
+            return new ChatClientMetadata("claude-code", Endpoint.BaseUrl, Endpoint.ModelId);
         }
 
         return serviceType.IsInstanceOfType(this) ? this : null;

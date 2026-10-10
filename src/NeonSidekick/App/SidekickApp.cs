@@ -74,7 +74,7 @@ public sealed class SidekickApp
     private readonly Func<EmbeddedLlm.IEmbeddedLlm>? _embeddedLlm;
     private readonly Func<Claude.IClaudeServerHost> _claudeServerFactory;
 
-    // The Claude CLI server's process for this run (2026-09-30): made at the run's start, disposed at its end; the chat
+    // The Claude Code server's process for this run (2026-09-30): made at the run's start, disposed at its end; the chat
     // clients built over the Claude CLI endpoint all drive this one.
     private Claude.IClaudeServerHost? _claudeServer;
     private readonly WebAccess _web;
@@ -167,7 +167,7 @@ public sealed class SidekickApp
     /// <param name="mcpTransport">What an MCP server's config becomes on the wire (<see cref="McpSession.DefaultTransport"/> in the app; tests a pipe into an in-process server); null = the app's.</param>
     /// <param name="frames">Where the screen's frames are held and let go as one write (2026-09-29, the rows' flicker at a turn's end): <c>Program.cs</c> passes the <see cref="UI.FrameWriter"/> it made stdout; null (tests) holds nothing.</param>
     /// <param name="embeddedLlm">Makes the embedded model's service for one run (2026-09-29): <c>Program.cs</c> passes <see cref="EmbeddedLlm.EmbeddedLlmService.Create"/> on Windows x64, tests a fake; null offers no embedded model.</param>
-    /// <param name="claudeServer">Makes the Claude CLI server's process host for one run (2026-09-30): null makes the app's own (<see cref="Claude.ClaudeServerHost"/>, which starts nothing until a turn asks), tests a fake.</param>
+    /// <param name="claudeServer">Makes the Claude Code server's process host for one run (2026-09-30): null makes the app's own (<see cref="Claude.ClaudeServerHost"/>, which starts nothing until a turn asks), tests a fake.</param>
     public SidekickApp(
         IAnsiConsole console,
         AppSettings settings,
@@ -247,7 +247,7 @@ public sealed class SidekickApp
         _openLogWindow = openLogWindow;
         _closeLogWindow = closeLogWindow;
         _closeViewer = closeViewer;
-        // The Claude CLI server (2026-09-30): a host over the real CLI, with this executable as its MCP relay, unless a test gives its own.
+        // The Claude Code server (2026-09-30): a host over the real CLI, with this executable as its MCP relay, unless a test gives its own.
         _claudeServerFactory = claudeServer ?? (() => new Claude.ClaudeServerHost(Claude.ClaudeServerHost.OwnRelayCommand));
         _frames = frames;
         // The performance bar's readings (2026-09-29): kernel32, NVML or PDH/DXGI in the app on Windows; none in tests.
@@ -311,7 +311,7 @@ public sealed class SidekickApp
     public string ModelsDirectory => _settings.ModelsDirectory;
 
     /// <summary>
-    /// Where the Claude CLI server runs (2026-09-30): <c>&lt;home&gt;/claude-cli</c>, one folder for every profile. It has no
+    /// Where the Claude Code server runs (2026-09-30): <c>&lt;home&gt;/claude-cli</c>, one folder for every profile. It has no
     /// file tools, so nothing reads the folder; the CLI keeps its per-folder state (its sessions) under its name.
     /// </summary>
     public string ClaudeCliDirectory => Path.Combine(_settings.StorageDirectory, "claude-cli");
@@ -774,11 +774,11 @@ public sealed class SidekickApp
         long? sessionId = null;
         // The Claude conversation /claude resumes (2026-09-27), as the screen keeps it; dropped with the session.
         string? claudeSessionId = null;
-        // The Claude CLI server's session (2026-09-30), as the screen keeps it: minted at the first turn over it, dropped with the session.
+        // The Claude Code server's session (2026-09-30), as the screen keeps it: minted at the first turn over it, dropped with the session.
         string? claudeServerSessionId = null;
         var claude = _claude ?? new Claude.ClaudeProcess(_environment.System);
-        // claude_advisor_cli (2026-09-27): its own thread, as the screen keeps it; no one to confirm with, so a call under
-        // Claude CLI advisor tool confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
+        // claude_code_advisor (2026-09-27): its own thread, as the screen keeps it; no one to confirm with, so a call under
+        // Claude Code advisor tool confirm is refused; Claude's tools and the footer as [tool] / [notice] lines, the answer the result's line.
         var advisorThread = new Claude.ClaudeAdvisorThread();
         var advisorTools = ChatScreen.ClaudeAdvisorTools(claude, () => EffectiveSettings, () => files.Root, advisorThread, (usage, usd) => session.Usage.AddClaude(usage, usd), () => session.History.Messages, null, new HeadlessAdvisorView(this));
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
@@ -1162,10 +1162,10 @@ public sealed class SidekickApp
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt.
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeCliAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), advisorTools: advisorTools, advisorEnabled: EffectiveSettings.ClaudeCodeAdvisor, preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools));
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
-                // The Claude CLI server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
+                // The Claude Code server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
                 assistant.ConversationId = Claude.ClaudeCliEndpoint.IsClaudeCli(session.Endpoint?.BaseUrl) ? claudeServerSessionId ??= Guid.NewGuid().ToString("D") : null;
                 if (assistant.ConversationId is not null)
                 {
@@ -1694,8 +1694,8 @@ public sealed class SidekickApp
         for (int attempt = 0; ; attempt++)
         {
             var level = Claude.ClaudePermission.Resolve(effective);
-            var request = new Claude.ClaudeRequest(args, id, resume, root, level, effective.ClaudeCliExecutable,
-                string.IsNullOrWhiteSpace(effective.ClaudeCliModel) ? null : effective.ClaudeCliModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeCliEffort));
+            var request = new Claude.ClaudeRequest(args, id, resume, root, level, effective.ClaudeCodeExecutable,
+                string.IsNullOrWhiteSpace(effective.ClaudeCodeModel) ? null : effective.ClaudeCodeModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeCodeEffort));
             var reply = new StringBuilder();
             Claude.ClaudeEvent.Result? result = null;
             bool prefixed = false;
@@ -1861,7 +1861,7 @@ public sealed class SidekickApp
     }
 
     /// <summary>
-    /// <c>claude_advisor_cli</c> headless (2026-09-27): each tool Claude uses as a <c>[tool] Claude › …</c> line and the footer as a
+    /// <c>claude_code_advisor</c> headless (2026-09-27): each tool Claude uses as a <c>[tool] Claude › …</c> line and the footer as a
     /// <c>[notice]</c>; the question and the answer are the generic call and result lines. Synchronous, as
     /// <see cref="OnHeadlessDiagnostic"/> is: the tool runs between the turn loop's awaited writes, never mid-line.
     /// </summary>
@@ -2247,7 +2247,7 @@ public sealed class SidekickApp
         {
             var host = _claudeServer ?? throw new InvalidOperationException(Claude.ClaudeCliText.NotRunningError);
             var context = new Claude.ClaudeCliContext(
-                () => Claude.ClaudeExecutable.Locate(EffectiveSettings.ClaudeCliExecutable, _environment.System, File.Exists),
+                () => Claude.ClaudeExecutable.Locate(EffectiveSettings.ClaudeCodeExecutable, _environment.System, File.Exists),
                 ClaudeCliDirectory);
             return new Claude.ClaudeCliChatClient(endpoint, host, context, timeouts.Request);
         }
@@ -2297,12 +2297,12 @@ public sealed class SidekickApp
         SettingsField.ShellPreferNative => _environment.ShellNative is not null ? EnvironmentOverrides.ShellNativeVariable : null,
         SettingsField.ObsidianVault => _environment.ObsidianVault is not null ? EnvironmentOverrides.ObsidianVaultVariable : null,
         SettingsField.ComfyUrl => _environment.ComfyUrl is not null ? EnvironmentOverrides.ComfyUrlVariable : null,
-        SettingsField.ClaudeCliExecutable => _environment.ClaudeCliExecutable is not null ? EnvironmentOverrides.ClaudeCliExeVariable : null,
-        SettingsField.ClaudeCliPermissions => _environment.ClaudeCliPermissions is not null ? EnvironmentOverrides.ClaudeCliPermissionsVariable : null,
-        SettingsField.ClaudeCliAdvisor => _environment.ClaudeCliAdvisor is not null ? EnvironmentOverrides.ClaudeCliAdvisorVariable : null,
+        SettingsField.ClaudeCodeExecutable => _environment.ClaudeCodeExecutable is not null ? EnvironmentOverrides.ClaudeCodeExeVariable : null,
+        SettingsField.ClaudeCodePermissions => _environment.ClaudeCodePermissions is not null ? EnvironmentOverrides.ClaudeCodePermissionsVariable : null,
+        SettingsField.ClaudeCodeAdvisor => _environment.ClaudeCodeAdvisor is not null ? EnvironmentOverrides.ClaudeCodeAdvisorVariable : null,
         SettingsField.AnthropicApi => _environment.AnthropicApi is not null ? EnvironmentOverrides.AnthropicApiVariable : null,
         SettingsField.AnthropicApiKey => _environment.AnthropicApiKey is not null ? EnvironmentOverrides.AnthropicApiKeyVariable : null,
-        SettingsField.ClaudeCliServer => _environment.ClaudeCliServer is not null ? EnvironmentOverrides.ClaudeCliServerVariable : null,
+        SettingsField.ClaudeCodeServer => _environment.ClaudeCodeServer is not null ? EnvironmentOverrides.ClaudeCodeServerVariable : null,
         SettingsField.OpenAIApi => _environment.OpenAIApi is not null ? EnvironmentOverrides.OpenAIApiVariable : null,
         SettingsField.OpenAIApiKey => _environment.OpenAIApiKey is not null ? EnvironmentOverrides.OpenAIApiKeyVariable : null,
         SettingsField.YouTubeApiKey => _environment.YouTubeApiKey is not null ? EnvironmentOverrides.YouTubeApiKeyVariable : null,

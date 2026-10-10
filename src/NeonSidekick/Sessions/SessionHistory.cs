@@ -80,11 +80,11 @@ public sealed class StoredHistory
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeSessionId { get; set; }
 
-    /// <summary>The Claude Code conversation <c>claude_advisor_cli</c> resumes (2026-09-27, its own thread): absent until the first call.</summary>
+    /// <summary>The Claude Code conversation <c>claude_code_advisor</c> resumes (2026-09-27, its own thread): absent until the first call.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeAdvisorSessionId { get; set; }
 
-    /// <summary>The Claude Code session the Claude CLI server runs this chat in (2026-09-30): absent until its first turn.</summary>
+    /// <summary>The Claude Code session the Claude Code server runs this chat in (2026-09-30): absent until its first turn.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ClaudeServerSessionId { get; set; }
 }
@@ -151,7 +151,7 @@ public static class SessionHistory
     public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId, out string? claudeAdvisorSessionId) =>
         FromJson(json, out plan, out executing, out claudeSessionId, out claudeAdvisorSessionId, out _);
 
-    /// <summary><see cref="FromJson(string, out StoredPlan, out StoredPlan, out string, out string)"/>, with the Claude CLI server's session (null before its first turn, 2026-09-30).</summary>
+    /// <summary><see cref="FromJson(string, out StoredPlan, out StoredPlan, out string, out string)"/>, with the Claude Code server's session (null before its first turn, 2026-09-30).</summary>
     public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId, out string? claudeAdvisorSessionId, out string? claudeServerSessionId)
     {
         ArgumentNullException.ThrowIfNull(json);

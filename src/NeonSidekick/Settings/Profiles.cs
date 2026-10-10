@@ -437,7 +437,7 @@ public static class Profiles
         nameof(AppSettingsData.WebBrowserPath),
         nameof(AppSettingsData.WebSearchMethod),
         nameof(AppSettingsData.WebSearxngUrl),
-        nameof(AppSettingsData.ClaudeCliExecutable),
+        nameof(AppSettingsData.ClaudeCodeExecutable),
         nameof(AppSettingsData.ObsidianVault),
         nameof(AppSettingsData.ComfyUrl),
         nameof(AppSettingsData.HomeAssistantUrl),
@@ -457,7 +457,7 @@ public static class Profiles
         to.WebBrowserPath = from.WebBrowserPath;
         to.WebSearchMethod = from.WebSearchMethod;
         to.WebSearxngUrl = from.WebSearxngUrl;
-        to.ClaudeCliExecutable = from.ClaudeCliExecutable;
+        to.ClaudeCodeExecutable = from.ClaudeCodeExecutable;
         to.ObsidianVault = from.ObsidianVault;
         to.ComfyUrl = from.ComfyUrl;
         to.HomeAssistantUrl = from.HomeAssistantUrl;

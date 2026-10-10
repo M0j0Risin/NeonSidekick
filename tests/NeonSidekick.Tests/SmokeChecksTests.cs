@@ -81,7 +81,7 @@ public class SmokeChecksTests
         Assert.Equal("1 tool listed as smoke__echo (smoke 1.0); echo answered through McpTool", check.Detail);
     }
 
-    /// <summary>The Claude CLI server's relay (2026-09-30): the app's MCP listener, the relay over a pipe pair as the CLI's stdio, a call carrying its tool-use id.</summary>
+    /// <summary>The Claude Code server's relay (2026-09-30): the app's MCP listener, the relay over a pipe pair as the CLI's stdio, a call carrying its tool-use id.</summary>
     [Fact]
     public void ProbeClaudeCliRelay_ListsAndAnswersThroughTheRelay()
     {

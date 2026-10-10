@@ -158,7 +158,7 @@ public static class ToolbarItems
         Shell => "Shell",
         Files => "Files",
         Web => "Web",
-        Claude => "Claude CLI advisor",   // "Claude" until 2026-10-04 (the user's ask)
+        Claude => "Claude Code advisor",   // "Claude" until 2026-10-04, "Claude CLI advisor" until 2026-10-09 (the user's asks)
         Docker => "Docker",
         Obsidian => "Obsidian",
         Sql => "SQL",

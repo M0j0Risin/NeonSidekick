@@ -830,7 +830,7 @@ public sealed class DockerTests : IDisposable
         Assert.Equal("docker_engine", fresh.DockerEnginePipe);
         int tab = (ToolsText.MenuIndex(ToolsText.DockerTabTitle) + 1) - 1;
         Assert.Equal([SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe], SettingsMenu.ToolsTabFields[tab]);
-        Assert.Equal((ToolsText.MenuIndex(ToolsText.ClaudeCliTabTitle) + 1) + 1, tab + 1);   // after Claude since 2026-10-03, the user's order (after UNC before)
+        Assert.Equal((ToolsText.MenuIndex(ToolsText.ClaudeCodeTabTitle) + 1) + 1, tab + 1);   // after Claude since 2026-10-03, the user's order (after UNC before)
         Assert.Equal(["Docker tools", "Docker writes", "Docker engine pipe"], SettingsMenu.ToolsTabFields[tab].Select(SettingsMenu.FieldName));
         Assert.Equal(@"\\.\pipe\docker_engine", SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, fresh, _dir));
         Assert.True(SettingsMenu.IsToggle(SettingsField.DockerWrites));

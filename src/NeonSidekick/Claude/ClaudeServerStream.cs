@@ -3,7 +3,7 @@ using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Claude;
 
-/// <summary>What one line of the Claude CLI server's <c>stream-json</c> says (<see cref="ClaudeServerStream"/>, 2026-09-30).</summary>
+/// <summary>What one line of the Claude Code server's <c>stream-json</c> says (<see cref="ClaudeServerStream"/>, 2026-09-30).</summary>
 public abstract record ClaudeServerEvent
 {
     private ClaudeServerEvent()
@@ -46,7 +46,7 @@ public abstract record ClaudeServerEvent
 }
 
 /// <summary>
-/// Reads the Claude CLI server's <c>stream-json</c> one line at a time (2026-09-30; the shapes captured from CLI 2.1.285 by
+/// Reads the Claude Code server's <c>stream-json</c> one line at a time (2026-09-30; the shapes captured from CLI 2.1.285 by
 /// the spike are the fixtures <c>server-*.jsonl</c>). Only the main conversation is read: a line with a
 /// <c>parent_tool_use_id</c> (a tool's <c>tool_progress</c> heartbeat, a subagent's) is skipped. Unknown kinds are
 /// skipped, never a failure; a line that is not JSON is logged and skipped. <see cref="JsonDocument"/>, as

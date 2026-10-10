@@ -7,7 +7,7 @@ using NeonSidekick.Llm;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// A request as the Claude CLI server reads it (<see cref="ClaudeServerInput.Split"/>, 2026-09-30): the CLI keeps the
+/// A request as the Claude Code server reads it (<see cref="ClaudeServerInput.Split"/>, 2026-09-30): the CLI keeps the
 /// conversation itself, so of the whole history the app sends each round only what came after the model's last message
 /// matters.
 /// </summary>
@@ -28,7 +28,7 @@ public sealed record ClaudeTurnInput(
 }
 
 /// <summary>
-/// What the Claude CLI server's client writes to the CLI's stdin, and how a request is read for it (2026-09-30). Pure, and
+/// What the Claude Code server's client writes to the CLI's stdin, and how a request is read for it (2026-09-30). Pure, and
 /// tested as data; the shapes are the spike's (<c>server-*.stdin.jsonl</c>).
 /// </summary>
 public static class ClaudeServerInput

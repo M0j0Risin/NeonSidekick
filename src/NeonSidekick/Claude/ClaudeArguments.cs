@@ -59,14 +59,14 @@ public static class ClaudeArguments
         return arguments;
     }
 
-    /// <summary>The MCP server's name in the Claude CLI server's config: its tools reach the model as <c>mcp__neon__&lt;tool&gt;</c>. Pinned.</summary>
+    /// <summary>The MCP server's name in the Claude Code server's config: its tools reach the model as <c>mcp__neon__&lt;tool&gt;</c>. Pinned.</summary>
     public const string McpServerName = "neon";
 
     /// <summary>What the CLI puts in front of each of the app's tool names (<see cref="McpServerName"/>'s tools). Pinned.</summary>
     public const string McpToolPrefix = "mcp__" + McpServerName + "__";
 
     /// <summary>
-    /// The command line of the Claude CLI server (2026-09-30): one long-lived child, fed one <c>stream-json</c> line per user
+    /// The command line of the Claude Code server (2026-09-30): one long-lived child, fed one <c>stream-json</c> line per user
     /// message on a stdin that stays open (<c>--input-format stream-json</c>), its replies read as <c>/claude</c>'s are. The
     /// CLI's own tools are all off (<c>--tools ""</c>): the model gets the app's tools alone, through the one MCP server in
     /// <paramref name="mcpConfig"/> (<c>--strict-mcp-config</c>: none of the user's), allowed without a prompt
@@ -104,7 +104,7 @@ public static class ClaudeArguments
 
     /// <summary>
     /// The command line of one request asked beside the conversation (2026-09-30: a session title, a skill reflection, a
-    /// <c>/compact</c> summary, a <c>/botchat</c> bot over the Claude CLI server): a <c>claude -p</c> of its own, the
+    /// <c>/compact</c> summary, a <c>/botchat</c> bot over the Claude Code server): a <c>claude -p</c> of its own, the
     /// conversation flattened into its stdin, no tools at all, no session kept — so nothing it asks lands in the chat's
     /// Claude session.
     /// </summary>
@@ -130,7 +130,7 @@ public static class ClaudeArguments
     }
 
     /// <summary>
-    /// The <c>--mcp-config</c> JSON of the Claude CLI server: one stdio server, <see cref="McpServerName"/>, that is this
+    /// The <c>--mcp-config</c> JSON of the Claude Code server: one stdio server, <see cref="McpServerName"/>, that is this
     /// app's own executable in its relay mode (<see cref="McpRelay"/>) pointed at the loopback listener with its key.
     /// </summary>
     public static string McpConfig(string command, IReadOnlyList<string> args)
@@ -171,7 +171,7 @@ public static class ClaudeArguments
 }
 
 /// <summary>
-/// What the Claude CLI server was started with (2026-09-30): the server is kept while the next turn asks for the same, and
+/// What the Claude Code server was started with (2026-09-30): the server is kept while the next turn asks for the same, and
 /// restarted with <c>--resume</c> on the same session when anything here changed (<see cref="ClaudeServerHost"/>). Value
 /// equality throughout: <see cref="ToolNames"/> is the offered tools' names joined, not a list.
 /// </summary>

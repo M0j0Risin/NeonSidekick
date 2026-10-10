@@ -6,7 +6,7 @@ Options that set something apply to this launch only. Both `--option value` and 
 
 | Option | What it does |
 |---|---|
-| `--url <url>` | Uses this LLM server: a URL, or `embedded`, `claude-cli` or `docker:<container>`. |
+| `--url <url>` | Uses this LLM server: a URL, or `embedded`, `claude-code` or `docker:<container>`. |
 | `--model <id>` | Uses this model. |
 | `--cwd <path>` | Uses this working directory. |
 | `--profile <name>` | Opens this profile (`settings.json` is left alone; an unknown name exits with code 2). |
@@ -31,4 +31,4 @@ The `--*-check` modes keep nothing (`--sql-check` makes one temporary table insi
 
 **Exit codes:** 0 done (a check passed), 1 a check failed, 2 a bad argument or an unknown profile, 3 a headless run in which a shell command was refused ([HEADLESS.md](HEADLESS.md)).
 
-`--mcp-relay` and `--llama-guard` are the app starting its own executable (for the Claude CLI server and, on a Mac, to stop the embedded LLM's server after a crash); don't pass them yourself.
+`--mcp-relay` and `--llama-guard` are the app starting its own executable (for the Claude Code server and, on a Mac, to stop the embedded LLM's server after a crash); don't pass them yourself.

@@ -571,12 +571,12 @@ public class ClaudeApiTests
     [Fact]
     public void Settings_TheClaudeTab_HoldsTheClaudeApisFourRows_AndTheCliServer()
     {
-        // On /tools' Claude tab from 2026-09-29 under the advisor's confirm, the Claude CLI server's switch below them from
+        // On /tools' Claude tab from 2026-09-29 under the advisor's confirm, the Claude Code server's switch below them from
         // 2026-09-30; /settings' own Claude tab since 2026-10-03 (the user's call), after Docker.
         Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
         Assert.Equal((int)SettingsTab.Docker + 1, (int)SettingsTab.Anthropic);
         var claude = SettingsMenu.TabFields[(int)SettingsTab.Anthropic];
-        Assert.Equal([SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching, SettingsField.ClaudeCliServer], claude);
+        Assert.Equal([SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching, SettingsField.ClaudeCodeServer], claude);
         Assert.All(SettingsMenu.ToolsTabFields, t => Assert.DoesNotContain(SettingsField.AnthropicApi, t));
         var apiRows = claude.SkipLast(1).ToList();
 

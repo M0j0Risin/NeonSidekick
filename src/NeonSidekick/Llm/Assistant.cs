@@ -558,7 +558,7 @@ public sealed class Assistant
         "With " + NeonSidekick.Llm.Tools.DockerLifecycleTool.ToolName + ", " + NeonSidekick.Llm.Tools.DockerPullTool.ToolName + " and the removing tools you may also change Docker, each call waiting for the user's yes: change it only when the user asks, say what you changed, and do not retry one they decline.";
 
     /// <summary>
-    /// The sentence the default rules gain while <c>claude_advisor_cli</c> is offered (the setting <c>Claude CLI advisor tool</c> on,
+    /// The sentence the default rules gain while <c>claude_code_advisor</c> is offered (the setting <c>Claude Code advisor tool</c> on,
     /// 2026-09-27): appended after the SQL sentence by <see cref="DefaultRules"/>. It says when (stuck, unsure of the best
     /// course — not for what a tool can look up), how (a self-contained question, the brief in context) and what to do with
     /// the answer (weigh it, decide, and never just relay it). Pinned.
@@ -1182,7 +1182,7 @@ public sealed class Assistant
     public IReadOnlyList<OpeningCall> PendingCalls { get; set; } = [];
 
     /// <summary>
-    /// The conversation a stateful server keeps for this chat (2026-09-30, the Claude CLI server: its session id), sent as
+    /// The conversation a stateful server keeps for this chat (2026-09-30, the Claude Code server: its session id), sent as
     /// <see cref="ChatOptions.ConversationId"/> on every request of a turn; null for every other server, which is sent the
     /// whole history each time. Set per turn by the shell, like <see cref="Tools"/>. The side requests (a summary, a
     /// title) never carry it.

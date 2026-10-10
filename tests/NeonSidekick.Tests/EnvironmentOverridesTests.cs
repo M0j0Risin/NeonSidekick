@@ -55,9 +55,9 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.ShellNativeVariable, "no"),
             (EnvironmentOverrides.ObsidianVaultVariable, @" D:\Notes "),
             (EnvironmentOverrides.ComfyUrlVariable, " http://gpu-box:8188 "),
-            (EnvironmentOverrides.ClaudeCliExeVariable, @" D:\bin\claude.exe "),
-            (EnvironmentOverrides.ClaudeCliPermissionsVariable, " Full "),
-            (EnvironmentOverrides.ClaudeCliAdvisorVariable, " Yes "),
+            (EnvironmentOverrides.ClaudeCodeExeVariable, @" D:\bin\claude.exe "),
+            (EnvironmentOverrides.ClaudeCodePermissionsVariable, " Full "),
+            (EnvironmentOverrides.ClaudeCodeAdvisorVariable, " Yes "),
             (EnvironmentOverrides.AnthropicApiVariable, " on "),
             (EnvironmentOverrides.AnthropicApiKeyVariable, " sk-ant-env "),
             (EnvironmentOverrides.LlmSamplingVariable, " {\"temperature\":0.3} "),
@@ -65,7 +65,7 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.HomeAssistantTokenVariable, " ha-token "),
             (EnvironmentOverrides.EmbeddedBackendVariable, OperatingSystem.IsMacOS() ? " Metal " : " Vulkan "),   // each machine's own names (2026-10-07)
             (EnvironmentOverrides.EmbeddedContextVariable, "16384"),
-            (EnvironmentOverrides.ClaudeCliServerVariable, " ON "),
+            (EnvironmentOverrides.ClaudeCodeServerVariable, " ON "),
             (EnvironmentOverrides.DockerPipeVariable, " npipe:////./pipe/dockerDesktopLinuxEngine "),
             (EnvironmentOverrides.OpenAIApiVariable, " Yes "),
             (EnvironmentOverrides.OpenAIApiKeyVariable, " sk-openai-env "),
@@ -94,9 +94,9 @@ public class EnvironmentOverridesTests
         Assert.Equal("http://gpu-box:8188", e.ComfyUrl);   // trimmed (2026-09-24)
         Assert.False(e.ShellPolice);   // any case, trimmed (2026-09-26)
         Assert.False(e.ShellPreferNative);   // the police's switch words (later on 2026-09-26)
-        Assert.Equal(@"D:\bin\claude.exe", e.ClaudeCliExecutable);   // trimmed (2026-09-27)
-        Assert.Equal("full", e.ClaudeCliPermissions);   // normalised to the saved word (2026-09-27)
-        Assert.True(e.ClaudeCliAdvisor);   // a switch word, any case, trimmed (2026-09-27)
+        Assert.Equal(@"D:\bin\claude.exe", e.ClaudeCodeExecutable);   // trimmed (2026-09-27)
+        Assert.Equal("full", e.ClaudeCodePermissions);   // normalised to the saved word (2026-09-27)
+        Assert.True(e.ClaudeCodeAdvisor);   // a switch word, any case, trimmed (2026-09-27)
         Assert.True(e.AnthropicApi);   // a switch word (2026-09-27)
         Assert.Equal("sk-ant-env", e.AnthropicApiKey);   // trimmed (2026-09-27)
         Assert.Equal(0.3, e.LlmSampling!["*"].Temperature);   // laid over every model (2026-09-28)
@@ -104,7 +104,7 @@ public class EnvironmentOverridesTests
         Assert.Equal("ha-token", e.HomeAssistantToken);   // trimmed (2026-09-28)
         Assert.Equal(OperatingSystem.IsMacOS() ? "metal" : "vulkan", e.EmbeddedBackend);   // any case, trimmed, the saved word (2026-09-29)
         Assert.Equal(16_384, e.EmbeddedContextSize);   // (2026-09-29)
-        Assert.True(e.ClaudeCliServer);   // a switch word, any case, trimmed (2026-09-30)
+        Assert.True(e.ClaudeCodeServer);   // a switch word, any case, trimmed (2026-09-30)
         Assert.Equal("npipe:////./pipe/dockerDesktopLinuxEngine", e.DockerEnginePipe);   // trimmed, kept as given; the pipe's bare name is read where it is used (2026-10-02)
         Assert.True(e.OpenAIApi);   // a switch word (2026-10-03)
         Assert.Equal("sk-openai-env", e.OpenAIApiKey);   // trimmed (2026-10-03)

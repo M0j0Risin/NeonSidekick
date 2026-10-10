@@ -8,18 +8,18 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// <c>claude_advisor_cli(question, context?)</c> (2026-09-27, the user's ask): the local model asks Claude Code for advice on
+/// <c>claude_code_advisor(question, context?)</c> (2026-09-27, the user's ask): the local model asks Claude Code for advice on
 /// its own when it is stuck — the <c>/claude</c> machinery (<see cref="IClaudeCli"/>, one <c>claude -p</c> child per call)
-/// turned into a tool, always <see cref="ClaudePermissionLevel.ReadOnly"/> whatever <c>Claude CLI slash command permissions</c> says:
+/// turned into a tool, always <see cref="ClaudePermissionLevel.ReadOnly"/> whatever <c>Claude Code slash command permissions</c> says:
 /// an advisor reads, it never acts. The answer is the tool's result. The decisions, the user's:
 /// <list type="bullet">
 /// <item>its own Claude thread (<see cref="ClaudeAdvisorThread"/>), apart from <c>/claude</c>'s, resumed call to call and
 /// dropped with the session; a lost resume is tried once anew, as <c>/claude</c> does;</item>
-/// <item>what Claude sees is <c>Claude CLI advisor tool context</c>: the model's brief alone, or with the last messages;</item>
-/// <item>at most <c>Claude CLI advisor tool calls per turn</c> calls a turn (<see cref="BeginTurn"/> resets the count), past it an
+/// <item>what Claude sees is <c>Claude Code advisor tool context</c>: the model's brief alone, or with the last messages;</item>
+/// <item>at most <c>Claude Code advisor tool calls per turn</c> calls a turn (<see cref="BeginTurn"/> resets the count), past it an
 /// error the model reads as "carry on alone";</item>
-/// <item><c>Claude CLI advisor tool model</c> / <c>effort</c>, blank for <c>/claude</c>'s own;</item>
-/// <item>with <c>Claude CLI advisor tool confirm</c> on (off by default) each call waits for the user's yes; nothing to ask (headless)
+/// <item><c>Claude Code advisor tool model</c> / <c>effort</c>, blank for <c>/claude</c>'s own;</item>
+/// <item>with <c>Claude Code advisor tool confirm</c> on (off by default) each call waits for the user's yes; nothing to ask (headless)
 /// is a no.</item>
 /// </list>
 /// The cost joins <c>/usage</c>'s Claude row through <paramref name="spent"/>. A failure is an <c>Error:</c> sentence, never a
@@ -27,7 +27,7 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public sealed class ClaudeAdvisorTool : AIFunction
 {
-    public const string ToolName = "claude_advisor_cli";
+    public const string ToolName = "claude_code_advisor";
     public const string QuestionArgument = "question";
     public const string ContextArgument = "context";
 
@@ -58,7 +58,7 @@ public sealed class ClaudeAdvisorTool : AIFunction
     /// <param name="workingDirectory">The folder Claude starts in: the sandbox's root as it is now.</param>
     /// <param name="thread">The advisor's Claude conversation, the screen's (or headless's) to store and drop.</param>
     /// <param name="spent">Where a run's tokens and dollars go (<see cref="TokenTally.AddClaude"/>).</param>
-    /// <param name="history">The conversation, for <c>Claude CLI advisor tool context: recent</c>.</param>
+    /// <param name="history">The conversation, for <c>Claude Code advisor tool context: recent</c>.</param>
     /// <param name="confirm">Asks the user (the question, the turn's token): true for yes, false for no, null when nothing could ask (no pane); the seam itself null where nothing ever can (headless).</param>
     /// <param name="view">Shows the call as it runs; null shows nothing.</param>
     public ClaudeAdvisorTool(IClaudeCli claude, Func<AppSettingsData> effective, Func<string> workingDirectory, ClaudeAdvisorThread thread, Action<TokenUsage, decimal> spent, Func<IReadOnlyList<ChatMessage>> history, Func<string, CancellationToken, Task<bool?>>? confirm = null, IClaudeAdvisorView? view = null)
@@ -91,13 +91,13 @@ public sealed class ClaudeAdvisorTool : AIFunction
         }
 
         var effective = _effective();
-        int cap = Math.Clamp(effective.ClaudeCliAdvisorCallsPerTurn, AppSettingsData.MinClaudeCliAdvisorCallsPerTurn, AppSettingsData.MaxClaudeCliAdvisorCallsPerTurn);
+        int cap = Math.Clamp(effective.ClaudeCodeAdvisorCallsPerTurn, AppSettingsData.MinClaudeCodeAdvisorCallsPerTurn, AppSettingsData.MaxClaudeCodeAdvisorCallsPerTurn);
         if (Interlocked.Increment(ref _calls) > cap)
         {
             return ClaudeText.AdvisorCapError(cap);
         }
 
-        if (effective.ClaudeCliAdvisorConfirm)
+        if (effective.ClaudeCodeAdvisorConfirm)
         {
             bool? yes = _confirm is null ? null : await _confirm(question, cancellationToken).ConfigureAwait(false);
             if (yes is null)
@@ -112,7 +112,7 @@ public sealed class ClaudeAdvisorTool : AIFunction
         }
 
         string context = ToolArguments.ReadString(arguments, ContextArgument);
-        var recent = ClaudeAdvisorContext.IsRecent(effective.ClaudeCliAdvisorContext) ? RecentLines(_history()) : null;
+        var recent = ClaudeAdvisorContext.IsRecent(effective.ClaudeCodeAdvisorContext) ? RecentLines(_history()) : null;
         _view?.Began(question);
 
         bool resume = _thread.SessionId is not null;
@@ -134,10 +134,10 @@ public sealed class ClaudeAdvisorTool : AIFunction
 
     private async Task<Run> RunAsync(string prompt, string sessionId, bool resume, AppSettingsData effective, CancellationToken cancellationToken)
     {
-        string? model = !string.IsNullOrWhiteSpace(effective.ClaudeCliAdvisorModel) ? effective.ClaudeCliAdvisorModel.Trim()
-            : !string.IsNullOrWhiteSpace(effective.ClaudeCliModel) ? effective.ClaudeCliModel.Trim() : null;
-        string? effort = string.IsNullOrWhiteSpace(effective.ClaudeCliAdvisorEffort) ? ClaudeEffort.Resolve(effective.ClaudeCliEffort) : ClaudeEffort.Resolve(effective.ClaudeCliAdvisorEffort);
-        var request = new ClaudeRequest(prompt, sessionId, resume, _workingDirectory(), ClaudePermissionLevel.ReadOnly, effective.ClaudeCliExecutable, model, effort);
+        string? model = !string.IsNullOrWhiteSpace(effective.ClaudeCodeAdvisorModel) ? effective.ClaudeCodeAdvisorModel.Trim()
+            : !string.IsNullOrWhiteSpace(effective.ClaudeCodeModel) ? effective.ClaudeCodeModel.Trim() : null;
+        string? effort = string.IsNullOrWhiteSpace(effective.ClaudeCodeAdvisorEffort) ? ClaudeEffort.Resolve(effective.ClaudeCodeEffort) : ClaudeEffort.Resolve(effective.ClaudeCodeAdvisorEffort);
+        var request = new ClaudeRequest(prompt, sessionId, resume, _workingDirectory(), ClaudePermissionLevel.ReadOnly, effective.ClaudeCodeExecutable, model, effort);
         var answer = new StringBuilder();
         ClaudeEvent.Result? result = null;
         try

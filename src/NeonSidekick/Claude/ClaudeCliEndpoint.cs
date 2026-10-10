@@ -16,16 +16,16 @@ namespace NeonSidekick.Claude;
 public static class ClaudeCliEndpoint
 {
     /// <summary>The sentinel's host; a base URL on it is the Claude CLI. Pinned.</summary>
-    public const string Host = "claude-cli.localhost";
+    public const string Host = "claude-code.localhost";
 
     /// <summary>The base URL saved for the Claude CLI, already <c>/v1</c>-normalised like every other.</summary>
     public static readonly Uri BaseUrl = new("http://" + Host + "/v1");
 
-    /// <summary>The word that stands for <see cref="BaseUrl"/> wherever a URL is typed (<c>/server claude-cli</c>, <c>--url claude-cli</c>).</summary>
-    public const string Alias = "claude-cli";
+    /// <summary>The word that stands for <see cref="BaseUrl"/> wherever a URL is typed (<c>/server claude-code</c>, <c>--url claude-code</c>).</summary>
+    public const string Alias = "claude-code";
 
     /// <summary>The server picker's name for the row (fits <c>SettingsMenu.ServerNameWidth</c>). Pinned.</summary>
-    public const string ServerName = "Claude CLI";
+    public const string ServerName = "Claude Code";   // "Claude CLI" until 2026-10-09 (the user's ask), the alias and host with it
 
     /// <summary>The model the row lists first and a blank <c>LLM model</c> means: the CLI's own pick would do too, but a named one shows on the hint row.</summary>
     public const string DefaultModel = "sonnet";
@@ -61,7 +61,7 @@ public static class ClaudeCliEndpoint
     }
 
     /// <summary>
-    /// Whether the Claude CLI is offered: the <c>Claude CLI server</c> switch on and the CLI found where
+    /// Whether the Claude CLI is offered: the <c>Claude Code server</c> switch on and the CLI found where
     /// <see cref="ClaudeExecutable.Locate"/> looks. <paramref name="environment"/> reads the system variables
     /// (<see cref="EnvironmentOverrides.System"/>), <paramref name="exists"/> the file test.
     /// </summary>
@@ -69,7 +69,7 @@ public static class ClaudeCliEndpoint
     {
         ArgumentNullException.ThrowIfNull(effective);
         ArgumentNullException.ThrowIfNull(environment);
-        return effective.ClaudeCliServer && ClaudeExecutable.Locate(effective.ClaudeCliExecutable, environment, exists ?? File.Exists) is not null;
+        return effective.ClaudeCodeServer && ClaudeExecutable.Locate(effective.ClaudeCodeExecutable, environment, exists ?? File.Exists) is not null;
     }
 
     /// <summary>The <c>--model</c> word for a saved <paramref name="model"/>: blank is <see cref="DefaultModel"/>.</summary>

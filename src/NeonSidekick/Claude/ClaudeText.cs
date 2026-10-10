@@ -40,13 +40,13 @@ public static class ClaudeText
     public static string NotFound => OperatingSystem.IsMacOS() ? MacNotFound : WindowsNotFound;
 
     /// <summary><see cref="NotFound"/> on Windows (and off macOS). Pinned.</summary>
-    public const string WindowsNotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude CLI executable on the ClaudeCLI tab of /tools.";
+    public const string WindowsNotFound = "Claude Code was not found on the PATH or in %USERPROFILE%\\.local\\bin. Install it, or set Claude Code executable on the ClaudeCode tab of /tools.";
 
     /// <summary><see cref="NotFound"/> on macOS (2026-10-06): <c>ClaudeProcess</c> looks in <c>~/.local/bin</c> there. Pinned.</summary>
-    public const string MacNotFound = "Claude Code was not found on the PATH or in ~/.local/bin. Install it, or set Claude CLI executable on the ClaudeCLI tab of /tools.";
+    public const string MacNotFound = "Claude Code was not found on the PATH or in ~/.local/bin. Install it, or set Claude Code executable on the ClaudeCode tab of /tools.";
 
-    /// <summary>The <c>Claude CLI executable</c> setting names no file. Pinned.</summary>
-    public static string ConfiguredNotFound(string path) => $"Claude CLI executable '{path}' does not exist. Fix it on the ClaudeCLI tab of /tools, or clear it to look on the PATH.";
+    /// <summary>The <c>Claude Code executable</c> setting names no file. Pinned.</summary>
+    public static string ConfiguredNotFound(string path) => $"Claude Code executable '{path}' does not exist. Fix it on the ClaudeCode tab of /tools, or clear it to look on the PATH.";
 
     /// <summary>The OS refused the start. Pinned.</summary>
     public static string CouldNotStart(string executable, string why) => $"Could not start Claude Code ({Path.GetFileName(executable)}): {why}";
@@ -63,7 +63,7 @@ public static class ClaudeText
 
     /// <summary>The tools the permission level turned away, once under the reply. Pinned.</summary>
     public static string DeniedNotice(IReadOnlyList<string> tools, string level) =>
-        $"Claude was denied {string.Join(", ", tools.Distinct(StringComparer.Ordinal))} (Claude CLI slash command permissions: {level}).";
+        $"Claude was denied {string.Join(", ", tools.Distinct(StringComparer.Ordinal))} (Claude Code slash command permissions: {level}).";
 
     /// <summary>The reply's footer: <c>Claude · $0.0256 · 6,254 in · 5 out</c>; the advisor's says <see cref="AdvisorName"/>. Pinned.</summary>
     public static string Footer(decimal costUsd, Llm.TokenUsage usage, string name = SpeakerName) =>
@@ -105,12 +105,12 @@ public static class ClaudeText
     public static bool IsClaudeLine(string userText) =>
         userText.StartsWith("/claude ", StringComparison.OrdinalIgnoreCase) && !string.Equals(userText.Trim(), "/claude " + NewWord, StringComparison.OrdinalIgnoreCase);
 
-    // ── claude_advisor_cli (2026-09-27) ─────────────────────────────────────────
+    // ── claude_code_advisor (2026-09-27) ─────────────────────────────────────────
 
     /// <summary>The advisor's name on its lines and footer. Pinned.</summary>
     public const string AdvisorName = "Claude advisor";
 
-    /// <summary>How many of the conversation's last messages <c>Claude CLI advisor tool context: recent</c> sends. Pinned.</summary>
+    /// <summary>How many of the conversation's last messages <c>Claude Code advisor tool context: recent</c> sends. Pinned.</summary>
     public const int AdvisorRecentMessages = 10;
 
     /// <summary>A tool result among those messages is cut to this many characters: the gist, not a whole file again.</summary>
@@ -155,10 +155,10 @@ public static class ClaudeText
     /// <summary>One of the recent messages as the advisor reads it: <c>user: …</c>, <c>tool read_file: …</c>. Pinned.</summary>
     public static string AdvisorRecentLine(string role, string text) => role + ": " + text.Trim();
 
-    /// <summary>The call's line in the transcript: <c>Claude CLI advisor tool › Which parser should I use?</c>. Pinned.</summary>
+    /// <summary>The call's line in the transcript: <c>Claude Code advisor tool › Which parser should I use?</c>. Pinned.</summary>
     public static string AdvisorQuestionNote(string question) => AdvisorName + " › " + question.ReplaceLineEndings(" ").Trim();
 
-    /// <summary>The confirm pane's title (<c>Claude CLI advisor tool confirm</c> on). Pinned.</summary>
+    /// <summary>The confirm pane's title (<c>Claude Code advisor tool confirm</c> on). Pinned.</summary>
     public static string AdvisorConfirmQuestion(string question)
     {
         string flat = question.ReplaceLineEndings(" ").Trim();
@@ -168,15 +168,15 @@ public static class ClaudeText
     /// <summary>A call with no question. Pinned.</summary>
     public const string AdvisorNoQuestionError = "Error: question is required — what you want Claude's advice on.";
 
-    /// <summary>A call past <c>Claude CLI advisor tool calls per turn</c>. Pinned.</summary>
+    /// <summary>A call past <c>Claude Code advisor tool calls per turn</c>. Pinned.</summary>
     public static string AdvisorCapError(int cap) =>
-        $"Error: claude_advisor_cli was already called {cap.ToString(CultureInfo.InvariantCulture)} time{(cap == 1 ? "" : "s")} this turn, the most allowed. Carry on without it.";
+        $"Error: claude_code_advisor was already called {cap.ToString(CultureInfo.InvariantCulture)} time{(cap == 1 ? "" : "s")} this turn, the most allowed. Carry on without it.";
 
     /// <summary>The user said no on the confirm pane. Pinned.</summary>
-    public const string AdvisorDeclinedError = "Error: the user declined to let you ask Claude. Carry on without it, and do not call claude_advisor_cli again this turn.";
+    public const string AdvisorDeclinedError = "Error: the user declined to let you ask Claude. Carry on without it, and do not call claude_code_advisor again this turn.";
 
     /// <summary>Confirmation is on and nothing can ask (headless, no pane). Pinned.</summary>
-    public const string AdvisorNotAskedError = "Error: claude_advisor_cli needs the user's yes (Claude CLI advisor tool confirm is on) and there is no one to ask here. Carry on without it.";
+    public const string AdvisorNotAskedError = "Error: claude_code_advisor needs the user's yes (Claude Code advisor tool confirm is on) and there is no one to ask here. Carry on without it.";
 
     /// <summary>A run that failed: the CLI missing, a refusal, a result with an error. Pinned.</summary>
     public static string AdvisorFailedError(string error) => "Error: Claude advisor failed: " + error.ReplaceLineEndings(" ").Trim();

@@ -16,7 +16,7 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The Claude CLI server (2026-09-30): the stream and stdin shapes against the spike's captures from Claude Code 2.1.285
+/// The Claude Code server (2026-09-30): the stream and stdin shapes against the spike's captures from Claude Code 2.1.285
 /// (<c>Fixtures/claude/server-*</c>, paths scrubbed), the command line, the chat client over
 /// <see cref="FakeClaudeServerHost"/> — the app's own loop running the model's calls, the process kept across turns, an
 /// interrupt, a lost session — and the MCP server reached through the relay.
@@ -619,12 +619,13 @@ public class ClaudeCliServerTests
     [Fact]
     public void Endpoint_TheAliasAndTheSentinel()
     {
-        Assert.Equal(ClaudeCliEndpoint.BaseUrl, LlmEndpoint.NormalizeBaseUrl("claude-cli"));
-        Assert.Equal("http://claude-cli.localhost/v1", ClaudeCliEndpoint.BaseUrl.AbsoluteUri);
-        Assert.True(ClaudeCliEndpoint.IsClaudeCli("CLAUDE-CLI"));
-        Assert.True(ClaudeCliEndpoint.IsClaudeCli("http://claude-cli.localhost/v1"));
+        Assert.Equal(ClaudeCliEndpoint.BaseUrl, LlmEndpoint.NormalizeBaseUrl("claude-code"));   // "claude-cli" until 2026-10-09 (the user's ask)
+        Assert.Equal("http://claude-code.localhost/v1", ClaudeCliEndpoint.BaseUrl.AbsoluteUri);
+        Assert.True(ClaudeCliEndpoint.IsClaudeCli("CLAUDE-CODE"));
+        Assert.True(ClaudeCliEndpoint.IsClaudeCli("http://claude-code.localhost/v1"));
         Assert.False(ClaudeCliEndpoint.IsClaudeCli("http://127.0.0.1:1234/v1"));
-        Assert.Equal("Claude CLI", LlmServer.NameFor(ClaudeCliEndpoint.BaseUrl, null));
+        Assert.False(ClaudeCliEndpoint.IsClaudeCli("claude-cli"));   // the old word names nothing since 2026-10-09 (no migration)
+        Assert.Equal("Claude Code", LlmServer.NameFor(ClaudeCliEndpoint.BaseUrl, null));
         Assert.Equal(("sonnet", "opus"), (ClaudeCliEndpoint.ModelOf(" "), ClaudeCliEndpoint.ModelOf(" opus ")));
     }
 
@@ -634,25 +635,25 @@ public class ClaudeCliServerTests
         string cli = Path.Combine(Path.GetTempPath(), "claude.exe");
         bool Exists(string path) => path == cli;
 
-        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliExecutable = cli }, _ => null, Exists));   // off by default
-        Assert.True(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliServer = true, ClaudeCliExecutable = cli }, _ => null, Exists));
-        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCliServer = true, ClaudeCliExecutable = @"C:\gone\claude.exe" }, _ => null, Exists));
+        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCodeExecutable = cli }, _ => null, Exists));   // off by default
+        Assert.True(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCodeServer = true, ClaudeCodeExecutable = cli }, _ => null, Exists));
+        Assert.False(ClaudeCliEndpoint.Offered(new AppSettingsData { ClaudeCodeServer = true, ClaudeCodeExecutable = @"C:\gone\claude.exe" }, _ => null, Exists));
     }
 
     [Fact]
     public void Setting_TheSwitchRow_AndItsVariable()
     {
-        Assert.Equal("Claude CLI server", SettingsMenu.FieldName(SettingsField.ClaudeCliServer));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCliServer));
-        Assert.True(SettingsMenu.IsLlmField(SettingsField.ClaudeCliServer));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCliServer, new AppSettingsData(), @"C:\p"));
-        Assert.Equal(SettingsField.ClaudeCliServer, SettingsMenu.TabFields[(int)SettingsTab.Anthropic][^1]);   // /settings' Claude tab's last row since 2026-10-03 (/tools' until then)
-        Assert.True(AppSettings.Copy(new AppSettingsData { ClaudeCliServer = true }).ClaudeCliServer);
+        Assert.Equal("Claude Code server", SettingsMenu.FieldName(SettingsField.ClaudeCodeServer));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.ClaudeCodeServer));
+        Assert.True(SettingsMenu.IsLlmField(SettingsField.ClaudeCodeServer));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ClaudeCodeServer, new AppSettingsData(), @"C:\p"));
+        Assert.Equal(SettingsField.ClaudeCodeServer, SettingsMenu.TabFields[(int)SettingsTab.Anthropic][^1]);   // /settings' Claude tab's last row since 2026-10-03 (/tools' until then)
+        Assert.True(AppSettings.Copy(new AppSettingsData { ClaudeCodeServer = true }).ClaudeCodeServer);
 
-        var environment = new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCliServerVariable ? "on" : null);
-        Assert.True(environment.ClaudeCliServer);
-        Assert.Equal("NEONSIDEKICK_CLAUDE_CLI_SERVER", EnvironmentOverrides.ClaudeCliServerVariable);
-        Assert.Contains(EnvironmentOverrides.ClaudeCliServerVariable, environment.ActiveVariables());
+        var environment = new EnvironmentOverrides(name => name == EnvironmentOverrides.ClaudeCodeServerVariable ? "on" : null);
+        Assert.True(environment.ClaudeCodeServer);
+        Assert.Equal("NEONSIDEKICK_CLAUDE_CODE_SERVER", EnvironmentOverrides.ClaudeCodeServerVariable);
+        Assert.Contains(EnvironmentOverrides.ClaudeCodeServerVariable, environment.ActiveVariables());
     }
 
     [Fact]
@@ -706,7 +707,7 @@ public class ClaudeCliServerTests
     {
         await using var rig = new SessionRig();
 
-        Assert.True(await rig.Session.ConnectAsync(new AppSettingsData { LlmUrl = "claude-cli", LlmModel = "opus", LlmScanMode = "disabled" }, CancellationToken.None));
+        Assert.True(await rig.Session.ConnectAsync(new AppSettingsData { LlmUrl = "claude-code", LlmModel = "opus", LlmScanMode = "disabled" }, CancellationToken.None));
 
         var endpoint = Assert.Single(rig.Endpoints);
         Assert.Equal((ClaudeCliEndpoint.BaseUrl, "opus"), (endpoint.BaseUrl, endpoint.ModelId));
@@ -722,7 +723,7 @@ public class ClaudeCliServerTests
         await using var rig = new SessionRig();
 
         var row = Assert.Single(rig.Session.ClaudeCliRows(new AppSettingsData()));
-        Assert.Equal((ClaudeCliEndpoint.BaseUrl, "Claude CLI", true), (row.BaseUrl, row.Name, row.Result.Exists));
+        Assert.Equal((ClaudeCliEndpoint.BaseUrl, "Claude Code", true), (row.BaseUrl, row.Name, row.Result.Exists));
         Assert.Equal(ClaudeCliEndpoint.Models, row.Result.ModelIds);
         rig.Offered = false;
         Assert.Empty(rig.Session.ClaudeCliRows(new AppSettingsData()));
@@ -733,7 +734,7 @@ public class ClaudeCliServerTests
     {
         await using var rig = new SessionRig { Offered = false };
 
-        await rig.Session.ConnectAsync(new AppSettingsData { LlmUrl = "claude-cli", LlmScanMode = "disabled" }, CancellationToken.None);
+        await rig.Session.ConnectAsync(new AppSettingsData { LlmUrl = "claude-code", LlmScanMode = "disabled" }, CancellationToken.None);
 
         Assert.Null(rig.Session.Endpoint);   // a blank URL with the scan disabled finds nothing
         Assert.Empty(rig.Endpoints);

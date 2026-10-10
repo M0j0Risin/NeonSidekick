@@ -11,7 +11,7 @@ using NeonSidekick.Diagnostics;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// A tool call the Claude CLI server's model made, as the MCP server took it (2026-09-30): the <c>tool_use</c> id the CLI
+/// A tool call the Claude Code server's model made, as the MCP server took it (2026-09-30): the <c>tool_use</c> id the CLI
 /// put in the call's <c>_meta</c> (the stream's own id for the same call, so the two meet exactly; null from a CLI that
 /// sends none), the tool's name as the app knows it, and the arguments.
 /// </summary>
@@ -21,7 +21,7 @@ public sealed record ClaudeToolCall(string? ToolUseId, string Name, IReadOnlyDic
 public sealed record ClaudeToolAnswer(string Text, IReadOnlyList<DataContent> Images, bool IsError);
 
 /// <summary>
-/// The MCP server the Claude CLI server's model reaches the app's tools through (2026-09-30). It listens on a loopback
+/// The MCP server the Claude Code server's model reaches the app's tools through (2026-09-30). It listens on a loopback
 /// port for the one relay the CLI starts (<see cref="McpRelay"/>, this app's own executable in its relay mode, whose stdio
 /// is the CLI's MCP pipe): the relay's first line is <see cref="Token"/>, a key minted per server (32 random bytes, hex),
 /// and a connection that sends anything else is closed. From there the SDK's own server runs over the socket

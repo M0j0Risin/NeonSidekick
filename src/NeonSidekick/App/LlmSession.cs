@@ -103,7 +103,7 @@ internal sealed class LlmSession : IDisposable
     /// <param name="time">The clock behind the assistant's turn deadline and its usage timings; tests pass a manual one.</param>
     /// <param name="samplingProbe">Asks the connected server for its sampling defaults when the <c>/sampling</c> pane wants them (<see cref="ServerSamplingAsync"/>); null asks nothing.</param>
     /// <param name="embedded">The embedded model (2026-09-29): its catalog's <c>/server</c> rows and the server an embedded URL starts; null offers none.</param>
-    /// <param name="claudeServer">The Claude CLI server's process (2026-09-30): stopped when another server is picked; null has none to stop.</param>
+    /// <param name="claudeServer">The Claude Code server's process (2026-09-30): stopped when another server is picked; null has none to stop.</param>
     /// <param name="claudeCliOffered">Whether the Claude CLI is offered for the settings (<see cref="ClaudeCliEndpoint.Offered"/>, which looks for the CLI); null offers it never.</param>
     /// <param name="dockerServers">The chosen Docker containers' switcher (2026-10-02): their <c>/server</c> rows and the switch a Docker URL makes; null offers none.</param>
     public LlmSession(LlmEndpointProbe probe, ContextLengthProbe contextProbe, Func<LlmEndpoint, LlmTimeouts, IChatClient> factory, TimeProvider? time = null, ServerSamplingProbe? samplingProbe = null, IEmbeddedLlm? embedded = null,
@@ -484,7 +484,7 @@ internal sealed class LlmSession : IDisposable
     public bool ClaudeCliOffered(AppSettingsData effective) => _claudeCliOffered(effective);
 
     /// <summary>The source phrase of the Claude CLI's endpoint and its window. Pinned.</summary>
-    public const string ClaudeCliSource = "Claude CLI";
+    public const string ClaudeCliSource = "Claude Code";   // "Claude CLI" until 2026-10-09 (the user's ask)
 
     /// <summary>
     /// The Claude CLI's <c>/server</c> row (2026-09-30), asked nothing: its models are the <c>--model</c> aliases. None when

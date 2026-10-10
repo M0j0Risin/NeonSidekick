@@ -89,7 +89,7 @@ public sealed class ToolbarItemsTests
         Assert.Equal("[[ ]] 📈  Performance             " + Theme.DimMarkup("/perfbar"), ToolbarItems.Label("perf", false));   // the command alone (2026-10-02)
         // The tool switches, the log and the viewers (2026-10-03, the user's names).
         Assert.Equal("[[x]] 🐚  Shell                   " + Theme.DimMarkup("/tools shell"), ToolbarItems.Label("shell", true));
-        Assert.Equal("[[ ]] ✴️  Claude CLI advisor      " + Theme.DimMarkup("/tools claude"), ToolbarItems.Label("claude", false));   // "Claude" until 2026-10-04 (the user's ask)
+        Assert.Equal("[[ ]] ✴️  Claude Code advisor     " + Theme.DimMarkup("/tools claude"), ToolbarItems.Label("claude", false));   // "Claude" until 2026-10-04, "Claude CLI advisor" until 2026-10-09 (the user's asks)
         Assert.Equal("[[ ]] 🛢️  SQL                     " + Theme.DimMarkup("/tools sql"), ToolbarItems.Label("sql", false));   // 🪟 until 2026-10-04
         // Themes and the Comfy thumb viewer (2026-10-04, the user's ask).
         Assert.Equal("[[ ]] 🧮  Themes                  " + Theme.DimMarkup("/theme"), ToolbarItems.Label("themes", false));

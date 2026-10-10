@@ -6,7 +6,7 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
-/// <summary><c>/server</c> and the Claude CLI server (2026-09-30): the row while offered, the refusal while not, and nothing started before a message.</summary>
+/// <summary><c>/server</c> and the Claude Code server (2026-09-30): the row while offered, the refusal while not, and nothing started before a message.</summary>
 public partial class ChatScreenTests
 {
     /// <summary>The screen over a session whose Claude CLI is offered or not, its process a <see cref="FakeClaudeServerHost"/>.</summary>
@@ -24,17 +24,17 @@ public partial class ChatScreenTests
     {
         _settings.Update(d => d.TtsOutput = false);
         var host = UseClaudeCli();
-        PushLine("/server claude-cli");
+        PushLine("/server claude-code");
         _console.Input.PushKey(Keys.Enter);    // the model picker's cursor on the CLI's first, the default, sonnet (A to Z since 2026-10-03)
         _console.Input.PushKey(Keys.Escape);   // keep the reasoning
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal("http://claude-cli.localhost/v1", _settings.Current.LlmUrl);
+        Assert.Equal("http://claude-code.localhost/v1", _settings.Current.LlmUrl);
         Assert.Equal(ClaudeCliEndpoint.DefaultModel, _settings.Current.LlmModel);
         Assert.Equal(ClaudeCliEndpoint.BaseUrl, _endpoints[^1].BaseUrl);
-        Assert.Contains("LLM: http://claude-cli.localhost/v1 model=sonnet", output);
+        Assert.Contains("LLM: http://claude-code.localhost/v1 model=sonnet", output);
         Assert.Equal(new ContextLength(ClaudeCliEndpoint.DefaultContextWindow, LlmSession.ClaudeCliSource), _session.ContextLength);
         Assert.Empty(host.Starts);   // the CLI starts with the first message, its prompt and tools known
     }
@@ -45,12 +45,12 @@ public partial class ChatScreenTests
         _settings.Update(d => d.TtsOutput = false);
         string url = _settings.Current.LlmUrl;
         UseClaudeCli(offered: false);
-        PushLine("/server claude-cli");
+        PushLine("/server claude-code");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("The Claude CLI server is not offered", output);
+        Assert.Contains("The Claude Code server is not offered", output);
         Assert.Equal(url, _settings.Current.LlmUrl);
     }
 }

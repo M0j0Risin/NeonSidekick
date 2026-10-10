@@ -206,7 +206,7 @@ public partial class ChatScreenTests
         Assert.Equal(
             [
                 new CompletionItem("embedded", ChatScreen.ServerEmbeddedNote),
-                new CompletionItem("claude-cli", ChatScreen.ServerClaudeCliNote),
+                new CompletionItem("claude-code", ChatScreen.ServerClaudeCliNote),
                 new CompletionItem("docker", ChatScreen.ServerDockerNote),
                 new CompletionItem("docker:vllm", ChatScreen.ServerDockerContainerNote),
                 new CompletionItem("docker:sglang", ChatScreen.ServerDockerContainerNote),
@@ -216,7 +216,7 @@ public partial class ChatScreenTests
         Assert.Equal(["docker:vllm"], ChatScreen.ServerItems("docker:", embedded: false, claudeCli: false, dockerContainers: ["vllm"]).Select(i => i.Text));
         Assert.Empty(ChatScreen.ServerItems("http://x y", embedded: true, claudeCli: true, dockerContainers: []));   // a space ends it
         Assert.Empty(ChatScreen.ArgumentItems("/server", "", Sources()));                                          // no source: nothing offered
-        Assert.Equal(["claude-cli"], ChatScreen.ArgumentItems("/server", "c", Sources() with { Server = text => ChatScreen.ServerItems(text, false, true, null) }).Select(i => i.Text));
+        Assert.Equal(["claude-code"], ChatScreen.ArgumentItems("/server", "c", Sources() with { Server = text => ChatScreen.ServerItems(text, false, true, null) }).Select(i => i.Text));
     }
 
     [Fact]

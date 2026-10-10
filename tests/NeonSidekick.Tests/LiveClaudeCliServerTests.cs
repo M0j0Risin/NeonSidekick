@@ -6,7 +6,7 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The Claude CLI server against the real CLI (2026-09-30, <see cref="LiveClaudeFactAttribute"/>, Haiku, a few cents): the
+/// The Claude Code server against the real CLI (2026-09-30, <see cref="LiveClaudeFactAttribute"/>, Haiku, a few cents): the
 /// app's own tool reached through the real relay (this build's <c>NeonSidekick.exe</c>, beside the tests) and run by the
 /// app's loop, the process kept across turns, and ESC interrupting a reply with the next turn on the same process — what
 /// the fixtures only replay.

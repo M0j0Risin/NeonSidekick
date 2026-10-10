@@ -10,7 +10,7 @@ using NeonSidekick.Shell;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// The Claude CLI server's process (2026-09-30): what <see cref="ClaudeCliChatClient"/> drives. The app's is
+/// The Claude Code server's process (2026-09-30): what <see cref="ClaudeCliChatClient"/> drives. The app's is
 /// <see cref="ClaudeServerHost"/>; the tests' a fake that plays a fixture's lines.
 /// </summary>
 public interface IClaudeServerHost : IAsyncDisposable

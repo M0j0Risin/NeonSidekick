@@ -34,7 +34,7 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_LLM_URL` | LLM URL (`--url` wins) | A base URL (`http://127.0.0.1:1234/v1`), or `embedded`, `claude-cli` or `docker:<container>` (Windows only). |
+| `NEONSIDEKICK_LLM_URL` | LLM URL (`--url` wins) | A base URL (`http://127.0.0.1:1234/v1`), or `embedded`, `claude-code` or `docker:<container>` (Windows only). |
 | `NEONSIDEKICK_LLM_MODEL` | LLM model (`--model` wins) | A model id, or an embedded model's id (`gemma-4-e2b`). |
 | `NEONSIDEKICK_LLM_API_KEY` | LLM API key | The key as issued. Never logged. |
 | `NEONSIDEKICK_LLM_REASONING` | LLM reasoning | `none`, `low`, `medium`, `high`, `xhigh`. |
@@ -62,12 +62,12 @@ Every variable starts with `NEONSIDEKICK_`. Each overrides a setting for one lau
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_CLAUDE_CLI_EXE` | Claude CLI executable | The Claude Code CLI's full path. |
-| `NEONSIDEKICK_CLAUDE_CLI_PERMISSIONS` | Claude CLI slash command permissions | `read-only`, `edit`, `full`. |
-| `NEONSIDEKICK_CLAUDE_CLI_ADVISOR` | Claude CLI advisor tool | on/off |
+| `NEONSIDEKICK_CLAUDE_CODE_EXE` | Claude Code executable | The Claude Code CLI's full path. |
+| `NEONSIDEKICK_CLAUDE_CODE_PERMISSIONS` | Claude Code slash command permissions | `read-only`, `edit`, `full`. |
+| `NEONSIDEKICK_CLAUDE_CODE_ADVISOR` | Claude Code advisor tool | on/off |
 | `NEONSIDEKICK_ANTHROPIC_API` | Anthropic API | on/off |
 | `NEONSIDEKICK_ANTHROPIC_API_KEY` | Anthropic API key | The key as issued. Never logged. |
-| `NEONSIDEKICK_CLAUDE_CLI_SERVER` | Claude CLI server | on/off |
+| `NEONSIDEKICK_CLAUDE_CODE_SERVER` | Claude Code server | on/off |
 
 ## OpenAI
 

@@ -118,7 +118,7 @@ internal sealed partial class ChatScreen
     /// The rewind (2026-09-30). These steps run in order:
     /// <list type="number">
     /// <item>The history is cut before <paramref name="turn"/> and the session row is cut to match (<see cref="ConversationRewind.Apply"/>).</item>
-    /// <item>The Claude CLI server's session is dropped. The CLI holds its own copy of the conversation, so the next turn starts
+    /// <item>The Claude Code server's session is dropped. The CLI holds its own copy of the conversation, so the next turn starts
     /// a new session, given the shorter history as its preamble. <c>/claude</c>'s and the advisor's threads are dropped only
     /// when a turn of theirs was cut.</item>
     /// <item>The context figure is zeroed (<see cref="Llm.TokenTally.ForgetContext"/>) and the reflection's traces are forgotten.</item>

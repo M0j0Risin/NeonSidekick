@@ -204,7 +204,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (Enter opens one, each a strip of its rows)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.MediaTabTitle, "Print"), (ToolsText.MediaTabTitle, "Camera"), (ToolsText.MediaTabTitle, "Screen")], HelpLocation.Menus("/tools").Take(3));
+        Assert.Equal([(ToolsText.DatabaseTabTitle, "SQL"), (ToolsText.DatabaseTabTitle, "MySQL"), (ToolsText.DatabaseTabTitle, "SQLite")], HelpLocation.Menus("/tools").Take(3));   // Database before Media since later on 2026-10-09
         Assert.Empty(HelpLocation.Menus("/settings"));
     }
 

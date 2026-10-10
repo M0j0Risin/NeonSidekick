@@ -8,7 +8,7 @@ using NeonSidekick.Shell;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// Where the Claude Code CLI is (2026-09-27), pure over its inputs: the <c>Claude CLI executable</c> setting when it
+/// Where the Claude Code CLI is (2026-09-27), pure over its inputs: the <c>Claude Code executable</c> setting when it
 /// names a file; else <c>claude.exe</c> on the PATH (the native install), else <c>claude</c> with the PATHEXT
 /// extensions (npm's <c>claude.cmd</c> shim); else the native installer's own folder,
 /// <c>%USERPROFILE%\.local\bin\claude.exe</c>, which a fresh install has not always put on the PATH yet.
@@ -94,8 +94,8 @@ public sealed class ClaudeProcess : IClaudeCli
     }
 
     /// <summary>
-    /// One <c>claude -p</c> child over <paramref name="launch"/> (2026-09-30: <c>/claude</c>'s and <c>claude_advisor_cli</c>'s,
-    /// and the Claude CLI server's one-shot requests, <see cref="ClaudeArguments.BuildOneShot"/>): <paramref name="prompt"/>
+    /// One <c>claude -p</c> child over <paramref name="launch"/> (2026-09-30: <c>/claude</c>'s and <c>claude_code_advisor</c>'s,
+    /// and the Claude Code server's one-shot requests, <see cref="ClaudeArguments.BuildOneShot"/>): <paramref name="prompt"/>
     /// on stdin, stdin closed, the reply read off stdout. The same shape and the same guarantees as
     /// <see cref="RunAsync"/>: a <see cref="ClaudeEvent.Result"/> last, the child's tree killed on a cancel.
     /// </summary>
@@ -150,7 +150,7 @@ public sealed class ClaudeProcess : IClaudeCli
     /// <summary>
     /// Starts a Claude CLI child with its three streams redirected as UTF-8 (no BOM) and <see cref="ChildEnvironment"/> on
     /// top of the inherited variables: the one place this app starts <c>claude</c>, <c>/claude</c>'s per-message children
-    /// and the Claude CLI server's long-lived one (<see cref="ClaudeServerHost"/>, 2026-09-30) alike.
+    /// and the Claude Code server's long-lived one (<see cref="ClaudeServerHost"/>, 2026-09-30) alike.
     /// </summary>
     internal static Process Start(ProcessLaunch launch)
     {

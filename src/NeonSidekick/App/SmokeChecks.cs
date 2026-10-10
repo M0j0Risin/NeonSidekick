@@ -230,7 +230,7 @@ public static partial class SmokeChecks
     }
 
     /// <summary>
-    /// <c>claude-cli:relay</c> (2026-09-30): the Claude CLI server's way to the app's tools on the published binary — the
+    /// <c>claude-cli:relay</c> (2026-09-30): the Claude Code server's way to the app's tools on the published binary — the
     /// app's MCP listener (<see cref="Claude.ClaudeMcpServer"/>, the SDK's server over a loopback socket), the relay
     /// (<see cref="Claude.McpRelay"/>) copying a pipe pair to it as the CLI's stdio, the real <c>McpClient</c> listing the
     /// app's tool and calling it with the CLI's <c>_meta</c> tool-use id — everything but the CLI, which the smoke gate

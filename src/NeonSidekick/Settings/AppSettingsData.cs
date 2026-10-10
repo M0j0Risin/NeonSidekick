@@ -1625,11 +1625,17 @@ public sealed class AppSettingsData
     // followed again, with no migration (the user's pick) — the old GitNative* keys are skipped on load, so the five
     // settings start at their defaults, and a saved git_* name in ToolsDisabled no longer matches a tool.
     // The same on 2026-10-04 (the user's call) for the two Claude tabs: /tools' Claude tab became ClaudeCLI and its ten
-    // Claude*/ClaudeAdvisor* keys ClaudeCli* (claude_advisor → claude_advisor_cli, NEONSIDEKICK_CLAUDE_EXE/_PERMISSIONS/_ADVISOR →
-    // NEONSIDEKICK_CLAUDE_CLI_*), and /settings' Claude tab became Anthropic and its four ClaudeApi* keys AnthropicApi*
-    // (NEONSIDEKICK_CLAUDE_API[_KEY] → NEONSIDEKICK_ANTHROPIC_API[_KEY]); ClaudeCliServer kept its name. No migration: the
+    // Claude*/ClaudeAdvisor* keys ClaudeCli* (claude_advisor → claude_code_advisor, NEONSIDEKICK_CLAUDE_EXE/_PERMISSIONS/_ADVISOR →
+    // NEONSIDEKICK_CLAUDE_CODE_*), and /settings' Claude tab became Anthropic and its four ClaudeApi* keys AnthropicApi*
+    // (NEONSIDEKICK_CLAUDE_API[_KEY] → NEONSIDEKICK_ANTHROPIC_API[_KEY]); ClaudeCodeServer kept its name. No migration: the
     // old keys are skipped on load and take their defaults, so the Anthropic key is entered again, and a saved claude_advisor
     // in ToolsDisabled no longer matches a tool.
+    // Again on 2026-10-09 (the user's ask: Claude Code by its name): the tab became ClaudeCode, the rows "Claude Code …", the
+    // eleven ClaudeCli* keys ClaudeCode* (ClaudeCliServer too), NEONSIDEKICK_CLAUDE_CLI_* → NEONSIDEKICK_CLAUDE_CODE_*,
+    // claude_advisor_cli → claude_code_advisor and /server's claude-cli → claude-code (host claude-code.localhost). No migration
+    // again: the old keys take their defaults, a saved claude-cli LLM URL is an unknown one (discovery), and a saved
+    // claude_advisor_cli in ToolsDisabled matches nothing. The <home>/claude-cli folder and the claude-cli:relay probe keep
+    // their names (the folder holds Claude Code's own sessions).
     // The clock's days_between became date_difference on 2026-10-05 (the user's pick, as it began answering in years and
     // months too): no migration either, so a profile that had switched days_between off is offered date_difference again.
 
@@ -2442,32 +2448,32 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Claude Code CLI <c>/claude</c> starts (2026-09-27): a full path, or empty to look for <c>claude.exe</c> on the
     /// PATH, then npm's <c>claude.cmd</c>, then <c>%USERPROFILE%\.local\bin</c> (<see cref="Claude.ClaudeExecutable"/>).
-    /// <c>/tools</c>' ClaudeCLI tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeCliExeVariable"/>.
+    /// <c>/tools</c>' ClaudeCode tab's first row; read at each <c>/claude</c>. Variable <see cref="EnvironmentOverrides.ClaudeCodeExeVariable"/>.
     /// </summary>
-    public string ClaudeCliExecutable { get; set; } = "";
+    public string ClaudeCodeExecutable { get; set; } = "";
 
     /// <summary>
     /// What the Claude Code child may do on its own (2026-09-27): one of <see cref="Claude.ClaudePermission.Names"/> —
     /// <c>read-only</c> (read, search, fetch), <c>edit</c> (file edits accepted, commands denied), <c>full</c> (everything,
     /// unasked). Nothing past the level is asked about: it is denied (<c>--permission-prompts none</c>) and the reply says
     /// so. Anything else reads as <see cref="Claude.ClaudePermission.Default"/>. Read at each <c>/claude</c>. Variable
-    /// <see cref="EnvironmentOverrides.ClaudeCliPermissionsVariable"/>.
+    /// <see cref="EnvironmentOverrides.ClaudeCodePermissionsVariable"/>.
     /// </summary>
-    public string ClaudeCliPermissions { get; set; } = Claude.ClaudePermission.Default;
+    public string ClaudeCodePermissions { get; set; } = Claude.ClaudePermission.Default;
 
     /// <summary>The <c>--model</c> of a <c>/claude</c> run (2026-09-27): an alias (<c>opus</c>, <c>sonnet</c>) or a full name; empty = the CLI's own. No variable.</summary>
-    public string ClaudeCliModel { get; set; } = "";
+    public string ClaudeCodeModel { get; set; } = "";
 
     /// <summary>The <c>--effort</c> of a <c>/claude</c> run (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = the CLI's own. No variable.</summary>
-    public string ClaudeCliEffort { get; set; } = Claude.ClaudeEffort.Default;
+    public string ClaudeCodeEffort { get; set; } = Claude.ClaudeEffort.Default;
 
     /// <summary>
-    /// Whether the model is offered <c>claude_advisor_cli</c> (2026-09-27, the user's ask: the local model asks Claude Code
-    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> ClaudeCLI tab's
+    /// Whether the model is offered <c>claude_code_advisor</c> (2026-09-27, the user's ask: the local model asks Claude Code
+    /// for advice on its own, read-only, when it is stuck): the tool group's switch, the <c>/tools</c> ClaudeCode tab's
     /// first advisor row. Off by default — every call costs money on the user's Claude account. Variable
-    /// <see cref="EnvironmentOverrides.ClaudeCliAdvisorVariable"/>.
+    /// <see cref="EnvironmentOverrides.ClaudeCodeAdvisorVariable"/>.
     /// </summary>
-    public bool ClaudeCliAdvisor { get; set; }
+    public bool ClaudeCodeAdvisor { get; set; }
 
     /// <summary>
     /// What an advisor call sends Claude besides the model's question (2026-09-27, the user's call: a setting): one of
@@ -2475,23 +2481,23 @@ public sealed class AppSettingsData
     /// alone; <c>recent</c>, those and the last <see cref="Claude.ClaudeText.AdvisorRecentMessages"/> messages of the
     /// conversation. Anything else reads as <c>brief</c>. No variable.
     /// </summary>
-    public string ClaudeCliAdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
+    public string ClaudeCodeAdvisorContext { get; set; } = Claude.ClaudeAdvisorContext.Default;
 
-    /// <summary>The most <c>claude_advisor_cli</c> calls one turn may make (2026-09-27), <see cref="MinClaudeCliAdvisorCallsPerTurn"/> to <see cref="MaxClaudeCliAdvisorCallsPerTurn"/>; a call past it is refused, and the model carries on alone. No variable.</summary>
-    public int ClaudeCliAdvisorCallsPerTurn { get; set; } = DefaultClaudeCliAdvisorCallsPerTurn;
+    /// <summary>The most <c>claude_code_advisor</c> calls one turn may make (2026-09-27), <see cref="MinClaudeCodeAdvisorCallsPerTurn"/> to <see cref="MaxClaudeCodeAdvisorCallsPerTurn"/>; a call past it is refused, and the model carries on alone. No variable.</summary>
+    public int ClaudeCodeAdvisorCallsPerTurn { get; set; } = DefaultClaudeCodeAdvisorCallsPerTurn;
 
-    public const int MinClaudeCliAdvisorCallsPerTurn = 1;
-    public const int MaxClaudeCliAdvisorCallsPerTurn = 10;
-    public const int DefaultClaudeCliAdvisorCallsPerTurn = 2;
+    public const int MinClaudeCodeAdvisorCallsPerTurn = 1;
+    public const int MaxClaudeCodeAdvisorCallsPerTurn = 10;
+    public const int DefaultClaudeCodeAdvisorCallsPerTurn = 2;
 
-    /// <summary>The <c>--model</c> of an advisor call (2026-09-27); empty = <see cref="ClaudeCliModel"/> (and, that empty too, the CLI's own). No variable.</summary>
-    public string ClaudeCliAdvisorModel { get; set; } = "";
+    /// <summary>The <c>--model</c> of an advisor call (2026-09-27); empty = <see cref="ClaudeCodeModel"/> (and, that empty too, the CLI's own). No variable.</summary>
+    public string ClaudeCodeAdvisorModel { get; set; } = "";
 
-    /// <summary>The <c>--effort</c> of an advisor call (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = <see cref="ClaudeCliEffort"/>. No variable.</summary>
-    public string ClaudeCliAdvisorEffort { get; set; } = "";
+    /// <summary>The <c>--effort</c> of an advisor call (2026-09-27): one of <see cref="Claude.ClaudeEffort.Names"/>; empty = <see cref="ClaudeCodeEffort"/>. No variable.</summary>
+    public string ClaudeCodeAdvisorEffort { get; set; } = "";
 
     /// <summary>Whether each advisor call waits for the user's yes on the approval pane (2026-09-27, the user's call: opt-in, off by default); headless has no one to ask, so a call there is refused. No variable.</summary>
-    public bool ClaudeCliAdvisorConfirm { get; set; }
+    public bool ClaudeCodeAdvisorConfirm { get; set; }
     // ─── Anthropic API (2026-09-27) ────────────────────────────────────────────────
 
     /// <summary>
@@ -2499,7 +2505,7 @@ public sealed class AppSettingsData
     /// <c>/server</c> choice, off by default — every message costs money on the key's account). Offered only while a key
     /// is set too (<see cref="Llm.Anthropic.ClaudeApi.Offered"/>): then <c>/server</c> and the startup picker list a
     /// <c>Anthropic API</c> row, and picking it saves <see cref="Llm.Anthropic.ClaudeApi.BaseUrl"/> as the LLM URL. The
-    /// <c>/settings</c>' Anthropic tab's first row (2026-10-03; <c>/tools</c>' ClaudeCLI tab's first API row, under the advisor's, from 2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.AnthropicApiVariable"/>.
+    /// <c>/settings</c>' Anthropic tab's first row (2026-10-03; <c>/tools</c>' ClaudeCode tab's first API row, under the advisor's, from 2026-09-29; <c>/settings</c>' Claude (API) tab's first until then); a reconnect. Variable <see cref="EnvironmentOverrides.AnthropicApiVariable"/>.
     /// </summary>
     public bool AnthropicApi { get; set; }
 
@@ -2567,18 +2573,18 @@ public sealed class AppSettingsData
     /// <summary>The <c>OpenAI-Project</c> header (2026-10-03, the user's ask); empty sends none, the key's own project then (a project key names it already). A reconnect. No variable.</summary>
     public string OpenAIApiProject { get; set; } = "";
 
-    // ─── Claude CLI server (2026-09-30) ───────────────────────────────────────────
+    // ─── Claude Code server (2026-09-30) ───────────────────────────────────────────
 
     /// <summary>
     /// Whether the Claude Code CLI is offered as a server (2026-09-30, the user's ask: the <c>claude</c> CLI kept running as
     /// an open session and used as the chat's server; off by default). Offered only while the CLI is found too
-    /// (<see cref="Claude.ClaudeCliEndpoint.Offered"/>: <see cref="ClaudeCliExecutable"/>, else the PATH): then <c>/server</c>
-    /// and the startup picker list a <c>Claude CLI</c> row, and picking it saves <see cref="Claude.ClaudeCliEndpoint.BaseUrl"/>
+    /// (<see cref="Claude.ClaudeCliEndpoint.Offered"/>: <see cref="ClaudeCodeExecutable"/>, else the PATH): then <c>/server</c>
+    /// and the startup picker list a <c>Claude Code</c> row, and picking it saves <see cref="Claude.ClaudeCliEndpoint.BaseUrl"/>
     /// as the LLM URL and the <c>--model</c> word as the LLM model. Claude Code's own tools are all off there: the model gets
-    /// the app's tools, over an MCP server the app hosts. <c>/settings</c>' Anthropic tab's last row (2026-10-03; <c>/tools</c>' ClaudeCLI tab's until then); a reconnect. Variable
-    /// <see cref="EnvironmentOverrides.ClaudeCliServerVariable"/>.
+    /// the app's tools, over an MCP server the app hosts. <c>/settings</c>' Anthropic tab's last row (2026-10-03; <c>/tools</c>' ClaudeCode tab's until then); a reconnect. Variable
+    /// <see cref="EnvironmentOverrides.ClaudeCodeServerVariable"/>.
     /// </summary>
-    public bool ClaudeCliServer { get; set; }
+    public bool ClaudeCodeServer { get; set; }
 
     // ─── Embedded model (2026-09-29) ───────────────────────────────────────────────
     // The embedded model (2026-09-29, the user's ask: a small model the app downloads from Hugging Face and runs itself on

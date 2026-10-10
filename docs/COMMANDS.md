@@ -119,7 +119,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths and keys unless `--all`. |
 | `/profile push\|pull <name>` | Copies its settings to (`push`) or from (`pull`) another.Every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the *LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key* and *YouTube API key* to or from another profile after a confirmation, mirrored: a key unset in the source clears the target's. Keys set only by environment variable aren't copied. |
-| `/profile push\|pull servers <name>` | Copies the server settings to or from another profile after a confirmation, replacing the target's: scan mode, LLM URL and model, and the embedded, Docker, Anthropic API, OpenAI API and Claude CLI server settings. Saved values only, not a `--url` or variable. |
+| `/profile push\|pull servers <name>` | Copies the server settings to or from another profile after a confirmation, replacing the target's: scan mode, LLM URL and model, and the embedded, Docker, Anthropic API, OpenAI API and Claude Code server settings. Saved values only, not a `--url` or variable. |
 | `/profile push\|pull commands <name> [overwrite]` | Copies *Shell allowed commands* to or from another profile (added, or replacing with `overwrite`). |
 | `/profile push\|pull history <name> [overwrite]` | Copies the command history to or from another profile (added, or replacing with `overwrite`); refused when the target has *Keep command history* off. |
 | `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell police forbidden strings* to or from another profile (added, or replacing with `overwrite`). |
@@ -133,7 +133,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 | `/sampling <field> <value>\|clear` | Sets or clears one of the connected model's values. |
 | `/sampling extra <json>\|clear` | Sets or clears its extra request body. |
 | `/sampling clear` | Clears every override of the connected model. |
-| `/server [<url>\|embedded\|claude-cli\|docker\|docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude CLI, installed embedded models, chosen Docker containers (Windows only)) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-cli`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. The argument list offers each of those words while it applies. |
+| `/server [<url>\|embedded\|claude-code\|docker\|docker:<container>]` | Picks an LLM server (found, Anthropic API, OpenAI API, Claude Code, installed embedded models, chosen Docker containers (Windows only)) or sets one by URL, then the model and reasoning, with one reconnect. `embedded`, `claude-code`, `docker` and `docker:<container>` go straight to those. A container serves its own model, so no model picker follows. The argument list offers each of those words while it applies. |
 | `/sessions [<id>]` | Lists the stored sessions, or restores one by its id. |
 | `/sessions purge <id>\|all` | Deletes one stored session, or every one. |
 | `/sessions purge older <age>` | Deletes the sessions older than an age: days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`). |
@@ -241,7 +241,7 @@ Type `/` to list every command with a summary; after a command and a space, its 
 * The reply streams in under Claude's name, with each tool on a dim line and a cost footer; with speech on, it is spoken.
 * The pair joins the conversation tagged `[to Claude]` and `[Claude]`, so the local model can build on it. Claude doesn't see the local conversation.
 * Each session has one Claude conversation, resumed by the next `/claude` (even after a restart). `/claude new`, `/clear`, `/new` and a profile switch start another.
-* *Claude CLI slash command permissions* sets what Claude may do; anything more is denied, never asked.
+* *Claude Code slash command permissions* sets what Claude may do; anything more is denied, never asked.
 * ESC or Ctrl+C stops it, keeping the reply so far. Works with no LLM server; refused during a reply.
 * Your own Claude Code setup applies (sign-in, `CLAUDE.md`, skills, MCP servers, hooks). `/usage` shows the cost.
 
@@ -438,7 +438,7 @@ When the message is sent, the picture is saved at its full size in *Pasted image
 * A name is 1 to 32 letters, digits, `-` or `_`, and can't be `neon` or one of the verbs.
 * A name starting with `_` is temporary: left off the picker and the name list (unless loaded), and the next launch opens `default` (the profile is kept). `/profile _name` still switches to one.
 * `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch without changing the next launch's. An unknown name exits with code 2; a headless run with neither opens `default`.
-* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude CLI executable, Obsidian vault, ComfyUI URL, Home Assistant URL, Home Assistant API key and YouTube API key; `--all` resets those too. `default` can only be reset while loaded.
+* A reset keeps the LLM URL, LLM model, LLM API key, TTS HTTP URL, Anthropic API key, OpenAI API key, Web browser path, Web search method, Web SearXNG URL, Claude Code executable, Obsidian vault, ComfyUI URL, Home Assistant URL, Home Assistant API key and YouTube API key; `--all` resets those too. `default` can only be reset while loaded.
 * `push <name>` copies the loaded profile's settings over another's; `pull <name>` the other way. Both ask first. Only `profile.json` is copied (the target keeps its working directory); a pull clears the conversation.
 * The API keys in `profile.json` are encrypted (DPAPI on Windows, the Keychain on a Mac); a key typed into the file by hand is encrypted at the next load. Only the same user on the same machine can read them.
 

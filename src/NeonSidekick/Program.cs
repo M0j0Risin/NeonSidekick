@@ -46,7 +46,7 @@ if (OperatingSystem.IsMacOS())
     DiagnosticLog.EchoToConsole = echo;
 }
 
-// The Claude CLI server's MCP relay (2026-09-30): this executable started by the claude CLI as its MCP server
+// The Claude Code server's MCP relay (2026-09-30): this executable started by the claude CLI as its MCP server
 // (NeonSidekick --mcp-relay <address> <key>), copying the CLI's stdio to the app's loopback listener. Before anything
 // touches the console: stdout is the MCP pipe, not a screen.
 if (NeonSidekick.Claude.McpRelay.Asked(args))

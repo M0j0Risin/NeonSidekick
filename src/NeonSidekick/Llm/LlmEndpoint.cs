@@ -75,7 +75,7 @@ public sealed record LlmEndpoint(Uri BaseUrl, string ModelId, string ApiKey, str
 
         if (string.Equals(trimmed, Claude.ClaudeCliEndpoint.Alias, StringComparison.OrdinalIgnoreCase))
         {
-            // The Claude CLI (2026-09-30): "claude-cli" stands for its sentinel the same way.
+            // The Claude CLI (2026-09-30): "claude-code" stands for its sentinel the same way.
             return Claude.ClaudeCliEndpoint.BaseUrl;
         }
 

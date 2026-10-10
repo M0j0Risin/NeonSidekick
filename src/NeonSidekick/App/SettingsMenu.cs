@@ -431,37 +431,37 @@ public enum SettingsField
     /// <summary>A toggle: whether the model's thinking streams into the transcript and folds when the answer starts (<see cref="Settings.AppSettingsData.LlmShowThinking"/>). The LLM tab's row under <see cref="LlmReasoning"/> (2026-10-01, the user's call: the thinking rows together; the last row from 2026-09-26, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     LlmShowThinking,
 
-    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeCliExecutable"/>); empty = looked up. The <c>/tools</c> ClaudeCLI tab's first row (2026-09-27; on <c>/settings</c> that morning); read at each <c>/claude</c> and advisor call.</summary>
-    ClaudeCliExecutable,
+    /// <summary>Typed: the Claude Code CLI <c>/claude</c> starts (<see cref="Settings.AppSettingsData.ClaudeCodeExecutable"/>); empty = looked up. The <c>/tools</c> ClaudeCode tab's first row (2026-09-27; on <c>/settings</c> that morning); read at each <c>/claude</c> and advisor call.</summary>
+    ClaudeCodeExecutable,
 
-    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudeCliPermissions"/>). The ClaudeCLI tab's second row (2026-09-27).</summary>
-    ClaudeCliPermissions,
+    /// <summary>A picker over <see cref="Claude.ClaudePermission.Names"/>: what the Claude Code child may do on its own (<see cref="Settings.AppSettingsData.ClaudeCodePermissions"/>). The ClaudeCode tab's second row (2026-09-27).</summary>
+    ClaudeCodePermissions,
 
-    /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeCliModel"/>); empty = the CLI's own. The ClaudeCLI tab's third row (2026-09-27).</summary>
-    ClaudeCliModel,
+    /// <summary>Typed: the <c>--model</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeCodeModel"/>); empty = the CLI's own. The ClaudeCode tab's third row (2026-09-27).</summary>
+    ClaudeCodeModel,
 
-    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeCliEffort"/>). The ClaudeCLI tab's last row (2026-09-27).</summary>
-    ClaudeCliEffort,
+    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of a <c>/claude</c> run (<see cref="Settings.AppSettingsData.ClaudeCodeEffort"/>). The ClaudeCode tab's last row (2026-09-27).</summary>
+    ClaudeCodeEffort,
 
-    /// <summary>A toggle: whether the model is offered <c>claude_advisor_cli</c> (<see cref="Settings.AppSettingsData.ClaudeCliAdvisor"/>). The <c>/tools</c> ClaudeCLI tab, under the four Claude command rows (2026-09-27); the group's switch, no reconnect (read at each turn).</summary>
-    ClaudeCliAdvisor,
+    /// <summary>A toggle: whether the model is offered <c>claude_code_advisor</c> (<see cref="Settings.AppSettingsData.ClaudeCodeAdvisor"/>). The <c>/tools</c> ClaudeCode tab, under the four Claude command rows (2026-09-27); the group's switch, no reconnect (read at each turn).</summary>
+    ClaudeCodeAdvisor,
 
-    /// <summary>A picker over <see cref="Claude.ClaudeAdvisorContext.Names"/>: what an advisor call sends besides the question (<see cref="Settings.AppSettingsData.ClaudeCliAdvisorContext"/>). Under the switch (2026-09-27).</summary>
-    ClaudeCliAdvisorContext,
+    /// <summary>A picker over <see cref="Claude.ClaudeAdvisorContext.Names"/>: what an advisor call sends besides the question (<see cref="Settings.AppSettingsData.ClaudeCodeAdvisorContext"/>). Under the switch (2026-09-27).</summary>
+    ClaudeCodeAdvisorContext,
 
-    /// <summary>Typed: the most advisor calls a turn, 1 to 10 (<see cref="Settings.AppSettingsData.ClaudeCliAdvisorCallsPerTurn"/>). Under the context (2026-09-27).</summary>
-    ClaudeCliAdvisorCallsPerTurn,
+    /// <summary>Typed: the most advisor calls a turn, 1 to 10 (<see cref="Settings.AppSettingsData.ClaudeCodeAdvisorCallsPerTurn"/>). Under the context (2026-09-27).</summary>
+    ClaudeCodeAdvisorCallsPerTurn,
 
-    /// <summary>Typed: the <c>--model</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeCliAdvisorModel"/>); empty = the Claude CLI slash command model. Under the cap (2026-09-27).</summary>
-    ClaudeCliAdvisorModel,
+    /// <summary>Typed: the <c>--model</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeCodeAdvisorModel"/>); empty = the Claude Code slash command model. Under the cap (2026-09-27).</summary>
+    ClaudeCodeAdvisorModel,
 
-    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeCliAdvisorEffort"/>); empty = the Claude CLI slash command effort. Under the model (2026-09-27).</summary>
-    ClaudeCliAdvisorEffort,
+    /// <summary>A picker over <see cref="Claude.ClaudeEffort.Names"/>: the <c>--effort</c> of an advisor call (<see cref="Settings.AppSettingsData.ClaudeCodeAdvisorEffort"/>); empty = the Claude Code slash command effort. Under the model (2026-09-27).</summary>
+    ClaudeCodeAdvisorEffort,
 
-    /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeCliAdvisorConfirm"/>). The ClaudeCLI tab's last row (2026-09-27).</summary>
-    ClaudeCliAdvisorConfirm,
+    /// <summary>A toggle: whether each advisor call waits for the user's yes (<see cref="Settings.AppSettingsData.ClaudeCodeAdvisorConfirm"/>). The ClaudeCode tab's last row (2026-09-27).</summary>
+    ClaudeCodeAdvisorConfirm,
 
-    /// <summary>A toggle: whether the Anthropic API is offered as a server (<see cref="Settings.AppSettingsData.AnthropicApi"/>). <c>/settings</c>' Anthropic tab's first row (2026-10-03; on <c>/tools</c>' ClaudeCLI tab under the advisor's from 2026-09-29, the first row of <c>/settings</c>' Claude (API) tab from 2026-09-27); a reconnect.</summary>
+    /// <summary>A toggle: whether the Anthropic API is offered as a server (<see cref="Settings.AppSettingsData.AnthropicApi"/>). <c>/settings</c>' Anthropic tab's first row (2026-10-03; on <c>/tools</c>' ClaudeCode tab under the advisor's from 2026-09-29, the first row of <c>/settings</c>' Claude (API) tab from 2026-09-27); a reconnect.</summary>
     AnthropicApi,
 
     /// <summary>Typed: the Anthropic API key, saved DPAPI-encrypted and shown masked (<see cref="Settings.AppSettingsData.AnthropicApiKey"/>); empty clears it. Under the switch (2026-09-27); a reconnect.</summary>
@@ -470,7 +470,7 @@ public enum SettingsField
     /// <summary>Typed: the <c>max_tokens</c> of every Anthropic API request (<see cref="Settings.AppSettingsData.AnthropicApiMaxTokens"/>). Under the key (2026-09-27); a reconnect.</summary>
     AnthropicApiMaxTokens,
 
-    /// <summary>A toggle: whether Anthropic API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.AnthropicApiPromptCaching"/>). Under the output cap on <c>/settings</c>' Anthropic tab (2026-10-03; <c>/tools</c>' ClaudeCLI tab from 2026-09-29, the Claude (API) tab's from 2026-09-27); a reconnect.</summary>
+    /// <summary>A toggle: whether Anthropic API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.AnthropicApiPromptCaching"/>). Under the output cap on <c>/settings</c>' Anthropic tab (2026-10-03; <c>/tools</c>' ClaudeCode tab from 2026-09-29, the Claude (API) tab's from 2026-09-27); a reconnect.</summary>
     AnthropicApiPromptCaching,
 
     /// <summary>A toggle: whether the <c>/botchat</c> bots get the main chat's skills and <c>load_skill</c> (<see cref="Settings.AppSettingsData.BotChatSkills"/>). The Botchat tab (2026-09-27, the user's ask); no reconnect (read per reply).</summary>
@@ -612,11 +612,11 @@ public enum SettingsField
     BotChatMultiEmbeddedKill,
 
     /// <summary>
-    /// A toggle: whether the Claude Code CLI is offered as a server (<see cref="Settings.AppSettingsData.ClaudeCliServer"/>,
+    /// A toggle: whether the Claude Code CLI is offered as a server (<see cref="Settings.AppSettingsData.ClaudeCodeServer"/>,
     /// 2026-09-30, the user's ask). <c>/settings</c>' Anthropic tab's last row, under the Anthropic API's (2026-10-03; <c>/tools</c>'
     /// Claude tab's until then); a reconnect.
     /// </summary>
-    ClaudeCliServer,
+    ClaudeCodeServer,
 
     /// <summary>A toggle: whether a turn offers the eight Oracle tools (<see cref="Settings.AppSettingsData.OracleTools"/>). The Oracle tab of <c>/tools</c>' first row (2026-09-30); no reconnect (read at each turn).</summary>
     OracleTools,
@@ -1013,8 +1013,8 @@ public enum SettingsTab
     Docker,
 
     /// <summary>
-    /// The Claude servers' rows (2026-10-03, the user's ask: off <c>/tools</c>' ClaudeCLI tab, which keeps <c>/claude</c>'s and the
-    /// advisor's): the Anthropic API's switch, key, output cap and prompt caching, then the Claude CLI server's switch. "Claude"
+    /// The Claude servers' rows (2026-10-03, the user's ask: off <c>/tools</c>' ClaudeCode tab, which keeps <c>/claude</c>'s and the
+    /// advisor's): the Anthropic API's switch, key, output cap and prompt caching, then the Claude Code server's switch. "Claude"
     /// until 2026-10-04 (the user's call: Anthropic, so it no longer shares a name with <c>/tools</c>' tab).
     /// </summary>
     Anthropic,
@@ -1030,7 +1030,7 @@ public enum SettingsTab
     /// <summary>The session store's rows (2026-09-18), after STT since 2026-09-29 (the user's order; second from later on 2026-09-18, last that morning).</summary>
     Sessions,
 
-    /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' ClaudeCLI tab, the user's call).</summary>
+    /// <summary>The <c>/botchat</c> picture rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>), last (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' ClaudeCode tab, the user's call).</summary>
     BotChat,
 }
 
@@ -1356,7 +1356,7 @@ internal sealed partial class SettingsMenu
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
-        [SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching, SettingsField.ClaudeCliServer],
+        [SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching, SettingsField.ClaudeCodeServer],
         [SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         [SettingsField.SttInput, SettingsField.SttDestination, .. Fields.Where(f => IsVoiceField(f) && f != SettingsField.SttInput)],
@@ -1398,9 +1398,9 @@ internal sealed partial class SettingsMenu
     /// Shell (2026-09-21) is the policy (its switch), the allowed list, the outside-paths police (2026-09-22), the default shell, the two timeouts and the output cap,
     /// then the script rows: the languages, their timeout, the tool bridge switch (later that day) and the tool-call cap it governs.
     /// Claude (2026-09-27, the user's call: <c>/claude</c>'s four rows off <c>/settings</c>, named <c>Claude command …</c>) is those four, then
-    /// the advisor's six (<c>claude_advisor_cli</c>): its switch, the context, the per-turn cap, the model, the effort and the confirm switch;
+    /// the advisor's six (<c>claude_code_advisor</c>): its switch, the context, the per-turn cap, the model, the effort and the confirm switch;
     /// from 2026-09-29 (the user's call: one tab named <c>Claude</c>, <c>Claude (CLI)</c> until then) the Anthropic API's four rows and
-    /// later the Claude CLI server's followed, until 2026-10-03 (the user's call), when the five went to <c>/settings</c>' Anthropic tab.
+    /// later the Claude Code server's followed, until 2026-10-03 (the user's call), when the five went to <c>/settings</c>' Anthropic tab.
     /// With <see cref="TabFields"/> and <see cref="SkillsTabFields"/> they are every <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
@@ -1419,7 +1419,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
         [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
         [SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
-        [SettingsField.ClaudeCliExecutable, SettingsField.ClaudeCliPermissions, SettingsField.ClaudeCliModel, SettingsField.ClaudeCliEffort, SettingsField.ClaudeCliAdvisor, SettingsField.ClaudeCliAdvisorContext, SettingsField.ClaudeCliAdvisorCallsPerTurn, SettingsField.ClaudeCliAdvisorModel, SettingsField.ClaudeCliAdvisorEffort, SettingsField.ClaudeCliAdvisorConfirm],
+        [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort, SettingsField.ClaudeCodeAdvisor, SettingsField.ClaudeCodeAdvisorContext, SettingsField.ClaudeCodeAdvisorCallsPerTurn, SettingsField.ClaudeCodeAdvisorModel, SettingsField.ClaudeCodeAdvisorEffort, SettingsField.ClaudeCodeAdvisorConfirm],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
@@ -1599,7 +1599,7 @@ internal sealed partial class SettingsMenu
     public static bool IsLlmField(SettingsField field) =>
         field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.LlmApiKey
             or SettingsField.LlmRequestTimeoutSeconds or SettingsField.LlmTurnTimeoutSeconds or SettingsField.LlmContextLength or SettingsField.LlmReasoning
-            or SettingsField.AnthropicApi or SettingsField.AnthropicApiKey or SettingsField.AnthropicApiMaxTokens or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCliServer
+            or SettingsField.AnthropicApi or SettingsField.AnthropicApiKey or SettingsField.AnthropicApiMaxTokens or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCodeServer
             or SettingsField.OpenAIApi or SettingsField.OpenAIApiKey or SettingsField.OpenAIApiMaxTokens or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
             or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedModels or SettingsField.EmbeddedBackend or SettingsField.EmbeddedContextSize or SettingsField.EmbeddedGpuLayers or SettingsField.EmbeddedVramBudget or SettingsField.EmbeddedVision
             or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly or SettingsField.DockerServers;
@@ -1829,8 +1829,8 @@ internal sealed partial class SettingsMenu
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPolice or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
-            or SettingsField.BotChatComfy or SettingsField.BotChatImageAsync or SettingsField.BotChatTools or SettingsField.BotChatSkills or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeCliAdvisor or SettingsField.ClaudeCliAdvisorConfirm
-            or SettingsField.AnthropicApi or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCliServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
+            or SettingsField.BotChatComfy or SettingsField.BotChatImageAsync or SettingsField.BotChatTools or SettingsField.BotChatSkills or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill or SettingsField.ClaudeCodeAdvisor or SettingsField.ClaudeCodeAdvisorConfirm
+            or SettingsField.AnthropicApi or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCodeServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
@@ -1922,16 +1922,16 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmSampling => "LLM sampling",
         SettingsField.LlmSamplingFromHuggingFace => "LLM sampling from Hugging Face",
         SettingsField.SessionSaveThinking => "Session save thinking",
-        SettingsField.ClaudeCliExecutable => "Claude CLI executable",
-        SettingsField.ClaudeCliPermissions => "Claude CLI slash command permissions",
-        SettingsField.ClaudeCliModel => "Claude CLI slash command model",
-        SettingsField.ClaudeCliEffort => "Claude CLI slash command effort",
-        SettingsField.ClaudeCliAdvisor => "Claude CLI advisor tool",
-        SettingsField.ClaudeCliAdvisorContext => "Claude CLI advisor tool context",
-        SettingsField.ClaudeCliAdvisorCallsPerTurn => "Claude CLI advisor tool calls per turn",
-        SettingsField.ClaudeCliAdvisorModel => "Claude CLI advisor tool model",
-        SettingsField.ClaudeCliAdvisorEffort => "Claude CLI advisor tool effort",
-        SettingsField.ClaudeCliAdvisorConfirm => "Claude CLI advisor tool confirm",
+        SettingsField.ClaudeCodeExecutable => "Claude Code executable",
+        SettingsField.ClaudeCodePermissions => "Claude Code slash command permissions",
+        SettingsField.ClaudeCodeModel => "Claude Code slash command model",
+        SettingsField.ClaudeCodeEffort => "Claude Code slash command effort",
+        SettingsField.ClaudeCodeAdvisor => "Claude Code advisor tool",
+        SettingsField.ClaudeCodeAdvisorContext => "Claude Code advisor tool context",
+        SettingsField.ClaudeCodeAdvisorCallsPerTurn => "Claude Code advisor tool calls per turn",
+        SettingsField.ClaudeCodeAdvisorModel => "Claude Code advisor tool model",
+        SettingsField.ClaudeCodeAdvisorEffort => "Claude Code advisor tool effort",
+        SettingsField.ClaudeCodeAdvisorConfirm => "Claude Code advisor tool confirm",
         SettingsField.LlmScanMode => "LLM server scan mode",
         SettingsField.WebTools => "Web tools",
         SettingsField.GitLibTools => "GitLib tools",
@@ -2090,7 +2090,7 @@ internal sealed partial class SettingsMenu
         SettingsField.AnthropicApiKey => "Anthropic API key",
         SettingsField.AnthropicApiMaxTokens => "Anthropic API max tokens",
         SettingsField.AnthropicApiPromptCaching => "Anthropic API prompt caching",
-        SettingsField.ClaudeCliServer => "Claude CLI server",
+        SettingsField.ClaudeCodeServer => "Claude Code server",
         SettingsField.OpenAIApi => "OpenAI API",
         SettingsField.OpenAIApiKey => "OpenAI API key",
         SettingsField.OpenAIApiMaxTokens => "OpenAI API max tokens",
@@ -2251,21 +2251,21 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmSampling => SamplingText.Summary(data.LlmSampling),
             SettingsField.LlmSamplingFromHuggingFace => OnOff(data.LlmSamplingFromHuggingFace),
             SettingsField.SessionSaveThinking => OnOff(data.SessionSaveThinking),
-            SettingsField.ClaudeCliExecutable => string.IsNullOrWhiteSpace(data.ClaudeCliExecutable) ? ClaudeLookedUpLabel : data.ClaudeCliExecutable,
-            SettingsField.ClaudeCliPermissions => data.ClaudeCliPermissions,
-            SettingsField.ClaudeCliModel => string.IsNullOrWhiteSpace(data.ClaudeCliModel) ? ClaudeDefaultLabel : data.ClaudeCliModel,
-            SettingsField.ClaudeCliEffort => string.IsNullOrWhiteSpace(data.ClaudeCliEffort) ? ClaudeDefaultLabel : data.ClaudeCliEffort,
-            SettingsField.ClaudeCliAdvisor => OnOff(data.ClaudeCliAdvisor),
-            SettingsField.ClaudeCliAdvisorContext => data.ClaudeCliAdvisorContext,
-            SettingsField.ClaudeCliAdvisorCallsPerTurn => ClaudeAdvisorCalls(data.ClaudeCliAdvisorCallsPerTurn),
-            SettingsField.ClaudeCliAdvisorModel => string.IsNullOrWhiteSpace(data.ClaudeCliAdvisorModel) ? ClaudeAdvisorModelLabel : data.ClaudeCliAdvisorModel,
-            SettingsField.ClaudeCliAdvisorEffort => string.IsNullOrWhiteSpace(data.ClaudeCliAdvisorEffort) ? ClaudeAdvisorEffortLabel : data.ClaudeCliAdvisorEffort,
-            SettingsField.ClaudeCliAdvisorConfirm => OnOff(data.ClaudeCliAdvisorConfirm),
+            SettingsField.ClaudeCodeExecutable => string.IsNullOrWhiteSpace(data.ClaudeCodeExecutable) ? ClaudeLookedUpLabel : data.ClaudeCodeExecutable,
+            SettingsField.ClaudeCodePermissions => data.ClaudeCodePermissions,
+            SettingsField.ClaudeCodeModel => string.IsNullOrWhiteSpace(data.ClaudeCodeModel) ? ClaudeDefaultLabel : data.ClaudeCodeModel,
+            SettingsField.ClaudeCodeEffort => string.IsNullOrWhiteSpace(data.ClaudeCodeEffort) ? ClaudeDefaultLabel : data.ClaudeCodeEffort,
+            SettingsField.ClaudeCodeAdvisor => OnOff(data.ClaudeCodeAdvisor),
+            SettingsField.ClaudeCodeAdvisorContext => data.ClaudeCodeAdvisorContext,
+            SettingsField.ClaudeCodeAdvisorCallsPerTurn => ClaudeAdvisorCalls(data.ClaudeCodeAdvisorCallsPerTurn),
+            SettingsField.ClaudeCodeAdvisorModel => string.IsNullOrWhiteSpace(data.ClaudeCodeAdvisorModel) ? ClaudeAdvisorModelLabel : data.ClaudeCodeAdvisorModel,
+            SettingsField.ClaudeCodeAdvisorEffort => string.IsNullOrWhiteSpace(data.ClaudeCodeAdvisorEffort) ? ClaudeAdvisorEffortLabel : data.ClaudeCodeAdvisorEffort,
+            SettingsField.ClaudeCodeAdvisorConfirm => OnOff(data.ClaudeCodeAdvisorConfirm),
             SettingsField.AnthropicApi => OnOff(data.AnthropicApi),
             SettingsField.AnthropicApiKey => ApiKeyLabel(data.AnthropicApiKey),
             SettingsField.AnthropicApiMaxTokens => Tokens(data.AnthropicApiMaxTokens),
             SettingsField.AnthropicApiPromptCaching => OnOff(data.AnthropicApiPromptCaching),
-            SettingsField.ClaudeCliServer => OnOff(data.ClaudeCliServer),
+            SettingsField.ClaudeCodeServer => OnOff(data.ClaudeCodeServer),
             SettingsField.OpenAIApi => OnOff(data.OpenAIApi),
             SettingsField.OpenAIApiKey => ApiKeyLabel(data.OpenAIApiKey),
             SettingsField.OpenAIApiMaxTokens => data.OpenAIApiMaxTokens > 0 ? Tokens(data.OpenAIApiMaxTokens) : OpenAIApiMaxTokensNoneLabel,
@@ -2693,13 +2693,13 @@ internal sealed partial class SettingsMenu
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebSearxngUrl"/>. Pinned.</summary>
     public const string SearxngUrlError = "must be an http or https URL, or empty";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCliExecutable"/> (2026-09-27): looked for on the PATH and in the installer's folder. Pinned.</summary>
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCodeExecutable"/> (2026-09-27): looked for on the PATH and in the installer's folder. Pinned.</summary>
     public const string ClaudeLookedUpLabel = "(looked up)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCliModel"/> or <see cref="AppSettingsData.ClaudeCliEffort"/> (2026-09-27): the CLI decides. Pinned.</summary>
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCodeModel"/> or <see cref="AppSettingsData.ClaudeCodeEffort"/> (2026-09-27): the CLI decides. Pinned.</summary>
     public const string ClaudeDefaultLabel = "(Claude Code's default)";
 
-    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ClaudeCliExecutable"/>. Pinned.</summary>
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ClaudeCodeExecutable"/>. Pinned.</summary>
     public const string ClaudeExecutableError = "must be the full path of an existing file, or empty to look for Claude Code";
 
     /// <summary>One row of the Claude-permissions picker: the level and its hint, padded to eleven (<c>read-only</c> is nine). Pinned.</summary>
@@ -2721,11 +2721,11 @@ internal sealed partial class SettingsMenu
     /// <summary>The Claude-model pickers' typed row. Pinned.</summary>
     public const string ClaudeModelOtherWord = "Other…";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCliAdvisorModel"/> (2026-09-27): the Claude CLI slash command model's. Pinned.</summary>
-    public const string ClaudeAdvisorModelLabel = "(as Claude CLI slash command model)";
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCodeAdvisorModel"/> (2026-09-27): the Claude Code slash command model's. Pinned.</summary>
+    public const string ClaudeAdvisorModelLabel = "(as Claude Code slash command model)";
 
-    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCliAdvisorEffort"/> (2026-09-27): the Claude CLI slash command effort's. Pinned.</summary>
-    public const string ClaudeAdvisorEffortLabel = "(as Claude CLI slash command effort)";
+    /// <summary>How the menu shows an empty <see cref="AppSettingsData.ClaudeCodeAdvisorEffort"/> (2026-09-27): the Claude Code slash command effort's. Pinned.</summary>
+    public const string ClaudeAdvisorEffortLabel = "(as Claude Code slash command effort)";
 
     /// <summary>One row of the advisor-context picker: the word and its hint, padded to eight. Pinned.</summary>
     public static string ClaudeAdvisorContextLabel(string name) =>
@@ -2752,12 +2752,12 @@ internal sealed partial class SettingsMenu
     /// <summary>The warning when DPAPI could not encrypt the LLM API key (2026-09-28): it is kept as typed. Pinned.</summary>
     public static string LlmApiKeyPlainWarning(string reason) => $"LLM API key saved unencrypted: {reason}.";
 
-    /// <summary>How the menu shows <see cref="AppSettingsData.ClaudeCliAdvisorCallsPerTurn"/>. Pinned.</summary>
+    /// <summary>How the menu shows <see cref="AppSettingsData.ClaudeCodeAdvisorCallsPerTurn"/>. Pinned.</summary>
     public static string ClaudeAdvisorCalls(int value) => value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " call" : " calls");
 
-    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ClaudeCliAdvisorCallsPerTurn"/>. Pinned.</summary>
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ClaudeCodeAdvisorCallsPerTurn"/>. Pinned.</summary>
     public static readonly string ClaudeAdvisorCallsRangeError =
-        "must be " + AppSettingsData.MinClaudeCliAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxClaudeCliAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture) + " calls";
+        "must be " + AppSettingsData.MinClaudeCodeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxClaudeCodeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture) + " calls";
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.HomeAssistantUrl"/> (2026-09-28): no server, so no Home Assistant tool. Pinned.</summary>
     public const string NoHomeAssistantUrlLabel = "(not set)";
@@ -3452,10 +3452,10 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserPath => data.WebBrowserPath,
         SettingsField.WebSearxngUrl => data.WebSearxngUrl,
         SettingsField.ComfyUrl => data.ComfyUrl,
-        SettingsField.ClaudeCliExecutable => data.ClaudeCliExecutable,
-        SettingsField.ClaudeCliModel => data.ClaudeCliModel,
-        SettingsField.ClaudeCliAdvisorModel => data.ClaudeCliAdvisorModel,
-        SettingsField.ClaudeCliAdvisorCallsPerTurn => data.ClaudeCliAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
+        SettingsField.ClaudeCodeExecutable => data.ClaudeCodeExecutable,
+        SettingsField.ClaudeCodeModel => data.ClaudeCodeModel,
+        SettingsField.ClaudeCodeAdvisorModel => data.ClaudeCodeAdvisorModel,
+        SettingsField.ClaudeCodeAdvisorCallsPerTurn => data.ClaudeCodeAdvisorCallsPerTurn.ToString(CultureInfo.InvariantCulture),
         SettingsField.AnthropicApiMaxTokens => data.AnthropicApiMaxTokens.ToString(CultureInfo.InvariantCulture),
         SettingsField.OpenAIApiMaxTokens => data.OpenAIApiMaxTokens.ToString(CultureInfo.InvariantCulture),
         SettingsField.OpenAIApiOrganization => data.OpenAIApiOrganization,
@@ -4380,29 +4380,29 @@ internal sealed partial class SettingsMenu
             return await PickReasoningAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.ClaudeCliPermissions)
+        if (field == SettingsField.ClaudeCodePermissions)
         {
             return await PickClaudePermissionsAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.ClaudeCliEffort)
+        if (field == SettingsField.ClaudeCodeEffort)
         {
-            return await PickClaudeEffortAsync(field, saved.ClaudeCliEffort, ClaudeDefaultLabel, cancellationToken).ConfigureAwait(false);
+            return await PickClaudeEffortAsync(field, saved.ClaudeCodeEffort, ClaudeDefaultLabel, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.ClaudeCliAdvisorEffort)
+        if (field == SettingsField.ClaudeCodeAdvisorEffort)
         {
-            return await PickClaudeEffortAsync(field, saved.ClaudeCliAdvisorEffort, ClaudeAdvisorEffortLabel, cancellationToken).ConfigureAwait(false);
+            return await PickClaudeEffortAsync(field, saved.ClaudeCodeAdvisorEffort, ClaudeAdvisorEffortLabel, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field is SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
+        if (field is SettingsField.ClaudeCodeModel or SettingsField.ClaudeCodeAdvisorModel
             && await PickClaudeModelAsync(field, saved, cancellationToken).ConfigureAwait(false) is { } pickedModel)
         {
             // Null: Other… — the typed edit below, pre-filled with the saved name.
             return pickedModel;
         }
 
-        if (field == SettingsField.ClaudeCliAdvisorContext)
+        if (field == SettingsField.ClaudeCodeAdvisorContext)
         {
             return await PickClaudeAdvisorContextAsync(saved, cancellationToken).ConfigureAwait(false);
         }
@@ -4895,7 +4895,7 @@ internal sealed partial class SettingsMenu
             return await PickVoskModelAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCliExecutable or SettingsField.ClaudeCliModel or SettingsField.ClaudeCliAdvisorModel
+        bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCodeExecutable or SettingsField.ClaudeCodeModel or SettingsField.ClaudeCodeAdvisorModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
             or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder or SettingsField.PastedImagesFolder
             or SettingsField.YouTubeRegion or SettingsField.YouTubeLanguage;
@@ -5453,7 +5453,7 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.WebBrowserPath = text.Length == 0 ? "" : Path.GetFullPath(text));
                 return true;
 
-            case SettingsField.ClaudeCliExecutable:
+            case SettingsField.ClaudeCodeExecutable:
                 text = text.Trim('"');
                 if (text.Length > 0 && !File.Exists(text))
                 {
@@ -5461,27 +5461,27 @@ internal sealed partial class SettingsMenu
                     return false;
                 }
 
-                Apply(field, d => d.ClaudeCliExecutable = text.Length == 0 ? "" : Path.GetFullPath(text));
+                Apply(field, d => d.ClaudeCodeExecutable = text.Length == 0 ? "" : Path.GetFullPath(text));
                 return true;
 
-            case SettingsField.ClaudeCliModel:
+            case SettingsField.ClaudeCodeModel:
                 // An alias or a full name: whatever the CLI takes, checked by the CLI at the next /claude.
-                Apply(field, d => d.ClaudeCliModel = text);
+                Apply(field, d => d.ClaudeCodeModel = text);
                 return true;
 
-            case SettingsField.ClaudeCliAdvisorModel:
-                // The same, for the advisor; empty follows the Claude CLI slash command model.
-                Apply(field, d => d.ClaudeCliAdvisorModel = text);
+            case SettingsField.ClaudeCodeAdvisorModel:
+                // The same, for the advisor; empty follows the Claude Code slash command model.
+                Apply(field, d => d.ClaudeCodeAdvisorModel = text);
                 return true;
 
-            case SettingsField.ClaudeCliAdvisorCallsPerTurn:
-                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int advisorCalls) || advisorCalls < AppSettingsData.MinClaudeCliAdvisorCallsPerTurn || advisorCalls > AppSettingsData.MaxClaudeCliAdvisorCallsPerTurn)
+            case SettingsField.ClaudeCodeAdvisorCallsPerTurn:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int advisorCalls) || advisorCalls < AppSettingsData.MinClaudeCodeAdvisorCallsPerTurn || advisorCalls > AppSettingsData.MaxClaudeCodeAdvisorCallsPerTurn)
                 {
                     Sink.Error($"{FieldName(field)} {ClaudeAdvisorCallsRangeError}; keeping {EditableValue(field, saved)}.");
                     return false;
                 }
 
-                Apply(field, d => d.ClaudeCliAdvisorCallsPerTurn = advisorCalls);
+                Apply(field, d => d.ClaudeCodeAdvisorCallsPerTurn = advisorCalls);
                 return true;
 
             case SettingsField.EmbeddedContextSize:
@@ -6087,20 +6087,20 @@ internal sealed partial class SettingsMenu
     /// <summary>The Claude-permissions picker under the settings list: one <see cref="ClaudePermissionLabel"/> row per <see cref="Claude.ClaudePermission.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickClaudePermissionsAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var page = new MenuPage(Crumb(FieldName(SettingsField.ClaudeCliPermissions)), Claude.ClaudePermission.Names.Select(ClaudePermissionLabel).ToList(), PickKeys);
-        int? picked = await PickAsync(page, Array.IndexOf(Claude.ClaudePermission.Names, saved.ClaudeCliPermissions), cancellationToken).ConfigureAwait(false);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ClaudeCodePermissions)), Claude.ClaudePermission.Names.Select(ClaudePermissionLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.IndexOf(Claude.ClaudePermission.Names, saved.ClaudeCodePermissions), cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {
             return Unchanged();
         }
 
         string name = Claude.ClaudePermission.Names[index];
-        Apply(SettingsField.ClaudeCliPermissions, d => d.ClaudeCliPermissions = name);
+        Apply(SettingsField.ClaudeCodePermissions, d => d.ClaudeCodePermissions = name);
         return true;
     }
 
     /// <summary>
-    /// A Claude-effort picker under the settings list (<c>Claude CLI slash command effort</c>, <c>Claude CLI advisor tool effort</c>): <paramref name="blank"/>
+    /// A Claude-effort picker under the settings list (<c>Claude Code slash command effort</c>, <c>Claude Code advisor tool effort</c>): <paramref name="blank"/>
     /// first (the CLI's default, or the command's for the advisor), then <c>--effort</c>'s words; the saved one under the cursor.
     /// </summary>
     private async Task<bool> PickClaudeEffortAsync(SettingsField field, string saved, string blank, CancellationToken cancellationToken)
@@ -6113,7 +6113,7 @@ internal sealed partial class SettingsMenu
         }
 
         string name = Claude.ClaudeEffort.Names[index];
-        Apply(field, field == SettingsField.ClaudeCliAdvisorEffort ? d => d.ClaudeCliAdvisorEffort = name : d => d.ClaudeCliEffort = name);
+        Apply(field, field == SettingsField.ClaudeCodeAdvisorEffort ? d => d.ClaudeCodeAdvisorEffort = name : d => d.ClaudeCodeEffort = name);
         return true;
     }
 
@@ -6125,8 +6125,8 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<bool?> PickClaudeModelAsync(SettingsField field, AppSettingsData saved, CancellationToken cancellationToken)
     {
-        bool advisor = field == SettingsField.ClaudeCliAdvisorModel;
-        string current = advisor ? saved.ClaudeCliAdvisorModel : saved.ClaudeCliModel;
+        bool advisor = field == SettingsField.ClaudeCodeAdvisorModel;
+        string current = advisor ? saved.ClaudeCodeAdvisorModel : saved.ClaudeCodeModel;
         string blank = advisor ? ClaudeAdvisorModelLabel : ClaudeDefaultLabel;
         var rows = new List<string> { ClaudeModelLabel("", blank) };
         rows.AddRange(Claude.ClaudeModels.Aliases.Select(alias => ClaudeModelLabel(alias, blank)));
@@ -6148,22 +6148,22 @@ internal sealed partial class SettingsMenu
         }
 
         string name = index == 0 ? "" : Claude.ClaudeModels.Aliases[index - 1];
-        Apply(field, advisor ? d => d.ClaudeCliAdvisorModel = name : d => d.ClaudeCliModel = name);
+        Apply(field, advisor ? d => d.ClaudeCodeAdvisorModel = name : d => d.ClaudeCodeModel = name);
         return true;
     }
 
     /// <summary>The advisor-context picker under the settings list: one <see cref="ClaudeAdvisorContextLabel"/> row per <see cref="Claude.ClaudeAdvisorContext.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickClaudeAdvisorContextAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var page = new MenuPage(Crumb(FieldName(SettingsField.ClaudeCliAdvisorContext)), Claude.ClaudeAdvisorContext.Names.Select(ClaudeAdvisorContextLabel).ToList(), PickKeys);
-        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(Claude.ClaudeAdvisorContext.Names, saved.ClaudeCliAdvisorContext.Trim().ToLowerInvariant())), cancellationToken).ConfigureAwait(false);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ClaudeCodeAdvisorContext)), Claude.ClaudeAdvisorContext.Names.Select(ClaudeAdvisorContextLabel).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(Claude.ClaudeAdvisorContext.Names, saved.ClaudeCodeAdvisorContext.Trim().ToLowerInvariant())), cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {
             return Unchanged();
         }
 
         string name = Claude.ClaudeAdvisorContext.Names[index];
-        Apply(SettingsField.ClaudeCliAdvisorContext, d => d.ClaudeCliAdvisorContext = name);
+        Apply(SettingsField.ClaudeCodeAdvisorContext, d => d.ClaudeCodeAdvisorContext = name);
         return true;
     }
 
@@ -6705,7 +6705,7 @@ internal sealed partial class SettingsMenu
         }
         else if (SettingButtonsFor(field) is { } settingButtons && _pane.Enabled)
         {
-            // The File, Print, Screen capture, Obsidian, YouTube and Claude CLI advisor pages carry their settings' buttons (2026-10-09,
+            // The File, Print, Screen capture, Obsidian, YouTube and Claude Code advisor pages carry their settings' buttons (2026-10-09,
             // the user's ask, the offered button's shape): the setting's own editor, then the page again with the values read afresh.
             var page = new MenuPage(Crumb(FieldName(field)), [ToggleLabel(field, true), ToggleLabel(field, false)], SettingButtonKeys(settingButtons));
             int cursor = was ? 0 : 1;
@@ -6848,11 +6848,11 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyShowPrompts => data.ComfyShowPrompts,
             SettingsField.ComfyCaretMention => data.ComfyCaretMention,
             SettingsField.ComfyPictureStrip => data.ComfyPictureStrip,
-            SettingsField.ClaudeCliAdvisor => data.ClaudeCliAdvisor,
-            SettingsField.ClaudeCliAdvisorConfirm => data.ClaudeCliAdvisorConfirm,
+            SettingsField.ClaudeCodeAdvisor => data.ClaudeCodeAdvisor,
+            SettingsField.ClaudeCodeAdvisorConfirm => data.ClaudeCodeAdvisorConfirm,
             SettingsField.AnthropicApi => data.AnthropicApi,
             SettingsField.AnthropicApiPromptCaching => data.AnthropicApiPromptCaching,
-            SettingsField.ClaudeCliServer => data.ClaudeCliServer,
+            SettingsField.ClaudeCodeServer => data.ClaudeCodeServer,
             SettingsField.OpenAIApi => data.OpenAIApi,
             SettingsField.EmbeddedVision => data.EmbeddedVision,
             SettingsField.EmbeddedVramOnly => data.EmbeddedVramOnly,
@@ -6954,11 +6954,11 @@ internal sealed partial class SettingsMenu
             case SettingsField.ComfyShowPrompts: data.ComfyShowPrompts = on; break;
             case SettingsField.ComfyCaretMention: data.ComfyCaretMention = on; break;
             case SettingsField.ComfyPictureStrip: data.ComfyPictureStrip = on; break;
-            case SettingsField.ClaudeCliAdvisor: data.ClaudeCliAdvisor = on; break;
-            case SettingsField.ClaudeCliAdvisorConfirm: data.ClaudeCliAdvisorConfirm = on; break;
+            case SettingsField.ClaudeCodeAdvisor: data.ClaudeCodeAdvisor = on; break;
+            case SettingsField.ClaudeCodeAdvisorConfirm: data.ClaudeCodeAdvisorConfirm = on; break;
             case SettingsField.AnthropicApi: data.AnthropicApi = on; break;
             case SettingsField.AnthropicApiPromptCaching: data.AnthropicApiPromptCaching = on; break;
-            case SettingsField.ClaudeCliServer: data.ClaudeCliServer = on; break;
+            case SettingsField.ClaudeCodeServer: data.ClaudeCodeServer = on; break;
             case SettingsField.OpenAIApi: data.OpenAIApi = on; break;
             case SettingsField.EmbeddedVision: data.EmbeddedVision = on; break;
             case SettingsField.EmbeddedVramOnly: data.EmbeddedVramOnly = on; break;
@@ -7068,11 +7068,11 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyShowPrompts => on ? "the prompts and params sent to ComfyUI under each picture's line" : "just the picture's line",
         SettingsField.ComfyCaretMention => on ? "^ and part of a name lists the offered workflows on the line" : "^ is ordinary text",
         SettingsField.ComfyPictureStrip => on ? "the session's pictures in a strip above the line" : "no strip",
-        SettingsField.ClaudeCliAdvisor => on ? "claude advisor tool enabled" : "claude advisor tool disabled",   // the user's wording, 2026-10-03
-        SettingsField.ClaudeCliAdvisorConfirm => on ? "each claude_advisor_cli call waits for your yes" : "claude_advisor_cli runs without asking",
+        SettingsField.ClaudeCodeAdvisor => on ? "claude advisor tool enabled" : "claude advisor tool disabled",   // the user's wording, 2026-10-03
+        SettingsField.ClaudeCodeAdvisorConfirm => on ? "each claude_code_advisor call waits for your yes" : "claude_code_advisor runs without asking",
         SettingsField.AnthropicApi => on ? "/server offers the Anthropic API while a key is set (billed per message)" : "the Anthropic API is not offered",
         SettingsField.AnthropicApiPromptCaching => on ? "the prompt and conversation are cached between requests (cheaper)" : "every request is billed in full",
-        SettingsField.ClaudeCliServer => on ? "/server offers the Claude CLI, run with the app's tools, not its own" : "the Claude CLI is not offered; a running one stops",
+        SettingsField.ClaudeCodeServer => on ? "/server offers Claude Code, run with the app's tools, not its own" : "Claude Code is not offered as a server; a running one stops",
         SettingsField.OpenAIApi => on ? "/server offers the OpenAI API while a key is set (billed per message)" : "the OpenAI API is not offered",
         SettingsField.EmbeddedVision => on ? "the embedded model loads its vision projector and reads images" : "the embedded model reads text alone; about 1 GB less memory",
         SettingsField.EmbeddedVramOnly => on ? "every layer on the GPU; a load that spills into system RAM is refused" : "a model too big for VRAM may run partly from system RAM, slowly",

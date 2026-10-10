@@ -43,12 +43,12 @@ public sealed class EnvironmentOverrides
     public const string ProfileVariable = Prefix + "PROFILE";
     public const string ShellPoliceVariable = Prefix + "SHELL_POLICE";
     public const string ShellNativeVariable = Prefix + "SHELL_NATIVE";
-    public const string ClaudeCliExeVariable = Prefix + "CLAUDE_CLI_EXE";
-    public const string ClaudeCliPermissionsVariable = Prefix + "CLAUDE_CLI_PERMISSIONS";
-    public const string ClaudeCliAdvisorVariable = Prefix + "CLAUDE_CLI_ADVISOR";
+    public const string ClaudeCodeExeVariable = Prefix + "CLAUDE_CODE_EXE";
+    public const string ClaudeCodePermissionsVariable = Prefix + "CLAUDE_CODE_PERMISSIONS";
+    public const string ClaudeCodeAdvisorVariable = Prefix + "CLAUDE_CODE_ADVISOR";
     public const string AnthropicApiVariable = Prefix + "ANTHROPIC_API";
     public const string AnthropicApiKeyVariable = Prefix + "ANTHROPIC_API_KEY";
-    public const string ClaudeCliServerVariable = Prefix + "CLAUDE_CLI_SERVER";
+    public const string ClaudeCodeServerVariable = Prefix + "CLAUDE_CODE_SERVER";
     public const string OpenAIApiVariable = Prefix + "OPENAI_API";
     public const string OpenAIApiKeyVariable = Prefix + "OPENAI_API_KEY";
     public const string LlmSamplingVariable = Prefix + "LLM_SAMPLING";
@@ -70,9 +70,9 @@ public sealed class EnvironmentOverrides
         WhisperModelVariable, LlmReasoningVariable, TtsVoice2Variable, TtsMixVariable,
         InterruptEchoVariable, InterruptConfirmVariable, LlmContextVariable, SearxngUrlVariable,
         CommandPolicyVariable, ShellPoliceVariable, ObsidianVaultVariable, ComfyUrlVariable,
-        ShellNativeVariable, ClaudeCliExeVariable, ClaudeCliPermissionsVariable, ClaudeCliAdvisorVariable,
+        ShellNativeVariable, ClaudeCodeExeVariable, ClaudeCodePermissionsVariable, ClaudeCodeAdvisorVariable,
         AnthropicApiVariable, AnthropicApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
-        HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCliServerVariable,
+        HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCodeServerVariable,
         DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable,
     };
 
@@ -115,10 +115,10 @@ public sealed class EnvironmentOverrides
     public string? ComfyUrl => Read(ComfyUrlVariable);
 
     /// <summary>The Claude Code CLI's path for <c>/claude</c>, or null (2026-09-27). Checked where it is used (a path that is no file is <c>/claude</c>'s error), not here.</summary>
-    public string? ClaudeCliExecutable => Read(ClaudeCliExeVariable);
+    public string? ClaudeCodeExecutable => Read(ClaudeCodeExeVariable);
 
-    /// <summary><c>Claude CLI slash command permissions</c> for this launch as one of <see cref="Claude.ClaudePermission.Names"/> (lowercased), or null when unset or not a level (2026-09-27: a scripted headless run says <c>edit</c> without saving it).</summary>
-    public string? ClaudeCliPermissions => ReadClaudePermissions(ClaudeCliPermissionsVariable);
+    /// <summary><c>Claude Code slash command permissions</c> for this launch as one of <see cref="Claude.ClaudePermission.Names"/> (lowercased), or null when unset or not a level (2026-09-27: a scripted headless run says <c>edit</c> without saving it).</summary>
+    public string? ClaudeCodePermissions => ReadClaudePermissions(ClaudeCodePermissionsVariable);
 
     /// <summary>Whisper model name or path, or null. Validated where it is used, not here.</summary>
     public string? SttWhisperModel => Read(WhisperModelVariable);
@@ -170,8 +170,8 @@ public sealed class EnvironmentOverrides
     /// </summary>
     public bool? ShellNative => ReadSwitch(ShellNativeVariable);
 
-    /// <summary><c>Claude CLI advisor tool</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_advisor_cli</c> without saving it.</summary>
-    public bool? ClaudeCliAdvisor => ReadSwitch(ClaudeCliAdvisorVariable);
+    /// <summary><c>Claude Code advisor tool</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted headless run offers <c>claude_code_advisor</c> without saving it.</summary>
+    public bool? ClaudeCodeAdvisor => ReadSwitch(ClaudeCodeAdvisorVariable);
 
     /// <summary><c>Anthropic API</c> for this launch, or null when unset or not a switch word (2026-09-27): a scripted run offers the Anthropic API without saving it.</summary>
     public bool? AnthropicApi => ReadSwitch(AnthropicApiVariable);
@@ -179,8 +179,8 @@ public sealed class EnvironmentOverrides
     /// <summary>The Anthropic API key for this launch, plain (2026-09-27); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
     public string? AnthropicApiKey => Read(AnthropicApiKeyVariable);
 
-    /// <summary><c>Claude CLI server</c> for this launch, or null when unset or not a switch word (2026-09-30): a scripted run offers the Claude CLI without saving it.</summary>
-    public bool? ClaudeCliServer => ReadSwitch(ClaudeCliServerVariable);
+    /// <summary><c>Claude Code server</c> for this launch, or null when unset or not a switch word (2026-09-30): a scripted run offers the Claude CLI without saving it.</summary>
+    public bool? ClaudeCodeServer => ReadSwitch(ClaudeCodeServerVariable);
 
     /// <summary><c>OpenAI API</c> for this launch, or null when unset or not a switch word (2026-10-03): a scripted run offers the OpenAI API without saving it.</summary>
     public bool? OpenAIApi => ReadSwitch(OpenAIApiVariable);
@@ -291,9 +291,9 @@ public sealed class EnvironmentOverrides
                 CommandPolicyVariable => ShellCommandPolicy is not null,
                 ShellPoliceVariable => ShellPolice is not null,
                 ShellNativeVariable => ShellNative is not null,
-                ClaudeCliAdvisorVariable => ClaudeCliAdvisor is not null,
+                ClaudeCodeAdvisorVariable => ClaudeCodeAdvisor is not null,
                 AnthropicApiVariable => AnthropicApi is not null,
-                ClaudeCliServerVariable => ClaudeCliServer is not null,
+                ClaudeCodeServerVariable => ClaudeCodeServer is not null,
                 OpenAIApiVariable => OpenAIApi is not null,
                 LlmSamplingVariable => LlmSampling is not null,
                 EmbeddedBackendVariable => EmbeddedBackend is not null,
@@ -365,12 +365,12 @@ public sealed class EnvironmentOverrides
         if (ShellNative is { } native) effective.ShellPreferNative = native;
         if (ObsidianVault is { } vault) effective.ObsidianVault = vault;
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;
-        if (ClaudeCliExecutable is { } claude) effective.ClaudeCliExecutable = claude;
-        if (ClaudeCliPermissions is { } claudePermissions) effective.ClaudeCliPermissions = claudePermissions;
-        if (ClaudeCliAdvisor is { } advisor) effective.ClaudeCliAdvisor = advisor;
+        if (ClaudeCodeExecutable is { } claude) effective.ClaudeCodeExecutable = claude;
+        if (ClaudeCodePermissions is { } claudePermissions) effective.ClaudeCodePermissions = claudePermissions;
+        if (ClaudeCodeAdvisor is { } advisor) effective.ClaudeCodeAdvisor = advisor;
         if (AnthropicApi is { } claudeApi) effective.AnthropicApi = claudeApi;
         if (AnthropicApiKey is { } claudeApiKey) effective.AnthropicApiKey = claudeApiKey;
-        if (ClaudeCliServer is { } claudeCliServer) effective.ClaudeCliServer = claudeCliServer;
+        if (ClaudeCodeServer is { } claudeCliServer) effective.ClaudeCodeServer = claudeCliServer;
         if (OpenAIApi is { } openAIApi) effective.OpenAIApi = openAIApi;
         if (OpenAIApiKey is { } openAIApiKey) effective.OpenAIApiKey = openAIApiKey;
         if (YouTubeApiKey is { } youTubeApiKey) effective.YouTubeApiKey = youTubeApiKey;

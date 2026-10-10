@@ -128,7 +128,7 @@ Each shortcut runs its command as if typed on its own; a draft on the row stays.
 | 🔒 / 🔓 | *Shell command policy* is `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* is on / off, and the policy isn't `off` | `/tools shell police` |
 | 🐚 | always; on the slab under `off` | `/tools shell`: the *Shell command policy* picker (yolo asks first; `c` the allowed commands, `p` the police) |
-| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Claude CLI advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
+| 📁 🌐 ✴️ 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | always; on the slab while off | `/tools files`, `web`, `claude`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`: that group's on/off page. 📁 ✴️ 💎 🖨️'s have setting buttons at the top (see *File tools*, *Claude Code advisor tool*, *Obsidian tools*, *Print tools*). 🛢️ 🔮 🐬 🪶 🐘 🔗 🎨's has an **offered** button (`o`) showing how many are offered (`☑  offered (2 of 5)`) that opens the group's *… offered* checklist. 📸's has **watch** (`w`), **live** (`l`), **snap** (`s`) and **screen** (`c`); see *Camera tool* |
 | 📄 | always | `/log`, the log window (Ctrl+Alt+G) |
 | ⚡ | always | `/process`, the background processes' list |
 | 🎞️ | always | `/comfy view`, the picture viewer (Ctrl+Alt+U) |
@@ -365,7 +365,7 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 
 ### Anthropic
 
-The Anthropic API and the Claude CLI as `/server` choices. `/claude` and `claude_advisor_cli` are on `/tools` › ClaudeCLI.
+The Anthropic API and Claude Code as `/server` choices. `/claude` and `claude_code_advisor` are on `/tools` › ClaudeCode.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -373,7 +373,7 @@ The Anthropic API and the Claude CLI as `/server` choices. `/claude` and `claude
 | Anthropic API key | Your Anthropic key (`sk-ant-…`), typed masked and saved encrypted (DPAPI on Windows, the Keychain on a Mac). An empty entry clears it. | (none) |
 | Anthropic API max tokens | The output cap per request, thinking included (1,024–128,000). | 32,000 |
 | Anthropic API prompt caching | Marks the tools, system prompt and conversation for Anthropic's prompt cache, so each request re-reads the last one's content cheaply. | on |
-| Claude CLI server | Offers Claude Code on `/server` while it is found (*Claude CLI executable* on `/tools` › ClaudeCLI, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude CLI stops. | off |
+| Claude Code server | Offers Claude Code on `/server` while it is found (*Claude Code executable* on `/tools` › ClaudeCode, or the PATH). Off (or missing) while it is the saved URL, the app scans as if the URL were blank, and a running Claude Code server stops. | off |
 
 **The Anthropic API** appears in `/server` as an **Anthropic API** row. Picking it sets *LLM URL* to `https://api.anthropic.com/v1`, then offers the account's models and the reasoning level.
 
@@ -382,7 +382,7 @@ The Anthropic API and the Claude CLI as `/server` choices. `/claude` and `claude
 * *LLM reasoning*: `low`…`xhigh` turn on adaptive thinking at that effort (`xhigh` is `high` on the 4.6 models; Haiku 4.5 and older take a budget). `none` turns thinking off where allowed; Opus 5.5 and Fable always think.
 * The context window is the model's `max_input_tokens`. `/usage` adds *Cache* and *Cost* rows (an estimate at list price).
 
-**The Claude CLI** appears last in `/server` (or `/server claude-cli`). Picking it sets *LLM URL* to `claude-cli` and offers `fable`, `opus`, `sonnet` and `haiku`, then the reasoning level (`--effort`).
+**Claude Code** appears last in `/server` (or `/server claude-code`). Picking it sets *LLM URL* to `claude-code` and offers `fable`, `opus`, `sonnet` and `haiku`, then the reasoning level (`--effort`).
 
 * **One open session:** the first message starts `claude` and keeps it running; later messages send only the new text. A change of model, reasoning, system prompt or tools, or a crash, restarts it on the same session. `/clear`, `/new` and a profile switch start a new one; restoring an app session resumes its Claude session.
 * **The app's tools, not Claude Code's:** Claude Code runs with its own tools, skills, hooks, settings files and MCP servers off, the app's system prompt, and this turn's tools through an MCP server the app hosts (the app's own exe runs as the relay, `--mcp-relay`). Calls run as any model's do: approvals, `ask_user` and *LLM max tool iterations* apply.
@@ -739,22 +739,22 @@ The picture, print and video tools, five menus on one tab: each row is a menu wi
 | YouTube region | A two-letter country code (`US`, `GB`, `DE`) a search asks for: what can be watched and is popular there. Empty for any region. The model's `region` and `/youtube search --region` override it. | (any region) |
 | YouTube language | A language code (`en`, `es`, `zh-Hans`) a search favours: results in it rank higher, the rest are still listed. Empty for any language. The model's `language` and `/youtube search --lang` override it. | (any language) |
 
-### ClaudeCLI
+### ClaudeCode
 
-The Claude Code CLI, for `/claude` (you message it) and `claude_advisor_cli` (the model asks it). The Anthropic API and the Claude CLI as servers are on `/settings` › Anthropic.
+The Claude Code CLI, for `/claude` (you message it) and `claude_code_advisor` (the model asks it). The Anthropic API and Claude Code as servers are on `/settings` › Anthropic.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Claude CLI executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
-| Claude CLI slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), `edit` (its usual tools with file edits, no commands) or `full` (everything, `bypassPermissions`). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
-| Claude CLI slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
-| Claude CLI slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
-| Claude CLI advisor tool | Offers `claude_advisor_cli`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. The top of its on/off page has **model** (`m`) and **effort** (`e`) buttons that open *Claude CLI advisor tool model* and *Claude CLI advisor tool effort*; ESC there comes back. | off |
-| Claude CLI advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
-| Claude CLI advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
-| Claude CLI advisor tool model | The advisor's `--model`; the first row follows *Claude CLI slash command model*. | (as Claude CLI slash command model) |
-| Claude CLI advisor tool effort | The advisor's `--effort`; the first row follows *Claude CLI slash command effort*. | (as Claude CLI slash command effort) |
-| Claude CLI advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
+| Claude Code executable | The Claude Code CLI. Blank looks on the PATH and in `%USERPROFILE%\.local\bin` (`~/.local/bin` on a Mac); a path you set must exist. | (looked up) |
+| Claude Code slash command permissions | What `/claude` may do: `read-only` (`Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`), `edit` (its usual tools with file edits, no commands) or `full` (everything, `bypassPermissions`). Anything else is denied, never asked. It works in the working directory but outside the app's sandbox and approvals. | `read-only` |
+| Claude Code slash command model | `/claude`'s `--model`: Claude Code's default, `fable`, `opus`, `sonnet`, `haiku`, or *Other…*. | (Claude Code's default) |
+| Claude Code slash command effort | `/claude`'s `--effort`: Claude Code's default, `low`, `medium`, `high`, `xhigh` or `max`. | (Claude Code's default) |
+| Claude Code advisor tool | Offers `claude_code_advisor`: read-only advice from Claude Code when the model is stuck. Each call costs money on your Claude account. The top of its on/off page has **model** (`m`) and **effort** (`e`) buttons that open *Claude Code advisor tool model* and *Claude Code advisor tool effort*; ESC there comes back. | off |
+| Claude Code advisor tool context | `brief` sends the question and context; `recent` adds the last 10 messages (tool results cut to 500 characters). | `brief` |
+| Claude Code advisor tool calls per turn | Advisor calls one reply may make (1–10). | 2 |
+| Claude Code advisor tool model | The advisor's `--model`; the first row follows *Claude Code slash command model*. | (as Claude Code slash command model) |
+| Claude Code advisor tool effort | The advisor's `--effort`; the first row follows *Claude Code slash command effort*. | (as Claude Code slash command effort) |
+| Claude Code advisor tool confirm | Each call waits for your yes (the cursor starts on No). Refused headless. | off |
 
 ### HA (Home Assistant)
 

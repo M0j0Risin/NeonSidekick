@@ -4,7 +4,7 @@ using System.Text;
 namespace NeonSidekick.Claude;
 
 /// <summary>
-/// This app's executable as the Claude CLI server's MCP server (2026-09-30): <c>NeonSidekick --mcp-relay &lt;address&gt;
+/// This app's executable as the Claude Code server's MCP server (2026-09-30): <c>NeonSidekick --mcp-relay &lt;address&gt;
 /// &lt;key&gt;</c>, the command the CLI's <c>--mcp-config</c> names (<see cref="ClaudeArguments.McpConfig"/>). The CLI
 /// speaks MCP over this process's stdio; the relay connects to the app's loopback listener
 /// (<see cref="ClaudeMcpServer"/>), sends the key as its first line, and from then on copies bytes both ways — nothing is
